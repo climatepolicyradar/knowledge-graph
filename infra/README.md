@@ -23,16 +23,18 @@ pulumi up
 export $(pulumi stack output --shell)
 ```
 
+## Load the private key into the ssh-agent
+
+```shell
+ssh-add ~/.ssh/wikibase
+```
+
 ## Connect to the instance in the terminal
 
 ```shell
-sh -i $PRIVATE_KEY ubuntu@$EC2_PUBLIC_DNS -L 3000:localhost:3000
+ssh ec2-user@$EC2_PUBLIC_DNS -i $PRIVATE_KEY_PATH
 ```
-
-This will forward port 3000 on the EC2 instance to port 3000 on your local machine.
 
 ## Connect to the instance in VSCode
 
-```shell
-code --remote ssh-remote+ubuntu@$EC2_PUBLIC_DNS
-```
+Get the hostname by running `echo ec2-user@$EC2_PUBLIC_DNS` and then hit CTRL+SHIFT+P and type `Remote-SSH: Connect to Host...` and paste the hostname.
