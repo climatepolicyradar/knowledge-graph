@@ -1,0 +1,12 @@
+{
+	"@metadata": {
+		"authors": [
+			"Amire80",
+			"Emem.calist",
+			"Leeheonjin"
+		]
+	},
+	"wbqc-constraintreport-no-parameter": "wala",
+	"wbqc-badparameters-short": "Maling paggamit ng mga 'parameter'",
+	"wbqc-violation-message-diff-within-range": "Ang pinagkaiba sa pagitan ng $3 ($4) at $1 ($2) ay dapat nasa pagitan ng $5 at $6 ([$5; $6])."
+}

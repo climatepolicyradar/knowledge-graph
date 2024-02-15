@@ -1,0 +1,12 @@
+{
+	"@metadata": {
+		"authors": [
+			"Robby"
+		]
+	},
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "D'Ausso respektéiert d'Limitatioun.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "D'Ausso respektéiert d'Limitatioun net.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "D'Limitatioun ass net implementéiert.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "D'Parameter vun der Limitatioun si falsch.",
+	"apihelp-wbcheckconstraints-example-2": "Kuckt all Limitatiounen op enger eenzeler Ausso no."
+}

@@ -1,0 +1,31 @@
+{
+	"@metadata": {
+		"authors": [
+			"Amire80",
+			"Guycn2"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "ביצוע בדיקת אילוצים על כל ישות והחזרת התוצאה.",
+	"apihelp-wbcheckconstraints-param-id": "רשימת מזהי ישויות שמהן צריך לקבל נתונים. יש להפריד את הערכים בתו '|' או חלופות.",
+	"apihelp-wbcheckconstraints-param-claimid": "רשימת GUID־ים שמזהים טענה שצריך לבדוק אל מול דו\"ח אילוצים. יש להפריד ערכים בתו '|'.",
+	"apihelp-wbcheckconstraints-param-constraintid": "מסנן אופציונלי שיחזיר רק את האילוצים שיש להם מזה אילוץ שצוין.",
+	"apihelp-wbcheckconstraints-param-status": "מסנן אופציונלי להחזרת תוצאות בדיקה עם מצבים מסוימים בלבד.\n\nנא לשים לב לכך שרק תוצאות עם המצבים \"violation\"‏, \"warning\"‏, \"suggestion\" ו־\"bad-parameters\" נשמרות במטמון, כך שבקשות שבוחרות כל מצב אחרת מלבד ארבעת אלה אינן מקבלות שום תועלת מהמטמון.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "הקביעה תואמת לאילוץ.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "הקביעה מפרה את האילוץ.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "ישות הנושא של הקביעה היא חריגה ידועה של האילוץ.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "האילוץ אינו מיושם.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "הפרמטרים של האילוץ אינם תקינים.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "האילוץ לא נבדק משום שהקביעה יצאה משימוש.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "הקביעה מפרה את האילוץ, אבל האילוץ אינו חובה.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "הקביעה הזאת מפרה את האילוץ, אבל האילוץ הוא רק הצעה.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "האילוץ אינו נבדק בסוג הקביעה הזה (קביעה ראשית, בדיקת כשירות או הפניה), ולכן דילגנו על האילוץ הזה.",
+	"apihelp-wbcheckconstraintparameters-summary": "בדיקת הפרמטרים של קביעות האילוצים.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "ניתן לציין את אחד הפרמטרים <var>property</var> ו־<var>constraintid</var> או את שניהם; כל האילוצים שנבחרו לפי אחד הפרמטרים ייבדקו.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "רשימה של מזהי המאפיינים שייבדקו. כל קביעות האילוצים של המאפיינים האלה תיבדקנה.\n\nאם הפרמטר הזה מצוין, הוא לא יכול להיות ריק.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "רשימה של מזהי האילוצים (ה־GUID של קביעות האילוצים) שייבדקו.\n\nאם הפרמטר הזה מצוין, הוא לא יכול להיות ריק.",
+	"apihelp-wbcheckconstraints-example-1": "בדיקה של כל האילוצים על הפריטים Q5 ו־Q42.",
+	"apihelp-wbcheckconstraints-example-2": "בדיקת כל האילוצים על טענה בודדת.",
+	"apihelp-wbcheckconstraints-example-3": "בדיקת אילוץ ייחודי בפריט Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "בדיקת הפרמטרים של כל האילוצים במאפיין.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "בדיקת הפרמטרים של שני אילוצים ייחודיים."
+}

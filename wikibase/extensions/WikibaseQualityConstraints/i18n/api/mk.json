@@ -1,0 +1,30 @@
+{
+	"@metadata": {
+		"authors": [
+			"Bjankuloski06"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Проверува услови за било која единица и дава исход.",
+	"apihelp-wbcheckconstraints-param-id": "Назнака на единиците за кои ги барате податоците. Одделете ги вредностите со права црта (|) или нешто друго.",
+	"apihelp-wbcheckconstraints-param-claimid": "GUID-список што пронаоѓа тврдење за проверка на извод од услови. Одделете ги вредностите со права црта (|).",
+	"apihelp-wbcheckconstraints-param-constraintid": "Филтер (по избор) што ги дава само условите со укажаната назнака.",
+	"apihelp-wbcheckconstraints-param-status": "Незадолжителен филтер за исход од проверка само со избраните состојби.\n\nИмајте на ум дека се меѓускладираат само исходите од состојбите „violation“, „warning“, „suggestion“ и „bad-parameters“, така што полза од меѓускладирање нема да имаат барањата што бираат состојби вон тие четири.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Исказот го задоволува условот.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Исказот го нарушува условот.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Предметната единица на исказот е познат исклучок од условот.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Условот не е спроведен.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Нарушени се условните параметри.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Условот не е проверен бидејќи исказот е застарен.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Исказот го нарушува условот, но условот не е задолжителен.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Исказот го нарушува условот, но условот е само предлог.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Условот не е проверен за ваква спојница (главна, определница или навод), и затоа проверката е изоставена.",
+	"apihelp-wbcheckconstraintparameters-summary": "Ги проверува условните параметри на условни искази.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Треба да е укажан параметарот <var>property</var> или <var>constraintid</var> или обете; ќе бидат проверени сите услови избрани по еден од параметрите.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Список на назнаки за својства за проерка. Ќе се проверат сите условни искази на тие својства.\n\nАко овој параметар е укажан, мора да не биде празен.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Список на условни назнаки (GUID на условни искази) за проверка.\n\nАко овој параметар е укажан, мора да не биде празен.",
+	"apihelp-wbcheckconstraints-example-1": "Провери ги сите услови за предметите Q5 и Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Провери ги сите услови за еден исказ.",
+	"apihelp-wbcheckconstraints-example-3": "Провери извесен услов за предметот Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Провери условни параметри за сите услови за својството.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Провери ги условните параметри за два услова."
+}

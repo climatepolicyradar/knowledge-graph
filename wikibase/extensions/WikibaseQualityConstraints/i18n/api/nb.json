@@ -1,0 +1,30 @@
+{
+	"@metadata": {
+		"authors": [
+			"Jon Harald Søby"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Utfører begrensningssjekk på de entitetene du ønsker og returnerer resultatet.",
+	"apihelp-wbcheckconstraints-param-id": "ID-liste over entiteter du ønsker å hente data fra. Atskill verdier med «|» eller alternativer.",
+	"apihelp-wbcheckconstraints-param-claimid": "GUID-liste som identifiserer en påstand for å sjekke en begrensningsrapport. Atskill verdier med «|».",
+	"apihelp-wbcheckconstraints-param-constraintid": "Valgfritt filter for å returnere bare begrensningene som har den gitte begrensnings-ID-en.",
+	"apihelp-wbcheckconstraints-param-status": "Valgfritt filter for kun å sjekke resultater med de valgte statusene.\n\nMerk at kun resultater for statusene «violation», «warning», «suggestion» og «bad-parameters» mellomlagres, så forespørsler som velger andre statuser drar ikke nytte av mellomlagringen.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Påstanden oppfyller begrensningen.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Påstanden bryter med begrensningen.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Subjektentiteten til påstanden er et kjent unntak fra begrensningen.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Begrensningen er ikke implementert.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Begrensningsparameterne er ødelagte.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Begrensningen har ikke blitt sjekket fordi påstanden er foreldet.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Påstanden bryter med begrensningen, men begrensningen er ikke obligatorisk.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Påstanden bryter med begrensningen, men begrensningen er bare et forslag.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Påstanden sjekkes ikke for denne snaktypen (hovedsnak, kvalifikator eller referanse), så begrensningssjekken hoppes over.",
+	"apihelp-wbcheckconstraintparameters-summary": "Sjekker begrensningsparametre for begrensningspåstander.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Én eller begge av parameterne <var>property</var> og <var>constraintid</var> må angis; alle begrensninger valgt av én av parameterne blir sjekket.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Liste over egenskaps-ID-er som skal sjekkes. Alle begrensningspåstander for disse egenskapene blir sjekket.\n\nHvis denne parameteren er angitt må den ikke være tom.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Liste over begrensnings-ID-er (begrensningspåstands-GUID-er) som skal sjekkes.\n\nHvis denne parameteren er angitt må den ikke være tom.",
+	"apihelp-wbcheckconstraints-example-1": "Sjekk alle begrensninger for elementene Q5 og Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Sjekk alle begrensninger for én enkel påstand.",
+	"apihelp-wbcheckconstraints-example-3": "Sjekk én bestemt begrensning på elementet Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Sjekk begrensningsparametre for alle begrensninger i en egenskap.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Sjekk begrensningsparametre for to bestemte begrensninger."
+}

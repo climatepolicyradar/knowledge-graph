@@ -1,0 +1,29 @@
+{
+	"@metadata": {
+		"authors": [
+			"Joetaras"
+		]
+	},
+	"wbqc-constraintreport": "Elenghe de le vingole",
+	"wbqc-desc": "Condrolle le vingole sus a le eleminde e sus a le probbietà e face 'ndrucà le resultate jndr'à 'na pàgena speciale",
+	"wbqc-constraintreport-form-section": "Condrolle le vingole pe entità",
+	"wbqc-constraintreport-form-submit-label": "Verifiche",
+	"wbqc-constraintreport-form-entityid-label": "ID de l'entità:",
+	"wbqc-constraintreport-result-headline": "Resultate pe",
+	"wbqc-constraintreport-invalid-entity-id": "ID de l'entità non valide.",
+	"wbqc-constraintreport-not-existent-entity": "L'entità non g'esiste.",
+	"wbqc-constraintreport-empty-result": "Non ge stonne vingole definite sus a st'entità.",
+	"wbqc-constraintreport-status-violation": "Violazione",
+	"wbqc-constraintreport-status-compliance": "Conforme",
+	"wbqc-constraintreport-status-exception": "Eccezzione",
+	"wbqc-constraintreport-status-todo": "Da fà",
+	"wbqc-constraintreport-status-bad-parameters": "Parametre sbagghiate",
+	"wbqc-constraintreport-status-deprecated": "Sconzigliate",
+	"wbqc-constraintreport-status-warning": "Avvertimende",
+	"wbqc-constraintreport-result-table-header-status": "State",
+	"wbqc-constraintreport-result-table-header-constraint": "Vingole",
+	"wbqc-constraintreport-result-link-to-claim": "vèje a l'asserzione",
+	"wbqc-constraintreport-result-link-to-constraint": "vèje a 'u vingole",
+	"wbqc-constraintreport-no-parameter": "ninde",
+	"wbqc-constrainttypehelp-short": "Aijute"
+}

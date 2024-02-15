@@ -1,0 +1,15 @@
+{
+	"@metadata": {
+		"authors": [
+			"Elisardojm"
+		]
+	},
+	"apihelp-wbcheckconstraints-param-constraintid": "Filtro opcional para devolver só as constantes que teñen o ID de constante especificado.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "A declaración satisfai a restrición.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "A declaración viola a restrición.",
+	"apihelp-wbcheckconstraints-example-1": "Verificar tódalas constantes sobre os elementos Q5 e Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Verificar tódalas constantes nunha soa instrucción.",
+	"apihelp-wbcheckconstraints-example-3": "Verificar unha restrición en particular sobre o obxecto Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Verificar os parámetros de restrición de tódalas restricións dunha propiedade.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Verificar os parámetros de restrición de dúas restricións en particular."
+}

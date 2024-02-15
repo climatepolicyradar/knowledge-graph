@@ -1,0 +1,55 @@
+{
+	"name": "wikibase/constraints",
+	"type": "mediawiki-extension",
+	"description": "Extension to manage constraints in Wikibase.",
+	"keywords": [
+		"quality",
+		"trust",
+		"violation",
+		"constraint",
+		"wikibase",
+		"wikidata"
+	],
+	"homepage": "https://www.mediawiki.org/wiki/Wikibase_Quality_Extensions",
+	"license": "GPL-2.0-or-later",
+	"authors": [
+		{
+			"name": "BP2014N1"
+		}
+	],
+	"support": {
+		"issues": "https://phabricator.wikimedia.org/project/profile/1202/"
+	},
+	"require": {
+		"php": ">=7.4.0",
+		"serialization/serialization": "^3.2.1|^4.0.0",
+		"data-values/data-values": "^3.0.0|^2.0.0|^1.0.0",
+		"data-values/common": "^1.0.0|^0.4.0|^0.3.0",
+		"data-values/geo": "^4.2.1|^3.0.1|^2.1.2",
+		"data-values/number": "^0.12.3|^0.11.0",
+		"data-values/time": "^1.0.4",
+		"data-values/serialization": "^1.2.4|^1.2.1",
+		"wikimedia/purtle": "^1.0.7"
+	},
+	"require-dev": {
+		"mediawiki/mediawiki-codesniffer": "41.0.0",
+		"mediawiki/mediawiki-phan-config": "0.12.1",
+		"mediawiki/minus-x": "1.1.1",
+		"php-parallel-lint/php-console-highlighter": "1.0.0",
+		"php-parallel-lint/php-parallel-lint": "1.3.2"
+	},
+	"scripts": {
+		"fix": [
+			"minus-x fix .",
+			"phpcbf"
+		],
+		"test": [
+			"composer validate --no-interaction",
+			"parallel-lint . --exclude vendor --exclude node_modules",
+			"@phpcs",
+			"minus-x check ."
+		],
+		"phan": "phan -d . --long-progress-bar --allow-polyfill-parser",
+		"phpcs": "phpcs -sp --cache"
+	}
+}

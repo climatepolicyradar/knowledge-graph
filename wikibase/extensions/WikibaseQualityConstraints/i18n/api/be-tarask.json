@@ -1,0 +1,31 @@
+{
+	"@metadata": {
+		"authors": [
+			"Red Winged Duck",
+			"Renessaince"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Выконвае праверкі абмежаваньня для любой патрэбнай вам сутнасьці і выводзіць вынік.",
+	"apihelp-wbcheckconstraints-param-id": "Сьпіс ідэнтыфікатараў сутнасьцяў, зь якіх трэба атрымаць зьвесткі. Аддзяляйце значэньні з дапамогай «|» ці чагосьці падобнага.",
+	"apihelp-wbcheckconstraints-param-claimid": "Сьпіс GUID, які вызначае запіс, у якім трэба выканаць праверку абмежаваньня. Аддзяляйце значэньні з дапамогай «|».",
+	"apihelp-wbcheckconstraints-param-constraintid": "Неабавязковы фільтар дзеля вяртаньня толькі тых абмежаваньняў, якія маюць вызначаны ідэнтыфікатар абмежаваньня.",
+	"apihelp-wbcheckconstraints-param-status": "Зьвярніце ўвагу, што кэшуюцца толькі вынікі для статусаў «парушэньне», «папярэджаньне», «прапанова» і «хібныя парамэтры», таму запыты, якія выбіраюць іншыя статусы, не атрымліваюць паскарэньня ад кэшаваньня.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Сьцьверджаньне адпавядае абмежаваньню.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Сьцьверджаньне парушае абмежаваньне.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Прадмет сутнасьці сьцьверджаньня — вядомы вынятак для абмежаваньня.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Абмежаваньне не прымененае.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Парамэтры абмежаваньня сапсаваныя.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Праверка абмежаваньня не адбылася, бо сьцьверджаньне састарэлае.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Сьцьверджаньне парушае абмежаваньне, аднак гэтае абмежаваньне неабавязковае.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Сьцьверджаньне парушае абмежаваньне, аднак гэтае абмежаваньне зьяўляецца толькі прапановай.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Абмежаваньне на гэтым відзе снэку (галоўнага снэку, кваліфікатара ці крыніцы) ня ўключанае, таму праверка абмежаваньня прапушчаная.",
+	"apihelp-wbcheckconstraintparameters-summary": "Правярае парамэтры сьцьверджаньняў абмежаваньня.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Можна пазначыць любы ці абодва парамэтраў <var>уласьцівасьць</var> ці <var>ідэнтыфікатар_абмежаваньня</var>; будуць правераныя ўсе абмежаваньні, выбраныя любым з парамэтраў.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Сьпіс ідэнтыфікатараў уласьцівасьцей для праверкі. Будуць правераныя ўсе сьцьверджаньні абмежаваньняў гэтых уласьцівасьцей.\n\nКалі гэты парамэтар пазначаны, ён ня можа быць пустым.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Сьпіс ідэнтыфікатараў абмежаваньняў (GUID сьцьверджаньняў абмежаваньняў) для праверкі.\n\nКалі гэты парамэтар пазначаны, ён ня можа быць пустым.",
+	"apihelp-wbcheckconstraints-example-1": "Праверыць усе абмежаваньні ў элемэнтах Q5 і Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Праверыць усе абмежаваньні ў адным сьцьверджаньні.",
+	"apihelp-wbcheckconstraints-example-3": "Праверыць адно канкрэтнае абмежаваньне ў элемэнце Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Праверыць парамэтры ўсіх абмежаваньняў уласьцівасьці.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Праверыць парамэтры двух канкрэтных абмежаваньняў."
+}

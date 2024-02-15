@@ -1,0 +1,39 @@
+{
+	"@metadata": {
+		"authors": [
+			"Aftabuzzaman",
+			"আফতাবুজ্জামান"
+		]
+	},
+	"wbqc-constraintreport": "সীমাবদ্ধতার প্রতিবেদন",
+	"wbqc-constraintreport-form-submit-label": "পরীক্ষা করুন",
+	"wbqc-constraintreport-form-entityid-placeholder": "Qxx বা Pxx",
+	"wbqc-constraintreport-result-headline": "এর জন্য ফলাফল",
+	"wbqc-constraintreport-status-violation": "লঙ্ঘন",
+	"wbqc-constraintreport-status-compliance": "সম্মতি",
+	"wbqc-constraintreport-status-exception": "ব্যতিক্রম",
+	"wbqc-constraintreport-status-todo": "করণীয়",
+	"wbqc-constraintreport-status-warning": "সতর্কীকরণ",
+	"wbqc-constraintreport-status-suggestion": "পরামর্শ",
+	"wbqc-constraintreport-result-table-header-status": "অবস্থা",
+	"wbqc-constraintreport-result-table-header-property": "বৈশিষ্ট্য",
+	"wbqc-constraintreport-result-table-header-message": "বার্তা",
+	"wbqc-constraintreport-result-table-header-constraint": "সীমাবদ্ধতা",
+	"wbqc-constraintreport-result-link-to-claim": "দাবিতে যান",
+	"wbqc-constraintreport-result-link-to-constraint": "সীমাবদ্ধতায় যান",
+	"wbqc-constraintreport-no-parameter": "কিছু নয়",
+	"wbqc-issues-short": "সমস্যা",
+	"wbqc-issues-long": "এই বিবৃতির কিছু সমস্যা রয়েছে।",
+	"wbqc-potentialissues-short": "সম্ভাব্য সমস্যা",
+	"wbqc-potentialissues-long": "এই বিবৃতির কিছু সম্ভাব্য সমস্যা রয়েছে।",
+	"wbqc-suggestions-short": "পরামর্শসমূহ",
+	"wbqc-suggestions-long": "এই বিবৃতিটি উন্নত করার জন্য এখানে কিছু পরামর্শ রয়েছে।",
+	"wbqc-badparameters-short": "খারাপ প্যারামিটার",
+	"wbqc-constrainttypehelp-short": "সাহায্য",
+	"wbqc-constraintdiscuss-short": "আলোচনা",
+	"wbqc-constraintdiscuss-long": "এই সীমাবদ্ধতা সম্পর্কে আলোচনার পাতা",
+	"wbqc-violation-message-commons-link-no-existent": "কমন্সের সংযোগ বিদ্যমান থাকা উচিত।",
+	"wbqc-violation-message-commons-link-not-well-formed": "কমন্সের সংযোগ সঠিক-বিন্যাসকৃত হতে হবে।",
+	"wbqc-violation-message-item": "$1 যুক্ত ভুক্তির {{PLURAL:$3|0=$2 বিবৃতি থাকা উচিত।|1=$2 $5 বিবৃতি থাকা উচিত।|নিন্মলিখিত মানগুলির একটি সহ $2-এর জন্য একটি বিবৃতি থাকা উচিত:$4}}",
+	"wbqc-violation-message-unique-value": "এই বৈশিষ্ট্যের মান অন্য কোন আইটেমে উপস্থিত থাকতে পারবে না, কিন্তু এটি {{PLURAL:$1|1=$3 এ উপস্থিত রয়েছে।|2=$3 ও $4 এ উপস্থিত রয়েছে।|নিম্নলিখিত আইটেমে উপস্থিত রয়েছে: $2}}"
+}

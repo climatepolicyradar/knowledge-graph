@@ -1,0 +1,30 @@
+{
+	"@metadata": {
+		"authors": [
+			"Joetaras"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Face le condrolle de vingole sus a tutte le endità ca vuè ccu tuèrne jndr'à 'u resultate.",
+	"apihelp-wbcheckconstraints-param-id": "ID de l'elenghe de l'endità da addò pigghià le date. Valore separate cu '|' o 'n'otre simbole.",
+	"apihelp-wbcheckconstraints-param-claimid": "L'elenghe de GUID idendifichescene 'na richieste da condrollà jndr'à 'nu reipiloghe de vingole. Valore separate cu '|'.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Filtre opzionale torne sulamende le vingole ca onne l'ID d'u vingole specificate.",
+	"apihelp-wbcheckconstraints-param-status": "'U filtre opzionale torne sulamende le resultate condrollate de le state scacchiate.\n\nNote ca sulamende le resultate pe le state 'violation', 'warning', 'suggestion' e 'bad-parameters' avènene memorizzate, accussì le richieste ca scacchie ogne state rrete a chiste e quattre non ge onne 'u benefice d'a cache.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "'A dichiarazione soddisfe 'u vingole.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "'A dichiarazione viole 'u vingole.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "L'endità oggette d'a dichiarazzione jè 'n'eccezzione canusciute a 'u vingole.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "'U vingole non g'è 'mblemendate.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Le parametre d'u vingole so scuasciate.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "'U vingole non g'ha state condrollate purcé 'a dichiarazione jè sconzigliate.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "'A dichiarazzione viole 'u vingole, ma 'u vingole non g'è obbligatorije.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "'A dichiarazzione viole 'u vingole, ma 'u vingole jè sulamende 'nu suggerimende.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "'U vingole non g'è condrollate sus a stu tipe de snak (snak prengepàle, qualificatore o referimende), accussì 'u condrolle d'u vingole jè zumbate.",
+	"apihelp-wbcheckconstraintparameters-summary": "Condrolle le parametre d'u vingole de le dichiaraziune d'u vingole.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Tutte e doje le parametre <var>property</var> e <var>constraintid</var> ponne essere specificate; tutte le vingole scacchiate da tutte e doje le parametre avènene condrollate.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Elenghe de le ID de le probbietà da condrollà. Tutte le dichiarazziune de le vingole de ste probbietà avènene condrollate.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Elenghe de le ID de le vingole (dichiarazzione d'a GUI d'u vingole) da condrollà.\n\nCe stu parametre jè specificate, non g'adda essere vacande.",
+	"apihelp-wbcheckconstraints-example-1": "Condrolle tutte le vingole sus a le vôsce Q5 e Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Condrolle tutte le vingole sus a 'na dichiarazione singole.",
+	"apihelp-wbcheckconstraints-example-3": "Condrolle 'nu vingole particolare sus a 'a vôsce Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Condrolle le parametre d'u vingole de tutte le vingole de 'na probbietà.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Condrolle le parametre de 'nu vingole de doje vingole particulare."
+}

@@ -1,0 +1,32 @@
+{
+	"@metadata": {
+		"authors": [
+			"Mainframe98",
+			"Sjoerddebruin",
+			"McDutchie"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Voert een beperkingencontrole uit op de gewenste entiteit en retourneert het resultaat.",
+	"apihelp-wbcheckconstraints-param-id": "ID-lijst van de entiteiten waaruit de gegevens moeten worden opgehaald. Scheid waarden met ‘|’ of een alternatief.",
+	"apihelp-wbcheckconstraints-param-claimid": "GUID-lijst die een verklaring identificeert om een beperkingsrapport te controleren. Scheid waarden met ‘|’.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Optioneel filter om alleen de beperkingen te retourneren die de opgegeven beperkings-ID hebben.",
+	"apihelp-wbcheckconstraints-param-status": "Optioneel filter om alleen controleresultaten met de geselecteerde statussen te retourneren.\n\nHoud er rekening mee dat alleen resultaten voor de statussen ‘violation’, ‘warning’, ‘suggestion’ en ‘bad-parameters’ in de cache worden opgeslagen. Aanvragen die een status buiten deze vier selecteren, worden niet in de cache geplaatst.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "De verklaring voldoet aan de beperking.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "De verklaring is in strijd met de beperking.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "De onderwerpentiteit van de verklaring is een bekende uitzondering op de beperking.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "De beperking is niet geïmplementeerd.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "De beperkingsparameters zijn onjuist.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "De beperking is niet gecontroleerd omdat de verklaring verouderd is.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "De verklaring is in strijd met de beperking, maar de beperking is niet verplicht.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "De verklaring is in strijd met de beperking, maar de beperking is slechts een suggestie.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "De beperking wordt niet gecontroleerd op dit soort snak (hoofdsnak, kwalificatie of referentie), dus de controle op de beperking wordt overgeslagen.",
+	"apihelp-wbcheckconstraintparameters-summary": "Controleert de beperkingsparameters van beperkingsverklaringen.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Van de parameters <var>property</var> en <var>constraintid</var> mag één of mogen beide worden opgegeven. Alle door één van beide parameters geselecteerde beperkingen worden gecontroleerd.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Lijst met te controleren eigenschaps-ID’s. Alle beperkingsverklaringen van deze eigenschappen worden gecontroleerd.\n\nEenmaal opgegeven mag deze parameter niet leeg zijn.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Lijst met te controleren beperkings-ID’s (GUID’s van beperkingsverklaringen).\n\nEenmaal opgegeven mag deze parameter niet leeg zijn.",
+	"apihelp-wbcheckconstraints-example-1": "Alle beperkingen voor de items Q5 en Q42 controleren.",
+	"apihelp-wbcheckconstraints-example-2": "Alle beperkingen voor een losse verklaring controleren.",
+	"apihelp-wbcheckconstraints-example-3": "Controleer één specifieke beperking op item Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Controleer de beperkingsparameters van alle op een eigenschap van toepassing zijnde beperkingen.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Controleer de beperkingsparameters van twee specifieke beperkingen."
+}

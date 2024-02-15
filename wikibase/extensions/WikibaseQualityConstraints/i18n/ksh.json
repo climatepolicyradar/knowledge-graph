@@ -1,0 +1,31 @@
+{
+	"@metadata": {
+		"authors": [
+			"Purodha"
+		]
+	},
+	"wbqc-constraintreport": "Bereesch övver Beschrängkonge",
+	"wbqc-constraintreport-explanation-part-one": "Heh di {{int:specialpage}} pröhv de Beschrängkonge vun jehde Saach, di de wells. De Saache wähde vum lebänndeje Süßtehm met de Dahtebangk jehollt, esu weed och jehde Verläzong vun ene Beschrängkung, wam_mer se doh reparehrt hät, tiräk heh uß de Leß jeschmeße.",
+	"wbqc-constraintreport-explanation-part-two": "De Beschrängkonge wähde jehde Woch vun de Klaafsigge övver de Eijeschaffte enjelässe. Dröm, wann De doh en Beschrängkong derbei deiht, fott nemmps, udder veränders, kann et en Woch duehre, bes dat heh em Bereesch ens opdouch. Mer ärbeide draan, dat mer di Beschrängkonge en de Behouptonge övver de Eijeschaffte medd enboue, su dat mer aam ldänndeje Süßtehm den de Dahtebangk pröhve künne.",
+	"wbqc-constraintreport-form-submit-label": "Lohß jonn!",
+	"wbqc-constraintreport-form-entityid-placeholder": "Qxy/Pxy",
+	"wbqc-constraintreport-result-headline": "Wat eruß kohm för",
+	"wbqc-constraintreport-not-existent-entity": "Di Saach jidd_et nit!",
+	"wbqc-constraintreport-empty-result": "Mer han kein Beschrängkonge för di Saach heh ennjereschdt.",
+	"wbqc-constraintreport-status-violation": "Verläzong",
+	"wbqc-constraintreport-status-compliance": "Kütt zepaß",
+	"wbqc-constraintreport-status-exception": "Ußnahm",
+	"wbqc-constraintreport-status-todo": "Noch ze donn",
+	"wbqc-constraintreport-result-table-header-status": "Zohschtand",
+	"wbqc-constraintreport-result-table-header-constraint": "Beschrängkong",
+	"wbqc-constraintreport-result-link-to-claim": "jangk op di Behouptong",
+	"wbqc-constraintreport-result-link-to-constraint": "jangk op di Beschrängkong",
+	"wbqc-constraintreport-no-parameter": "keine",
+	"wbq-subextension-name-wbqc": "Beschrängkonge",
+	"wbqc-violation-header-parameters": "Parramehtere:",
+	"wbqc-violations-group": "Beschrängkonge",
+	"wbqc-violation-message": "De Pröhfong hädd_en Verläzong vum Berett för de müjjelesche Wääte jefonge. Op dat Minnibelldsche Kleke brängk Der mih Aanjahbe derzoh.",
+	"wbqc-violation-message-commons-link-check-for-namespace-not-yet-implemented": "För dat Appachtemang „$1“ jidd_et noch keine Pröhvong.",
+	"wbqc-violation-message-diff-within-range-must-have-equal-types": "Di Eijeschaff, di en dä Parramehtere faßjelaht es, moß ene Wäät vun dersällve Zoot han, wi heh di Eijeschaff.",
+	"wbqc-violation-message-multi-value": "Heh di Eijeschaff moß mih wi eijne Wäät han. Et möße alsu zwai udder mih Behoutonge doh sin, di se bruche."
+}

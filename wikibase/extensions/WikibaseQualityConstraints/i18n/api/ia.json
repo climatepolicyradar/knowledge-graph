@@ -1,0 +1,30 @@
+{
+	"@metadata": {
+		"authors": [
+			"McDutchie"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Executa verificationes de restrictiones sur qualcunque entitate que tu vole e restitue le resultato.",
+	"apihelp-wbcheckconstraints-param-id": "Lista de IDs del entitates pro le quales obtener datos. Separa valores con '|' o alternative.",
+	"apihelp-wbcheckconstraints-param-claimid": "Lista de GUIDs identificante un assertion pro verificar un reporto de restrictiones. Separa valores con '|'.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Filtro optional pro restituer solmente le restrictiones que ha le ID de restriction specificate.",
+	"apihelp-wbcheckconstraints-param-status": "Filtro optional pro restituer solmente resultatos de verificationes con le statos seligite.\n\nNota que solmente resultatos pro le statos 'violation', 'warning', 'suggestion' e 'bad-parameters' es immagazinate in cache, de modo que requestas que selige qualcunque statos ultra iste quatro non beneficia del cache.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Le declaration satisface le restriction.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Le declaration viola le restriction.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Le entitate de subjecto del declaration es un exception cognoscite al restriction.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Le restriction non es implementate.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Le parametros del restriction es defectuose.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Le restriction non ha essite verificate perque le declaration es obsolescente.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Le declaration viola le restriction, ma le restriction non es obligatori.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Le declaration viola le restriction, ma le restriction solo es un suggestion.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Le restriction non es verificate sur iste typo de snak (snak principal, qualificator o referentia), dunque le controlo del restriction es saltate.",
+	"apihelp-wbcheckconstraintparameters-summary": "Verifica le parametros de restriction de declarationes de restriction.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Un o le duo del parametros <var>property</var> e <var>constraintid</var> pote esser specificate; tote le restrictiones seligite per cata parametro essera verificate.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Lista de identificatores de proprietate a verificar. Tote le declarationes de restriction de iste proprietates essera verificate.\n\nSi iste parametro es specificate, illo debe esser non vacue.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Lista de identificatores de restriction (GUIDs de declaration de restriction) a verificar.\n\nSi iste parametro es specificate, illo debe esser non vacue.",
+	"apihelp-wbcheckconstraints-example-1": "Verificar tote le restrictiones sur le elementos Q5 e Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Verificar tote le restrictiones sur un singule declaration.",
+	"apihelp-wbcheckconstraints-example-3": "Verificar un restriction particular sur le elemento Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Verifica le parametros de restriction de tote le restrictiones sur un proprietate.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Verificar le parametros de restriction de duo restrictiones particular."
+}

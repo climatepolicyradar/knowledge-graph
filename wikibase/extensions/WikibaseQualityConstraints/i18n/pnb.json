@@ -1,0 +1,31 @@
+{
+	"@metadata": {
+		"authors": [
+			"Abbas dhothar",
+			"Bgo eiu"
+		]
+	},
+	"wbqc-constraintreport-form-submit-label": "نرودھ کھوج شروع کرو",
+	"wbqc-constraintreport-form-entityid-label": "چیز دا شناختی:",
+	"wbqc-constraintreport-form-entityid-placeholder": "Qxx یا Pxx",
+	"wbqc-constraintreport-result-headline": "نتیجہ:",
+	"wbqc-constraintreport-invalid-entity-id": "چیز دا شناختی نہیں درست اے۔",
+	"wbqc-constraintreport-not-existent-entity": "چیز نہیں ہندی۔",
+	"wbqc-constraintreport-status-todo": "ہݨے نرودھ کم نہیں سکدا",
+	"wbqc-constraintreport-status-warning": "خبردار",
+	"wbqc-constraintreport-result-table-header-status": "حالت",
+	"wbqc-constraintreport-result-table-header-property": "وشیشتا",
+	"wbqc-constraintreport-result-table-header-message": "سنیہا",
+	"wbqc-constraintreport-result-table-header-constraint": "نرودھ",
+	"wbqc-constraintreport-no-parameter": "کوئی نئیں",
+	"wbqc-issues-short": "مسئلے",
+	"wbqc-parameterissues-short": "اضافی مسئلے",
+	"wbqc-constrainttypehelp-short": "مدد",
+	"wbqc-constraintdiscuss-short": "گل بات",
+	"wbqc-dataValueType-wikibase-entityid": "چیز دا شناختی",
+	"wbq-subextension-name-wbqc": "نرودھ",
+	"wbqc-violation-header-parameters": "ماپ دنڈ:",
+	"wbqc-violations-group": "نرودھ",
+	"wbqc-violation-message-qualifiers": "$1 لئی $2 وشیشگتا نہیں درست اے۔ {{PLURAL:$3|1=صرف $5 ورت ہی سکدے۔|2=صرف $5 یا $6 ورت ہی سکدے۔|صرف ایہہ وشیشگتاواں ورت ہی سکدے: $4}}",
+	"wbqc-violation-message-citationNeeded": "$1 بیاناں لئی حوالے ضروری اے۔"
+}

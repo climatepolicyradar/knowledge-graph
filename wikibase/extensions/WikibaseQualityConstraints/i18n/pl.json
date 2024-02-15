@@ -1,0 +1,41 @@
+{
+	"@metadata": {
+		"authors": [
+			"Chrumps",
+			"CiaPan",
+			"InternerowyGołąb",
+			"Woytecr"
+		]
+	},
+	"wbqc-constraintreport-form-submit-label": "Sprawdź",
+	"wbqc-constraintreport-form-entityid-placeholder": "Qxx lub Pxx",
+	"wbqc-constraintreport-result-headline": "Wynik dla",
+	"wbqc-constraintreport-invalid-entity-id": "Nieprawidłowy identyfikator elementu",
+	"wbqc-constraintreport-not-existent-entity": "Element nie istnieje.",
+	"wbqc-constraintreport-status-violation": "Naruszenie",
+	"wbqc-constraintreport-status-compliance": "Zgodność",
+	"wbqc-constraintreport-status-exception": "Wyjątek",
+	"wbqc-constraintreport-status-todo": "Do zrobienia",
+	"wbqc-constraintreport-status-bad-parameters": "Złe parametry",
+	"wbqc-constraintreport-status-warning": "Ostrzeżenie",
+	"wbqc-constraintreport-result-table-header-status": "Status",
+	"wbqc-constraintreport-result-table-header-property": "Właściwość",
+	"wbqc-constraintreport-result-table-header-message": "Wiadomość",
+	"wbqc-constraintreport-no-parameter": "brak",
+	"wbqc-badparameters-short": "Złe parametry",
+	"wbqc-constrainttypehelp-short": "Pomoc",
+	"wbqc-violation-header-parameters": "Parametry:",
+	"wbqc-violation-message-parameter-regex": "$1 nie jest prawidłowym wyrażeniem regularnym.",
+	"wbqc-violation-message-diff-within-range-must-have-equal-types": "Właściwość określona w parametrach musi mieć wartość tego samego typu jak ta właściwość.",
+	"wbqc-violation-message-format": "Wartość dla $1 ($2) powinna pasować do wzorca $3.",
+	"wbqc-violation-message-multi-value": "Ta właściwość powinna zawierać wiele wartości.",
+	"wbqc-violation-message-one-of": "Właściwość $1 powinna mieć wartość {{PLURAL:$2|1=$4.|2=$4 albo $5.|jedną z następujących:$3}}",
+	"wbqc-violation-message-qualifier": "Ta właściwość powinna być stosowana tylko jako kwalifikator.",
+	"wbqc-violation-message-range-quantity-leftopen": "Wartość  $1 ($2) nie powinna być większa od $3.",
+	"wbqc-violation-message-range-time-closed": "Wartość $1 ($2) powinna być powinna $3 oraz $4.",
+	"wbqc-violation-message-single-value": "Ta właściwość powinna zawierać tylko jedną wartość.",
+	"wbqc-violation-message-target-required-claim": "$1 powinno mieć {{PLURAL:$3|0=deklarację $2.|1=deklarację $2 $5.|deklarację dla $2 z jedną z następujących wartości: $4}}",
+	"wbqc-violation-message-units-none": "Wartość $1 nie powinna mieć jednostki.",
+	"wbqc-violation-message-integer": "Wartości dla $1 powinny być liczbami całkowitymi, ale $2 ma część ułamkową.",
+	"wbqc-violation-message-property-scope": "Właściwość $1 nie powinna być używana w tej lokalizacji ($2). {{PLURAL:$3| Jedyna prawidłowa|Jedyne prawidłowe}} dla tej właściwości {{PLURAL:$3|to $5|to: $4}}"
+}

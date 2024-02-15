@@ -1,0 +1,33 @@
+{
+	"@metadata": {
+		"authors": [
+			"DDPAT",
+			"Ice bulldog",
+			"Piramidion",
+			"Vlad5250"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Виконує перевірки обмежень у будь-якій сутності за Вашим бажання, і виводить результат.",
+	"apihelp-wbcheckconstraints-param-id": "Список ідентифікаторів сутностей, з яких слід отримати дані. Відокремлюйте значення за допомогою '|' чи чогось подібного.",
+	"apihelp-wbcheckconstraints-param-claimid": "Список GUID, який визначає запис, щодо якого слід виконати перевірку й отримати звіт щодо обмежень. Відокремлюйте значення за допомогою '|'.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Необов'язковий фільтр для повернення лише тих обмежень, які мають вказаний ідентифікатор обмеження.",
+	"apihelp-wbcheckconstraints-param-status": "Необов'язковий фільтр для повернення лише тих результатів перевірки, які мають вибрані статуси.\n\nЗверніть увагу, що кешуються лише результати зі статусами 'violation', 'warning', 'suggestion' і 'bad-parameters', тож запити, в яких вибрано якісь інші статуси окрім чотирьох наведених, не матимуть користі від кешування.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Твердження задовольняє обмеження.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Твердження порушує обмеження.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Суб'єктна сутність твердження є відомим винятком до обмеження.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Це обмеження не впроваджено.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Параметри обмеження зламані.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Обмеження не було перевірено, оскільки твердження є застарілим.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Твердження порушує обмеження, але це обмеження не є обов'язковим.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Твердження порушує обмеження, але це обмеження є лише пропозицією.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Обмеження не перевіряються на цьому типі подробиць (головна подробиця, уточнення або посилання на джерело), тож перевірку обмежень пропущено.",
+	"apihelp-wbcheckconstraintparameters-summary": "Перевіряє параметри тверджень обмежень.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Можна вказати обидва або один з параметрів <var>property</var> та <var>constraintid</var>; перевірені будуть усі обмеження, вибрані іншим параметром.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Список ідентифікаторів властивостей, які слід перевірити. Всі твердження обмежень цих властивостей буде перевірено.\n\nЯкщо цей параметр вказано, він не повинен бути порожнім.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Список ідентифікаторів обмежень (GUID тверджень обмежень), які слід перевірити.\n\nЯкщо цей параметр вказано, він не повинен бути порожнім.",
+	"apihelp-wbcheckconstraints-example-1": "Перевірити всі обмеження в елементах Q5 та Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Перевірити всі обмеження в одному твердженні.",
+	"apihelp-wbcheckconstraints-example-3": "Перевірити одне конкретне обмеження в елементі Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Перевірити параметри усіх обмежень у властивості.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Перевірити параметри двох конкретних обмежень."
+}

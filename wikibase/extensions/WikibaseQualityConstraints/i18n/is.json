@@ -1,0 +1,21 @@
+{
+	"@metadata": {
+		"authors": [
+			"Sveinn í Felli"
+		]
+	},
+	"wbqc-constraintreport-form-submit-label": "Athuga",
+	"wbqc-constraintreport-result-headline": "Niðurstaða fyrir",
+	"wbqc-constraintreport-status-exception": "Frávik",
+	"wbqc-constraintreport-status-todo": "Geralistinn",
+	"wbqc-constraintreport-status-deprecated": "Úrelt",
+	"wbqc-constraintreport-status-warning": "Aðvörun",
+	"wbqc-constraintreport-result-table-header-status": "Staða",
+	"wbqc-constraintreport-result-table-header-constraint": "Hömlur",
+	"wbqc-constraintreport-no-parameter": "ekkert",
+	"wbqc-issues-short": "Vandamál",
+	"wbqc-constrainttypehelp-short": "Hjálp",
+	"wbq-subextension-name-wbqc": "Hömlur",
+	"wbqc-violation-header-parameters": "Viðföng:",
+	"wbqc-violations-group": "Hömlur"
+}

@@ -1,0 +1,33 @@
+{
+	"@metadata": {
+		"authors": [
+			"A Chinese Wikipedian",
+			"GuoPC",
+			"Liuxinyu970226",
+			"Shizhao"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "在任何您希望执行的实体上执行约束检查，并返回结果。",
+	"apihelp-wbcheckconstraints-param-id": "要获取数据的实体ID列表。使用“|”或替代字符分隔值。",
+	"apihelp-wbcheckconstraints-param-claimid": "识别要检查约束报告的声明的GUID列表。使用“|”分隔值。",
+	"apihelp-wbcheckconstraints-param-constraintid": "可选的过滤器，只返回有指定约束ID的约束。",
+	"apihelp-wbcheckconstraints-param-status": "可选过滤器，只返回具有选定状态的检查结果。\n\n注意只有“violation”、“warning”、“suggestion”和“bad-parameters”状态的结果会被缓存，所以选择任何不属于这4种状态的请求都将不会得到缓存。",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "该陈述符合约束条件。",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "该陈述违反了约束限定值。",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "陈述的对象实体是约束的已知例外。",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "约束未实施。",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "约束参数损坏。",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "约束未检查，因为陈述已弃用。",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "陈述违反约束，但约束并非强制。",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "该陈述违反了约束，但约束只是一个建议。",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "约束未在此类型snak中检查（主snak、修饰符或参考文献），因此约束检查被跳过。",
+	"apihelp-wbcheckconstraintparameters-summary": "检查约束陈述的约束参数。",
+	"apihelp-wbcheckconstraintparameters-extended-description": "可指定<var>property</var>和<var>constraintid</var>参数中的任意一个，或二者皆可；两个参数选择的所有约束都将接受检查。",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "要检查的属性ID列表。这些属性的所有约束陈述都将接受检查。\n\n如果指定了该参数，它必须为非空值。",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "要检查的约束ID（约束声明GUID）列表。\n\n如果指定了该参数，它必须为非空值。",
+	"apihelp-wbcheckconstraints-example-1": "检查项目Q5和Q42的所有约束。",
+	"apihelp-wbcheckconstraints-example-2": "检查单个陈述上的所有约束。",
+	"apihelp-wbcheckconstraints-example-3": "在项目Q2上检查某个特定约束。",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "检查某一属性上所有约束的约束参数。",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "检查两个特定约束的约束参数。"
+}

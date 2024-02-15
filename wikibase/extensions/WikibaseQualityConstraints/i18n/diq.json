@@ -1,0 +1,23 @@
+{
+	"@metadata": {
+		"authors": [
+			"Mirzali",
+			"Orbot707"
+		]
+	},
+	"wbqc-constraintreport-status-violation": "İxlal",
+	"wbqc-constraintreport-status-exception": "İstisna",
+	"wbqc-constraintreport-status-todo": "Todo",
+	"wbqc-constraintreport-status-bad-parameters": "Parametreyo xırab",
+	"wbqc-constraintreport-status-deprecated": "Wedariyaye",
+	"wbqc-constraintreport-status-warning": "Tembe kem",
+	"wbqc-constraintreport-status-suggestion": "Teklif",
+	"wbqc-constraintreport-result-table-header-status": "Weziyet",
+	"wbqc-constraintreport-result-table-header-property": "Xısusiyet",
+	"wbqc-constraintreport-result-table-header-message": "Mesac",
+	"wbqc-constraintreport-no-parameter": "çıniyo",
+	"wbqc-issues-short": "Meseleyi",
+	"wbqc-suggestions-short": "Teklifi",
+	"wbqc-constrainttypehelp-short": "Peşti",
+	"wbqc-violation-header-parameters": "Parametreyi:"
+}

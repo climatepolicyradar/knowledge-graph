@@ -1,0 +1,19 @@
+{
+	"@metadata": {
+		"authors": [
+			"NMW03",
+			"Neriman2003",
+			"Toghrul Rahimli",
+			"Wertuose"
+		]
+	},
+	"wbqc-potentialissues-short": "Mümkün problemlər",
+	"wbqc-suggestions-short": "Təkliflər",
+	"wbqc-constrainttypehelp-short": "Kömək",
+	"wbqc-constrainttypehelp-long": "Bu məhdudiyyət növünün kömək səhifəsi",
+	"wbqc-constraintdiscuss-short": "Müzakirə",
+	"wbqc-constraintdiscuss-long": "Bu məhdudiyyət barədə müzakirə səhifəsi",
+	"wbqc-violation-message-type-instanceOrSubclass": "$1 parametri istifadə edilmiş müddəaların anlayış sinifləri və ya alt sinifləri {{PLURAL:$3|1=$5|2=$5 və ya $6|aşağıdakı siniflərdən biri}} (və ya {{PLURAL:$3|1=alt sinfi|2=onların alt sinfi|alt siniflərindən biri}}) olmalıdır, amma $2 hazırda {{PLURAL:$3|1=belə deyil.|2=belə deyil.|$4 deyil.}}",
+	"wbqc-violation-message-target-required-claim": "$1 {{PLURAL:$3|0=$2 müddəasına|1=$2 $5 müddəasına|$2 müddəası $4 dəyərlərindən birinə}} malik olmalıdır.",
+	"wbqc-violation-message-citationNeeded": "$1 üçün ən azı bir istinad tələb olunur."
+}

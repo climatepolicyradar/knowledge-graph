@@ -1,0 +1,38 @@
+{
+	"@metadata": {
+		"authors": [
+			"Abián",
+			"Alifakoor",
+			"Amire80",
+			"Liuxinyu970226",
+			"Lucas Werkmeister (WMDE)",
+			"Metalhead64",
+			"Raymond",
+			"Robby",
+			"Verdy p"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "{{Doc-apihelp-summary|wbcheckconstraints}}",
+	"apihelp-wbcheckconstraints-param-id": "{{Doc-apihelp-param|wbcheckconstraints|id}}",
+	"apihelp-wbcheckconstraints-param-claimid": "{{Doc-apihelp-param|wbcheckconstraints|claimid}}",
+	"apihelp-wbcheckconstraints-param-constraintid": "{{Doc-apihelp-param|wbcheckconstraints|constraintid}}",
+	"apihelp-wbcheckconstraints-param-status": "{{Doc-apihelp-param|wbcheckconstraints|status}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|compliance}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|violation}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|exception}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|todo}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|bad-parameters}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|deprecated}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|warning}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|suggestion}}",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "{{Doc-apihelp-paramvalue|wbcheckconstraints|status|not-in-scope}}",
+	"apihelp-wbcheckconstraintparameters-summary": "{{Doc-apihelp-summary|wbcheckconstraintparameters}}",
+	"apihelp-wbcheckconstraintparameters-extended-description": "{{Doc-apihelp-extended-description|wbcheckconstraintparameters}}",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "{{Doc-apihelp-param|wbcheckconstraintparameters|propertyid}}",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "{{Doc-apihelp-param|wbcheckconstraintparameters|constraintid}}",
+	"apihelp-wbcheckconstraints-example-1": "{{Doc-apihelp-example|wbcheckconstraints}}",
+	"apihelp-wbcheckconstraints-example-2": "{{Doc-apihelp-example|wbcheckconstraints}}",
+	"apihelp-wbcheckconstraints-example-3": "{{Doc-apihelp-example|wbcheckconstraints}}",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "{{Doc-apihelp-example|wbcheckconstraintparameters}}",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "{{Doc-apihelp-example|wbcheckconstraintparameters}}"
+}

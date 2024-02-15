@@ -1,0 +1,11 @@
+{
+	"@metadata": {
+		"authors": [
+			"AryanSogd"
+		]
+	},
+	"wbq-subextension-name-wbqc": "Маҳдудият",
+	"wbqc-violation-message-diff-within-range-must-have-equal-types": "Хусусияти муайян дар параметрҳо бояд арзиши навъи ба худ монандро дошта бошад.",
+	"wbqc-violation-message-inverse": "Ин хусусиятро танҳо дар ҳолате истифода бурдан мумкин аст, ки дархости арзиши иншооти худ ва истифода аз бузургиҳои худ карда ҳамин нуқтаро ҳамчун маъно ишора мекунад.",
+	"wbqc-violation-message-one-of": "Арзиши мол бояд яке аз қисмҳои муайяншуда дар бузургиҳо бошад."
+}

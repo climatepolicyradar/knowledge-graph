@@ -1,0 +1,14 @@
+{
+	"@metadata": {
+		"authors": [
+			"Beta16"
+		]
+	},
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "La dichiarazione soddisfa il vincolo.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "La dichiarazione viola il vincolo.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Il soggetto dell'entità della dichiarazione è un'eccezione nota al vincolo.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Il vincolo non è implementato.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Il vincolo non è stato controllato perché la dichiarazione è deprecata.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "La dichiarazione viola il vincolo, ma il vincolo non è obbligatorio.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Il vincolo non viene controllato su questo tipo di snak (snak principale, qualificatore o riferimento), quindi il controllo dei vincoli viene saltato."
+}

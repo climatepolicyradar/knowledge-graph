@@ -1,0 +1,32 @@
+{
+	"@metadata": {
+		"authors": [
+			"Metalhead64",
+			"Nw520",
+			"Umherirrender"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Führt Beschränkungsprüfungen für jedes beliebige Objekt durch und gibt das Ergebnis aus.",
+	"apihelp-wbcheckconstraints-param-id": "Kennung der Objektliste, von der die Daten abgerufen werden sollen. Mehrere Werte mit „|“ oder Ähnlichem trennen.",
+	"apihelp-wbcheckconstraints-param-claimid": "GUID-Liste, die eine Behauptung erkennt, um einen Beschränkungsbericht zu prüfen. Mehrere Werte mit „|“ trennen.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Optionaler Filter, um nur die Beschränkungen zurückzugeben, die die angegebenen Beschränkungskennungen haben.",
+	"apihelp-wbcheckconstraints-param-status": "Optionaler Filter, der nur Prüfergebnisse mit den ausgewählten Status zurückgibt.\n\nBeachte, dass nur Ergebnisse für die Status „violation“, „warning“, „suggestion“ und „bad-parameters“ zwischengespeichert werden.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Die Aussage hält die Beschränkung ein.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Die Aussage verletzt die Beschränkung.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Der Themendatensatz der Aussage ist eine bekannte Ausnahme der Beschränkung.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Die Beschränkung ist nicht implementiert.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Die Beschränkungsparameter sind defekt.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Die Beschränkung wurde nicht geprüft, da die Aussage veraltet ist.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Die Aussage verletzt die Beschränkung, die Beschränkung ist jedoch nicht verpflichtend.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Die Aussage verletzt die Beschränkung, die Beschränkung ist jedoch nur ein Vorschlag.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Die Einschränkung wird bei dieser Art von Snak (Haupt-Snak, Qualifier oder Referenz) nicht geprüft, so dass die Einschränkungsprüfung übersprungen wird.",
+	"apihelp-wbcheckconstraintparameters-summary": "Überprüft die Beschränkungsparameter der Beschränkungsaussagen.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Einer oder beide der Parameter <var>property</var> und <var>constraintid</var> können angegeben werden; alle Einschränkungen, die durch einen der beiden Parameter ausgewählt wurden, werden überprüft.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Liste der zu prüfenden Eigenschafts-IDs. Es werden alle Constraint-Anweisungen dieser Eigenschaften geprüft.\n\nWenn dieser Parameter angegeben wird, darf er nicht leer sein.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Liste der zu prüfenden Constraint-IDs (GUIDs von Constraint-Anweisungen).\n\nWenn dieser Parameter angegeben wird, darf er nicht leer sein.",
+	"apihelp-wbcheckconstraints-example-1": "Überprüft alle Beschränkungen der Objekte Q5 und Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Überprüft alle Beschränkungen einer einzelnen Aussage.",
+	"apihelp-wbcheckconstraints-example-3": "Überprüft eine bestimmte Beschränkung des Objekts Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Überprüft Beschränkungsparameter aller Beschränkungen einer Eigenschaft.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Überprüft Parameter zwei spezieller Beschränkungen."
+}

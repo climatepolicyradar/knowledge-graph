@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<ruleset>
+	<rule ref="./vendor/mediawiki/mediawiki-codesniffer/MediaWiki">
+		<exclude name="Generic.Metrics.CyclomaticComplexity.TooHigh" />
+		<exclude name="MediaWiki.WhiteSpace.SpaceBeforeSingleLineComment.NewLineComment" />
+	</rule>
+
+	<!-- BEGIN rules copied from wikibase-codesniffer (T268831) -->
+
+	<!-- The function comment sniff is way too rigorous about way too many details that need
+		exceptions:
+		* It complains about missing documentation on fully self-explanatory function headers
+		  with strict type hints.
+		* It complains about missing documentation if there is a proper @see tag.
+		* It complains about duplicate spaces in "@param <type>  $<var>", but removing these
+		  doesn't make the code easier to read.
+		* It does not understand "@param <type> [$optional,…]. -->
+	<rule ref="MediaWiki.Commenting.FunctionComment">
+		<severity>0</severity>
+	</rule>
+
+	<!-- Similarly, a typed property should be allowed to have no @var documentation. -->
+	<rule ref="MediaWiki.Commenting.PropertyDocumentation.MissingDocumentationProtected">
+		<severity>0</severity>
+	</rule>
+	<rule ref="MediaWiki.Commenting.PropertyDocumentation.MissingDocumentationPrivate">
+		<severity>0</severity>
+	</rule>
+
+	<!-- Starting a function's body with an empty line can be helpful after a very large header.
+		The code is not guaranteed to be easier to read if this is disallowed. -->
+	<rule ref="MediaWiki.WhiteSpace.DisallowEmptyLineFunctions">
+		<severity>0</severity>
+	</rule>
+
+	<!-- NOTE: We purposely decided against additional Generic.CodeAnalysis.… sniffs, because they
+		all have possible exceptions, and are not meant to block patches from being merged. -->
+
+	<!-- Disallows any content outside of <?php … ?> tags. -->
+	<rule ref="Generic.Files.InlineHTML" />
+
+	<rule ref="MediaWiki.NamingConventions.LowerCamelFunctionsName">
+		<!-- Exclude test methods like "testGivenInvalidInput_methodThrowsException". -->
+		<exclude-pattern>tests*Test*\.php</exclude-pattern>
+	</rule>
+
+	<rule ref="MediaWiki.Usage.StaticClosure.StaticClosure">
+		<!-- Exclude test closures that might use $this->assert...() later. -->
+		<exclude-pattern>tests*Test*\.php</exclude-pattern>
+	</rule>
+
+	<!-- NOTE: We can not use the Squiz.Arrays.ArrayBracketSpacing sniff because it conflicts with
+		the MediaWiki style that encourages to use spaces inside brackets, see
+		https://www.mediawiki.org/wiki/Manual:Coding_conventions/JavaScript#Whitespace -->
+
+	<rule ref="Squiz.Functions.GlobalFunction" />
+
+	<!-- NOTE: Do not add the Squiz.Strings.DoubleQuoteUsage sniff. Even if we encourage to prefer
+		single quotes, we don't think double quotes should block patches from being merged. -->
+
+	<!-- END rules copied from wikibase-codesniffer (T268831) -->
+
+	<!-- BEGIN equivalent rules based on wikibase-codesniffer (T268831) -->
+
+	<rule ref="MediaWiki.Classes.FullQualifiedClassName">
+		<severity>5</severity>
+		<properties>
+			<property name="allowFunctions" value="false" />
+		</properties>
+	</rule>
+
+	<rule ref="MediaWiki.Commenting.ClassLevelLicense">
+		<properties>
+			<property name="license" value="GPL-2.0-or-later" />
+		</properties>
+	</rule>
+
+	<!-- END equivalent rules based on wikibase-codesniffer (T268831) -->
+
+	<rule ref="MediaWiki.Arrays.TrailingComma">
+		<properties>
+			<property name="singleLine" value="false" />
+			<property name="multiLine" value="true" />
+		</properties>
+	</rule>
+
+	<rule ref="Generic.Files.LineLength">
+		<properties>
+			<!-- FIXME: Should be lowered further, ideally to 100 (default). -->
+			<property name="lineLimit" value="130" />
+		</properties>
+	</rule>
+
+	<rule ref="Generic.Metrics.CyclomaticComplexity" />
+	<rule ref="Generic.Metrics.NestingLevel" />
+
+	<arg name="extensions" value="php" />
+	<arg name="encoding" value="UTF-8" />
+	<file>.</file>
+	<exclude-pattern>.phan/stubs</exclude-pattern>
+</ruleset>

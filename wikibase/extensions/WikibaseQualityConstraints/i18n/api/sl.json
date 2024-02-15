@@ -1,0 +1,31 @@
+{
+	"@metadata": {
+		"authors": [
+			"Eleassar",
+			"Janezdrilc"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Izvede preverjanje omejitev katerekoli želene stvari in izpiše rezultat.",
+	"apihelp-wbcheckconstraints-param-id": "Seznam ID-jev entitet, katerih podatki naj se pridobijo. Vrednosti ločite z »|« ali podobnim.",
+	"apihelp-wbcheckconstraints-param-claimid": "Seznam GUID, ki identificira zahtevek za preverjanje poročila o omejitvah. Vrednosti ločite z »|«.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Izbirni filter za vrnitev samo tistih omejitev, ki imajo določen ID omejitve.",
+	"apihelp-wbcheckconstraints-param-status": "Izbirni filter za vrnitev samo zadetkov preverjanja z izbranimi statusi.\n\nUpoštevajte, da so predpomnjeni samo zadetki za stanja »violation«, »warning«, »suggestion« in »bad-parameters«, zato zahtevki, ki izberejo katera koli stanja, ki presegajo ta štiri, nso podprti s predpomnjenjem.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "Izjava je v skladu z omejitvijo.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "Ta izjava krši omejitev.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "Entiteta teme izjave je znana izjema od te omejitve.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "Omejitev ni sprogramirana.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "Parametri omejitve so pokvarjeni.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "Omejitev ni bila preverjena, ker je izjava opuščena.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "Ta izjava krši omejitev, ki sicer ni obvezna.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "Izjava ne upošteva omejitve, čeprav slednja velja zgolj kot predlog.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "Omejitev se pri tej vrsti določila (glavno določilo, kvalifikator ali sklic) ne preveri, zato se preverjanje omejitve preskoči.",
+	"apihelp-wbcheckconstraintparameters-summary": "Preveri parametre v izjavah omejitev.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Določiti je mogoče enega ali oba parametra <var>property</var> in parametra <var>contraintid</var>; preverjene bodo vse omejitve, izbrane s katerim koli parametrom.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "Seznam ID-jev lastnosti, ki jih je treba preveriti. Preverjene bodo vse izjave o omejitvah teh lastnosti.\n\nČe je ta parameter predložen, ne sme biti prazen.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "Seznam ID-jev omejitev (GUID-jev omejitvenih izjav), ki jih je treba preveriti.\n\nČe je ta parameter predložen, ne sme biti prazen.",
+	"apihelp-wbcheckconstraints-example-1": "Preveri vse omejitve objektov Q5 in Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Preveri vse omejitve ene izjave.",
+	"apihelp-wbcheckconstraints-example-3": "Preveri določeno omejitev objekta Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Preveri parametre vseh omejitev pri lastnosti.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Preveri parametre dveh določenih omejitev."
+}

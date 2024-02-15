@@ -1,0 +1,10 @@
+{
+	"@metadata": {
+		"authors": [
+			"Matrafox"
+		]
+	},
+	"wbqc-potentialissues-short": "Posibile erori",
+	"wbqc-potentialissues-long": "Aceasta afirmație poate conține erori.",
+	"wbqc-violation-message-no-qualifiers": "Declarațiile $1 nu trebuie să conțină calificative."
+}

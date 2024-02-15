@@ -1,0 +1,24 @@
+{
+	"@metadata": {
+		"authors": [
+			"Papuass"
+		]
+	},
+	"wbqc-constraintreport": "Ierobežotāju ziņojums",
+	"wbqc-constraintreport-form-entityid-label": "Vienuma ID:",
+	"wbqc-constraintreport-status-violation": "Pārkāpums",
+	"wbqc-constraintreport-status-exception": "Izņēmums",
+	"wbqc-constraintreport-status-bad-parameters": "Nederīgi parametri",
+	"wbqc-constraintreport-status-deprecated": "Novecojis",
+	"wbqc-constraintreport-status-warning": "Brīdinājums",
+	"wbqc-constraintreport-status-suggestion": "Ieteikums",
+	"wbqc-constraintreport-result-table-header-status": "Statuss",
+	"wbqc-constraintreport-result-table-header-property": "Īpašība",
+	"wbqc-constraintreport-result-table-header-message": "Paziņojums",
+	"wbqc-suggestions-short": "Ieteikumi",
+	"wbqc-badparameters-short": "Nederīgi parametri",
+	"wbq-subextension-name-wbqc": "Ierobežojumi",
+	"wbqc-violation-header-parameters": "Parametri:",
+	"wbqc-violations-group": "Ierobežojumi",
+	"wbqc-violation-message-parameter-regex": "$1 nav derīga regulārā izteiksme."
+}

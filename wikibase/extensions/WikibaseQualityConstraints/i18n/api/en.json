@@ -1,0 +1,31 @@
+{
+	"@metadata": {
+		"authors": [
+			"BP2014N1",
+			"Andreas Burmeister"
+		]
+	},
+	"apihelp-wbcheckconstraints-summary": "Performs constraint checks on any entity you want and returns the result.",
+	"apihelp-wbcheckconstraints-param-id": "ID list of the entities to get the data from. Separate values with '|' or alternative.",
+	"apihelp-wbcheckconstraints-param-claimid": "GUID list identifying a claim to check a constraint report. Separate values with '|'.",
+	"apihelp-wbcheckconstraints-param-constraintid": "Optional filter to return only the constraints that have the specified constraint ID.",
+	"apihelp-wbcheckconstraints-param-status": "Optional filter to return only check results with the selected statuses.\n\nNote that only results for the 'violation', 'warning', 'suggestion' and 'bad-parameters' statuses are cached, so requests that select any statuses beyond those four do not benefit from caching.",
+	"apihelp-wbcheckconstraints-paramvalue-status-compliance": "The statement satisfies the constraint.",
+	"apihelp-wbcheckconstraints-paramvalue-status-violation": "The statement violates the constraint.",
+	"apihelp-wbcheckconstraints-paramvalue-status-exception": "The subject entity of the statement is a known exception to the constraint.",
+	"apihelp-wbcheckconstraints-paramvalue-status-todo": "The constraint is not implemented.",
+	"apihelp-wbcheckconstraints-paramvalue-status-bad-parameters": "The constraint parameters are broken.",
+	"apihelp-wbcheckconstraints-paramvalue-status-deprecated": "The constraint has not been checked because the statement is deprecated.",
+	"apihelp-wbcheckconstraints-paramvalue-status-warning": "The statement violates the constraint, but the constraint is not mandatory.",
+	"apihelp-wbcheckconstraints-paramvalue-status-suggestion": "The statement violates the constraint, but the constraint is just a suggestion.",
+	"apihelp-wbcheckconstraints-paramvalue-status-not-in-scope": "The constraint is not checked on this kind of snak (main snak, qualifier or reference), so the constraint check is skipped.",
+	"apihelp-wbcheckconstraintparameters-summary": "Checks the constraint parameters of constraint statements.",
+	"apihelp-wbcheckconstraintparameters-extended-description": "Either or both of the <var>property</var> and <var>constraintid</var> parameters may be specified; all constraints selected by either parameter will be checked.",
+	"apihelp-wbcheckconstraintparameters-param-propertyid": "List of property IDs to check. All constraint statements of these properties will be checked.\n\nIf this parameter is specified, it must be nonempty.",
+	"apihelp-wbcheckconstraintparameters-param-constraintid": "List of constraint IDs (constraint statement GUIDs) to check.\n\nIf this parameter is specified, it must be nonempty.",
+	"apihelp-wbcheckconstraints-example-1": "Check all constraints on the items Q5 and Q42.",
+	"apihelp-wbcheckconstraints-example-2": "Check all constraints on a single statement.",
+	"apihelp-wbcheckconstraints-example-3": "Check one particular constraint on the item Q2.",
+	"apihelp-wbcheckconstraintparameters-example-propertyid-1": "Check constraint parameters of all constraints on a property.",
+	"apihelp-wbcheckconstraintparameters-example-constraintid-2": "Check constraint parameters of two particular constraints."
+}
