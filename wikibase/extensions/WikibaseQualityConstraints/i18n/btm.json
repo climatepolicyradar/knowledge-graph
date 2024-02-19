@@ -1,9 +1,0 @@
-{
-	"@metadata": {
-		"authors": [
-			"Simartampua"
-		]
-	},
-	"wbqc-violation-message-entityType": "Properti $1 inda tola ipake i entitas on should not be used on this type of entity, sada-sadana na valid {{PLURAL:$2|1=tipe entitas ima $4.|2=tipe entitas ima $4 dot $5.|tipe entitas ima: $3}}",
-	"wbqc-violation-message-none-of": "Nilai ni $1 angkon manjadi {{PLURAL:$2|1=$4.|2=either $4 or $5.|sada tingon na onan:$3}}"
-}

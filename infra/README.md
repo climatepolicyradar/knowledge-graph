@@ -1,9 +1,8 @@
 # Infra
 
-Starts up an EC2 instance for running wikibase
+Infrastructure (defined in pulumi) for an EC2 instance where the wikibase stack can be developed.
 
 Get it running by running `pulumi up` from the `infra` directory. Run `pulumi destroy` to tear it down.
-
 
 ## SSH Key Generation (On Mac)
 

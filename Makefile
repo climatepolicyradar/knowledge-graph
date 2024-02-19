@@ -12,3 +12,5 @@ start-ec2:
 stop-ec2:
 	poetry run pulumi destroy --cwd infra
 
+download-extensions:
+	poetry run python scripts/download_extensions.py
