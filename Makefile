@@ -1,4 +1,4 @@
-.PHONY: install start-ec2 stop-ec2 export-ec2
+.PHONY: install start-ec2 stop-ec2
 
 install:
 	poetry install
@@ -14,3 +14,7 @@ stop-ec2:
 
 download-extensions:
 	poetry run python scripts/download_extensions.py
+
+start-wikibase:
+	docker-compose -f wikibase/docker-compose.yml -f wikibase/docker-compose.extra.yml up
+

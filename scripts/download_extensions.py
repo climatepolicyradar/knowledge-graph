@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 import httpx
 import html5lib
@@ -18,7 +19,6 @@ extensions = [
     "ConfirmEdit",
     "DeleteBatch",
     "Echo",
-    "EmbedVideo",
     "EntitySchema",
     "Graph",
     "JsonConfig",
@@ -31,30 +31,39 @@ extensions = [
     "PageImages",
     "ParserFunctions",
     "Poem",
-    "ReCaptchaNoCaptcha",
     "RevisionSlider",
     "Score",
     "Scribunto",
     "SecureLinkFixer",
-    "SyntaxHighlight",
     "TemplateData",
     "TemplateSandbox",
     "Thanks",
     "TorBlock",
     "TwoColConflict",
     "UniversalLanguageSelector",
-    "WikbaseInWikitext",
     "Wikibase",
     "WikibaseManifest",
     "WikiEditor",
     "WikiHiero",
-    # the extensions below are not included in the standard deployments, but we need them
+    # these ones are known failures from the list in the docs - they don't exist in the
+    # list at BASE_URL
+    # "EmbedVideo",
+    # "ReCaptchaNoCaptcha",
+    # "SyntaxHighlight",
+    # "WikbaseInWikitext",
+    # We've found that we also need to download these ones, as they're required
+    # dependencies for the standard list above
+    "Babel",
+    "CirrusSearch",
+    "Elastica",
+    "SyntaxHighlight_GeSHi",
+    "VisualEditor",
+    "WikibaseCirrusSearch",
+    "WikibaseLocalMedia",
+    # these ones are not included in the standard deployments, but we need them
     # for our own purposes
     "WikibaseQualityConstraints",
 ]
-
-# lowercase all of the extensions
-extensions = [extension.lower() for extension in extensions]
 
 BASE_URL = "https://extdist.wmflabs.org/dist/extensions/"
 # this page is big list of extensions in a directory which looks something like this:
@@ -97,6 +106,7 @@ BASE_URL = "https://extdist.wmflabs.org/dist/extensions/"
 
 # we want to download the latest version of each extension and save an unzipped version to
 # the extensions directory
+
 extensions_dir = Path("./wikibase/extensions")
 
 
@@ -127,7 +137,8 @@ for extension in progress_bar:
     extension_options = [
         link
         for link in all_links
-        if link.lower().startswith(extension + "-") and "master" not in link.lower()
+        if link.lower().startswith(extension.lower() + "-")
+        and "master" not in link.lower()
     ]
     try:
         latest_version = max(extension_options)
@@ -145,7 +156,14 @@ for extension in progress_bar:
             f.write(response.content)
 
     with tarfile.open(extensions_dir / latest_version, "r:gz") as tar:
-        tar.extractall(extensions_dir)
+        # extract to a temporary directory
+        # move it to the extensions directory, renamed according to the original list
+        # remove the temporary directory
+        tar.extractall(extension_tmp_dir := extensions_dir / "tmp")
+        shutil.move(extension_tmp_dir / tar.getnames()[0], extensions_dir / extension)
+
 
     # remove the tar file
     (extensions_dir / latest_version).unlink()
+
+recursively_remove_dir(extension_tmp_dir)

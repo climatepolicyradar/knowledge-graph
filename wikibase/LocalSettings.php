@@ -26,44 +26,47 @@
 #ini_set( 'display_errors', 0 );
 
 # these are all of the standard wikibase extensions, see https://www.wbstack.com/users/wiki.html
-wfLoadExtension( 'DeleteBatch' );
-wfLoadExtension( 'Echo' );
-wfLoadExtension( 'Nuke' );
-wfLoadExtension( 'TemplateSandbox' );
+wfLoadExtension( 'AdvancedSearch' );
+wfLoadExtension( 'Babel' );
+wfLoadExtension( 'Cite' );
+wfLoadExtension( 'CLDR' );
 wfLoadExtension( 'CodeEditor' );
 wfLoadExtension( 'CodeMirror' );
-wfLoadExtension( 'WikiEditor' );
-wfLoadExtension( 'EmbedVideo' );
-wfLoadExtension( 'Cite' );
+wfLoadExtension( 'ConfirmEdit' );
+wfLoadExtension( 'DeleteBatch' );
+wfLoadExtension( 'Echo' );
+wfLoadExtension( 'EntitySchema' );
 wfLoadExtension( 'Graph' );
+wfLoadExtension( 'JsonConfig' );
 wfLoadExtension( 'Kartographer' );
 wfLoadExtension( 'Math' );
-wfLoadExtension( 'ParserFunctions' );
-wfLoadExtension( 'Poem' );
-wfLoadExtension( 'Score' );
-wfLoadExtension( 'WikiHiero' );
-wfLoadExtension( 'Scribunto' );
-wfLoadExtension( 'SyntaxHighlight' );
-wfLoadExtension( 'TemplateData' );
-wfLoadExtension( 'ConfirmEdit' );
-wfLoadExtension( 'ReCaptchaNoCaptcha' );
-wfLoadExtension( 'TorBlock' );
-wfLoadExtension( 'PageImages' );
-wfLoadExtension( 'EntitySchema' );
-wfLoadExtension( 'AdvancedSearch' );
-wfLoadExtension( 'CLDR' );
-wfLoadExtension( 'JsonConfig' );
 wfLoadExtension( 'MobileFrontend' );
 wfLoadExtension( 'MultimediaViewer' );
+wfLoadExtension( 'Nuke' );
 wfLoadExtension( 'OAuth' );
+wfLoadExtension( 'PageImages' );
+wfLoadExtension( 'ParserFunctions' );
+wfLoadExtension( 'Poem' );
 wfLoadExtension( 'RevisionSlider' );
+wfLoadExtension( 'Score' );
+wfLoadExtension( 'Scribunto' );
 wfLoadExtension( 'SecureLinkFixer' );
+wfLoadExtension( 'TemplateData' );
+wfLoadExtension( 'TemplateSandbox' );
 wfLoadExtension( 'Thanks' );
+wfLoadExtension( 'TorBlock' );
 wfLoadExtension( 'TwoColConflict' );
 wfLoadExtension( 'UniversalLanguageSelector' );
 wfLoadExtension( 'Wikibase' );
-wfLoadExtension( 'WikbaseInWikitext' );
 wfLoadExtension( 'WikibaseManifest' );
+wfLoadExtension( 'WikiEditor' );
+wfLoadExtension( 'WikiHiero' );
+
+# We haven't been able to find/download these ones
+// wfLoadExtension( 'EmbedVideo' );
+// wfLoadExtension( 'ReCaptchaNoCaptcha' );
+// wfLoadExtension( 'SyntaxHighlight' );
+// wfLoadExtension( 'WikbaseInWikitext' );
 
 # The following extensions are added because we have specific needs:
 # we use WikibaseQualityConstraints to add inverse and symmetric constraints to our 
