@@ -6,7 +6,7 @@
 
 # Update package manager and install Docker and Git
 sudo yum update -y
-sudo yum install docker git make -y
+sudo yum install docker git make composer -y
 
 # Start Docker service
 sudo systemctl start docker

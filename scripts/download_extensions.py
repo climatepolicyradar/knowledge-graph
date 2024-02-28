@@ -9,59 +9,11 @@ import tarfile
 log = logging.getLogger("rich")
 
 extensions = [
-    # these are all of the standard extensions used for deployments of wikibase.cloud,
-    # see https://www.wbstack.com/users/wiki.html
-    "AdvancedSearch",
-    "Cite",
-    "CLDR",
-    "CodeEditor",
-    "CodeMirror",
-    "ConfirmEdit",
-    "DeleteBatch",
     "Echo",
-    "EntitySchema",
-    "Graph",
-    "JsonConfig",
-    "Kartographer",
-    "Math",
     "MobileFrontend",
-    "MultimediaViewer",
-    "Nuke",
-    "OAuth",
-    "PageImages",
-    "ParserFunctions",
-    "Poem",
     "RevisionSlider",
-    "Score",
-    "Scribunto",
-    "SecureLinkFixer",
-    "TemplateData",
-    "TemplateSandbox",
-    "Thanks",
-    "TorBlock",
     "TwoColConflict",
-    "UniversalLanguageSelector",
-    "Wikibase",
-    "WikibaseManifest",
     "WikiEditor",
-    "WikiHiero",
-    # these ones are known failures from the list in the docs - they don't exist in the
-    # list at BASE_URL
-    # "EmbedVideo",
-    # "ReCaptchaNoCaptcha",
-    # "SyntaxHighlight",
-    # "WikbaseInWikitext",
-    # We've found that we also need to download these ones, as they're required
-    # dependencies for the standard list above
-    "Babel",
-    "CirrusSearch",
-    "Elastica",
-    "SyntaxHighlight_GeSHi",
-    "VisualEditor",
-    "WikibaseCirrusSearch",
-    "WikibaseLocalMedia",
-    # these ones are not included in the standard deployments, but we need them
-    # for our own purposes
     "WikibaseQualityConstraints",
 ]
 
@@ -133,7 +85,8 @@ with httpx.Client() as client:
 
 progress_bar = tqdm(extensions, desc="Downloading extensions")
 for extension in progress_bar:
-    # We want to choose the highest version number, but not master. Master is for devs.
+    # We want to choose version number which corresponds to mediawiki version 1.39
+    # so the name should contain "REL1_39"
     extension_options = [
         link
         for link in all_links
@@ -141,7 +94,11 @@ for extension in progress_bar:
         and "master" not in link.lower()
     ]
     try:
-        latest_version = max(extension_options)
+        version_name = next(
+            option
+            for option in extension_options
+            if "REL1_39" in option and option.endswith(".tar.gz")
+        )
     except ValueError:
         log.error(
             f"Couldn't find {extension} in the list of extensions available at {BASE_URL}"
@@ -149,21 +106,20 @@ for extension in progress_bar:
         continue
 
     # download the latest version of the extension
-    url = BASE_URL + latest_version
+    url = BASE_URL + version_name
     with httpx.Client() as client:
         response = client.get(url)
-        with open(extensions_dir / latest_version, "wb") as f:
+        with open(extensions_dir / version_name, "wb") as f:
             f.write(response.content)
 
-    with tarfile.open(extensions_dir / latest_version, "r:gz") as tar:
+    with tarfile.open(extensions_dir / version_name, "r:gz") as tar:
         # extract to a temporary directory
         # move it to the extensions directory, renamed according to the original list
         # remove the temporary directory
         tar.extractall(extension_tmp_dir := extensions_dir / "tmp")
         shutil.move(extension_tmp_dir / tar.getnames()[0], extensions_dir / extension)
 
-
     # remove the tar file
-    (extensions_dir / latest_version).unlink()
+    (extensions_dir / version_name).unlink()
 
 recursively_remove_dir(extension_tmp_dir)

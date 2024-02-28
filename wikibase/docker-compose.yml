@@ -30,7 +30,14 @@ services:
       ## Uncomment this next line to mount your own LocalSettings.php file
       ## also uncomment the same line in the wikibase-jobrunner service!
       - ./LocalSettings.php:/var/www/html/LocalSettings.d/LocalSettings.override.php
-      - ./extensions:/var/www/html/extensions
+      # Add the extensions. We can't just mount the whole folder as it will overwrite the
+      # shared volume with all of the existing extensions
+      - ./extensions/WikibaseQualityConstraints:/var/www/html/extensions/WikibaseQualityConstraints
+      - ./extensions/Echo:/var/www/html/extensions/Echo
+      - ./extensions/MobileFrontend:/var/www/html/extensions/MobileFrontend
+      - ./extensions/RevisionSlider:/var/www/html/extensions/RevisionSlider
+      - ./extensions/TwoColConflict:/var/www/html/extensions/TwoColConflict
+      - ./extensions/WikiEditor:/var/www/html/extensions/WikiEditor
     networks:
       default:
         aliases:
@@ -56,7 +63,14 @@ services:
       ## Uncomment this next line to mount your own LocalSettings.php file
       ## also uncomment the same line in the wikibase service
       - ./LocalSettings.php:/var/www/html/LocalSettings.d/LocalSettings.override.php
-      - ./extensions/:/var/www/html/extensions/
+      # Add the extensions. We can't just mount the whole folder as it will overwrite the
+      # shared volume with all of the existing extensions
+      - ./extensions/WikibaseQualityConstraints:/var/www/html/extensions/WikibaseQualityConstraints
+      - ./extensions/Echo:/var/www/html/extensions/Echo
+      - ./extensions/MobileFrontend:/var/www/html/extensions/MobileFrontend
+      - ./extensions/RevisionSlider:/var/www/html/extensions/RevisionSlider
+      - ./extensions/TwoColConflict:/var/www/html/extensions/TwoColConflict
+      - ./extensions/WikiEditor:/var/www/html/extensions/WikiEditor
     networks:
       default:
         aliases:

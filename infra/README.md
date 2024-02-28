@@ -49,3 +49,10 @@ tar czf - ./ | pv | ssh ec2-user@$EC2_PUBLIC_DNS 'mkdir -p ~/wikibase && tar xzf
 - `ssh ec2-user@$EC2_PUBLIC_DNS`: Initiates an SSH connection to the remote machine.
 - `mkdir -p ~/wikibase`: On the remote machine, creates a directory named wikibase in the home directory of the ec2-user.
 - `'tar xzf - -C ~/'`: Still on the remote machine, extracts (tar xzf) the gzipped tar archive from standard input (-) and specifies the extraction directory (-C ~/, the home directory of the ec2-user).
+
+The reverse would be eg:
+
+```shell
+ssh ec2-user@$EC2_PUBLIC_DNS 'tar czf - ~/wikibase/extensions' | pv | tar xzf - -C ./wikibase/extensions
+```
+

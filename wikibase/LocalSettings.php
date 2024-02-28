@@ -1,75 +1,21 @@
 <?php
 
-/*******************************/
-/* Enable Federated properties */
-/*******************************/
-#$wgWBRepoSettings['federatedPropertiesEnabled'] = true;
+# Stop anonymous users from creating accounts or editing pages - only admin users should 
+# be able to create new accounts, and signed-in users should be able to edit pages
+$wgGroupPermissions['*']['edit'] = false;
+$wgGroupPermissions['*']['createaccount'] = false;
 
-/*******************************/
-/* Enables ConfirmEdit Captcha */
-/*******************************/
-#wfLoadExtension( 'ConfirmEdit/QuestyCaptcha' );
-#$wgCaptchaQuestions = [
-#  'What animal' => 'dog',
-#];
-
-#$wgCaptchaTriggers['edit']          = true;
-#$wgCaptchaTriggers['create']        = true;
-#$wgCaptchaTriggers['createtalk']    = true;
-#$wgCaptchaTriggers['addurl']        = true;
-#$wgCaptchaTriggers['createaccount'] = true;
-#$wgCaptchaTriggers['badlogin']      = true;
-
-/*******************************/
-/* Disable UI error-reporting  */
-/*******************************/
-#ini_set( 'display_errors', 0 );
-
-# these are all of the standard wikibase extensions, see https://www.wbstack.com/users/wiki.html
-wfLoadExtension( 'AdvancedSearch' );
-wfLoadExtension( 'Babel' );
-wfLoadExtension( 'Cite' );
-wfLoadExtension( 'CLDR' );
-wfLoadExtension( 'CodeEditor' );
-wfLoadExtension( 'CodeMirror' );
-wfLoadExtension( 'ConfirmEdit' );
-wfLoadExtension( 'DeleteBatch' );
-wfLoadExtension( 'Echo' );
-wfLoadExtension( 'EntitySchema' );
-wfLoadExtension( 'Graph' );
-wfLoadExtension( 'JsonConfig' );
-wfLoadExtension( 'Kartographer' );
-wfLoadExtension( 'Math' );
-wfLoadExtension( 'MobileFrontend' );
-wfLoadExtension( 'MultimediaViewer' );
-wfLoadExtension( 'Nuke' );
-wfLoadExtension( 'OAuth' );
-wfLoadExtension( 'PageImages' );
-wfLoadExtension( 'ParserFunctions' );
-wfLoadExtension( 'Poem' );
-wfLoadExtension( 'RevisionSlider' );
-wfLoadExtension( 'Score' );
-wfLoadExtension( 'Scribunto' );
-wfLoadExtension( 'SecureLinkFixer' );
-wfLoadExtension( 'TemplateData' );
-wfLoadExtension( 'TemplateSandbox' );
-wfLoadExtension( 'Thanks' );
-wfLoadExtension( 'TorBlock' );
-wfLoadExtension( 'TwoColConflict' );
-wfLoadExtension( 'UniversalLanguageSelector' );
-wfLoadExtension( 'Wikibase' );
-wfLoadExtension( 'WikibaseManifest' );
-wfLoadExtension( 'WikiEditor' );
-wfLoadExtension( 'WikiHiero' );
-
-# We haven't been able to find/download these ones
-// wfLoadExtension( 'EmbedVideo' );
-// wfLoadExtension( 'ReCaptchaNoCaptcha' );
-// wfLoadExtension( 'SyntaxHighlight' );
-// wfLoadExtension( 'WikbaseInWikitext' );
 
 # The following extensions are added because we have specific needs:
-# we use WikibaseQualityConstraints to add inverse and symmetric constraints to our 
+# we use WikibaseQualityConstraints to define inverse and symmetric constraints on our 
 # properties, for hierarchical and related properties respectively
 wfLoadExtension( 'WikibaseQualityConstraints' );
 
+# These ones are standard in the list of extensions that are included in wikibase.cloud
+# see https://www.wbstack.com/users/wiki.html#wiki
+# The rest of the items in that list are unnecessary for our purposes
+wfLoadExtension( 'Echo');
+wfLoadExtension( 'MobileFrontend');
+wfLoadExtension( 'RevisionSlider');
+wfLoadExtension( 'TwoColConflict');
+wfLoadExtension( 'WikiEditor');
