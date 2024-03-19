@@ -159,5 +159,8 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# wikibase extensions directory
-wikibase/extensions/
+# data directory
+data/**/*
+!data/**/
+!**/.gitkeep
+!**/README.md

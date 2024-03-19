@@ -1,4 +1,0 @@
-config:
-  aws:profile: labs
-  aws:region: eu-west-1
-  wikibase:project: wikibase

@@ -4,17 +4,3 @@ install:
 	poetry install
 	poetry run pre-commit install
 	poetry run ipython kernel install --user
-
-start-ec2:
-	poetry run pulumi up --cwd infra; \
-	export $$(poetry run pulumi stack output --shell --cwd infra)
-
-stop-ec2:
-	poetry run pulumi destroy --cwd infra
-
-download-extensions:
-	poetry run python scripts/download_extensions.py
-
-start-wikibase:
-	docker-compose -f wikibase/docker-compose.yml -f wikibase/docker-compose.extra.yml up
-

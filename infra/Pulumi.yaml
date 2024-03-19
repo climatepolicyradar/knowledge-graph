@@ -1,4 +1,0 @@
-name: wikibase
-runtime: python
-description: An ec2 instance for self-hosting wikibase
-main: .
