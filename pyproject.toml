@@ -24,7 +24,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
-select = ["E", "F", "D", "I"]
+lint.select = ["E", "F", "D", "I"]
 line-length = 88
 # Docstring Ignores:
 # D100 - Missing docstring in public module

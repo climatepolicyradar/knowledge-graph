@@ -1,9 +1,12 @@
-.PHONY: install
+.PHONY: install process-gst populate-wikibase
 
 install:
 	poetry install
 	poetry run pre-commit install
 	poetry run ipython kernel install --user
 
-upload-gst-data:
-	poetry run python scripts/upload_gst_data.py
+process-gst:
+	poetry run python scripts/process_gst.py
+
+populate-wikibase:
+	poetry run python scripts/populate_wikibase.py
