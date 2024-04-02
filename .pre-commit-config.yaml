@@ -5,12 +5,18 @@ repos:
       - id: check-json
       - id: detect-aws-credentials
         args: [ --allow-missing-credentials ]
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: 'v0.1.5'
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
     hooks:
-    - id: ruff
-      args: [ --fix ]
-    - id: ruff-format
+      - id: nbstripout
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        types_or: [ python, pyi, jupyter ]
+        args: [ --fix ]
+      - id: ruff-format
+        types_or: [ python, pyi, jupyter ]
   - repo: local
     hooks:
       - id: pyright
@@ -21,6 +27,7 @@ repos:
         types: [python]
         additional_dependencies: ['pyright@1.1.294']
   - repo: https://github.com/python-poetry/poetry
-    rev: '1.7.0'
+    rev: 1.7.1
     hooks:
-    - id: poetry-lock
+    -   id: poetry-check
+
