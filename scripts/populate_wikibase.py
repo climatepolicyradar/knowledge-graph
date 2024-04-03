@@ -38,4 +38,4 @@ for concept in concepts:
 progress_bar.close()
 
 with open("./data/processed/concepts_with_wikibase_ids.json", "w") as f:
-    json.dump([concept.to_dict() for concept in concepts_with_wikibase_ids], f)
+    json.dump([concept.dict() for concept in concepts_with_wikibase_ids], f)

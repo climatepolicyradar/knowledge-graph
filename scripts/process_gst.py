@@ -39,8 +39,8 @@ for concept_dir in input_data_dir.iterdir():
 
         # load all the synonyms for each span id
         level_1_concept = Concept(
-            preferred_label=concept_dir.stem.replace("-", " ")
-        )  # the directory name
+            preferred_label=concept_dir.stem.replace("-", " ")  # the directory name
+        )
 
         patterns, _ = load_input_spreadsheet(concept_dir / "input.xlsx")
         patterns = sorted(patterns, key=lambda i: i.get("id", ""))

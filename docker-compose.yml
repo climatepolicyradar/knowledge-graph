@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  api:
+    build: 
+      dockerfile: Dockerfile
+      context: .
+    ports:
+      - 8000:8000
+    env_file:
+      - .env
+  neo4j:
+    image: neo4j:latest
+    volumes:
+      - type: bind
+        source: ./data/neo4j/data
+        target: /data
+      - type: bind
+        source: ./data/neo4j/logs
+        target: /logs
+    ports:
+      - 7474:7474
+      - 7687:7687
+    env_file: .env
+    environment:
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4JLABS_PLUGINS=["graph-data-science", "apoc"]
+      - NEO4J_dbms_security_procedures_whitelist=gds.*, apoc.*
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*

@@ -240,3 +240,26 @@ class WikibaseSession:
             concepts.append(concept)
 
         return concepts
+
+    def list_concepts(self) -> List[Concept]:
+        """
+        List all concepts in Wikibase
+
+        :return List[Concept]: A list of all concepts in the Wikibase instance
+        """
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "format": "json",
+                "list": "allpages",
+                "aplimit": 500,
+            },
+        ).json()
+
+        concepts = []
+        for page in response["query"]["allpages"]:
+            wikibase_id = page["title"]
+            concepts.append(self.get_concepts(wikibase_id)[0])
+
+        return concepts
