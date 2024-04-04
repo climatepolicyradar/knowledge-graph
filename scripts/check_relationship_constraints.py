@@ -1,10 +1,12 @@
 import json
 from logging import getLogger
 
+import dotenv
 from tqdm import tqdm
 
 from src.wikibase import WikibaseSession
 
+dotenv.load_dotenv()
 logger = getLogger(__name__)
 
 wikibase = WikibaseSession()
@@ -51,6 +53,14 @@ all_pages_response = wikibase.session.get(
 ).json()
 
 
+# define the constraints we want to enforce
+relationship_constraints = [
+    # (property_id, target_property_id)
+    (wikibase.has_subconcept_property_id, wikibase.subconcept_of_property_id),
+    (wikibase.subconcept_of_property_id, wikibase.has_subconcept_property_id),
+    (wikibase.related_concept_property_id, wikibase.related_concept_property_id),
+]
+
 missing_claims = []
 for item in all_pages_response["query"]["allpages"]:
     page_id = item["title"].replace("Item:", "")
@@ -58,78 +68,34 @@ for item in all_pages_response["query"]["allpages"]:
 
     claims = get_item_claims(page_id)
 
-    # if there's a P1 claim, we want to see a corresponding P2 claim on the target item
-    if "P1" in claims:
-        p1_items = [
-            item["mainsnak"]["datavalue"]["value"]["id"] for item in claims["P1"]
-        ]
-        for target_item_id in p1_items:
-            target_item_claims = get_item_claims(target_item_id)
-            try:
-                target_p2_items = [
-                    item["mainsnak"]["datavalue"]["value"]["id"]
-                    for item in target_item_claims["P2"]
-                ]
-                assert page_id in target_p2_items
-            except (KeyError, AssertionError):
-                missing_claims.append((page_id, target_item_id, "P2"))
-                logger.error(
-                    "%s has a P2 claim pointing to %s, but %s does not have a P1 claim pointing to %s",
-                    page_id,
-                    target_item_id,
-                    target_item_id,
-                    page_id,
-                )
-
-    # if there's a P2 claim, we want to see a corresponding P1 claim on the target item
-    if "P2" in claims:
-        p2_items = [
-            item["mainsnak"]["datavalue"]["value"]["id"] for item in claims["P2"]
-        ]
-        for target_item_id in p2_items:
-            target_item_claims = get_item_claims(target_item_id)
-            try:
-                target_p1_items = [
-                    item["mainsnak"]["datavalue"]["value"]["id"]
-                    for item in target_item_claims["P1"]
-                ]
-                assert page_id in target_p1_items
-            except (KeyError, AssertionError):
-                missing_claims.append((page_id, target_item_id, "P1"))
-                logger.error(
-                    "%s has a P1 claim pointing to %s, but %s does not have a P2 claim pointing to %s",
-                    page_id,
-                    target_item_id,
-                    target_item_id,
-                    page_id,
-                )
-
-    # if there's a P3 claim, we want to see a corresponding P3 claim on the target item
-    if "P3" in claims:
-        p3_items = [
-            item["mainsnak"]["datavalue"]["value"]["id"] for item in claims["P3"]
-        ]
-        for target_item_id in p3_items:
-            target_item_claims = get_item_claims(target_item_id)
-            try:
-                target_p3_items = [
-                    item["mainsnak"]["datavalue"]["value"]["id"]
-                    for item in target_item_claims["P3"]
-                ]
-                assert page_id in target_p3_items
-            except (KeyError, AssertionError):
-                missing_claims.append((page_id, target_item_id, "P3"))
-                logger.error(
-                    "%s has a P3 claim pointing to %s, but %s does not have a P3 claim pointing to %s",
-                    page_id,
-                    target_item_id,
-                    target_item_id,
-                    page_id,
-                )
+    for property_id, target_property_id in relationship_constraints:
+        if property_id in claims:
+            items = [
+                item["mainsnak"]["datavalue"]["value"]["id"]
+                for item in claims[property_id]
+            ]
+            for target_item_id in items:
+                target_item_claims = get_item_claims(target_item_id)
+                try:
+                    target_items = [
+                        item["mainsnak"]["datavalue"]["value"]["id"]
+                        for item in target_item_claims[target_property_id]
+                    ]
+                    assert page_id in target_items
+                except (KeyError, AssertionError):
+                    missing_claims.append((page_id, target_item_id, target_property_id))
+                    logger.error(
+                        "%s has a %s claim pointing to %s, but %s does not have a %s claim pointing to %s",
+                        page_id,
+                        property_id,
+                        target_item_id,
+                        target_item_id,
+                        target_property_id,
+                        page_id,
+                    )
 
 if missing_claims:
     logger.info("Creating missing claims")
-
     for page_id, target_item_id, property_id in tqdm(missing_claims):
         create_claim_response = wikibase.session.post(
             url=wikibase.api_url,
