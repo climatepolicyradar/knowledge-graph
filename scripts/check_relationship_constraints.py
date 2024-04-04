@@ -1,29 +1,42 @@
+import json
+from logging import getLogger
+
 from tqdm import tqdm
 
 from src.wikibase import WikibaseSession
 
+logger = getLogger(__name__)
+
 wikibase = WikibaseSession()
 
-CACHE = {}
+
+def use_cache(func):
+    CACHE = {}
+
+    def wrapper(*args, **kwargs):
+        if args[0] in CACHE:
+            return CACHE[args[0]]
+        result = func(*args, **kwargs)
+        CACHE[args[0]] = result
+        return result
+
+    return wrapper
 
 
+@use_cache
 def get_item_claims(item_id: str):
-    if item_id in CACHE:
-        claims = CACHE[item_id]
-    else:
-        response = wikibase.session.get(
-            url=wikibase.api_url,
-            params={
-                "action": "wbgetentities",
-                "format": "json",
-                "ids": item_id,
-            },
-        ).json()
-        claims = response["entities"][item_id]["claims"]
-        CACHE[item_id] = claims
-    return claims
+    response = wikibase.session.get(
+        url=wikibase.api_url,
+        params={
+            "action": "wbgetentities",
+            "format": "json",
+            "ids": item_id,
+        },
+    ).json()
+    return response["entities"][item_id]["claims"]
 
 
+# get a list of every item in the concept store
 all_pages_response = wikibase.session.get(
     url=wikibase.api_url,
     params={
@@ -37,16 +50,16 @@ all_pages_response = wikibase.session.get(
     },
 ).json()
 
-progress_bar = tqdm(all_pages_response["query"]["allpages"])
 
-for item in progress_bar:
+missing_claims = []
+for item in all_pages_response["query"]["allpages"]:
     page_id = item["title"].replace("Item:", "")
-    progress_bar.set_description(f"Checking claims for {page_id}")
+    logger.info("Checking relationships for %s", page_id)
 
     claims = get_item_claims(page_id)
 
+    # if there's a P1 claim, we want to see a corresponding P2 claim on the target item
     if "P1" in claims:
-        # if there's a P1 claim, we want to see a corresponding P2 claim on the target item
         p1_items = [
             item["mainsnak"]["datavalue"]["value"]["id"] for item in claims["P1"]
         ]
@@ -58,16 +71,18 @@ for item in progress_bar:
                     for item in target_item_claims["P2"]
                 ]
                 assert page_id in target_p2_items
-            except KeyError:
-                raise AssertionError(f"No P2 claims found on {target_item_id}")
-            except AssertionError:
-                raise AssertionError(
-                    f"{page_id} has a P1 claim pointing to {target_item_id}, but "
-                    f"{target_item_id} does not have a P2 claim pointing to {page_id} "
+            except (KeyError, AssertionError):
+                missing_claims.append((page_id, target_item_id, "P2"))
+                logger.error(
+                    "%s has a P2 claim pointing to %s, but %s does not have a P1 claim pointing to %s",
+                    page_id,
+                    target_item_id,
+                    target_item_id,
+                    page_id,
                 )
 
+    # if there's a P2 claim, we want to see a corresponding P1 claim on the target item
     if "P2" in claims:
-        # if there's a P2 claim, we want to see a corresponding P1 claim on the target item
         p2_items = [
             item["mainsnak"]["datavalue"]["value"]["id"] for item in claims["P2"]
         ]
@@ -79,16 +94,18 @@ for item in progress_bar:
                     for item in target_item_claims["P1"]
                 ]
                 assert page_id in target_p1_items
-            except KeyError:
-                raise AssertionError(f"No P1 claims found on {target_item_id}")
-            except AssertionError:
-                raise AssertionError(
-                    f"{page_id} has a P2 claim pointing to {target_item_id}, but "
-                    f"{target_item_id} does not have a P1 claim pointing to {page_id} "
+            except (KeyError, AssertionError):
+                missing_claims.append((page_id, target_item_id, "P1"))
+                logger.error(
+                    "%s has a P1 claim pointing to %s, but %s does not have a P2 claim pointing to %s",
+                    page_id,
+                    target_item_id,
+                    target_item_id,
+                    page_id,
                 )
 
+    # if there's a P3 claim, we want to see a corresponding P3 claim on the target item
     if "P3" in claims:
-        # if there's a P3 claim, we want to see a corresponding P3 claim on the target item
         p3_items = [
             item["mainsnak"]["datavalue"]["value"]["id"] for item in claims["P3"]
         ]
@@ -100,10 +117,34 @@ for item in progress_bar:
                     for item in target_item_claims["P3"]
                 ]
                 assert page_id in target_p3_items
-            except KeyError:
-                raise AssertionError(f"No P3 claims found on {target_item_id}")
-            except AssertionError:
-                raise AssertionError(
-                    f"{page_id} has a P3 claim pointing to {target_item_id}, but "
-                    f"{target_item_id} does not have a P3 claim pointing to {page_id} "
+            except (KeyError, AssertionError):
+                missing_claims.append((page_id, target_item_id, "P3"))
+                logger.error(
+                    "%s has a P3 claim pointing to %s, but %s does not have a P3 claim pointing to %s",
+                    page_id,
+                    target_item_id,
+                    target_item_id,
+                    page_id,
                 )
+
+if missing_claims:
+    logger.info("Creating missing claims")
+
+    for page_id, target_item_id, property_id in tqdm(missing_claims):
+        create_claim_response = wikibase.session.post(
+            url=wikibase.api_url,
+            data={
+                "action": "wbcreateclaim",
+                "format": "json",
+                "entity": page_id,
+                "property": property_id,
+                "snaktype": "value",
+                "value": json.dumps({"entity-type": "item", "id": target_item_id}),
+                "token": wikibase.csrf_token,
+                "bot": True,
+                "summary": "Adding missing relationship claim",
+            },
+        ).json()
+        logger.info(f"Created claim: {create_claim_response}")
+
+logger.info("All relationships are consistent!")
