@@ -38,18 +38,7 @@ def get_item_claims(item_id: str):
 
 
 # get a list of every item in the concept store
-all_pages_response = wikibase.session.get(
-    url=wikibase.api_url,
-    params={
-        "action": "query",
-        "format": "json",
-        "list": "allpages",
-        "apnamespace": "120",
-        # NOTE: this will work up to a limit of 5000 item pages in the concept store.
-        # Beyond that, we'll need to start paginating over the results
-        "aplimit": "max",
-    },
-).json()
+all_item_ids = wikibase.get_all_item_ids()
 
 
 # define the constraints we want to enforce
@@ -61,11 +50,10 @@ relationship_constraints = [
 ]
 
 missing_claims = []
-for item in all_pages_response["query"]["allpages"]:
-    page_id = item["title"].replace("Item:", "")
-    logger.info("Checking relationships for %s", page_id)
+for item_id in all_item_ids:
+    logger.info("Checking relationships for %s", item_id)
 
-    claims = get_item_claims(page_id)
+    claims = get_item_claims(item_id)
 
     for property_id, target_property_id in relationship_constraints:
         if property_id in claims:
@@ -80,24 +68,24 @@ for item in all_pages_response["query"]["allpages"]:
                         item["mainsnak"]["datavalue"]["value"]["id"]
                         for item in target_item_claims[target_property_id]
                     ]
-                    assert page_id in target_items
+                    assert item_id in target_items
                 except (KeyError, AssertionError):
-                    missing_claims.append((page_id, target_item_id, target_property_id))
+                    missing_claims.append((item_id, target_item_id, target_property_id))
                     logger.error(
                         "%s has a %s claim pointing to %s, but %s does not have a %s claim pointing to %s",
-                        page_id,
+                        item_id,
                         property_id,
                         target_item_id,
                         target_item_id,
                         target_property_id,
-                        page_id,
+                        item_id,
                     )
 
 if missing_claims:
     logger.info("Creating missing claims")
-    for page_id, target_item_id, property_id in tqdm(missing_claims):
+    for item_id, target_item_id, property_id in tqdm(missing_claims):
         create_claim_response = wikibase.add_statement(
-            subject_id=page_id,
+            subject_id=item_id,
             predicate_id=property_id,
             object_id=target_item_id,
             summary="Adding missing relationship claim",
