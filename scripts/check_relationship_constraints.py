@@ -1,11 +1,9 @@
 from logging import getLogger
 
-import dotenv
 from tqdm import tqdm
 
 from src.wikibase import WikibaseSession
 
-dotenv.load_dotenv()
 logger = getLogger(__name__)
 
 wikibase = WikibaseSession()
