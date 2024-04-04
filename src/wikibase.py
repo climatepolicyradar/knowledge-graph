@@ -206,6 +206,32 @@ class WikibaseSession:
 
         return concept
 
+    def get_all_item_ids(self) -> List[str]:
+        """
+        Get all item IDs from the Wikibase instance
+
+        NOTE: Because this call has a max `aplimit` of 5000, this implementation will
+        work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
+        need to start paginating over the results
+
+        :return List[str]: A list of all item IDs in the Wikibase instance
+        """
+        all_pages_response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "format": "json",
+                "list": "allpages",
+                "apnamespace": "120",
+                "aplimit": "max",
+            },
+        ).json()
+        all_item_ids = [
+            page["title"].replace("Item:", "")
+            for page in all_pages_response["query"]["allpages"]
+        ]
+        return all_item_ids
+
     def get_concepts(self, wikibase_ids: Union[str, List[str]]) -> List[Concept]:
         """
         Get concepts from Wikibase by their Wikibase IDs
@@ -263,3 +289,45 @@ class WikibaseSession:
             concepts.append(self.get_concepts(wikibase_id)[0])
 
         return concepts
+
+    def add_statement(
+        self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
+    ) -> dict:
+        """
+        Add a statement to a Wikibase item
+
+        :param str subject_id: The Wikibase ID of the subject entity
+        :param str predicate_id: The Wikibase ID of the predicate property
+        :param str object_id: The Wikibase ID of the object entity
+        :param Optional[str] summary: A summary message for the edit
+        :return dict: The response from the Wikibase API
+        """
+        data = {
+            "action": "wbcreateclaim",
+            "format": "json",
+            "entity": subject_id,
+            "property": predicate_id,
+            "snaktype": "value",
+            "value": json.dumps({"entity-type": "item", "id": object_id}),
+            "token": self.csrf_token,
+            "bot": True,
+        }
+
+        if summary:
+            data["summary"] = summary
+
+        create_claim_response = self.session.post(url=self.api_url, data=data).json()
+        return create_claim_response
+
+    def remove_statement(
+        self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
+    ) -> None:
+        """
+        Remove a statement from a Wikibase entity
+
+        :param str subject_id: The Wikibase ID of the subject entity
+        :param str predicate_id: The Wikibase ID of the predicate property
+        :param str object_id: The Wikibase ID of the object entity
+        :param Optional[str] summary: A summary message for the edit
+        """
+        raise NotImplementedError

@@ -78,3 +78,8 @@ class Concept(BaseModel):
                 f'No wikibase_id found for concept "{self.preferred_label}"'
             )
         return f"{os.getenv('WIKIBASE_URL')}/wiki/Item:{self.wikibase_id}"
+
+    @property
+    def all_labels(self) -> List[str]:
+        """Return a list of all unique labels for the concept"""
+        return list(set([self.preferred_label] + self.alternative_labels))
