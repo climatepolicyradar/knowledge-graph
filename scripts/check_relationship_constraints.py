@@ -1,4 +1,3 @@
-import json
 from logging import getLogger
 
 import dotenv
@@ -97,20 +96,12 @@ for item in all_pages_response["query"]["allpages"]:
 if missing_claims:
     logger.info("Creating missing claims")
     for page_id, target_item_id, property_id in tqdm(missing_claims):
-        create_claim_response = wikibase.session.post(
-            url=wikibase.api_url,
-            data={
-                "action": "wbcreateclaim",
-                "format": "json",
-                "entity": page_id,
-                "property": property_id,
-                "snaktype": "value",
-                "value": json.dumps({"entity-type": "item", "id": target_item_id}),
-                "token": wikibase.csrf_token,
-                "bot": True,
-                "summary": "Adding missing relationship claim",
-            },
-        ).json()
+        create_claim_response = wikibase.add_statement(
+            subject_id=page_id,
+            predicate_id=property_id,
+            object_id=target_item_id,
+            summary="Adding missing relationship claim",
+        )
         logger.info(f"Created claim: {create_claim_response}")
 
 logger.info("All relationships are consistent!")

@@ -264,22 +264,44 @@ class WikibaseSession:
 
         return concepts
 
-    def add_statement(self, subject_id: str, predicate_id: str, object_id: str):
+    def add_statement(
+        self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
+    ) -> dict:
         """
-        Add a statement to a Wikibase entity
+        Add a statement to a Wikibase item
 
         :param str subject_id: The Wikibase ID of the subject entity
         :param str predicate_id: The Wikibase ID of the predicate property
         :param str object_id: The Wikibase ID of the object entity
+        :param Optional[str] summary: A summary message for the edit
+        :return dict: The response from the Wikibase API
         """
-        raise NotImplementedError
+        data = {
+            "action": "wbcreateclaim",
+            "format": "json",
+            "entity": subject_id,
+            "property": predicate_id,
+            "snaktype": "value",
+            "value": json.dumps({"entity-type": "item", "id": object_id}),
+            "token": self.csrf_token,
+            "bot": True,
+        }
 
-    def remove_statement(self, subject_id: str, predicate_id: str, object_id: str):
+        if summary:
+            data["summary"] = summary
+
+        create_claim_response = self.session.post(url=self.api_url, data=data).json()
+        return create_claim_response
+
+    def remove_statement(
+        self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
+    ) -> None:
         """
         Remove a statement from a Wikibase entity
 
         :param str subject_id: The Wikibase ID of the subject entity
         :param str predicate_id: The Wikibase ID of the predicate property
         :param str object_id: The Wikibase ID of the object entity
+        :param Optional[str] summary: A summary message for the edit
         """
         raise NotImplementedError
