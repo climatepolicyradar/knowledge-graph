@@ -263,3 +263,23 @@ class WikibaseSession:
             concepts.append(self.get_concepts(wikibase_id)[0])
 
         return concepts
+
+    def add_statement(self, subject_id: str, predicate_id: str, object_id: str):
+        """
+        Add a statement to a Wikibase entity
+
+        :param str subject_id: The Wikibase ID of the subject entity
+        :param str predicate_id: The Wikibase ID of the predicate property
+        :param str object_id: The Wikibase ID of the object entity
+        """
+        raise NotImplementedError
+
+    def remove_statement(self, subject_id: str, predicate_id: str, object_id: str):
+        """
+        Remove a statement from a Wikibase entity
+
+        :param str subject_id: The Wikibase ID of the subject entity
+        :param str predicate_id: The Wikibase ID of the predicate property
+        :param str object_id: The Wikibase ID of the object entity
+        """
+        raise NotImplementedError

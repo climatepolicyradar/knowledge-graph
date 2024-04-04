@@ -25,8 +25,7 @@ flat_concepts = [
     concept
     for top_level_concept in concepts
     for concept in top_level_concept.all_subconcepts
-]
-
+] + concepts
 
 concepts_with_wikibase_ids = []
 progress_bar = tqdm(total=len(flat_concepts), desc="Creating concepts", unit="concept")
