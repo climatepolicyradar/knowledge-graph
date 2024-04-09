@@ -1,6 +1,6 @@
 # Adding relationships between concepts
 
-Relationships between concepts are set as **statements** on the concept page. 
+Relationships between concepts are set as **statements** on the concept page.
 
 Each statement is made up of an **item**, a **property**, and a **value**. For example, the statement `Extreme Cold` `Subconcept of` `Extreme Weather` (item, property, and value respectively) would be used to describe the relationship between two concepts. It would be displayed on the concept page for `Extreme Cold`.
 

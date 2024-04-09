@@ -1,18 +1,15 @@
 # Idealised workflow
 
-- A policy team member would make additions to the Knowledge Graph based on their research:
-  - Create a new concept “parent” (e.g. just transition)
-  - Add new concept “children” linked to the parents (e.g. green jobs as part of just transition)
-  - Add the textual representations or “elements” of these concepts to be identified in the text (e.g. Just Transition, Just Ecological Transition, green job, green jobs…)
-  - Easily check whether the concepts or textual representations already exist within the Knowledge Graph and flag duplications
-  - Easily add to any added child concepts or elements a relationship to any concepts that are already within the concepts store outside of the concept that it has been added within
-  - Check for typos or human error before submitting to the store
-- The Head of Policy / appropriate team member would edit, deny or approve these additions to the concepts store before they are finalised:
-  - Additions can be recorded as “pending”, and then be approved or denied
-  - Date of input and of approval would be recorded
-  - Denial of an addition could be recorded outside of the store (e.g. Notion)
-  - Talk can be recorded in the entry for a concept that is edited or approved
-  - Permission for completion needs to be granted by the appropriate team member i.e. not everyone can immediately add and approve a concept
-- The concepts store would also house the methodology for the concept (e.g. explorer input, classifier methodology, and such)
-  - Edits and additions to the methodologies could also be housed within the concepts store
-  - Tracked changes would also be visible between different versions of the methodologies
+This is a guide to an idealised workflow for the concepts store. It's based on [some notes by Sarah](https://www.notion.so/climatepolicyradar/Policy-workflow-in-concept-store-10fbda2795e44ba08a07a555ef5deb45?pvs=4), and adapted for the working concepts store. As the workflow evolves, this document should be updated to reflect the new process!
+
+- A policy team member would make additions to the concepts store based on their research:
+  - At each stage, search the concepts store to check check whether the concepts to be created already exist
+    - Find or create a new concept “parent” (e.g. `Just transition`) with a description and a set of alternative labels. This concept should be as high-level as possible, and should be a good starting point for a new field.
+    - Find or create subconcepts linked to the parent concepts (e.g. `Green jobs` are a `Subconcept of` `Just transition`)
+    - Continue to build out the hierarchy of concepts, and add non-hierarchical relationships as needed
+    - Check for typos or human error before submitting to the store
+- The Head of Policy / appropriate team member would edit the concept to ensure it is accurate and complete:
+  - Each change will be timestamped and added to the history of the concept
+  - [Talk pages](./talk-pages.md) should be used that to discuss controversial changes to the concept, revisions, merges, and deletions
+  - The `Status` property should be used to indicate whether the concept is ready for use in downstream services (eg classifiers, knowledge graph). This should be set to `Ready` when the concept is sufficiently accurate and complete.
+- [Talk pages](./talk-pages.md) should also be used to provide concept definitions and labelling strategies in cases where the concept has an example-based classifier.

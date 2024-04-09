@@ -1,4 +1,4 @@
-# Struggling to find stuff
+# Struggling to find stuff
 
 If you're adding to a concept and are struggling to find the right property or concept to link to via search, you've probably identified a gap in the names for the properties or concepts.
 
