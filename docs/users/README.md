@@ -29,5 +29,5 @@ These pages should give you some heuristics for how to structure new concepts an
 
 - [Idealised workflow](idealised-workflow.md)
 - [Hierarchy heuristics](hierarchy-heuristics.md)
-- [Boiling the ocean](boiling-the-ocean.md)
+- [Concept heuristics](concept-heuristics.md)
 - [Struggling to find stuff](struggling-to-find-stuff.md)
