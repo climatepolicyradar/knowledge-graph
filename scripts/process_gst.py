@@ -1,3 +1,23 @@
+"""
+Extracts concept hierarchy from the global-stocktake repository and formats it as JSON.
+
+The generated JSON file contains a list of dictionaries, where each dictionary
+represents a concept at the top of a hierarchy, and containts its subconcepts. Each
+concept dictionary contains the preferred label, alternative labels, and subconcepts.
+
+Note: This script assumes that the global-stocktake repository is cloned in the same
+directory as the knowledge-graph repository.
+
+Usage:
+- Ensure that the global-stocktake repository is cloned in the same directory as the
+  knowledge-graph repository.
+- Run `python scripts/process_gst.py`
+
+Output:
+- "data/processed/concepts.json" containing the processed concepts and their
+  hierarchy.
+"""
+
 import itertools
 import json
 import warnings

@@ -1,3 +1,17 @@
+"""
+Ensures that the relationship constraints are satisfied between concepts in wikibase.
+
+The script performs the following steps:
+1. Retrieves the claims for every item in the concepts store.
+2. Checks whether the necessary symmetric/inverse relationship constraints are
+   satisfied between concepts.
+3. If any constraints are not satisfied, creates missing relationship claims to enforce
+   the constraints.
+
+Usage:
+- Run `python scripts/check_relationship_constraints.py`
+"""
+
 from logging import getLogger
 
 from tqdm import tqdm
