@@ -9,13 +9,14 @@ The technical content is about how to use the concepts store, while the conceptu
 
 ## Technical stuff
 
-The technical content should give you a good grounding in how to use the concepts store. It's a step-by-step guide to creating and editing concepts, and should give you a good idea of how to make your first edits.
+This technical content should give you a good grounding in how to use the concepts store. It's should give you a good idea of how to make your first edits.
 
-The concepts store borrows a lot of ideas from wikidata, so if you get stuck, you might find answers in their [help pages](https://www.wikidata.org/wiki/Help:Contents).
+The concepts store borrows a lot of ideas from wikidata, so if you get stuck, you might find answers in their [help pages](https://www.wikidata.org/wiki/Help:Contents). Make sure to add the answers you find to this documentation so that it's easier for the next person!
 
 - [What is the concepts store?](what-is-the-concepts-store.md)
 - [Creating an account](creating-an-account.md)
 - [Creating a new concept](creating-a-new-concept.md)
+- [Editing an existing concept](editing-an-existing-concept.md)
 - [Adding relationships](adding-relationships.md)
 - [Auditing a concept's history](auditing-a-concepts-history.md)
 - [Discussion pages](discussion-pages.md)
