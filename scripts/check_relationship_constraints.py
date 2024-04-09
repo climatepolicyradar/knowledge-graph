@@ -49,7 +49,7 @@ def get_item_claims(item_id: str):
     return response["entities"][item_id]["claims"]
 
 
-# get a list of every item in the concept store
+# get a list of every item in the concepts store
 all_item_ids = wikibase.get_all_item_ids()
 
 

@@ -19,7 +19,7 @@ You might be prompted to add a [qualifier](https://www.wikidata.org/wiki/Help:Qu
 
 ## References
 
-Each statement can be supported by an optional reference. To add a reference, click the `+ add reference` button on the right hand side of the statement you want to reference. The value should be a URL to a reliable source that supports the statement.
+Each statement can be supported by an optional reference. To add a reference, click the `+ add reference` button on the right hand side of the statement you want to reference. The value should be a URL to a reliable source that supports the statement. That might be something direct and formal (eg a scientific paper, a news article, a government report), or indirect (eg a conversation on slack, or a page in notion). As long as the reference offers sufficient explanation for why a decision was made, it's a good reference.
 
 ## Editing relationships
 

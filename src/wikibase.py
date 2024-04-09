@@ -211,7 +211,7 @@ class WikibaseSession:
         Get all item IDs from the Wikibase instance
 
         NOTE: Because this call has a max `aplimit` of 5000, this implementation will
-        work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
+        work up to a limit of 5000 item pages in the concepts store. Beyond that, we'll
         need to start paginating over the results
 
         :return List[str]: A list of all item IDs in the Wikibase instance
