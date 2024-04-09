@@ -52,6 +52,6 @@ Each concept page has a 'View history' tab, which shows a record of changes whic
 
 ![](./images/view-history-tab.png)
 
-This should allow us to see who made changes, when they were made, and what the changes were. If we decide that a change was made in error, we can revert to an earlier version of the concept with a single click. Ideally, new edits or reversions should be discussed with the team on the concept's corresponding [discussion page](./discussion-pages.md) before they're made, and the reasons for the change should be tracked in the edit summary.
+This should allow us to see who made changes, when they were made, and what the changes were. If we decide that a change was made in error, we can revert to an earlier version of the concept with a single click. Ideally, new edits or reversions should be discussed with the team on the concept's corresponding [talk page](./talk-pages.md) before they're made, and the reasons for the change should be tracked in the edit summary.
 
 Take a look at [auditing a concept's history](./auditing-a-concepts-history.md) for more information on how to use the 'View history' tab.

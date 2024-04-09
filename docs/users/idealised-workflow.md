@@ -11,7 +11,7 @@
   - Additions can be recorded as “pending”, and then be approved or denied
   - Date of input and of approval would be recorded
   - Denial of an addition could be recorded outside of the store (e.g. Notion)
-  - Discussion can be recorded in the entry for a concept that is edited or approved
+  - Talk can be recorded in the entry for a concept that is edited or approved
   - Permission for completion needs to be granted by the appropriate team member i.e. not everyone can immediately add and approve a concept
 - The concept store would also house the methodology for the concept (e.g. explorer input, classifier methodology, and such)
   - Edits and additions to the methodologies could also be housed within the concept store

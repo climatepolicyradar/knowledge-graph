@@ -19,7 +19,7 @@ The concepts store borrows a lot of ideas from wikidata, so if you get stuck, yo
 - [Editing an existing concept](editing-an-existing-concept.md)
 - [Adding relationships](adding-relationships.md)
 - [Auditing a concept's history](auditing-a-concepts-history.md)
-- [Discussion pages](discussion-pages.md)
+- [Talk pages](talk-pages.md)
 - [Types of classifier](classifier-types.md)
 - [Merging existing concepts](merging-existing-concepts.md)
 
