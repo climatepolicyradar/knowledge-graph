@@ -1,3 +1,21 @@
+"""
+Populates a Wikibase instance with concepts from a JSON file.
+
+Takes the output of the `process_gst.py` script, which contains the processed concepts
+hierarchy, and creates a set of corresponding concepts and relationships in Wikibase.
+
+Note: This script assumes that you've already run the `process_gst.py` script to
+generate the concepts.json file, and have a Wikibase instance running with the
+appropriate credentials set in the .env file.
+
+Usage:
+- Run `python scripts/populate_wikibase.py`
+
+Output:
+- "data/processed/concepts_with_wikibase_ids.json" containing the original concepts
+  hierarchy, along with their new Wikibase IDs.
+"""
+
 import json
 from logging import getLogger
 from pathlib import Path
