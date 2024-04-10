@@ -283,9 +283,10 @@ class WikibaseSession:
             entity = response["entities"][wikibase_id]
 
             concept = Concept(
-                preferred_label=entity["labels"]["en"]["value"],
+                preferred_label=entity.get("labels", {}).get("en", {}).get("value"),
                 alternative_labels=[
-                    alias["value"] for alias in entity["aliases"]["en"]
+                    alias.get("value")
+                    for alias in entity.get("aliases", {}).get("en", [])
                 ],
                 wikibase_id=wikibase_id,
             )
