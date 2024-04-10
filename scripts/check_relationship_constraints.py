@@ -50,7 +50,7 @@ def get_item_claims(item_id: str):
 
 
 # get a list of every item in the concepts store
-all_item_ids = wikibase.get_all_item_ids()
+all_items = wikibase.get_all_items()
 
 
 # define the constraints we want to enforce
@@ -62,7 +62,8 @@ relationship_constraints = [
 ]
 
 missing_claims = []
-for item_id in all_item_ids:
+for item_id in all_items:
+    item_id = item_id["q_id"]
     logger.info("Checking relationships for %s", item_id)
 
     claims = get_item_claims(item_id)

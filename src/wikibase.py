@@ -2,7 +2,7 @@ import json
 import os
 from functools import wraps
 from logging import getLogger
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import dotenv
 import httpx
@@ -37,7 +37,8 @@ class WikibaseSession:
     session = httpx.Client()
     username = os.getenv("WIKIBASE_USERNAME")
     password = os.getenv("WIKIBASE_PASSWORD")
-    api_url = f"{os.getenv('WIKIBASE_URL')}/w/api.php"
+    base_url = os.getenv("WIKIBASE_URL")
+    api_url = f"{base_url}/w/api.php"
 
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID")
     subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID")
@@ -206,7 +207,31 @@ class WikibaseSession:
 
         return concept
 
-    def get_all_item_ids(self) -> List[str]:
+    def get_all_properties(self) -> List[Dict[str, str]]:
+        """
+        Get all property IDs from the Wikibase instance
+
+        :return List[Dict[str, str]]: A list of all property IDs (and their
+        corresponding page_ids) in the Wikibase instance
+        """
+        all_properties_response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "format": "json",
+                "list": "allpages",
+                "apnamespace": "122",
+                "aplimit": "max",
+            },
+        ).json()
+        all_properties = [
+            {"p_id": page["title"].replace("Property:", ""), "page_id": page["pageid"]}
+            for page in all_properties_response["query"]["allpages"]
+        ]
+        sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
+        return sorted_properties
+
+    def get_all_items(self) -> List[Dict[str, str]]:
         """
         Get all item IDs from the Wikibase instance
 
@@ -214,7 +239,8 @@ class WikibaseSession:
         work up to a limit of 5000 item pages in the concepts store. Beyond that, we'll
         need to start paginating over the results
 
-        :return List[str]: A list of all item IDs in the Wikibase instance
+        :return List[Dict[str, str]]: A list of all item IDs (and their corresponding
+        page_ids) in the Wikibase instance
         """
         all_pages_response = self.session.get(
             url=self.api_url,
@@ -226,11 +252,12 @@ class WikibaseSession:
                 "aplimit": "max",
             },
         ).json()
-        all_item_ids = [
-            page["title"].replace("Item:", "")
+        all_items = [
+            {"q_id": page["title"].replace("Item:", ""), "page_id": page["pageid"]}
             for page in all_pages_response["query"]["allpages"]
         ]
-        return all_item_ids
+        sorted_items = sorted(all_items, key=lambda x: int(x["q_id"][1:]))
+        return sorted_items
 
     def get_concepts(self, wikibase_ids: Union[str, List[str]]) -> List[Concept]:
         """
@@ -289,6 +316,25 @@ class WikibaseSession:
             concepts.append(self.get_concepts(wikibase_id)[0])
 
         return concepts
+
+    def get_statements(self, item_id: str) -> List[dict]:
+        """
+        Get all statements for a Wikibase item
+
+        :param str item_id: The Wikibase ID of the item
+        :return List[dict]: A list of all statements for the item
+        """
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetclaims",
+                "format": "json",
+                "entity": item_id,
+            },
+        ).json()
+
+        statements = response["claims"]
+        return statements
 
     def add_statement(
         self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
