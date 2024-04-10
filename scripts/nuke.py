@@ -68,6 +68,7 @@ def main():
                         advance=1,
                         description=f"Deleting item {item['q_id']}",
                     )
+
                     # https://www.mediawiki.org/w/api.php?action=help&modules=delete
                     item_deletion_response = wikibase.session.post(
                         url=wikibase.api_url,
@@ -93,6 +94,7 @@ def main():
                         advance=1,
                         description=f"Deleting property {property['p_id']}",
                     )
+
                     # https://www.mediawiki.org/w/api.php?action=help&modules=delete
                     property_deletion_response = wikibase.session.post(
                         url=wikibase.api_url,
@@ -110,7 +112,7 @@ def main():
                         )
                 progress.stop()
 
-            # # now delete the properties
+            console.print("[green]All items and properties successfully deleted.[/]")
 
 
 if __name__ == "__main__":
