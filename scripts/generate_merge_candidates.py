@@ -1,6 +1,6 @@
 import json
 import re
-from collections import Counter
+from collections import defaultdict
 from pathlib import Path
 from string import punctuation
 
@@ -94,17 +94,21 @@ def main(
     all_item_ids = [item["q_id"] for item in wikibase.get_all_items()]
     concepts = wikibase.get_concepts(all_item_ids)
 
-    console.print("Parsing labels and normalising...", style="dim")
-    preferred_labels = [concept.preferred_label for concept in concepts]
-    normalised_labels = [normalise(label) for label in preferred_labels]
+    console.print("Normalising labels...", style="dim")
+    normalised_labels = [
+        list(set([normalise(label) for label in concept.all_labels]))
+        for concept in concepts
+    ]
 
     console.print("Finding merge candidates...", style="dim")
-    label_groups = Counter(normalised_labels)
-    merge_candidates = [
-        [concept for concept in concepts if normalise(concept.preferred_label) == label]
-        for label, count in label_groups.items()
-        if count > 1
-    ]
+    normalised_label_to_concept = defaultdict(list)
+    for i, concept in enumerate(concepts):
+        for label in normalised_labels[i]:
+            normalised_label_to_concept[label].append(concept)
+
+    for label, concepts in normalised_label_to_concept.items():
+        if len(concepts) > 1:
+            merge_candidates.append(concepts)
 
     console.print(f"Found {len(merge_candidates)} merge candidates", style="bold green")
 
@@ -136,7 +140,8 @@ def main(
     merge_candidate_ids = [
         [concept.wikibase_id for concept in candidate] for candidate in merge_candidates
     ]
-    with open(output_path, "w") as f:
+
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(merge_candidate_ids, f, indent=4)
 
     console.print(f"Saved merge candidates to {output_path}", style="bold green")
