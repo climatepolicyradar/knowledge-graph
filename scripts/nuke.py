@@ -52,6 +52,7 @@ def main():
                                     "claim": statement["id"],
                                     "token": wikibase.csrf_token,
                                     "format": "json",
+                                    "bot": True,
                                 },
                             )
                             if remove_claim_response.status_code != 200:
