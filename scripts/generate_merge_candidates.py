@@ -1,6 +1,5 @@
 import json
 import re
-from collections import defaultdict
 from pathlib import Path
 from string import punctuation
 
@@ -17,18 +16,17 @@ wikibase = WikibaseSession()
 
 def normalise(label: str) -> str:
     """
-    Normalise a label
+    Naively normalise a label.
 
-    Removes punctuation, casing, stopwords, pluralisation, and whitespace.
+    Removes punctuation, casing, stopwords, pluralisation, and whitespace. In the
+    future we should probably swap some of these out for more sophisticated methods
+    (eg running full stemming instead of depluralisation, etc).
     """
     # lowercase
     label = label.lower()
 
     # replace any punctuation with whitespace
     label = re.sub(rf"[{punctuation}]", " ", label)
-
-    # remove multiple whitespace characters
-    label = re.sub(r"\s+", " ", label)
 
     # get rid of stopwords
     stopwords = [
@@ -48,15 +46,17 @@ def normalise(label: str) -> str:
         "an",
         "a",
     ]
-    label = " ".join([word for word in label.split() if word not in stopwords])
+    words = label.split()
+    words = [word for word in words if word not in stopwords]
 
     # remove pluralisation
-    words = label.split()
     for i, word in enumerate(words):
         if word.endswith("s"):
             words[i] = word[:-1]
         if word.endswith("es"):
             words[i] = word[:-2]
+
+    # remove extra whitespace by joining the words back together
     label = " ".join(words)
 
     return label
@@ -74,6 +74,9 @@ def main(
             help="Path to the output file",
         ),
     ],
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Automatically merge all candidates"
+    ),
 ):
     """
     Queries the wikibase instance for groups of items which could plausibly be merged
@@ -88,7 +91,6 @@ def main(
     The output file can be used as input to the merge_concepts.py script
     """
     assert output_path.suffix == ".json", "Output file must be a json file"
-    merge_candidates = []
 
     console.print("Fetching all items from wikibase...", style="dim")
     all_item_ids = [item["q_id"] for item in wikibase.get_all_items()]
@@ -101,39 +103,55 @@ def main(
     ]
 
     console.print("Finding merge candidates...", style="dim")
-    normalised_label_to_concept = defaultdict(list)
-    for i, concept in enumerate(concepts):
-        for label in normalised_labels[i]:
-            normalised_label_to_concept[label].append(concept)
 
-    for label, concepts in normalised_label_to_concept.items():
-        if len(concepts) > 1:
-            merge_candidates.append(concepts)
+    # join the groups of items which share a normalised label
+    merge_candidates: list[set] = []
+    for i, concept in enumerate(concepts):
+        for j, other_concept in enumerate(concepts):
+            if i == j:
+                continue
+
+            if any(
+                normalised_label in normalised_labels[j]
+                for normalised_label in normalised_labels[i]
+            ):
+                # if either concept is already in a group, add the other to that group
+                for group in merge_candidates:
+                    if concept in group or other_concept in group:
+                        group.add(concept)
+                        group.add(other_concept)
+                        break
+                else:
+                    merge_candidates.append({concept, other_concept})
 
     console.print(f"Found {len(merge_candidates)} merge candidates", style="bold green")
 
     # for each candidate, prompt the user to select them as a merge candidate
     for i, candidate in enumerate(merge_candidates):
-        console.print(
-            f"\nMerge candidate group {i + 1}/{len(merge_candidates)}",
-            style="bold white",
-        )
+        if yes:
+            merge = True
 
-        table = Table()
-        table.add_column("ID")
-        table.add_column("Preferred Label")
-        table.add_column("Alternative Labels")
-
-        for concept in candidate:
-            table.add_row(
-                concept.wikibase_id,
-                concept.preferred_label,
-                ", ".join(concept.alternative_labels),
+        else:
+            console.print(
+                f"\nMerge candidate group {i + 1}/{len(merge_candidates)}",
+                style="bold white",
             )
 
-        console.print(table)
+            table = Table()
+            table.add_column("ID")
+            table.add_column("Preferred Label")
+            table.add_column("Alternative Labels")
 
-        merge = typer.confirm("Would you like to merge these concepts?")
+            for concept in candidate:
+                table.add_row(
+                    concept.wikibase_id,
+                    concept.preferred_label,
+                    ", ".join(concept.alternative_labels),
+                )
+
+            console.print(table)
+            merge = typer.confirm("Would you like to merge these concepts?")
+
         if not merge:
             merge_candidates.remove(candidate)
 

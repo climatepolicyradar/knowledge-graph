@@ -246,10 +246,11 @@ class WikibaseSession:
             url=self.api_url,
             params={
                 "action": "query",
-                "format": "json",
                 "list": "allpages",
                 "apnamespace": "120",
                 "aplimit": "max",
+                "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
+                "format": "json",
             },
         ).json()
         all_items = [

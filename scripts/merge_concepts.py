@@ -3,6 +3,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.progress import Progress
 from typing_extensions import Annotated
 
 from src.wikibase import WikibaseSession
@@ -36,6 +37,7 @@ def main(
         ...
     ]
 
+    The first item in each group will act as the target item, with all other items in the group being merged into it.
     """
     assert input_path.suffix == ".json", "Input file must be a json file"
     with open(input_path, "r") as f:
@@ -48,13 +50,79 @@ def main(
         for item in group:
             assert isinstance(item, str), "Each item in a group must be a string"
 
-    console.print("Merging concepts...", style="blue")
-    for group in merge_candidates:
-        # remove any claims which link the items in the group to one another
+    with Progress() as progress:
+        task = progress.add_task(
+            "[cyan]Merging concepts...", total=len(merge_candidates)
+        )
+        for group in merge_candidates:
+            progress.advance(task)
 
-        # then merge the items
-        # https://www.wikidata.org/w/api.php?action=help&modules=wbmergeitems
-        pass
+            # get the claims for each item in the group
+            for wikibase_id in group:
+                response = wikibase.session.get(
+                    url=wikibase.api_url,
+                    params={
+                        "action": "wbgetclaims",
+                        "format": "json",
+                        "entity": wikibase_id,
+                    },
+                ).json()
+                statements = response["claims"]
+                flat_statements = [
+                    statement
+                    for statements_of_same_type in statements.values()
+                    for statement in statements_of_same_type
+                ]
+                for statement in flat_statements:
+                    item_id = (
+                        statement.get("mainsnak", {})
+                        .get("datavalue", {})
+                        .get("value", {})
+                        .get("id", None)
+                    )
+                    # if the statement refers to another item in the group, remove it
+                    if item_id is not None and item_id in group:
+                        # https://www.wikidata.org/w/api.php?action=help&modules=wbremoveclaims
+                        remove_claim_response = wikibase.session.post(
+                            url=wikibase.api_url,
+                            data={
+                                "action": "wbremoveclaims",
+                                "claim": statement["id"],
+                                "token": wikibase.csrf_token,
+                                "bot": True,
+                                "summary": "Removing claims between duplicate items",
+                                "format": "json",
+                            },
+                        )
+                        if remove_claim_response.status_code != 200:
+                            console.print(
+                                f"Failed to remove claim {statement['id']} from item {wikibase_id}: {remove_claim_response.text}",
+                                style="red",
+                            )
+
+                # then merge the items
+                # https://www.wikidata.org/w/api.php?action=help&modules=wbmergeitems
+                for wikibase_id in group[1:]:
+                    target_item = group[0]
+                    merge_response = wikibase.session.post(
+                        url=wikibase.api_url,
+                        data={
+                            "action": "wbmergeitems",
+                            "fromid": wikibase_id,
+                            "toid": target_item,
+                            "token": wikibase.csrf_token,
+                            "bot": True,
+                            "summary": "Merging duplicate items",
+                            "format": "json",
+                        },
+                    )
+                    if merge_response.status_code != 200:
+                        console.print(
+                            f"Failed to merge item {wikibase_id} into item {target_item}: {merge_response.text}",
+                            style="red",
+                        )
+
+    console.print("Finished merging concepts", style="green")
 
 
 if __name__ == "__main__":

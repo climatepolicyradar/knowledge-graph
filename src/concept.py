@@ -83,3 +83,7 @@ class Concept(BaseModel):
     def all_labels(self) -> List[str]:
         """Return a list of all unique labels for the concept"""
         return list(set([self.preferred_label] + self.alternative_labels))
+
+    def __hash__(self) -> int:
+        """Return a unique hash for the concept"""
+        return hash((self.wikibase_id, self.preferred_label, *self.alternative_labels))
