@@ -9,7 +9,7 @@ The technical content is about how to use the concepts store, while the conceptu
 
 ## Technical stuff
 
-This technical content should give you a good grounding in how to use the concepts store. It's should give you a good idea of how to make your first edits.
+This technical content should give you a good grounding in how to use the concepts store.
 
 The concepts store borrows a lot of ideas from wikidata, so if you get stuck, you might find answers in their [help pages](https://www.wikidata.org/wiki/Help:Contents). Make sure to add the answers you find to this documentation so that it's easier for the next person!
 
