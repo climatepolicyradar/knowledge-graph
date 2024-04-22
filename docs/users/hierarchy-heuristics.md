@@ -31,7 +31,7 @@ By allowing for a broader range of relationships between concepts, we'll make it
 
 While we should avoid being _too_ hierarchical, we can still use hierarchies as a starting point for exploring new fields. Deliberately oversimplifying the world into a hierarchy can be a useful way to get the ball rolling, and our workflow means it's always possible to refine the structure later.
 
-When we're starting a new field, we should try to find a high-level concept that captures the essence of the field, and then add subconcepts that are part of that high-level concept.
+When we're starting a new field, we should try to find a high-level concept that captures the essence of the field, and then add subconcepts that are part of that high-level concept. Examples might include 'Mitigation', 'Technologies', 'Policy Instruments', 'Sectors', etc.
 
 We've also seen that other organisations often arrange their concepts in hierarchical taxonomies. Bootstrapping our work with their knowledge should speed up our classifier development, and make it easier to collaborate with those orgs.
 
@@ -42,3 +42,9 @@ Nevertheless, we should be prepared to adjust the hierarchical representations w
 We should aim to keep our hierarchies relatively shallow. Doing so will (hopefully) keep the concepts abstract enough to be useful to users, while making it easier for us to maintain the hierarchy as the world changes.
 
 The concepts inhereted from [GST](https://gst1.org) worked over three levels of abstraction, and we should aim to keep our future hierarchies at a similar depth.
+
+## Hierarchies can overlap
+
+Although a hierarchy will usually start life as a single tree, it's likely that as we develop our concepts store, we'll find that concepts might exist in multiple hierarchies, with overlapping branches. This is fine! We should aim to represent the relationships between concepts as accurately as possible, and if that means that a concept is a subconcept of two different parent concepts, that's okay.
+
+Take a look at [the documentation on merging concepts](./merging-existing-concepts.md) for more information on how merge two concepts from different hierarchies which represent the same thing.

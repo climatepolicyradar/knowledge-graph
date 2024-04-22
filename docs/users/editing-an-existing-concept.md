@@ -11,3 +11,7 @@ If you choose to save your changes, they will automatically be added to the hist
 ## Editing statements
 
 To add/delete statements on your item, see the [Adding relationships between concepts](./adding-relationships.md) documentation.
+
+## Atomic edits
+
+Try to keep your edits small! Making changes to the preferred label, description, and alternative labels all at once, or editing multiple statements will muddle the edit history of the item. Instead, try to make individual, atomic changes. Doing so will make it much easier for future users to understand the history of the item, and to revert part of a change without scrapping the parts which are still useful!

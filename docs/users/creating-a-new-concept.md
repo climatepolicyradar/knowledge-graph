@@ -12,3 +12,7 @@
 ![](./images/create-a-new-item.png)
 
 - Click the `Create` button
+
+## How is this data used?
+
+Take a look at the [classifier types](./classifier-types.md) documentation to see how this data is used to build classifiers.
