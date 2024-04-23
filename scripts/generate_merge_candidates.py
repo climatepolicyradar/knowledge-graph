@@ -92,39 +92,38 @@ def main(
     """
     assert output_path.suffix == ".json", "Output file must be a json file"
 
-    console.print("Fetching all items from wikibase...", style="dim")
-    all_item_ids = [item["q_id"] for item in wikibase.get_all_items()]
-    concepts = wikibase.get_concepts(all_item_ids)
+    with console.status("Fetching all items from wikibase..."):
+        all_item_ids = [item["q_id"] for item in wikibase.get_all_items()]
+        concepts = wikibase.get_concepts(all_item_ids)
 
-    console.print("Normalising labels...", style="dim")
-    normalised_labels = [
-        list(set([normalise(label) for label in concept.all_labels]))
-        for concept in concepts
-    ]
+    with console.status("Normalising labels..."):
+        normalised_labels = [
+            list(set([normalise(label) for label in concept.all_labels]))
+            for concept in concepts
+        ]
 
-    console.print("Finding merge candidates...", style="dim")
+    with console.status("Finding merge candidates..."):
+        # join the groups of items which share a normalised label
+        merge_candidates: list[set] = []
+        for i, concept in enumerate(concepts):
+            for j, other_concept in enumerate(concepts):
+                if i == j:
+                    continue
 
-    # join the groups of items which share a normalised label
-    merge_candidates: list[set] = []
-    for i, concept in enumerate(concepts):
-        for j, other_concept in enumerate(concepts):
-            if i == j:
-                continue
+                if any(
+                    normalised_label in normalised_labels[j]
+                    for normalised_label in normalised_labels[i]
+                ):
+                    # if either concept is already in a group, add the other to that group
+                    for group in merge_candidates:
+                        if concept in group or other_concept in group:
+                            group.add(concept)
+                            group.add(other_concept)
+                            break
+                    else:
+                        merge_candidates.append({concept, other_concept})
 
-            if any(
-                normalised_label in normalised_labels[j]
-                for normalised_label in normalised_labels[i]
-            ):
-                # if either concept is already in a group, add the other to that group
-                for group in merge_candidates:
-                    if concept in group or other_concept in group:
-                        group.add(concept)
-                        group.add(other_concept)
-                        break
-                else:
-                    merge_candidates.append({concept, other_concept})
-
-    console.print(f"Found {len(merge_candidates)} merge candidates", style="bold green")
+    console.print(f"✅ Found {len(merge_candidates)} merge candidates", style="green")
 
     # for each candidate, prompt the user to select them as a merge candidate
     for i, candidate in enumerate(merge_candidates):
@@ -134,7 +133,7 @@ def main(
         else:
             console.print(
                 f"\nMerge candidate group {i + 1}/{len(merge_candidates)}",
-                style="bold white",
+                style="white",
             )
 
             table = Table()
@@ -162,7 +161,12 @@ def main(
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(merge_candidate_ids, f, indent=4)
 
-    console.print(f"Saved merge candidates to {output_path}", style="bold green")
+    console.print(f"✅ Saved merge candidates to {output_path}", style="green")
+
+    console.print("To merge the generated candidates, run:")
+    console.print(
+        f'  python scripts/merge_concepts.py --input-path="{output_path}"', style="cyan"
+    )
 
 
 if __name__ == "__main__":
