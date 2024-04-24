@@ -246,10 +246,11 @@ class WikibaseSession:
             url=self.api_url,
             params={
                 "action": "query",
-                "format": "json",
                 "list": "allpages",
                 "apnamespace": "120",
                 "aplimit": "max",
+                "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
+                "format": "json",
             },
         ).json()
         all_items = [
@@ -283,9 +284,10 @@ class WikibaseSession:
             entity = response["entities"][wikibase_id]
 
             concept = Concept(
-                preferred_label=entity["labels"]["en"]["value"],
+                preferred_label=entity.get("labels", {}).get("en", {}).get("value"),
                 alternative_labels=[
-                    alias["value"] for alias in entity["aliases"]["en"]
+                    alias.get("value")
+                    for alias in entity.get("aliases", {}).get("en", [])
                 ],
                 wikibase_id=wikibase_id,
             )
