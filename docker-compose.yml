@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   api:
-    build: 
+    build:
       dockerfile: Dockerfile
       context: .
     ports:
