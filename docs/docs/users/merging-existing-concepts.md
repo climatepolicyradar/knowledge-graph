@@ -24,5 +24,5 @@ If two concepts are about _exactly_ the same thing, they should be merged. If no
 
 - Identify the two concepts that should be merged
 - Remove any statements which link the items together (eg `Related to`, `Subconcept of`, `Has subconcept`) from both items. If the items are linked, the merge will fail.
-- Go to [the concepts store's Special:MergeItems page](https://climatepolicyradar.wikibase.cloud/wiki/Special:MergeItems)
+- Go to [the concept store's Special:MergeItems page](https://climatepolicyradar.wikibase.cloud/wiki/Special:MergeItems)
 - Enter the two concept IDs and click "Merge"

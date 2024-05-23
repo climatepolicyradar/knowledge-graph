@@ -1,6 +1,6 @@
 # Hierarchy heuristics
 
-This page provides some rough guidance on how to think about hierarchies in the concepts store. Like everything else in this documentation, these are just suggestions. If you have a good reason to go against this guidance (and have discussed it with the team), you should! If that new insight applies to more than a couple of specific cases, you should add it to this documentation so that it's easier for the next person to get started.
+This page provides some rough guidance on how to think about hierarchies in the concept store. Like everything else in this documentation, these are just suggestions. If you have a good reason to go against this guidance (and have discussed it with the team), you should! If that new insight applies to more than a couple of specific cases, you should add it to this documentation so that it's easier for the next person to get started.
 
 ## Hierarchies should be used to represent levels of abstraction
 
@@ -14,7 +14,7 @@ Users should see mentions of `Extreme Cold` when they're searching mentions of f
 
 ## We should avoid being too hierarchical
 
-As we're developing our concepts store and bringing structure to our knowledge graph, we should try to avoid relying too heavily on hierarchical relationships. While hierarchy is useful (especially as a starting point for new fields), we should lean more on "relatedness" than "hierarchy" for a few reasons:
+As we're developing our concept store and bringing structure to our knowledge graph, we should try to avoid relying too heavily on hierarchical relationships. While hierarchy is useful (especially as a starting point for new fields), we should lean more on "relatedness" than "hierarchy" for a few reasons:
 
 1. **Hierarchies are hard to maintain:** The strict parent-child relationships in a hierarchy can be hard to maintain. The real world is messy, and most concepts don't fit neatly into one single category. It's almost impossible to represent levels of abstraction consistently across fields/disciplines in a hierarchical way (many librarians have tried!), and it's even harder to maintain these levels of abstraction as the world changes. This is particularly true in fields like climate and policy, where the meaning of a concept can drift in a matter of years.  
 Taking a more flexible, networked approach to concepts' relationships allows us to represent the complexity of the real world more accurately, and makes it easier to adapt to new information or changes in the world.
@@ -45,6 +45,6 @@ The concepts inhereted from [GST](https://gst1.org) worked over three levels of 
 
 ## Hierarchies can overlap
 
-Although a hierarchy will usually start life as a single tree, it's likely that as we develop our concepts store, we'll find that concepts might exist in multiple hierarchies, with overlapping branches. This is fine! We should aim to represent the relationships between concepts as accurately as possible, and if that means that a concept is a subconcept of two different parent concepts, that's okay.
+Although a hierarchy will usually start life as a single tree, it's likely that as we develop our concept store, we'll find that concepts might exist in multiple hierarchies, with overlapping branches. This is fine! We should aim to represent the relationships between concepts as accurately as possible, and if that means that a concept is a subconcept of two different parent concepts, that's okay.
 
 Take a look at [the documentation on merging concepts](./merging-existing-concepts.md) for more information on how merge two concepts from different hierarchies which represent the same thing.
