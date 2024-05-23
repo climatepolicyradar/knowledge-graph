@@ -32,10 +32,10 @@ To add a new statement, click the `+ add statement` button in the top right hand
 
 A form will appear where you can add a new statement. The form will prompt you for the following information:
 
-- **Property:** The property that describes the relationship between the two concepts. You can search for the property you want to use by starting to type. The value should be one of [the properties in the concepts store](https://climatepolicyradar.wikibase.cloud/wiki/Special:ListProperties) (aka the listed relationship types above).
+- **Property:** The property that describes the relationship between the two concepts. You can search for the property you want to use by starting to type. The value should be one of [the properties in the concept store](https://climatepolicyradar.wikibase.cloud/wiki/Special:ListProperties) (aka the listed relationship types above).
 - **Value:** The concept that the item is related to. You can search for the concept you want to use by starting to type.
 
-You might be prompted to add a [qualifier](https://www.wikidata.org/wiki/Help:Qualifiers) or [rank](https://www.wikidata.org/wiki/Help:Ranking) to the statement. These are optional, and we aren't currently using them in the concepts store.
+You might be prompted to add a [qualifier](https://www.wikidata.org/wiki/Help:Qualifiers) or [rank](https://www.wikidata.org/wiki/Help:Ranking) to the statement. These are optional, and we aren't currently using them in the concept store.
 
 ## References
 
