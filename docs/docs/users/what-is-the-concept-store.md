@@ -4,7 +4,7 @@ The concept store is our way of managing the climate concepts we care about, and
 
 For example, we might have a concept for `Extreme Cold`, which is a subconcept of `Extreme Weather`, which is a subconcept of `Climate Related Hazards`. The relationships between these ideas give us a clearer picture of how they fit into the climate policy landscape, and an easy way to navigate between them.
 
-![](./images/concepts-store-example.png)
+![](./images/concept-store-example.png)
 
 Each of these concepts will have its own page in the concept store, containing some metadata about the concept, its relationships to other concepts, and a record of changes which have been made to the concept over time.
 
@@ -22,7 +22,7 @@ There are a few key differences between the concept store and wikipedia:
 
 - **It's more focused:** Our concept store is specifically for _climate_ concepts, rather than all human knowledge. We're not trying to build a model of the entire world.
 - **It's more structured:** Like _wikidata_, we're interested in collecting _structured data_ about our concepts, rather than free-text descriptions.
-- **It's more connected:** We're very interested in the relationships between concepts, and how they can be used to build up a [knowledge graph](../concepts-store-vs-knowledge-graph.md). Without the relationships, we would still be able to build individual concept classifiers, but paying attention to how they're connected will allow us to _really_ unlock its potential.
+- **It's more connected:** We're very interested in the relationships between concepts, and how they can be used to build up a [knowledge graph](../developers/concept-store-vs-knowledge-graph.md). Without the relationships, we would still be able to build individual concept classifiers, but paying attention to how they're connected will allow us to _really_ unlock its potential.
 
 ## Concept pages
 

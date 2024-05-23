@@ -13,7 +13,7 @@ This technical content should give you a good grounding in how to use the concep
 
 The concept store borrows a lot of ideas from wikidata, so if you get stuck, you might find answers in their [help pages](https://www.wikidata.org/wiki/Help:Contents). Make sure to add the answers you find to this documentation so that it's easier for the next person!
 
-- [What is the concept store?](what-is-the-concepts-store.md)
+- [What is the concept store?](what-is-the-concept-store.md)
 - [Creating an account](creating-an-account.md)
 - [Creating a new concept](creating-a-new-concept.md)
 - [Editing an existing concept](editing-an-existing-concept.md)
