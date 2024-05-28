@@ -1,4 +1,4 @@
-.PHONY: install process-gst populate-wikibase knowledge-graph
+.PHONY: install process-gst populate-wikibase knowledge-graph docs
 
 install:
 	poetry install
@@ -16,3 +16,6 @@ knowledge-graph:
 	docker-compose up -d neo4j; \
 	poetry run python scripts/populate_knowledge_graph.py; \
 	}
+
+docs:
+	cd docs && poetry run mkdocs serve

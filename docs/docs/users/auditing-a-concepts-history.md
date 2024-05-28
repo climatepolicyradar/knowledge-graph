@@ -1,6 +1,6 @@
 # Auditing a concept's history
 
-The concepts store keeps a record of every change made to a concept. This is useful for tracking down errors, understanding why a concept was changed, or reverting to a previous version. You can view the history of a concept by clicking the `View history` button on the right hand side of the concept page.
+The concept store keeps a record of every change made to a concept. This is useful for tracking down errors, understanding why a concept was changed, or reverting to a previous version. You can view the history of a concept by clicking the `View history` button on the right hand side of the concept page.
 
 Each edit comes with a summary of the changes made, the user who made the change, and the time the change was made.
 
@@ -16,7 +16,7 @@ To undo a change, find the change you want to revert to in the list, and click t
 
 To restore a previous version of a concept, find the version you want to restore in the list, and click the `restore` button next to it. A new revision of the concept with the same content as the version you selected will be created.
 
-**NOTE:** Undoing or restoring a previous version will create a new revision of the concept.
+Undoing or restoring a previous version will create a new revision of the concept. This will be recorded in the history, and can itself be undone in the same way.
 
 ## Comparing versions
 
