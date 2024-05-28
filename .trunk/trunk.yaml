@@ -32,13 +32,14 @@ lint:
           run: bandit --exit-zero -c bandit.yaml --format json --output ${tmpfile} ${target}
 
   enabled:
+    - oxipng@9.1.1
     - actionlint@1.7.0
     - bandit@1.7.8
     - black@24.4.2
-    - checkov@3.2.98
+    - checkov@3.2.109
     - git-diff-check
     - isort@5.13.2
-    - markdownlint@0.40.0
+    - markdownlint@0.41.0
     - osv-scanner@1.7.3
     - pre-commit-hooks@4.6.0:
         commands:
@@ -54,13 +55,13 @@ lint:
           - end-of-file-fixer
           - trailing-whitespace
     - prettier@3.2.5
-    - pyright@1.1.363
-    - ruff@0.4.4
+    - pyright@1.1.364
+    - ruff@0.4.5
     - shellcheck@0.10.0
     - shfmt@3.6.0
     - taplo@0.8.1
     - terrascan@1.19.1
-    - trivy@0.51.2
+    - trivy@0.51.4
     - trufflehog@3.76.3
     - yamllint@1.35.1
 
