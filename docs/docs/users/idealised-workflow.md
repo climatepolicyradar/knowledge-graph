@@ -1,7 +1,5 @@
 # Idealised workflow
 
-TODO: clearer navigation instructions for new users
-
 This is a guide to an idealised workflow for the concept store. It's based on [some notes by Sarah](https://www.notion.so/climatepolicyradar/Policy-workflow-in-concept-store-10fbda2795e44ba08a07a555ef5deb45?pvs=4), and adapted for the working concept store. As the workflow evolves, this document should be updated to reflect the new process!
 
 - A policy team member would make additions to the concept store based on their research:

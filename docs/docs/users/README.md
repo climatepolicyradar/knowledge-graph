@@ -30,9 +30,9 @@ There are a few key differences between the concept store and wikipedia:
 - **It's more structured:** Like _wikidata_, we're interested in collecting _structured data_ about our concepts, rather than free-text descriptions.
 - **It's more connected:** We're very interested in the relationships between concepts, and how they can be used to build up a [knowledge graph](../developers/concept-store-vs-knowledge-graph.md). Without the relationships, we would still be able to build individual concept classifiers, but paying attention to how they're connected will allow us to _really_ unlock its potential.
 
-### Concept pages
+### Concept item pages
 
-Each concept in the concept store is given its own page, with fields for:
+Each concept in the concept store is given its own Item in the concept store (a page with a QID, eg [Q42](https://climatepolicyradar.wikibase.cloud/wiki/Item:Q42)), with fields for:
 
 - **A preferred label:** The typical name used to refer to the concept, or the name which is used by the people who are most invested in the concept
 - **Alternative labels:** Other names which might be used to refer to the concept, including abbreviations, synonyms, or translations into other languages. This field might also include common misspellings, misnomers, or offensive terms which are used to refer to the concept (depending on the context and the type of classifier we're building).
@@ -44,9 +44,10 @@ Each concept in the concept store is given its own page, with fields for:
 At the moment, we work with two types of relationship between concepts:
 
 - **Hierarchical relationships:** These are relationships which describe how one concept is a subconcept of another. For example, `Extreme Cold` is a subconcept of `Extreme Weather`. These are often lifted from hierarchical third-party taxonomies. For example, our taxonomy of technologies is based on [the UN Climate Technology Centre and Network’s taxonomy of climate technologies](https://www.ctc-n.org/resources/ctcn-taxonomy).  
-The concept store allows you to set `Subconcept of` and `Has subconcept` relationships between concepts, which can be used to build up a hierarchy of concepts.
+  The concept store allows you to set `Subconcept of` and `Has subconcept` relationships between concepts, which can be used to build up a hierarchy of concepts.
+
 - **Non-hierarchical relationships:** Hierarchies are an intuitive way to start organising concepts, but they're not the best/only way. As more complexity builds up over time, limiting ourselves to working within a single hierarchy can become very restrictive! Non-hierarchical relationships are a good way to link concepts together in contexts where hierarchy becomes too restrictive. They also allow us to draw relationships across different hierarchies, which can be very useful for representing several perspectives on a single concept. See [hierarchy heuristics](./hierarchy-heuristics.md) for more guidance on how to structure these relationships.
-The concept store allows you to set a `Related to` relationship between concepts, which can be used to link concepts together when hierarchical relationships aren't appropriate.
+  The concept store allows you to set a `Related to` relationship between concepts, which can be used to link concepts together when hierarchical relationships aren't appropriate.
 
 Here's a visual example of how hierarchical and non-hierarchical relationships between concepts might look:
 

@@ -4,7 +4,7 @@ Relationships between concepts are set as **statements** on the concept page.
 
 Each statement is made up of an **item**, a **property**, and a **value**. For example, the statement `Extreme Cold` `Subconcept of` `Extreme Weather` (item, property, and value respectively) would be used to describe the relationship between two concepts. It would be displayed on the concept page for `Extreme Cold`.
 
-TODO: each statement needs to have a type specified before its value can be entered
+NB Both concepts must exist in the concept store before you can add a relationship between them. If the concept you want to relate to doesn't exist yet, you'll need to [create it](./creating-a-new-concept.md) first.
 
 ## Relationship types
 
@@ -39,12 +39,6 @@ A form will appear where you can add a new statement. The form will prompt you f
 
 You might be prompted to add a [qualifier](https://www.wikidata.org/wiki/Help:Qualifiers) or [rank](https://www.wikidata.org/wiki/Help:Ranking) to the statement. These are optional, and we aren't currently using them in the concept store.
 
-## References
-
-TODO: Move this to <references.md>
-
-Each statement can be supported by an optional reference. To add a reference, click the `+ add reference` button on the right hand side of the statement you want to reference. The value should be a URL to a reliable source that supports the statement. That might be something direct and formal (eg a scientific paper, a news article, a government report), or indirect (eg a conversation on slack, or a page in notion). As long as the reference offers sufficient explanation for why a decision was made, it's a good reference.
-
 ## Editing relationships
 
 To edit a relationship, click the `✏️ edit` button on the right hand side of the statement you want to change. Make the necessary changes in the form that appears, and click `✅ save` to save your changes. To abandon your changes, click `❌ cancel`.
@@ -54,5 +48,3 @@ To edit a relationship, click the `✏️ edit` button on the right hand side of
 To delete a relationship,`✏️ edit` button on the right hand side of the statement you want to change, and then click the `🗑️ remove` button.
 
 If you want to undo the deletion, go to the item's history, find the appropriate revision in the list, and click the corresponding `undo` button.
-
-## TODO: Concepts need to be created before they can be added in statements
