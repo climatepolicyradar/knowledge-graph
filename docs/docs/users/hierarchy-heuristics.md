@@ -48,3 +48,5 @@ The concepts inhereted from [GST](https://gst1.org) worked over three levels of 
 Although a hierarchy will usually start life as a single tree, it's likely that as we develop our concept store, we'll find that concepts might exist in multiple hierarchies, with overlapping branches. This is fine! We should aim to represent the relationships between concepts as accurately as possible, and if that means that a concept is a subconcept of two different parent concepts, that's okay.
 
 Take a look at [the documentation on merging concepts](./merging-existing-concepts.md) for more information on how merge two concepts from different hierarchies which represent the same thing.
+
+## TODO: Can a grandparent also be a parent?

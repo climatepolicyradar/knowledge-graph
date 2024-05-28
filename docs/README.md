@@ -1,6 +1,6 @@
 # Documentation
 
-The documentation site is built with [MkDocs](https://www.mkdocs.org/), giving us a simple way to write and maintain documentation in markdown, with a feature-rich site generated from it. Users are able to search and navigate the documentation easily, and the site is easy to maintain and update.
+The documentation site is built with [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/), giving us a simple way to write and maintain documentation in markdown, with a feature-rich site generated from it. Users are able to search and navigate the documentation easily, and the site is easy to maintain and update.
 
 ## Local development
 

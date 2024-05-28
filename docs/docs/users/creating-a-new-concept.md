@@ -16,3 +16,5 @@
 ## How is this data used?
 
 Take a look at the [classifier types](./classifier-types.md) documentation to see how this data is used to build classifiers.
+
+## TODO: Concepts need to be created before they can be added in statements

@@ -4,6 +4,8 @@ Relationships between concepts are set as **statements** on the concept page.
 
 Each statement is made up of an **item**, a **property**, and a **value**. For example, the statement `Extreme Cold` `Subconcept of` `Extreme Weather` (item, property, and value respectively) would be used to describe the relationship between two concepts. It would be displayed on the concept page for `Extreme Cold`.
 
+TODO: each statement needs to have a type specified before its value can be entered
+
 ## Relationship types
 
 There are three major types of relationship which you can use to describe the how concepts are connected to one another. These are:
@@ -39,6 +41,8 @@ You might be prompted to add a [qualifier](https://www.wikidata.org/wiki/Help:Qu
 
 ## References
 
+TODO: Move this to <references.md>
+
 Each statement can be supported by an optional reference. To add a reference, click the `+ add reference` button on the right hand side of the statement you want to reference. The value should be a URL to a reliable source that supports the statement. That might be something direct and formal (eg a scientific paper, a news article, a government report), or indirect (eg a conversation on slack, or a page in notion). As long as the reference offers sufficient explanation for why a decision was made, it's a good reference.
 
 ## Editing relationships
@@ -50,3 +54,5 @@ To edit a relationship, click the `✏️ edit` button on the right hand side of
 To delete a relationship,`✏️ edit` button on the right hand side of the statement you want to change, and then click the `🗑️ remove` button.
 
 If you want to undo the deletion, go to the item's history, find the appropriate revision in the list, and click the corresponding `undo` button.
+
+## TODO: Concepts need to be created before they can be added in statements
