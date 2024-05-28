@@ -1,0 +1,62 @@
+site_name: CPR concept store documentation
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/favicon.png
+  font:
+    text: Inter
+    code: Roboto Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.tracking
+    - navigation.top
+    - navigation.expand
+    - navigation.breadcrumbs
+    - toc.integrate
+    - search.suggest
+    - content.tabs.link
+    - content.code.annotation
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+
+nav:
+  - Home: index.md
+  - Developers:
+      - Overview: developers/README.md
+      - Concept Store vs Knowledge Graph: developers/concept-store-vs-knowledge-graph.md
+      - Environment Variables: developers/environment-variables.md
+      - Bot Users: developers/bot-users.md
+  - Users:
+      - Overview: users/README.md
+      - Creating an Account: users/creating-an-account.md
+      - Idealised Workflow: users/idealised-workflow.md
+      - Creating a New Concept: users/creating-a-new-concept.md
+      - Editing an Existing Concept: users/editing-an-existing-concept.md
+      - Merging Existing Concepts: users/merging-existing-concepts.md
+      - Deleting a Concept: users/deleting-a-concept.md
+      - Adding Relationships: users/adding-relationships.md
+      - Deleting Relationships: users/deleting-relationships.md
+      - References: users/references.md
+      - Auditing a Concept's History: users/auditing-a-concepts-history.md
+      - Struggling to Find Stuff: users/struggling-to-find-stuff.md
+      - Talk Pages: users/talk-pages.md
+      - Patrolling Changes: users/patrolling-changes.md
+      - Classifier Types: users/classifier-types.md
+      - Concept Heuristics: users/concept-heuristics.md
+      - Hierarchy Heuristics: users/hierarchy-heuristics.md

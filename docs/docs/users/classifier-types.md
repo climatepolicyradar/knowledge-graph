@@ -1,8 +1,8 @@
 # Classifier types
 
-> **NOTE:** Users of the concepts store deserve a thorough explanation of how their contributions are used in downstream services (like classifiers), but the process for structuring and distinguishing between each type of classifier is still in active development. This page is therefore a work-in-progress/placeholder. When we've developed a clearer strategy for how we define and build classifiers, I'll update this page with clearer guidance.
+> **NOTE:** Users of the concept store deserve a thorough explanation of how their contributions are used in downstream services (like classifiers), but the process for structuring and distinguishing between each type of classifier is still in active development. This page is therefore a work-in-progress/placeholder. When we've developed a clearer strategy for how we define and build classifiers, I'll update this page with clearer guidance.
 
-We use data from the concepts store to build a variety of types of concept classifier. The major classes of classifier that we're developing are:
+We use data from the concept store to build a variety of types of concept classifier. The major classes of classifier that we're developing are:
 
 ## Keyword classifiers
 

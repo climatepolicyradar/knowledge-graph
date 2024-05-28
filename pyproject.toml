@@ -18,7 +18,11 @@ explorer = { git = "https://github.com/climatepolicyradar/explorer.git", rev = "
 neomodel = "^5.2.1"
 typer = "0.9.4"
 
+[tool.poetry.group.dev]
+optional = true
+
 [tool.poetry.group.dev.dependencies]
+mkdocs-material = "^9.5.24"
 nbstripout = "^0.7.1"
 
 [build-system]
