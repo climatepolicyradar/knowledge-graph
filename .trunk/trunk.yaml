@@ -73,6 +73,7 @@ actions:
     - trunk-check-pre-commit
     - trunk-fmt-pre-commit
     - trunk-upgrade-available
+    - configure-pyright
     - nbstripout
     - poetry-check
   definitions:
@@ -83,5 +84,9 @@ actions:
         - git_hooks: [pre-commit]
     - id: poetry-check
       run: poetry check
+      triggers:
+        - git_hooks: [pre-commit]
+    - id: configure-pyright
+      run: source .trunk/configure-pyright.sh
       triggers:
         - git_hooks: [pre-commit]
