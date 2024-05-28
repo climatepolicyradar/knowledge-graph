@@ -16,7 +16,7 @@ To undo a change, find the change you want to revert to in the list, and click t
 
 To restore a previous version of a concept, find the version you want to restore in the list, and click the `restore` button next to it. A new revision of the concept with the same content as the version you selected will be created.
 
-**NOTE:** Undoing or restoring a previous version will create a new revision of the concept.
+Undoing or restoring a previous version will create a new revision of the concept. This will be recorded in the history, and can itself be undone in the same way.
 
 ## Comparing versions
 
