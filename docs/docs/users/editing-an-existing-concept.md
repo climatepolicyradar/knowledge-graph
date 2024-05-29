@@ -2,7 +2,7 @@
 
 On a concept page, you should see an `✏️ edit` button in the top right hand side of the item content
 
-![](./images/edit-item.png)
+![A screenshot of the item page for the "Low-income people" concept, with an "edit" button visible at the top right of the page](./images/edit-item.png)
 
 This will allow you to change the preferred label, description, and alternative labels for the item. Make your changes, and hit `✅ save`. To abandon your changes, click `❌ cancel`.
 

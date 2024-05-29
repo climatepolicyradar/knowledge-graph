@@ -10,7 +10,7 @@ The concept store is our way of managing the climate concepts we care about, and
 
 For example, we might have a concept for `Extreme Cold`, which is a subconcept of `Extreme Weather`, which is a subconcept of `Climate Related Hazards`. The relationships between these ideas give us a clearer picture of how they fit into the climate policy landscape, and an easy way to navigate between them.
 
-![](./images/concept-store-example.png)
+![A tree diagram showing the relationships between the concepts `Extreme Cold`, `Extreme Weather`, and `Climate Related Hazards`. `Extreme Cold` is a subconcept of `Extreme Weather`, which is a subconcept of `Climate Related Hazards`. There are several other concepts which are subconcepts of `Climate Related Hazards`, and `Extreme Weather` but they are not named in this diagram.](./images/concept-store-example.png)
 
 Each of these concepts will have its own page in the concept store, containing some metadata about the concept, its relationships to other concepts, and a record of changes which have been made to the concept over time.
 
@@ -51,13 +51,13 @@ At the moment, we work with two types of relationship between concepts:
 
 Here's a visual example of how hierarchical and non-hierarchical relationships between concepts might look:
 
-![](./images/relationships-example.png)
+![Two identical hierarchical or tree-like structures composed of nodes and edges. One is coloured blue, and the other is coloured red. There are a series of green dotted lines which connect nodes to one another, both across the two hierarchies, and within each of the hierarchies in non-hierarchical ways.](./images/relationships-example.png)
 
 ### History
 
 Each concept page has a 'View history' tab, which shows a record of changes which have been made to the concept since it was created. You can see the 'View history' tab in the top right of the page, next to the search bar:
 
-![](./images/view-history-tab.png)
+![A screenshot of an item page for the "Extreme Cold" concept, with the "View history" tab visible in the top right corner, next to the search bar](./images/view-history-tab.png)
 
 This should allow us to see who made changes, when they were made, and what the changes were. If we decide that a change was made in error, we can revert to an earlier version of the concept with a single click. Ideally, new edits or reversions should be discussed with the team on the concept's corresponding [talk page](./talk-pages.md) before they're made, and the reasons for the change should be tracked in the edit summary.
 

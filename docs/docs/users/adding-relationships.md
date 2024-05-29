@@ -30,7 +30,7 @@ Hierarchies are complicated! There's some guidance on how to think about hierarc
 
 To add a new statement, click the `+ add statement` button in the top right hand side of the item content.
 
-![](./images/edit-item.png)
+![An item page in wikibase, with an "edit" button in the top right corner of the item content.](./images/edit-item.png)
 
 A form will appear where you can add a new statement. The form will prompt you for the following information:
 

@@ -12,11 +12,11 @@ Everyone can patrol changes in the concept store. If you see a change that you t
 
 The best way to keep on top of your patrolling duties is to check the recent changes to the concept store. You can do this by clicking the `Recent changes` link in the sidebar.
 
-![](./images/sidebar.png)
+![The default wikibase sidebar, with a link to the "Recent changes" section in the first section](./images/sidebar.png)
 
 This will take you to a list of the most recent changes to the concept store. You can filter this list by user, date, or type of change to make it easier to find the changes you're interested in. Unpatrolled changes will be marked with a red exclamation mark ❗️.
 
-![](./images/recent-changes.png)
+![A screenshot of the recent changes page in wikibase, with a list of changes and a red exclamation mark next to unpatrolled changes](./images/recent-changes.png)
 
 When you find a change that you want to patrol, click the `diff` link next to the change. If there are multiple changes, the same button will be labelled eg `2 changes`. This will take you to a side-by-side comparison of the changes made.
 

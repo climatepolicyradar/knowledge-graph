@@ -164,6 +164,3 @@ data/**/*
 !data/**/
 !**/.gitkeep
 !**/README.md
-
-# this is here because pyright doesn't understand poetry venvs - each will be personal to each user's machine.
-pyrightconfig.json
