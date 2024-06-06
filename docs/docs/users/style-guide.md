@@ -10,9 +10,9 @@ If you do break these guidelines, it's worth recording your reasoning in the cor
 
 [Wikidata's guidance on labels](https://www.wikidata.org/wiki/Help:Label)
 
-Labels for items in the concept store should:
+Labels for items in the concept store should follow the following guidelines:
 
-### Refer to one thing and one thing only
+### Should refer to one thing and one thing only
 
 Our concepts should be atomic. We should therefore avoid creating concepts that include words like 'and' or 'or'.
 
@@ -20,7 +20,7 @@ For example, a concept like `barriers and challenges` should probably be broken 
 
 Some important concepts known by a non-atomic name in the climate policy community will break this rule, e.g., `loss and damage` ([see below](#reflect-common-usage))
 
-### Reflect common usage
+### Should reflect common usage
 
 Preferred labels should make it easy for readers to understand the meaning of the concept at a glance, and should reflect its most common usage in the climate policy community.
 
@@ -122,7 +122,7 @@ Definitions go beyond descriptions. While a [description](#descriptions) should 
 
 Definitions should be part of the public record of what we believe the concept is, and we should be prepared for external users of our tools to question our definitions. A complete definition should cover all edge cases and exceptions to the concept.
 
-### Be sufficient to label examples of the concept in text
+### Should be sufficient to label examples of the concept in text
 
 Definitions should be precise enough that a reader could identify instances of the concept in a passage of text during a labelling task. For example, a definition of `greenhouse gas` should be sufficient to identify instances of `carbon dioxide`, `methane`, and `nitrous oxide` in a given text.
 
@@ -132,7 +132,7 @@ Note that the definition of a concept will almost always be iteratively develope
 
 Definitions should be based on the best available evidence, and should be supported by [references](#references) where possible.
 
-### Also avoid information that is likely to change
+### Should also avoid information that is likely to change
 
 As above, words and phrases like "current", "expected", or "last year's" in the definition will eventually need to be changed. We won't always be able to catch these changes in time, so we should endeavour to write definitions which will _remain_ true.
 
