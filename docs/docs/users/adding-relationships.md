@@ -48,3 +48,11 @@ To edit a relationship, click the `✏️ edit` button on the right hand side of
 To delete a relationship,`✏️ edit` button on the right hand side of the statement you want to change, and then click the `🗑️ remove` button.
 
 If you want to undo the deletion, go to the item's history, find the appropriate revision in the list, and click the corresponding `undo` button.
+
+## Inverse and symmetric relationships
+
+In the concept store, relationships between items _should be_ symmetric. For example, if `A` is a `subconcept_of` `B`, then `B` should have a corresponding statement to say that it `has_subconcept` `A`.
+
+However, these requirements aren't currently enforced by the software.
+
+When adding or removing relationships, remember to check the corresponding relationship on the other item to make sure that the pair are consistent!
