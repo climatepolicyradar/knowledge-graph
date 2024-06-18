@@ -25,6 +25,7 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 mkdocs-material = "^9.5.24"
+prefect = "^2.14.20"
 
 [build-system]
 requires = ["poetry-core"]
