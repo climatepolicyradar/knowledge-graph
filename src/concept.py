@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -30,7 +30,7 @@ class Concept(BaseModel):
     """Base class for a concept"""
 
     preferred_label: str = Field(..., description="The preferred label for the concept")
-    alternative_labels: List[str] = Field(
+    alternative_labels: list[str] = Field(
         default_factory=list, description="List of alternative labels for the concept"
     )
     description: Optional[str] = Field(
@@ -40,14 +40,14 @@ class Concept(BaseModel):
     wikibase_id: Optional[WikibaseID] = Field(
         default=None, description="The Wikibase ID for the concept"
     )
-    subconcept_of: List[WikibaseID] = Field(
+    subconcept_of: list[WikibaseID] = Field(
         default_factory=list,
         description="List of parent concept IDs",
     )
-    has_subconcept: List[WikibaseID] = Field(
+    has_subconcept: list[WikibaseID] = Field(
         default_factory=list, description="List of subconcept IDs"
     )
-    related_concepts: List[WikibaseID] = Field(
+    related_concepts: list[WikibaseID] = Field(
         default_factory=list, description="List of related concept IDs"
     )
     definition: Optional[str] = Field(
@@ -56,7 +56,7 @@ class Concept(BaseModel):
 
     @field_validator("alternative_labels", mode="before")
     @classmethod
-    def _ensure_alternative_labels_are_unique(cls, values: List[str]) -> List[str]:
+    def _ensure_alternative_labels_are_unique(cls, values: list[str]) -> list[str]:
         """Ensure that the alternative labels are a unique set of strings"""
         return list(set(str(item) for item in values))
 
@@ -90,7 +90,7 @@ class Concept(BaseModel):
         return f"{os.getenv('WIKIBASE_URL')}/wiki/Item:{self.wikibase_id}"
 
     @property
-    def all_labels(self) -> List[str]:
+    def all_labels(self) -> list[str]:
         """Return a list of all unique labels for the concept"""
         return list(set([self.preferred_label] + self.alternative_labels))
 

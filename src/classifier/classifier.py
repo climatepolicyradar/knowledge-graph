@@ -1,7 +1,7 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from pydantic import BaseModel
 
@@ -31,12 +31,12 @@ class Classifier(ABC):
         return self
 
     @abstractmethod
-    def predict(self, text: str) -> List[Span]:
+    def predict(self, text: str) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
         :param str text: The text to predict on
-        :return List[Span]: A list of spans in the text
+        :return list[Span]: A list of spans in the text
         """
         raise NotImplementedError
 

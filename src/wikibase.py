@@ -2,7 +2,7 @@ import json
 import os
 from functools import wraps
 from logging import getLogger
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import dotenv
 import httpx
@@ -209,11 +209,11 @@ class WikibaseSession:
 
         return concept
 
-    def get_all_properties(self) -> List[Dict[str, str]]:
+    def get_all_properties(self) -> list[Dict[str, str]]:
         """
         Get all property IDs from the Wikibase instance
 
-        :return List[Dict[str, str]]: A list of all property IDs (and their
+        :return list[Dict[str, str]]: A list of all property IDs (and their
         corresponding page_ids) in the Wikibase instance
         """
         all_properties_response = self.session.get(
@@ -233,7 +233,7 @@ class WikibaseSession:
         sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
         return sorted_properties
 
-    def get_all_items(self) -> List[Dict[str, str]]:
+    def get_all_items(self) -> list[Dict[str, str]]:
         """
         Get all item IDs from the Wikibase instance
 
@@ -241,7 +241,7 @@ class WikibaseSession:
         work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
         need to start paginating over the results
 
-        :return List[Dict[str, str]]: A list of all item IDs (and their corresponding
+        :return list[Dict[str, str]]: A list of all item IDs (and their corresponding
         page_ids) in the Wikibase instance
         """
         all_pages_response = self.session.get(
@@ -304,11 +304,11 @@ class WikibaseSession:
 
         return concept
 
-    def get_concepts(self, wikibase_ids: List[WikibaseID]) -> List[Concept]:
+    def get_concepts(self, wikibase_ids: list[WikibaseID]) -> list[Concept]:
         """
         Get concepts from Wikibase by their Wikibase IDs
 
-        :param List[WikibaseID] wikibase_ids: The Wikibase IDs of the concepts
+        :param list[WikibaseID] wikibase_ids: The Wikibase IDs of the concepts
         :return Concept: The concepts with the given Wikibase IDs
         """
         concepts = []
@@ -318,11 +318,11 @@ class WikibaseSession:
 
         return concepts
 
-    def list_concepts(self) -> List[Concept]:
+    def list_concepts(self) -> list[Concept]:
         """
         List all concepts in Wikibase
 
-        :return List[Concept]: A list of all concepts in the Wikibase instance
+        :return list[Concept]: A list of all concepts in the Wikibase instance
         """
         response = self.session.get(
             url=self.api_url,
@@ -341,12 +341,12 @@ class WikibaseSession:
 
         return concepts
 
-    def get_statements(self, wikibase_id: WikibaseID) -> List[dict]:
+    def get_statements(self, wikibase_id: WikibaseID) -> list[dict]:
         """
         Get all statements for a Wikibase item
 
         :param str wikibase_id: The Wikibase ID of the item
-        :return List[dict]: A list of all statements for the item
+        :return list[dict]: A list of all statements for the item
         """
         response = self.session.get(
             url=self.api_url,
@@ -393,13 +393,13 @@ class WikibaseSession:
 
     def get_subconcepts(
         self, wikibase_id: WikibaseID, recursive: bool = True
-    ) -> List[Concept]:
+    ) -> list[Concept]:
         """
         Get all subconcepts of a concept
 
         :param str wikibase_id: The Wikibase ID of the concept
         :param bool recursive: Whether to get subconcepts recursively
-        :return List[Concept]: A list of all subconcepts of the concept
+        :return list[Concept]: A list of all subconcepts of the concept
         """
         response = self.session.get(
             url=self.api_url,

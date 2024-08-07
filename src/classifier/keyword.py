@@ -1,5 +1,4 @@
 import re
-from typing import List
 
 from src.classifier.classifier import Classifier, Span
 from src.concept import Concept
@@ -41,12 +40,12 @@ class KeywordClassifier(Classifier):
             r"\b(?:" + "|".join(self.case_insensitive_labels) + r")\b", re.IGNORECASE
         )
 
-    def predict(self, text: str) -> List[Span]:
+    def predict(self, text: str) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
         :param str text: The text to predict on
-        :return List[Span]: A list of spans in the text
+        :return list[Span]: A list of spans in the text
         """
         spans = []
         matched_positions = set()
