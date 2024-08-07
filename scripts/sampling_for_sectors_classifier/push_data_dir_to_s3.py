@@ -1,31 +1,43 @@
-from pathlib import Path
-
 import boto3
+import typer
 from rich.console import Console
 from rich.progress import track
 
+from scripts.config import aws_region, data_dir
+
 console = Console()
 
-data_dir = Path("data")
-
 session = boto3.Session(profile_name="labs")
-s3_client = session.client("s3", region_name="eu-west-1")
+s3_client = session.client("s3", region_name=aws_region)
 bucket_name = "cpr-sectors-classifier-sampling"
 existing_buckets = [
     bucket["Name"] for bucket in s3_client.list_buckets().get("Buckets")
 ]
 if bucket_name in existing_buckets:
     # first empty the bucket
-    objects = s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", [])
-    for obj in track(
-        objects, description="🪣 Deleting existing data from AWS S3...", transient=True
+    if typer.confirm(
+        f"🪣 Bucket {bucket_name} already exists. Do you want to delete it?"
     ):
-        s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
-    # then delete the bucket
-    s3_client.delete_bucket(Bucket=bucket_name)
-    console.print(f"🪣 Deleted existing AWS S3 bucket: {bucket_name}", style="green")
+        objects = s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", [])
+        for obj in track(
+            objects,
+            description="🪣 Deleting existing data from AWS S3...",
+            transient=True,
+        ):
+            s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+        # then delete the bucket
+        s3_client.delete_bucket(Bucket=bucket_name)
+        console.print(
+            f"🪣 Deleted existing AWS S3 bucket: {bucket_name}", style="green"
+        )
+    else:
+        console.print(
+            f"🪣 Bucket {bucket_name} already exists. Please delete it and try again."
+        )
+        raise typer.Abort()
+
 bucket = s3_client.create_bucket(
-    Bucket=bucket_name, CreateBucketConfiguration={"LocationConstraint": "eu-west-1"}
+    Bucket=bucket_name, CreateBucketConfiguration={"LocationConstraint": aws_region}
 )
 console.print(f"🪣 Created new AWS S3 bucket: {bucket_name}", style="green")
 

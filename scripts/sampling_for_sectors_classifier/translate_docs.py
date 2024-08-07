@@ -9,7 +9,6 @@ poetry run python scripts/sampling_for_sectors_classifier/translate_docs.py
 """
 
 import json
-from pathlib import Path
 
 from cpr_data_access.models import BaseDocument
 from cpr_data_access.parser_models import BaseParserOutput
@@ -17,15 +16,15 @@ from navigator_document_parser.translator.translate import translate_parser_outp
 from rich.console import Console
 from rich.progress import track
 
+from scripts.config import interim_data_dir
+
 console = Console()
 
 target_language = "en"
 
 n_translated = 0
-
-data_dir = Path("data/interim")
-parser_output_dir = data_dir / "output"
-translated_dir = data_dir / "translated"
+parser_output_dir = interim_data_dir / "output"
+translated_dir = interim_data_dir / "translated"
 translated_dir.mkdir(parents=True, exist_ok=True)
 paths = list(parser_output_dir.rglob("*.json"))
 console.print(

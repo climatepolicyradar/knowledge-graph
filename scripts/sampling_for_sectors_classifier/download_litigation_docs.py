@@ -5,28 +5,29 @@ Usage:
 poetry run python scripts/sampling_for_sectors_classifier/download_litigation_docs.py
 """
 
-from pathlib import Path
-
 import httpx
 import pandas as pd
 from rich.console import Console
 from rich.progress import track
 
+from scripts.config import raw_data_dir
 from src.identifiers import generate_identifier
 
 console = Console()
 
-data_dir = Path("data")
-litigation_us_csv_path = data_dir / "raw" / "litigation-us.csv"
-litigation_non_us_csv_path = data_dir / "raw" / "litigation-non-us.csv"
 
-litigation_us_df = pd.read_csv(litigation_us_csv_path)
-# columns:
-# Title,Jurisdictions,Document type,Document file
+# Read the litigation CSVs
+litigation_us_df = pd.read_csv(raw_data_dir / "litigation-us.csv")
+litigation_non_us_df = pd.read_csv(raw_data_dir / "litigation-non-us.csv")
 
-litigation_non_us_df = pd.read_csv(litigation_non_us_csv_path)
-# columns:
-# Title,Jurisdictions,Document type,Document file
+# Assert that the litigation dataframes have the expected columns
+expected_columns = ["Title", "Jurisdictions", "Document type", "Document file"]
+assert all(
+    col in litigation_us_df.columns for col in expected_columns
+), "Missing columns in litigation_us_df"
+assert all(
+    col in litigation_non_us_df.columns for col in expected_columns
+), "Missing columns in litigation_non_us_df"
 
 # Join the two dataframes and drop any rows with missing values
 litigation_df = pd.concat([litigation_us_df, litigation_non_us_df]).dropna()
@@ -35,7 +36,7 @@ litigation_df = pd.concat([litigation_us_df, litigation_non_us_df]).dropna()
 litigation_df["Jurisdictions"] = litigation_df["Jurisdictions"].str.split(">").str[0]
 
 # Create the PDFs directory
-litigation_pdf_dir = data_dir / "raw" / "pdfs" / "litigation"
+litigation_pdf_dir = raw_data_dir / "pdfs" / "litigation"
 litigation_pdf_dir.mkdir(exist_ok=True, parents=True)
 
 # Sample from the litigation documents such that we get a maximum volume per
@@ -68,7 +69,7 @@ sampled_litigation_df["id"] = sampled_litigation_df.apply(
 )
 
 # Save the sampled litigation documents as a json file
-sampled_litigation_json_path = data_dir / "raw" / "sampled_litigation.json"
+sampled_litigation_json_path = raw_data_dir / "sampled_litigation.json"
 sampled_litigation_df.to_json(sampled_litigation_json_path, orient="records")
 console.print(
     f"📄 Saved sampled litigation documents to {sampled_litigation_json_path}"

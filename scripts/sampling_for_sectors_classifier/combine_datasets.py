@@ -7,7 +7,6 @@ the world bank region metadata to the dataset for stratification.
 """
 
 import json
-from pathlib import Path
 
 import pandas as pd
 from cpr_data_access.models import (
@@ -22,15 +21,15 @@ from cpr_data_access.models import (
 from rich.console import Console
 from rich.progress import track
 
+from scripts.config import data_dir, processed_data_dir
 from src.geography import geography_string_to_iso, iso_to_world_bank_region
 
 console = Console()
 
-combined_dataset_path = Path("data/processed/combined_dataset")
+combined_dataset_path = processed_data_dir / "combined_dataset.feather"
 
 datasets = []
 
-data_dir = Path("data/processed/documents")
 for subdir in data_dir.iterdir():
     if subdir.is_dir():
         text_blocks = []

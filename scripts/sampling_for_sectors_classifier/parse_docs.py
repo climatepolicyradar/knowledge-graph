@@ -26,18 +26,17 @@ AZURE_PROCESSOR_KEY
 AZURE_PROCESSOR_ENDPOINT
 """
 
-from pathlib import Path
-
 from azure_pdf_parser.run import run_parser
 from dotenv import load_dotenv
 from rich.console import Console
+
+from scripts.config import interim_data_dir, raw_data_dir
 
 load_dotenv()
 
 console = Console()
 
-data_dir = Path("./data")
-pdf_dir = data_dir / "raw" / "pdfs"
+pdf_dir = raw_data_dir / "pdfs"
 if not pdf_dir.exists():
     raise FileNotFoundError(
         "The PDFs directory does not exist. "
@@ -58,7 +57,7 @@ for pdf_source_directory in pdf_dir.iterdir():
     if not pdf_source_directory.is_dir():
         continue
     console.print(f"📄 Parsing PDFs in {pdf_source_directory.name}")
-    output_dir = data_dir / "output" / pdf_source_directory.name
+    output_dir = interim_data_dir / "output" / pdf_source_directory.name
     output_dir.mkdir(exist_ok=True, parents=True)
     run_parser(pdf_dir=pdf_source_directory, output_dir=output_dir)
 

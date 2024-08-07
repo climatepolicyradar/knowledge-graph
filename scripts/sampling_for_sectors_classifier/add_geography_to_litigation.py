@@ -6,20 +6,20 @@ poetry run python scripts/sampling_for_sectors_classifier/add_geography_to_litig
 """
 
 import json
-from pathlib import Path
 
 import pandas as pd
 from cpr_data_access.parser_models import BaseParserOutput
 from rich.console import Console
 from rich.progress import track
 
+from scripts.config import interim_data_dir, processed_data_dir, raw_data_dir
 from src.identifiers import generate_identifier
 
 console = Console()
 
-data_dir = Path("data")
-litigation_us_csv_path = data_dir / "raw" / "litigation-us.csv"
-litigation_non_us_csv_path = data_dir / "raw" / "litigation-non-us.csv"
+
+litigation_us_csv_path = raw_data_dir / "litigation-us.csv"
+litigation_non_us_csv_path = raw_data_dir / "litigation-non-us.csv"
 
 litigation_us_df = pd.read_csv(litigation_us_csv_path)
 litigation_non_us_df = pd.read_csv(litigation_non_us_csv_path)
@@ -35,18 +35,15 @@ litigation_df["id"] = litigation_df.apply(
 litigation_df.set_index("id", inplace=True)
 
 
-translated_litigation_documents_path = (
-    data_dir / "interim" / "translated" / "litigation"
-)
+translated_litigation_documents_path = interim_data_dir / "translated" / "litigation"
 
-output_dir = data_dir / "processed" / "documents" / "litigation"
+output_dir = processed_data_dir / "documents" / "litigation"
 output_dir.mkdir(parents=True, exist_ok=True)
 for document_path in track(
     list(translated_litigation_documents_path.glob("*.json")),
     description="Adding jurisdiction information",
 ):
-    with open(document_path, "r") as f:
-        litigation_document = json.load(f)
+    litigation_document = json.loads(document_path.read_text())
     parser_output = BaseParserOutput(**litigation_document)
 
     document_id = document_path.stem

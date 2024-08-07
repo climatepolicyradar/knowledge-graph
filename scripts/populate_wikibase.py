@@ -18,11 +18,11 @@ Output:
 
 import json
 from logging import getLogger
-from pathlib import Path
 
 import dotenv
 from tqdm import tqdm
 
+from scripts.config import processed_data_dir
 from src.concept import Concept
 from src.wikibase import WikibaseSession
 
@@ -33,7 +33,7 @@ dotenv.load_dotenv()
 wikibase = WikibaseSession()
 
 
-data_path = Path("./data/processed/concepts.json")
+data_path = processed_data_dir / "concepts.json"
 with open(data_path, "r") as f:
     concepts_json = json.load(f)
 
