@@ -1,0 +1,33 @@
+stratified_columns: ["world_bank_region", "dataset_name"]
+equal_columns: ["translated"]
+sample_size: 130
+negative_proportion: 0.2
+wikibase_ids:
+  [
+    "Q756",
+    "Q757",
+    "Q758",
+    "Q760",
+    "Q761",
+    "Q762",
+    "Q763",
+    "Q764",
+    "Q765",
+    "Q766",
+    "Q767",
+    "Q768",
+    "Q769",
+    "Q774",
+    "Q775",
+    "Q777",
+    "Q778",
+    "Q779",
+    "Q857",
+    "Q786",
+    "Q787",
+    "Q788",
+    "Q818",
+    "Q903",
+    "Q904",
+  ]
+labellers: ["sion", "roshan", "tabea"]
