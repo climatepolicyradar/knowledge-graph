@@ -17,16 +17,19 @@ from src.identifiers import generate_identifier
 console = Console()
 
 data_dir = Path("data")
-litigation_us_csv_path = data_dir / "raw" / "litigation-us.csv"
-litigation_non_us_csv_path = data_dir / "raw" / "litigation-non-us.csv"
 
-litigation_us_df = pd.read_csv(litigation_us_csv_path)
-# columns:
-# Title,Jurisdictions,Document type,Document file
+# Read the litigation CSVs
+litigation_us_df = pd.read_csv(data_dir / "raw" / "litigation-us.csv")
+litigation_non_us_df = pd.read_csv(data_dir / "raw" / "litigation-non-us.csv")
 
-litigation_non_us_df = pd.read_csv(litigation_non_us_csv_path)
-# columns:
-# Title,Jurisdictions,Document type,Document file
+# Assert that the litigation dataframes have the expected columns
+expected_columns = ["Title", "Jurisdictions", "Document type", "Document file"]
+assert all(
+    col in litigation_us_df.columns for col in expected_columns
+), "Missing columns in litigation_us_df"
+assert all(
+    col in litigation_non_us_df.columns for col in expected_columns
+), "Missing columns in litigation_non_us_df"
 
 # Join the two dataframes and drop any rows with missing values
 litigation_df = pd.concat([litigation_us_df, litigation_non_us_df]).dropna()
