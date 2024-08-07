@@ -45,8 +45,7 @@ for document_path in track(
     list(translated_litigation_documents_path.glob("*.json")),
     description="Adding jurisdiction information",
 ):
-    with open(document_path, "r") as f:
-        litigation_document = json.load(f)
+    litigation_document = json.loads(document_path.read_text())
     parser_output = BaseParserOutput(**litigation_document)
 
     document_id = document_path.stem
