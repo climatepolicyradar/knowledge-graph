@@ -1,0 +1,46 @@
+from pathlib import Path
+
+import boto3
+from rich.console import Console
+from rich.progress import track
+
+console = Console()
+
+data_dir = Path("data")
+
+session = boto3.Session(profile_name="labs")
+s3_client = session.client("s3", region_name="eu-west-1")
+bucket_name = "cpr-sectors-classifier-sampling"
+existing_buckets = [
+    bucket["Name"] for bucket in s3_client.list_buckets().get("Buckets")
+]
+if bucket_name in existing_buckets:
+    # first empty the bucket
+    objects = s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", [])
+    for obj in track(
+        objects, description="🪣 Deleting existing data from AWS S3...", transient=True
+    ):
+        s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+    # then delete the bucket
+    s3_client.delete_bucket(Bucket=bucket_name)
+    console.print(f"🪣 Deleted existing AWS S3 bucket: {bucket_name}", style="green")
+bucket = s3_client.create_bucket(
+    Bucket=bucket_name, CreateBucketConfiguration={"LocationConstraint": "eu-west-1"}
+)
+console.print(f"🪣 Created new AWS S3 bucket: {bucket_name}", style="green")
+
+file_paths = list(data_dir.rglob("*"))
+for file_path in track(
+    file_paths,
+    description="☁️ Uploading data to AWS S3...",
+    total=len(file_paths),
+    transient=True,
+):
+    if file_path.is_file():
+        with file_path.open("rb") as file:
+            s3_client.upload_fileobj(
+                file, bucket_name, str(file_path.relative_to(data_dir))
+            )
+
+console.print("☁️ All data uploaded successfully to AWS S3", style="green")
+console.print(f"🔗 S3 bucket URL: https://{bucket_name}.s3.amazonaws.com/")
