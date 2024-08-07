@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import boto3
+import typer
 from rich.console import Console
 from rich.progress import track
 
@@ -16,14 +17,27 @@ existing_buckets = [
 ]
 if bucket_name in existing_buckets:
     # first empty the bucket
-    objects = s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", [])
-    for obj in track(
-        objects, description="🪣 Deleting existing data from AWS S3...", transient=True
+    if typer.confirm(
+        f"🪣 Bucket {bucket_name} already exists. Do you want to delete it?"
     ):
-        s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
-    # then delete the bucket
-    s3_client.delete_bucket(Bucket=bucket_name)
-    console.print(f"🪣 Deleted existing AWS S3 bucket: {bucket_name}", style="green")
+        objects = s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", [])
+        for obj in track(
+            objects,
+            description="🪣 Deleting existing data from AWS S3...",
+            transient=True,
+        ):
+            s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+        # then delete the bucket
+        s3_client.delete_bucket(Bucket=bucket_name)
+        console.print(
+            f"🪣 Deleted existing AWS S3 bucket: {bucket_name}", style="green"
+        )
+    else:
+        console.print(
+            f"🪣 Bucket {bucket_name} already exists. Please delete it and try again."
+        )
+        raise typer.Abort()
+
 bucket = s3_client.create_bucket(
     Bucket=bucket_name, CreateBucketConfiguration={"LocationConstraint": "eu-west-1"}
 )
