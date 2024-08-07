@@ -2,12 +2,12 @@ import json
 import os
 from functools import wraps
 from logging import getLogger
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional
 
 import dotenv
 import httpx
 
-from src.concept import Concept
+from src.concept import Concept, WikibaseID
 
 logger = getLogger(__name__)
 
@@ -43,6 +43,7 @@ class WikibaseSession:
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID")
     subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID")
     related_concept_property_id = os.getenv("WIKIBASE_RELATED_CONCEPT_PROPERTY_ID")
+    labelling_project_property_id = os.getenv("WIKIBASE_LABELLING_PROJECT_PROPERTY_ID")
 
     def __init__(self):
         """Log in to Wikibase and get a CSRF token"""
@@ -93,13 +94,13 @@ class WikibaseSession:
 
     @update_progress_bar
     def create_concept(
-        self, concept: Concept, subconcept_of: Optional[str] = None, **kwargs
+        self, concept: Concept, subconcept_of: Optional[WikibaseID] = None, **kwargs
     ) -> Concept:
         """
         Create a concept in Wikibase, with all of its subconcepts and relationships
 
         :param Concept concept: The concept to create
-        :param Optional[str] subconcept_of: The Wikibase ID of the parent concept
+        :param Optional[WikibaseID] subconcept_of: The Wikibase ID of the parent concept
         :return Concept: The original concept with a newly populated wikibase_id property
         """
         new_item_response = self.session.post(
@@ -177,7 +178,7 @@ class WikibaseSession:
                         "property": self.related_concept_property_id,
                         "snaktype": "value",
                         "value": json.dumps(
-                            {"entity-type": "item", "id": related_concept.wikibase_id}
+                            {"entity-type": "item", "id": related_concept}
                         ),
                         "token": self.csrf_token,
                     },
@@ -188,7 +189,7 @@ class WikibaseSession:
                     data={
                         "action": "wbcreateclaim",
                         "format": "json",
-                        "entity": related_concept.wikibase_id,
+                        "entity": related_concept,
                         "property": self.related_concept_property_id,
                         "snaktype": "value",
                         "value": json.dumps(
@@ -199,19 +200,20 @@ class WikibaseSession:
                 ).json()
 
                 logger.debug(
-                    f"Created 'related concept' relationship between {concept.preferred_label} and {related_concept.preferred_label}"
+                    f"Created 'related concept' relationship between {concept.wikibase_id} and {related_concept}"
                 )
 
-        for subconcept in concept.subconcepts:
-            self.create_concept(subconcept, subconcept_of=concept.wikibase_id, **kwargs)
+        # TODO: Add support for creating subconcepts
+        # for subconcept in concept.subconcept_of:
+        #     self.create_concept(subconcept, subconcept_of=concept.wikibase_id, **kwargs)
 
         return concept
 
-    def get_all_properties(self) -> List[Dict[str, str]]:
+    def get_all_properties(self) -> list[Dict[str, str]]:
         """
         Get all property IDs from the Wikibase instance
 
-        :return List[Dict[str, str]]: A list of all property IDs (and their
+        :return list[Dict[str, str]]: A list of all property IDs (and their
         corresponding page_ids) in the Wikibase instance
         """
         all_properties_response = self.session.get(
@@ -231,7 +233,7 @@ class WikibaseSession:
         sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
         return sorted_properties
 
-    def get_all_items(self) -> List[Dict[str, str]]:
+    def get_all_items(self) -> list[Dict[str, str]]:
         """
         Get all item IDs from the Wikibase instance
 
@@ -239,7 +241,7 @@ class WikibaseSession:
         work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
         need to start paginating over the results
 
-        :return List[Dict[str, str]]: A list of all item IDs (and their corresponding
+        :return list[Dict[str, str]]: A list of all item IDs (and their corresponding
         page_ids) in the Wikibase instance
         """
         all_pages_response = self.session.get(
@@ -260,47 +262,67 @@ class WikibaseSession:
         sorted_items = sorted(all_items, key=lambda x: int(x["q_id"][1:]))
         return sorted_items
 
-    def get_concepts(self, wikibase_ids: Union[str, List[str]]) -> List[Concept]:
+    def get_concept(self, wikibase_id: WikibaseID) -> Concept:
+        """
+        Get a concept from Wikibase by its Wikibase ID
+
+        :param WikibaseID wikibase_id: The Wikibase ID of the concept
+        :return Concept: The concept with the given Wikibase ID
+        """
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetentities",
+                "format": "json",
+                "ids": wikibase_id,
+            },
+        ).json()
+
+        entity = response["entities"][wikibase_id]
+
+        concept = Concept(
+            preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
+            alternative_labels=[
+                alias.get("value") for alias in entity.get("aliases", {}).get("en", [])
+            ],
+            description=entity.get("descriptions", {}).get("en", {}).get("value", ""),
+            wikibase_id=wikibase_id,
+        )
+
+        if "claims" in entity:
+            for claim in entity["claims"].values():
+                for statement in claim:
+                    if statement["mainsnak"]["snaktype"] == "value":
+                        property_id = statement["mainsnak"]["property"]
+                        value = statement["mainsnak"]["datavalue"]["value"]
+                        if property_id == self.subconcept_of_property_id:
+                            concept.subconcept_of.append(value["id"])
+                        elif property_id == self.has_subconcept_property_id:
+                            concept.has_subconcept.append(value["id"])
+                        elif property_id == self.related_concept_property_id:
+                            concept.related_concepts.append(value["id"])
+
+        return concept
+
+    def get_concepts(self, wikibase_ids: list[WikibaseID]) -> list[Concept]:
         """
         Get concepts from Wikibase by their Wikibase IDs
 
-        :param Union[str  |  List[str]] wikibase_ids: A Wikibase ID or a list of Wikibase IDs
+        :param list[WikibaseID] wikibase_ids: The Wikibase IDs of the concepts
         :return Concept: The concepts with the given Wikibase IDs
         """
-        if isinstance(wikibase_ids, str):
-            wikibase_ids = [wikibase_ids]
-
         concepts = []
         for wikibase_id in wikibase_ids:
-            response = self.session.get(
-                url=self.api_url,
-                params={
-                    "action": "wbgetentities",
-                    "format": "json",
-                    "ids": wikibase_id,
-                },
-            ).json()
-
-            entity = response["entities"][wikibase_id]
-
-            concept = Concept(
-                preferred_label=entity.get("labels", {}).get("en", {}).get("value"),
-                alternative_labels=[
-                    alias.get("value")
-                    for alias in entity.get("aliases", {}).get("en", [])
-                ],
-                wikibase_id=wikibase_id,
-            )
-
+            concept = self.get_concept(wikibase_id)
             concepts.append(concept)
 
         return concepts
 
-    def list_concepts(self) -> List[Concept]:
+    def list_concepts(self) -> list[Concept]:
         """
         List all concepts in Wikibase
 
-        :return List[Concept]: A list of all concepts in the Wikibase instance
+        :return list[Concept]: A list of all concepts in the Wikibase instance
         """
         response = self.session.get(
             url=self.api_url,
@@ -319,19 +341,19 @@ class WikibaseSession:
 
         return concepts
 
-    def get_statements(self, item_id: str) -> List[dict]:
+    def get_statements(self, wikibase_id: WikibaseID) -> list[dict]:
         """
         Get all statements for a Wikibase item
 
-        :param str item_id: The Wikibase ID of the item
-        :return List[dict]: A list of all statements for the item
+        :param str wikibase_id: The Wikibase ID of the item
+        :return list[dict]: A list of all statements for the item
         """
         response = self.session.get(
             url=self.api_url,
             params={
                 "action": "wbgetclaims",
                 "format": "json",
-                "entity": item_id,
+                "entity": wikibase_id,
             },
         ).json()
 
@@ -339,14 +361,16 @@ class WikibaseSession:
         return statements
 
     def add_statement(
-        self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
+        self, subject_id: str, predicate_id: str, value: str, summary: Optional[str]
     ) -> dict:
         """
         Add a statement to a Wikibase item
 
         :param str subject_id: The Wikibase ID of the subject entity
         :param str predicate_id: The Wikibase ID of the predicate property
-        :param str object_id: The Wikibase ID of the object entity
+        :param str value: Should take the form
+            {"entity-type": "item", "id": object_id} or
+            {"datatype": "string", "value": "string"}
         :param Optional[str] summary: A summary message for the edit
         :return dict: The response from the Wikibase API
         """
@@ -356,7 +380,7 @@ class WikibaseSession:
             "entity": subject_id,
             "property": predicate_id,
             "snaktype": "value",
-            "value": json.dumps({"entity-type": "item", "id": object_id}),
+            "value": json.dumps(value),
             "token": self.csrf_token,
             "bot": True,
         }
@@ -367,15 +391,37 @@ class WikibaseSession:
         create_claim_response = self.session.post(url=self.api_url, data=data).json()
         return create_claim_response
 
-    def remove_statement(
-        self, subject_id: str, predicate_id: str, object_id: str, summary: Optional[str]
-    ) -> None:
+    def get_subconcepts(
+        self, wikibase_id: WikibaseID, recursive: bool = True
+    ) -> list[Concept]:
         """
-        Remove a statement from a Wikibase entity
+        Get all subconcepts of a concept
 
-        :param str subject_id: The Wikibase ID of the subject entity
-        :param str predicate_id: The Wikibase ID of the predicate property
-        :param str object_id: The Wikibase ID of the object entity
-        :param Optional[str] summary: A summary message for the edit
+        :param str wikibase_id: The Wikibase ID of the concept
+        :param bool recursive: Whether to get subconcepts recursively
+        :return list[Concept]: A list of all subconcepts of the concept
         """
-        raise NotImplementedError
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetentities",
+                "format": "json",
+                "ids": wikibase_id,
+                "props": "claims",
+            },
+        ).json()
+
+        entity = response["entities"][wikibase_id]
+        subconcepts = []
+        if "claims" in entity:
+            for claim in entity["claims"].values():
+                for statement in claim:
+                    if statement["mainsnak"]["snaktype"] == "value":
+                        property_id = statement["mainsnak"]["property"]
+                        value = statement["mainsnak"]["datavalue"]["value"]
+                        if property_id == self.has_subconcept_property_id:
+                            subconcepts.append(self.get_concept(value["id"]))
+                            if recursive:
+                                subconcepts.extend(self.get_subconcepts(value["id"]))
+
+        return subconcepts

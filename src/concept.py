@@ -1,72 +1,82 @@
 import os
-from typing import Dict, List, Optional
+import re
+from typing import Dict, Optional
 
-from pydantic import BaseModel, root_validator, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class WikibaseID(str):
+    """A Wikibase ID, which is a string that starts with a 'Q' followed by a number."""
+
+    @classmethod
+    def _validate(cls, value: str, field=None) -> str:
+        """Validate that the Wikibase ID is in the correct format"""
+        if not re.match(r"^Q[1-9]\d*$", value):
+            raise ValueError(f"{value} is not a valid Wikibase ID")
+        return value
+
+    @classmethod
+    def __get_validators__(cls):
+        """Return a generator of validators for the WikibaseID class"""
+        yield cls._validate
+
+    def __new__(cls, value: str) -> "WikibaseID":
+        """Create a new instance of WikibaseID after validation"""
+        validated_value = cls._validate(value)
+        return str.__new__(cls, validated_value)
 
 
 class Concept(BaseModel):
     """Base class for a concept"""
 
-    preferred_label: str
-    alternative_labels: List[str] = []
-    wikibase_id: Optional[str] = None
-    subconcepts: List["Concept"] = []
-    related_concepts: List["Concept"] = []
+    preferred_label: str = Field(..., description="The preferred label for the concept")
+    alternative_labels: list[str] = Field(
+        default_factory=list, description="List of alternative labels for the concept"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="A short description of the concept which should be sufficient to disambiguate it from other concepts with similar labels",
+    )
+    wikibase_id: Optional[WikibaseID] = Field(
+        default=None, description="The Wikibase ID for the concept"
+    )
+    subconcept_of: list[WikibaseID] = Field(
+        default_factory=list,
+        description="List of parent concept IDs",
+    )
+    has_subconcept: list[WikibaseID] = Field(
+        default_factory=list, description="List of subconcept IDs"
+    )
+    related_concepts: list[WikibaseID] = Field(
+        default_factory=list, description="List of related concept IDs"
+    )
+    definition: Optional[str] = Field(
+        default=None, description="The definition of the concept"
+    )
 
-    def __getitem__(self, key: str) -> "Concept":
-        """
-        Index into the concept's subconcepts according to their preferred_label
-
-        :param str key: The preferred_label of the subconcept to retrieve
-        :raises KeyError: Raised if the key is not found in the subconcepts
-        :return Concept: The subconcept with the given preferred_label
-        """
-        for subconcept in self.subconcepts:
-            if subconcept.preferred_label == key:
-                return subconcept
-        raise KeyError(f'"{key}" not found in subconcepts of "{self.preferred_label}"')
-
-    @validator("alternative_labels")
+    @field_validator("alternative_labels", mode="before")
     @classmethod
-    def _ensure_alternative_labels_are_unique(cls, values: List[str]) -> List[str]:
+    def _ensure_alternative_labels_are_unique(cls, values: list[str]) -> list[str]:
         """Ensure that the alternative labels are a unique set of strings"""
         return list(set(str(item) for item in values))
 
-    @root_validator
+    @model_validator(mode="before")
     @classmethod
     def _ensure_preferred_label_not_in_alternative_labels(cls, values: Dict) -> Dict:
         """Ensure that the preferred label is not in the alternative labels"""
-        if values.get("preferred_label") in values.get("alternative_labels", []):
+        preferred_label = values.get("preferred_label")
+        if preferred_label in values.get("alternative_labels", []):
             # remove the preferred label from the alternative labels
-            values["alternative_labels"].remove(values.get("preferred_label"))
+            values["alternative_labels"].remove(preferred_label)
         return values
-
-    def dict(self) -> dict:
-        """Return a dictionary representation of the concept"""
-        return {
-            "preferred_label": self.preferred_label,
-            "alternative_labels": list(self.alternative_labels),
-            "subconcepts": [c.dict() for c in self.subconcepts],
-        }
-
-    @classmethod
-    def from_dict(cls, concept_dict: Dict) -> "Concept":
-        """Create a Concept instance from a dictionary"""
-        return cls(**concept_dict)
 
     def __repr__(self) -> str:
         """Return a string representation of the concept"""
-        n_subconcepts = f"{len(self.subconcepts)} subconcept{'' if len(self.subconcepts) == 1 else 's'}"
-        return f'Concept("{self.preferred_label}", {n_subconcepts})'
+        return f'Concept({self.wikibase_id}, "{self.preferred_label}")'
 
-    @property
-    def all_subconcepts(self) -> List["Concept"]:
-        """Return a list of all subconcepts, including subconcepts of subconcepts"""
-        all_subconcepts = []
-        for subconcept in self.subconcepts:
-            all_subconcepts.append(subconcept)
-            all_subconcepts.extend(subconcept.all_subconcepts)
-        return all_subconcepts
+    def __str__(self) -> str:
+        """Return a string representation of the concept"""
+        return super().__str__()
 
     @property
     def wikibase_url(self) -> str:
@@ -80,7 +90,7 @@ class Concept(BaseModel):
         return f"{os.getenv('WIKIBASE_URL')}/wiki/Item:{self.wikibase_id}"
 
     @property
-    def all_labels(self) -> List[str]:
+    def all_labels(self) -> list[str]:
         """Return a list of all unique labels for the concept"""
         return list(set([self.preferred_label] + self.alternative_labels))
 

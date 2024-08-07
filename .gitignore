@@ -164,3 +164,4 @@ data/**/*
 !data/**/
 !**/.gitkeep
 !**/README.md
+google-credentials.json
