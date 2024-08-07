@@ -1,13 +1,11 @@
-from pathlib import Path
-
 import boto3
 import typer
 from rich.console import Console
 from rich.progress import track
 
-console = Console()
+from scripts.config import data_dir
 
-data_dir = Path("data")
+console = Console()
 
 session = boto3.Session(profile_name="labs")
 s3_client = session.client("s3", region_name="eu-west-1")

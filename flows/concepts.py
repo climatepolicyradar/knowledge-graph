@@ -9,5 +9,6 @@ def get_concept_class_fields():
     concept_fields = Concept.__fields__.keys()
     logger.info(f"Concept class fields: {concept_fields}")
 
+
 if __name__ == "__main__":
     get_concept_class_fields()

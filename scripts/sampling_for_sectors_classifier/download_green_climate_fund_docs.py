@@ -11,16 +11,16 @@ Usage:
 
 import json
 import sys
-from pathlib import Path
 
 import httpx
 from rich.console import Console
 from rich.progress import track
 
+from scripts.config import raw_data_dir
+
 console = Console()
 
-data_dir = Path("data")
-scraped_json_path = data_dir / "raw" / "green-climate-fund.json"
+scraped_json_path = raw_data_dir / "green-climate-fund.json"
 if not scraped_json_path.exists():
     console.print(
         "🚨 The scraped JSON file does not exist. Please run the scraper first.",
@@ -32,7 +32,7 @@ with open(scraped_json_path, "r") as f:
     scraped_data = json.load(f)
 
 # Create the PDFs directory
-gcf_pdf_dir = data_dir / "raw" / "pdfs" / "green-climate-fund"
+gcf_pdf_dir = raw_data_dir / "pdfs" / "green-climate-fund"
 gcf_pdf_dir.mkdir(exist_ok=True, parents=True)
 
 # Download the documents

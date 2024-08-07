@@ -1,6 +1,5 @@
 import httpx
 from prefect import flow
-import json
 
 
 @flow(log_prints=True)

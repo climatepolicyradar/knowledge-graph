@@ -5,7 +5,11 @@ description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
 readme = "README.md"
-packages = [{ include = "src", from = "." }]
+packages = [
+  { include = "src", from = "." },
+  { include = "tests", from = "." },
+  { include = "scripts", from = "." },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.10"

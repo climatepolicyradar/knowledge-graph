@@ -14,7 +14,7 @@ Usage:
 - Run `python scripts/process_gst.py`
 
 Output:
-- "data/processed/concepts.json" containing the processed concepts and their
+- "data/interim/concepts.json" containing the processed concepts and their
   hierarchy.
 """
 
@@ -28,6 +28,7 @@ from pathlib import Path
 import pandas as pd
 from explorer.main import load_input_spreadsheet
 
+from scripts.config import interim_data_dir
 from src.concept import Concept
 
 logger = getLogger(__name__)
@@ -43,7 +44,7 @@ assert Path(
 
 # set up the input and output directories
 input_data_dir = Path("../global-stocktake/concepts")
-output_data_dir = Path("./data/processed")
+output_data_dir = interim_data_dir
 output_data_dir.mkdir(parents=True, exist_ok=True)
 
 concepts = []

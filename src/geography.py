@@ -1,9 +1,9 @@
-from pathlib import Path
-
 import pandas as pd
 from rapidfuzz import fuzz
 
-geography_data = Path("data/raw/geography-iso-3166-backend.csv")
+from scripts.config import raw_data_dir
+
+geography_data = raw_data_dir / "geography-iso-3166-backend.csv"
 geography_df = pd.read_csv(geography_data)
 
 
