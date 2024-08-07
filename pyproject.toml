@@ -5,20 +5,26 @@ description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
 readme = "README.md"
-packages = [
-    { include = "src", from = "." },
-]
-
+packages = [{ include = "src", from = "." }]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.9,<3.10"
 httpx = "^0.26.0"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
-explorer = {git = "https://github.com/climatepolicyradar/explorer.git", rev = "96d2a244f4a0e3298a080f71edee6c4b96e5bd37"}
+cpr_data_access = { git = "https://github.com/climatepolicyradar/data-access.git", tag = "0.4.0" }
+azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.3.1" }
+# navigator_document_parser = { git = "https://github.com/climatepolicyradar/navigator-document-parser.git" }
 neomodel = "^5.2.1"
 typer = "0.9.4"
+numpy = "1.26.4"
+argilla = "^1.29.0"
+rapidfuzz = "^3.9.4"
+python-dotenv = "^1.0.1"
+pytest = "^8.3.2"
+hypothesis = "^6.108.5"
+more-itertools = "^10.3.0"
 
 [tool.poetry.group.dev]
 optional = true
@@ -47,7 +53,22 @@ line-length = 88
 # D407 - Missing dashed underline after section
 # D413 - Missing blank line after last section
 # D415 - First line should end with a period, question mark, or exclamation point
-lint.ignore = ["D100", "D103", "D104", "D107", "D202", "D203", "D212", "D400", "D401", "D406", "D407", "D413", "D415", "E501"]
+lint.ignore = [
+  "D100",
+  "D103",
+  "D104",
+  "D107",
+  "D202",
+  "D203",
+  "D212",
+  "D400",
+  "D401",
+  "D406",
+  "D407",
+  "D413",
+  "D415",
+  "E501",
+]
 
 # Ignore `E402` (import violations) in all `__init__.py` files, and `E501` (line too long) in all files in the `tests` directory
 [tool.ruff.lint.per-file-ignores]
