@@ -14,10 +14,10 @@ existing_buckets = [
     bucket["Name"] for bucket in s3_client.list_buckets().get("Buckets")
 ]
 if bucket_name in existing_buckets:
-    # first empty the bucket
     if typer.confirm(
         f"🪣 Bucket {bucket_name} already exists. Do you want to delete it?"
     ):
+        # first empty the bucket
         objects = s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", [])
         for obj in track(
             objects,
@@ -25,6 +25,9 @@ if bucket_name in existing_buckets:
             transient=True,
         ):
             s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+        assert (
+            s3_client.list_objects_v2(Bucket=bucket_name).get("Contents", []) == []
+        ), "Bucket not empty"
         # then delete the bucket
         s3_client.delete_bucket(Bucket=bucket_name)
         console.print(
