@@ -21,7 +21,7 @@ from cpr_data_access.models import (
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import data_dir, processed_data_dir
+from scripts.config import interim_data_dir, processed_data_dir
 from src.geography import geography_string_to_iso, iso_to_world_bank_region
 
 console = Console()
@@ -30,7 +30,7 @@ combined_dataset_path = processed_data_dir / "combined_dataset.feather"
 
 datasets = []
 
-for subdir in data_dir.iterdir():
+for subdir in (interim_data_dir / "output").iterdir():
     if subdir.is_dir():
         text_blocks = []
         for file_path in track(
@@ -100,6 +100,7 @@ for _, document in track(
     combined_dataset.iterrows(),
     description="Adding world bank region metadata",
     transient=True,
+    total=len(combined_dataset),
 ):
     if document.get("geography_iso"):
         world_bank_region = iso_to_world_bank_region.get(document["geography_iso"], "")
