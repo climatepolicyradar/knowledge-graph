@@ -5,7 +5,7 @@ Usage:
     python3 pull_concepts.py
 
 or in code:
-    
+
     from pull_concepts import request_concepts, transform_and_filter
 
     raw_results = request_concepts() # Can raise RuntimeError
@@ -13,7 +13,8 @@ or in code:
 """
 
 import json
-from typing import Any, Callable, Mapping, Sequence, Tuple
+from typing import Any, Callable, Mapping, Tuple
+
 import requests
 
 # Types
@@ -37,7 +38,8 @@ SELECT ?subject ?predicate ?object ?subjectLabel ?predicateLabel ?objectLabel WH
 
 
 def request_concepts() -> Json:
-    """Simply request the concepts from the SPARQL endpoint of the Wikibase instance.
+    """
+    Simply request the concepts from the SPARQL endpoint of the Wikibase instance.
 
     :raises RuntimeError: If the HTTP status code is not 200
     :return Mapping[str, Any]: The JSON response from the SPARQL query
@@ -63,7 +65,8 @@ def request_concepts() -> Json:
 
 
 def filter(entities: Json) -> Json:
-    """filters the entities to only include those that are from the Wikibase instance.
+    """
+    filters the entities to only include those that are from the Wikibase instance.
 
     :param Mapping[str, Any] entities: entities to filter
     :return Mapping[str, Any]: entities that are from the Wikibase instance
@@ -143,7 +146,8 @@ def _use_cpr_transform() -> Tuple[Callable[[], Json], Callable[[Json], None]]:
 
 
 def transform_and_filter(raw_results: Json) -> Json:
-    """Transforms and filters the raw results from the Wikibase instance.
+    """
+    Transforms and filters the raw results from the Wikibase instance.
 
     :param Json raw_results: The raw results from the Wikibase instance
     :return Json: The transformed and filtered results
