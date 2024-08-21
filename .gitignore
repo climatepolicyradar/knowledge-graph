@@ -162,6 +162,7 @@ cython_debug/
 # data directory
 data/**/*
 !data/**/
+!data/config/*
 !**/.gitkeep
 !**/README.md
 google-credentials.json
