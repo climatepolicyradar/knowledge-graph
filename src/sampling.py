@@ -1,7 +1,12 @@
 from collections import defaultdict
-from typing import List, Optional
+from pathlib import Path
+from typing import Optional, Union
 
 import pandas as pd
+import yaml
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.concept import WikibaseID
 
 
 class Sampler:
@@ -10,14 +15,14 @@ class Sampler:
     def __init__(
         self,
         sample_size: int,
-        stratified_columns: List[str] = [],
-        equal_columns: List[str] = [],
+        stratified_columns: list[str] = [],
+        equal_columns: list[str] = [],
     ):
         """
         Initialize the Sampler.
 
-        :param List[str] stratified_columns: The columns to stratify the sample on.
-        :param List[str] equal_columns: The columns to keep the distribution equal.
+        :param list[str] stratified_columns: The columns to stratify the sample on.
+        :param list[str] equal_columns: The columns to keep the distribution equal.
         :param int sample_size: The number of samples to take.
         """
         self.stratified_columns = list(stratified_columns) if stratified_columns else []
@@ -162,3 +167,63 @@ class Sampler:
         sample_df = sample_df.sample(self.sample_size, replace=False)
 
         return sample_df
+
+
+class SamplingConfig(BaseModel):
+    """A class to hold the sampling configuration."""
+
+    # Set frozen=True to make the config immutable after loading. If a user tries to edit
+    # the config in code, an validation error will be raised.
+    model_config = ConfigDict(frozen=True)
+
+    stratified_columns: list[str] = Field(
+        default_factory=list,
+        description="Sampled passages will be sampled from these columns according to the distribution of the reference dataset.",
+    )
+    equal_columns: list[str] = Field(
+        default_factory=list,
+        description="Sampled passages will be sampled from these columns with an equal number of samples from each group.",
+    )
+    sample_size: int = Field(
+        ...,
+        description="The number of samples to take.",
+        examples=[1000],
+    )
+    negative_proportion: float = Field(
+        ...,
+        description="The proportion of negative samples to take.",
+        examples=[0.2],
+        ge=0,
+        le=1,
+    )
+    wikibase_ids: list[WikibaseID] = Field(
+        default_factory=list,
+        description="The Wikibase IDs of the concepts to sample.",
+        examples=["Q42"],
+    )
+    labellers: list[str] = Field(
+        default_factory=list,
+        description="The usernames of the labellers to sample.",
+        examples=["alice", "bob"],
+    )
+
+    @classmethod
+    def load(cls, file_path: Union[str, Path]) -> "SamplingConfig":
+        """
+        Load the sampling configuration from a YAML file.
+
+        :param Union[str, Path] file_path: The path to the YAML file.
+        """
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        if not file_path.is_file():
+            raise ValueError(f"Path is not a file: {file_path}")
+        if file_path.suffix != ".yaml":
+            raise ValueError("File must be a YAML file.")
+
+        with open(file_path, "r") as file:
+            config = yaml.safe_load(file)
+
+        return cls(**config)
