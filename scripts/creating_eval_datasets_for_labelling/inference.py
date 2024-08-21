@@ -7,72 +7,60 @@ concept to a file.
 """
 
 import pandas as pd
-import yaml
+import typer
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import track
 
-from scripts.config import classifier_dir, config_dir, processed_data_dir
+from scripts.config import classifier_dir, processed_data_dir
 from src.classifier import Classifier
+from src.sampling import SamplingConfig
 
 console = Console()
 
-# Load the config
-with console.status("🔬 Loading config"):
-    config_path = config_dir / "sectors.yaml"
-    sampling_config = yaml.safe_load(config_path.read_text())
-console.log("✅ Config loaded")
+app = typer.Typer()
 
-# Set up the output directory
-candidate_passages_path = processed_data_dir / "candidate_passages"
-candidate_passages_path.mkdir(parents=True, exist_ok=True)
 
-# Load the combined dataset
-with console.status("🚚 Loading combined dataset"):
-    combined_dataset_path = processed_data_dir / "combined_dataset"
-    df = pd.read_feather(combined_dataset_path).sample(frac=0.1)
-console.log(f"✅ Loaded {len(df)} passages from local file")
+@app.command()
+def main(config_path: str):
+    console.log(f"Loading config from {config_path}")
+    sampling_config = SamplingConfig.load(config_path)
+    console.log(f"Config loaded: {sampling_config}")
 
-progress = Progress(
-    TextColumn("[progress.description]{task.description}", justify="right"),
-    SpinnerColumn(),
-    BarColumn(),
-    MofNCompleteColumn(),
-    TimeElapsedColumn(),
-    TimeRemainingColumn(),
-)
-wikibase_ids = sampling_config.get("wikibase_ids", [])
-classifiers: dict[str, Classifier] = {}
-for wikibase_id in wikibase_ids:
-    classifier = Classifier.load(classifier_dir / wikibase_id)
-    classifiers[wikibase_id] = classifier
+    # Set up the output directory
+    candidate_passages_path = processed_data_dir / "candidate_passages"
+    candidate_passages_path.mkdir(parents=True, exist_ok=True)
 
-    progress.add_task(
-        description=f"{classifier.concept.preferred_label} ({wikibase_id})",
-        total=len(df),
-    )
+    # Load the combined dataset
+    console.log("🚚 Loading combined dataset")
+    combined_dataset_path = processed_data_dir / "combined_dataset.feather"
+    df = pd.read_feather(combined_dataset_path)
+    console.log(f"✅ Loaded {len(df)} passages from local file")
 
-with progress:
-    for task in progress.tasks:
-        wikibase_id = task.description
-        classifier = classifiers[wikibase_id]
-
-        predictions = []
-        for _, row in df.iterrows():
-            predictions.append(bool(classifier.predict(row["text"])))
-            task.completed += 1
+    for wikibase_id in sampling_config.wikibase_ids:
+        classifier = Classifier.load(classifier_dir / wikibase_id)
+        console.log(f"Loaded classifier for concept {wikibase_id}")
+        console.log(f"Running classifier {classifier} on passages...")
+        predictions = [
+            bool(classifier.predict(text))
+            for text in track(
+                df["text"].values,
+                console=console,
+                transient=True,
+            )
+        ]
 
         console.log(
-            f"Found {len(predictions)} passages which are about {classifier.concept.preferred_label}"
+            f"Found {sum(predictions)} positive passages for concept {wikibase_id}"
         )
 
         # save the candidate passages to a file with the concept ID in the name
         candidate_passages_file = candidate_passages_path / f"{wikibase_id}.json"
         df[predictions].to_json(candidate_passages_file, orient="records", lines=True)
+
+        console.log(f"Saved candidate passages to {candidate_passages_file}")
+
+    console.log("🎉 All classifiers have been run")
+
+
+if __name__ == "__main__":
+    app()

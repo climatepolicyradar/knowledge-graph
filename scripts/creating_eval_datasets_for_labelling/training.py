@@ -14,7 +14,6 @@ app = typer.Typer()
 
 @app.command()
 def main(config_path: str):
-    # Load the sampling config
     console.log(f"Loading config from {config_path}")
     sampling_config = SamplingConfig.load(config_path)
     console.log(f"Config loaded: {sampling_config}")

@@ -4,19 +4,13 @@ from typing import Optional, Union
 
 import pandas as pd
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from src.concept import WikibaseID
 
 
 class SamplingConfig(BaseModel):
     """A class to hold the sampling configuration."""
-
-    model_config = ConfigDict(
-        # Setting frozen=True makes the config immutable after loading. If a user tries
-        # to tweak the config in code, a validation error will be raised.
-        frozen=True
-    )
 
     stratified_columns: list[str] = Field(
         default_factory=list,
@@ -30,9 +24,10 @@ class SamplingConfig(BaseModel):
         ...,
         description="The number of samples to take.",
         examples=[1000],
+        ge=1,
     )
     negative_proportion: float = Field(
-        ...,
+        default=0,
         description="The proportion of negative samples to take.",
         examples=[0.2],
         ge=0,
@@ -155,7 +150,7 @@ class Sampler:
             # Create the final sample DataFrame
             samples = []
             for stratum, count in target_sample_counts.items():
-                stratum_df = dataset[strata == stratum]
+                stratum_df = dataset.loc[strata == stratum]
 
                 if self.config.equal_columns:
                     # Calculate the number of groups in self.config.equal_columns
@@ -166,15 +161,19 @@ class Sampler:
                     )
 
                     num_groups = stratum_df[equal_columns].nunique()
-                    samples_per_group = int(count // num_groups)
-                    for _, group_df in stratum_df.groupby(equal_columns):
-                        self.sample_size_for_group = min(
-                            samples_per_group, len(group_df)
-                        )
-                        sampled_group = group_df.sample(
-                            self.sample_size_for_group, replace=False
-                        )
-                        samples.append(sampled_group)
+                    if num_groups > 0:
+                        samples_per_group = int(count // num_groups)
+                        for _, group_df in stratum_df.groupby(equal_columns):
+                            self.sample_size_for_group = min(
+                                samples_per_group, len(group_df)
+                            )
+                            sampled_group = group_df.sample(
+                                self.sample_size_for_group, replace=False
+                            )
+                            samples.append(sampled_group)
+                    else:
+                        # If num_groups is 0, skip this stratum and move on to the next one
+                        continue
                 else:
                     # If equal_columns is empty, sample directly from stratum_df
                     sampled_stratum = stratum_df.sample(count, replace=False)
