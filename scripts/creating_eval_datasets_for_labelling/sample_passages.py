@@ -19,6 +19,8 @@ instances of the concept, for use as negative examples in the labelling project.
 The sampled passages are saved to a local file.
 """
 
+from pathlib import Path
+
 import pandas as pd
 import typer
 from rich.console import Console
@@ -35,7 +37,7 @@ console = Console()
 
 
 @app.command()
-def main(config_path: str):
+def main(config_path: Path):
     console.log(f"Loading config from {config_path}")
     sampling_config = SamplingConfig.load(config_path)
     console.log(f"Config loaded: {sampling_config}")
