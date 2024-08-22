@@ -113,13 +113,6 @@ def main(config_path: Path):
         dataset_name = f"{concept.preferred_label}-{concept_id}".replace(" ", "-")
         console.log(f"✅ Retrieved metadata for {dataset_name}")
 
-        try:
-            rg.FeedbackDataset.from_argilla(
-                name=dataset_name, workspace=workspace_name
-            ).delete()
-        except ValueError:
-            pass
-
         dataset = rg.FeedbackDataset(
             guidelines="Highlight the entity if it is present in the text",
             fields=[
