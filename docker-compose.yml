@@ -45,7 +45,7 @@ services:
   argilla:
     # loosely adapted from
     # https://github.com/argilla-io/argilla/blob/a88c81879d7088413912e6c368eee8ae77e840a9/docker/docker-compose.yaml
-    image: argilla/argilla-server:latest
+    image: argilla/argilla-server:v1.26.1
     container_name: argilla
     restart: unless-stopped
     ports:
