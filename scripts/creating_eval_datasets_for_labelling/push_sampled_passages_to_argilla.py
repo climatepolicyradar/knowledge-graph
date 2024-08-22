@@ -23,6 +23,7 @@ from rich.progress import track
 from rich.table import Table
 
 from scripts.config import processed_data_dir
+from src.identifiers import generate_identifier
 from src.sampling import SamplingConfig
 from src.wikibase import WikibaseSession
 
@@ -42,32 +43,40 @@ def main(config_path: Path):
     console.log("✅ Connected to Wikibase")
 
     console.log("🔗 Connecting to Argilla...")
-    client = rg.Argilla(
-        api_key=os.getenv("ARGILLA_API_KEY"),
-        api_url=os.getenv("ARGILLA_API_URL"),
-    )
+    rg.init(api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL"))
     console.log("✅ Connected to Argilla")
 
     # Create a workspace for the datasets, and add each of the labellers to it.
     # N.B. for now, we're not doing any fancy assignment of labellers to datasets. We're
     # coordinating manually, and we'll come back round to efficient assignment in code in
     # a future iteration if needed.
-    workspace = client.workspaces(config_path.stem)
-    if workspace is None:
-        workspace = rg.Workspace(name=config_path.stem).create()
-        console.log(f"✅ Created workspace {workspace.name}")
+    workspace_name = config_path.stem
+    try:
+        workspace = rg.Workspace.create(name=workspace_name)
+        console.log(f'✅ Created workspace "{workspace.name}"')
+    except ValueError:
+        workspace = rg.Workspace.from_name(name=workspace_name)
+        console.log(f'✅ Loaded workspace "{workspace.name}"')
 
-    for user in sampling_config.labellers:
-        if client.users(user) is None:
-            rg.User(
-                username=user,
-                password=os.getenv("ARGILLA_DEFAULT_PASSWORD", "password"),
-                role="annotator",
-            ).create()
-            console.log(f"✅ Created user {user}")
-            added_user = workspace.add_user(user)
+    for username in sampling_config.labellers:
+        try:
+            password = generate_identifier(username)
+            user = rg.User.create(
+                username=username, password=password, role="annotator"
+            )
+            console.log(f'✅ Created user "{username}" with password "{password}"')
+        except KeyError:
+            console.log(f'✅ User "{username}" already exists')
+            user = rg.User.from_name(username)
+
+        try:
+            workspace.add_user(user.id)
             console.log(
-                f"✅ Added user {added_user.username} to workspace {workspace.name}"
+                f'✅ Added user "{user.username}" to workspace "{workspace.name}"'
+            )
+        except ValueError:
+            console.log(
+                f'✅ User "{user.username}" already in workspace "{workspace.name}"'
             )
 
     # create a rich table for the results to be displayed in
@@ -85,7 +94,7 @@ def main(config_path: Path):
         raise FileNotFoundError(f"Missing files for concepts: {missing_files}")
 
     datasets = {
-        file.stem: pd.read_json(file, orient="records", lines=True).fillna("")
+        file.stem: pd.read_json(file, orient="records", lines=True)
         for file in track(
             sampled_passage_file_paths,
             description="Loading datasets",
@@ -104,51 +113,41 @@ def main(config_path: Path):
         dataset_name = f"{concept.preferred_label}-{concept_id}".replace(" ", "-")
         console.log(f"✅ Retrieved metadata for {dataset_name}")
 
-        dataset = client.datasets(name=dataset_name, workspace=workspace)
-        if dataset is not None:
-            dataset.delete()
-            console.log(f"✅ Deleted existing dataset {dataset.name}")
+        try:
+            rg.FeedbackDataset.from_argilla(
+                name=dataset_name, workspace=workspace_name
+            ).delete()
+        except ValueError:
+            pass
 
-        dataset = rg.Dataset(
-            name=dataset_name,
-            workspace=workspace,
-            settings=rg.Settings(
-                fields=[
-                    rg.TextField(name="text", title="Text", use_markdown=True),
-                ],
-                questions=[
-                    rg.SpanQuestion(
-                        name="entities",
-                        labels={concept.wikibase_id: concept.preferred_label},
-                        field="text",
-                        required=True,
-                        allow_overlapping=False,
-                    )
-                ],
-                guidelines="Highlight the entity if it is present in the text",
-                metadata=[
-                    rg.TermsMetadataProperty(name=column_name)
-                    for column_name in df.columns
-                    if column_name != "text"
-                ],
-            ),
-        ).create()
-        console.log(f"✅ Created dataset {dataset.name}")
+        dataset = rg.FeedbackDataset(
+            guidelines="Highlight the entity if it is present in the text",
+            fields=[
+                rg.TextField(name="text", title="Text", use_markdown=True),
+            ],
+            questions=[
+                rg.SpanQuestion(
+                    name="entities",
+                    labels={concept.wikibase_id: concept.preferred_label},
+                    field="text",
+                    required=True,
+                    allow_overlapping=False,
+                )
+            ],
+        )
 
         records = [
-            rg.Record(
-                fields={"text": row["text"]},
-                metadata=row.drop("text").apply(str).to_dict(),
+            rg.FeedbackRecord(
+                fields={"text": row["text"]}, metadata=row.apply(str).to_dict()
             )
             for _, row in df.iterrows()
         ]
-        dataset.records.log(records)
-        console.log(f"✅ Added {len(records)} records to dataset {dataset.name}")
-
-        dataset_url = (
-            f"{os.getenv('ARGILLA_API_URL')}/dataset/{dataset.id}/annotation-mode"
+        dataset.add_records(records)
+        dataset_in_argilla = dataset.push_to_argilla(
+            name=dataset_name, workspace=workspace_name, show_progress=False
         )
-        table.add_row(concept_id, concept.wikibase_url, dataset_url)
+        console.log(f"✅ Created dataset {dataset_in_argilla.url}")
+        table.add_row(concept_id, concept.wikibase_url, dataset_in_argilla.url)
 
     # display the results in the rich table
     console.print(table)

@@ -28,7 +28,7 @@ python-dotenv = "^1.0.1"
 pytest = "^8.3.2"
 hypothesis = "^6.108.5"
 more-itertools = "^10.3.0"
-argilla = "^2.0.1"
+argilla = "^1.29"
 
 [tool.poetry.group.dev]
 optional = true
