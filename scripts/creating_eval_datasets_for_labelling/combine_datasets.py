@@ -15,9 +15,7 @@ from cpr_data_access.models import (
     CPRDocument,
     GSTDocument,
 )
-from cpr_data_access.models import (
-    Dataset as CPRDataset,
-)
+from cpr_data_access.models import Dataset as CPRDataset
 from rich.console import Console
 from rich.progress import track
 

@@ -1,19 +1,10 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
-from pydantic import BaseModel
-
-from src.concept import Concept, WikibaseID
-
-
-class Span(BaseModel):
-    """A span of text in a document."""
-
-    start_index: int
-    end_index: int
-    identifier: Optional[WikibaseID]
+from src.concept import Concept
+from src.span import Span
 
 
 class Classifier(ABC):

@@ -1,29 +1,9 @@
 import os
-import re
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
-class WikibaseID(str):
-    """A Wikibase ID, which is a string that starts with a 'Q' followed by a number."""
-
-    @classmethod
-    def _validate(cls, value: str, field=None) -> str:
-        """Validate that the Wikibase ID is in the correct format"""
-        if not re.match(r"^Q[1-9]\d*$", value):
-            raise ValueError(f"{value} is not a valid Wikibase ID")
-        return value
-
-    @classmethod
-    def __get_validators__(cls):
-        """Return a generator of validators for the WikibaseID class"""
-        yield cls._validate
-
-    def __new__(cls, value: str) -> "WikibaseID":
-        """Create a new instance of WikibaseID after validation"""
-        validated_value = cls._validate(value)
-        return str.__new__(cls, validated_value)
+from src.identifiers import WikibaseID
 
 
 class Concept(BaseModel):

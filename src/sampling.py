@@ -6,7 +6,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, Field
 
-from src.concept import WikibaseID
+from src.identifiers import WikibaseID
 
 
 class SamplingConfig(BaseModel):
