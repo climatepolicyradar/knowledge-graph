@@ -38,6 +38,17 @@ class Span(BaseModel):
         """Return a unique hash for the span."""
         return hash((self.start_index, self.end_index, self.identifier, self.labeller))
 
+    def __eq__(self, other: object) -> bool:
+        """Check whether two spans are equal."""
+        if not isinstance(other, Span):
+            return False
+        return (
+            self.start_index == other.start_index
+            and self.end_index == other.end_index
+            and self.identifier == other.identifier
+            and self.labeller == other.labeller
+        )
+
     @model_validator(mode="after")
     def check_whether_span_is_valid(self):
         """Check whether the span is valid."""
@@ -46,32 +57,6 @@ class Span(BaseModel):
                 f"The end index must be greater than the start index. Got {self}"
             )
         return self
-
-
-def spans_match_exactly(*spans: Span) -> bool:
-    """
-    Check whether the start and end indices of the supplied spans match exactly.
-
-    :param Span spans: The spans to check for equality
-    :return bool: True if the spans match exactly, False otherwise
-    """
-    return all(
-        span.start_index == spans[0].start_index
-        and span.end_index == spans[0].end_index
-        for span in spans[1:]
-    )
-
-
-def spans_overlap(*spans: Span) -> bool:
-    """
-    Check whether the span overlaps with another given span.
-
-    :param Span spans: The spans to check for overlap
-    :return bool: True if the spans overlap, False otherwise
-    """
-    return max([span.start_index for span in spans]) < min(
-        span.end_index for span in spans
-    )
 
 
 def jaccard_similarity(span_a: Span, span_b: Span) -> float:
