@@ -48,6 +48,20 @@ class Span(BaseModel):
         return self
 
 
+def spans_match_exactly(*spans: Span) -> bool:
+    """
+    Check whether the start and end indices of the supplied spans match exactly.
+
+    :param Span spans: The spans to check for equality
+    :return bool: True if the spans match exactly, False otherwise
+    """
+    return all(
+        span.start_index == spans[0].start_index
+        and span.end_index == spans[0].end_index
+        for span in spans[1:]
+    )
+
+
 def spans_overlap(*spans: Span) -> bool:
     """
     Check whether the span overlaps with another given span.
@@ -79,3 +93,15 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
     )
     union = len(span_a) + len(span_b) - intersection
     return intersection / union
+
+
+def spans_are_similar(span_a: Span, span_b: Span, threshold) -> bool:
+    """
+    Check whether the spans are similar based on their Jaccard similarity.
+
+    :param Span span_a: The first span
+    :param Span span_b: The second span
+    :param float threshold: The jaccard metric threshold for similarity
+    :return bool: True if the spans are similar, False otherwise
+    """
+    return jaccard_similarity(span_a, span_b) >= threshold

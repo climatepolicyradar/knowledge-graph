@@ -1,23 +1,10 @@
-"""
-Create sets of golden labelled passages from Argilla datasets.
-
-This script reads the datasets from Argilla, and combines them into a single dataset
-for each concept. It then converts the Argilla records into labelled passages, and writes
-them to a JSON file.
-
-It also produces a golden set by filtering the labelled passages to only include the spans
-which annotators agree on.
-
-The script uses a supplied configuration file to determine which datasets to process.
-"""
-
 import os
 from pathlib import Path
 from typing import Annotated
 
 import argilla as rg
 from rich.console import Console
-from typer import Argument, Typer
+from typer import Option, Typer
 
 from scripts.config import processed_data_dir
 from src.argilla import combine_datasets
@@ -32,8 +19,20 @@ app = Typer()
 
 @app.command()
 def main(
-    config_path: Annotated[Path, Argument(..., help="Path to the sampling config")],
+    config_path: Annotated[Path, Option(..., help="Path to the sampling config")],
 ):
+    """
+    Create sets of golden labelled passages from Argilla datasets.
+
+    This script reads the datasets from Argilla, and combines them into a single dataset
+    for each concept. It then converts the Argilla records into labelled passages, and writes
+    them to a JSON file.
+
+    It also produces a golden set by filtering the labelled passages to only include the spans
+    which annotators agree on.
+
+    The script uses a supplied configuration file to determine which datasets to process.
+    """
     console.log(f"⚙️ Loading config from {config_path}")
     config = SamplingConfig.load(config_path)
     console.log("✅ Config loaded")
