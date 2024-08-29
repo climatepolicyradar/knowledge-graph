@@ -27,7 +27,5 @@ wikibase_ids:
     "Q787",
     "Q788",
     "Q818",
-    "Q903",
-    "Q904",
   ]
 labellers: ["sion", "roshan", "tabea"]
