@@ -16,7 +16,7 @@ console = Console()
 app = Typer()
 
 
-class IAA_TYPES(Enum):
+class AGREEMENT_TYPES(Enum):
     """Types of inter-annotator agreement"""
 
     EXACT = "exact"
@@ -27,8 +27,8 @@ class IAA_TYPES(Enum):
 @app.command()
 def main(
     config_path: Annotated[Path, Option(..., help="Path to the sampling config")],
-    similarity_type: Annotated[
-        IAA_TYPES,
+    agreement_type: Annotated[
+        AGREEMENT_TYPES,
         Option(
             ...,
             help=(
@@ -39,10 +39,13 @@ def main(
                 "supplied threshold (see jaccard_threshold)."
             ),
         ),
-    ] = IAA_TYPES.JACCARD,
+    ] = AGREEMENT_TYPES.JACCARD,
     jaccard_threshold: Annotated[
         float, Option(..., help="Jaccard threshold for filtering")
     ] = 0.5,
+    find_disagreements: Annotated[
+        bool, Option(..., help="Find disagreements as well as agreements")
+    ] = False,
 ):
     """
     Filter labelled passages for spans where annotators agree
@@ -55,7 +58,7 @@ def main(
     console.log(f"⚙️ Loading config from {config_path}")
     config = SamplingConfig.load(config_path)
     console.log("✅ Config loaded")
-    if similarity_type == IAA_TYPES.JACCARD:
+    if agreement_type == AGREEMENT_TYPES.JACCARD:
         console.log(f"👀 Filtering for Jaccard similarity >= {jaccard_threshold}")
 
     for wikibase_id in config.wikibase_ids:
@@ -81,25 +84,33 @@ def main(
             f"with {n_annotations} annotations"
         )
 
-        agreed_upon_annotations = []
+        agreements = []
+        disagreements = []
         for labelled_passage in labelled_passages:
-            agreed_upon_spans = set()
+            agreeing_spans = set()
+            disagreeing_spans = set()
             for span in labelled_passage.spans:
+                agreement_with_at_least_one_other_labeller = False
                 for other_span in labelled_passage.spans:
-                    agreements = {
-                        IAA_TYPES.EXACT: spans_match_exactly(span, other_span),
-                        IAA_TYPES.OVERLAP: spans_overlap(span, other_span),
-                        IAA_TYPES.JACCARD: spans_are_similar(
+                    if agreement_type == AGREEMENT_TYPES.EXACT:
+                        labellers_agree = spans_match_exactly(span, other_span)
+                    elif agreement_type == AGREEMENT_TYPES.OVERLAP:
+                        labellers_agree = spans_overlap(span, other_span)
+                    elif agreement_type == AGREEMENT_TYPES.JACCARD:
+                        labellers_agree = spans_are_similar(
                             span, other_span, jaccard_threshold
-                        ),
-                    }
+                        )
+
                     if (
-                        agreements[similarity_type]
+                        labellers_agree
                         and span.identifier == other_span.identifier
                         and span.labeller != other_span.labeller
                     ):
-                        agreed_upon_spans.add(
+                        agreement_with_at_least_one_other_labeller = True
+                        agreeing_spans.add(
                             Span(
+                                # Take the union of the two spans as the new span that
+                                # they agree on
                                 start_index=min(
                                     span.start_index, other_span.start_index
                                 ),
@@ -109,29 +120,47 @@ def main(
                             )
                         )
 
-            agreed_upon_annotations.append(
-                labelled_passage.model_copy(update={"spans": list(agreed_upon_spans)})
+                if not agreement_with_at_least_one_other_labeller:
+                    disagreeing_spans.add(span)
+
+            agreements.append(
+                labelled_passage.model_copy(update={"spans": list(agreeing_spans)})
             )
 
-        n_agreed_upon_annotations = sum(
-            [len(entry.spans) for entry in agreed_upon_annotations]
-        )
+            disagreements.append(
+                labelled_passage.model_copy(update={"spans": list(disagreeing_spans)})
+            )
+
+        n_agreements = sum([len(entry.spans) for entry in agreements])
         console.log(
             "🤝 Filtered annotations for agreement between annotators. "
-            f"Found {n_agreed_upon_annotations}"
+            f"Found {n_agreements}"
         )
 
         # dump the agreed-upon annotations to a jsonl file
-        agreed_upon_annotations_path = data_dir / "agreements.json"
-        with open(agreed_upon_annotations_path, "w") as f:
-            f.writelines(
-                [entry.model_dump_json() + "\n" for entry in labelled_passages]
+        agreements_path = data_dir / "agreements.json"
+        with open(agreements_path, "w") as f:
+            f.writelines([entry.model_dump_json() + "\n" for entry in agreements])
+
+        console.log(f"📝 Wrote {len(agreements)} passages to {agreements_path}")
+
+        if find_disagreements:
+            n_disagreements = sum([len(entry.spans) for entry in disagreements])
+            console.log(
+                "⚔️ Filtered annotations for disagreement between annotators. "
+                f"Found {n_disagreements}"
             )
 
-        console.log(
-            f"📝 Wrote {len(agreed_upon_annotations)} passages to "
-            f"{agreed_upon_annotations_path}"
-        )
+            # dump the disagreeing annotations to a jsonl file
+            disagreements_path = data_dir / "disagreements.json"
+            with open(disagreements_path, "w") as f:
+                f.writelines(
+                    [entry.model_dump_json() + "\n" for entry in disagreements]
+                )
+
+            console.log(
+                f"📝 Wrote {len(disagreements)} passages to {disagreements_path}"
+            )
 
 
 if __name__ == "__main__":

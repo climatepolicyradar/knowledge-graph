@@ -78,9 +78,9 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
     """
     Calculate the Jaccard similarity of two spans.
 
-    The Jaccard similarity is defined as the size of the intersection divided by
-    the size of the union. Also known as the Jaccard index, or intersection over
-    union (IoU). See https://en.wikipedia.org/wiki/Jaccard_index.
+    The Jaccard similarity of two spans is defined as the size of the intersection
+    divided by the size of their union. Also known as the Jaccard index, or intersection
+    over union (IoU). See https://en.wikipedia.org/wiki/Jaccard_index.
 
     :param Span span_a: The first span
     :param Span span_b: The second span
@@ -95,13 +95,13 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
     return intersection / union
 
 
-def spans_are_similar(span_a: Span, span_b: Span, threshold) -> bool:
+def spans_are_similar(span_a: Span, span_b: Span, threshold: float = 0.5) -> bool:
     """
     Check whether the spans are similar based on their Jaccard similarity.
 
     :param Span span_a: The first span
     :param Span span_b: The second span
-    :param float threshold: The jaccard metric threshold for similarity
+    :param float threshold: The jaccard index threshold for similarity
     :return bool: True if the spans are similar, False otherwise
     """
     return jaccard_similarity(span_a, span_b) >= threshold
