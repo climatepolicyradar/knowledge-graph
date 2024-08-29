@@ -1,5 +1,7 @@
 from itertools import cycle
-from typing import Any, Generator, Tuple
+from typing import Any, Dict, Generator, Tuple
+
+from argilla import FeedbackDataset, FeedbackRecord
 
 
 def distribute_labelling_projects(
@@ -27,3 +29,46 @@ def distribute_labelling_projects(
     for dataset in datasets:
         for _ in range(min_labellers):
             yield dataset, next(labeller_cycle)
+
+
+def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:
+    """
+    Combine an arbitrary number of argilla datasets into one.
+
+    :param FeedbackDataset *datasets: Unspecified number of datasets to combine, at
+    least one.
+    :return FeedbackDataset: The combined dataset
+    """
+    if not datasets:
+        raise ValueError("At least one dataset must be provided")
+
+    combined_dataset = FeedbackDataset(
+        fields=datasets[0].fields,
+        questions=datasets[0].questions,
+        metadata_properties=datasets[0].metadata_properties,
+        vectors_settings=datasets[0].vectors_settings,
+        guidelines=datasets[0].guidelines,
+        allow_extra_metadata=datasets[0].allow_extra_metadata,
+    )
+
+    records_dict: Dict[str, FeedbackRecord] = {}
+    for dataset in datasets:
+        for record in dataset.records:
+            # Use the 'text' field as the key (assuming it's unique)
+            key = record.fields.get("text", "")
+
+            if key in records_dict:
+                # If the record already exists, merge the responses
+                existing_record = records_dict[key]
+                existing_record.responses.extend(record.responses)
+            else:
+                # If it's a new record, add it to the dictionary
+                records_dict[key] = record
+
+    # Convert the dictionary values back to a list of records
+    combined_records = list(records_dict.values())
+
+    # Add the combined records to the new dataset
+    combined_dataset.add_records(combined_records)
+
+    return combined_dataset

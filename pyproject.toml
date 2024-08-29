@@ -22,13 +22,12 @@ azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-pars
 # navigator_document_parser = { git = "https://github.com/climatepolicyradar/navigator-document-parser.git" }
 neomodel = "^5.2.1"
 typer = "0.9.4"
-numpy = "1.26.4"
 rapidfuzz = "^3.9.4"
 python-dotenv = "^1.0.1"
 pytest = "^8.3.2"
 hypothesis = "^6.108.5"
 more-itertools = "^10.3.0"
-argilla = "^1.29"
+argilla = "1.29.1"
 
 [tool.poetry.group.dev]
 optional = true
