@@ -41,7 +41,7 @@ class Span(BaseModel):
     @model_validator(mode="after")
     def check_whether_span_is_valid(self):
         """Check whether the span is valid."""
-        if self.start_index >= self.end_index:
+        if self.start_index > self.end_index:
             raise ValueError(
                 f"The end index must be greater than the start index. Got {self}"
             )

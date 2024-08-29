@@ -1,5 +1,7 @@
+import html
+
 from argilla import FeedbackRecord
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from src.classifier import Span
 from src.identifiers import generate_identifier
@@ -19,17 +21,6 @@ class LabelledPassage(BaseModel):
     def __init__(self, text: str, spans: list[Span], **kwargs):
         id = kwargs.pop("id", generate_identifier(text))
         super().__init__(text=text, spans=spans, id=id, **kwargs)
-
-    @field_validator("spans", mode="before")
-    @classmethod
-    def check_whether_spans_are_valid(cls, value):
-        """Check whether the spans are valid"""
-        for span in value:
-            if span.start_index < 0 or span.end_index < 0:
-                raise ValueError("start_index and end_index must be greater than 0")
-            if span.start_index >= span.end_index:
-                raise ValueError("start_index must be less than end_index")
-        return value
 
     @model_validator(mode="after")
     def check_whether_spans_are_within_text(self):
@@ -69,24 +60,30 @@ class LabelledPassage(BaseModel):
 
         return cls(text=text, spans=spans)
 
-    @property
-    def highlighted_text(self, format="cyan") -> str:
+    def get_highlighted_text(self, format="cyan") -> str:
         """
         Returns the text with highlighted spans, usable in a rich console output
 
         :param str format: Rich formatting style to use for highlights, default "cyan"
         :return str: The text with highlighted spans
         """
-        output = ""
-        text = self.text
-        for span in self.spans:
-            output += text[: span.start_index]
-            output += (
-                f"[{format}]" + text[span.start_index : span.end_index] + f"[/{format}]"
-            )
-            text = text[span.end_index :]
+        # Decode HTML entities
+        decoded_text = html.unescape(self.text)
 
-        output += text
+        output = ""
+        last_end = 0
+        sorted_spans = sorted(self.spans, key=lambda span: span.start_index)
+
+        for span in sorted_spans:
+            # Add text before the span
+            output += decoded_text[last_end : span.start_index]
+            # Add highlighted span
+            output += f"[{format}]{decoded_text[span.start_index : span.end_index]}[/{format}]"
+            last_end = span.end_index
+
+        # Add any remaining text after the last span
+        output += decoded_text[last_end:]
+
         return output
 
     @property
