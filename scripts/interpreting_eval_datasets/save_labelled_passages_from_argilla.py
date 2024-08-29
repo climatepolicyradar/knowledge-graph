@@ -13,10 +13,11 @@ The script uses a supplied configuration file to determine which datasets to pro
 
 import os
 from pathlib import Path
+from typing import Annotated
 
 import argilla as rg
-import typer
 from rich.console import Console
+from typer import Argument, Typer
 
 from scripts.config import processed_data_dir
 from src.argilla import combine_datasets
@@ -26,11 +27,13 @@ from src.sampling import SamplingConfig
 
 console = Console()
 
-app = typer.Typer()
+app = Typer()
 
 
 @app.command()
-def main(config_path: Path):
+def main(
+    config_path: Annotated[Path, Argument(..., help="Path to the sampling config")],
+):
     console.log(f"⚙️ Loading config from {config_path}")
     config = SamplingConfig.load(config_path)
     console.log("✅ Config loaded")

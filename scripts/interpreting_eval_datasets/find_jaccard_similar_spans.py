@@ -1,9 +1,8 @@
-"""Filter for spans which have an IOU of at least 0.5 with at least one other annotator"""
-
 from pathlib import Path
+from typing import Annotated
 
-import typer
 from rich.console import Console
+from typer import Argument, Typer
 
 from scripts.config import processed_data_dir
 from src.labelled_passage import LabelledPassage
@@ -12,11 +11,15 @@ from src.span import Span, jaccard_similarity
 
 console = Console()
 
-app = typer.Typer()
+
+app = Typer()
 
 
 @app.command()
-def main(config_path: Path):
+def main(
+    config_path: Annotated[Path, Argument(..., help="Path to the sampling config")],
+):
+    """Filter for spans which have an IOU of at least 0.5 with at least one other annotator"""
     console.log(f"⚙️ Loading config from {config_path}")
     config = SamplingConfig.load(config_path)
     console.log("✅ Config loaded")
