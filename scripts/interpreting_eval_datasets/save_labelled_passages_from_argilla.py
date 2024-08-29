@@ -11,13 +11,11 @@ which annotators agree on.
 The script uses a supplied configuration file to determine which datasets to process.
 """
 
-import json
 import os
 from pathlib import Path
 
 import argilla as rg
 import typer
-from pydantic_core import to_jsonable_python
 from rich.console import Console
 
 from scripts.config import processed_data_dir
@@ -71,68 +69,33 @@ def main(config_path: Path):
 
     console.log("📂 Collating datasets...")
 
-    # group the datasets by name
-    datasets_by_name = {}
+    # group the datasets by wikibase_id
+    datasets_by_wikibase_id = {}
     for dataset in taxonomy_datasets:
-        datasets_by_name.setdefault(dataset.name.split("-")[-1], []).append(dataset)
+        wikibase_id = WikibaseID(dataset.name.split("-")[-1])
+        datasets_by_wikibase_id.setdefault(wikibase_id, []).append(dataset)
 
     # combine the datasets
     combined_datasets = {}
-    for name, datasets in datasets_by_name.items():
-        combined_datasets[name] = combine_datasets(*datasets)
+    for wikibase_id, datasets in datasets_by_wikibase_id.items():
+        combined_datasets[wikibase_id] = combine_datasets(*datasets)
     console.log(f"📊 Combined {len(combined_datasets)} datasets")
 
-    for name, dataset in combined_datasets.items():
-        # convert the argilla records to labelled passages, and write them to a JSON file
-        labelled_passages = [
-            LabelledPassage.from_argilla_record(record) for record in dataset.records
-        ]
+    for wikibase_id, dataset in combined_datasets.items():
+        # convert the argilla records to labelled passages, and write them to a jsonl file
 
-        output_dir = processed_data_dir / "labelled_passages" / name
+        output_dir = processed_data_dir / "labelled_passages" / wikibase_id
         output_dir.mkdir(parents=True, exist_ok=True)
-        labelled_passages_output_path = output_dir / "labelled_passages.json"
-        with open(labelled_passages_output_path, "w") as f:
-            json.dump(to_jsonable_python(labelled_passages), f, indent=2)
+        labelled_passages_output_path = output_dir / "labelled_passages.jsonl"
+        with open(labelled_passages_output_path, "w", encoding="utf-8") as f:
+            jsonl_data = [
+                LabelledPassage.from_argilla_record(record).model_dump_json() + "\n"
+                for record in dataset.records
+            ]
+            f.writelines(jsonl_data)
 
         console.log(
-            f"📊 Wrote {len(labelled_passages)} labelled passages to "
-            f"{labelled_passages_output_path}"
-        )
-
-        # produce a golden set by filtering the labelled passages to only include the spans
-        # on which annotators agree.
-        golden_labelled_passages = []
-        for labelled_passage in labelled_passages:
-            agreed_spans = set()
-
-            for span in labelled_passage.spans:
-                for other_span in labelled_passage.spans:
-                    if (
-                        (
-                            span.start_index == other_span.start_index
-                            and span.end_index == other_span.end_index
-                        )
-                        and span.identifier == other_span.identifier
-                        and span.labeller != other_span.labeller
-                    ):
-                        copy_span = span.model_copy()
-                        copy_span.labeller = "all"
-                        agreed_spans.add(copy_span)
-
-            copy_labelled_passage = labelled_passage.model_copy()
-            copy_labelled_passage.spans = list(agreed_spans)
-            golden_labelled_passages.append(copy_labelled_passage)
-
-        # dump the golden labelled passages to a JSON file
-        golden_labelled_passages_output_path = (
-            output_dir / "golden_labelled_passages.json"
-        )
-        with open(golden_labelled_passages_output_path, "w") as f:
-            json.dump(to_jsonable_python(golden_labelled_passages), f, indent=2)
-
-        console.log(
-            f"📊 Wrote {len(golden_labelled_passages)} golden labelled passages to "
-            f"{golden_labelled_passages_output_path}"
+            f"📝 Wrote {len(jsonl_data)} lines to {labelled_passages_output_path}"
         )
 
 
