@@ -3,8 +3,8 @@ import html
 from argilla import FeedbackRecord
 from pydantic import BaseModel, Field, model_validator
 
-from src.classifier import Span
 from src.identifiers import generate_identifier
+from src.span import Span, merge_overlapping_spans
 
 
 class LabelledPassage(BaseModel):
@@ -48,10 +48,11 @@ class LabelledPassage(BaseModel):
                     spans.extend(
                         [
                             Span(
+                                text=text,
                                 start_index=entity.start,
                                 end_index=entity.end,
-                                identifier=entity.label,
-                                labeller=user_id,
+                                concept_id=entity.label,
+                                labellers=[user_id],
                             )
                         ]
                     )
@@ -70,10 +71,13 @@ class LabelledPassage(BaseModel):
         # Decode HTML entities
         decoded_text = html.unescape(self.text)
 
+        # merge any overlapping spans
+        merged_spans = merge_overlapping_spans(self.spans)
+
+        # create the output text
         output = ""
         last_end = 0
-        sorted_spans = sorted(self.spans, key=lambda span: span.start_index)
-
+        sorted_spans = sorted(merged_spans, key=lambda span: span.start_index)
         for span in sorted_spans:
             # Add text before the span
             output += decoded_text[last_end : span.start_index]
@@ -87,10 +91,12 @@ class LabelledPassage(BaseModel):
         return output
 
     @property
-    def annotators(self) -> list[str]:
+    def labellers(self) -> list[str]:
         """
-        Returns the set of annotators who labelled the passage
+        Returns the set of labellers who labelled the passage
 
-        :return list[str]: The set of annotators who labelled the passage
+        :return list[str]: The set of labellers who labelled the passage
         """
-        return list(set(span.labeller for span in self.spans if span.labeller))
+        return list(
+            set([labeller for span in self.spans for labeller in span.labellers])
+        )

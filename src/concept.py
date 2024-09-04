@@ -4,6 +4,7 @@ from typing import Dict, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.identifiers import WikibaseID
+from src.labelled_passage import LabelledPassage
 
 
 class Concept(BaseModel):
@@ -32,6 +33,10 @@ class Concept(BaseModel):
     )
     definition: Optional[str] = Field(
         default=None, description="The definition of the concept"
+    )
+    labelled_passages: list[LabelledPassage] = Field(
+        default_factory=list,
+        description="List of labelled passages which mention the concept",
     )
 
     @field_validator("alternative_labels", mode="before")

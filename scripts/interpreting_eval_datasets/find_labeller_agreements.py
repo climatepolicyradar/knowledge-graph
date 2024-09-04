@@ -7,9 +7,9 @@ from typer import Option, Typer
 from scripts.config import processed_data_dir
 from src.labelled_passage import LabelledPassage
 from src.sampling import SamplingConfig
-from src.span import Span, spans_are_similar
+from src.span import merge_overlapping_spans
 
-console = Console()
+console = Console(highlight=False)
 
 
 app = Typer()
@@ -70,69 +70,60 @@ def main(
             f"with {n_annotations} individual annotations"
         )
 
-        agreements = []
-        disagreements = []
+        # for any spans with a jaccard similarity >= threshold, add their union to the
+        # labelled_passages_with_agreements list. Any spans which do not have a match
+        # are added to the labelled_passages_with_disagreements list.
+        labelled_passages_with_agreements: list[LabelledPassage] = []
+        labelled_passages_with_disagreements: list[LabelledPassage] = []
+
         for labelled_passage in labelled_passages:
-            processed_spans = set()
-            agreeing_spans = []
-            disagreeing_spans = []
+            agreements = []
+            disagreements = []
 
-            for span in labelled_passage.spans:
-                if span in processed_spans:
-                    continue
+            merged_spans = merge_overlapping_spans(labelled_passage.spans, threshold)
+            for span in merged_spans:
+                if len(span.labellers) > 1:
+                    agreements.append(span)
+                else:
+                    disagreements.append(span)
 
-                agreement_found = False
-                for other_span in labelled_passage.spans:
-                    if (
-                        span != other_span
-                        and spans_are_similar(span, other_span, threshold)
-                        and span.identifier == other_span.identifier
-                        and span.labeller != other_span.labeller
-                    ):
-                        agreement_found = True
-                        agreeing_span = Span(
-                            # We take the union of the two as the new, agreed-upon span
-                            start_index=min(span.start_index, other_span.start_index),
-                            end_index=max(span.end_index, other_span.end_index),
-                            identifier=span.identifier,
-                            labeller=span.labeller,
-                        )
-                        agreeing_spans.append(agreeing_span)
-                        processed_spans.add(span)
-                        processed_spans.add(other_span)
-                        break
-
-                if not agreement_found and span not in processed_spans:
-                    disagreeing_spans.append(span)
-                    processed_spans.add(span)
-
-            agreements.append(
-                labelled_passage.model_copy(update={"spans": agreeing_spans})
+            labelled_passages_with_agreements.append(
+                labelled_passage.model_copy(update={"spans": agreements}, deep=True)
             )
-            disagreements.append(
-                labelled_passage.model_copy(update={"spans": disagreeing_spans})
+            labelled_passages_with_disagreements.append(
+                labelled_passage.model_copy(update={"spans": disagreements}, deep=True)
             )
 
-        n_agreements = sum(len(entry.spans) for entry in agreements)
-        n_disagreements = sum(len(entry.spans) for entry in disagreements)
+        console.log("🤝 Filtered for agreement between annotators.")
 
         # dump the agreements and disagreements to separate jsonl files
         agreements_path = data_dir / "agreements.json"
         with open(agreements_path, "w") as f:
-            f.writelines([entry.model_dump_json() + "\n" for entry in agreements])
+            f.writelines(
+                [
+                    entry.model_dump_json() + "\n"
+                    for entry in labelled_passages_with_agreements
+                ]
+            )
 
         console.log(
-            f"🤝 Filtered for agreement between annotators. Found {n_agreements}. "
+            f"Found {len([span for entry in labelled_passages_with_agreements for span in entry.spans])} spans which agree. "
             f"Wrote passages to {agreements_path}"
         )
 
         disagreements_path = data_dir / "disagreements.json"
         with open(disagreements_path, "w") as f:
-            f.writelines([entry.model_dump_json() + "\n" for entry in disagreements])
+            f.writelines(
+                [
+                    entry.model_dump_json() + "\n"
+                    for entry in labelled_passages_with_disagreements
+                ]
+            )
 
         console.log(
-            f"⚔️ Filtered for disagreement between annotators. Found {n_disagreements}. "
-            f"Wrote passages to {disagreements_path}"
+            f"Found {len([span for entry in labelled_passages_with_disagreements for span in entry.spans])} spans which disagree. "
+            f"Wrote passages to {disagreements_path}",
+            end="\n\n",
         )
 
 
