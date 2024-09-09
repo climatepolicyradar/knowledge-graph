@@ -165,7 +165,7 @@ def main(
                 ],
             ).to_csv(disagreements_path, index=False)
             console.log(
-                f"📝 Found {len([span for entry in labelled_passages_with_disagreements for span in entry.spans])} spans which agree. "
+                f"📝 Found {len([span for entry in labelled_passages_with_disagreements for span in entry.spans])} spans which disagree. "
                 f"Wrote passages to {disagreements_path}"
             )
 
