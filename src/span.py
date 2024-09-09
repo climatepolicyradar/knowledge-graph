@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from src.identifiers import WikibaseID, generate_identifier
 
@@ -51,6 +51,20 @@ class Span(BaseModel):
             text=text, start_index=start_index, end_index=end_index, id=id, **kwargs
         )
 
+    @model_validator(mode="after")
+    def check_whether_span_is_valid(self):
+        """Check whether the span is valid."""
+        if self.start_index > self.end_index:
+            raise ValueError(
+                f"The end index must be greater than the start index. Got {self}"
+            )
+        return self
+
+    @computed_field
+    def labelled_text(self) -> str:
+        """The span's labelled substring"""
+        return self.text[self.start_index : self.end_index]
+
     def __len__(self):
         """Return the length of the span."""
         return self.end_index - self.start_index
@@ -64,15 +78,6 @@ class Span(BaseModel):
         if not isinstance(other, Span):
             return False
         return self.id == other.id
-
-    @model_validator(mode="after")
-    def check_whether_span_is_valid(self):
-        """Check whether the span is valid."""
-        if self.start_index > self.end_index:
-            raise ValueError(
-                f"The end index must be greater than the start index. Got {self}"
-            )
-        return self
 
     @classmethod
     def union(cls, spans: list["Span"]) -> "Span":

@@ -1,6 +1,8 @@
+from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
+import pandas as pd
 from rich.console import Console
 from typer import Option, Typer
 
@@ -13,6 +15,13 @@ console = Console(highlight=False)
 
 
 app = Typer()
+
+
+class OutputFormat(Enum):
+    """Allowed output formats"""
+
+    JSON = "json"
+    CSV = "csv"
 
 
 @app.command()
@@ -33,6 +42,14 @@ def main(
             max=1,
         ),
     ] = 0.5,
+    format: Annotated[
+        OutputFormat,
+        Option(
+            ...,
+            help="The format of the output file. Either 'json' or 'csv'",
+            case_sensitive=False,
+        ),
+    ] = "json",
 ):
     """
     Filter labelled passages for spans where annotators agree
@@ -48,7 +65,7 @@ def main(
     console.log(f"👀 Filtering for Jaccard similarity >= {threshold}")
 
     for wikibase_id in config.wikibase_ids:
-        console.log(f"🔍 Processing {wikibase_id}")
+        console.log(f"🤔 Processing {wikibase_id}")
         data_dir = processed_data_dir / "labelled_passages" / wikibase_id
         labelled_passages_path = data_dir / "labelled_passages.jsonl"
 
@@ -66,7 +83,7 @@ def main(
             ]
         n_annotations = sum([len(entry.spans) for entry in labelled_passages])
         console.log(
-            f"✅ Loaded {len(labelled_passages)} labelled passages "
+            f"🚚 Loaded {len(labelled_passages)} labelled passages "
             f"with {n_annotations} individual annotations"
         )
 
@@ -96,35 +113,61 @@ def main(
 
         console.log("🤝 Filtered for agreement between annotators.")
 
-        # dump the agreements and disagreements to separate jsonl files
-        agreements_path = data_dir / "agreements.json"
-        with open(agreements_path, "w") as f:
-            f.writelines(
-                [
-                    entry.model_dump_json() + "\n"
-                    for entry in labelled_passages_with_agreements
-                ]
+        if format == OutputFormat.JSON:
+            # dump the agreements and disagreements to separate jsonl files
+            agreements_path = data_dir / "agreements.json"
+            with open(agreements_path, "w") as f:
+                f.writelines(
+                    [
+                        entry.model_dump_json() + "\n"
+                        for entry in labelled_passages_with_agreements
+                    ]
+                )
+
+            console.log(
+                f"📝 Found {len([span for entry in labelled_passages_with_agreements for span in entry.spans])} spans which agree. "
+                f"Wrote passages to {agreements_path}"
             )
 
-        console.log(
-            f"Found {len([span for entry in labelled_passages_with_agreements for span in entry.spans])} spans which agree. "
-            f"Wrote passages to {agreements_path}"
-        )
+            disagreements_path = data_dir / "disagreements.json"
+            with open(disagreements_path, "w") as f:
+                f.writelines(
+                    [
+                        entry.model_dump_json() + "\n"
+                        for entry in labelled_passages_with_disagreements
+                    ]
+                )
 
-        disagreements_path = data_dir / "disagreements.json"
-        with open(disagreements_path, "w") as f:
-            f.writelines(
-                [
-                    entry.model_dump_json() + "\n"
-                    for entry in labelled_passages_with_disagreements
-                ]
+            console.log(
+                f"📝 Found {len([span for entry in labelled_passages_with_disagreements for span in entry.spans])} spans which disagree. "
+                f"Wrote passages to {disagreements_path}",
+                end="\n\n",
             )
-
-        console.log(
-            f"Found {len([span for entry in labelled_passages_with_disagreements for span in entry.spans])} spans which disagree. "
-            f"Wrote passages to {disagreements_path}",
-            end="\n\n",
-        )
+        elif format == OutputFormat.CSV:
+            agreements_path = data_dir / "agreements.csv"
+            disagreements_path = data_dir / "disagreements.csv"
+            pd.DataFrame(
+                [
+                    span.model_dump()
+                    for labelled_passage in labelled_passages_with_agreements
+                    for span in labelled_passage.spans
+                ],
+            ).to_csv(agreements_path, index=False)
+            console.log(
+                f"📝 Found {len([span for entry in labelled_passages_with_agreements for span in entry.spans])} spans which agree. "
+                f"Wrote passages to {agreements_path}"
+            )
+            pd.DataFrame(
+                [
+                    span.model_dump()
+                    for labelled_passage in labelled_passages_with_disagreements
+                    for span in labelled_passage.spans
+                ],
+            ).to_csv(disagreements_path, index=False)
+            console.log(
+                f"📝 Found {len([span for entry in labelled_passages_with_disagreements for span in entry.spans])} spans which agree. "
+                f"Wrote passages to {disagreements_path}"
+            )
 
 
 if __name__ == "__main__":
