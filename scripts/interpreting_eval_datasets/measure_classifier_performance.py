@@ -54,7 +54,10 @@ def main(
     console.log(f"🔍 Using a jaccard similarity threshold of {threshold} for equality")
 
     labelled_passages_dir = processed_data_dir / "labelled_passages"
-
+    
+    if not labelled_passages_dir.exists():
+        raise FileNotFoundError("Labelled passages data doesn't exist. Run save_labelled_passages_from_argilla.py first")
+        
     table = Table(box=box.SIMPLE_HEAVY)
     table.add_column("Preferred label", style="cyan", justify="right")
     table.add_column("Wikibase ID", style="cyan")
@@ -64,7 +67,7 @@ def main(
 
     for wikibase_id in config.wikibase_ids:
         if verbose:
-            console.print(
+            console.log(
                 f"📚 Evaluating classifier performance for concept [bold]{wikibase_id}[/bold]"
             )
         # Load the labelled passages for the concept
@@ -116,11 +119,11 @@ def main(
                     break
 
             if verbose:
-                console.print("Human-labelled passage:", style="white bold")
-                console.print(human_labelled_passage.get_highlighted_text())
-                console.print("Model-labelled passage:", style="white bold")
-                console.print(model_labelled_passage.get_highlighted_text())
-                console.print(
+                console.log("Human-labelled passage:", style="white bold")
+                console.log(human_labelled_passage.get_highlighted_text())
+                console.log("Model-labelled passage:", style="white bold")
+                console.log(model_labelled_passage.get_highlighted_text())
+                console.log(
                     f"Passage-level agreement: {'✅' if passage_level_agreement else '❌'}",
                     style="white bold",
                     end="\n\n",
