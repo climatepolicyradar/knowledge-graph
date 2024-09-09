@@ -56,9 +56,11 @@ class KeywordClassifier(Classifier):
             if start != end and not any(start <= p < end for p in matched_positions):
                 spans.append(
                     Span(
-                        identifier=self.concept.wikibase_id,
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
                         start_index=start,
                         end_index=end,
+                        labeller=[str(self)],
                     )
                 )
                 matched_positions.update(range(start, end))
@@ -69,9 +71,11 @@ class KeywordClassifier(Classifier):
             if start != end and not any(start <= p < end for p in matched_positions):
                 spans.append(
                     Span(
-                        identifier=self.concept.wikibase_id,
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
                         start_index=start,
                         end_index=end,
+                        labeller=[str(self)],
                     )
                 )
                 matched_positions.update(range(start, end))

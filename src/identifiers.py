@@ -23,7 +23,7 @@ class WikibaseID(str):
         return str.__new__(cls, validated_value)
 
 
-def generate_identifier(input_string: str) -> str:
+def generate_identifier(*args) -> str:
     """
     Generates a neat identifier using eight unambiguous lowercase and numeric characters
 
@@ -33,12 +33,14 @@ def generate_identifier(input_string: str) -> str:
     generate 31^8 = 852,891,037,441 unique identifiers. This should be more than enough
     for most use cases!
 
-    :param str input_string: the string to generate the identifier from
+    :param args: an arbitrary set of data to be hashed
     :return str: a unique identifier based on the input string
     """
     # the following list of characters excludes "i", "l", "1", "o", "0" to minimise
     # ambiguity when reading the identifiers
     characters = "abcdefghjkmnpqrstuvwxyz23456789"
+
+    input_string = "".join([str(arg) for arg in args])
     hashed_data = hashlib.sha256(input_string.encode()).digest()
 
     output = []

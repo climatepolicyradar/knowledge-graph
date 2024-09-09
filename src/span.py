@@ -1,27 +1,32 @@
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
-from src.identifiers import WikibaseID
+from src.identifiers import WikibaseID, generate_identifier
 
 
 class Span(BaseModel):
     """Represents a span within a text."""
 
+    id: str = Field(..., description="A unique identifier for the span")
+    text: str = Field(..., description="The text of the span")
     start_index: int = Field(
         ..., ge=0, description="The start index of the span within the text"
     )
     end_index: int = Field(
         ..., gt=0, description="The end index of the span within the text"
     )
-    identifier: Optional[WikibaseID] = Field(
+    concept_id: Optional[WikibaseID] = Field(
         None,
         description="The wikibase identifier associated with the span",
         examples=["Q42"],
     )
-    labeller: Optional[str] = Field(
-        None,
-        description="An identifier for the labeller of the span. Could be a username, a user ID, a model name, etc.",
+    labellers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "A list of identifiers for the labeller of the span. "
+            "Could be a username, a user ID, a model name, etc."
+        ),
         examples=[
             "alice",
             "bob",
@@ -30,23 +35,20 @@ class Span(BaseModel):
         ],
     )
 
-    def __len__(self):
-        """Return the length of the span."""
-        return self.end_index - self.start_index
-
-    def __hash__(self) -> int:
-        """Return a unique hash for the span."""
-        return hash((self.start_index, self.end_index, self.identifier, self.labeller))
-
-    def __eq__(self, other: object) -> bool:
-        """Check whether two spans are equal."""
-        if not isinstance(other, Span):
-            return False
-        return (
-            self.start_index == other.start_index
-            and self.end_index == other.end_index
-            and self.identifier == other.identifier
-            and self.labeller == other.labeller
+    def __init__(self, text: str, start_index: int, end_index: int, **kwargs):
+        concept_id = kwargs.pop("concept_id", None)
+        id = kwargs.pop(
+            "id",
+            generate_identifier(
+                text,
+                start_index,
+                end_index,
+                concept_id,
+                # shouldn't matter who the labeller is
+            ),
+        )
+        super().__init__(
+            text=text, start_index=start_index, end_index=end_index, id=id, **kwargs
         )
 
     @model_validator(mode="after")
@@ -57,6 +59,55 @@ class Span(BaseModel):
                 f"The end index must be greater than the start index. Got {self}"
             )
         return self
+
+    @computed_field
+    def labelled_text(self) -> str:
+        """The span's labelled substring"""
+        return self.text[self.start_index : self.end_index]
+
+    def __len__(self):
+        """Return the length of the span."""
+        return self.end_index - self.start_index
+
+    def __hash__(self) -> int:
+        """Return a unique hash for the span."""
+        return hash(self.id)
+
+    def __eq__(self, other: object) -> bool:
+        """Check whether two spans are equal."""
+        if not isinstance(other, Span):
+            return False
+        return self.id == other.id
+
+    @classmethod
+    def union(cls, spans: list["Span"]) -> "Span":
+        """
+        Return the union of a set of overlapping spans
+
+        The union of a set of spans is the smallest span that contains all of the spans.
+
+        :param Span spans: The spans to union
+        :return Span: A new span that is the union of the input spans
+        """
+        if not all(span.text == spans[0].text for span in spans):
+            raise ValueError("All spans must have the same text")
+        if not all(span.concept_id == spans[0].concept_id for span in spans):
+            raise ValueError("All spans must have the same concept_id")
+        if len(spans) == 0:
+            raise ValueError("Cannot union an empty list of spans")
+        if len(spans) == 1:
+            return spans[0]
+        else:
+            labellers = list(
+                set(labeller for span in spans for labeller in span.labellers)
+            )
+            return Span(
+                text=spans[0].text,
+                start_index=min(span.start_index for span in spans),
+                end_index=max(span.end_index for span in spans),
+                concept_id=spans[0].concept_id,
+                labellers=labellers,
+            )
 
 
 def jaccard_similarity(span_a: Span, span_b: Span) -> float:
@@ -76,17 +127,51 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
         min(span_a.end_index, span_b.end_index)
         - max(span_a.start_index, span_b.start_index),
     )
-    union = len(span_a) + len(span_b) - intersection
+    union = max(span_a.end_index, span_b.end_index) - min(
+        span_a.start_index, span_b.start_index
+    )
     return intersection / union
 
 
-def spans_are_similar(span_a: Span, span_b: Span, threshold: float = 0.5) -> bool:
+def group_overlapping_spans(
+    spans: list[Span], jaccard_threshold: float = 0.5
+) -> list[list[Span]]:
     """
-    Check whether the spans are similar based on their Jaccard similarity.
+    Create a list of groups of spans according to their overlap.
 
-    :param Span span_a: The first span
-    :param Span span_b: The second span
-    :param float threshold: The jaccard index threshold for similarity
-    :return bool: True if the spans are similar, False otherwise
+    :param list[Span] spans: The spans to group
+    :param float jaccard_threshold: The minimum Jaccard similarity for two spans to be
+    considered overlapping, default 0.5
+    :return list[list[Span]]: A list of groups of overlapping spans
     """
-    return jaccard_similarity(span_a, span_b) >= threshold
+    groups: list[list[Span]] = []
+    for span in spans:
+        found = False
+        for group in groups:
+            if any(
+                jaccard_similarity(span, other) >= jaccard_threshold for other in group
+            ):
+                group.append(span)
+                found = True
+                break
+        if not found:
+            groups.append([span])
+
+    return groups
+
+
+def merge_overlapping_spans(
+    spans: list[Span], jaccard_threshold: float = 0.5
+) -> list[Span]:
+    """
+    Merge a list of overlapping spans into a list of non-overlapping spans.
+
+    :param list[Span] spans: The spans to merge
+    :param float jaccard_threshold: The minimum Jaccard similarity for two spans to be
+    considered overlapping, default 0.5
+    :return list[Span]: A list of non-overlapping spans
+    """
+    return [
+        Span.union(spans=group)
+        for group in group_overlapping_spans(spans, jaccard_threshold)
+    ]
