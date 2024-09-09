@@ -54,10 +54,12 @@ def main(
     console.log(f"🔍 Using a jaccard similarity threshold of {threshold} for equality")
 
     labelled_passages_dir = processed_data_dir / "labelled_passages"
-    
+
     if not labelled_passages_dir.exists():
-        raise FileNotFoundError("Labelled passages data doesn't exist. Run save_labelled_passages_from_argilla.py first")
-        
+        raise FileNotFoundError(
+            "Labelled passages data doesn't exist. Run save_labelled_passages_from_argilla.py first"
+        )
+
     table = Table(box=box.SIMPLE_HEAVY)
     table.add_column("Preferred label", style="cyan", justify="right")
     table.add_column("Wikibase ID", style="cyan")
