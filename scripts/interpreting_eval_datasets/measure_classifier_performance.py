@@ -17,7 +17,7 @@ console = Console(highlight=False)
 
 
 app = Typer()
-thresholds = [0, 0.1, 0.5, 0.9, 1]
+thresholds = [0.001, 0.1, 0.5, 0.9, 1]
 
 
 @app.command()
