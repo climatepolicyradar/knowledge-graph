@@ -17,7 +17,7 @@ console = Console(highlight=False)
 
 
 app = Typer()
-thresholds = [0.001, 0.1, 0.5, 0.9, 1]
+thresholds = [0.001, 0.1, 0.5, 0.9, 1, "passage level"]
 
 
 @app.command()
@@ -64,6 +64,7 @@ def main(
                     spans=classifier.predict(labelled_passage.text),
                 )
             )
+
         for threshold in thresholds:
             true_positives = 0
             false_positives = 0
@@ -71,26 +72,54 @@ def main(
             for human_labelled_passage, model_labelled_passage in zip(
                 human_labelled_passages, model_labelled_passages
             ):
-                for human_span in human_labelled_passage.spans:
-                    found = False
-                    for model_span in model_labelled_passage.spans:
-                        if jaccard_similarity(human_span, model_span) >= threshold:
-                            found = True
-                            true_positives += 1
-                            break
-                    if not found:
-                        false_negatives += 1
-                        break
-
-                for model_span in model_labelled_passage.spans:
-                    found = False
+                if threshold == "passage level":
+                    human_labelled_positive_passages = set(
+                        [
+                            passage.id
+                            for passage in human_labelled_passages
+                            if len(passage.spans) > 0
+                        ]
+                    )
+                    model_labelled_positive_passages = set(
+                        [
+                            passage.id
+                            for passage in model_labelled_passages
+                            if len(passage.spans) > 0
+                        ]
+                    )
+                    true_positives += len(
+                        human_labelled_positive_passages
+                        & model_labelled_positive_passages
+                    )
+                    false_positives += len(
+                        model_labelled_positive_passages
+                        - human_labelled_positive_passages
+                    )
+                    false_negatives += len(
+                        human_labelled_positive_passages
+                        - model_labelled_positive_passages
+                    )
+                else:
                     for human_span in human_labelled_passage.spans:
-                        if jaccard_similarity(model_span, human_span) >= threshold:
-                            found = True
+                        found = False
+                        for model_span in model_labelled_passage.spans:
+                            if jaccard_similarity(human_span, model_span) >= threshold:
+                                found = True
+                                true_positives += 1
+                                break
+                        if not found:
+                            false_negatives += 1
                             break
-                    if not found:
-                        false_positives += 1
-                        break
+
+                    for model_span in model_labelled_passage.spans:
+                        found = False
+                        for human_span in human_labelled_passage.spans:
+                            if jaccard_similarity(model_span, human_span) >= threshold:
+                                found = True
+                                break
+                        if not found:
+                            false_positives += 1
+                            break
 
             try:
                 precision = true_positives / (true_positives + false_positives)
@@ -122,18 +151,19 @@ def main(
 
         results = pd.DataFrame(results)
         results.to_json(results_path, orient="records")
+
         if verbose:
             table = Table(
-                box=box.SIMPLE,
+                box=box.ROUNDED,
                 show_header=True,
                 title=f"{classifier.concept.preferred_label} ({wikibase_id})",
                 title_justify="left",
                 title_style="bold",
             )
-            table.add_column("threshold", style="magenta", width=12)
-            table.add_column("precision", style="magenta", width=12)
-            table.add_column("recall", style="magenta", width=12)
-            table.add_column("f1_score", style="magenta", width=12)
+            table.add_column("threshold", style="cyan", justify="right")
+            table.add_column("precision", style="magenta")
+            table.add_column("recall", style="magenta")
+            table.add_column("f1_score", style="magenta")
             for _, row in results.iterrows():
                 table.add_row(
                     str(row["threshold"]),
@@ -141,6 +171,7 @@ def main(
                     f"{row['recall']:.2f}",
                     f"{row['f1_score']:.2f}",
                 )
+
             console.print(table)
 
     console.log(f"📝 Wrote results to {results_path.parent}")
