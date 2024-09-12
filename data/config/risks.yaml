@@ -2,5 +2,5 @@ stratified_columns: ["world_bank_region", "dataset_name"]
 equal_columns: ["translated"]
 sample_size: 130
 negative_proportion: 0.2
-wikibase_ids: ["Q973", "Q374", "Q949", "Q443", "Q954", "Q955", "Q956", "Q986"]
+wikibase_ids: ["Q973", "Q374", "Q949", "Q954", "Q955", "Q956", "Q986"]
 labellers: ["sarah", "kyra"]

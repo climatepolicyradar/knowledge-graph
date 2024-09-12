@@ -10,14 +10,57 @@ from typer import Option, Typer
 from scripts.config import classifier_dir, processed_data_dir
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
+from src.metrics import (
+    ConfusionMatrix,
+    count_passage_level_metrics,
+    count_span_level_metrics,
+)
 from src.sampling import SamplingConfig
-from src.span import jaccard_similarity
 
 console = Console(highlight=False)
 
 
 app = Typer()
-thresholds = [0.001, 0.1, 0.5, 0.9, 1]
+
+
+def group_passages_by_equity_strata(
+    human_labelled_passages: list[LabelledPassage],
+    model_labelled_passages: list[LabelledPassage],
+    equity_strata: list[str],
+) -> list[tuple[str, list[LabelledPassage], list[LabelledPassage]]]:
+    groups = [("all", human_labelled_passages, model_labelled_passages)]
+
+    # get the unique values for each equity strata from the labelled passages' metadata
+    equity_strata_values = {
+        equity_stratum: set(
+            passage.metadata.get(equity_stratum, "")
+            for passage in human_labelled_passages
+        )
+        for equity_stratum in equity_strata
+    }
+
+    # group the passages according to their values
+    for equity_stratum, values in equity_strata_values.items():
+        for value in values:
+            human_labelled_passages_group = [
+                passage
+                for passage in human_labelled_passages
+                if passage.metadata.get(equity_stratum, "") == value
+            ]
+            model_labelled_passages_group = [
+                passage
+                for passage in model_labelled_passages
+                if passage.metadata.get(equity_stratum, "") == value
+            ]
+            groups.append(
+                (
+                    f"{equity_stratum}: {value}",
+                    human_labelled_passages_group,
+                    model_labelled_passages_group,
+                )
+            )
+
+    return groups
 
 
 @app.command()
@@ -30,6 +73,13 @@ def main(
             help="Show the comparison between human and model labels in the console",
         ),
     ] = False,
+    equity: Annotated[
+        bool,
+        Option(
+            ...,
+            help="Calculate metrics across equity strata",
+        ),
+    ] = False,
 ):
     """Measure classifier performance against human-labelled evaluation datasets"""
     console.log("🚀 Starting classifier performance measurement")
@@ -37,6 +87,8 @@ def main(
     console.log(f"⚙️ Loading config from {config_path}")
     config = SamplingConfig.load(config_path)
     console.log("✅ Config loaded")
+
+    equity_strata = config.equal_columns + config.stratified_columns
 
     labelled_passages_dir = processed_data_dir / "labelled_passages"
 
@@ -46,8 +98,9 @@ def main(
         )
 
     for wikibase_id in config.wikibase_ids:
-        results = []
-        # Load the labelled passages for the concept
+        results: dict[str, ConfusionMatrix] = {}
+
+        # Load the human-labelled passages for the concept
         labelled_passages_path = labelled_passages_dir / wikibase_id / "agreements.json"
         human_labelled_passages = [
             LabelledPassage.model_validate_json(line)
@@ -56,94 +109,82 @@ def main(
         classifier = Classifier.load(classifier_dir / wikibase_id)
 
         # create a new set of labelled passages, labelled by the classifier
-        model_labelled_passages: list[LabelledPassage] = []
-        for labelled_passage in human_labelled_passages:
-            model_labelled_passages.append(
-                LabelledPassage(
-                    text=labelled_passage.text,
-                    spans=classifier.predict(labelled_passage.text),
-                )
+        model_labelled_passages = [
+            labelled_passage.model_copy(
+                update={"spans": classifier.predict(labelled_passage.text)}, deep=True
             )
-        for threshold in thresholds:
-            true_positives = 0
-            false_positives = 0
-            false_negatives = 0
-            for human_labelled_passage, model_labelled_passage in zip(
-                human_labelled_passages, model_labelled_passages
-            ):
-                for human_span in human_labelled_passage.spans:
-                    found = False
-                    for model_span in model_labelled_passage.spans:
-                        if jaccard_similarity(human_span, model_span) >= threshold:
-                            found = True
-                            true_positives += 1
-                            break
-                    if not found:
-                        false_negatives += 1
-                        break
+            for labelled_passage in human_labelled_passages
+        ]
 
-                for model_span in model_labelled_passage.spans:
-                    found = False
-                    for human_span in human_labelled_passage.spans:
-                        if jaccard_similarity(model_span, human_span) >= threshold:
-                            found = True
-                            break
-                    if not found:
-                        false_positives += 1
-                        break
-
-            try:
-                precision = true_positives / (true_positives + false_positives)
-            except ZeroDivisionError:
-                precision = 0
-            try:
-                recall = true_positives / (true_positives + false_negatives)
-            except ZeroDivisionError:
-                recall = 0
-            try:
-                f1_score = 2 * (precision * recall) / (precision + recall)
-            except ZeroDivisionError:
-                f1_score = 0
-
-            results.append(
-                {
-                    "wikibase_id": wikibase_id,
-                    "threshold": threshold,
-                    "precision": precision,
-                    "recall": recall,
-                    "f1_score": f1_score,
-                }
-            )
-
-        results_path = (
-            processed_data_dir / "classifier_performance" / f"{wikibase_id}.json"
+        df = pd.DataFrame(
+            columns=[
+                "Group",
+                "Agreement at",
+                "Precision",
+                "Recall",
+                "Accuracy",
+                "F1 score",
+                "Cohen's kappa",
+            ]
         )
-        results_path.parent.mkdir(parents=True, exist_ok=True)
 
-        results = pd.DataFrame(results)
-        results.to_json(results_path, orient="records")
+        for (
+            group,
+            human_labelled_passages,
+            model_labelled_passages,
+        ) in group_passages_by_equity_strata(
+            human_labelled_passages, model_labelled_passages, equity_strata
+        ):
+            results["Passage level"] = count_passage_level_metrics(
+                human_labelled_passages, model_labelled_passages
+            )
+
+            for threshold in [0.001, 0.5, 0.9, 1]:
+                results[f"Span level ({threshold})"] = count_span_level_metrics(
+                    human_labelled_passages,
+                    model_labelled_passages,
+                    threshold=threshold,
+                )
+
+            df = pd.concat(
+                [
+                    df,
+                    pd.DataFrame(
+                        [
+                            {
+                                "Group": group,
+                                "Agreement at": agreement_level,
+                                "Precision": f"{confusion_matrix.precision():.2f}",
+                                "Recall": f"{confusion_matrix.recall():.2f}",
+                                "Accuracy": f"{confusion_matrix.accuracy():.2f}",
+                                "F1 score": f"{confusion_matrix.f1_score():.2f}",
+                                "Cohen's kappa": f"{confusion_matrix.cohens_kappa():.2f}",
+                            }
+                            for agreement_level, confusion_matrix in results.items()
+                        ]
+                    ),
+                ]
+            )
+
         if verbose:
             table = Table(
-                box=box.SIMPLE,
-                show_header=True,
-                title=f"{classifier.concept.preferred_label} ({wikibase_id})",
+                title=f"Performance metrics for {wikibase_id}",
                 title_justify="left",
                 title_style="bold",
+                box=box.SIMPLE,
+                show_header=True,
             )
-            table.add_column("threshold", style="magenta", width=12)
-            table.add_column("precision", style="magenta", width=12)
-            table.add_column("recall", style="magenta", width=12)
-            table.add_column("f1_score", style="magenta", width=12)
-            for _, row in results.iterrows():
-                table.add_row(
-                    str(row["threshold"]),
-                    f"{row['precision']:.2f}",
-                    f"{row['recall']:.2f}",
-                    f"{row['f1_score']:.2f}",
-                )
+            for column in df.columns:
+                table.add_column(column)
+            for _, row in df.iterrows():
+                table.add_row(*row)
+
             console.print(table)
 
-    console.log(f"📝 Wrote results to {results_path.parent}")
+        df.to_json(
+            processed_data_dir / "classifier_performance" / f"{wikibase_id}.json",
+            orient="records",
+        )
 
 
 if __name__ == "__main__":
