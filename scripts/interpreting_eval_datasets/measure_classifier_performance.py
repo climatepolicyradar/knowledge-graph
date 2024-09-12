@@ -29,6 +29,36 @@ def group_passages_by_equity_strata(
     equity_strata: list[str],
 ) -> list[tuple[str, list[LabelledPassage], list[LabelledPassage]]]:
     groups = [("all", human_labelled_passages, model_labelled_passages)]
+
+    # get the unique values for each equity strata from the labelled passages' metadata
+    equity_strata_values = {
+        equity_stratum: set(
+            passage.metadata.get(equity_stratum, "")
+            for passage in human_labelled_passages
+        )
+        for equity_stratum in equity_strata
+    }
+
+    for equity_stratum, values in equity_strata_values.items():
+        for value in values:
+            human_labelled_passages_group = [
+                passage
+                for passage in human_labelled_passages
+                if passage.metadata.get(equity_stratum, "") == value
+            ]
+            model_labelled_passages_group = [
+                passage
+                for passage in model_labelled_passages
+                if passage.metadata.get(equity_stratum, "") == value
+            ]
+            groups.append(
+                (
+                    f"{equity_stratum}: {value}",
+                    human_labelled_passages_group,
+                    model_labelled_passages_group,
+                )
+            )
+
     return groups
 
 
@@ -78,14 +108,12 @@ def main(
         classifier = Classifier.load(classifier_dir / wikibase_id)
 
         # create a new set of labelled passages, labelled by the classifier
-        model_labelled_passages: list[LabelledPassage] = []
-        for labelled_passage in human_labelled_passages:
-            model_labelled_passages.append(
-                LabelledPassage(
-                    text=labelled_passage.text,
-                    spans=classifier.predict(labelled_passage.text),
-                )
+        model_labelled_passages = [
+            labelled_passage.model_copy(
+                update={"spans": classifier.predict(labelled_passage.text)}, deep=True
             )
+            for labelled_passage in human_labelled_passages
+        ]
 
         df = pd.DataFrame(
             columns=[

@@ -17,6 +17,11 @@ class LabelledPassage(BaseModel):
         title="Spans",
         description="The spans in the passage which have been labelled by the annotator",
     )
+    metadata: dict = Field(
+        default_factory=dict,
+        title="Metadata",
+        description="Additional data, eg translation status or dataset",
+    )
 
     def __init__(self, text: str, spans: list[Span], **kwargs):
         id = kwargs.pop("id", generate_identifier(text))
@@ -39,6 +44,12 @@ class LabelledPassage(BaseModel):
         :return: The created LabelledPassage object
         """
         text = record.fields.get("text", "")
+
+        metadata = {
+            "translated": record.metadata.get("translated", False),
+            "dataset_name": record.metadata.get("dataset_name", ""),
+            "world_bank_region": record.metadata.get("world_bank_region", ""),
+        }
         spans = []
 
         for response in record.responses or []:
@@ -59,7 +70,7 @@ class LabelledPassage(BaseModel):
             except KeyError:
                 pass
 
-        return cls(text=text, spans=spans)
+        return cls(text=text, spans=spans, metadata=metadata)
 
     def get_highlighted_text(self, format="cyan") -> str:
         """
