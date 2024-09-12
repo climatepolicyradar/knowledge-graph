@@ -39,6 +39,7 @@ def group_passages_by_equity_strata(
         for equity_stratum in equity_strata
     }
 
+    # group the passages according to their values
     for equity_stratum, values in equity_strata_values.items():
         for value in values:
             human_labelled_passages_group = [
