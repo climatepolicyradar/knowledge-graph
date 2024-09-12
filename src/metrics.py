@@ -70,15 +70,15 @@ class ConfusionMatrix:
 
 
 def count_span_level_metrics(
-    human_labelled_passages: list[LabelledPassage],
-    model_labelled_passages: list[LabelledPassage],
+    ground_truth_passages: list[LabelledPassage],
+    predicted_passages: list[LabelledPassage],
     threshold: float,
 ) -> ConfusionMatrix:
     """
     Count the span-level metrics for a given set of human and model labelled passages
 
-    :param list[LabelledPassage] human_labelled_passages: A set of gold-standard spans
-    :param list[LabelledPassage] model_labelled_passages: A set of predicted spans
+    :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
+    :param list[LabelledPassage] predicted_passages: A set of predicted spans
     :param float threshold: The Jaccard similarity threshold to consider overlapping
     spans as a match
     :return ConfusionMatrix: The resulting confusion matrix for calculating span-level
@@ -86,13 +86,13 @@ def count_span_level_metrics(
     """
     cm = ConfusionMatrix()
 
-    for human_labelled_passage, model_labelled_passage in zip(
-        human_labelled_passages, model_labelled_passages
+    for ground_truth_passage, predicted_passage in zip(
+        ground_truth_passages, predicted_passages
     ):
-        for human_span in human_labelled_passage.spans:
+        for ground_truth_span in ground_truth_passage.spans:
             found = False
-            for model_span in model_labelled_passage.spans:
-                if jaccard_similarity(human_span, model_span) >= threshold:
+            for predicted_span in predicted_passage.spans:
+                if jaccard_similarity(ground_truth_span, predicted_span) >= threshold:
                     found = True
                     cm.true_positives += 1
                     break
@@ -100,67 +100,67 @@ def count_span_level_metrics(
                 cm.false_negatives += 1
                 break
 
-        for model_span in model_labelled_passage.spans:
+        for predicted_span in predicted_passage.spans:
             found = False
-            for human_span in human_labelled_passage.spans:
-                if jaccard_similarity(model_span, human_span) >= threshold:
+            for ground_truth_span in ground_truth_passage.spans:
+                if jaccard_similarity(predicted_span, ground_truth_span) >= threshold:
                     found = True
                     break
             if not found:
                 cm.false_positives += 1
                 break
 
-        human_labelled_negative_passages = set(
-            passage.id for passage in human_labelled_passages if len(passage.spans) == 0
+        ground_truth_negative_passages = set(
+            passage.id for passage in ground_truth_passages if len(passage.spans) == 0
         )
-        model_labelled_negative_passages = set(
-            passage.id for passage in model_labelled_passages if len(passage.spans) == 0
+        predicted_negative_passages = set(
+            passage.id for passage in predicted_passages if len(passage.spans) == 0
         )
         cm.true_negatives += len(
-            human_labelled_negative_passages & model_labelled_negative_passages
+            ground_truth_negative_passages & predicted_negative_passages
         )
 
     return cm
 
 
 def count_passage_level_metrics(
-    human_labelled_passages: list[LabelledPassage],
-    model_labelled_passages: list[LabelledPassage],
+    ground_truth_passages: list[LabelledPassage],
+    predicted_passages: list[LabelledPassage],
 ) -> ConfusionMatrix:
     """
     Count the passage-level metrics for a given set of human and model labelled passages
 
-    :param list[LabelledPassage] human_labelled_passages: A set of gold-standard spans
-    :param list[LabelledPassage] model_labelled_passages: A set of predicted spans
+    :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
+    :param list[LabelledPassage] predicted_passages: A set of predicted spans
     :return ConfusionMatrix: The resulting confusion matrix for calculating
     passage-level metrics
     """
     cm = ConfusionMatrix()
 
-    human_labelled_positive_passages = set(
-        passage.id for passage in human_labelled_passages if len(passage.spans) > 0
+    ground_truth_positive_passages = set(
+        passage.id for passage in ground_truth_passages if len(passage.spans) > 0
     )
-    model_labelled_positive_passages = set(
-        passage.id for passage in model_labelled_passages if len(passage.spans) > 0
+    predicted_positive_passages = set(
+        passage.id for passage in predicted_passages if len(passage.spans) > 0
     )
-    human_labelled_negative_passages = set(
-        passage.id for passage in human_labelled_passages if len(passage.spans) == 0
+    ground_truth_negative_passages = set(
+        passage.id for passage in ground_truth_passages if len(passage.spans) == 0
     )
-    model_labelled_negative_passages = set(
-        passage.id for passage in model_labelled_passages if len(passage.spans) == 0
+    predicted_negative_passages = set(
+        passage.id for passage in predicted_passages if len(passage.spans) == 0
     )
 
     cm.true_positives = len(
-        human_labelled_positive_passages & model_labelled_positive_passages
+        ground_truth_positive_passages & predicted_positive_passages
     )
     cm.false_positives = len(
-        model_labelled_positive_passages - human_labelled_positive_passages
+        predicted_positive_passages - ground_truth_positive_passages
     )
     cm.true_negatives = len(
-        human_labelled_negative_passages & model_labelled_negative_passages
+        ground_truth_negative_passages & predicted_negative_passages
     )
     cm.false_negatives = len(
-        human_labelled_positive_passages - model_labelled_positive_passages
+        ground_truth_positive_passages - predicted_positive_passages
     )
 
     return cm
