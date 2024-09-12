@@ -98,15 +98,44 @@ class Span(BaseModel):
         if len(spans) == 1:
             return spans[0]
         else:
-            labellers = list(
-                set(labeller for span in spans for labeller in span.labellers)
-            )
             return Span(
                 text=spans[0].text,
                 start_index=min(span.start_index for span in spans),
                 end_index=max(span.end_index for span in spans),
                 concept_id=spans[0].concept_id,
-                labellers=labellers,
+                labellers=list(
+                    set(labeller for span in spans for labeller in span.labellers)
+                ),
+            )
+
+    @classmethod
+    def intersection(cls, spans: list["Span"]) -> "Span":
+        """
+        Return the intersection of a set of overlapping spans
+
+        The intersection of a set of spans is the largest span that is contained within
+        all of the spans.
+
+        :param Span spans: The spans to union
+        :return Span: A new span that is the intersection of the input spans
+        """
+        if not all(span.text == spans[0].text for span in spans):
+            raise ValueError("All spans must have the same text")
+        if not all(span.concept_id == spans[0].concept_id for span in spans):
+            raise ValueError("All spans must have the same concept_id")
+        if len(spans) == 0:
+            raise ValueError("Cannot union an empty list of spans")
+        if len(spans) == 1:
+            return spans[0]
+        else:
+            return Span(
+                text=spans[0].text,
+                start_index=max(span.start_index for span in spans),
+                end_index=min(span.end_index for span in spans),
+                concept_id=spans[0].concept_id,
+                labellers=list(
+                    set(labeller for span in spans for labeller in span.labellers)
+                ),
             )
 
 
