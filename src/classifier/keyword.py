@@ -60,7 +60,7 @@ class KeywordClassifier(Classifier):
                         concept_id=self.concept.wikibase_id,
                         start_index=start,
                         end_index=end,
-                        labeller=[str(self)],
+                        labellers=[str(self)],
                     )
                 )
                 matched_positions.update(range(start, end))
@@ -75,7 +75,7 @@ class KeywordClassifier(Classifier):
                         concept_id=self.concept.wikibase_id,
                         start_index=start,
                         end_index=end,
-                        labeller=[str(self)],
+                        labellers=[str(self)],
                     )
                 )
                 matched_positions.update(range(start, end))
