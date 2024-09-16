@@ -1,3 +1,25 @@
+"""
+Generates a visualization of human- vs model-labelled spans in a set of passages
+
+This script loads the human-labelled passages for a given group of Wikibase IDs, before
+using a pre-trained classifier to generate fresh predictions for each passage. The
+human and model labels are then combined and visualized in an HTML file, with spans
+coloured according to whether they were labelled by a human or the model.
+
+The HTML file is saved to the `labels.html` file in the `labelled_passages` directory
+for each Wikibase ID.
+
+Usage:
+    python scripts/interpreting_eval_datasets/find_model_agreements.py
+
+The script requires the following files to be present:
+- `data/config/sectors.yaml`: The configuration file for the sampling process
+- `data/processed_data/labelled_passages/{wikibase_id}/agreements.json`: The
+  human-labelled passages for each Wikibase ID
+- `models/classifiers/{wikibase_id}.joblib`: The pre-trained classifier for each
+  Wikibase ID
+"""
+
 from pathlib import Path
 
 from rich.console import Console
@@ -7,10 +29,18 @@ from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.sampling import SamplingConfig
 
-console = Console(highlight=False)
-
 
 def labelled_passage_to_html(labelled_passage: LabelledPassage) -> str:
+    """
+    Convert a LabelledPassage to an HTML string
+
+    Spans will be highlighted in different colours based on whether they were labelled
+    by a human or the model.
+
+    :param LabelledPassage labelled_passage: The LabelledPassage to convert to HTML
+    :return str: An HTML string representing the LabelledPassage, with <span> tags
+    around each span
+    """
     sorted_spans = sorted(labelled_passage.spans, key=lambda x: x.start_index)
     html = f'<div class="passage">{labelled_passage.text}</div>'
     highlights = []
@@ -26,6 +56,9 @@ def labelled_passage_to_html(labelled_passage: LabelledPassage) -> str:
         )
 
     return f'<div class="passage-container">{html}{"".join(highlights)}</div>'
+
+
+console = Console(highlight=False)
 
 
 config_path = Path("data/config/sectors.yaml")
