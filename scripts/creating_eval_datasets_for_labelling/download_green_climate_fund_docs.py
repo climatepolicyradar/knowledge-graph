@@ -28,7 +28,7 @@ if not scraped_json_path.exists():
     )
     sys.exit(1)
 
-with open(scraped_json_path, "r") as f:
+with open(scraped_json_path, "r", encoding="utf-8") as f:
     scraped_data = json.load(f)
 
 # Create the PDFs directory
@@ -43,5 +43,5 @@ for doc in track(scraped_data, description="Downloading documents"):
         continue
 
     response = httpx.get(doc["pdf_url"])
-    with open(doc_path, "wb") as f:
+    with open(doc_path, "wb", encoding="utf-8") as f:
         f.write(response.content)

@@ -52,7 +52,7 @@ for file_path in track(
     transient=True,
 ):
     if file_path.is_file():
-        with file_path.open("rb") as file:
+        with file_path.open("rb", encoding="utf-8") as file:
             s3_client.upload_fileobj(
                 file, bucket_name, str(file_path.relative_to(data_dir))
             )

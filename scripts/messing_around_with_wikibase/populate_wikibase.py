@@ -34,7 +34,7 @@ wikibase = WikibaseSession()
 
 
 data_path = processed_data_dir / "concepts.json"
-with open(data_path, "r") as f:
+with open(data_path, "r", encoding="utf-8") as f:
     concepts_json = json.load(f)
 
 concepts = [Concept.from_dict(concept) for concept in concepts_json]
@@ -54,5 +54,7 @@ for concept in concepts:
     concepts_with_wikibase_ids.append(concept_with_wikibase_id)
 progress_bar.close()
 
-with open("./data/processed/concepts_with_wikibase_ids.json", "w") as f:
+with open(
+    "./data/processed/concepts_with_wikibase_ids.json", "w", encoding="utf-8"
+) as f:
     json.dump([concept.dict() for concept in concepts_with_wikibase_ids], f)

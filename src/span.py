@@ -94,7 +94,7 @@ class Span(BaseModel):
         if not all(span.concept_id == spans[0].concept_id for span in spans):
             raise ValueError("All spans must have the same concept_id")
         if len(spans) == 0:
-            raise ValueError("Cannot union an empty list of spans")
+            raise ValueError("Cannot merge an empty list of spans")
         if len(spans) == 1:
             return spans[0]
         else:
@@ -124,7 +124,7 @@ class Span(BaseModel):
         if not all(span.concept_id == spans[0].concept_id for span in spans):
             raise ValueError("All spans must have the same concept_id")
         if len(spans) == 0:
-            raise ValueError("Cannot union an empty list of spans")
+            raise ValueError("Cannot merge an empty list of spans")
         if len(spans) == 1:
             return spans[0]
         else:

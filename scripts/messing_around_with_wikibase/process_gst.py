@@ -132,7 +132,7 @@ for concept_dir in input_data_dir.iterdir():
 
 # dump the data to a json file
 json_output_path = output_data_dir / "concepts.json"
-with open(json_output_path, "w") as f:
+with open(json_output_path, "w", encoding="utf-8") as f:
     json.dump([c.dict() for c in concepts], f, indent=2)
 
 logger.info(f"Wrote concepts to {json_output_path}")

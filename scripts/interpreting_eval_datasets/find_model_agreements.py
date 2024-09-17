@@ -14,8 +14,8 @@ Usage:
 
 The script requires the following files to be present:
 - `data/config/sectors.yaml`: The configuration file for the sampling process
-- `data/processed_data/labelled_passages/{wikibase_id}/agreements.json`: The
-  human-labelled passages for each Wikibase ID
+- `data/processed_data/labelled_passages/{wikibase_id}/gold_standard.jsonl`: The
+  gold-standard labelled passages for each Wikibase ID
 - `models/classifiers/{wikibase_id}.joblib`: The pre-trained classifier for each
   Wikibase ID
 """
@@ -66,14 +66,42 @@ console.log(f"⚙️ Loading config from {config_path}")
 config = SamplingConfig.load(config_path)
 console.log("✅ Config loaded")
 
-for wikibase_id in config.wikibase_ids:
-    console.log(f"🤔 Processing {wikibase_id}")
-    labelled_passages_dir = processed_data_dir / "labelled_passages" / wikibase_id
+labelled_passages_dir = processed_data_dir / "labelled_passages"
+gold_standard_labelled_passages_paths = [
+    labelled_passages_dir / wikibase_id / "gold_standard.jsonl"
+    for wikibase_id in config.wikibase_ids
+]
+missing_gold_standard_paths = [
+    path for path in gold_standard_labelled_passages_paths if not path.exists()
+]
+if missing_gold_standard_paths:
+    raise FileNotFoundError(
+        "Some gold standard labelled passages don't exist. Make sure you've run "
+        "save_labelled_passages_from_argilla.py and "
+        "create_gold_standard_labels.py with the same config before running this "
+        "script."
+        f"Missing paths: {missing_gold_standard_paths}"
+    )
 
-    labelled_passages_path = labelled_passages_dir / "agreements.json"
+classifier_paths = [classifier_dir / wikibase_id for wikibase_id in config.wikibase_ids]
+missing_classifier_paths = [path for path in classifier_paths if not path.exists()]
+if missing_classifier_paths:
+    raise FileNotFoundError(
+        "Some classifiers don't exist. Make sure you've run train_classifier.py "
+        "with the same config before running this script."
+        f"Missing paths: {missing_classifier_paths}"
+    )
+
+for gold_standard_labelled_passages_path, classifier_path in zip(
+    gold_standard_labelled_passages_paths, classifier_paths
+):
+    wikibase_id = gold_standard_labelled_passages_path.parent.stem
+    console.log(f"🔍 Processing Wikibase ID: {wikibase_id}")
     human_labelled_passages = [
         LabelledPassage.model_validate_json(line)
-        for line in labelled_passages_path.read_text(encoding="utf-8").splitlines()
+        for line in gold_standard_labelled_passages_path.read_text(
+            encoding="utf-8"
+        ).splitlines()
     ]
     classifier = Classifier.load(classifier_dir / wikibase_id)
 
@@ -81,7 +109,6 @@ for wikibase_id in config.wikibase_ids:
         model_labels = classifier.predict(labelled_passage.text)
         labelled_passage.spans.extend(model_labels)
 
-    output_path = labelled_passages_dir / wikibase_id / "labels.html"
     html = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -176,7 +203,8 @@ for wikibase_id in config.wikibase_ids:
     </html>
     """
     html = " ".join(html.split())
+    output_path = gold_standard_labelled_passages_path.parent / "labels.html"
     output_path.write_text(html, encoding="utf-8")
-    console.log(f"📝 Wrote labels to {output_path}")
+    console.log(f"📄 Saved label comparison visualisation to {output_path}")
 
-    console.log("✅ Done")
+console.log("✅ Done")

@@ -85,5 +85,5 @@ for doc in track(
         continue
 
     response = httpx.get(doc["Document file"])
-    with open(doc_path, "wb") as f:
+    with open(doc_path, "wb", encoding="utf-8") as f:
         f.write(response.content)
