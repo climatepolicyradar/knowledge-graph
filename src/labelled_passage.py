@@ -43,7 +43,7 @@ class LabelledPassage(BaseModel):
         :param record: The Argilla record to create the LabelledPassage object from
         :return: The created LabelledPassage object
         """
-        text = record.fields.get("text", "")
+        text = html.unescape(record.fields.get("text", ""))
 
         metadata = {
             "translated": record.metadata.get("translated", False),
