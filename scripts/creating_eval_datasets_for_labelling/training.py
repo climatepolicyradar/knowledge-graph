@@ -37,15 +37,19 @@ def main(config_path: Path):
         # Fetch all of its subconcepts recursively
         subconcepts = wikibase.get_subconcepts(wikibase_id, recursive=True)
 
-        # fetch all of the all_labels for all of the subconcepts and the concept itself
+        # fetch all of the labels and negative_labels for all of the subconcepts
+        # and the concept itself
         all_labels = set(concept.all_labels)
+        all_negative_labels = set(concept.negative_labels)
         for subconcept in subconcepts:
             all_labels.update(subconcept.all_labels)
+            all_negative_labels.update(subconcept.negative_labels)
 
         classifier = ClassifierFactory.create(
             concept=Concept(
                 preferred_label=concept.preferred_label,
                 alternative_labels=list(all_labels),
+                negative_labels=list(all_negative_labels),
             )
         )
 
