@@ -116,7 +116,7 @@ class Span(BaseModel):
         The intersection of a set of spans is the largest span that is contained within
         all of the spans.
 
-        :param Span spans: The spans to union
+        :param Span spans: The spans to intersect
         :return Span: A new span that is the intersection of the input spans
         """
         if not all(span.text == spans[0].text for span in spans):
