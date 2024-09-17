@@ -92,11 +92,6 @@ def main(
 
     labelled_passages_dir = processed_data_dir / "labelled_passages"
 
-    if not labelled_passages_dir.exists():
-        raise FileNotFoundError(
-            "Labelled passages data doesn't exist. Run save_labelled_passages_from_argilla.py first"
-        )
-
     for wikibase_id in config.wikibase_ids:
         results: dict[str, ConfusionMatrix] = {}
 
@@ -104,6 +99,14 @@ def main(
         labelled_passages_path = (
             labelled_passages_dir / wikibase_id / "gold_standard.jsonl"
         )
+
+        if not labelled_passages_path.exists():
+            raise FileNotFoundError(
+                "Gold standard labelled passages don't exist. Make sure you've run "
+                "save_labelled_passages_from_argilla.py and "
+                "create_gold_standard_labels.py before running this script."
+            )
+
         human_labelled_passages = [
             LabelledPassage.model_validate_json(line)
             for line in labelled_passages_path.read_text(encoding="utf-8").splitlines()
