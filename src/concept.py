@@ -14,9 +14,16 @@ class Concept(BaseModel):
     alternative_labels: list[str] = Field(
         default_factory=list, description="List of alternative labels for the concept"
     )
+    negative_labels: list[str] = Field(
+        default_factory=list,
+        description="Labels which should not be matched instances of the concept",
+    )
     description: Optional[str] = Field(
         default=None,
-        description="A short description of the concept which should be sufficient to disambiguate it from other concepts with similar labels",
+        description=(
+            "A short description of the concept which should be sufficient to "
+            "disambiguate it from other concepts with similar labels"
+        ),
     )
     wikibase_id: Optional[WikibaseID] = Field(
         default=None, description="The Wikibase ID for the concept"
