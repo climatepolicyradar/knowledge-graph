@@ -101,7 +101,9 @@ def main(
         results: dict[str, ConfusionMatrix] = {}
 
         # Load the human-labelled passages for the concept
-        labelled_passages_path = labelled_passages_dir / wikibase_id / "agreements.json"
+        labelled_passages_path = (
+            labelled_passages_dir / wikibase_id / "gold_standard.jsonl"
+        )
         human_labelled_passages = [
             LabelledPassage.model_validate_json(line)
             for line in labelled_passages_path.read_text(encoding="utf-8").splitlines()

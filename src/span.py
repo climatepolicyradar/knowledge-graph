@@ -149,7 +149,7 @@ def group_overlapping_spans(
         found = False
         for group in groups:
             if any(
-                jaccard_similarity(span, other) >= jaccard_threshold for other in group
+                jaccard_similarity(span, other) > jaccard_threshold for other in group
             ):
                 group.append(span)
                 found = True
