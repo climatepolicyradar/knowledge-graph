@@ -77,7 +77,7 @@ def main(
             )
             break
 
-        with open(labelled_passages_path, "r") as f:
+        with open(labelled_passages_path, "r", encoding="utf-8") as f:
             labelled_passages = [
                 LabelledPassage.model_validate_json(line) for line in f
             ]
@@ -116,7 +116,7 @@ def main(
         if format == OutputFormat.JSON:
             # dump the agreements and disagreements to separate jsonl files
             agreements_path = data_dir / "agreements.json"
-            with open(agreements_path, "w") as f:
+            with open(agreements_path, "w", encoding="utf-8") as f:
                 f.writelines(
                     [
                         entry.model_dump_json() + "\n"
@@ -130,7 +130,7 @@ def main(
             )
 
             disagreements_path = data_dir / "disagreements.json"
-            with open(disagreements_path, "w") as f:
+            with open(disagreements_path, "w", encoding="utf-8") as f:
                 f.writelines(
                     [
                         entry.model_dump_json() + "\n"

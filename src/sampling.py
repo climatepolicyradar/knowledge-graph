@@ -60,7 +60,7 @@ class SamplingConfig(BaseModel):
         if file_path.suffix != ".yaml":
             raise ValueError("File must be a YAML file.")
 
-        with open(file_path, "r") as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             config = yaml.safe_load(file)
 
         return cls(**config)

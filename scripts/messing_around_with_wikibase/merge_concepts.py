@@ -38,7 +38,7 @@ def main(
     The first item in each group will act as the target item, with all other items in the group being merged into it.
     """
     assert input_path.suffix == ".json", "Input file must be a json file"
-    with open(input_path, "r") as f:
+    with open(input_path, "r", encoding="utf-8") as f:
         merge_candidates = json.load(f)
 
     # make sure the data is a list of lists of strings
