@@ -31,10 +31,26 @@ def main(
     config = SamplingConfig.load(config_path)
     console.log("✅ Config loaded")
 
-    for wikibase_id in config.wikibase_ids:
+    labelled_passages_dir = processed_data_dir / "labelled_passages"
+    labelled_passages_paths = [
+        labelled_passages_dir / wikibase_id / "labelled_passages.jsonl"
+        for wikibase_id in config.wikibase_ids
+    ]
+    missing_labelled_passages_paths = [
+        path for path in labelled_passages_paths if not path.exists()
+    ]
+    if missing_labelled_passages_paths:
+        raise FileNotFoundError(
+            "Some labelled passages don't exist. Make sure you've run "
+            "save_labelled_passages_from_argilla.py with the same config before "
+            "running this script."
+            f"Missing paths: {missing_labelled_passages_paths}"
+        )
+
+    for labelled_passages_path, wikibase_id in zip(
+        labelled_passages_paths, config.wikibase_ids
+    ):
         console.log(f"🤔 Processing {wikibase_id}")
-        data_dir = processed_data_dir / "labelled_passages" / wikibase_id
-        labelled_passages_path = data_dir / "labelled_passages.jsonl"
 
         if not labelled_passages_path.exists():
             console.log(
@@ -66,7 +82,7 @@ def main(
             f"with {n_annotations} individual annotations"
         )
 
-        gold_standard_path = data_dir / "gold_standard.jsonl"
+        gold_standard_path = labelled_passages_path.parent / "gold_standard.jsonl"
         with open(gold_standard_path, "w", encoding="utf-8") as f:
             f.writelines(
                 [entry.model_dump_json() + "\n" for entry in gold_standard_passages]
