@@ -91,29 +91,52 @@ def main(
     equity_strata = config.equal_columns + config.stratified_columns
 
     labelled_passages_dir = processed_data_dir / "labelled_passages"
-
-    if not labelled_passages_dir.exists():
+    gold_standard_labelled_passages_paths = [
+        labelled_passages_dir / wikibase_id / "gold_standard.jsonl"
+        for wikibase_id in config.wikibase_ids
+    ]
+    missing_gold_standard_paths = [
+        path for path in gold_standard_labelled_passages_paths if not path.exists()
+    ]
+    if missing_gold_standard_paths:
         raise FileNotFoundError(
-            "Labelled passages data doesn't exist. Run save_labelled_passages_from_argilla.py first"
+            "Some gold standard labelled passages don't exist. Make sure you've run "
+            "save_labelled_passages_from_argilla.py and "
+            "create_gold_standard_labels.py with the same config before running this "
+            "script."
+            f"Missing paths: {missing_gold_standard_paths}"
         )
 
-    for wikibase_id in config.wikibase_ids:
-        results: dict[str, ConfusionMatrix] = {}
+    classifier_paths = [
+        classifier_dir / wikibase_id for wikibase_id in config.wikibase_ids
+    ]
+    missing_classifier_paths = [path for path in classifier_paths if not path.exists()]
+    if missing_classifier_paths:
+        raise FileNotFoundError(
+            "Some classifiers don't exist. Make sure you've run train_classifier.py "
+            "with the same config before running this script."
+            f"Missing paths: {missing_classifier_paths}"
+        )
 
-        # Load the human-labelled passages for the concept
-        labelled_passages_path = labelled_passages_dir / wikibase_id / "agreements.json"
-        human_labelled_passages = [
+    for labelled_passages_path, classifier_path in zip(
+        gold_standard_labelled_passages_paths, classifier_paths
+    ):
+        results: dict[str, ConfusionMatrix] = {}
+        wikibase_id = labelled_passages_path.parent.name
+
+        # load the gold-standard passages and the classifier
+        gold_standard_labelled_passages = [
             LabelledPassage.model_validate_json(line)
             for line in labelled_passages_path.read_text(encoding="utf-8").splitlines()
         ]
-        classifier = Classifier.load(classifier_dir / wikibase_id)
+        classifier = Classifier.load(classifier_path)
 
         # create a new set of labelled passages, labelled by the classifier
         model_labelled_passages = [
             labelled_passage.model_copy(
                 update={"spans": classifier.predict(labelled_passage.text)}, deep=True
             )
-            for labelled_passage in human_labelled_passages
+            for labelled_passage in gold_standard_labelled_passages
         ]
 
         df = pd.DataFrame(
@@ -130,18 +153,18 @@ def main(
 
         for (
             group,
-            human_labelled_passages,
+            gold_standard_labelled_passages,
             model_labelled_passages,
         ) in group_passages_by_equity_strata(
-            human_labelled_passages, model_labelled_passages, equity_strata
+            gold_standard_labelled_passages, model_labelled_passages, equity_strata
         ):
             results["Passage level"] = count_passage_level_metrics(
-                human_labelled_passages, model_labelled_passages
+                gold_standard_labelled_passages, model_labelled_passages
             )
 
-            for threshold in [0.001, 0.5, 0.9, 1]:
+            for threshold in [0, 0.5, 0.9, 1]:
                 results[f"Span level ({threshold})"] = count_span_level_metrics(
-                    human_labelled_passages,
+                    gold_standard_labelled_passages,
                     model_labelled_passages,
                     threshold=threshold,
                 )
