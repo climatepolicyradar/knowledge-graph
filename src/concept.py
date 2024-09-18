@@ -10,7 +10,9 @@ from src.labelled_passage import LabelledPassage
 class Concept(BaseModel):
     """Base class for a concept"""
 
-    preferred_label: str = Field(..., description="The preferred label for the concept")
+    preferred_label: str = Field(
+        ..., description="The preferred label for the concept", min_length=1
+    )
     alternative_labels: list[str] = Field(
         default_factory=list, description="List of alternative labels for the concept"
     )
