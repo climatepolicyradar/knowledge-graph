@@ -20,6 +20,7 @@ The script requires the following files to be present:
   Wikibase ID
 """
 
+import os
 from pathlib import Path
 
 from rich.console import Console
@@ -96,6 +97,7 @@ for gold_standard_labelled_passages_path, classifier_path in zip(
     gold_standard_labelled_passages_paths, classifier_paths
 ):
     wikibase_id = gold_standard_labelled_passages_path.parent.stem
+    wikibase_url = f"{os.environ.get('WIKIBASE_URL')}/wiki/Item:{wikibase_id}"
     console.log(f"🔍 Processing Wikibase ID: {wikibase_id}")
     human_labelled_passages = [
         LabelledPassage.model_validate_json(line)
@@ -185,7 +187,7 @@ for gold_standard_labelled_passages_path, classifier_path in zip(
         </style>
     </head>
     <body>
-        <h1>Labelled Passages - {wikibase_id}</h1>
+        <h1>Labelled Passages - <a href="{wikibase_url}">{wikibase_id}</a></h1>
         <div class="legend">
             <div class="legend-item">
                 <div class="legend-color" style="background-color: #99ff99;"></div>
@@ -197,7 +199,7 @@ for gold_standard_labelled_passages_path, classifier_path in zip(
             </div>
         </div>
         <ul>
-            {"".join(f"<li>{labelled_passage_to_html(labelled_passage)}</li>" for labelled_passage in human_labelled_passages)}
+            {"".join(f"<li>{i+1}. {labelled_passage_to_html(labelled_passage)}</li>" for i, labelled_passage in enumerate(human_labelled_passages))}
         </ul>
     </body>
     </html>
