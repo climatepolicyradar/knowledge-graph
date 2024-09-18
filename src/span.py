@@ -58,6 +58,14 @@ class Span(BaseModel):
             raise ValueError(
                 f"The end index must be greater than the start index. Got {self}"
             )
+        if self.start_index < 0:
+            raise ValueError(
+                f"The start index must be greater than or equal to 0. Got {self}"
+            )
+        if self.end_index > len(self.text):
+            raise ValueError(
+                f"The end index must be less than the length of the text. Got {self}"
+            )
         return self
 
     @computed_field
@@ -190,7 +198,7 @@ def group_overlapping_spans(
 
 
 def merge_overlapping_spans(
-    spans: list[Span], jaccard_threshold: float = 0.5
+    spans: list[Span], jaccard_threshold: float = 0
 ) -> list[Span]:
     """
     Merge a list of overlapping spans into a list of non-overlapping spans.
