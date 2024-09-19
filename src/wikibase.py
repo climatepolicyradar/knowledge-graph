@@ -43,7 +43,7 @@ class WikibaseSession:
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID")
     subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID")
     related_concept_property_id = os.getenv("WIKIBASE_RELATED_CONCEPT_PROPERTY_ID")
-    labelling_project_property_id = os.getenv("WIKIBASE_LABELLING_PROJECT_PROPERTY_ID")
+    negative_labels_property_id = os.getenv("WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID")
 
     def __init__(self):
         """Log in to Wikibase and get a CSRF token"""
@@ -301,6 +301,8 @@ class WikibaseSession:
                             concept.has_subconcept.append(value["id"])
                         elif property_id == self.related_concept_property_id:
                             concept.related_concepts.append(value["id"])
+                        elif property_id == self.negative_labels_property_id:
+                            concept.negative_labels.append(value)
 
         return concept
 

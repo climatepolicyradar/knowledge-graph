@@ -20,6 +20,15 @@ class ConfusionMatrix:
         except ZeroDivisionError:
             return 0
 
+    def support(self) -> int:
+        """https://en.wikipedia.org/wiki/Confusion_matrix"""
+        return (
+            self.true_positives
+            + self.false_negatives
+            + self.false_positives
+            + self.true_negatives
+        )
+
     def recall(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
         try:

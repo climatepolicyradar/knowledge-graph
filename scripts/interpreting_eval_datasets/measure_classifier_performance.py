@@ -82,6 +82,10 @@ def main(
     ] = False,
 ):
     """Measure classifier performance against human-labelled evaluation datasets"""
+
+    output_dir = Path(processed_data_dir / "classifier_performance")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     console.log("🚀 Starting classifier performance measurement")
 
     console.log(f"⚙️ Loading config from {config_path}")
@@ -147,7 +151,6 @@ def main(
                 "Recall",
                 "Accuracy",
                 "F1 score",
-                "Cohen's kappa",
             ]
         )
 
@@ -181,7 +184,7 @@ def main(
                                 "Recall": f"{confusion_matrix.recall():.2f}",
                                 "Accuracy": f"{confusion_matrix.accuracy():.2f}",
                                 "F1 score": f"{confusion_matrix.f1_score():.2f}",
-                                "Cohen's kappa": f"{confusion_matrix.cohens_kappa():.2f}",
+                                "Support": str(confusion_matrix.support()),
                             }
                             for agreement_level, confusion_matrix in results.items()
                         ]
