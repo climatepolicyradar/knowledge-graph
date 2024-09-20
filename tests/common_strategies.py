@@ -39,21 +39,13 @@ def concept_strategy(draw):
 
 
 @st.composite
-def span_inputs_strategy(draw, text: Optional[str] = None):
+def span_strategy(draw, text: Optional[str] = None):
     if text is None:
         text = draw(text_strategy)
     start_index = draw(st.integers(min_value=0, max_value=len(text) - 1))
     end_index = draw(st.integers(min_value=start_index + 1, max_value=len(text)))
     concept_id = draw(st.one_of(wikibase_id_strategy, st.none()))
     labellers = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
-    return text, start_index, end_index, concept_id, labellers
-
-
-@st.composite
-def span_strategy(draw, text: Optional[str] = None):
-    text, start_index, end_index, concept_id, labellers = draw(
-        span_inputs_strategy(text)
-    )
     return Span(
         text=text,
         start_index=start_index,
