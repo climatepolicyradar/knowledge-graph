@@ -3,32 +3,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from src.span import Span, group_overlapping_spans, jaccard_similarity
-
-text_strategy = st.text(min_size=10, max_size=1000)
-labeller_strategy = st.text(min_size=1, max_size=10)
-wikibase_id_strategy = st.from_regex(r"^Q[1-9]\d*$", fullmatch=True)
-
-
-@st.composite
-def span_inputs_strategy(draw):
-    text = draw(text_strategy)
-    start = draw(st.integers(min_value=0, max_value=len(text) - 1))
-    end = draw(st.integers(min_value=start + 1, max_value=len(text)))
-    concept_id = draw(wikibase_id_strategy)
-    labellers = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
-    return text, start, end, concept_id, labellers
-
-
-@st.composite
-def span_strategy(draw):
-    text, start, end, concept_id, labellers = draw(span_inputs_strategy())
-    return Span(
-        text=text,
-        start_index=start,
-        end_index=end,
-        concept_id=concept_id,
-        labellers=labellers,
-    )
+from tests.common_strategies import (
+    labeller_strategy,
+    span_strategy,
+    text_strategy,
+    wikibase_id_strategy,
+)
 
 
 @st.composite
@@ -102,26 +82,6 @@ def fully_entailed_spans_strategy(draw, text):
     )
 
     return span_a, span_b
-
-
-@given(
-    inputs=span_inputs_strategy(),
-)
-def test_whether_span_is_correctly_initialised(inputs):
-    text, start_index, end_index, concept_id, labellers = inputs
-    span = Span(
-        text=text,
-        start_index=start_index,
-        end_index=end_index,
-        concept_id=concept_id,
-        labellers=labellers,
-    )
-    assert span.text == text
-    assert span.start_index == start_index
-    assert span.end_index == end_index
-    assert span.concept_id == concept_id
-    assert span.labellers == labellers
-    assert span.labelled_text == text[start_index:end_index]
 
 
 def test_whether_span_raises_value_error_on_with_start_index_greater_than_end_index():

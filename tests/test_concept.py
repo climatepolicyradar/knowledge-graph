@@ -7,54 +7,7 @@ from pydantic import ValidationError
 
 from src.concept import Concept
 from src.identifiers import WikibaseID
-
-label_strategy = st.text(
-    min_size=1,
-    max_size=25,
-    alphabet=st.characters(exclude_categories=("C", "Z")),
-).filter(lambda x: x.strip())
-wikibase_id_strategy = st.from_regex(r"^Q[1-9]\d*$", fullmatch=True)
-
-
-@given(
-    preferred_label=label_strategy,
-    alternative_labels=st.lists(label_strategy, max_size=5),
-    description=st.one_of(st.text(max_size=200), st.none()),
-    wikibase_id=st.one_of(wikibase_id_strategy, st.none()),
-    subconcept_of=st.lists(wikibase_id_strategy, max_size=3),
-    has_subconcept=st.lists(wikibase_id_strategy, max_size=3),
-    related_concepts=st.lists(wikibase_id_strategy, max_size=3),
-    definition=st.one_of(st.text(max_size=200), st.none()),
-)
-def test_whether_concept_is_successfully_initialized(
-    preferred_label,
-    alternative_labels,
-    description,
-    wikibase_id,
-    subconcept_of,
-    has_subconcept,
-    related_concepts,
-    definition,
-):
-    concept = Concept(
-        preferred_label=preferred_label,
-        alternative_labels=alternative_labels,
-        description=description,
-        wikibase_id=wikibase_id,
-        subconcept_of=subconcept_of,
-        has_subconcept=has_subconcept,
-        related_concepts=related_concepts,
-        definition=definition,
-    )
-
-    assert concept.preferred_label == preferred_label
-    assert set(concept.alternative_labels) == set(alternative_labels)
-    assert concept.description == description
-    assert concept.wikibase_id == wikibase_id
-    assert set(concept.subconcept_of) == set(subconcept_of)
-    assert set(concept.has_subconcept) == set(has_subconcept)
-    assert set(concept.related_concepts) == set(related_concepts)
-    assert concept.definition == definition
+from tests.common_strategies import concept_label_strategy, wikibase_id_strategy
 
 
 def test_whether_alternative_labels_are_unique():
@@ -109,8 +62,8 @@ def test_whether_concepts_are_hashable():
 
 
 @given(
-    preferred_label=label_strategy,
-    alternative_labels=st.lists(label_strategy, min_size=1),
+    preferred_label=concept_label_strategy,
+    alternative_labels=st.lists(concept_label_strategy, min_size=1),
     wikibase_id=wikibase_id_strategy,
 )
 def test_whether_repr_and_str_are_correctly_formatted(

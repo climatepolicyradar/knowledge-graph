@@ -3,14 +3,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from src.identifiers import WikibaseID, generate_identifier
+from tests.common_strategies import wikibase_id_strategy
 
-valid_wikibase_id = st.from_regex(r"Q[1-9]\d*", fullmatch=True)
-invalid_wikibase_id = st.text().filter(
+invalid_wikibase_id_strategy = st.text().filter(
     lambda x: not x.startswith("Q") or not x[1:].isdigit() or x == "Q0"
 )
 
 
-@given(valid_wikibase_id)
+@given(wikibase_id_strategy)
 def test_whether_valid_wikibase_ids_are_accepted(value):
     wikibase_id = WikibaseID(value)
     assert isinstance(
@@ -19,13 +19,13 @@ def test_whether_valid_wikibase_ids_are_accepted(value):
     assert str(wikibase_id) == value, f"Expected {value}, got {wikibase_id}"
 
 
-@given(invalid_wikibase_id)
+@given(invalid_wikibase_id_strategy)
 def test_whether_invalid_wikibase_ids_are_rejected(value):
     with pytest.raises(ValueError):
         WikibaseID(value)
 
 
-@given(valid_wikibase_id)
+@given(wikibase_id_strategy)
 def test_whether_wikibase_ids_are_strings(value):
     wikibase_id = WikibaseID(value)
     assert isinstance(wikibase_id, str), "WikibaseID is not a subclass of str"

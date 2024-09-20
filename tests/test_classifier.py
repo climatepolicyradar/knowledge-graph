@@ -9,37 +9,7 @@ from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.span import Span
-
-wikibase_id_strategy = st.from_regex(r"^Q[1-9]\d*$", fullmatch=True)
-
-label_strategy = st.text(
-    min_size=1,
-    max_size=25,
-    alphabet=st.characters(exclude_categories=("C", "Zl", "Zp", "P", "M", "S")),
-).filter(lambda x: x.strip())
-
-
-@st.composite
-def concept_strategy(draw):
-    preferred_label = draw(label_strategy)
-    alt_labels = draw(st.lists(label_strategy, max_size=5))
-    # negative_labels cannot overlap with the positive labels
-    negative_labels = draw(
-        st.lists(
-            label_strategy.filter(
-                lambda x: x.lower()
-                not in [label.lower() for label in alt_labels + [preferred_label]]
-            ),
-            max_size=5,
-        )
-    )
-
-    return Concept(
-        wikibase_id=draw(wikibase_id_strategy),
-        preferred_label=preferred_label,
-        alternative_labels=alt_labels,
-        negative_labels=negative_labels,
-    )
+from tests.common_strategies import concept_label_strategy, concept_strategy
 
 
 @st.composite
@@ -136,7 +106,7 @@ def test_whether_classifier_respects_negative_labels(
         pytest.skip("This test only applies to RulesBasedClassifier")
 
     # Create a positive label and a negative which contains the positive label.
-    positive_label = data.draw(label_strategy)
+    positive_label = data.draw(concept_label_strategy)
     negative_label = positive_label + " a modifier which changes its meaning"
 
     # create a text containing the negative label

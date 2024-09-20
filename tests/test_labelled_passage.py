@@ -4,33 +4,7 @@ from hypothesis import strategies as st
 
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-
-text_strategy = st.text(min_size=1, max_size=1000)
-
-
-@st.composite
-def span_strategy(draw, text):
-    start = draw(st.integers(min_value=0, max_value=len(text) - 1))
-    end = draw(st.integers(min_value=start + 1, max_value=len(text)))
-    concept_id = draw(st.text(min_size=1, max_size=10))
-    labellers = draw(st.lists(st.text(min_size=1, max_size=10), min_size=1, max_size=3))
-    return Span(
-        text=text,
-        start_index=start,
-        end_index=end,
-        concept_id=concept_id,
-        labellers=labellers,
-    )
-
-
-@given(text=text_strategy, spans=st.data())
-def test_whether_labelled_passage_is_correctly_initialised(text, spans):
-    span_list = spans.draw(st.lists(span_strategy(text), min_size=0, max_size=10))
-    passage = LabelledPassage(text=text, spans=span_list)
-    assert passage.text == text
-    assert passage.spans == span_list
-    assert isinstance(passage.id, str)
-    assert isinstance(passage.metadata, dict)
+from tests.common_strategies import span_strategy, text_strategy
 
 
 def test_whether_labelled_passage_raises_validation_error_on_short_text_and_long_span():
@@ -156,7 +130,6 @@ def test_whether_highlighted_text_correctly_handles_encoded_html():
                 text="This &amp; that",
                 start_index=0,
                 end_index=4,
-                concept_id="TEST",
                 labellers=["user1"],
             )
         ],
