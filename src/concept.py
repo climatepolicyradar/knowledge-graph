@@ -64,6 +64,36 @@ class Concept(BaseModel):
             values["alternative_labels"].remove(preferred_label)
         return values
 
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_negative_labels_are_unique(cls, values: Dict) -> Dict:
+        """Ensure that the negative labels are a unique set of strings"""
+        values["negative_labels"] = list(
+            set(str(item) for item in values.get("negative_labels", []))
+        )
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_negative_labels_are_not_in_positive_labels(cls, values: Dict) -> Dict:
+        """Raise a ValueError if a negative label is also a positive label"""
+        if any(
+            label in values["alternative_labels"] for label in values["negative_labels"]
+        ):
+            raise ValueError(
+                "A negative label should not be the same as a positive label"
+            )
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_whitespace_from_labels(cls, values: Dict) -> Dict:
+        """Strip leading and trailing whitespace from all labels"""
+        for key in ["alternative_labels", "negative_labels"]:
+            values[key] = [label.strip() for label in values.get(key, [])]
+        values["preferred_label"] = values["preferred_label"].strip()
+        return values
+
     def __repr__(self) -> str:
         """Return a string representation of the concept"""
         return f'Concept({self.wikibase_id}, "{self.preferred_label}")'
