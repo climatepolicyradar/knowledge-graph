@@ -64,8 +64,7 @@ def main(
     # Save the concept to disk
     output_path = concept_dir / f"{wikibase_id}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(concept.model_dump_json(indent=2))
+    concept.save(output_path)
     console.log(f"💾 Concept saved to {output_path}")
 
 

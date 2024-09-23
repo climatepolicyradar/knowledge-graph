@@ -23,20 +23,20 @@ get-concept id:
     poetry run python scripts/atomic/get_concept.py --wikibase-id {{id}}
 
 # train a model for a specific wikibase ID
-train id: (get-concept id)
-    poetry run python scripts/atomic/train.py {{id}}
+train id:
+    poetry run python scripts/atomic/train.py --wikibase-id {{id}}
 
 # evaluate a model for a specific wikibase ID
-evaluate id: (get-concept id)
-    poetry run python scripts/atomic/evaluate.py {{id}}
+evaluate id:
+    poetry run python scripts/atomic/evaluate.py --wikibase-id {{id}}
 
 # run a model for a specific wikibase ID on a supplied string
 label id string: (train id)
-    poetry run python scripts/atomic/label.py {{id}} {{string}}
+    poetry run python scripts/atomic/label.py --wikibase-id {{id}} {{string}}
 
 # find instances of the concept in a set of passages for a specific wikibase ID
 predict id: (train id) build-dataset
-    poetry run python scripts/atomic/predict.py {{id}}
+    poetry run python scripts/atomic/predict.py --wikibase-id {{id}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id n: (train id) (predict id)
