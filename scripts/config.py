@@ -5,6 +5,7 @@ raw_data_dir = data_dir / "raw"
 interim_data_dir = data_dir / "interim"
 processed_data_dir = data_dir / "processed"
 classifier_dir = processed_data_dir / "classifiers"
+concept_dir = processed_data_dir / "concepts"
 
 config_dir = data_dir / "config"
 
