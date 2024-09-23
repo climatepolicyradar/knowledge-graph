@@ -60,7 +60,7 @@ def main(config_path: Path):
         # Save the classifier to a file with the concept ID in the name
         classifier_path = classifier_dir / wikibase_id
         classifier.save(classifier_path)
-        console.log(f"Saved classifier to {classifier_path}")
+        console.log(f"Saved {classifier} to {classifier_path}")
 
 
 if __name__ == "__main__":

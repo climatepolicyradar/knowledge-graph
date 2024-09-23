@@ -8,7 +8,6 @@ from src.identifiers import WikibaseID, generate_identifier
 class Span(BaseModel):
     """Represents a span within a text."""
 
-    id: str = Field(..., description="A unique identifier for the span")
     text: str = Field(..., description="The text of the span")
     start_index: int = Field(
         ..., ge=0, description="The start index of the span within the text"
@@ -35,28 +34,23 @@ class Span(BaseModel):
         ],
     )
 
-    def __init__(self, text: str, start_index: int, end_index: int, **kwargs):
-        concept_id = kwargs.pop("concept_id", None)
-        id = kwargs.pop(
-            "id",
-            generate_identifier(
-                text,
-                start_index,
-                end_index,
-                concept_id,
-                # shouldn't matter who the labeller is
-            ),
-        )
-        super().__init__(
-            text=text, start_index=start_index, end_index=end_index, id=id, **kwargs
+    @computed_field
+    def id(self) -> str:
+        """Return the unique identifier for the span."""
+        return generate_identifier(
+            self.text, self.start_index, self.end_index, self.concept_id
         )
 
     @model_validator(mode="after")
     def check_whether_span_is_valid(self):
         """Check whether the span is valid."""
-        if self.start_index > self.end_index:
+        if self.start_index >= self.end_index:
             raise ValueError(
                 f"The end index must be greater than the start index. Got {self}"
+            )
+        if self.end_index > len(self.text):
+            raise ValueError(
+                f"The end index must be less than the length of the text. Got {self}"
             )
         return self
 
@@ -79,6 +73,16 @@ class Span(BaseModel):
             return False
         return self.id == other.id
 
+    @staticmethod
+    def _validate_merge_candidates(spans: list["Span"]):
+        """Check whether the spans can be merged."""
+        if not all(span.text == spans[0].text for span in spans):
+            raise ValueError("All spans must have the same text")
+        if not all(span.concept_id == spans[0].concept_id for span in spans):
+            raise ValueError("All spans must have the same concept_id")
+        if len(spans) == 0:
+            raise ValueError("Cannot merge an empty list of spans")
+
     @classmethod
     def union(cls, spans: list["Span"]) -> "Span":
         """
@@ -89,12 +93,7 @@ class Span(BaseModel):
         :param Span spans: The spans to union
         :return Span: A new span that is the union of the input spans
         """
-        if not all(span.text == spans[0].text for span in spans):
-            raise ValueError("All spans must have the same text")
-        if not all(span.concept_id == spans[0].concept_id for span in spans):
-            raise ValueError("All spans must have the same concept_id")
-        if len(spans) == 0:
-            raise ValueError("Cannot merge an empty list of spans")
+        cls._validate_merge_candidates(spans)
         if len(spans) == 1:
             return spans[0]
         else:
@@ -119,12 +118,7 @@ class Span(BaseModel):
         :param Span spans: The spans to intersect
         :return Span: A new span that is the intersection of the input spans
         """
-        if not all(span.text == spans[0].text for span in spans):
-            raise ValueError("All spans must have the same text")
-        if not all(span.concept_id == spans[0].concept_id for span in spans):
-            raise ValueError("All spans must have the same concept_id")
-        if len(spans) == 0:
-            raise ValueError("Cannot merge an empty list of spans")
+        cls._validate_merge_candidates(spans)
         if len(spans) == 1:
             return spans[0]
         else:
@@ -137,6 +131,15 @@ class Span(BaseModel):
                     set(labeller for span in spans for labeller in span.labellers)
                 ),
             )
+
+    def overlaps(self, other: "Span") -> bool:
+        """
+        Check whether this span overlaps with another span in the same text.
+
+        :param Span other: The other span
+        :return bool: True if the spans overlap, False otherwise
+        """
+        return jaccard_similarity(self, other) > 0
 
 
 def jaccard_similarity(span_a: Span, span_b: Span) -> float:
@@ -151,6 +154,8 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
     :param Span span_b: The second span
     :return float: The Jaccard similarity of the two spans
     """
+    if span_a.text != span_b.text:
+        raise ValueError("The spans must have the same text")
     intersection = max(
         0,
         min(span_a.end_index, span_b.end_index)
@@ -163,14 +168,14 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
 
 
 def group_overlapping_spans(
-    spans: list[Span], jaccard_threshold: float = 0.5
+    spans: list[Span], jaccard_threshold: float = 0
 ) -> list[list[Span]]:
     """
     Create a list of groups of spans according to their overlap.
 
     :param list[Span] spans: The spans to group
     :param float jaccard_threshold: The minimum Jaccard similarity for two spans to be
-    considered overlapping, default 0.5
+    considered overlapping
     :return list[list[Span]]: A list of groups of overlapping spans
     """
     groups: list[list[Span]] = []
@@ -190,14 +195,14 @@ def group_overlapping_spans(
 
 
 def merge_overlapping_spans(
-    spans: list[Span], jaccard_threshold: float = 0.5
+    spans: list[Span], jaccard_threshold: float = 0
 ) -> list[Span]:
     """
     Merge a list of overlapping spans into a list of non-overlapping spans.
 
     :param list[Span] spans: The spans to merge
     :param float jaccard_threshold: The minimum Jaccard similarity for two spans to be
-    considered overlapping, default 0.5
+    considered overlapping
     :return list[Span]: A list of non-overlapping spans
     """
     return [
