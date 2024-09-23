@@ -5,10 +5,12 @@ import re
 class WikibaseID(str):
     """A Wikibase ID, which is a string that starts with a 'Q' followed by a number."""
 
+    regex = r"^Q[1-9]\d*$"
+
     @classmethod
     def _validate(cls, value: str, field=None) -> str:
         """Validate that the Wikibase ID is in the correct format"""
-        if not re.match(r"^Q[1-9]\d*$", value):
+        if not re.match(cls.regex, value):
             raise ValueError(f"{value} is not a valid Wikibase ID")
         return value
 

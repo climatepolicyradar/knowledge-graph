@@ -3,9 +3,10 @@ from typing import Optional
 from hypothesis import strategies as st
 
 from src.concept import Concept
+from src.identifiers import WikibaseID
 from src.span import Span
 
-wikibase_id_strategy = st.from_regex(r"^Q[1-9]\d*$", fullmatch=True)
+wikibase_id_strategy = st.from_regex(WikibaseID.regex, fullmatch=True)
 text_strategy = st.text(min_size=10, max_size=1000)
 labeller_strategy = st.text(min_size=1, max_size=10)
 concept_label_strategy = st.text(
