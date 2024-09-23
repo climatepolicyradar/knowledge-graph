@@ -86,12 +86,12 @@ def main(
     try:
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
         console.log(f'📚 Loaded concept "{concept}" from {concept_dir}')
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise typer.BadParameter(
             f"Data for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
             f"  just get-concept {wikibase_id}\n"
-        )
+        ) from e
 
     console.log("🥇 Creating a list of gold-standard labelled passages")
     gold_standard_labelled_passages: list[LabelledPassage] = []
@@ -113,12 +113,12 @@ def main(
     try:
         classifier = Classifier.load(classifier_dir / wikibase_id)
         console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise typer.BadParameter(
             f"Classifier for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
             f"  just train {wikibase_id}\n"
-        )
+        ) from e
 
     console.log("🤖 Labelling passages with the classifier")
     model_labelled_passages = [

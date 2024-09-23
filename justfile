@@ -35,7 +35,7 @@ label id string: (train id)
     poetry run python scripts/atomic/label.py --wikibase-id {{id}} {{string}}
 
 # find instances of the concept in a set of passages for a specific wikibase ID
-predict id: (train id) build-dataset
+predict id:
     poetry run python scripts/atomic/predict.py --wikibase-id {{id}}
 
 # sample a set of passages from the dataset for a specific wikibase ID

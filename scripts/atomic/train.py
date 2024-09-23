@@ -30,12 +30,12 @@ def main(
     console.log(f"Loading concept {wikibase_id} from {concept_dir}")
     try:
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise typer.BadParameter(
             f"Data for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
             f"  just get-concept {wikibase_id}\n"
-        )
+        ) from e
 
     wikibase = WikibaseSession()
 
