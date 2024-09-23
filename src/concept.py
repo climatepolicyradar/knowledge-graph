@@ -65,11 +65,11 @@ class Concept(BaseModel):
 
     def __repr__(self) -> str:
         """Return a string representation of the concept"""
-        return f'Concept({self.wikibase_id}, "{self.preferred_label}")'
+        return f"{self.preferred_label} ({self.wikibase_id})"
 
     def __str__(self) -> str:
         """Return a string representation of the concept"""
-        return super().__str__()
+        return self.__repr__()
 
     @property
     def wikibase_url(self) -> str:

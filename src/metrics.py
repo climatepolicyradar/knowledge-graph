@@ -13,6 +13,15 @@ class ConfusionMatrix:
     true_negatives: int = 0
     false_negatives: int = 0
 
+    def support(self) -> int:
+        """Total number of samples in the confusion matrix"""
+        return (
+            self.true_positives
+            + self.false_negatives
+            + self.false_positives
+            + self.true_negatives
+        )
+
     def precision(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
         try:
