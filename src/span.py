@@ -48,10 +48,6 @@ class Span(BaseModel):
             raise ValueError(
                 f"The end index must be greater than the start index. Got {self}"
             )
-        if self.start_index < 0:
-            raise ValueError(
-                f"The start index must be greater than or equal to 0. Got {self}"
-            )
         if self.end_index > len(self.text):
             raise ValueError(
                 f"The end index must be less than the length of the text. Got {self}"
