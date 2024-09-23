@@ -8,13 +8,8 @@ class RulesBasedClassifier(KeywordClassifier):
     """
     Classifier uses keyword matching to find instances of a concept in text.
 
-    This modified version of the KeywordClassifier uses regular expressions to match the
-    keywords in the text. Regexes are case-sensitive based on the casing of the keyword
-    itself, and are applied at word boundaries in order of decreasing length to ensure
-    that longer keywords are matched first.
-
-    The classifier also supports negative keywords, which are used to exclude matches
-    based on the context in which the keyword appears.
+    This modified version of the KeywordClassifier uses regular expressions to match
+    positive labels, while excluding matches that appear within negative labels.
     """
 
     def __init__(self, concept: Concept):
@@ -24,27 +19,54 @@ class RulesBasedClassifier(KeywordClassifier):
         :param Concept concept: The concept which the classifier will identify in text
         """
         super().__init__(concept)
-        negative_labels = sorted(self.concept.negative_labels, key=len, reverse=True)
 
-        case_sensitive_labels = []
-        case_insensitive_labels = []
-        for label in sorted(self.concept.all_labels, key=len, reverse=True):
-            if label.strip():  # Ensure the label is not just whitespace
-                if any(char.isupper() for char in label):
-                    case_sensitive_labels.append(re.escape(label))
-                else:
-                    case_insensitive_labels.append(re.escape(label))
+        def create_pattern(positive_labels, negative_labels):
+            # Sort labels by length in descending order to ensure longer matches take precedence
+            positive_labels = sorted(positive_labels, key=len, reverse=True)
+            negative_labels = sorted(negative_labels, key=len, reverse=True)
 
-        negative_pattern = "|".join(
-            re.escape(label) for label in negative_labels if label.strip()
+            # Escape special regex characters in labels
+            positive_labels = [re.escape(label) for label in positive_labels]
+            negative_labels = [re.escape(label) for label in negative_labels]
+
+            # Create the positive pattern
+            positive_pattern = r"\b(?:" + "|".join(positive_labels) + r")\b"
+
+            # If there are negative labels, create a pattern that excludes them
+            if negative_labels:
+                negative_pattern = r"\b(?:" + "|".join(negative_labels) + r")\b"
+                # The final pattern matches a positive label only if it's not part of a negative label
+                return f"(?!{negative_pattern})({positive_pattern})"
+            else:
+                return f"({positive_pattern})"
+
+        # Create case-sensitive and case-insensitive patterns
+        self.case_sensitive_pattern = re.compile(
+            create_pattern(
+                [
+                    label
+                    for label in self.concept.all_labels
+                    if any(c.isupper() for c in label)
+                ],
+                [
+                    label
+                    for label in self.concept.negative_labels
+                    if any(c.isupper() for c in label)
+                ],
+            )
         )
-
-        def create_pattern(labels):
-            if labels:
-                return rf'\b(?!(?:{negative_pattern})\b)({"|".join(labels)})\b'
-            return r"(?!)"
-
-        self.case_sensitive_pattern = re.compile(create_pattern(case_sensitive_labels))
         self.case_insensitive_pattern = re.compile(
-            create_pattern(case_insensitive_labels), re.IGNORECASE
+            create_pattern(
+                [
+                    label.lower()
+                    for label in self.concept.all_labels
+                    if not any(c.isupper() for c in label)
+                ],
+                [
+                    label.lower()
+                    for label in self.concept.negative_labels
+                    if not any(c.isupper() for c in label)
+                ],
+            ),
+            re.IGNORECASE,
         )

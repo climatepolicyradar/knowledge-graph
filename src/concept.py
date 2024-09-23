@@ -1,4 +1,5 @@
 import os
+import warnings
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -10,13 +11,18 @@ from src.labelled_passage import LabelledPassage
 class Concept(BaseModel):
     """Base class for a concept"""
 
-    preferred_label: str = Field(..., description="The preferred label for the concept")
+    preferred_label: str = Field(
+        ..., description="The preferred label for the concept", min_length=1
+    )
     alternative_labels: list[str] = Field(
         default_factory=list, description="List of alternative labels for the concept"
     )
     negative_labels: list[str] = Field(
         default_factory=list,
-        description="Labels which should not be matched instances of the concept",
+        description=(
+            "Labels which should not be matched instances of the concept. "
+            "Negative labels should be unique, and cannot overlap with positive labels."
+        ),
     )
     description: Optional[str] = Field(
         default=None,
@@ -60,6 +66,39 @@ class Concept(BaseModel):
         if preferred_label in values.get("alternative_labels", []):
             # remove the preferred label from the alternative labels
             values["alternative_labels"].remove(preferred_label)
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_negative_labels_are_unique(cls, values: Dict) -> Dict:
+        """Ensure that the negative labels are a unique set of strings"""
+        negative_labels = values.get("negative_labels", [])
+        if len(negative_labels) != len(set(negative_labels)):
+            warnings.warn(
+                "Duplicate negative labels found. Using unique values.", UserWarning
+            )
+        values["negative_labels"] = list(set(str(item) for item in negative_labels))
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_negative_labels_are_not_in_positive_labels(cls, values: Dict) -> Dict:
+        """Raise a ValueError if a negative label is also a positive label"""
+        if any(
+            label in values["alternative_labels"] for label in values["negative_labels"]
+        ):
+            raise ValueError(
+                "A negative label should not be the same as a positive label"
+            )
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_whitespace_from_labels(cls, values: Dict) -> Dict:
+        """Strip leading and trailing whitespace from all labels"""
+        for key in ["alternative_labels", "negative_labels"]:
+            values[key] = [label.strip() for label in values.get(key, [])]
+        values["preferred_label"] = values["preferred_label"].strip()
         return values
 
     def __repr__(self) -> str:
