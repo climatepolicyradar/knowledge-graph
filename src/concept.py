@@ -1,4 +1,5 @@
 import os
+import warnings
 from typing import Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -18,7 +19,10 @@ class Concept(BaseModel):
     )
     negative_labels: list[str] = Field(
         default_factory=list,
-        description="Labels which should not be matched instances of the concept",
+        description=(
+            "Labels which should not be matched instances of the concept. "
+            "Negative labels should be unique, and cannot overlap with positive labels."
+        ),
     )
     description: Optional[str] = Field(
         default=None,
@@ -68,9 +72,12 @@ class Concept(BaseModel):
     @classmethod
     def _ensure_negative_labels_are_unique(cls, values: Dict) -> Dict:
         """Ensure that the negative labels are a unique set of strings"""
-        values["negative_labels"] = list(
-            set(str(item) for item in values.get("negative_labels", []))
-        )
+        negative_labels = values.get("negative_labels", [])
+        if len(negative_labels) != len(set(negative_labels)):
+            warnings.warn(
+                "Duplicate negative labels found. Using unique values.", UserWarning
+            )
+        values["negative_labels"] = list(set(str(item) for item in negative_labels))
         return values
 
     @model_validator(mode="before")
