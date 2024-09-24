@@ -53,3 +53,6 @@ create-labelling-task id usernames workspace:
     just predict --wikibase-id {{id}}
     just sample --wikibase-id {{id}}
     just push-to-argilla --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
+
+visualise-labels id:
+    poetry run python scripts/visualise_labels.py --wikibase-id {{id}}

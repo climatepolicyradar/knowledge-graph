@@ -1,0 +1,235 @@
+import os
+from typing import Annotated
+
+import typer
+from rich.console import Console
+
+from scripts.config import concept_dir, processed_data_dir
+from src.concept import Concept
+from src.identifiers import WikibaseID
+from src.labelled_passage import LabelledPassage
+from src.span import merge_overlapping_spans
+
+console = Console()
+app = typer.Typer()
+
+
+def labelled_passage_to_html(
+    labelled_passage: LabelledPassage, labeller_to_colour: dict[str, str]
+) -> str:
+    """
+    Convert a LabelledPassage to an HTML string
+
+    Spans will be highlighted in different colours based on the labeller.
+
+    :param LabelledPassage labelled_passage: The LabelledPassage to convert to HTML
+    :param dict[str, str] labeller_to_colour: A dictionary mapping labeller names to their corresponding colors
+    :return str: An HTML string representing the LabelledPassage, with <span> tags
+    around each span
+    """
+    sorted_spans = sorted(labelled_passage.spans, key=lambda x: x.start_index)
+    highlights = []
+    for span in sorted_spans:
+        for labeller in span.labellers:
+            label_type = labeller_to_colour[labeller]
+            highlights.append(
+                f'<span class="highlight {label_type}" style="left: {span.start_index}ch; width: {span.end_index - span.start_index}ch;"></span>'
+            )
+
+    return f'<div class="passage-container"><div class="passage">{labelled_passage.text}</div>{"".join(highlights)}</div>'
+
+
+def visualise_labelled_passages_as_html(
+    concept: Concept,
+    labelled_passages: list[LabelledPassage],
+) -> str:
+    """
+    Turn a list of labelled passages into an HTML string which visualises the labels
+
+    The labelled passages will be displayed in a list, with spans highlighted in
+    different colours based on the labellers.
+
+    :param list[LabelledPassage] labelled_passages: The labelled passages to visualise
+    """
+    wikibase_id = concept.wikibase_id
+    wikibase_url = f"{os.environ.get('WIKIBASE_URL')}/wiki/Item:{wikibase_id}"
+
+    all_labeller_names = set(
+        labeller
+        for labelled_passage in labelled_passages
+        for span in labelled_passage.spans
+        for labeller in span.labellers
+    )
+    # assume there are no more than 6 labellers
+    colours = ["#ff9999", "#99ff99", "#9999ff", "#ff99ff", "#99ffff", "#ffff99"]
+    labeller_to_colour = {
+        labeller: colour for labeller, colour in zip(all_labeller_names, colours)
+    }
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="initial-scale=1.0">
+        <title>Labelled Passages - {wikibase_id}</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            h1 {{
+                color: #2c3e50;
+                border-bottom: 2px solid #3498db;
+                padding-bottom: 10px;
+            }}
+            ul {{
+                list-style-type: none;
+                padding: 0;
+            }}
+            li {{
+                background-color: #f9f9f9;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                margin-bottom: 10px;
+                padding: 15px;
+                overflow-x: auto;
+            }}
+            .passage-container {{
+                position: relative;
+                font-family: monospace;
+                white-space: nowrap;
+                overflow-x: visible;
+            }}
+            .passage {{
+                position: relative;
+                z-index: 1;
+                display: inline-block;
+            }}
+            .highlight {{
+                position: absolute;
+                height: 1.2em;
+                top: 0;
+                z-index: 0;
+                opacity: 0.3;
+            }}
+            .legend {{
+                display: flex;
+                justify-content: center;
+                margin-bottom: 20px;
+            }}
+            .legend-item {{
+                margin: 0 10px;
+                display: flex;
+                align-items: center;
+            }}
+            .legend-color {{
+                width: 20px;
+                height: 20px;
+                margin-right: 5px;
+                border: 1px solid #333;
+                opacity: 0.3;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>Labelled Passages - <a href="{wikibase_url}">{wikibase_id}</a></h1>
+        <div class="legend">
+            {"".join(f'<div class="legend-item"><div class="legend-color" style="background-color: {colour};"></div><span>{labeller.capitalize()} Label</span></div>' for labeller, colour in labeller_to_colour.items())}
+        </div>
+        <ul>
+            {"".join(f"<li>{i+1}. {labelled_passage_to_html(labelled_passage, labeller_to_colour)}</li>" for i, labelled_passage in enumerate(labelled_passages))}
+        </ul>
+    </body>
+    </html>
+    """
+    return " ".join(html.split())
+
+
+@app.command()
+def main(
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ...,
+            help="The Wikibase ID of the concept classifier to train",
+            parser=WikibaseID,
+        ),
+    ],
+):
+    concept = Concept.load(concept_dir / f"{wikibase_id}.json")
+
+    console.log(f"Visualising labels for {concept}")
+
+    predictions_dir = processed_data_dir / "predictions"
+    console.log(f"Loading predictions from {predictions_dir}")
+    try:
+        with open(predictions_dir / f"{wikibase_id}.jsonl", "r", encoding="utf-8") as f:
+            predictions = [LabelledPassage.model_validate_json(line) for line in f]
+        n_annotations = sum([len(entry.spans) for entry in predictions])
+        console.log(
+            f"Loaded {len(predictions)} positively predicted passages with "
+            f"{n_annotations} individual spans"
+        )
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"No sampled passages found for {wikibase_id}. Please run"
+            f"  just sample {wikibase_id}"
+        ) from e
+
+    visualisations_dir = processed_data_dir / "visualisations" / wikibase_id
+    visualisations_dir.mkdir(parents=True, exist_ok=True)
+
+    console.log("🤝 Visualising inter-annotator agreement")
+    html = visualise_labelled_passages_as_html(
+        concept=concept, labelled_passages=concept.labelled_passages
+    )
+    output_path = visualisations_dir / "inter_annotator_agreement.html"
+    output_path.write_text(html, encoding="utf-8")
+    console.log(f"📄 Saved inter-annotator agreement visualisation to {output_path}")
+
+    console.log("🥇 Creating gold standard labelled passages")
+    gold_standard_passages: list[LabelledPassage] = []
+    for labelled_passage in concept.labelled_passages:
+        merged_spans = merge_overlapping_spans(
+            # if there's any overlap between spans, merge them
+            spans=labelled_passage.spans,
+            jaccard_threshold=0,
+        )
+        gold_standard_passages.append(
+            labelled_passage.model_copy(update={"spans": merged_spans}, deep=True)
+        )
+    n_annotations = sum([len(entry.spans) for entry in gold_standard_passages])
+
+    console.log("🤩 Visualising gold standard labels' agreement with model predictions")
+
+    output_path = visualisations_dir / "model_vs_gold_standard.html"
+    predictions_and_gold_standard_labels = [
+        predicted_passage.model_copy(
+            update={"spans": predicted_passage.spans + gold_standard_passage.spans},
+            deep=True,
+        )
+        for predicted_passage, gold_standard_passage in zip(
+            predictions, gold_standard_passages
+        )
+    ]
+    html = visualise_labelled_passages_as_html(
+        concept=concept, labelled_passages=predictions_and_gold_standard_labels
+    )
+    output_path.write_text(html, encoding="utf-8")
+    console.log(f"📄 Saved model comparison visualisation to {output_path}")
+
+    console.log("💯 visualising all model predictions")
+    output_path = visualisations_dir / "predictions.html"
+    html = visualise_labelled_passages_as_html(
+        concept=concept, labelled_passages=predictions
+    )
+    output_path.write_text(html, encoding="utf-8")
+    console.log(f"📄 Saved prediction visualisation to {output_path}")
+
+
+if __name__ == "__main__":
+    app()
