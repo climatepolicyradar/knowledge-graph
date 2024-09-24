@@ -21,7 +21,7 @@ def main(
         WikibaseID,
         typer.Option(
             ...,
-            help="The Wikibase ID of the concept classifier to train",
+            help="The Wikibase ID of the concept classifier to run",
             parser=WikibaseID,
         ),
     ],
@@ -33,7 +33,6 @@ def main(
     documents in the combined dataset, and saves the resulting positive passages for each
     concept to a file.
     """
-    # Load the combined dataset
     console.log("🚚 Loading combined dataset")
     combined_dataset_path = processed_data_dir / "combined_dataset.feather"
     try:
@@ -55,14 +54,13 @@ def main(
             f"  just train {wikibase_id}"
         ) from e
 
-    console.log(f"Running {classifier} on passages")
     labelled_passages: list[LabelledPassage] = []
     for _, row in track(
         df.iterrows(),
         console=console,
         transient=True,
         total=len(df),
-        description=f"Running {classifier} inference",
+        description=f"Running {classifier} on {len(df)} passages",
     ):
         text = row.get("text", "")
         spans = classifier.predict(text)
@@ -72,11 +70,7 @@ def main(
                 LabelledPassage(
                     text=text,
                     spans=spans,
-                    metadata={
-                        "translated": row.get("translated", False),
-                        "dataset_name": row.get("dataset_name", ""),
-                        "world_bank_region": row.get("world_bank_region", ""),
-                    },
+                    metadata=row.astype(str).to_dict(),
                 )
             )
 

@@ -24,7 +24,6 @@ def main(
         ),
     ],
 ):
-    # Set up the output directory
     classifier_dir.mkdir(parents=True, exist_ok=True)
 
     console.log(f"Loading concept {wikibase_id} from {concept_dir}")

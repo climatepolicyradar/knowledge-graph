@@ -12,8 +12,8 @@ config_dir = data_dir / "config"
 # aws
 aws_region = "eu-west-1"
 
-# classifier config
-stratified_columns = ["world_bank_region", "dataset_name"]
-equal_columns = ["translated"]
-sample_size = 130
-negative_proportion = 0.2
+# sampling config
+SAMPLE_SIZE = 130
+NEGATIVE_PROPORTION = 0.2
+STRATIFIED_COLUMNS = ["world_bank_region", "dataset_name"]
+EQUAL_COLUMNS = ["translated"]

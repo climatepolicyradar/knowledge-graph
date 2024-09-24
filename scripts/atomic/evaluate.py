@@ -8,11 +8,11 @@ from rich.console import Console
 from rich.table import Table
 
 from scripts.config import (
+    EQUAL_COLUMNS,
+    STRATIFIED_COLUMNS,
     classifier_dir,
     concept_dir,
-    equal_columns,
     processed_data_dir,
-    stratified_columns,
 )
 from src.classifier import Classifier
 from src.concept import Concept
@@ -142,13 +142,19 @@ def main(
     ) in group_passages_by_equity_strata(
         human_labelled_passages=gold_standard_labelled_passages,
         model_labelled_passages=model_labelled_passages,
-        equity_strata=equal_columns + stratified_columns,
+        equity_strata=EQUAL_COLUMNS + STRATIFIED_COLUMNS,
     ):
         confusion_matrices[group]["Passage level"] = count_passage_level_metrics(
             gold_standard_labelled_passages, model_labelled_passages
         )
 
-        for threshold in [0, 0.5, 0.9, 1]:
+        # calculate span-level metrics at different thresholds. The thresholds define the
+        # minimum Jaccard similarity required for two spans to be considered a match. We
+        # take a range of thresholds to get a sense of how the model performs at
+        # different levels of agreement (with 0 allowing for any overlap between model
+        # and human, and 1 setting a requirement for an exact match)
+        span_level_agreement_thresholds = [0, 0.5, 0.9, 1]
+        for threshold in span_level_agreement_thresholds:
             confusion_matrices[group][f"Span level ({threshold})"] = (
                 count_span_level_metrics(
                     gold_standard_labelled_passages,

@@ -39,17 +39,17 @@ predict id:
     poetry run python scripts/atomic/predict.py --wikibase-id {{id}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
-sample id: (train id) (predict id)
-    poetry run python scripts/atomic/sample.py {{id}}
+sample id:
+    poetry run python scripts/atomic/sample.py --wikibase-id {{id}}
 
 # push a sampled set of passages to argilla for a specific wikibase ID
-push-to-argilla id: (sample id)
-    poetry run python scripts/atomic/push_to_argilla.py {{id}}
+push-to-argilla id:
+    poetry run python scripts/atomic/push_to_argilla.py --wikibase-id {{id}}
 
 # run the full pipeline for a specific wikibase ID
-create-labelling-task id: (sample id)
-    just get-concept {{id}}
-    just train {{id}}
-    just predict {{id}}
-    just sample {{id}}
-    just push-to-argilla {{id}}
+create-labelling-task id:
+    just get-concept --wikibase-id {{id}}
+    just train --wikibase-id {{id}}
+    just predict --wikibase-id {{id}}
+    just sample --wikibase-id {{id}}
+    just push-to-argilla --wikibase-id {{id}}
