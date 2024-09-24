@@ -17,23 +17,6 @@ app = typer.Typer()
 console = Console()
 
 
-def list_of_labelled_passages_to_dataframe(
-    list_of_labelled_passages: list[LabelledPassage],
-) -> pd.DataFrame:
-    """
-    Convert a list of LabelledPassage objects to a pandas DataFrame.
-
-    :param list[LabelledPassage] list_of_labelled_passages: A list of LabelledPassage objects.
-    :return: A pandas DataFrame.
-    """
-    return pd.DataFrame(
-        [
-            labelled_passage.model_dump()
-            for labelled_passage in list_of_labelled_passages
-        ]
-    )
-
-
 @app.command()
 def main(
     wikibase_id: Annotated[

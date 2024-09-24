@@ -43,13 +43,13 @@ sample id:
     poetry run python scripts/atomic/sample.py --wikibase-id {{id}}
 
 # push a sampled set of passages to argilla for a specific wikibase ID
-push-to-argilla id:
-    poetry run python scripts/atomic/push_to_argilla.py --wikibase-id {{id}}
+push-to-argilla id usernames workspace:
+    poetry run python scripts/atomic/push_to_argilla.py --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
 
 # run the full pipeline for a specific wikibase ID
-create-labelling-task id:
+create-labelling-task id usernames workspace:
     just get-concept --wikibase-id {{id}}
     just train --wikibase-id {{id}}
     just predict --wikibase-id {{id}}
     just sample --wikibase-id {{id}}
-    just push-to-argilla --wikibase-id {{id}}
+    just push-to-argilla --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
