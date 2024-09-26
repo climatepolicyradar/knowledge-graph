@@ -13,7 +13,7 @@ concept_label_strategy = st.text(
     min_size=1,
     max_size=25,
     alphabet=st.characters(exclude_categories=("C", "Zl", "Zp", "P", "M", "S")),
-).filter(lambda x: x.strip())
+).map(lambda x: x.strip()).filter(lambda x: x)
 
 
 @st.composite
