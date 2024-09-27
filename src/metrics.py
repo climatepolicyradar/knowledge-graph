@@ -101,7 +101,7 @@ def count_span_level_metrics(
         for ground_truth_span in ground_truth_passage.spans:
             found = False
             for predicted_span in predicted_passage.spans:
-                if jaccard_similarity(ground_truth_span, predicted_span) >= threshold:
+                if jaccard_similarity(ground_truth_span, predicted_span) > threshold:
                     found = True
                     cm.true_positives += 1
                     break
@@ -112,7 +112,7 @@ def count_span_level_metrics(
         for predicted_span in predicted_passage.spans:
             found = False
             for ground_truth_span in ground_truth_passage.spans:
-                if jaccard_similarity(predicted_span, ground_truth_span) >= threshold:
+                if jaccard_similarity(predicted_span, ground_truth_span) > threshold:
                     found = True
                     break
             if not found:
