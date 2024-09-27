@@ -15,15 +15,16 @@ app = typer.Typer()
 
 
 def labelled_passage_to_html(
-    labelled_passage: LabelledPassage, labeller_to_colour: dict[str, str]
+    labelled_passage: LabelledPassage, labeller_to_color: dict[str, str]
 ) -> str:
     """
     Convert a LabelledPassage to an HTML string
 
-    Spans will be highlighted in different colours based on the labeller.
+    Spans will be highlighted in different colors based on the labeller.
 
     :param LabelledPassage labelled_passage: The LabelledPassage to convert to HTML
-    :param dict[str, str] labeller_to_colour: A dictionary mapping labeller names to their corresponding colors
+    :param dict[str, str] labeller_to_color: A dictionary mapping labeller names to
+    their corresponding colors
     :return str: An HTML string representing the LabelledPassage, with <span> tags
     around each span
     """
@@ -31,9 +32,8 @@ def labelled_passage_to_html(
     highlights = []
     for span in sorted_spans:
         for labeller in span.labellers:
-            label_type = labeller_to_colour[labeller]
             highlights.append(
-                f'<span class="highlight {label_type}" style="left: {span.start_index}ch; width: {span.end_index - span.start_index}ch;"></span>'
+                f'<span class="highlight" style="left: {span.start_index}ch; width: {span.end_index - span.start_index}ch; background-color: {labeller_to_color[labeller]};"></span>'
             )
 
     return f'<div class="passage-container"><div class="passage">{labelled_passage.text}</div>{"".join(highlights)}</div>'
@@ -42,17 +42,17 @@ def labelled_passage_to_html(
 def visualise_labelled_passages_as_html(
     concept: Concept,
     labelled_passages: list[LabelledPassage],
+    title: str = "Labelled Passages",
 ) -> str:
     """
     Turn a list of labelled passages into an HTML string which visualises the labels
 
     The labelled passages will be displayed in a list, with spans highlighted in
-    different colours based on the labellers.
+    different colors based on the labellers.
 
     :param list[LabelledPassage] labelled_passages: The labelled passages to visualise
     """
-    wikibase_id = concept.wikibase_id
-    wikibase_url = f"{os.environ.get('WIKIBASE_URL')}/wiki/Item:{wikibase_id}"
+    wikibase_url = f"{os.environ.get('WIKIBASE_URL')}/wiki/Item:{concept.wikibase_id}"
 
     all_labeller_names = set(
         labeller
@@ -60,10 +60,12 @@ def visualise_labelled_passages_as_html(
         for span in labelled_passage.spans
         for labeller in span.labellers
     )
-    # assume there are no more than 6 labellers
-    colours = ["#ff9999", "#99ff99", "#9999ff", "#ff99ff", "#99ffff", "#ffff99"]
-    labeller_to_colour = {
-        labeller: colour for labeller, colour in zip(all_labeller_names, colours)
+    colors = [
+        f"hsl({i * 360 // len(all_labeller_names)}, 70%, 50%)"
+        for i in range(len(all_labeller_names))
+    ]
+    labeller_to_color = {
+        labeller: color for labeller, color in zip(all_labeller_names, colors)
     }
 
     html = f"""
@@ -72,7 +74,7 @@ def visualise_labelled_passages_as_html(
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="initial-scale=1.0">
-        <title>Labelled Passages - {wikibase_id}</title>
+        <title>{title} - {concept.preferred_label}</title>
         <style>
             body {{
                 font-family: Arial, sans-serif;
@@ -80,11 +82,6 @@ def visualise_labelled_passages_as_html(
                 color: #333;
                 margin: 0 auto;
                 padding: 20px;
-            }}
-            h1 {{
-                color: #2c3e50;
-                border-bottom: 2px solid #3498db;
-                padding-bottom: 10px;
             }}
             ul {{
                 list-style-type: none;
@@ -118,8 +115,11 @@ def visualise_labelled_passages_as_html(
             }}
             .legend {{
                 display: flex;
-                justify-content: center;
                 margin-bottom: 20px;
+                border-top: 1px solid #ccc;
+                padding-top: 10px;
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 10px;
             }}
             .legend-item {{
                 margin: 0 10px;
@@ -136,12 +136,23 @@ def visualise_labelled_passages_as_html(
         </style>
     </head>
     <body>
-        <h1>Labelled Passages - <a href="{wikibase_url}">{wikibase_id}</a></h1>
+    <div>
+        <h1>{title} - <a href="{wikibase_url}">{concept}</a></h1>
+        {f"<p>{concept.description}</p>" or ""}
+    </div>
         <div class="legend">
-            {"".join(f'<div class="legend-item"><div class="legend-color" style="background-color: {colour};"></div><span>{labeller.capitalize()} Label</span></div>' for labeller, colour in labeller_to_colour.items())}
+            <b>Labellers:</b>
+            {
+                "".join(
+                    (
+                        f'<div class="legend-item"><div class="legend-color" style="background-color: {color};"></div>'
+                        f'<span>{labeller.capitalize()}</span></div>' 
+                    )
+                for labeller, color in labeller_to_color.items())       
+            }
         </div>
         <ul>
-            {"".join(f"<li>{i+1}. {labelled_passage_to_html(labelled_passage, labeller_to_colour)}</li>" for i, labelled_passage in enumerate(labelled_passages))}
+            {"".join(f"<li>{i+1}. {labelled_passage_to_html(labelled_passage, labeller_to_color)}</li>" for i, labelled_passage in enumerate(labelled_passages))}
         </ul>
     </body>
     </html>
@@ -185,7 +196,9 @@ def main(
 
     console.log("🤝 Visualising inter-annotator agreement")
     html = visualise_labelled_passages_as_html(
-        concept=concept, labelled_passages=concept.labelled_passages
+        concept=concept,
+        labelled_passages=concept.labelled_passages,
+        title="Inter-annotator agreement",
     )
     output_path = visualisations_dir / "inter_annotator_agreement.html"
     output_path.write_text(html, encoding="utf-8")
@@ -203,7 +216,10 @@ def main(
             labelled_passage.model_copy(update={"spans": merged_spans}, deep=True)
         )
     n_annotations = sum([len(entry.spans) for entry in gold_standard_passages])
-
+    console.log(
+        f"Created {len(gold_standard_passages)} gold standard passages with "
+        f"{n_annotations} individual spans"
+    )
     console.log("🤩 Visualising gold standard labels' agreement with model predictions")
 
     output_path = visualisations_dir / "model_vs_gold_standard.html"
@@ -217,7 +233,9 @@ def main(
         )
     ]
     html = visualise_labelled_passages_as_html(
-        concept=concept, labelled_passages=predictions_and_gold_standard_labels
+        concept=concept,
+        labelled_passages=predictions_and_gold_standard_labels,
+        title="Model predictions vs Gold-standard labels",
     )
     output_path.write_text(html, encoding="utf-8")
     console.log(f"📄 Saved model comparison visualisation to {output_path}")
@@ -225,7 +243,7 @@ def main(
     console.log("💯 visualising all model predictions")
     output_path = visualisations_dir / "predictions.html"
     html = visualise_labelled_passages_as_html(
-        concept=concept, labelled_passages=predictions
+        concept=concept, labelled_passages=predictions, title="All model predictions"
     )
     output_path.write_text(html, encoding="utf-8")
     console.log(f"📄 Saved prediction visualisation to {output_path}")
