@@ -4,11 +4,12 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from scripts.config import concept_dir, processed_data_dir
+from scripts.config import classifier_dir, concept_dir, processed_data_dir
+from src.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
-from src.span import merge_overlapping_spans
+from src.span import Span, group_overlapping_spans
 
 console = Console()
 app = typer.Typer()
@@ -194,7 +195,17 @@ def main(
     visualisations_dir = processed_data_dir / "visualisations" / wikibase_id
     visualisations_dir.mkdir(parents=True, exist_ok=True)
 
-    console.log("🤝 Visualising inter-annotator agreement")
+    console.log("💯 visualising all model predictions")
+    output_path = visualisations_dir / "predictions.html"
+    html = visualise_labelled_passages_as_html(
+        concept=concept, labelled_passages=predictions, title="All model predictions"
+    )
+    output_path.write_text(html, encoding="utf-8")
+    console.log(f"📄 Saved prediction visualisation to {output_path}")
+
+    ########
+
+    console.log("🤝 visualising inter-annotator agreement")
     html = visualise_labelled_passages_as_html(
         concept=concept,
         labelled_passages=concept.labelled_passages,
@@ -204,33 +215,49 @@ def main(
     output_path.write_text(html, encoding="utf-8")
     console.log(f"📄 Saved inter-annotator agreement visualisation to {output_path}")
 
+    ########
     console.log("🥇 Creating gold standard labelled passages")
-    gold_standard_passages: list[LabelledPassage] = []
+    gold_standard_labelled_passages: list[LabelledPassage] = []
     for labelled_passage in concept.labelled_passages:
-        merged_spans = merge_overlapping_spans(
-            # if there's any overlap between spans, merge them
-            spans=labelled_passage.spans,
-            jaccard_threshold=0,
-        )
-        gold_standard_passages.append(
+        merged_spans = []
+        for group in group_overlapping_spans(
+            spans=labelled_passage.spans, jaccard_threshold=0
+        ):
+            merged_span = Span.union(spans=group)
+            merged_span.labellers = ["gold standard"]
+            merged_spans.append(merged_span)
+
+        gold_standard_labelled_passages.append(
             labelled_passage.model_copy(update={"spans": merged_spans}, deep=True)
         )
-    n_annotations = sum([len(entry.spans) for entry in gold_standard_passages])
+    n_annotations = sum([len(entry.spans) for entry in gold_standard_labelled_passages])
     console.log(
-        f"Created {len(gold_standard_passages)} gold standard passages with "
+        f"Created {len(gold_standard_labelled_passages)} gold standard passages with "
         f"{n_annotations} individual spans"
     )
-    console.log("🤩 Visualising gold standard labels' agreement with model predictions")
 
+    console.log("🧠 Generating model predictions for gold-standard passages")
+    try:
+        classifier = Classifier.load(classifier_dir / wikibase_id)
+        console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
+    except FileNotFoundError as e:
+        raise typer.BadParameter(
+            f"Classifier for {wikibase_id} not found. \n"
+            "If you haven't already, you should run:\n"
+            f"  just train {wikibase_id}\n"
+        ) from e
+
+    console.log("🤩 Visualising gold standard labels' agreement with model predictions")
     output_path = visualisations_dir / "model_vs_gold_standard.html"
     predictions_and_gold_standard_labels = [
-        predicted_passage.model_copy(
-            update={"spans": predicted_passage.spans + gold_standard_passage.spans},
+        gold_standard_passage.model_copy(
+            update={
+                "spans": classifier.predict(gold_standard_passage.text)
+                + gold_standard_passage.spans
+            },
             deep=True,
         )
-        for predicted_passage, gold_standard_passage in zip(
-            predictions, gold_standard_passages
-        )
+        for gold_standard_passage in gold_standard_labelled_passages
     ]
     html = visualise_labelled_passages_as_html(
         concept=concept,
@@ -239,14 +266,6 @@ def main(
     )
     output_path.write_text(html, encoding="utf-8")
     console.log(f"📄 Saved model comparison visualisation to {output_path}")
-
-    console.log("💯 visualising all model predictions")
-    output_path = visualisations_dir / "predictions.html"
-    html = visualise_labelled_passages_as_html(
-        concept=concept, labelled_passages=predictions, title="All model predictions"
-    )
-    output_path.write_text(html, encoding="utf-8")
-    console.log(f"📄 Saved prediction visualisation to {output_path}")
 
 
 if __name__ == "__main__":

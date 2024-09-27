@@ -23,7 +23,7 @@ from src.metrics import (
     count_passage_level_metrics,
     count_span_level_metrics,
 )
-from src.span import merge_overlapping_spans
+from src.span import Span, group_overlapping_spans
 
 console = Console()
 app = typer.Typer()
@@ -96,11 +96,14 @@ def main(
     console.log("🥇 Creating a list of gold-standard labelled passages")
     gold_standard_labelled_passages: list[LabelledPassage] = []
     for labelled_passage in concept.labelled_passages:
-        merged_spans = merge_overlapping_spans(
-            # if there's any overlap between spans, merge them
-            spans=labelled_passage.spans,
-            jaccard_threshold=0,
-        )
+        merged_spans = []
+        for group in group_overlapping_spans(
+            spans=labelled_passage.spans, jaccard_threshold=0
+        ):
+            merged_span = Span.union(spans=group)
+            merged_span.labellers = ["gold standard"]
+            merged_spans.append(merged_span)
+
         gold_standard_labelled_passages.append(
             labelled_passage.model_copy(update={"spans": merged_spans}, deep=True)
         )
