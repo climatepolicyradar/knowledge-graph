@@ -1,6 +1,6 @@
 import html
 
-from argilla import FeedbackRecord
+from argilla import Record
 from pydantic import BaseModel, Field, model_validator
 
 from src.identifiers import generate_identifier
@@ -36,7 +36,7 @@ class LabelledPassage(BaseModel):
         return self
 
     @classmethod
-    def from_argilla_record(cls, record: FeedbackRecord) -> "LabelledPassage":
+    def from_argilla_record(cls, record: Record) -> "LabelledPassage":
         """
         Create a LabelledPassage object from an Argilla record
 

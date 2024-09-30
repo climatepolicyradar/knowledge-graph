@@ -1,7 +1,7 @@
 from itertools import cycle
 from typing import Any, Dict, Generator, Tuple
 
-from argilla import FeedbackDataset, FeedbackRecord
+from argilla import Dataset, Record
 
 
 def distribute_labelling_projects(
@@ -31,18 +31,18 @@ def distribute_labelling_projects(
             yield dataset, next(labeller_cycle)
 
 
-def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:
+def combine_datasets(*datasets: Dataset) -> Dataset:
     """
     Combine an arbitrary number of argilla datasets into one.
 
-    :param FeedbackDataset *datasets: Unspecified number of datasets to combine, at
+    :param Dataset *datasets: Unspecified number of datasets to combine, at
     least one.
-    :return FeedbackDataset: The combined dataset
+    :return Dataset: The combined dataset
     """
     if not datasets:
         raise ValueError("At least one dataset must be provided")
 
-    combined_dataset = FeedbackDataset(
+    combined_dataset = Dataset(
         fields=datasets[0].fields,
         questions=datasets[0].questions,
         metadata_properties=datasets[0].metadata_properties,
@@ -51,7 +51,7 @@ def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:
         allow_extra_metadata=datasets[0].allow_extra_metadata,
     )
 
-    records_dict: Dict[str, FeedbackRecord] = {}
+    records_dict: Dict[str, Record] = {}
     for dataset in datasets:
         for record in dataset.records:
             # Use the 'text' field as the key (assuming it's unique)
