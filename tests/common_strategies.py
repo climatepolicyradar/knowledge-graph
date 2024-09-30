@@ -9,11 +9,15 @@ from src.span import Span
 wikibase_id_strategy = st.from_regex(WikibaseID.regex, fullmatch=True)
 text_strategy = st.text(min_size=10, max_size=1000)
 labeller_strategy = st.text(min_size=1, max_size=10)
-concept_label_strategy = st.text(
-    min_size=1,
-    max_size=25,
-    alphabet=st.characters(exclude_categories=("C", "Zl", "Zp", "P", "M", "S")),
-).map(lambda x: x.strip()).filter(lambda x: x)
+concept_label_strategy = (
+    st.text(
+        min_size=1,
+        max_size=25,
+        alphabet=st.characters(exclude_categories=("C", "Zl", "Zp", "P", "M", "S")),
+    )
+    .map(lambda x: x.strip())
+    .filter(lambda x: x)
+)
 
 
 @st.composite
