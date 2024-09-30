@@ -20,20 +20,20 @@ ipykernel = "^6.29.3"
 cpr_data_access = { git = "https://github.com/climatepolicyradar/data-access.git", tag = "0.4.0" }
 azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.3.1" }
 # navigator_document_parser = { git = "https://github.com/climatepolicyradar/navigator-document-parser.git" }
-neomodel = "^5.2.1"
+neomodel = "^5.3.3"
 typer = "0.9.4"
-rapidfuzz = "^3.9.4"
+rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 pytest = "^8.3.2"
-hypothesis = "^6.108.5"
+hypothesis = "^6.112.2"
 more-itertools = "^10.3.0"
-argilla = "1.29.1"
+argilla = "2.2.2"
 
 [tool.poetry.group.dev]
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-mkdocs-material = "^9.5.24"
+mkdocs-material = "^9.5.39"
 prefect = "^2.14.20"
 pre-commit = "^3.8.0"
 
