@@ -496,6 +496,17 @@ files = [
 ]
 
 [[package]]
+name = "backports-strenum"
+version = "1.3.1"
+description = "Base class for creating enumerated constants that are also subclasses of str"
+optional = false
+python-versions = ">=3.8.6,<3.11"
+files = [
+    {file = "backports_strenum-1.3.1-py3-none-any.whl", hash = "sha256:cdcfe36dc897e2615dc793b7d3097f54d359918fc448754a517e6f23044ccf83"},
+    {file = "backports_strenum-1.3.1.tar.gz", hash = "sha256:77c52407342898497714f0596e86188bb7084f89063226f4ba66863482f42414"},
+]
+
+[[package]]
 name = "boto3"
 version = "1.35.20"
 description = "The AWS SDK for Python"
@@ -1427,16 +1438,17 @@ test = ["objgraph", "psutil"]
 
 [[package]]
 name = "griffe"
-version = "1.3.1"
+version = "0.48.0"
 description = "Signatures for entire Python programs. Extract the structure, the frame, the skeleton of your project, to generate API documentation or find breaking changes in your API."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "griffe-1.3.1-py3-none-any.whl", hash = "sha256:940aeb630bc3054b4369567f150b6365be6f11eef46b0ed8623aea96e6d17b19"},
-    {file = "griffe-1.3.1.tar.gz", hash = "sha256:3f86a716b631a4c0f96a43cb75d05d3c85975003c20540426c0eba3b0581c56a"},
+    {file = "griffe-0.48.0-py3-none-any.whl", hash = "sha256:f944c6ff7bd31cf76f264adcd6ab8f3d00a2f972ae5cc8db2d7b6dcffeff65a2"},
+    {file = "griffe-0.48.0.tar.gz", hash = "sha256:f099461c02f016b6be4af386d5aa92b01fb4efe6c1c2c360dda9a5d0a863bb7f"},
 ]
 
 [package.dependencies]
+backports-strenum = {version = ">=1.3", markers = "python_version < \"3.11\""}
 colorama = ">=0.4"
 
 [[package]]
@@ -4870,4 +4882,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "1421182d216af19ee82420f358940b2b83780f00142dd34e271ac81399f5dd20"
+content-hash = "3e75b912c8fef8011c0134d6d62f0b151862daf8e474d83a71b15d705ec8c998"
