@@ -47,7 +47,7 @@ def test_whether_all_labels_are_correctly_generated():
     assert set(concept.all_labels) == {"Test", "A", "B", "C"}
 
 
-def test_whether_concepts_are_hashable_regardless_of_ordering():
+def test_whether_concepts_produce_the_same_hash_regardless_of_alternative_label_ordering():
     concept1 = Concept(
         preferred_label="Test",
         alternative_labels=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"],
