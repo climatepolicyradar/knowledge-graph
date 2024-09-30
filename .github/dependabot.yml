@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    commit-message:
+      prefix: feat
+      include: scope
+    groups:
+       all:
+         applies-to: version-updates
+         patterns:
+           - "*"
+    directory: /
+    schedule:
+      interval: monthly
+    reviewers:
+      - climatepolicyradar/deng
+  - package-ecosystem: github-actions
+    commit-message:
+      prefix: feat
+      include: scope
+    groups:
+       all:
+         applies-to: version-updates
+         patterns:
+           - "*"
+    directory: /
+    schedule:
+      interval: monthly
+    reviewers:
+      - climatepolicyradar/deng
+
