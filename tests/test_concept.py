@@ -74,8 +74,8 @@ def test_whether_repr_and_str_are_correctly_formatted(
         alternative_labels=alternative_labels,
         wikibase_id=wikibase_id,
     )
-    assert repr(concept) == f'Concept({wikibase_id}, "{preferred_label}")'
-    assert str(concept) != repr(concept)
+    assert repr(concept) == f"{preferred_label} ({wikibase_id})"
+    assert str(concept) == repr(concept)
 
 
 def test_whether_blank_preferred_label_raises_validation_error():
