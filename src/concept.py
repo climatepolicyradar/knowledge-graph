@@ -57,7 +57,7 @@ class Concept(BaseModel):
     @classmethod
     def _ensure_alternative_labels_are_unique(cls, values: list[str]) -> list[str]:
         """Ensure that the alternative labels are a unique set of strings"""
-        return list(set(str(item) for item in values))
+        return sorted(list(set(str(item) for item in values)))
 
     @model_validator(mode="before")
     @classmethod

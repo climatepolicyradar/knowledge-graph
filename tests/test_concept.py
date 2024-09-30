@@ -47,15 +47,15 @@ def test_whether_all_labels_are_correctly_generated():
     assert set(concept.all_labels) == {"Test", "A", "B", "C"}
 
 
-def test_whether_concepts_are_hashable():
+def test_whether_concepts_are_hashable_regardless_of_ordering():
     concept1 = Concept(
         preferred_label="Test",
-        alternative_labels=["A", "B"],
+        alternative_labels=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"],
         wikibase_id=WikibaseID("Q123"),
     )
     concept2 = Concept(
         preferred_label="Test",
-        alternative_labels=["B", "A"],
+        alternative_labels=["D", "H", "I", "G", "E", "F", "J", "K", "A", "C", "B"],
         wikibase_id=WikibaseID("Q123"),
     )
     assert hash(concept1) == hash(concept2)
