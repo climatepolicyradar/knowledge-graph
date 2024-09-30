@@ -1,24 +1,67 @@
 name: ci 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
+
 permissions:
   contents: write
+
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install poetry
+        shell: bash
+        run: pipx install poetry==1.8.2
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
-      - uses: actions/cache@v2
-        with:
-          key: ${{ github.ref }}
-          path: .cache
-      - run: pip install mkdocs-material
-      - name: Deploy docs
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Lint
         run: |
-          cd docs
-          mkdocs gh-deploy --force
+          poetry run pre-commit install
+          poetry run pre-commit run --all-files
+
+      - name: Test
+        run: poetry run pytest -v
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install poetry
+        shell: bash
+        run: pipx install poetry==1.8.2
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Deploy docs
+        working-directory: ./docs
+        run: poetry run mkdocs gh-deploy --force
+
+      - name: Deploy more
+        run: echo 'this is a placeholder'
