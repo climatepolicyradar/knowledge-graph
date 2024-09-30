@@ -63,8 +63,8 @@ def main(
         description=f"Running {classifier} on {len(df)} passages",
     ):
         text = row.get("text", "")
-        spans = classifier.predict(text)
-        if spans:
+        if text:
+            spans = classifier.predict(text)
             # only save the passage if the classifier found something
             labelled_passages.append(
                 LabelledPassage(
