@@ -21,13 +21,13 @@ cpr_data_access = { git = "https://github.com/climatepolicyradar/data-access.git
 azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.3.1" }
 # navigator_document_parser = { git = "https://github.com/climatepolicyradar/navigator-document-parser.git" }
 neomodel = "^5.3.3"
-typer = "0.12.5"
+typer = "0.9.4"
 rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 hypothesis = "^6.112.2"
 more-itertools = "^10.3.0"
-argilla = "2.0.1"
-prefect = "2.20.8"
+argilla = "1.29.1"
+prefect = "2.16.8"
 
 [tool.poetry.group.dev]
 optional = true
