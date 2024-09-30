@@ -1,12 +1,41 @@
 # 🕸️ Knowledge graph
 
-Infrastructure, tools, and scripts for managing Climate Policy Radar's concept store and knowledge graph.
+This repo comprises the infrastructure, tools, and scripts for managing Climate Policy Radar's concept store and knowledge graph.
 
-The concept store is a wikibase instance, used by the policy team to manage individual climate concepts and the relationships between them.
+Confused about those terms? See the [concept store vs knowledge graph](./docs/docs/developers/concept-store-vs-knowledge-graph.md) documentation for more information.
 
 ## Getting started
 
-Documentation is available in the [docs](docs) directory, and mirrored at [labs.climatepolicyradar.org/knowledge-graph](https://labs.climatepolicyradar.org/knowledge-graph)
+### As a developer
 
-- Policy team members (and other contributors to the concept store) should refer to the [users](https://labs.climatepolicyradar.org/knowledge-graph/docs/users) section of the documentation
-- Developers should refer to the [developers](docs/developers/) section of the documentation
+This repo is orchestrated with a [justfile](./justfile) (see [just](https://github.com/casey/just)) that wraps together a number of useful commands. Make sure you have `just` installed before you get started.
+
+Next, you'll need to install the project specific dependencies:
+
+```bash
+just install
+```
+
+Then you can run the tests:
+
+```bash
+just test
+```
+
+Or fetch everything we know about a concept from the concept store and argilla:
+
+```bash
+just get-concept Q123
+```
+
+You can see the full list of commands by running:
+
+```bash
+just --list
+```
+
+See the [docs](./docs) for more information on how to work with the knowledge graph.
+
+### As an editor
+
+You can also explore and edit the graph directly through UI like the concept store. We've documented the process of getting started with the concept store and a style guide for how to structure the data in the [concept store documentation in notion](https://www.notion.so/climatepolicyradar/Concept-store-documentation-54b91a8359664cb3a9bbe3989efb7ca0?pvs=4).

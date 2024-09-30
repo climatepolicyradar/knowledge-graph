@@ -13,21 +13,21 @@ class ConfusionMatrix:
     true_negatives: int = 0
     false_negatives: int = 0
 
-    def precision(self) -> float:
-        """https://en.wikipedia.org/wiki/Precision_and_recall"""
-        try:
-            return self.true_positives / (self.true_positives + self.false_positives)
-        except ZeroDivisionError:
-            return 0
-
     def support(self) -> int:
-        """https://en.wikipedia.org/wiki/Confusion_matrix"""
+        """Total number of samples in the confusion matrix"""
         return (
             self.true_positives
             + self.false_negatives
             + self.false_positives
             + self.true_negatives
         )
+
+    def precision(self) -> float:
+        """https://en.wikipedia.org/wiki/Precision_and_recall"""
+        try:
+            return self.true_positives / (self.true_positives + self.false_positives)
+        except ZeroDivisionError:
+            return 0
 
     def recall(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
@@ -101,7 +101,7 @@ def count_span_level_metrics(
         for ground_truth_span in ground_truth_passage.spans:
             found = False
             for predicted_span in predicted_passage.spans:
-                if jaccard_similarity(ground_truth_span, predicted_span) >= threshold:
+                if jaccard_similarity(ground_truth_span, predicted_span) > threshold:
                     found = True
                     cm.true_positives += 1
                     break
@@ -112,7 +112,7 @@ def count_span_level_metrics(
         for predicted_span in predicted_passage.spans:
             found = False
             for ground_truth_span in ground_truth_passage.spans:
-                if jaccard_similarity(predicted_span, ground_truth_span) >= threshold:
+                if jaccard_similarity(predicted_span, ground_truth_span) > threshold:
                     found = True
                     break
             if not found:

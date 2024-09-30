@@ -45,11 +45,7 @@ class LabelledPassage(BaseModel):
         """
         text = html.unescape(record.fields.get("text", ""))
 
-        metadata = {
-            "translated": record.metadata.get("translated", False),
-            "dataset_name": record.metadata.get("dataset_name", ""),
-            "world_bank_region": record.metadata.get("world_bank_region", ""),
-        }
+        metadata = record.metadata or {}
         spans = []
 
         for response in record.responses or []:

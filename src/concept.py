@@ -1,6 +1,7 @@
 import os
 import warnings
-from typing import Dict, Optional
+from pathlib import Path
+from typing import Dict, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -103,11 +104,11 @@ class Concept(BaseModel):
 
     def __repr__(self) -> str:
         """Return a string representation of the concept"""
-        return f'Concept({self.wikibase_id}, "{self.preferred_label}")'
+        return f"{self.preferred_label} ({self.wikibase_id})"
 
     def __str__(self) -> str:
         """Return a string representation of the concept"""
-        return super().__str__()
+        return self.__repr__()
 
     @property
     def wikibase_url(self) -> str:
@@ -128,3 +129,23 @@ class Concept(BaseModel):
     def __hash__(self) -> int:
         """Return a unique hash for the concept"""
         return hash((self.wikibase_id, self.preferred_label, *self.alternative_labels))
+
+    def save(self, path: Union[str, Path]) -> None:
+        """
+        Save the concept to a JSON file at the specified path
+
+        :param Union[str, Path] path: The path to save the concept to
+        """
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.model_dump_json(indent=2))
+
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "Concept":
+        """
+        Load a concept from a JSON file at the specified path
+
+        :param Union[str, Path] path: The path to load the concept from
+        :return Concept: The loaded concept
+        """
+        with open(path, "r", encoding="utf-8") as f:
+            return cls.model_validate_json(f.read())
