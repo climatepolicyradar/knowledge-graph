@@ -14,6 +14,8 @@ console = Console()
 
 app = typer.Typer()
 
+SAMPLE_SIZE = 250_000
+
 
 @app.command()
 def main(
@@ -37,6 +39,7 @@ def main(
     combined_dataset_path = processed_data_dir / "combined_dataset.feather"
     try:
         df = pd.read_feather(combined_dataset_path)
+        df = df.dropna(subset=["text"]).sample(SAMPLE_SIZE)
         console.log(f"✅ Loaded {len(df)} passages from local file")
     except FileNotFoundError as e:
         raise FileNotFoundError(
@@ -65,14 +68,15 @@ def main(
         text = row.get("text", "")
         if text:
             spans = classifier.predict(text)
-            # only save the passage if the classifier found something
-            labelled_passages.append(
-                LabelledPassage(
-                    text=text,
-                    spans=spans,
-                    metadata=row.astype(str).to_dict(),
+            if spans:
+                # only save the passage if the classifier found something
+                labelled_passages.append(
+                    LabelledPassage(
+                        text=text,
+                        spans=spans,
+                        metadata=row.astype(str).to_dict(),
+                    )
                 )
-            )
 
     n_spans = sum([len(entry.spans) for entry in labelled_passages])
     n_positive_passages = sum([len(entry.spans) > 0 for entry in labelled_passages])

@@ -57,3 +57,5 @@ create-labelling-task id usernames workspace:
 # visualise IAA, model vs gold-standard agreement, and positive predictions on the full dataset
 visualise-labels id:
     poetry run python scripts/visualise_labels.py --wikibase-id {{id}}
+
+analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id) (visualise-labels id)
