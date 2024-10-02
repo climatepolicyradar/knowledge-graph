@@ -33,7 +33,12 @@ class Classifier(ABC):
 
     def __repr__(self):
         """Return a string representation of the classifier."""
-        return f'{self.__class__.__name__}("{self.concept.preferred_label}")'
+        return f'{self.name}("{self.concept.preferred_label}")'
+
+    @property
+    def name(self):
+        """Return the name of the classifier."""
+        return self.__class__.__name__
 
     def save(self, path: Union[str, Path]):
         """

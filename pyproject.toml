@@ -30,6 +30,11 @@ prefect = "2.16.8"
 griffe = "0.48.0"
 cpr-sdk = "^1.7.1"
 sentence-transformers = "^3.1.1"
+wandb = "^0.18.3"
+boto3 = "^1.35.31"
+
+[tool.poetry.scripts]
+train = "scripts.train:app"
 
 [tool.poetry.group.dev]
 optional = true
@@ -38,6 +43,9 @@ optional = true
 pytest = "^8.3.2"
 mkdocs-material = "^9.5.39"
 pre-commit = "^3.8.0"
+boto3 = "^1.35.32"
+syrupy = "^4.7.1"
+moto = {extras = ["s3"], version = "^5.0.16"}
 
 [build-system]
 requires = ["poetry-core"]
