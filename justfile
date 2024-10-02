@@ -31,8 +31,8 @@ evaluate id:
     poetry run python scripts/evaluate.py --wikibase-id {{id}}
 
 # run a model for a specific wikibase ID on a supplied string
-label id string: (train id)
-    poetry run python scripts/label.py --wikibase-id {{id}} {{string}}
+label id string:
+    poetry run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
 
 # find instances of the concept in a set of passages for a specific wikibase ID
 predict id:
