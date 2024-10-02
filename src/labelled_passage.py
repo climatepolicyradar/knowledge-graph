@@ -1,6 +1,6 @@
 import html
 
-from argilla import FeedbackRecord
+from argilla import FeedbackRecord, User
 from pydantic import BaseModel, Field, model_validator
 
 from src.identifiers import generate_identifier
@@ -49,7 +49,7 @@ class LabelledPassage(BaseModel):
         spans = []
 
         for response in record.responses or []:
-            user_id = str(response.user_id)
+            user_name = User.from_id(response.user_id).username
             try:
                 for entity in response.values["entities"].value:
                     spans.extend(
@@ -59,7 +59,7 @@ class LabelledPassage(BaseModel):
                                 start_index=entity.start,
                                 end_index=entity.end,
                                 concept_id=entity.label,
-                                labellers=[user_id],
+                                labellers=[user_name],
                             )
                         ]
                     )

@@ -156,7 +156,7 @@ def main(
         # take a range of thresholds to get a sense of how the model performs at
         # different levels of agreement (with 0 allowing for any overlap between model
         # and human, and 1 setting a requirement for an exact match)
-        span_level_agreement_thresholds = [0, 0.5, 0.9, 1]
+        span_level_agreement_thresholds = [0, 0.5, 0.9, 0.99]
         for threshold in span_level_agreement_thresholds:
             confusion_matrices[group][f"Span level ({threshold})"] = (
                 count_span_level_metrics(
@@ -192,7 +192,6 @@ def main(
     console.log(table)
 
     metrics_path = processed_data_dir / "classifier_performance" / f"{wikibase_id}.json"
-
     df.to_json(metrics_path, orient="records", indent=2)
     console.log(f"📄 Saved performance metrics to {metrics_path}")
 
