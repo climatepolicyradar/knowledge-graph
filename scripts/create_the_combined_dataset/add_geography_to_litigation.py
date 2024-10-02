@@ -8,7 +8,7 @@ poetry run python scripts/sampling_for_sectors_classifier/add_geography_to_litig
 import json
 
 import pandas as pd
-from cpr_data_access.parser_models import BaseParserOutput
+from cpr_sdk.parser_models import BaseParserOutput
 from rich.console import Console
 from rich.progress import track
 
