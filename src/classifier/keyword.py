@@ -10,9 +10,24 @@ class KeywordClassifier(Classifier):
 
     Keywords are based on the preferred and alternative labels of the concept. The
     classifier uses regular expressions to match the keywords in the text. Regexes are
-    case-sensitive based on the casing of the keyword itself, and are applied at word
-    boundaries in order of decreasing length to ensure that longer keywords are matched
-    first.
+    applied differently based on the casing of the original label:
+
+    1. Case-sensitive matching: Applied to incoming labels containing any uppercase
+    characters.
+    2. Case-insensitive matching: Applied to labels containing only lowercase
+    characters (this should apply to most labels).
+
+    Regexes are applied at word boundaries in order of decreasing length to ensure that
+    longer keywords are matched first.
+
+    This approach allows for nuanced matching where:
+    - Uppercase-containing labels (e.g., "WHO") will only match exactly ("WHO", not
+    "who")
+    - Lowercase-only labels (e.g., "virus") will match regardless of case ("virus",
+    "Virus", "VIRUS")
+
+    This distinction is particularly useful for differentiating between common words
+    and specific entities (e.g., "who" vs "WHO" for the World Health Organization).
     """
 
     def __init__(self, concept: Concept):
@@ -22,27 +37,46 @@ class KeywordClassifier(Classifier):
         :param Concept concept: The concept which the classifier will identify in text
         """
         super().__init__(concept)
+
+        def create_pattern(labels):
+            return r"\b(?:" + "|".join(labels) + r")\b"
+
         self.case_sensitive_labels = []
         self.case_insensitive_labels = []
 
-        for label in sorted(self.concept.all_labels, key=len, reverse=True):
+        # Sort labels by length in descending order so that longer labels are matched first
+        sorted_labels = sorted(self.concept.all_labels, key=len, reverse=True)
+
+        for label in sorted_labels:
             if label.strip():  # Ensure the label is not just whitespace
                 if any(char.isupper() for char in label):
+                    # Labels including uppercase characters are added to the case-sensitive list
                     self.case_sensitive_labels.append(re.escape(label))
                 else:
+                    # Labels with only lowercase characters are added to the case-insensitive list
                     self.case_insensitive_labels.append(re.escape(label))
 
-        # Allow matches at the end by using word boundary \b
+        # Case-sensitive pattern: matches exactly as provided
         self.case_sensitive_pattern = re.compile(
-            r"\b(?:" + "|".join(self.case_sensitive_labels) + r")\b"
+            create_pattern(self.case_sensitive_labels)
         )
+
+        # Case-insensitive pattern: matches regardless of case
         self.case_insensitive_pattern = re.compile(
-            r"\b(?:" + "|".join(self.case_insensitive_labels) + r")\b", re.IGNORECASE
+            create_pattern(self.case_insensitive_labels), re.IGNORECASE
         )
 
     def predict(self, text: str) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
+
+        This method applies both case-sensitive and case-insensitive patterns to find
+        matches. It ensures that:
+
+        1. Longer matches take precedence over shorter ones
+        2. No overlapping matches are returned
+        3. Case-sensitive matches are found exactly as provided
+        4. Case-insensitive matches can be found regardless of casing
 
         :param str text: The text to predict on
         :return list[Span]: A list of spans in the text
