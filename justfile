@@ -23,8 +23,8 @@ get-concept id:
     poetry run python scripts/get_concept.py --wikibase-id {{id}}
 
 # train a model for a specific wikibase ID
-train id:
-    poetry run python scripts/train.py --wikibase-id {{id}}
+train id +OPTS="":
+    poetry run train --wikibase-id {{id}} {{OPTS}}
 
 # evaluate a model for a specific wikibase ID
 evaluate id:

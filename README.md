@@ -28,6 +28,18 @@ Or fetch everything we know about a concept from the concept store and argilla:
 just get-concept Q123
 ```
 
+You can then train a model, after logging in (with `aws sso login --profile labs`):
+
+```bash
+just train Q992
+```
+
+Or to also track in W&B and upload to S3:
+
+```bash
+just train Q992 --track --upload --aws-env staging
+```
+
 You can see the full list of commands by running:
 
 ```bash
