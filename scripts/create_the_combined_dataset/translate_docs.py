@@ -10,8 +10,8 @@ poetry run python scripts/sampling_for_sectors_classifier/translate_docs.py
 
 import json
 
-from cpr_data_access.models import BaseDocument
-from cpr_data_access.parser_models import BaseParserOutput
+from cpr_sdk.models import BaseDocument
+from cpr_sdk.parser_models import BaseParserOutput
 from navigator_document_parser.translator.translate import translate_parser_output
 from rich.console import Console
 from rich.progress import track

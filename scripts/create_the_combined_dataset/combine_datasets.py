@@ -9,13 +9,13 @@ the world bank region metadata to the dataset for stratification.
 import json
 
 import pandas as pd
-from cpr_data_access.models import (
+from cpr_sdk.models import (
     BaseDocument,
     BaseParserOutput,
     CPRDocument,
     GSTDocument,
 )
-from cpr_data_access.models import Dataset as CPRDataset
+from cpr_sdk.models import Dataset as CPRDataset
 from rich.console import Console
 from rich.progress import track
 

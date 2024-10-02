@@ -17,8 +17,7 @@ httpx = "^0.26.0"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
-cpr_data_access = { git = "https://github.com/climatepolicyradar/data-access.git", tag = "0.4.0" }
-azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.3.1" }
+azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
 # navigator_document_parser = { git = "https://github.com/climatepolicyradar/navigator-document-parser.git" }
 neomodel = "^5.3.3"
 typer = "0.9.4"
@@ -29,6 +28,7 @@ more-itertools = "^10.3.0"
 argilla = "1.29.1"
 prefect = "2.16.8"
 griffe = "0.48.0"
+cpr-sdk = "^1.7.1"
 
 [tool.poetry.group.dev]
 optional = true
