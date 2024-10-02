@@ -2,7 +2,7 @@ set dotenv-load
 
 # install dependencies and set up the project
 install:
-    poetry install
+    poetry install --with dev
     poetry run pre-commit install
     poetry run ipython kernel install --user
 
