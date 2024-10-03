@@ -31,7 +31,7 @@ class EmbeddingClassifier(Classifier):
 
         self.concept_embedding = self.embedding_model.encode(self.concept_text)
 
-    def predict(self, text: str, threshold: float = 0.5) -> list[Span]:
+    def predict(self, text: str, threshold: float = 0.65) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
