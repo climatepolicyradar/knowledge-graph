@@ -29,6 +29,7 @@ argilla = "1.29.1"
 prefect = "2.16.8"
 griffe = "0.48.0"
 cpr-sdk = "^1.7.1"
+sentence-transformers = "^3.1.1"
 
 [tool.poetry.group.dev]
 optional = true
