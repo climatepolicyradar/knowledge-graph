@@ -1,4 +1,5 @@
 from src.classifier.classifier import Classifier
+from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
@@ -7,6 +8,7 @@ __all__ = [
     "Classifier",
     "KeywordClassifier",
     "RulesBasedClassifier",
+    "EmbeddingClassifier",
 ]
 
 
