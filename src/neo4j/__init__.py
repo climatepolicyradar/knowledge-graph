@@ -25,6 +25,7 @@ def get_neo4j_session(clear=False):
     with open(os.devnull, "w", encoding="utf-8") as dev_null:
         db.install_all_labels(dev_null)
 
+    console.log("Connected to neo4j")
     return db
 
 

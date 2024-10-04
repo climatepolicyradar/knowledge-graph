@@ -6,7 +6,7 @@ class DocumentNode(StructuredNode):
     """Neo4j node representing a document."""
 
     title = StringProperty(required=True)
-    slug = StringProperty(required=True, unique_index=True)
+    document_id = StringProperty(required=True, unique_index=True)
     passages = RelationshipTo("PassageNode", "HAS_PASSAGE")
 
 
