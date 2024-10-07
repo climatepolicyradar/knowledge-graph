@@ -15,13 +15,13 @@ document metadata.
 import os
 from pathlib import Path
 
-import argilla as rg
 import pandas as pd
 import typer
 from rich.console import Console
 from rich.progress import track
 from rich.table import Table
 
+import argilla as rg
 from scripts.config import processed_data_dir
 from src.identifiers import generate_identifier
 from src.sampling import SamplingConfig

@@ -2,10 +2,10 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-import argilla as rg
 from rich.console import Console
 from typer import Option, Typer
 
+import argilla as rg
 from scripts.config import processed_data_dir
 from src.argilla import combine_datasets
 from src.identifiers import WikibaseID
