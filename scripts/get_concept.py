@@ -1,10 +1,10 @@
 import os
 from typing import Annotated
 
-import argilla as rg
 import typer
 from rich.console import Console
 
+import argilla as rg
 from scripts.config import concept_dir
 from src.argilla import combine_datasets
 from src.identifiers import WikibaseID

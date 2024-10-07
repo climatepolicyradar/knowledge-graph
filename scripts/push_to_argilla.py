@@ -1,11 +1,11 @@
 import os
 from typing import Annotated
 
-import argilla as rg
 import typer
 from rich.console import Console
 from tqdm.auto import tqdm
 
+import argilla as rg
 from scripts.config import concept_dir, processed_data_dir
 from src.concept import Concept
 from src.identifiers import WikibaseID, generate_identifier

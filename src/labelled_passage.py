@@ -1,8 +1,8 @@
 import html
 
-from argilla import FeedbackRecord, User
 from pydantic import BaseModel, Field, model_validator
 
+from argilla import FeedbackRecord, User
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
 
