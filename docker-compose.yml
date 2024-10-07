@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   neo4j:
-    image: neo4j:latest
+    image: neo4j:5.24.1
     volumes:
       - type: bind
         source: ./data/neo4j/data

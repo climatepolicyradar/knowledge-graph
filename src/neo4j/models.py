@@ -1,4 +1,10 @@
-from neomodel import RelationshipFrom, RelationshipTo, StringProperty, StructuredNode
+from neomodel import (
+    Relationship,
+    RelationshipFrom,
+    RelationshipTo,
+    StringProperty,
+    StructuredNode,
+)
 from neomodel.sync_.cardinality import One, ZeroOrMore
 
 
@@ -32,4 +38,4 @@ class ConceptNode(StructuredNode):
     has_subconcept = RelationshipFrom(
         "ConceptNode", "SUBCONCEPT_OF", cardinality=ZeroOrMore
     )
-    related_to = RelationshipTo("ConceptNode", "RELATED_TO", cardinality=ZeroOrMore)
+    related_to = Relationship("ConceptNode", "RELATED_TO", cardinality=ZeroOrMore)

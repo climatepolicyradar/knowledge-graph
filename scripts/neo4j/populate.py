@@ -130,7 +130,7 @@ for labelled_passage in track(labelled_passages, console=console):
     for span in labelled_passage.spans:
         concept_node = ConceptNode.nodes.first(wikibase_id=span.concept_id)
         if not concept_node:
-            console.log(f"Concept node for {span.concept_id} not found")
+            console.log(f'Concept node for "{span.concept_id}" not found')
             continue
         concept_node.passages.connect(passage_node)
 
