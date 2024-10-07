@@ -1,0 +1,52 @@
+name: Bump dependencies
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install poetry==1.8.2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Run pre-commit autoupdate
+        run: poetry run pre-commit autoupdate
+
+      - name: Detect changes
+        id: changed-file
+        uses: tj-actions/changed-files@v45
+        with:
+          # Avoid using single or double quotes for multiline patterns
+          files: |
+            .pre-commit-config.yaml
+
+      - name: Create Pull Request
+        if: steps.changed-file.outputs.any_changed == 'true'
+        uses: peter-evans/create-pull-request@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: update/pre-commit-autoupdate
+          title: Auto-update pre-commit hooks
+          commit-message: 'ci: Bump pre-commit hooks'
+          body: |
+            Update versions of tools in pre-commit
+            configs to latest version
