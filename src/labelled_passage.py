@@ -37,16 +37,12 @@ class LabelledPassage(BaseModel):
         return self
 
     @classmethod
-    def from_argilla_record(
-        cls, record: FeedbackRecord, filter_for_submitted: bool = True
-    ) -> "LabelledPassage":
+    def from_argilla_record(cls, record: FeedbackRecord) -> "LabelledPassage":
         """
         Create a LabelledPassage object from an Argilla record
 
         :param FeedbackRecord record: The Argilla record to create the LabelledPassage
         object from
-        :param bool filter_for_submitted: Whether to filter for only submitted records,
-        defaults to True
         :return LabelledPassage: The created LabelledPassage object
         """
         text = html.unescape(record.fields.get("text", ""))
