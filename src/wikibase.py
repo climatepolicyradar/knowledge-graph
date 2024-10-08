@@ -146,11 +146,11 @@ class WikibaseSession:
         self, limit: Optional[int], wikibase_ids: list[WikibaseID] = []
     ) -> list[Concept]:
         """
-        Get concepts from Wikibase by their Wikibase IDs
+        Get concepts from Wikibase, optionally specified by their Wikibase IDs
 
+        :param Optional[int] limit: The maximum number of concepts to fetch
         :param list[WikibaseID] wikibase_ids: The Wikibase IDs of the concepts
-        :param int limit: The maximum number of concepts to fetch
-        :return Concept: The concepts with the given Wikibase IDs
+        :return list[Concept]: The concepts, optionally with the given Wikibase IDs
         """
         if not wikibase_ids:
             # NOTE: Because this call has a max `aplimit` of 5000, this implementation will
