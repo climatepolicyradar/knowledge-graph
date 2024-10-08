@@ -12,7 +12,7 @@ test:
 
 # run linters and code formatters
 lint:
-    poetry run pre-commit run --all-files
+    poetry run pre-commit run --all-files --show-diff-on-failure
 
 # build a dataset of passages
 build-dataset:
