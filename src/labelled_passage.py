@@ -1,4 +1,5 @@
 import html
+import itertools
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -40,15 +41,25 @@ class LabelledPassage(BaseModel):
         """
         Create a LabelledPassage object from an Argilla record
 
-        :param record: The Argilla record to create the LabelledPassage object from
-        :return: The created LabelledPassage object
+        :param FeedbackRecord record: The Argilla record to create the LabelledPassage
+        object from
+        :return LabelledPassage: The created LabelledPassage object
         """
         text = html.unescape(record.fields.get("text", ""))
 
         metadata = record.metadata or {}
         spans = []
 
-        for response in record.responses or []:
+        # we've observed that users can submit multiple annotations for the same text!
+        # we should only consider the most recent annotation from each.
+        most_recent_annotation_from_each_user = [
+            max(group, key=lambda record: record.updated_at)
+            for _, group in itertools.groupby(
+                sorted(record.responses, key=lambda response: response.user_id),
+                key=lambda response: response.user_id,
+            )
+        ]
+        for response in most_recent_annotation_from_each_user:
             user_name = User.from_id(response.user_id).username
             try:
                 for entity in response.values["entities"].value:
