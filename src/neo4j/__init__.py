@@ -1,10 +1,10 @@
 import os
 from time import sleep
 
-from neo4j.exceptions import ServiceUnavailable
 from neomodel import config, db, install_all_labels
 from rich.console import Console
 
+from neo4j.exceptions import ServiceUnavailable
 from src.neo4j.models import ConceptNode, DocumentNode, PassageNode
 
 console = Console()

@@ -1,4 +1,4 @@
-name: ci 
+name: ci
 on:
   pull_request:
     branches:
@@ -33,7 +33,7 @@ jobs:
       - name: Lint
         run: |
           poetry run pre-commit install
-          poetry run pre-commit run --all-files
+          poetry run pre-commit run --all-files --show-diff-on-failure
 
       - name: Test
         run: poetry run pytest -v
