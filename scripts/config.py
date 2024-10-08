@@ -25,6 +25,7 @@ raw_data_dir = data_dir / "raw"
 interim_data_dir = data_dir / "interim"
 processed_data_dir = data_dir / "processed"
 classifier_dir = processed_data_dir / "classifiers"
+metrics_dir = processed_data_dir / "classifiers_performance"
 concept_dir = processed_data_dir / "concepts"
 
 # aws
