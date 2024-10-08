@@ -40,6 +40,12 @@ Or to also track in W&B and upload to S3:
 just train Q992 --track --upload --aws-env staging
 ```
 
+Afterwards, evaluate the trained model:
+
+```bash
+just evaluate Q992
+```
+
 You can see the full list of commands by running:
 
 ```bash

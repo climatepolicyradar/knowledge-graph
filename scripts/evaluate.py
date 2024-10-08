@@ -12,7 +12,7 @@ from scripts.config import (
     STRATIFIED_COLUMNS,
     classifier_dir,
     concept_dir,
-    processed_data_dir,
+    metrics_dir,
 )
 from src.classifier import Classifier
 from src.concept import Concept
@@ -82,6 +82,8 @@ def main(
 ):
     """Measure classifier performance against human-labelled gold-standard datasets"""
     console.log("🚀 Starting classifier performance measurement")
+
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
@@ -191,7 +193,7 @@ def main(
 
     console.log(table)
 
-    metrics_path = processed_data_dir / "classifier_performance" / f"{wikibase_id}.json"
+    metrics_path = metrics_dir / f"{wikibase_id}.json"
     df.to_json(metrics_path, orient="records", indent=2)
     console.log(f"📄 Saved performance metrics to {metrics_path}")
 
