@@ -64,7 +64,7 @@ def test_determine_document_ids__error():
 def test_load_classifier__existing_classifier(
     mock_classifiers_dir, local_classifier_id
 ):
-    classifier = load_classifier(local_classifier_id)
+    classifier = load_classifier(local_classifier_id, alias="latest")
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
@@ -118,7 +118,7 @@ def test_store_labels(mock_bucket):
 
 def test_text_block_inference(mock_classifiers_dir, local_classifier_id):
     with patch.object(config, "local_classifier_dir", new=mock_classifiers_dir):
-        classifier = load_classifier(local_classifier_id)
+        classifier = load_classifier(local_classifier_id, "latest")
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"

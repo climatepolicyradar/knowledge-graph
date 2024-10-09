@@ -68,7 +68,7 @@ def determine_document_ids(
     return requested_document_ids
 
 
-def load_classifier(wikibase_id: WikibaseID) -> Classifier:
+def load_classifier(wikibase_id: WikibaseID, alias: str) -> Classifier:
     """
     Loads a classifier into memory
 
@@ -145,8 +145,22 @@ def text_block_inference(
     return labelled_passage
 
 
+def determine_classifier_ids(
+    classifier_spec: list[tuple[WikibaseID, str]],
+) -> list[WikibaseID]:
+    """
+    To implement.
+
+    A check that requested classifiers exist, or return all the latest classifiers
+    """
+    return [(WikibaseID("Q788"), "latest")]
+
+
 @flow(log_prints=True)
-def classifier_inference(document_ids: list[str] = None):
+def classifier_inference(
+    document_ids: list[str] = None,
+    classifier_spec: list[tuple[WikibaseID, str]] = None,
+):
     """
     Flow to run inference on documents within a bucket prefix
 
@@ -161,13 +175,13 @@ def classifier_inference(document_ids: list[str] = None):
     validated_document_ids = determine_document_ids(
         requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
     )
+    classifier_spec = determine_classifier_ids(classifier_spec)
 
-    # TODO Better way of choosing classifiers
-    wikibase_ids = [WikibaseID("Q788")]
-
-    for wikibase_id in wikibase_ids:
-        print(f"Loading classifier with id: {wikibase_id}")
-        classifier = load_classifier(wikibase_id)
+    for wikibase_id, classifier_alias in classifier_spec:
+        print(
+            f"Loading classifier with id: {wikibase_id}, and alias: {classifier_alias}"
+        )
+        classifier = load_classifier(wikibase_id, classifier_alias)
         for document_id in validated_document_ids:
             print(f"Loading document with id {document_id}")
             document = load_document(document_id)
