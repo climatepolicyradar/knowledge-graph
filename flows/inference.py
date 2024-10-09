@@ -50,10 +50,11 @@ def determine_document_ids(
     requested_document_ids: list[str], current_bucket_ids: list[str]
 ) -> list[str]:
     """
-    Determine which documents to run with.
+    Confirm chosen document ids or default to all if not specified.
 
-    Compares the requested IDs to what exists in the bucket.
-    If no ids where requested will run on the entire bucket.
+    Compares the requested_document_ids to what actually exists in the bucket.
+    If a document id has been requested but does not exist this will raise a ValueError
+    If no document id were requested, this will instead return the current_bucket_ids.
     """
     if requested_document_ids is None:
         return current_bucket_ids
