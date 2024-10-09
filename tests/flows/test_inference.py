@@ -88,7 +88,7 @@ def test_store_labels(mock_bucket):
     labels = helper_list_labels_in_bucket(mock_bucket)
 
     assert len(labels) == 1
-    assert labels[0] == "spans/TEST.DOC.0.1.Q9081.json"
+    assert labels[0] == "labelled_passages/TEST.DOC.0.1.Q9081.json"
 
 
 def test_text_block_inference(mock_classifiers_dir, local_classifier_id):
@@ -113,8 +113,8 @@ def test_classifier_inference(mock_classifiers_dir, mock_bucket, mock_bucket_doc
     labels = helper_list_labels_in_bucket(mock_bucket)
 
     assert sorted(labels) == [
-        "spans/HTML.document.0.1.Q788.json",
-        "spans/PDF.document.0.1.Q788.json",
+        "labelled_passages/HTML.document.0.1.Q788.json",
+        "labelled_passages/PDF.document.0.1.Q788.json",
     ]
 
     for key in labels:
