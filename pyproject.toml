@@ -33,6 +33,19 @@ sentence-transformers = "^3.1.1"
 wandb = "^0.18.3"
 boto3 = "^1.35.31"
 moto = {extras = ["s3"], version = "^5.0.16"}
+# The following is to work around the fact that pytorch stopped supported intel-macs after 2.2.2
+# See: https://github.com/pytorch/pytorch/issues/114602
+torch = [
+    {version = "2.2.2", markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'"},
+    {version = "2.4.1", markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'"},
+  ]
+
+
+[[tool.poetry.source]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
 
 [tool.poetry.scripts]
 train = "scripts.train:app"
