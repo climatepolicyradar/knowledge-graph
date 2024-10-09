@@ -20,7 +20,7 @@ class Config:
 
     cache_bucket: str = os.environ.get("CACHE_BUCKET")
     document_source_prefix: str = "embeddings_input"
-    document_target_prefix: str = "spans"
+    document_target_prefix: str = "labelled_passages"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
 
