@@ -10,6 +10,7 @@ from flows.inference import (
     classifier_inference,
     config,
     determine_document_ids,
+    document_passages,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
@@ -83,6 +84,23 @@ def test_stringify():
     text = ["a", " sequence", " of ", "text "]
     result = stringify(text)
     assert result == "a sequence of text"
+
+
+def test_document_passages__invalid_content_type(parser_output):
+    # When the content type is borked
+    parser_output.document_content_type = None
+    with pytest.raises(ValueError):
+        document_passages(parser_output).__next__()
+
+
+def test_document_passages__html(parser_output_html):
+    html_result = document_passages(parser_output_html).__next__()
+    assert html_result == ("test html text", "1")
+
+
+def test_document_passages__pdf(parser_output_pdf):
+    pdf_result = document_passages(parser_output_pdf).__next__()
+    assert pdf_result == ("test pdf text", "2")
 
 
 def test_store_labels(mock_bucket):

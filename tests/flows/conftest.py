@@ -6,6 +6,14 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from cpr_sdk.parser_models import (
+    BaseParserOutput,
+    BlockType,
+    HTMLData,
+    HTMLTextBlock,
+    PDFData,
+    PDFTextBlock,
+)
 from moto import mock_aws
 
 from flows.inference import config
@@ -72,3 +80,51 @@ def local_classifier_id(mock_classifiers_dir):
     full_path = mock_classifiers_dir / classifier_id
     assert full_path.exists()
     yield classifier_id
+
+
+@pytest.fixture
+def parser_output():
+    yield BaseParserOutput(
+        document_id="test id",
+        document_metadata={},
+        document_name="test name",
+        document_slug="test slug",
+        document_description="test description",
+    )
+
+
+@pytest.fixture
+def parser_output_html(parser_output):
+    parser_output.document_content_type = "text/html"
+    parser_output.html_data = HTMLData(
+        has_valid_text=True,
+        text_blocks=[
+            HTMLTextBlock(
+                text=["test html text"],
+                text_block_id="1",
+            )
+        ],
+    )
+    yield parser_output
+
+
+@pytest.fixture
+def parser_output_pdf(parser_output):
+    # When the content type is pdf
+    parser_output.document_content_type = "application/pdf"
+    parser_output.html_data = None
+    parser_output.pdf_data = PDFData(
+        page_metadata=[],
+        md5sum="",
+        text_blocks=[
+            PDFTextBlock(
+                text=["test pdf text"],
+                text_block_id="2",
+                page_number=1,
+                coords=[],
+                type=BlockType.TEXT,
+                type_confidence=0.5,
+            )
+        ],
+    )
+    yield parser_output
