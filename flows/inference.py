@@ -123,7 +123,9 @@ def store_labels(labels: list[LabelledPassage], document_id: str, classifier_id:
 
 
 @task()
-def infer(classifier: Classifier, block_id: str, text: str) -> LabelledPassage:
+def text_block_inference(
+    classifier: Classifier, block_id: str, text: str
+) -> LabelledPassage:
     """Runs predict on a single text block"""
     spans: list[Span] = classifier.predict(text)
     labelled_passage = LabelledPassage(
@@ -163,7 +165,7 @@ def classifier_inference(document_ids: list[str] = None):
 
             doc_labels = []
             for text, block_id in document_passages(document):
-                labelled_passage = infer(
+                labelled_passage = text_block_inference(
                     classifier=classifier, block_id=block_id, text=text
                 )
                 doc_labels.append(labelled_passage)

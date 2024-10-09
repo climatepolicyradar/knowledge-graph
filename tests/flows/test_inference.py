@@ -10,11 +10,11 @@ from flows.inference import (
     classifier_inference,
     config,
     determine_document_ids,
-    infer,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
     store_labels,
+    text_block_inference,
 )
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -91,13 +91,15 @@ def test_store_labels(mock_bucket):
     assert labels[0] == "spans/TEST.DOC.0.1.Q9081.json"
 
 
-def test_infer(mock_classifiers_dir, local_classifier_id):
+def test_text_block_inference(mock_classifiers_dir, local_classifier_id):
     with patch.object(config, "local_classifier_dir", new=mock_classifiers_dir):
         classifier = load_classifier(local_classifier_id)
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
-    labels = infer.fn(classifier=classifier, block_id=block_id, text=text)
+    labels = text_block_inference.fn(
+        classifier=classifier, block_id=block_id, text=text
+    )
 
     assert len(labels.spans) > 0
     assert labels.id == block_id
