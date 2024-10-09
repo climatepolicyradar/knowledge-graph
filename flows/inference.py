@@ -155,7 +155,7 @@ def classifier_inference(document_ids: list[str] = None):
     wikibase_ids = [WikibaseID("Q788")]
 
     for wikibase_id in wikibase_ids:
-        print(f"Loaded classifier with id: {wikibase_id}")
+        print(f"Loading classifier with id: {wikibase_id}")
         classifier = load_classifier(wikibase_id)
         for document_id in validated_document_ids:
             print(f"Loading document with id {document_id}")
