@@ -32,6 +32,7 @@ cpr-sdk = "^1.7.1"
 sentence-transformers = "^3.1.1"
 wandb = "^0.18.3"
 boto3 = "^1.35.31"
+moto = {extras = ["s3"], version = "^5.0.16"}
 
 [tool.poetry.scripts]
 train = "scripts.train:app"
