@@ -14,6 +14,7 @@ from flows.inference import (
     load_classifier,
     load_document,
     store_labels,
+    stringify,
     text_block_inference,
 )
 from src.labelled_passage import LabelledPassage
@@ -76,6 +77,12 @@ def test_load_document(mock_bucket_documents):
         doc_id = Path(doc_file_name).stem
         doc = load_document(document_id=doc_id)
         assert doc_id == doc.document_id
+
+
+def test_stringify():
+    text = ["a", " sequence", " of ", "text "]
+    result = stringify(text)
+    assert result == "a sequence of text"
 
 
 def test_store_labels(mock_bucket):

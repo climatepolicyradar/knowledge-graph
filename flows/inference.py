@@ -97,6 +97,10 @@ def load_document(document_id: str) -> BaseParserOutput:
     return document
 
 
+def stringify(text: list[str]) -> str:
+    return " ".join([line.strip() for line in text])
+
+
 def document_passages(document: BaseParserOutput):
     """Yields the text block irrespective of content type"""
     match document.document_content_type:
@@ -110,7 +114,7 @@ def document_passages(document: BaseParserOutput):
                 f"document: {document.document_id}"
             )
     for text_block in text_blocks:
-        yield text_block.to_string(), text_block.text_block_id
+        yield stringify(text_block.text), text_block.text_block_id
 
 
 def store_labels(labels: list[LabelledPassage], document_id: str, classifier_id: str):
