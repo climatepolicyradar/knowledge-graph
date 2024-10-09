@@ -104,6 +104,11 @@ def document_passages(document: BaseParserOutput):
             text_blocks = document.pdf_data.text_blocks
         case "text/html":
             text_blocks = document.html_data.text_blocks
+        case _:
+            raise ValueError(
+                f"Invalid document content type: {document.document_content_type}, for "
+                f"document: {document.document_id}"
+            )
     for text_block in text_blocks:
         yield text_block.to_string(), text_block.text_block_id
 
