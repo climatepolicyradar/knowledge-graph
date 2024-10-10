@@ -38,7 +38,7 @@ jobs:
       - name: Test
         run: poetry run pytest -v
 
-  deploy:
+  deploy_docs:
     if: github.ref == 'refs/heads/main'
     needs: [test]
     runs-on: ubuntu-latest
@@ -63,5 +63,16 @@ jobs:
         working-directory: ./docs
         run: poetry run mkdocs gh-deploy --force
 
-      - name: Deploy more
-        run: echo 'this is a placeholder'
+
+  deploy_prefect_sandbox:
+    if: github.ref == 'refs/heads/main'
+    needs: [test]
+    uses: ./.github/workflows/prefect_deploy.yml
+    with:
+      aws-env: sandbox
+      pipeline-cache-src-bucket: cpr-sandbox-data-pipeline-cache
+      prefect-workspace: ${{ vars.PREFECT_WORKSPACE }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
