@@ -1,0 +1,16 @@
+FROM prefecthq/prefect:2.20.7-python3.10
+
+RUN pip install --upgrade pip
+RUN pip install "poetry==1.8.3"
+
+WORKDIR /opt/prefect/knowledge-graph
+
+# Set up environment
+COPY ./poetry.lock ./pyproject.toml ./
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-root --no-interaction --only main
+
+# Set up package
+COPY ./flows ./flows/
+COPY ./src ./src/
+RUN poetry install --only-root --no-interaction --only main
