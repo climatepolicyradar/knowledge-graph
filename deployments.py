@@ -15,6 +15,7 @@ from prefect.flows import Flow
 
 from flows.inference import classifier_inference
 
+MEGABYTES_PER_GIGABYTE = 1024
 
 def create_deployment(
     project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any], build: bool = True, push: bool = True
@@ -54,8 +55,8 @@ create_deployment(
     flow=classifier_inference,
     description="Run concept classifier inference on document passages",
     flow_variables={
-        "cpu": 8192,
-        "memory": 1024 * 8,
+        "cpu": MEGABYTES_PER_GIGABYTE * 4,
+        "memory": MEGABYTES_PER_GIGABYTE * 16,
         "env": {
             "CACHE_BUCKET": os.environ["CACHE_BUCKET"],
         },
