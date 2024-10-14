@@ -31,6 +31,9 @@ def create_deployment(
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
     job_variables = {**default_variables, **flow_variables}
 
+    # FIXME: Temp until we've merged the bugfix
+    job_variables["task_role_arn"] = job_variables["task_arn_role"]
+
     _ = classifier_inference.deploy(
         f"{project_name}-{flow_name}-{aws_env}",
         work_pool_name=f"mvp-{aws_env}-ecs",
