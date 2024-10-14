@@ -62,7 +62,9 @@ create_deployment(
         },
         "ephemeralStorage": {
             "sizeInGiB": 50
-        }
+        },
+        # TODO create this in the orchestrator repo
+        "task_definition_arn": os.getenv("TASK_DEFINITION_ARN"),
     },
     build=False,
     push=False
