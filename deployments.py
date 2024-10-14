@@ -17,8 +17,9 @@ from flows.inference import classifier_inference
 
 
 def create_deployment(
-    project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any]
-):
+    project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any], build: bool = True, push: bool = True
+) -> None:
+    """Create a deployment for the specified flow"""
     aws_env = os.getenv("AWS_ENV", "sandbox")
     version = importlib.metadata.version(project_name)
     flow_name = flow.name
@@ -29,7 +30,7 @@ def create_deployment(
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
     job_variables = {**default_variables, **flow_variables}
 
-    _deployment = classifier_inference.deploy(
+    _ = classifier_inference.deploy(
         f"{project_name}-{flow_name}-{aws_env}",
         work_pool_name=f"mvp-{aws_env}-ecs",
         version=version,
@@ -42,6 +43,8 @@ def create_deployment(
         job_variables=job_variables,
         tags=[f"repo:{docker_repository}", f"awsenv:{aws_env}"],
         description=description,
+        build=build,
+        push=push,
     )
 
 
@@ -57,4 +60,6 @@ create_deployment(
             "CACHE_BUCKET": os.environ["CACHE_BUCKET"],
         },
     },
+    build=False,
+    push=False
 )
