@@ -60,6 +60,9 @@ create_deployment(
         "env": {
             "CACHE_BUCKET": os.environ["CACHE_BUCKET"],
         },
+        "ephemeralStorage": {
+            "sizeInGiB": 50
+        }
     },
     build=False,
     push=False
