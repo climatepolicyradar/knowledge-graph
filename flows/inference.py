@@ -7,6 +7,7 @@ from pathlib import Path
 import boto3
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
+import wandb
 
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
@@ -68,6 +69,24 @@ def determine_document_ids(
     return requested_document_ids
 
 
+# TODO: Update to accept the classifier name and version as arguments
+def download_classifier_from_wandb_to_local(wikibase_id: WikibaseID) -> str:
+    """
+    Function for downloading a classifier from W&B to local.
+
+    Models referenced by weights and biases are stored in s3. This means that to
+    download the model via the W&B API, we need access to both the s3 bucket via iam
+    in your environment and WanDB via the api key.
+    """
+    wandb.login(key=os.environ["WANDB_API_KEY"])
+    run = wandb.init()
+    artifact = run.use_artifact(
+        f'climatepolicyradar/{wikibase_id}/RulesBasedClassifier:latest',
+        type='model'
+    )
+    return artifact.download()
+
+
 def load_classifier(wikibase_id: WikibaseID, alias: str) -> Classifier:
     """
     Loads a classifier into memory
@@ -78,7 +97,8 @@ def load_classifier(wikibase_id: WikibaseID, alias: str) -> Classifier:
     local_classifier_path: Path = config.local_classifier_dir / wikibase_id
 
     if not local_classifier_path.exists():
-        raise NotImplementedError("Still need to add W&B download")
+        model_cache_dir = download_classifier_from_wandb_to_local(wikibase_id)
+        local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
     classifier = Classifier.load(local_classifier_path)
 
@@ -147,13 +167,15 @@ def text_block_inference(
 
 def determine_classifier_ids(
     classifier_spec: list[tuple[WikibaseID, str]],
-) -> list[WikibaseID]:
+) -> list[tuple[WikibaseID, str]]:
     """
     To implement.
 
     A check that requested classifiers exist, or return all the latest classifiers
     """
-    return [(WikibaseID("Q788"), "latest")]
+    if not classifier_spec:
+        return [(WikibaseID("Q788"), "latest")]
+    return classifier_spec
 
 
 @flow(log_prints=True)
@@ -168,6 +190,11 @@ def classifier_inference(
     files.
 
     Iterates: classifiers > documents > passages. Loading output into s3
+
+    params:
+    - document_ids: List of document ids to run inference on
+    - classifier_spec: List of classifier ids and aliases (versions) to run inference with
+    Example classifier_spec: [(WikibaseID("Q788"), "latest")]
     """
     print(f"Running with config: {config}")
 
@@ -201,4 +228,7 @@ def classifier_inference(
 
 
 if __name__ == "__main__":
-    classifier_inference()
+    classifier_inference(
+        document_ids=["CCLW.executive.10000.4494"],
+        classifier_spec=[(WikibaseID("Q992"), "latest")]
+    )
