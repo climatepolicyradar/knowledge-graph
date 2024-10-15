@@ -1,3 +1,4 @@
+from asyncio import log
 import json
 import os
 from dataclasses import dataclass
@@ -7,8 +8,8 @@ from pathlib import Path
 import boto3
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
-import wandb
 
+import wandb
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -85,10 +86,7 @@ def download_classifier_from_wandb_to_local(wikibase_id: WikibaseID, alias: str)
         f"{wikibase_id}-RulesBasedClassifier:{alias or 'latest'}"
     )
     print(f"Downloading artifact from W&B: {artifact}")
-    artifact = run.use_artifact(
-        artifact,
-        type='model'
-    )
+    artifact = run.use_artifact(artifact, type="model")
     return artifact.download()
 
 
@@ -142,7 +140,12 @@ def document_passages(document: BaseParserOutput):
         yield stringify(text_block.text), text_block.text_block_id
 
 
-def store_labels(labels: list[LabelledPassage], document_id: str, classifier_id: str):
+@task(log_prints=True)
+def store_labels(
+    labels: list[LabelledPassage], document_id: str, classifier_id: str
+) -> None:
+    """Stores the labels in the cache bucket"""
+    print("Storing labels for document {document_id} and classifier {classifier_id}")
     key = os.path.join(
         config.document_target_prefix, f"{document_id}.{classifier_id}.json"
     )
@@ -184,6 +187,28 @@ def determine_classifier_ids(
 
 
 @flow(log_prints=True)
+def run_classifier_inference_on_document(
+    document_id: str, classifier: Classifier, wikibase_id: str
+) -> None:
+    """Run the classifier inference flow on a document."""
+    print(f"Loading document with id {document_id}")
+    document = load_document(document_id)
+
+    doc_labels = []
+    for text, block_id in document_passages(document):
+        labelled_passage = text_block_inference(
+            classifier=classifier, block_id=block_id, text=text
+        )
+        doc_labels.append(labelled_passage)
+
+    store_labels(
+        labels=doc_labels,
+        document_id=document_id,
+        classifier_id=wikibase_id,
+    )
+
+
+@flow(log_prints=True)
 def classifier_inference(
     document_ids: list[str] = None,
     classifier_spec: list[tuple[WikibaseID, str]] = None,
@@ -215,25 +240,15 @@ def classifier_inference(
         )
         classifier = load_classifier(wikibase_id, classifier_alias)
         for document_id in validated_document_ids:
-            print(f"Loading document with id {document_id}")
-            document = load_document(document_id)
-
-            doc_labels = []
-            for text, block_id in document_passages(document):
-                labelled_passage = text_block_inference(
-                    classifier=classifier, block_id=block_id, text=text
-                )
-                doc_labels.append(labelled_passage)
-
-            store_labels(
-                labels=doc_labels,
+            run_classifier_inference_on_document(
                 document_id=document_id,
-                classifier_id=wikibase_id,
+                classifier=classifier,
+                wikibase_id=wikibase_id,
             )
 
 
 if __name__ == "__main__":
     classifier_inference(
         document_ids=["CCLW.executive.4242.2011_translated_en"],
-        classifier_spec=[(WikibaseID("Q992"), "latest")]
+        classifier_spec=[(WikibaseID("Q992"), "latest")],
     )
