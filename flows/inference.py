@@ -69,8 +69,7 @@ def determine_document_ids(
     return requested_document_ids
 
 
-# TODO: Update to accept the classifier name and version as arguments
-def download_classifier_from_wandb_to_local(wikibase_id: WikibaseID) -> str:
+def download_classifier_from_wandb_to_local(wikibase_id: WikibaseID, alias: str) -> str:
     """
     Function for downloading a classifier from W&B to local.
 
@@ -80,8 +79,14 @@ def download_classifier_from_wandb_to_local(wikibase_id: WikibaseID) -> str:
     """
     wandb.login(key=os.environ["WANDB_API_KEY"])
     run = wandb.init()
+    # FIXME: We can't instantiate a WikibaseID with trailing letters {wikibase_id}-RulesBasedClassifier
+    artifact = (
+        "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
+        f"{wikibase_id}-RulesBasedClassifier:{alias or 'latest'}"
+    )
+    print(f"Downloading artifact from W&B: {artifact}")
     artifact = run.use_artifact(
-        f'climatepolicyradar/{wikibase_id}/RulesBasedClassifier:latest',
+        artifact,
         type='model'
     )
     return artifact.download()
@@ -97,7 +102,7 @@ def load_classifier(wikibase_id: WikibaseID, alias: str) -> Classifier:
     local_classifier_path: Path = config.local_classifier_dir / wikibase_id
 
     if not local_classifier_path.exists():
-        model_cache_dir = download_classifier_from_wandb_to_local(wikibase_id)
+        model_cache_dir = download_classifier_from_wandb_to_local(wikibase_id, alias)
         local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
     classifier = Classifier.load(local_classifier_path)
@@ -193,7 +198,7 @@ def classifier_inference(
 
     params:
     - document_ids: List of document ids to run inference on
-    - classifier_spec: List of classifier ids and aliases (versions) to run inference with
+    - classifier_spec: List of classifier ids and aliases (alias tag for the version) to run inference with
     Example classifier_spec: [(WikibaseID("Q788"), "latest")]
     """
     print(f"Running with config: {config}")
@@ -229,6 +234,6 @@ def classifier_inference(
 
 if __name__ == "__main__":
     classifier_inference(
-        document_ids=["CCLW.executive.10000.4494"],
+        document_ids=["CCLW.executive.4242.2011_translated_en"],
         classifier_spec=[(WikibaseID("Q992"), "latest")]
     )
