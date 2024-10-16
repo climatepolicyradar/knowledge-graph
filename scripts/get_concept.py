@@ -6,7 +6,6 @@ from rich.console import Console
 
 import argilla as rg
 from scripts.config import concept_dir
-from src.argilla import combine_datasets
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession
@@ -37,29 +36,27 @@ def main(
         )
     console.log("✅ Connected to Argilla")
 
-    datasets_about_our_concept = []
     with console.status("Fetching and filtering datasets from Argilla..."):
         for dataset in rg.list_datasets():
             try:
                 # if the dataset.name ends with our wikibase_id, then it's one we want to process
                 if WikibaseID(dataset.name.split("-")[-1]) == wikibase_id:
-                    datasets_about_our_concept.append(dataset)
                     console.log(
-                        f'🕵️  Found "{dataset.name}" in the "{dataset.workspace.name}" workspace in Argilla'
+                        f'🕵️  Found "{dataset.name}" in the "{dataset.workspace.name}" workspace'
                     )
+                    concept.labelled_passages = [
+                        LabelledPassage.from_argilla_record(record)
+                        for record in dataset.records
+                    ]
+                    console.log(
+                        f"📚 Found {len(concept.labelled_passages)} labelled passages"
+                    )
+                    break
             except ValueError:
                 continue
 
-    if not datasets_about_our_concept:
-        console.log("No labelled passages found for this concept")
-    else:
-        dataset = combine_datasets(*datasets_about_our_concept)
-        concept.labelled_passages = [
-            LabelledPassage.from_argilla_record(record) for record in dataset.records
-        ]
-        console.log(
-            f"📚 Found {len(concept.labelled_passages)} labelled passages for {wikibase_id}"
-        )
+    if not concept.labelled_passages:
+        console.log(f"❌ No labelled passages found for {wikibase_id}")
 
     # Save the concept to disk
     output_path = concept_dir / f"{wikibase_id}.json"
