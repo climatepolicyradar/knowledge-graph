@@ -29,7 +29,14 @@ def create_deployment(
     image_name = os.path.join(docker_registry, docker_repository)
 
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
-    job_variables = {**default_variables, **flow_variables}
+    default_variables_required = {
+        "name": default_variables["name"],
+        "family": default_variables["family"],
+        "cluster": default_variables["cluster"],
+        "task_role_arn": default_variables["task_role_arn"],
+        "execution_role_arn": default_variables["execution_role_arn"],
+    }
+    job_variables = {**default_variables_required, **flow_variables}
 
     _ = classifier_inference.deploy(
         f"{project_name}-{flow_name}-{aws_env}",
@@ -64,8 +71,19 @@ create_deployment(
         "ephemeralStorage": {
             "sizeInGiB": 50
         },
+        # TODO create this in the orchestrator repo
         "task_definition_arn": os.getenv("TASK_DEFINITION_ARN"),
     },
     build=False,
     push=False
 )
+
+
+# {
+#   "name": "ecs-cluster-fargate",
+#   "family": "fargate-classifier-task-prefect-mvp-labs",
+#   "cluster": "prefect-fargate-cluster-prefect-mvp-labs-704eae5",
+#   "task_role_arn": "arn:aws:iam::845035659285:role/task-role-prefect-mvp-labs-49e2596",
+#   "execution_role_arn": "arn:aws:iam::845035659285:role/execution-role-prefect-mvp-labs-9c16f4f",
+#   "task_definition_arn": "arn:aws:ecs:eu-west-1:845035659285:task-definition/knowledge-graph-task-prefect-mvp-labs:3"
+# }
