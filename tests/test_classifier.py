@@ -24,7 +24,7 @@ def negative_text_strategy(draw, labels: list[str]):
 
 @st.composite
 def positive_text_strategy(
-    draw: st.DataObject, labels: list[str], negative_labels: list[str] = None
+    draw: st.DataObject, labels: list[str] = [], negative_labels: list[str] = []
 ):
     """Generate text containing one of the labels, with different before and after text that doesn't match negative labels."""
     keyword = draw(st.sampled_from(labels))
@@ -107,9 +107,9 @@ def test_whether_classifier_respects_negative_labels(
 
     # Create a positive label and a negative which contains the positive label.
     positive_label = data.draw(concept_label_strategy)
-    negative_label = positive_label + " a modifier which changes its meaning"
+    negative_label = positive_label + " a_modifier_which_changes_its_meaning"
 
-    # create a text containing the negative label
+    # create a text containing the negative label but not the positive label
     text = data.draw(
         positive_text_strategy(
             labels=[negative_label], negative_labels=[positive_label]
@@ -123,6 +123,7 @@ def test_whether_classifier_respects_negative_labels(
     )
     classifier = classifier_class(concept)
 
+    # The classifier should not match the text
     spans = classifier.predict(text)
 
     assert not spans, f"{classifier} matched text in '{text}'"
