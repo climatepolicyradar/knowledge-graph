@@ -166,3 +166,5 @@ data/**/*
 !**/.gitkeep
 !**/README.md
 google-credentials.json
+wandb/*
+artifacts/*

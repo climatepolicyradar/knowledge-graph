@@ -71,3 +71,13 @@ push-image:
 
 get-version:
     python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
+
+export_env_vars:
+	export $(cat .env | xargs)
+
+prefect_login: export_env_vars
+	prefect cloud login -k ${PREFECT_API_KEY}
+
+deploy: prefect_login
+	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+	python -m deployments
