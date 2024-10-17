@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
+from typing import Optional
 
 import boto3
 from cpr_sdk.parser_models import BaseParserOutput
@@ -158,8 +159,8 @@ def determine_classifier_ids(
 
 @flow(log_prints=True)
 def classifier_inference(
-    document_ids: list[str] = None,
-    classifier_spec: list[tuple[WikibaseID, str]] = None,
+    document_ids: Optional[list[str]] = None,
+    classifier_spec: Optional[list[tuple[WikibaseID, str]]] = None,
 ):
     """
     Flow to run inference on documents within a bucket prefix
