@@ -1,9 +1,7 @@
 import os
 import re
-from enum import Enum
 from typing import Annotated
 
-import boto3
 import botocore
 import botocore.client
 import typer
@@ -13,6 +11,7 @@ from rich.console import Console
 from wandb.sdk.wandb_run import Run
 
 from scripts.config import classifier_dir, concept_dir
+from scripts.platform import AwsEnv, get_s3_client
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -20,15 +19,6 @@ from src.wikibase import WikibaseSession
 
 console = Console()
 app = typer.Typer()
-
-
-class AwsEnv(str, Enum):
-    """The only available AWS environments."""
-
-    labs = "labs"
-    sandbox = "sandbox"
-    staging = "staging"
-    production = "production"
 
 
 class Namespace(BaseModel):
@@ -111,32 +101,20 @@ def link_model_artifact(
         type="model",
         metadata=metadata,
     )
-    artifact.add_reference(
-        uri=os.path.join(
-            "s3://",
-            storage_link.bucket,
-            storage_link.key,
-        ),
+    uri = os.path.join(
+        "s3://",
+        storage_link.bucket,
+        storage_link.key,
     )
+    # Don't checksum files since that means that W&B will try
+    # and be too smart and will think a model artifact file in
+    # a different AWS environment is the same, I think.
+    artifact.add_reference(uri=uri, checksum=False)
 
-    run.log_artifact(artifact)
+    artifact = run.log_artifact(artifact)
+    artifact = artifact.wait()
 
     return artifact
-
-
-def get_s3_client(aws_env: AwsEnv, region_name: str) -> botocore.client.BaseClient:
-    """
-    Creates an S3 client using the specified AWS environment and region.
-
-    :param aws_env: The AWS environment.
-    :type aws_env: AwsEnv
-    :param region_name: The AWS region name.
-    :type region_name: str
-    :return: The S3 client.
-    :rtype: botocore.client.BaseClient
-    """
-    session = boto3.Session(profile_name=aws_env.value)
-    return session.client("s3", region_name=region_name)
 
 
 def get_next_version(

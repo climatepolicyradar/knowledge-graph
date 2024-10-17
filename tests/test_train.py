@@ -6,43 +6,17 @@ import pytest
 import wandb
 from moto import mock_aws
 
+from scripts.platform import AwsEnv
 from scripts.train import (
-    AwsEnv,
     Namespace,
     StorageLink,
     StorageUpload,
     get_next_version,
-    get_s3_client,
     link_model_artifact,
     main,
     upload_model_artifact,
 )
 from src.identifiers import WikibaseID
-
-
-@pytest.mark.parametrize(
-    "aws_env, expected_profile",
-    [
-        (AwsEnv.labs, "labs"),
-        (AwsEnv.sandbox, "sandbox"),
-        (AwsEnv.staging, "staging"),
-        (AwsEnv.production, "production"),
-    ],
-)
-def test_get_s3_client(aws_env, expected_profile):
-    with patch("boto3.Session") as mock_session:
-        mock_client = Mock()
-        mock_session.return_value.client.return_value = mock_client
-
-        region_name = "eu-west-1"
-        client = get_s3_client(aws_env, region_name)
-
-        mock_session.assert_called_once_with(profile_name=expected_profile)
-        mock_session.return_value.client.assert_called_once_with(
-            "s3", region_name=region_name
-        )
-
-        assert client == mock_client
 
 
 @pytest.mark.parametrize(
@@ -124,8 +98,7 @@ def test_link_model_artifact(aws_credentials):
     key = "Q123/test_classifier/v3/model.pickle"
     aws_env = AwsEnv.labs
 
-    session = boto3.Session()
-    s3_client = session.client("s3", region_name=region_name)
+    s3_client = boto3.client("s3", region_name=region_name)
 
     s3_client.create_bucket(
         Bucket=bucket,
@@ -144,7 +117,7 @@ def test_link_model_artifact(aws_credentials):
         )
 
         # When it's linked from S3 to a W&B artifact
-        artifact = link_model_artifact(
+        link_model_artifact(
             mock_run,
             mock_classifier,
             storage_link,
@@ -161,9 +134,6 @@ def test_link_model_artifact(aws_credentials):
             type="model",
             metadata={"aws_env": aws_env.value},
         )
-
-        # Then the artifact returned is the mocked instance
-        assert artifact == mock_artifact_instance
 
 
 @patch("wandb.Api")
