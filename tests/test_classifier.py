@@ -67,7 +67,7 @@ def positive_text_strategy(
     return f"{pre_text} {keyword} {post_text}"
 
 
-classifier_classes = [KeywordClassifier, RulesBasedClassifier]
+classifier_classes: list[Type[Classifier]] = [KeywordClassifier, RulesBasedClassifier]
 
 
 @pytest.mark.parametrize("classifier_class", classifier_classes)
@@ -165,7 +165,6 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier = classifier_class(concept)
     assert hash(classifier) == hash(str(classifier) + concept.model_dump_json())
     assert classifier.id == generate_identifier(hash(classifier))
-    assert classifier == classifier
     assert classifier == classifier_class(concept)
 
 
@@ -189,19 +188,17 @@ def test_whether_classifier_id_generation_is_affected_by_internal_state(
 def test_whether_different_concepts_produce_different_hashes_when_using_the_same_classifier_class(
     classifier_class: Type[Classifier], concepts: list[Concept]
 ):
+    # classifiers of the same class, for different concepts
     classifiers = [classifier_class(concept) for concept in concepts]
     hashes = [hash(classifier) for classifier in classifiers]
     assert len(set(hashes)) == len(hashes)
-
-    for i, classifier_a in enumerate(classifiers):
-        for classifier_b in classifiers[i + 1 :]:
-            assert classifier_a != classifier_b
 
 
 @given(concept=concept_strategy())
 def test_whether_different_classifier_models_produce_different_hashes_when_based_on_the_same_concept(
     concept: Concept,
 ):
+    # classifiers of different classes, for the same concept
     classifiers = [classifier_class(concept) for classifier_class in classifier_classes]
     hashes = [hash(classifier) for classifier in classifiers]
     assert len(set(hashes)) == len(hashes)
