@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Union
 
 from src.concept import Concept
+from src.identifiers import generate_identifier
 from src.span import Span
 
 
@@ -39,6 +40,24 @@ class Classifier(ABC):
     def name(self):
         """Return the name of the classifier."""
         return self.__class__.__name__
+
+    def __hash__(self):
+        """
+        Return a hash of the classifier.
+
+        NB. This should be re-implemented for classifiers whose behaviour could be
+        affected by different training runs.
+        """
+        return hash(str(self) + self.concept.model_dump_json())
+
+    def __eq__(self, other):
+        """Return whether two classifiers are equal."""
+        return hash(self) == hash(other)
+
+    @property
+    def id(self):
+        """Return a neat human-readable identifier for the classifier."""
+        return generate_identifier(hash(self))
 
     def save(self, path: Union[str, Path]):
         """

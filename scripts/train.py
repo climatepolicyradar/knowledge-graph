@@ -1,17 +1,14 @@
 import os
 import re
-from enum import Enum
-from typing import Annotated
+from typing import Annotated, Any
 
-import boto3
-import botocore
-import botocore.client
 import typer
 from pydantic import BaseModel, Field
 from rich.console import Console
 
 import wandb
 from scripts.config import classifier_dir, concept_dir
+from scripts.platform import AwsEnv, get_s3_client
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -20,15 +17,6 @@ from wandb.sdk.wandb_run import Run
 
 console = Console()
 app = typer.Typer()
-
-
-class AwsEnv(str, Enum):
-    """The only available AWS environments."""
-
-    labs = "labs"
-    sandbox = "sandbox"
-    staging = "staging"
-    production = "production"
 
 
 class Namespace(BaseModel):
@@ -46,16 +34,6 @@ class Namespace(BaseModel):
 
 class StorageUpload(BaseModel):
     """Represents the storage configuration for model artifacts in S3."""
-
-    class Config:
-        """Internal config for the model."""
-
-        arbitrary_types_allowed = True  # For the s3_client
-
-    s3_client: botocore.client.BaseClient = Field(
-        ...,
-        description="The S3 client used for uploading.",
-    )
 
     next_version: str = Field(
         ...,
@@ -96,8 +74,8 @@ def link_model_artifact(
     :type run: Run
     :param classifier: The classifier object.
     :type classifier: Classifier
-    :param bucket: The storage location configuration.
-    :type bucket: Storage
+    :param storage_link: The storage location configuration.
+    :type storage_link: StorageLink
     :return: The created W&B artifact.
     :rtype: wandb.Artifact
     """
@@ -111,32 +89,20 @@ def link_model_artifact(
         type="model",
         metadata=metadata,
     )
-    artifact.add_reference(
-        uri=os.path.join(
-            "s3://",
-            storage_link.bucket,
-            storage_link.key,
-        ),
+    uri = os.path.join(
+        "s3://",
+        storage_link.bucket,
+        storage_link.key,
     )
+    # Don't checksum files since that means that W&B will try
+    # and be too smart and will think a model artifact file in
+    # a different AWS environment is the same, I think.
+    artifact.add_reference(uri=uri, checksum=False)
 
-    run.log_artifact(artifact)
+    artifact = run.log_artifact(artifact)
+    artifact = artifact.wait()
 
     return artifact
-
-
-def get_s3_client(aws_env: AwsEnv, region_name: str) -> botocore.client.BaseClient:
-    """
-    Creates an S3 client using the specified AWS environment and region.
-
-    :param aws_env: The AWS environment.
-    :type aws_env: AwsEnv
-    :param region_name: The AWS region name.
-    :type region_name: str
-    :return: The S3 client.
-    :rtype: botocore.client.BaseClient
-    """
-    session = boto3.Session(profile_name=aws_env.value)
-    return session.client("s3", region_name=region_name)
 
 
 def get_next_version(
@@ -177,6 +143,7 @@ def upload_model_artifact(
     classifier_path: str,
     storage_upload: StorageUpload,
     namespace: Namespace,
+    s3_client: Any,
 ) -> tuple[str, str]:
     """
     Uploads a model artifact to S3.
@@ -185,10 +152,12 @@ def upload_model_artifact(
     :type classifier: Classifier
     :param classifier_path: The path to the classifier file.
     :type classifier_path: str
-    :param storage_upload: The configuration for uploading the artifact..
+    :param storage_upload: The configuration for uploading the artifact.
     :type storage_upload: StorageUpload
     :param namespace: The W&B configuration containing project and entity.
-    :type namespace: WandBConfig
+    :type namespace: Namespace
+    :param s3_client: The S3 client used for uploading.
+    :type s3_client: Any
     :return: The bucket name and the key of the uploaded artifact.
     :rtype: tuple[str, str]
     """
@@ -203,7 +172,13 @@ def upload_model_artifact(
 
     console.log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
 
-    storage_upload.s3_client.upload_file(classifier_path, bucket, key)
+    s3_client.upload_file(
+        classifier_path,
+        bucket,
+        key,
+        ExtraArgs={"ContentType": "application/octet-stream"},
+        Callback=lambda bytes_transferred: None,
+    )
 
     console.log(f"Uploaded {classifier.name} to {key} in bucket {bucket}")
 
@@ -320,7 +295,6 @@ def main(
         )
 
         storage_upload = StorageUpload(
-            s3_client=s3_client,
             next_version=next_version,
             aws_env=aws_env,
         )
@@ -330,6 +304,7 @@ def main(
             classifier_path,
             storage_upload,
             namespace,
+            s3_client=s3_client,
         )
 
     if track:

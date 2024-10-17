@@ -118,7 +118,7 @@ def test_whether_highlighted_text_is_correctly_generated_with_alternative_format
             )
         ],
     )
-    highlighted = passage.get_highlighted_text(format="red")
+    highlighted = passage.get_highlighted_text(highlight_format="red")
     assert highlighted == "[red]This[/red] is a test passage."
 
 

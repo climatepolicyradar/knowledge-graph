@@ -49,6 +49,7 @@ priority = "explicit"
 
 [tool.poetry.scripts]
 train = "scripts.train:app"
+promote = "scripts.promote:app"
 
 [tool.poetry.group.dev]
 optional = true

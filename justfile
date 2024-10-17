@@ -6,9 +6,13 @@ install:
     poetry run pre-commit install
     poetry run ipython kernel install --user
 
-# test the project's core classes
+# test the project
 test:
     poetry run pytest
+
+# update the snapshots for the tests
+test-snapshot-update:
+    poetry run pytest --snapshot-update
 
 # run linters and code formatters
 lint:
@@ -29,6 +33,10 @@ train id +OPTS="":
 # evaluate a model for a specific wikibase ID
 evaluate id:
     poetry run python scripts/evaluate.py --wikibase-id {{id}}
+
+# promote a model for a specific wikibase ID
+promote id +OPTS="":
+    poetry run promote --wikibase-id {{id}} {{OPTS}}
 
 # run a model for a specific wikibase ID on a supplied string
 label id string:

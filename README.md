@@ -37,13 +37,25 @@ just train Q992
 Or to also track in W&B and upload to S3:
 
 ```bash
-just train Q992 --track --upload --aws-env staging
+just train Q992 --track --upload --aws-env labs
 ```
 
 Afterwards, evaluate the trained model:
 
 ```bash
 just evaluate Q992
+```
+
+You can promote a model version from one AWS account/environment, to another. You can optionally promote that model to be the primary version that's used in that account.
+
+```bash
+poetry run promote --wikibase-id Q992 --classifier RulesBasedClassifier --version v13 --from-aws-env labs --to-aws-env staging --primary
+```
+
+_or_
+
+```bash
+just promote --wikibase-id Q992 --classifier RulesBasedClassifier --version v7 --within-aws-env staging --no-primary
 ```
 
 You can see the full list of commands by running:

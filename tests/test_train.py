@@ -1,48 +1,20 @@
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
-import boto3
 import pytest
-from moto import mock_aws
 
 import wandb
+from scripts.platform import AwsEnv
 from scripts.train import (
-    AwsEnv,
     Namespace,
     StorageLink,
     StorageUpload,
     get_next_version,
-    get_s3_client,
     link_model_artifact,
     main,
     upload_model_artifact,
 )
 from src.identifiers import WikibaseID
-
-
-@pytest.mark.parametrize(
-    "aws_env, expected_profile",
-    [
-        (AwsEnv.labs, "labs"),
-        (AwsEnv.sandbox, "sandbox"),
-        (AwsEnv.staging, "staging"),
-        (AwsEnv.production, "production"),
-    ],
-)
-def test_get_s3_client(aws_env, expected_profile):
-    with patch("boto3.Session") as mock_session:
-        mock_client = Mock()
-        mock_session.return_value.client.return_value = mock_client
-
-        region_name = "eu-west-1"
-        client = get_s3_client(aws_env, region_name)
-
-        mock_session.assert_called_once_with(profile_name=expected_profile)
-        mock_session.return_value.client.assert_called_once_with(
-            "s3", region_name=region_name
-        )
-
-        assert client == mock_client
 
 
 @pytest.mark.parametrize(
@@ -54,13 +26,7 @@ def test_get_s3_client(aws_env, expected_profile):
         (AwsEnv.production, "cpr-production-models"),
     ],
 )
-@mock_aws
-def test_upload_model_artifact(
-    aws_credentials,
-    aws_env,
-    expected_bucket,
-    tmp_path,
-):
+def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     # Create a mock classifier
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
@@ -70,12 +36,10 @@ def test_upload_model_artifact(
     with open(test_file_path, "w") as f:
         f.write("test model content")
 
-    # Set up the S3 client
-    s3_client = boto3.client("s3", region_name="us-east-1")
-    s3_client.create_bucket(Bucket=expected_bucket)
+    # Create a mock S3 client
+    mock_s3_client = Mock()
 
     storage_upload = StorageUpload(
-        s3_client=s3_client,
         next_version="v3",
         aws_env=aws_env,
     )
@@ -86,6 +50,7 @@ def test_upload_model_artifact(
         classifier_path=test_file_path,
         storage_upload=storage_upload,
         namespace=Namespace(project=WikibaseID("Q123"), entity="test_entity"),
+        s3_client=mock_s3_client,
     )
 
     # Assert the correct bucket was used
@@ -94,10 +59,14 @@ def test_upload_model_artifact(
     # Assert the key structure is correct
     assert key == "Q123/test_classifier/v3/model.pickle"
 
-    # Check if the file was uploaded to S3
-    response = s3_client.get_object(Bucket=bucket, Key=key)
-    content = response["Body"].read().decode("utf-8")
-    assert content == "test model content"
+    # Verify that the upload_file method was called with correct arguments
+    mock_s3_client.upload_file.assert_called_once_with(
+        test_file_path,
+        expected_bucket,
+        key,
+        ExtraArgs={"ContentType": "application/octet-stream"},
+        Callback=ANY,
+    )
 
 
 def test_main_track_false_upload_true():
@@ -113,23 +82,19 @@ def test_main_track_false_upload_true():
         )
 
 
-@mock_aws
-def test_link_model_artifact(aws_credentials):
+def test_link_model_artifact():
     # Given there's a model that's been uploaded to S3
     mock_run = Mock()
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
-    region_name = "eu-west-1"
     bucket = "cpr-labs-models"
     key = "Q123/test_classifier/v3/model.pickle"
     aws_env = AwsEnv.labs
 
-    session = boto3.Session()
-    s3_client = session.client("s3", region_name=region_name)
-
-    s3_client.create_bucket(
-        Bucket=bucket,
-        CreateBucketConfiguration={"LocationConstraint": region_name},
+    storage_link = StorageLink(
+        bucket=bucket,
+        key=key,
+        aws_env=aws_env,
     )
 
     # When it's linked from S3 to a W&B artifact
@@ -137,33 +102,29 @@ def test_link_model_artifact(aws_credentials):
         mock_artifact_instance = Mock()
         mock_artifact_class.return_value = mock_artifact_instance
 
-        storage_link = StorageLink(
-            bucket=bucket,
-            key=key,
-            aws_env=aws_env,
-        )
-
-        # When it's linked from S3 to a W&B artifact
-        artifact = link_model_artifact(
+        link_model_artifact(
             mock_run,
             mock_classifier,
             storage_link,
         )
 
-        # Then W&B internally has gotten the checksums from S3. This is
-        # done internally, which is why we use `mock_aws`, and need to
-        # setup the bucket).
-        mock_run.log_artifact.assert_called_once()
-
-        # Then the artifact was logged in W&b.
+        # Then the artifact was created with correct parameters
         mock_artifact_class.assert_called_once_with(
             name=mock_classifier.name,
             type="model",
             metadata={"aws_env": aws_env.value},
         )
 
-        # Then the artifact returned is the mocked instance
-        assert artifact == mock_artifact_instance
+        # Then the S3 reference was added to the artifact
+        mock_artifact_instance.add_reference.assert_called_once_with(
+            uri=f"s3://{bucket}/{key}", checksum=False
+        )
+
+        # Then the artifact was logged in W&B
+        mock_run.log_artifact.assert_called_once_with(mock_artifact_instance)
+
+        # Then the artifact was waited for
+        mock_run.log_artifact.return_value.wait.assert_called_once()
 
 
 @patch("wandb.Api")
