@@ -17,8 +17,14 @@ from flows.inference import classifier_inference
 
 MEGABYTES_PER_GIGABYTE = 1024
 
+
 def create_deployment(
-    project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any], build: bool = True, push: bool = True
+    project_name: str,
+    flow: Flow,
+    description: str,
+    flow_variables: dict[str, Any],
+    build: bool = True,
+    push: bool = True,
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = os.getenv("AWS_ENV", "sandbox")
@@ -61,10 +67,8 @@ create_deployment(
             "CACHE_BUCKET": os.environ["CACHE_BUCKET"],
             "WANDB_API_KEY": os.environ["WANDB_API_KEY"],
         },
-        "ephemeralStorage": {
-            "sizeInGiB": 50
-        },
+        "ephemeralStorage": {"sizeInGiB": 50},
     },
     build=False,
-    push=False
+    push=False,
 )

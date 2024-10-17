@@ -3,9 +3,9 @@ from unittest.mock import Mock, patch
 
 import boto3
 import pytest
-import wandb
 from moto import mock_aws
 
+import wandb
 from scripts.train import (
     AwsEnv,
     Namespace,
