@@ -1,0 +1,61 @@
+from enum import Enum
+from typing import Optional
+
+import boto3
+import boto3.session
+import botocore
+import botocore.client
+
+
+class AwsEnv(str, Enum):
+    """The only available AWS environments."""
+
+    labs = "labs"
+    sandbox = "sandbox"
+    staging = "staging"
+    production = "production"
+
+    @classmethod
+    def _missing_(cls, value):
+        if value == "dev":
+            return cls.staging
+
+
+def get_session(aws_env: AwsEnv) -> boto3.session.Session:
+    """Create an AWS session using the specified AWS environment."""
+    return boto3.Session(profile_name=aws_env.value)
+
+
+def get_s3_client(
+    aws_env: Optional[AwsEnv],
+    region_name: str,
+) -> botocore.client.BaseClient:
+    """
+    Create an AWS S3 client.
+
+    Uses the specified AWS environment and region.
+    """
+    match aws_env:
+        case None:
+            return boto3.client("s3", region_name=region_name)
+
+        case aws_env:
+            session = get_session(aws_env)
+            return session.client("s3", region_name=region_name)
+
+
+def get_sts_client(
+    aws_env: Optional[AwsEnv],
+) -> botocore.client.BaseClient:
+    """
+    Create an AWS STS client.
+
+    Uses the specified AWS environment.
+    """
+    match aws_env:
+        case None:
+            return boto3.client("sts")
+
+        case aws_env:
+            session = get_session(aws_env)
+            return session.client("sts")
