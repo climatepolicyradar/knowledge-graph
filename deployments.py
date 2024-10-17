@@ -64,7 +64,6 @@ create_deployment(
         "ephemeralStorage": {
             "sizeInGiB": 50
         },
-        "task_definition_arn": os.getenv("TASK_DEFINITION_ARN"),
     },
     build=False,
     push=False
