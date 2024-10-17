@@ -1,70 +1,46 @@
-[tool.poetry]
+[project]
 name = "knowledge-graph"
 version = "0.1.0"
-description = ""
-authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
-license = "Apache 2.0"
+description = "Add your description here"
 readme = "README.md"
-packages = [
-  { include = "src", from = "." },
-  { include = "tests", from = "." },
-  { include = "scripts", from = "." },
+requires-python = ">=3.11"
+dependencies = [
+    "argilla==1.29.1",
+    "azure-pdf-parser",
+    "boto3==1.35.31",
+    "cpr-sdk==1.9.1",
+    "griffe==0.48.0",
+    "httpx==0.26.0",
+    "ipykernel==6.29.3",
+    "more-itertools==10.3.0",
+    "neomodel==5.3.3",
+    "prefect==2.16.8",
+    "python-dotenv==1.0.1",
+    "rapidfuzz==3.10.0",
+    "rich==13.7.0",
+    "sentence-transformers==3.1.1",
+    "tqdm>=4.66.5",
+    "typer==0.9.4",
+    "wandb==0.18.3",
+    # The following is to work around the fact that pytorch stopped supported intel-macs after 2.2.2
+    # See: https://github.com/pytorch/pytorch/issues/114602
+    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch==2.4.1; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.11"
-httpx = "^0.26.0"
-rich = "^13.7.0"
-tqdm = "^4.66.2"
-ipykernel = "^6.29.3"
-azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
-# navigator_document_parser = { git = "https://github.com/climatepolicyradar/navigator-document-parser.git" }
-neomodel = "^5.3.3"
-typer = "0.9.4"
-rapidfuzz = "^3.10.0"
-python-dotenv = "^1.0.1"
-hypothesis = "^6.112.2"
-more-itertools = "^10.3.0"
-argilla = "1.29.1"
-prefect = "2.16.8"
-griffe = "0.48.0"
-cpr-sdk = "^1.7.1"
-sentence-transformers = "^3.1.1"
-wandb = "^0.18.3"
-boto3 = "^1.35.31"
-moto = {extras = ["s3"], version = "^5.0.16"}
-# The following is to work around the fact that pytorch stopped supported intel-macs after 2.2.2
-# See: https://github.com/pytorch/pytorch/issues/114602
-torch = [
-    {version = "2.2.2", markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'"},
-    {version = "2.4.1", markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'"},
-  ]
+[project.optional-dependencies]
+dev = [
+    "hypothesis==6.112.2",
+    "mkdocs-material==9.5.39",
+    "moto[s3]==5.0.16",
+    "pre-commit>=4.0.1",
+    "pytest>=8.3.3",
+    "ruff>=0.7.0",
+    "syrupy>=4.7.2",
+]
 
-
-[[tool.poetry.source]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cpu"
-priority = "explicit"
-
-
-[tool.poetry.scripts]
-train = "scripts.train:app"
-promote = "scripts.promote:app"
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.2"
-mkdocs-material = "^9.5.39"
-pre-commit = "^3.8.0"
-boto3 = "^1.35.32"
-syrupy = "^4.7.1"
-moto = {extras = ["s3"], version = "^5.0.16"}
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv.sources]
+azure-pdf-parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
 
 [tool.ruff]
 lint.select = ["E", "F", "D", "I"]

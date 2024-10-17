@@ -11,57 +11,79 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install Python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: Lint
+        run: |
+          uv run pre-commit install
+          uv run pre-commit run --all-files --show-diff-on-failure
+
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
 
-      - name: Install poetry
-        shell: bash
-        run: pipx install poetry==1.8.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install python or load from cache with dependencies
+      - name: Install Python or load from cache with dependencies
         uses: actions/setup-python@v5
         with:
-          python-version-file: .python-version
-          cache: poetry
+          python-version-file: "pyproject.toml"
 
-      - name: Install dependencies
-        run: poetry install --with dev
-
-      - name: Lint
-        run: |
-          poetry run pre-commit install
-          poetry run pre-commit run --all-files --show-diff-on-failure
+      - name: Install the project
+        run: uv sync --all-extras --dev
 
       - name: Test
-        run: poetry run pytest -v
+        run: uv run pytest -v
 
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [test]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
 
-      - name: Install poetry
-        shell: bash
-        run: pipx install poetry==1.8.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install python or load from cache with dependencies
+      - name: Install Python or load from cache with dependencies
         uses: actions/setup-python@v5
         with:
-          python-version-file: .python-version
-          cache: poetry
+          python-version-file: "pyproject.toml"
 
-      - name: Install dependencies
-        run: poetry install
+      - name: Install the project
+        run: uv sync --all-extras --dev
 
       - name: Deploy docs
         working-directory: ./docs
-        run: poetry run mkdocs gh-deploy --force
+        run: uv run mkdocs gh-deploy --force
 
       - name: Deploy more
         run: echo 'this is a placeholder'

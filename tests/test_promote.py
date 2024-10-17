@@ -353,9 +353,10 @@ def test_copy_across_aws_envs(
         mock_from_s3.head_object.return_value = {"ContentLength": len(content)}
         mock_to_s3.head_object.return_value = {"ContentLength": len(content)}
 
-        with patch("scripts.promote.download") as mock_download, patch(
-            "scripts.promote.upload"
-        ) as mock_upload:
+        with (
+            patch("scripts.promote.download") as mock_download,
+            patch("scripts.promote.upload") as mock_upload,
+        ):
             # Call the function
             result_bucket, result_key = copy_across_aws_envs(
                 promotion,
