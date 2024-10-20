@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from prefect import flow
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
@@ -108,7 +109,12 @@ def test_store_labels(mock_bucket):
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    store_labels(labels, "TEST.DOC.0.1", "Q9081")
+    @flow
+    def store_labels_wrapper_flow() -> None:
+        """As default tasks cannot be run outside of flows so we wrap the task."""
+        return store_labels(labels, "TEST.DOC.0.1", "Q9081")
+
+    store_labels_wrapper_flow()
 
     labels = helper_list_labels_in_bucket(mock_bucket)
 
