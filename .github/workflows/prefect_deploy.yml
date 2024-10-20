@@ -42,7 +42,7 @@ jobs:
           cache: poetry
 
       - name: Install dependencies
-        run: poetry install
+        run: poetry install --with dev
         
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
