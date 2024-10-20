@@ -79,7 +79,7 @@ jobs:
           DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
           DOCKER_TAG: ${{ steps.get_version.outputs.docker_tag }}
-          PIPELINE_CACHE_SRC_BUCKET: ${{ inputs.pipeline-cache-src-bucket }}
+          CACHE_BUCKET: ${{ inputs.pipeline-cache-src-bucket }}
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
         run: |
            poetry run python -m deployments
