@@ -61,6 +61,7 @@ pre-commit = "^3.8.0"
 boto3 = "^1.35.32"
 syrupy = "^4.7.1"
 moto = {extras = ["s3"], version = "^5.0.16"}
+just = "^0.8.162"
 
 [build-system]
 requires = ["poetry-core"]
