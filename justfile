@@ -78,7 +78,7 @@ push-image:
     docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
 
 get-version:
-    python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
+    poetry run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
 
 export_env_vars:
 	export $(cat .env | xargs)
