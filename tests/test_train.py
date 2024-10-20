@@ -2,8 +2,8 @@ import os
 from unittest.mock import ANY, Mock, patch
 
 import pytest
-
 import wandb
+
 from scripts.platform import AwsEnv
 from scripts.train import (
     Namespace,

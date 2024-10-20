@@ -3,17 +3,17 @@ import re
 from typing import Annotated, Any
 
 import typer
+import wandb
 from pydantic import BaseModel, Field
 from rich.console import Console
+from wandb.sdk.wandb_run import Run
 
-import wandb
 from scripts.config import classifier_dir, concept_dir
 from scripts.platform import AwsEnv, get_s3_client
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.wikibase import WikibaseSession
-from wandb.sdk.wandb_run import Run
 
 console = Console()
 app = typer.Typer()

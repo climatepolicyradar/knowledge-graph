@@ -9,6 +9,7 @@ from typing import Annotated, List, Optional
 import botocore
 import botocore.client
 import typer
+import wandb
 from pydantic import (
     BaseModel,
     TypeAdapter,
@@ -18,7 +19,6 @@ from rich.logging import RichHandler
 from tqdm import tqdm
 from typing_extensions import Self
 
-import wandb
 from scripts.platform import AwsEnv, get_s3_client, get_sts_client
 from src.identifiers import WikibaseID
 
