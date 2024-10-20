@@ -42,7 +42,7 @@ jobs:
           cache: poetry
 
       - name: Install dependencies
-        run: poetry install --with dev
+        run: poetry install
         
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
@@ -60,6 +60,10 @@ jobs:
         with:
           prefect-api-key: ${{ secrets.PREFECT_API_KEY }}
           prefect-workspace: ${{ inputs.prefect-workspace }}
+
+      - uses: extractions/setup-just@v1
+        with:
+          just-version: 1.36.0
 
       - name: Get version
         id: get_version
