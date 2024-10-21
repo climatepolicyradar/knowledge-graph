@@ -46,6 +46,12 @@ Afterwards, evaluate the trained model:
 just evaluate Q992
 ```
 
+Or to also track in W&B:
+
+```bash
+just evaluate Q992 --track
+```
+
 You can promote a model version from one AWS account/environment, to another. You can optionally promote that model to be the primary version that's used in that account.
 
 ```bash

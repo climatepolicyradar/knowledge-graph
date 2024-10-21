@@ -1,18 +1,23 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from src.concept import Concept
 from src.identifiers import generate_identifier
 from src.span import Span
+from src.version import Version
 
 
 class Classifier(ABC):
     """Abstract class for all classifier types."""
 
-    def __init__(self, concept: Concept):
+    concept: Concept
+    version: Optional[Version]
+
+    def __init__(self, concept: Concept, version: Optional[Version] = None):
         self.concept = concept
+        self.version = version
 
     def fit(self) -> "Classifier":
         """

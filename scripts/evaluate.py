@@ -3,10 +3,13 @@ from typing import Annotated
 
 import pandas as pd
 import typer
+import wandb
+from pydantic import BaseModel, Field
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from scripts.cloud import AwsEnv
 from scripts.config import (
     EQUAL_COLUMNS,
     STRATIFIED_COLUMNS,
@@ -27,6 +30,19 @@ from src.span import Span, group_overlapping_spans
 
 console = Console()
 app = typer.Typer()
+
+
+class Namespace(BaseModel):
+    """Hierarchy we use: CPR / {concept} / {classifier}"""
+
+    project: WikibaseID = Field(
+        ...,
+        description="The name of the W&B project, which is the concept ID",
+    )
+    entity: str = Field(
+        ...,
+        description="The name of the W&B entity",
+    )
 
 
 def group_passages_by_equity_strata(
@@ -79,15 +95,48 @@ def main(
             parser=WikibaseID,
         ),
     ],
+    track: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to track the training run with Weights & Biases",
+        ),
+    ] = False,
+    aws_env: Annotated[
+        AwsEnv,
+        typer.Option(
+            ...,
+            help="AWS environment to use for metadata",
+        ),
+    ] = AwsEnv.labs,
+    # TODO Accept version, and DL it from W&B
 ):
-    """Measure classifier performance against human-labelled gold-standard datasets"""
-    console.log("🚀 Starting classifier performance measurement")
+    if track:
+        entity = "climatepolicyradar"
+        project = wikibase_id
+        namespace = Namespace(project=project, entity=entity)
+        job_type = "evaluate_model"
+        config = {"aws_env": aws_env.value}
+
+        run = wandb.init(
+            entity=namespace.entity,
+            project=namespace.project,
+            job_type=job_type,
+            config=config,
+        )
+
+    tracking = "on" if track else "off"
+    console.log(
+        f"🚀 Starting classifier performance measurement with tracking {tracking}"
+    )
 
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
         console.log(f'📚 Loaded concept "{concept}" from {concept_dir}')
+        if track:
+            run.config["preferred_label"] = concept.preferred_label
     except FileNotFoundError as e:
         raise typer.BadParameter(
             f"Data for {wikibase_id} not found. \n"
@@ -114,6 +163,11 @@ def main(
         f"🚚 Loaded {len(gold_standard_labelled_passages)} labelled passages "
         f"with {n_annotations} individual annotations"
     )
+    if track:
+        run.config["n_gold_standard_labelled_passages"] = len(
+            gold_standard_labelled_passages
+        )
+        run.config["n_annotations"] = n_annotations
 
     try:
         classifier = Classifier.load(classifier_dir / wikibase_id)
@@ -137,6 +191,8 @@ def main(
         f"✅ Labelled {len(model_labelled_passages)} passages "
         f"with {n_annotations} individual annotations"
     )
+    if track:
+        run.config["n_model_labelled_passages"] = len(model_labelled_passages)
 
     console.log(f"📊 Calculating performance metrics for {concept}")
     confusion_matrices: dict[str, dict[str, ConfusionMatrix]] = defaultdict(dict)
@@ -175,11 +231,11 @@ def main(
                 {
                     "Group": group,
                     "Agreement at": agreement_level,
-                    "Precision": f"{confusion_matrix.precision():.2f}",
-                    "Recall": f"{confusion_matrix.recall():.2f}",
-                    "Accuracy": f"{confusion_matrix.accuracy():.2f}",
-                    "F1 score": f"{confusion_matrix.f1_score():.2f}",
-                    "Support": str(confusion_matrix.support()),
+                    "Precision": confusion_matrix.precision(),
+                    "Recall": confusion_matrix.recall(),
+                    "Accuracy": confusion_matrix.accuracy(),
+                    "F1 score": confusion_matrix.f1_score(),
+                    "Support": confusion_matrix.support(),
                 },
             )
 
@@ -189,13 +245,32 @@ def main(
     for column in df.columns:
         table.add_column(column)
     for _, row in df.iterrows():
-        table.add_row(*row)
+        formatted_row = [
+            f"{value:.2f}" if isinstance(value, float) else str(value) for value in row
+        ]
+        table.add_row(*formatted_row)
 
     console.log(table)
 
     metrics_path = metrics_dir / f"{wikibase_id}.json"
     df.to_json(metrics_path, orient="records", indent=2)
     console.log(f"📄 Saved performance metrics to {metrics_path}")
+
+    if track:
+        # Attempt to get a version, otherwise, have none for the lineage.
+        #
+        # The model have been trained and saved without a version.
+        if classifier.version is not None:
+            # It must have been tracked and uploaded, during training
+            version = classifier.version
+            artifact_id = f"{wikibase_id}/{classifier.name}:{version}"
+            console.log(f"Using artifact: {artifact_id}")
+            run.use_artifact(artifact_id)
+
+        table = wandb.Table(data=df.values.tolist(), columns=df.columns.tolist())
+
+        run.log({"performance": table})
+        run.finish()
 
 
 if __name__ == "__main__":
