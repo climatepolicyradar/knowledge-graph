@@ -24,6 +24,7 @@ class Config:
     document_target_prefix: str = "labelled_passages"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
+    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
 
 
 config = Config()
@@ -79,10 +80,7 @@ def download_classifier_from_wandb_to_local(classifier_id: str, alias: str) -> s
     """
     wandb.login(key=os.environ["WANDB_API_KEY"])
     run = wandb.init()
-    artifact = (
-        "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
-        f"{classifier_id}:{alias or 'latest'}"
-    )
+    artifact = config.wandb_model_registry + f"{classifier_id}:{alias or 'latest'}"
     print(f"Downloading artifact from W&B: {artifact}")
     artifact = run.use_artifact(artifact, type="model")
     return artifact.download()
