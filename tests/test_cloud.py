@@ -1,4 +1,4 @@
-from scripts.platform import AwsEnv
+from scripts.cloud import AwsEnv
 
 
 def test_init_awsenv():
