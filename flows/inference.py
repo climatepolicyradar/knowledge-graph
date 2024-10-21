@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
+import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
 
-import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
