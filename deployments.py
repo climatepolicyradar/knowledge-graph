@@ -18,7 +18,7 @@ from flows.inference import classifier_inference
 MEGABYTES_PER_GIGABYTE = 1024
 
 def create_deployment(
-    project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any], build: bool = True, push: bool = True
+    project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any]
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = os.getenv("AWS_ENV", "sandbox")
@@ -44,8 +44,6 @@ def create_deployment(
         job_variables=job_variables,
         tags=[f"repo:{docker_repository}", f"awsenv:{aws_env}"],
         description=description,
-        build=build,
-        push=push,
     )
 
 
@@ -65,6 +63,4 @@ create_deployment(
             "sizeInGiB": 50
         },
     },
-    build=False,
-    push=False
 )

@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
 
+import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -171,19 +171,6 @@ def text_block_inference(
     return labelled_passage
 
 
-def determine_classifier_ids(
-    classifier_spec: Optional[list[tuple[str, str]]],
-) -> list[tuple[str, str]]:
-    """
-    To implement.
-
-    A check that requested classifiers exist, or return all the latest classifiers
-    """
-    if not classifier_spec:
-        return [("Q788", "latest")]
-    return classifier_spec
-
-
 @flow(log_prints=True)
 def run_classifier_inference_on_document(
     document_id: str, classifier: Classifier, classifier_id: str
@@ -208,8 +195,7 @@ def run_classifier_inference_on_document(
 
 @flow(log_prints=True)
 def classifier_inference(
-    document_ids: Optional[list[str]] = None,
-    classifier_spec: Optional[list[tuple[str, str]]] = None,
+    classifier_spec: list[tuple[str, str]], document_ids: Optional[list[str]] = None
 ):
     """
     Flow to run inference on documents within a bucket prefix
@@ -230,7 +216,6 @@ def classifier_inference(
     validated_document_ids = determine_document_ids(
         requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
     )
-    classifier_spec = determine_classifier_ids(classifier_spec)
 
     for classifier_id, classifier_alias in classifier_spec:
         print(
@@ -243,10 +228,3 @@ def classifier_inference(
                 classifier=classifier,
                 classifier_id=classifier_id,
             )
-
-
-if __name__ == "__main__":
-    classifier_inference(
-        document_ids=["CCLW.executive.4242.2011_translated_en_short"],
-        classifier_spec=[("Q992-RulesBasedClassifier", "latest")],
-    )

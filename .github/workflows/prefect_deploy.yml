@@ -26,12 +26,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+
+      - uses: extractions/setup-just@v1
+        with:
+          just-version: 1.36.0
 
       - name: Install poetry
         shell: bash
@@ -62,10 +63,6 @@ jobs:
         with:
           prefect-api-key: ${{ secrets.PREFECT_API_KEY }}
           prefect-workspace: ${{ inputs.prefect-workspace }}
-
-      - uses: extractions/setup-just@v1
-        with:
-          just-version: 1.36.0
 
       - name: Get version
         id: get_version
