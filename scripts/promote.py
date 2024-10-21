@@ -19,7 +19,7 @@ from rich.logging import RichHandler
 from tqdm import tqdm
 from typing_extensions import Self
 
-from scripts.platform import AwsEnv, get_s3_client, get_sts_client
+from scripts.cloud import AwsEnv, get_s3_client, get_sts_client
 from src.identifiers import WikibaseID
 
 logging.basicConfig(
