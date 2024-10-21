@@ -143,7 +143,7 @@ def store_labels(
     labels: list[LabelledPassage], document_id: str, classifier_id: str
 ) -> None:
     """Stores the labels in the cache bucket"""
-    print("Storing labels for document {document_id} and classifier {classifier_id}")
+    print(f"Storing labels for document {document_id} and classifier {classifier_id}")
     key = os.path.join(
         config.document_target_prefix, f"{document_id}.{classifier_id}.json"
     )
