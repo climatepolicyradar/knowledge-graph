@@ -63,10 +63,23 @@ jobs:
         working-directory: ./docs
         run: poetry run mkdocs gh-deploy --force
 
+  deploy_prefect_labs:
+    if: github.ref == 'refs/heads/main'
+    needs: [test]
+    uses: ./.github/workflows/prefect_deploy.yml
+    with:
+      aws-env: labs
+      pipeline-cache-src-bucket: cpr-labs-data-pipeline-cache
+      prefect-workspace: ${{ vars.PREFECT_WORKSPACE }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_LABS }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_LABS }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
 
   deploy_prefect_sandbox:
     if: github.ref == 'refs/heads/main'
-    needs: [test]
+    needs: [deploy_prefect_labs]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox
@@ -75,5 +88,33 @@ jobs:
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+
+  deploy_prefect_staging:
+    if: github.ref == 'refs/heads/main'
+    needs: [deploy_prefect_sandbox]
+    uses: ./.github/workflows/prefect_deploy.yml
+    with:
+      aws-env: staging
+      pipeline-cache-src-bucket: cpr-staging-data-pipeline-cache
+      prefect-workspace: ${{ vars.PREFECT_WORKSPACE }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+
+  deploy_prefect_prod:
+    if: github.ref == 'refs/heads/main'
+    needs: [deploy_prefect_staging]
+    uses: ./.github/workflows/prefect_deploy.yml
+    with:
+      aws-env: prod
+      pipeline-cache-src-bucket: cpr-prod-data-pipeline-cache
+      prefect-workspace: ${{ vars.PREFECT_WORKSPACE }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
       PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
       WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
