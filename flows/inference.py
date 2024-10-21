@@ -83,7 +83,7 @@ def determine_document_ids(
     return requested_document_ids
 
 
-def download_classifier_from_wandb_to_local(classifier_id: str, alias: str) -> str:
+def download_classifier_from_wandb_to_local(classifier_name: str, alias: str) -> str:
     """
     Function for downloading a classifier from W&B to local.
 
@@ -93,23 +93,25 @@ def download_classifier_from_wandb_to_local(classifier_id: str, alias: str) -> s
     """
     wandb.login(key=get_aws_ssm_param("WANDB_API_KEY"))
     run = wandb.init()
-    artifact = config.wandb_model_registry + f"{classifier_id}:{alias or 'latest'}"
+    artifact = config.wandb_model_registry + f"{classifier_name}:{alias or 'latest'}"
     print(f"Downloading artifact from W&B: {artifact}")
     artifact = run.use_artifact(artifact, type="model")
     return artifact.download()
 
 
-def load_classifier(classifier_id: str, alias: str) -> Classifier:
+def load_classifier(classifier_name: str, alias: str) -> Classifier:
     """
     Loads a classifier into memory
 
     If the classifier is available locally, this will be used. Otherwise the
     classifier will be downloaded from W&B (Once implemented)
     """
-    local_classifier_path: Path = config.local_classifier_dir / classifier_id
+    local_classifier_path: Path = config.local_classifier_dir / classifier_name
 
     if not local_classifier_path.exists():
-        model_cache_dir = download_classifier_from_wandb_to_local(classifier_id, alias)
+        model_cache_dir = download_classifier_from_wandb_to_local(
+            classifier_name, alias
+        )
         local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
     classifier = Classifier.load(local_classifier_path)
@@ -151,12 +153,12 @@ def document_passages(document: BaseParserOutput):
 
 @task(log_prints=True)
 def store_labels(
-    labels: list[LabelledPassage], document_id: str, classifier_id: str
+    labels: list[LabelledPassage], document_id: str, classifier_name: str
 ) -> None:
     """Stores the labels in the cache bucket"""
-    print(f"Storing labels for document {document_id} and classifier {classifier_id}")
+    print(f"Storing labels for document {document_id} and classifier {classifier_name}")
     key = os.path.join(
-        config.document_target_prefix, f"{document_id}.{classifier_id}.json"
+        config.document_target_prefix, f"{document_id}.{classifier_name}.json"
     )
 
     data = [label.model_dump() for label in labels]
@@ -184,7 +186,7 @@ def text_block_inference(
 
 @flow(log_prints=True)
 def run_classifier_inference_on_document(
-    document_id: str, classifier: Classifier, classifier_id: str
+    document_id: str, classifier: Classifier, classifier_name: str
 ) -> None:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with id {document_id}")
@@ -200,7 +202,7 @@ def run_classifier_inference_on_document(
     store_labels(
         labels=doc_labels,
         document_id=document_id,
-        classifier_id=classifier_id,
+        classifier_name=classifier_name,
     )
 
 
@@ -218,7 +220,7 @@ def classifier_inference(
 
     params:
     - document_ids: List of document ids to run inference on
-    - classifier_spec: List of classifier ids and aliases (alias tag for the version) to run inference with
+    - classifier_spec: List of classifier names and aliases (alias tag for the version) to run inference with
     Example classifier_spec: ["Q788", "latest")]
     """
     print(f"Running with config: {config}")
@@ -228,14 +230,14 @@ def classifier_inference(
         requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
     )
 
-    for classifier_id, classifier_alias in classifier_spec:
+    for classifier_name, classifier_alias in classifier_spec:
         print(
-            f"Loading classifier with id: {classifier_id}, and alias: {classifier_alias}"
+            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
         )
-        classifier = load_classifier(classifier_id, classifier_alias)
+        classifier = load_classifier(classifier_name, classifier_alias)
         for document_id in validated_document_ids:
             run_classifier_inference_on_document(
                 document_id=document_id,
                 classifier=classifier,
-                classifier_id=classifier_id,
+                classifier_name=classifier_name,
             )
