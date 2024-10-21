@@ -34,7 +34,7 @@ boto3 = "^1.35.31"
 [tool.poetry.group.embeddings.dependencies]
 # Torch CPU versions: https://download.pytorch.org/whl/torch/
 torch = [
-  # Mac x86_64 
+  # Mac x86_64
   # Pinned to 2.2.2 because pytorch stopped supported intel-macs after 2.2.2: https://github.com/pytorch/pytorch/issues/114602
   { markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'", url = "https://download.pytorch.org/whl/cpu/torch-2.2.2-cp310-none-macosx_10_9_x86_64.whl" },
   # Mac arm64
@@ -54,6 +54,7 @@ priority = "explicit"
 [tool.poetry.scripts]
 train = "scripts.train:app"
 promote = "scripts.promote:app"
+evaluate = "scripts.evaluate:app"
 
 [tool.poetry.group.dev]
 optional = true
