@@ -70,10 +70,8 @@ jobs:
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox
-      pipeline-cache-src-bucket: cpr-sandbox-data-pipeline-cache
       prefect-workspace: ${{ vars.PREFECT_WORKSPACE }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX }}
       PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
-      WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
