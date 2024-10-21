@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from wandb.sdk.wandb_run import Run
 
+from scripts.cloud import AwsEnv, get_s3_client
 from scripts.config import classifier_dir, concept_dir
-from scripts.platform import AwsEnv, get_s3_client
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID

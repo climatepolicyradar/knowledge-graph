@@ -6,7 +6,7 @@ import pytest
 import typer
 from moto import mock_aws
 
-from scripts.platform import AwsEnv
+from scripts.cloud import AwsEnv
 from scripts.promote import (
     Across,
     Version,
