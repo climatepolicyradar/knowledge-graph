@@ -19,7 +19,7 @@ from rich.logging import RichHandler
 from tqdm import tqdm
 from typing_extensions import Self
 
-from scripts.cloud import AwsEnv, get_s3_client, get_sts_client
+from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
 from src.identifiers import WikibaseID
 
 logging.basicConfig(
@@ -282,19 +282,6 @@ def upload(
     progress_bar.close()
 
 
-def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
-    """Check if the user is logged in to the specified AWS environment."""
-    try:
-        aws_env = aws_env if use_aws_profiles else None
-
-        sts = get_sts_client(aws_env)
-        sts.get_caller_identity()
-
-        return True
-    except botocore.exceptions.ClientError:
-        return False
-
-
 def throw_not_logged_in(aws_env: AwsEnv):
     """Raise a typer.BadParameter exception for a not logged in AWS environment."""
     raise typer.BadParameter(
@@ -412,7 +399,7 @@ def main(
         }
     )
 
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
 
     log.info("Validating AWS logins...")
     validate_logins(promotion, use_aws_profiles)

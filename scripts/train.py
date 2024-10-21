@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from wandb.sdk.wandb_run import Run
 
-from scripts.cloud import AwsEnv, get_s3_client
+from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
 from scripts.config import classifier_dir, concept_dir
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
@@ -237,6 +237,14 @@ def main(
     if (not track) and upload:
         raise ValueError(
             "you can only upload a model artifact, if you're also tracking the run"
+        )
+
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
+
+    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
+        raise typer.BadParameter(
+            f"you're not logged into {aws_env.value}. "
+            f"Do `aws sso --login {aws_env.value}`"
         )
 
     if track:
