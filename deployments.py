@@ -56,10 +56,6 @@ create_deployment(
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,
-        "env": {
-            "CACHE_BUCKET": os.environ["CACHE_BUCKET"],
-            "WANDB_API_KEY": os.environ["WANDB_API_KEY"],
-        },
         "ephemeralStorage": {"sizeInGiB": 50},
     },
 )

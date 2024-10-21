@@ -8,18 +8,31 @@ from typing import Optional
 import boto3
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
+from prefect.blocks.system import JSON
 
 import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
+AWS_ENV = os.environ["AWS_ENV"]
+WORKPOOL_DEFAULT_JOB_VARIABLES = JSON.load(
+    f"default-job-variables-prefect-mvp-{AWS_ENV}"
+).value
+
+
+def get_aws_ssm_param(param_name: str) -> str:
+    """Retrieve a parameter from AWS SSM"""
+    ssm = boto3.client("ssm")
+    response = ssm.get_parameter(Name=param_name, WithDecryption=True)
+    return response["Parameter"]["Value"]
+
 
 @dataclass()
 class Config:
     """Settings used across flow runs"""
 
-    cache_bucket: str = os.environ.get("CACHE_BUCKET")
+    cache_bucket: str = WORKPOOL_DEFAULT_JOB_VARIABLES["pipeline_cache_bucket_name"]
     document_source_prefix: str = "embeddings_input"
     document_target_prefix: str = "labelled_passages"
     bucket_region: str = "eu-west-1"
@@ -78,7 +91,7 @@ def download_classifier_from_wandb_to_local(classifier_id: str, alias: str) -> s
     download the model via the W&B API, we need access to both the s3 bucket via iam
     in your environment and WanDB via the api key.
     """
-    wandb.login(key=os.environ["WANDB_API_KEY"])
+    wandb.login(key=get_aws_ssm_param("WANDB_API_KEY"))
     run = wandb.init()
     artifact = config.wandb_model_registry + f"{classifier_id}:{alias or 'latest'}"
     print(f"Downloading artifact from W&B: {artifact}")
