@@ -59,3 +59,21 @@ def get_sts_client(
         case aws_env:
             session = get_session(aws_env)
             return session.client("sts")
+
+
+def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
+    """Check if the user is logged in to the specified AWS environment."""
+    try:
+        aws_env = aws_env if use_aws_profiles else None
+
+        sts = get_sts_client(aws_env)
+        sts.get_caller_identity()
+
+        return True
+    except (
+        botocore.exceptions.ClientError,
+        botocore.exceptions.NoCredentialsError,
+        botocore.exceptions.SSOTokenLoadError,
+    ) as e:
+        print(f"determining that not logged in due to exception: {e}")
+        return False
