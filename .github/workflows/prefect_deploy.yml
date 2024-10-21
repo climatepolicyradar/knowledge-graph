@@ -71,6 +71,14 @@ jobs:
           echo "version: $VERSION"
           echo "DOCKER_TAG=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Build the docker image
+        run: |
+          just build-image
+
+      - name: Push the docker image
+        run: |
+          just push-image
+
       - name: Deploy to Prefect
         env:
           AWS_ENV: ${{ inputs.aws-env }}
