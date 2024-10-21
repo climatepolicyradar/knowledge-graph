@@ -65,7 +65,7 @@ jobs:
 
 
   deploy_prefect_sandbox:
-    if: github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'
     needs: [test]
     uses: ./.github/workflows/prefect_deploy.yml
     with:

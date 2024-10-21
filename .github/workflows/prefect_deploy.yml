@@ -64,7 +64,23 @@ jobs:
         run: |
           VERSION=$(just get-version)
           echo "version: $VERSION"
-          echo "DOCKER_TAG=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build the docker image
+        env:
+          DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DOCKER_REPOSITORY: ${{ github.event.repository.name }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          just build-image
+
+      - name: Push the docker image
+        env:
+          DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DOCKER_REPOSITORY: ${{ github.event.repository.name }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          just push-image
 
       - name: Deploy to Prefect
         env:

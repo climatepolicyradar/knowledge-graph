@@ -44,6 +44,8 @@ def create_deployment(
         job_variables=job_variables,
         tags=[f"repo:{docker_repository}", f"awsenv:{aws_env}"],
         description=description,
+        build=False,
+        push=False,
     )
 
 
