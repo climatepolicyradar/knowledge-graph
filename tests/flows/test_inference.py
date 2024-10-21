@@ -139,7 +139,7 @@ def test_text_block_inference(mock_classifiers_dir, local_classifier_id):
 def test_classifier_inference(mock_classifiers_dir, mock_bucket, mock_bucket_documents):
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
-        classifier_inference(document_ids=doc_ids)
+        classifier_inference(classifier_spec=[("Q788", "latest")], document_ids=doc_ids)
 
     labels = helper_list_labels_in_bucket(mock_bucket)
 
