@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import boto3
 import pytest
@@ -8,7 +7,6 @@ from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
     classifier_inference,
-    config,
     determine_document_ids,
     document_passages,
     list_bucket_doc_ids,
@@ -22,19 +20,19 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-def helper_list_labels_in_bucket(bucket_name):
+def helper_list_labels_in_bucket(test_config, bucket_name):
     # Find out what is now in the spans bucket
-    s3 = boto3.client("s3", region_name=config.bucket_region)
+    s3 = boto3.client("s3", region_name=test_config.bucket_region)
     response = s3.list_objects_v2(
-        Bucket=bucket_name, Prefix=config.document_target_prefix
+        Bucket=bucket_name, Prefix=test_config.document_target_prefix
     )
     labels = [c.get("Key") for c in response.get("Contents", [])]
     return labels
 
 
-def test_list_bucket_doc_ids(mock_bucket_documents):
+def test_list_bucket_doc_ids(test_config, mock_bucket_documents):
     expected_ids = [Path(d).stem for d in mock_bucket_documents]
-    got_ids = list_bucket_doc_ids()
+    got_ids = list_bucket_doc_ids(test_config)
     assert sorted(expected_ids) == sorted(got_ids)
 
 
@@ -62,9 +60,9 @@ def test_determine_document_ids__error():
 
 
 def test_load_classifier__existing_classifier(
-    mock_classifiers_dir, local_classifier_id
+    test_config, mock_classifiers_dir, local_classifier_id
 ):
-    classifier = load_classifier(local_classifier_id, alias="latest")
+    classifier = load_classifier(test_config, local_classifier_id, alias="latest")
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
@@ -73,10 +71,10 @@ def test_download_classifier__wandb_classifier():
     pass
 
 
-def test_load_document(mock_bucket_documents):
+def test_load_document(test_config, mock_bucket_documents):
     for doc_file_name in mock_bucket_documents:
         doc_id = Path(doc_file_name).stem
-        doc = load_document(document_id=doc_id)
+        doc = load_document(test_config, document_id=doc_id)
         assert doc_id == doc.document_id
 
 
@@ -103,22 +101,22 @@ def test_document_passages__pdf(parser_output_pdf):
     assert pdf_result == ("test pdf text", "2")
 
 
-def test_store_labels(mock_bucket):
+def test_store_labels(test_config, mock_bucket):
     text = "This is a test text block"
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    store_labels.fn(labels, "TEST.DOC.0.1", "Q9081", "latest")
+    store_labels.fn(test_config, labels, "TEST.DOC.0.1", "Q9081", "latest")
 
-    labels = helper_list_labels_in_bucket(mock_bucket)
+    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
     assert labels[0] == "labelled_passages/Q9081/latest/TEST.DOC.0.1.json"
 
 
-def test_text_block_inference(mock_classifiers_dir, local_classifier_id):
-    with patch.object(config, "local_classifier_dir", new=mock_classifiers_dir):
-        classifier = load_classifier(local_classifier_id, "latest")
+def test_text_block_inference(test_config, mock_classifiers_dir, local_classifier_id):
+    test_config.local_classifier_dir = mock_classifiers_dir
+    classifier = load_classifier(test_config, local_classifier_id, "latest")
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
@@ -130,12 +128,18 @@ def test_text_block_inference(mock_classifiers_dir, local_classifier_id):
     assert labels.id == block_id
 
 
-def test_classifier_inference(mock_classifiers_dir, mock_bucket, mock_bucket_documents):
+def test_classifier_inference(
+    test_config, mock_classifiers_dir, mock_bucket, mock_bucket_documents
+):
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
-        classifier_inference(classifier_spec=[("Q788", "latest")], document_ids=doc_ids)
+        classifier_inference(
+            classifier_spec=[("Q788", "latest")],
+            document_ids=doc_ids,
+            config=test_config,
+        )
 
-    labels = helper_list_labels_in_bucket(mock_bucket)
+    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert sorted(labels) == [
         "labelled_passages/Q788/latest/HTML.document.0.1.json",
@@ -143,8 +147,8 @@ def test_classifier_inference(mock_classifiers_dir, mock_bucket, mock_bucket_doc
     ]
 
     for key in labels:
-        s3 = boto3.client("s3", region_name=config.bucket_region)
-        response = s3.get_object(Bucket=config.cache_bucket, Key=key)
+        s3 = boto3.client("s3", region_name=test_config.bucket_region)
+        response = s3.get_object(Bucket=test_config.cache_bucket, Key=key)
         data = json.loads(response["Body"].read().decode("utf-8"))
 
         # Some spans where identified
