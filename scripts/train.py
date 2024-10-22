@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from wandb.sdk.wandb_run import Run
 
-from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
+from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
 from scripts.config import classifier_dir, concept_dir
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
@@ -18,19 +18,6 @@ from src.wikibase import WikibaseSession
 
 console = Console()
 app = typer.Typer()
-
-
-class Namespace(BaseModel):
-    """Hierarchy we use: CPR / {concept} / {classifier}"""
-
-    project: WikibaseID = Field(
-        ...,
-        description="The name of the W&B project, which is the concept ID",
-    )
-    entity: str = Field(
-        ...,
-        description="The name of the W&B entity",
-    )
 
 
 class StorageUpload(BaseModel):

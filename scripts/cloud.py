@@ -5,6 +5,22 @@ import boto3
 import boto3.session
 import botocore
 import botocore.client
+from pydantic import BaseModel, Field
+
+from src.identifiers import WikibaseID
+
+
+class Namespace(BaseModel):
+    """Hierarchy we use: CPR / {concept} / {classifier}"""
+
+    project: WikibaseID = Field(
+        ...,
+        description="The name of the W&B project, which is the concept ID",
+    )
+    entity: str = Field(
+        ...,
+        description="The name of the W&B entity",
+    )
 
 
 class AwsEnv(str, Enum):
