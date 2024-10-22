@@ -1,21 +1,23 @@
+import os
 from collections import defaultdict
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Optional
 
 import pandas as pd
 import typer
 import wandb
-from pydantic import BaseModel, Field
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from scripts.cloud import AwsEnv
+from scripts.cloud import Namespace
 from scripts.config import (
     EQUAL_COLUMNS,
     STRATIFIED_COLUMNS,
     classifier_dir,
     concept_dir,
     metrics_dir,
+    model_artifact_name,
 )
 from src.classifier import Classifier
 from src.concept import Concept
@@ -27,22 +29,9 @@ from src.metrics import (
     count_span_level_metrics,
 )
 from src.span import Span, group_overlapping_spans
+from src.version import Version
 
 console = Console()
-app = typer.Typer()
-
-
-class Namespace(BaseModel):
-    """Hierarchy we use: CPR / {concept} / {classifier}"""
-
-    project: WikibaseID = Field(
-        ...,
-        description="The name of the W&B project, which is the concept ID",
-    )
-    entity: str = Field(
-        ...,
-        description="The name of the W&B entity",
-    )
 
 
 def group_passages_by_equity_strata(
@@ -85,6 +74,48 @@ def group_passages_by_equity_strata(
     return groups
 
 
+app = typer.Typer()
+
+
+def validate_args(
+    track: bool,
+    classifier: Optional[str],
+    version: Optional[Version],
+) -> None:
+    match (track, classifier, version):
+        # Tracking from a local model artifact
+        case (True, None, None):
+            pass
+        case (True, None, version) if version is not None:
+            raise typer.BadParameter(
+                "cannot track a remote model artifact without a classifier name"
+            )
+        case (True, classifier, None) if classifier is not None:
+            raise typer.BadParameter(
+                "cannot track a remote model artifact without a version"
+            )
+        # Tracking from a remote model artifact
+        case (
+            True,
+            classifier,
+            version,
+        ) if classifier is not None and version is not None:
+            pass
+        case (False, None, version) if version is not None:
+            raise typer.BadParameter(
+                f"A remote version ({version}) was specified, but the script was told not to track. Tracking must be enabled to use a remote version."
+            )
+        case (False, classifier, None) if classifier is not None:
+            raise typer.BadParameter(
+                f"A remote classifier ({classifier}) was specified, but the script was told not to track. Tracking must be enabled to use a remote classifier."
+            )
+        # No tracking or downloading
+        case (False, None, None):
+            pass
+        case _:
+            raise typer.BadParameter("invalid evaluation arguments combination")
+
+
 @app.command()
 def main(
     wikibase_id: Annotated[
@@ -102,27 +133,36 @@ def main(
             help="Whether to track the training run with Weights & Biases",
         ),
     ] = False,
-    aws_env: Annotated[
-        AwsEnv,
+    classifier: Annotated[
+        Optional[str],
         typer.Option(
-            ...,
-            help="AWS environment to use for metadata",
+            help="Classifier name that aligns with the Python class name",
         ),
-    ] = AwsEnv.labs,
-    # TODO Accept version, and DL it from W&B
+    ] = None,
+    version: Annotated[
+        Optional[Version],
+        typer.Option(
+            help="Version of the model (e.g., v3) to download through W&B",
+            parser=Version,
+        ),
+    ] = None,
 ):
+    validate_args(
+        track,
+        classifier,
+        version,
+    )
+
     if track:
         entity = "climatepolicyradar"
         project = wikibase_id
         namespace = Namespace(project=project, entity=entity)
         job_type = "evaluate_model"
-        config = {"aws_env": aws_env.value}
 
         run = wandb.init(
             entity=namespace.entity,
             project=namespace.project,
             job_type=job_type,
-            config=config,
         )
 
     tracking = "on" if track else "off"
@@ -169,15 +209,48 @@ def main(
         )
         run.config["n_annotations"] = n_annotations
 
-    try:
-        classifier = Classifier.load(classifier_dir / wikibase_id)
-        console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
-    except FileNotFoundError as e:
-        raise typer.BadParameter(
-            f"Classifier for {wikibase_id} not found. \n"
-            "If you haven't already, you should run:\n"
-            f"  just train {wikibase_id}\n"
-        ) from e
+    # No (remote) version was specified, so use the local artifact.
+    #
+    # Load the classifier, regardless of tracking or not.
+    if version is None and classifier is None:
+        try:
+            classifier = Classifier.load(classifier_dir / wikibase_id)
+            console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
+            if track:
+                # Attempt to get a version, otherwise, have none for the lineage.
+                #
+                # The model have been trained and saved without a version.
+                if classifier.version is not None:
+                    # It must have been tracked and uploaded, during training
+                    artifact_id = (
+                        f"{wikibase_id}/{classifier.name}:{classifier.version}"
+                    )
+                    console.log(f"Using artifact: {artifact_id}")
+                    run.use_artifact(artifact_id)
+        except FileNotFoundError as e:
+            raise typer.BadParameter(
+                f"Classifier for {wikibase_id} not found. \n"
+                "If you haven't already, you should run:\n"
+                f"  just train {wikibase_id}\n"
+            ) from e
+    # Otherwise, pull through W&B, if still tracking
+    elif track:
+        artifact_id = f"{wikibase_id}/{classifier}:{version}"
+        artifact = run.use_artifact(artifact_id, type="model")
+
+        aws_env = artifact.metadata["aws_env"]
+
+        # Make it easier to know which AWS env this happened in
+        run.config["aws_env"] = aws_env
+
+        # Set this for W&B to pickup
+        os.environ["AWS_PROFILE"] = aws_env
+
+        artifact_dir = artifact.download()
+        artifiact_path = Path(artifact_dir) / model_artifact_name
+        classifier = Classifier.load(artifiact_path)
+    else:
+        raise ValueError("impossible to reach here")
 
     console.log("🤖 Labelling passages with the classifier")
     model_labelled_passages = [
@@ -260,10 +333,13 @@ def main(
         # Attempt to get a version, otherwise, have none for the lineage.
         #
         # The model have been trained and saved without a version.
-        if classifier.version is not None:
+        #
+        # This is only if a remote model artifact isn't being used, as
+        # it would've been downloaded, and thus included in the
+        # lineage for the run already.
+        if classifier.version is not None and (version is None and classifier is None):
             # It must have been tracked and uploaded, during training
-            version = classifier.version
-            artifact_id = f"{wikibase_id}/{classifier.name}:{version}"
+            artifact_id = f"{wikibase_id}/{classifier.name}:{classifier.version}"
             console.log(f"Using artifact: {artifact_id}")
             run.use_artifact(artifact_id)
 
