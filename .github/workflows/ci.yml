@@ -36,6 +36,8 @@ jobs:
           poetry run pre-commit run --all-files --show-diff-on-failure
 
       - name: Test
+        env:
+          AWS_ENV: sandbox
         run: poetry run pytest -v
 
   deploy_docs:
