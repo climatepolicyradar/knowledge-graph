@@ -17,6 +17,7 @@ from flows.inference import classifier_inference
 
 MEGABYTES_PER_GIGABYTE = 1024
 
+
 def create_deployment(
     project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any]
 ) -> None:
