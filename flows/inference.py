@@ -15,10 +15,12 @@ from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-AWS_ENV = os.environ["AWS_ENV"]
-WORKPOOL_DEFAULT_JOB_VARIABLES = JSON.load(
-    f"default-job-variables-prefect-mvp-{AWS_ENV}"
-).value
+
+def get_prefect_job_variable(param_name: str) -> str:
+    aws_env = os.environ["AWS_ENV"]
+    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
+    workpool_default_job_variables = JSON.load(block_name).value
+    return workpool_default_job_variables[param_name]
 
 
 def get_aws_ssm_param(param_name: str) -> str:
@@ -32,7 +34,7 @@ def get_aws_ssm_param(param_name: str) -> str:
 class Config:
     """Settings used across flow runs"""
 
-    cache_bucket: str = WORKPOOL_DEFAULT_JOB_VARIABLES["pipeline_cache_bucket_name"]
+    cache_bucket: str = get_prefect_job_variable("pipeline_cache_bucket_name")
     document_source_prefix: str = "embeddings_input"
     document_target_prefix: str = "labelled_passages"
     bucket_region: str = "eu-west-1"
