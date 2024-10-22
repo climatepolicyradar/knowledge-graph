@@ -153,13 +153,19 @@ def document_passages(document: BaseParserOutput):
 
 @task(log_prints=True)
 def store_labels(
-    labels: list[LabelledPassage], document_id: str, classifier_name: str
+    labels: list[LabelledPassage],
+    document_id: str,
+    classifier_name: str,
+    classifier_alias: str,
 ) -> None:
     """Stores the labels in the cache bucket"""
-    print(f"Storing labels for document {document_id} and classifier {classifier_name}")
     key = os.path.join(
-        config.document_target_prefix, f"{document_id}.{classifier_name}.json"
+        config.document_target_prefix,
+        classifier_name,
+        classifier_alias,
+        f"{document_id}.json",
     )
+    print(f"Storing labels for document {document_id} at {key}")
 
     data = [label.model_dump() for label in labels]
     body = BytesIO(json.dumps(data).encode("utf-8"))
@@ -186,7 +192,10 @@ def text_block_inference(
 
 @flow(log_prints=True)
 def run_classifier_inference_on_document(
-    document_id: str, classifier: Classifier, classifier_name: str
+    document_id: str,
+    classifier: Classifier,
+    classifier_name: str,
+    classifier_alias: str,
 ) -> None:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with id {document_id}")
@@ -203,6 +212,7 @@ def run_classifier_inference_on_document(
         labels=doc_labels,
         document_id=document_id,
         classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
     )
 
 
@@ -240,4 +250,5 @@ def classifier_inference(
                 document_id=document_id,
                 classifier=classifier,
                 classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
             )
