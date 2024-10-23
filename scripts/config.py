@@ -1,8 +1,9 @@
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 
-def get_git_root():
+def get_git_root() -> Optional[Path]:
     try:
         git_root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
