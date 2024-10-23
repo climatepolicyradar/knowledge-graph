@@ -1,8 +1,19 @@
+import importlib
+
 from src.classifier.classifier import Classifier
-from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
+
+
+def __getattr__(name):
+    """Only import embeddings when we want it"""
+    if name == "EmbeddingClassifier":
+        module = importlib.import_module(".embedding", __package__)
+        return getattr(module, name)
+    else:
+        return globals()[name]
+
 
 __all__ = [
     "Classifier",
