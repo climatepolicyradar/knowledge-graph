@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from typing import Generator
 
-import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
@@ -34,10 +33,6 @@ def get_vespa_search_adapter(cert_dir: str = "certs") -> VespaSearchAdapter:
     return VespaSearchAdapter(instance_url=vespa_instance_url, cert_directory=cert_dir)
 
 
-VESPA_SEARCH_ADAPTER = get_vespa_search_adapter()
-S3_CLIENT = boto3.client("s3")
-
-
 # TODO: Think about overrides for specific document ids etc.
 def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, None]:
     """
@@ -47,9 +42,9 @@ def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, No
     - s3_path: The path in s3 to yield objects from.
     """
     object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_path)
-
+    bucket = Path(s3_path).parts[1]
     for key in object_keys:
-        obj = _s3_object_read_text(s3_path=key)
+        obj = _s3_object_read_text(s3_path="s3://" + bucket + "/" + key)
         yield key, json.loads(obj)
 
 
@@ -69,7 +64,9 @@ def document_concepts_generator(
             pass
 
 
-def get_document_passages_from_vespa(document_import_id: str) -> list[VespaPassage]:
+def get_document_passages_from_vespa(
+    document_import_id: str, vespa_search_adapter: VespaSearchAdapter
+) -> list[VespaPassage]:
     """
     Retrieve all the passages for a document in vespa.
 
@@ -82,7 +79,7 @@ def get_document_passages_from_vespa(document_import_id: str) -> list[VespaPassa
         extra={"props": {"document_import_id": document_import_id}},
     )
 
-    vespa_search_response = VESPA_SEARCH_ADAPTER.search(
+    vespa_search_response = vespa_search_adapter.search(
         parameters=SearchParameters(
             document_ids=[document_import_id], documents_only=False
         )
@@ -108,7 +105,9 @@ def get_document_passages_from_vespa(document_import_id: str) -> list[VespaPassa
 
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
-    document_import_id: str, document_concepts: list[VespaConcept]
+    document_import_id: str,
+    document_concepts: list[VespaConcept],
+    vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
     """
     Run partial update for vespa Concepts on a text block in the document_passage index in vespa.
@@ -123,7 +122,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     logger = get_run_logger()
 
     document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id
+        document_import_id=document_import_id, vespa_search_adapter=vespa_search_adapter
     )
     if document_passages == []:
         logger.error(
@@ -138,7 +137,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     for concept in document_concepts:
         passage_for_concept = document_passages_id_map.get(concept.id.split(".")[-1])
         if passage_for_concept:
-            VESPA_SEARCH_ADAPTER.client.update_data(
+            vespa_search_adapter.client.update_data(
                 schema="document_passage",
                 data_id=(
                     "id:doc_search:document_passage::"
@@ -170,6 +169,7 @@ async def index_concepts_from_s3_to_vespa(s3_path: str) -> None:
     Assumptions:
     - The name of the files in the s3 path are the document import ids.
     """
+    vespa_search_adapter = get_vespa_search_adapter()
     s3_obj_gen = s3_obj_generator(s3_path=s3_path)
     document_concepts_gen = document_concepts_generator(generator_func=s3_obj_gen)
 
@@ -177,6 +177,7 @@ async def index_concepts_from_s3_to_vespa(s3_path: str) -> None:
         run_partial_updates_of_concepts_for_document_passages(
             document_import_id=Path(s3_key).stem,
             document_concepts=document_concepts,
+            vespa_search_adapter=vespa_search_adapter,
         )
         for s3_key, document_concepts in document_concepts_gen
     ]

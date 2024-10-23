@@ -37,9 +37,37 @@ def mock_aws_creds():
 
 
 @pytest.fixture
-def mock_s3_client(mock_aws_creds) -> Generator[str, Any, Any]:
+def mock_s3_client(mock_aws_creds) -> Generator:
     with mock_aws():
         yield boto3.client("s3")
+
+
+@pytest.fixture(scope="function")
+def mock_ssm_client(mock_aws_creds) -> Generator:
+    with mock_aws():
+        yield boto3.client("ssm", region_name="eu-west-1")
+
+
+@pytest.fixture
+def create_vespa_paras(mock_ssm_client):
+    mock_ssm_client.put_parameter(
+        Name="VESPA_INSTANCE_URL",
+        Description="A test parameter for the vespa instance.",
+        Value="http://localhost:8080",
+        Type="SecureString",
+    )
+    mock_ssm_client.put_parameter(
+        Name="VESPA_PUBLIC_CERT",
+        Description="A test parameter for a vespa public cert",
+        Value="Cert Content",
+        Type="SecureString",
+    )
+    mock_ssm_client.put_parameter(
+        Name="VESPA_PRIVATE_KEY",
+        Description="A test parameter for a vespa private key",
+        Value="Key Content",
+        Type="SecureString",
+    )
 
 
 @pytest.fixture
@@ -133,3 +161,33 @@ def parser_output_pdf(parser_output):
         ],
     )
     yield parser_output
+
+
+@pytest.fixture
+def s3_prefix_concepts() -> str:
+    """Returns the s3 prefix for the concepts."""
+    return "labelled_concepts/Q788-RuleBasedClassifier/latest"
+
+
+@pytest.fixture()
+def concept_fixture_files() -> list[str]:
+    """Returns the list of concept fixture files."""
+    return [
+        "CCLW.document.0.0.json",
+        "CCLW.document.1.1.json",
+        "CCLW.document.2.2.json",
+    ]
+
+
+@pytest.fixture
+def mock_bucket_concepts(
+    mock_s3_client, mock_bucket, s3_prefix_concepts, concept_fixture_files
+) -> None:
+    """Puts the concept fixture files in the mock bucket."""
+    for file_name in concept_fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join(s3_prefix_concepts, file_name)
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )

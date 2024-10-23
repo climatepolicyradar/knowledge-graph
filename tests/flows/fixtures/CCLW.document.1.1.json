@@ -1,0 +1,15 @@
+{
+    "name": "test_concept_name_1",
+    "id": "test_concept_id_1.1",
+    "parent_concepts": [
+        {
+            "id": "test_parent_concept_id_1",
+            "name": "test_parent_concept_name_1"
+        }
+    ],
+    "start": 1,
+    "end": 10,
+    "model": "test_model_1",
+    "timestamp": "2021-01-01T00:00:00Z"
+}
+

@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
 from prefect.blocks.system import JSON
 
+import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -23,9 +23,9 @@ def get_prefect_job_variable(param_name: str) -> str:
     return workpool_default_job_variables[param_name]
 
 
-def get_aws_ssm_param(param_name: str) -> str:
+def get_aws_ssm_param(param_name: str, region_name: str = "eu-west-1") -> str:
     """Retrieve a parameter from AWS SSM"""
-    ssm = boto3.client("ssm")
+    ssm = boto3.client("ssm", region_name=region_name)
     response = ssm.get_parameter(Name=param_name, WithDecryption=True)
     return response["Parameter"]["Value"]
 
