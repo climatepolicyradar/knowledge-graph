@@ -1,0 +1,94 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      aws-env:
+        required: true
+        type: string
+      prefect-workspace:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      PREFECT_API_KEY:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - uses: extractions/setup-just@v1
+        with:
+          just-version: 1.36.0
+
+      - name: Install poetry
+        shell: bash
+        run: pipx install poetry==1.8.2
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Login to Prefect
+        uses: PrefectHQ/actions-prefect-auth@v1
+        with:
+          prefect-api-key: ${{ secrets.PREFECT_API_KEY }}
+          prefect-workspace: ${{ inputs.prefect-workspace }}
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(just get-version)
+          echo "version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build the docker image
+        env:
+          DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DOCKER_REPOSITORY: ${{ github.event.repository.name }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          just build-image
+
+      - name: Push the docker image
+        env:
+          DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DOCKER_REPOSITORY: ${{ github.event.repository.name }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          just push-image
+
+      - name: Deploy to Prefect
+        env:
+          AWS_ENV: ${{ inputs.aws-env }}
+          AWS_REGION: eu-west-1
+          DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DOCKER_REPOSITORY: ${{ github.event.repository.name }}
+          DOCKER_TAG: ${{ steps.get_version.outputs.docker_tag }}
+          PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+        run: |
+           poetry run python -m deployments

@@ -67,3 +67,25 @@ visualise-labels id:
     poetry run python scripts/visualise_labels.py --wikibase-id {{id}}
 
 analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id) (visualise-labels id)
+
+build-image:
+    docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+
+ecr-login:
+    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+
+push-image:
+    docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
+
+get-version:
+    poetry run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
+
+export_env_vars:
+	export $(cat .env | xargs)
+
+prefect_login: export_env_vars
+	prefect cloud login -k ${PREFECT_API_KEY}
+
+deploy: prefect_login
+	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+	python -m deployments
