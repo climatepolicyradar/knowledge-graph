@@ -13,4 +13,4 @@ RUN poetry install --no-root --no-interaction --only main
 # Set up package
 COPY ./flows ./flows/
 COPY ./src ./src/
-RUN poetry install --no-interaction --only main
+RUN poetry install --no-interaction --only-root
