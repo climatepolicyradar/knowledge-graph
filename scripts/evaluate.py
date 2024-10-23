@@ -1,5 +1,6 @@
 import os
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
@@ -284,48 +285,66 @@ def group_passages_by_equity_strata(
     return groups
 
 
-def validate_args(
+class Source(str, Enum):
+    """Source of the classifier model."""
+
+    LOCAL = "local"
+    REMOTE = "remote"
+
+
+def validate_local_args(
+    classifier: Optional[str],
+    version: Optional[Version],
+) -> None:
+    """Validate arguments for local source."""
+    if classifier is not None or version is not None:
+        raise typer.BadParameter(
+            "classifier and version should not be specified for local source"
+        )
+
+
+def validate_remote_args(
     track: bool,
     classifier: Optional[str],
     version: Optional[Version],
 ) -> None:
-    """Validate command line arguments for model evaluation."""
-    match (track, classifier, version):
-        # Tracking from a local model artifact
-        case (True, None, None):
-            pass
-        case (True, None, version) if version is not None:
-            raise typer.BadParameter(
-                "cannot track a remote model artifact without a classifier name"
-            )
-        case (True, classifier, None) if classifier is not None:
-            raise typer.BadParameter(
-                "cannot track a remote model artifact without a version"
-            )
-        # Tracking from a remote model artifact
-        case (
-            True,
-            classifier,
-            version,
-        ) if classifier is not None and version is not None:
-            pass
-        case (False, None, version) if version is not None:
+    """Validate arguments for remote source."""
+    if not track:
+        if version is not None:
             raise typer.BadParameter(
                 f"A remote version ({version}) was specified, but the script "
                 "was told not to track. Tracking must be enabled to use a "
                 "remote version."
             )
-        case (False, classifier, None) if classifier is not None:
+        if classifier is not None:
             raise typer.BadParameter(
                 f"A remote classifier ({classifier}) was specified, but the "
                 "script was told not to track. Tracking must be enabled to use"
                 " a remote classifier."
             )
-        # No tracking or downloading
-        case (False, None, None):
-            pass
-        case _:
-            raise typer.BadParameter("invalid evaluation arguments combination")
+    else:
+        if version is not None and classifier is None:
+            raise typer.BadParameter(
+                "cannot track a remote model artifact without a classifier name"
+            )
+        if classifier is not None and version is None:
+            raise typer.BadParameter(
+                "cannot track a remote model artifact without a version"
+            )
+
+
+def validate_args(
+    track: bool,
+    classifier: Optional[str],
+    version: Optional[Version],
+    source: Source,
+) -> None:
+    """Validate command line arguments for model evaluation."""
+    match source:
+        case Source.LOCAL:
+            validate_local_args(classifier, version)
+        case Source.REMOTE:
+            validate_remote_args(track, classifier, version)
 
 
 def log_metrics(
@@ -371,6 +390,12 @@ def main(
             parser=Version,
         ),
     ] = None,
+    source: Annotated[
+        Source,
+        typer.Option(
+            help="Source of the classifier model (local or remote)",
+        ),
+    ] = Source.LOCAL,
 ):
     """
     Measure classifier performance.
@@ -381,6 +406,7 @@ def main(
         track,
         classifier,
         version,
+        source,
     )
 
     if track:
@@ -421,24 +447,19 @@ def main(
         )
         run.config["n_annotations"] = n_annotations
 
-    # No (remote) version was specified, so use the local artifact.
-    #
-    # Load the classifier, regardless of tracking or not.
-    if version is None and classifier is None:
-        classifier = load_classifier_local(wikibase_id)
-        console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
-        if track:
-            add_artifact_to_run_lineage_local(run, classifier, wikibase_id)
-    # Otherwise, pull through W&B, if still tracking
-    elif track:
-        classifier = load_classifier_remote(
-            run,
-            classifier,
-            version,
-            wikibase_id,
-        )
-    else:
-        raise ValueError("impossible to reach here")
+    match source:
+        case Source.LOCAL:
+            classifier = load_classifier_local(wikibase_id)
+            console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
+            if track:
+                add_artifact_to_run_lineage_local(run, classifier, wikibase_id)
+        case Source.REMOTE:
+            classifier = load_classifier_remote(
+                run,
+                classifier,
+                version,
+                wikibase_id,
+            )
 
     console.log("🤖 Labelling passages with the classifier")
     model_labelled_passages = label_passages_with_classifier(

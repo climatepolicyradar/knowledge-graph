@@ -777,22 +777,22 @@
   None
 # ---
 # name: test_validate_args[False-None-version4-expected_exception4]
-  'A remote version (v1) was specified, but the script was told not to track. Tracking must be enabled to use a remote version.'
+  'classifier and version should not be specified for local source'
 # ---
 # name: test_validate_args[False-TestClassifier-None-expected_exception5]
-  'A remote classifier (TestClassifier) was specified, but the script was told not to track. Tracking must be enabled to use a remote classifier.'
+  'classifier and version should not be specified for local source'
 # ---
 # name: test_validate_args[False-TestClassifier-version7-expected_exception7]
-  'invalid evaluation arguments combination'
+  'A remote version (v1) was specified, but the script was told not to track. Tracking must be enabled to use a remote version.'
 # ---
 # name: test_validate_args[True-None-None-None]
   None
 # ---
 # name: test_validate_args[True-None-version1-expected_exception1]
-  'cannot track a remote model artifact without a classifier name'
+  'classifier and version should not be specified for local source'
 # ---
 # name: test_validate_args[True-TestClassifier-None-expected_exception2]
-  'cannot track a remote model artifact without a version'
+  'classifier and version should not be specified for local source'
 # ---
 # name: test_validate_args[True-TestClassifier-version3-None]
   None
