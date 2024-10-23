@@ -35,42 +35,75 @@ def test_print_metrics(capsys, metrics_df: pd.DataFrame):
     assert "0.3" in captured.out  # Precision
     assert "215" in captured.out  # Support
 
-def test_validate_local_args():
-    # Valid case
-    validate_local_args(None, None)
 
-    # Invalid cases
-    with pytest.raises(typer.BadParameter) as excinfo:
-        validate_local_args("TestClassifier", None)
-    assert "classifier and version should not be specified" in str(excinfo.value)
+@pytest.mark.parametrize(
+    "classifier,version,expected_error",
+    [
+        (None, None, None),
+        (
+            "TestClassifier",
+            None,
+            "classifier and version should not be specified",
+        ),
+        (
+            None,
+            Version("v1"),
+            "classifier and version should not be specified",
+        ),
+        (
+            "TestClassifier",
+            Version("v1"),
+            "classifier and version should not be specified",
+        ),
+    ],
+)
+def test_validate_local_args(classifier, version, expected_error):
+    if expected_error is None:
+        validate_local_args(classifier, version)  # Should not raise
+    else:
+        with pytest.raises(typer.BadParameter) as excinfo:
+            validate_local_args(classifier, version)
+        assert expected_error in str(excinfo.value)
 
-    with pytest.raises(typer.BadParameter) as excinfo:
-        validate_local_args(None, Version("v1"))
-    assert "classifier and version should not be specified" in str(excinfo.value)
 
-
-def test_validate_remote_args():
-    # Valid cases
-    validate_remote_args(True, "TestClassifier", Version("v1"))
-    validate_remote_args(False, None, None)
-
-    # Invalid cases - not tracking
-    with pytest.raises(typer.BadParameter) as excinfo:
-        validate_remote_args(False, "TestClassifier", None)
-    assert "script was told not to track" in str(excinfo.value)
-
-    with pytest.raises(typer.BadParameter) as excinfo:
-        validate_remote_args(False, None, Version("v1"))
-    assert "script was told not to track" in str(excinfo.value)
-
-    # Invalid cases - tracking but missing info
-    with pytest.raises(typer.BadParameter) as excinfo:
-        validate_remote_args(True, None, Version("v1"))
-    assert "without a classifier name" in str(excinfo.value)
-
-    with pytest.raises(typer.BadParameter) as excinfo:
-        validate_remote_args(True, "TestClassifier", None)
-    assert "without a version" in str(excinfo.value)
+@pytest.mark.parametrize(
+    "track,classifier,version,expected_error",
+    [
+        (True, "TestClassifier", Version("v1"), None),
+        (False, None, None, None),
+        (
+            False,
+            "TestClassifier",
+            None,
+            "script was told not to track",
+        ),
+        (
+            False,
+            None,
+            Version("v1"),
+            "script was told not to track",
+        ),
+        (
+            True,
+            None,
+            Version("v1"),
+            "without a classifier name",
+        ),
+        (
+            True,
+            "TestClassifier",
+            None,
+            "without a version",
+        ),
+    ],
+)
+def test_validate_remote_args(track, classifier, version, expected_error):
+    if expected_error is None:
+        validate_remote_args(track, classifier, version)  # Should not raise
+    else:
+        with pytest.raises(typer.BadParameter) as excinfo:
+            validate_remote_args(track, classifier, version)
+        assert expected_error in str(excinfo.value)
 
 
 @pytest.mark.parametrize(
