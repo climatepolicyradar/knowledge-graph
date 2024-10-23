@@ -7,7 +7,23 @@ from src.concept import Concept
 
 
 def __getattr__(name):
-    """Only import embeddings when we want it"""
+    """
+    Only import embeddings when we want it
+
+    This adds a special case for embeddings because they rely on very large external
+    libraries. Importing these libraries is very slow and having them installed
+    requires much more disc space, so we gave them a distinct group in the
+    pyproject.toml file (see: f53a404).
+
+    This makes it so we only import them when we explicitly want to. So the following
+    import statments will both work, but only the second requires the embeddings group
+    to have been installed with poetry:
+
+    ```
+    from src.classifier import Classifier
+    from src.classifier import EmbeddingClassifier
+    ```
+    """
     if name == "EmbeddingClassifier":
         module = importlib.import_module(".embedding", __package__)
         return getattr(module, name)
