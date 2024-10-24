@@ -12,13 +12,10 @@ from prefect import flow
 from prefect.logging import get_run_logger
 from pydantic import ValidationError
 
-# TODO: Move to the sdk?
-#   https://docs.getmoto.org/en/latest/docs/services/ssm.html
 from flows.inference import get_aws_ssm_param
 
 
 # TODO: Move to the sdk?
-#   https://docs.getmoto.org/en/latest/docs/services/ssm.html
 def get_vespa_search_adapter_from_aws_secrets(
     cert_dir: str = "certs",
 ) -> VespaSearchAdapter:
@@ -110,7 +107,10 @@ def get_document_passages_from_vespa(
     return passages
 
 
-# TODO: Add concurrency limit
+# TODO: Add concurrency limit.
+#  Concurrency limits can only be set at the deployment level, and thus we would have
+#  to trigger a deployment of this flow to set the concurrency limit. This can be done
+#  from a parent flow or using automations / events / schedules etc.
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
