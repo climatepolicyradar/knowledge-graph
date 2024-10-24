@@ -48,24 +48,33 @@ def mock_ssm_client(mock_aws_creds) -> Generator:
         yield boto3.client("ssm", region_name="eu-west-1")
 
 
+@pytest.fixture()
+def mock_vespa_credentials() -> dict[str, str]:
+    return {
+        "VESPA_INSTANCE_URL": "http://localhost:8080",
+        "VESPA_PUBLIC_CERT": "Cert Content",
+        "VESPA_PRIVATE_KEY": "Key Content",
+    }
+
+
 @pytest.fixture
-def create_vespa_paras(mock_ssm_client):
+def create_vespa_params(mock_ssm_client, mock_vespa_credentials):
     mock_ssm_client.put_parameter(
         Name="VESPA_INSTANCE_URL",
         Description="A test parameter for the vespa instance.",
-        Value="http://localhost:8080",
+        Value=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
         Name="VESPA_PUBLIC_CERT",
         Description="A test parameter for a vespa public cert",
-        Value="Cert Content",
+        Value=mock_vespa_credentials["VESPA_PUBLIC_CERT"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
         Name="VESPA_PRIVATE_KEY",
         Description="A test parameter for a vespa private key",
-        Value="Key Content",
+        Value=mock_vespa_credentials["VESPA_PRIVATE_KEY"],
         Type="SecureString",
     )
 

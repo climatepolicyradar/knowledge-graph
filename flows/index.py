@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Optional
 
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
@@ -19,16 +19,23 @@ from flows.inference import get_aws_ssm_param
 
 # TODO: Move to the sdk?
 #   https://docs.getmoto.org/en/latest/docs/services/ssm.html
-def get_vespa_search_adapter(cert_dir: str = "certs") -> VespaSearchAdapter:
-    """Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager."""
+def get_vespa_search_adapter_from_aws_secrets(
+    cert_dir: str = "certs",
+) -> VespaSearchAdapter:
+    """
+    Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager.
+
+    We then save the secrets to local files in the cert_dir directory and instantiate
+    the VespaSearchAdapter.
+    """
     vespa_instance_url = get_aws_ssm_param("VESPA_INSTANCE_URL")
     vespa_public_cert = get_aws_ssm_param("VESPA_PUBLIC_CERT")
     vespa_private_key = get_aws_ssm_param("VESPA_PRIVATE_KEY")
 
     os.makedirs(cert_dir, exist_ok=True)
-    with open("certs/cert.pem", "w") as f:
+    with open(f"{cert_dir}/cert.pem", "w") as f:
         f.write(vespa_public_cert)
-    with open("certs/key.pem", "w") as f:
+    with open(f"{cert_dir}/key.pem", "w") as f:
         f.write(vespa_private_key)
     return VespaSearchAdapter(instance_url=vespa_instance_url, cert_directory=cert_dir)
 
@@ -103,6 +110,7 @@ def get_document_passages_from_vespa(
     return passages
 
 
+# TODO: Add concurrency limit
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
@@ -162,14 +170,17 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
 
 @flow
-async def index_concepts_from_s3_to_vespa(s3_path: str) -> None:
+async def index_concepts_from_s3_to_vespa(
+    s3_path: str, vespa_search_adapter: Optional[VespaSearchAdapter] = None
+) -> None:
     """
     Index vespa Concept objects from s3 into vespa.
 
     Assumptions:
     - The name of the files in the s3 path are the document import ids.
     """
-    vespa_search_adapter = get_vespa_search_adapter()
+    if not vespa_search_adapter:
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets()
     s3_obj_gen = s3_obj_generator(s3_path=s3_path)
     document_concepts_gen = document_concepts_generator(generator_func=s3_obj_gen)
 

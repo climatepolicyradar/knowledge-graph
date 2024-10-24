@@ -1,12 +1,33 @@
 import os
 from pathlib import Path
 
-from flows.index import s3_obj_generator
+from cpr_sdk.models.search import Concept as VespaConcept
+
+from flows.index import (
+    document_concepts_generator,
+    get_vespa_search_adapter_from_aws_secrets,
+    s3_obj_generator,
+)
+
+
+def test_vespa_search_adapter_from_aws_secrets(
+    create_vespa_params, mock_vespa_credentials, tmpdir
+) -> None:
+    """Test that we can successfully instantiate the VespaSearchAdpater from ssm params."""
+    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(cert_dir=tmpdir)
+
+    assert os.path.exists(f"{tmpdir}/cert.pem")
+    assert os.path.exists(f"{tmpdir}/key.pem")
+    assert (
+        vespa_search_adapter.instance_url
+        == mock_vespa_credentials["VESPA_INSTANCE_URL"]
+    )
+    assert vespa_search_adapter.client.cert == f"{tmpdir}/cert.pem"
+    assert vespa_search_adapter.client.key == f"{tmpdir}/key.pem"
 
 
 def test_s3_obj_generator(
     mock_bucket,
-    mock_ssm_client,
     mock_bucket_concepts,
     s3_prefix_concepts,
     concept_fixture_files,
@@ -23,17 +44,30 @@ def test_s3_obj_generator(
     assert sorted(s3_files_keys) == sorted(expected_keys)
 
 
-# TODO Test that we successfully confirm if a TextBlock object exists in Vespa
+def test_document_concepts_generator(
+    mock_bucket,
+    mock_bucket_concepts,
+    s3_prefix_concepts,
+    concept_fixture_files,
+) -> None:
+    """Test that the document concepts generator yields the correct objects."""
+    s3_gen = s3_obj_generator(os.path.join("s3://", mock_bucket, s3_prefix_concepts))
+    document_concepts_gen = document_concepts_generator(generator_func=s3_gen)
+    document_concepts_files = list(document_concepts_gen)
+    expected_keys = [
+        f"{s3_prefix_concepts}/{Path(f).stem}.json" for f in concept_fixture_files
+    ]
+
+    assert len(document_concepts_files) == len(concept_fixture_files)
+    for s3_key, document_concepts in document_concepts_files:
+        assert all([type(i) is VespaConcept for i in document_concepts])
+        assert s3_key in expected_keys
 
 
-# TODO Test that we successfully index a Concept object into Vespa
-# def test_index_concepts_from_s3_to_vespa(
-#     test_config, mock_classifiers_dir, mock_bucket, mock_bucket_documents
-# ):
-#     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
-#     with prefect_test_harness():
-#         classifier_inference(
-#             classifier_spec=[("Q788", "latest")],
-#             document_ids=doc_ids,
-#             config=test_config,
-#         )
+# TODO: Test get document passages from Vespa
+
+
+# TODO: Test run partial udpates
+
+
+# TODO: Test index_concepts_from_s3_to_vespa
