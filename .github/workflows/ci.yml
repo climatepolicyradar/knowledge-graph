@@ -65,7 +65,7 @@ jobs:
 
   deploy_prefect_sandbox:
     if: github.ref == 'refs/heads/main'
-    needs: [deploy_prefect_labs]
+    needs: [test]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox
@@ -77,7 +77,7 @@ jobs:
 
   deploy_prefect_labs:
     if: github.ref == 'refs/heads/main'
-    needs: [test]
+    needs: [deploy_prefect_sandbox]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: labs
@@ -101,7 +101,7 @@ jobs:
 
   deploy_prefect_prod:
     if: github.ref == 'refs/heads/main'
-    needs: [deploy_prefect_staging]
+    needs: [deploy_prefect_sandbox]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: prod
