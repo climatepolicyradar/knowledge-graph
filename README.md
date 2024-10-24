@@ -46,16 +46,22 @@ Afterwards, evaluate the trained model:
 just evaluate Q992
 ```
 
+Or to also track in W&B:
+
+```bash
+just evaluate Q992 --track
+```
+
 You can promote a model version from one AWS account/environment, to another. You can optionally promote that model to be the primary version that's used in that account.
 
 ```bash
-poetry run promote --wikibase-id Q992 --classifier RulesBasedClassifier --version v13 --from-aws-env labs --to-aws-env staging --primary
+poetry run promote Q992 --classifier RulesBasedClassifier --version v13 --from-aws-env labs --to-aws-env staging --primary
 ```
 
 _or_
 
 ```bash
-just promote --wikibase-id Q992 --classifier RulesBasedClassifier --version v7 --within-aws-env staging --no-primary
+just promote Q992 --classifier RulesBasedClassifier --version v7 --within-aws-env staging --no-primary
 ```
 
 You can see the full list of commands by running:

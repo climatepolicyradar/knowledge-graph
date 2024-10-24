@@ -1,0 +1,632 @@
+[
+  {
+    "Group":"all",
+    "Agreement at":"Passage level",
+    "Precision":0.9846153846,
+    "Recall":1.0,
+    "Accuracy":0.9846153846,
+    "F1 score":0.992248062,
+    "Support":130
+  },
+  {
+    "Group":"all",
+    "Agreement at":"Span level (0)",
+    "Precision":0.9824561404,
+    "Recall":0.6588235294,
+    "Accuracy":0.6511627907,
+    "F1 score":0.7887323944,
+    "Support":172
+  },
+  {
+    "Group":"all",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3636363636,
+    "Recall":0.3188405797,
+    "Accuracy":0.2046511628,
+    "F1 score":0.3397683398,
+    "Support":215
+  },
+  {
+    "Group":"all",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.3149606299,
+    "Recall":0.2919708029,
+    "Accuracy":0.1785714286,
+    "F1 score":0.303030303,
+    "Support":224
+  },
+  {
+    "Group":"all",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3070866142,
+    "Recall":0.2846715328,
+    "Accuracy":0.1733333333,
+    "F1 score":0.2954545455,
+    "Support":225
+  },
+  {
+    "Group":"translated: False",
+    "Agreement at":"Passage level",
+    "Precision":0.975308642,
+    "Recall":1.0,
+    "Accuracy":0.975308642,
+    "F1 score":0.9875,
+    "Support":81
+  },
+  {
+    "Group":"translated: False",
+    "Agreement at":"Span level (0)",
+    "Precision":0.9718309859,
+    "Recall":0.6764705882,
+    "Accuracy":0.6634615385,
+    "F1 score":0.7976878613,
+    "Support":104
+  },
+  {
+    "Group":"translated: False",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3552631579,
+    "Recall":0.3214285714,
+    "Accuracy":0.2030075188,
+    "F1 score":0.3375,
+    "Support":133
+  },
+  {
+    "Group":"translated: False",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.3037974684,
+    "Recall":0.2891566265,
+    "Accuracy":0.1739130435,
+    "F1 score":0.2962962963,
+    "Support":138
+  },
+  {
+    "Group":"translated: False",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3037974684,
+    "Recall":0.2891566265,
+    "Accuracy":0.1739130435,
+    "F1 score":0.2962962963,
+    "Support":138
+  },
+  {
+    "Group":"translated: True",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":49
+  },
+  {
+    "Group":"translated: True",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.6323529412,
+    "Accuracy":0.6323529412,
+    "F1 score":0.7747747748,
+    "Support":68
+  },
+  {
+    "Group":"translated: True",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3777777778,
+    "Recall":0.3148148148,
+    "Accuracy":0.2073170732,
+    "F1 score":0.3434343434,
+    "Support":82
+  },
+  {
+    "Group":"translated: True",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.3333333333,
+    "Recall":0.2962962963,
+    "Accuracy":0.1860465116,
+    "F1 score":0.3137254902,
+    "Support":86
+  },
+  {
+    "Group":"translated: True",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3125,
+    "Recall":0.2777777778,
+    "Accuracy":0.1724137931,
+    "F1 score":0.2941176471,
+    "Support":87
+  },
+  {
+    "Group":"world_bank_region: ",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":25
+  },
+  {
+    "Group":"world_bank_region: ",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.7142857143,
+    "Accuracy":0.7142857143,
+    "F1 score":0.8333333333,
+    "Support":28
+  },
+  {
+    "Group":"world_bank_region: ",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3636363636,
+    "Recall":0.32,
+    "Accuracy":0.2051282051,
+    "F1 score":0.3404255319,
+    "Support":39
+  },
+  {
+    "Group":"world_bank_region: ",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.25,
+    "Recall":0.24,
+    "Accuracy":0.1395348837,
+    "F1 score":0.2448979592,
+    "Support":43
+  },
+  {
+    "Group":"world_bank_region: ",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.25,
+    "Recall":0.24,
+    "Accuracy":0.1395348837,
+    "F1 score":0.2448979592,
+    "Support":43
+  },
+  {
+    "Group":"world_bank_region: North America",
+    "Agreement at":"Passage level",
+    "Precision":0.5,
+    "Recall":1.0,
+    "Accuracy":0.5,
+    "F1 score":0.6666666667,
+    "Support":2
+  },
+  {
+    "Group":"world_bank_region: North America",
+    "Agreement at":"Span level (0)",
+    "Precision":0.5,
+    "Recall":0.5,
+    "Accuracy":0.3333333333,
+    "F1 score":0.5,
+    "Support":3
+  },
+  {
+    "Group":"world_bank_region: North America",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.5,
+    "Recall":0.5,
+    "Accuracy":0.3333333333,
+    "F1 score":0.5,
+    "Support":3
+  },
+  {
+    "Group":"world_bank_region: North America",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.5,
+    "Recall":0.5,
+    "Accuracy":0.3333333333,
+    "F1 score":0.5,
+    "Support":3
+  },
+  {
+    "Group":"world_bank_region: North America",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.5,
+    "Recall":0.5,
+    "Accuracy":0.3333333333,
+    "F1 score":0.5,
+    "Support":3
+  },
+  {
+    "Group":"world_bank_region: South Asia",
+    "Agreement at":"Passage level",
+    "Precision":0.75,
+    "Recall":1.0,
+    "Accuracy":0.75,
+    "F1 score":0.8571428571,
+    "Support":4
+  },
+  {
+    "Group":"world_bank_region: South Asia",
+    "Agreement at":"Span level (0)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":4
+  },
+  {
+    "Group":"world_bank_region: South Asia",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":7
+  },
+  {
+    "Group":"world_bank_region: South Asia",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":7
+  },
+  {
+    "Group":"world_bank_region: South Asia",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":7
+  },
+  {
+    "Group":"world_bank_region: Sub-Saharan Africa",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":20
+  },
+  {
+    "Group":"world_bank_region: Sub-Saharan Africa",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.7692307692,
+    "Accuracy":0.7692307692,
+    "F1 score":0.8695652174,
+    "Support":26
+  },
+  {
+    "Group":"world_bank_region: Sub-Saharan Africa",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.35,
+    "Recall":0.3333333333,
+    "Accuracy":0.2058823529,
+    "F1 score":0.3414634146,
+    "Support":34
+  },
+  {
+    "Group":"world_bank_region: Sub-Saharan Africa",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.3333333333,
+    "Recall":0.3333333333,
+    "Accuracy":0.2,
+    "F1 score":0.3333333333,
+    "Support":35
+  },
+  {
+    "Group":"world_bank_region: Sub-Saharan Africa",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3333333333,
+    "Recall":0.3333333333,
+    "Accuracy":0.2,
+    "F1 score":0.3333333333,
+    "Support":35
+  },
+  {
+    "Group":"world_bank_region: Europe & Central Asia",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":41
+  },
+  {
+    "Group":"world_bank_region: Europe & Central Asia",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.5892857143,
+    "Accuracy":0.5892857143,
+    "F1 score":0.7415730337,
+    "Support":56
+  },
+  {
+    "Group":"world_bank_region: Europe & Central Asia",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.4864864865,
+    "Recall":0.3829787234,
+    "Accuracy":0.2727272727,
+    "F1 score":0.4285714286,
+    "Support":66
+  },
+  {
+    "Group":"world_bank_region: Europe & Central Asia",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.4210526316,
+    "Recall":0.347826087,
+    "Accuracy":0.2352941176,
+    "F1 score":0.380952381,
+    "Support":68
+  },
+  {
+    "Group":"world_bank_region: Europe & Central Asia",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3947368421,
+    "Recall":0.3260869565,
+    "Accuracy":0.2173913043,
+    "F1 score":0.3571428571,
+    "Support":69
+  },
+  {
+    "Group":"world_bank_region: East Asia & Pacific",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":19
+  },
+  {
+    "Group":"world_bank_region: East Asia & Pacific",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.7878787879,
+    "Accuracy":0.7878787879,
+    "F1 score":0.8813559322,
+    "Support":33
+  },
+  {
+    "Group":"world_bank_region: East Asia & Pacific",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3157894737,
+    "Recall":0.2857142857,
+    "Accuracy":0.1764705882,
+    "F1 score":0.3,
+    "Support":34
+  },
+  {
+    "Group":"world_bank_region: East Asia & Pacific",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.3157894737,
+    "Recall":0.2857142857,
+    "Accuracy":0.1764705882,
+    "F1 score":0.3,
+    "Support":34
+  },
+  {
+    "Group":"world_bank_region: East Asia & Pacific",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3157894737,
+    "Recall":0.2857142857,
+    "Accuracy":0.1764705882,
+    "F1 score":0.3,
+    "Support":34
+  },
+  {
+    "Group":"world_bank_region: Latin America & Caribbean",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":19
+  },
+  {
+    "Group":"world_bank_region: Latin America & Caribbean",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.5454545455,
+    "Accuracy":0.5454545455,
+    "F1 score":0.7058823529,
+    "Support":22
+  },
+  {
+    "Group":"world_bank_region: Latin America & Caribbean",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.2352941176,
+    "Recall":0.2105263158,
+    "Accuracy":0.125,
+    "F1 score":0.2222222222,
+    "Support":32
+  },
+  {
+    "Group":"world_bank_region: Latin America & Caribbean",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.2105263158,
+    "Recall":0.2105263158,
+    "Accuracy":0.1176470588,
+    "F1 score":0.2105263158,
+    "Support":34
+  },
+  {
+    "Group":"world_bank_region: Latin America & Caribbean",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.2105263158,
+    "Recall":0.2105263158,
+    "Accuracy":0.1176470588,
+    "F1 score":0.2105263158,
+    "Support":34
+  },
+  {
+    "Group":"dataset_name: gst",
+    "Agreement at":"Passage level",
+    "Precision":0.9666666667,
+    "Recall":1.0,
+    "Accuracy":0.9666666667,
+    "F1 score":0.9830508475,
+    "Support":60
+  },
+  {
+    "Group":"dataset_name: gst",
+    "Agreement at":"Span level (0)",
+    "Precision":0.96,
+    "Recall":0.6486486486,
+    "Accuracy":0.6315789474,
+    "F1 score":0.7741935484,
+    "Support":76
+  },
+  {
+    "Group":"dataset_name: gst",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3859649123,
+    "Recall":0.3548387097,
+    "Accuracy":0.2268041237,
+    "F1 score":0.3697478992,
+    "Support":97
+  },
+  {
+    "Group":"dataset_name: gst",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.35,
+    "Recall":0.3387096774,
+    "Accuracy":0.2079207921,
+    "F1 score":0.3442622951,
+    "Support":101
+  },
+  {
+    "Group":"dataset_name: gst",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3333333333,
+    "Recall":0.3225806452,
+    "Accuracy":0.1960784314,
+    "F1 score":0.3278688525,
+    "Support":102
+  },
+  {
+    "Group":"dataset_name: litigation",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":3
+  },
+  {
+    "Group":"dataset_name: litigation",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.75,
+    "Accuracy":0.75,
+    "F1 score":0.8571428571,
+    "Support":4
+  },
+  {
+    "Group":"dataset_name: litigation",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":6
+  },
+  {
+    "Group":"dataset_name: litigation",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":6
+  },
+  {
+    "Group":"dataset_name: litigation",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.0,
+    "Recall":0.0,
+    "Accuracy":0.0,
+    "F1 score":0.0,
+    "Support":6
+  },
+  {
+    "Group":"dataset_name: cclw",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":53
+  },
+  {
+    "Group":"dataset_name: cclw",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.6578947368,
+    "Accuracy":0.6578947368,
+    "F1 score":0.7936507937,
+    "Support":76
+  },
+  {
+    "Group":"dataset_name: cclw",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.3469387755,
+    "Recall":0.2881355932,
+    "Accuracy":0.1868131868,
+    "F1 score":0.3148148148,
+    "Support":91
+  },
+  {
+    "Group":"dataset_name: cclw",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.3,
+    "Recall":0.2586206897,
+    "Accuracy":0.1612903226,
+    "F1 score":0.2777777778,
+    "Support":93
+  },
+  {
+    "Group":"dataset_name: cclw",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.3,
+    "Recall":0.2586206897,
+    "Accuracy":0.1612903226,
+    "F1 score":0.2777777778,
+    "Support":93
+  },
+  {
+    "Group":"dataset_name: green-climate-fund",
+    "Agreement at":"Passage level",
+    "Precision":1.0,
+    "Recall":1.0,
+    "Accuracy":1.0,
+    "F1 score":1.0,
+    "Support":14
+  },
+  {
+    "Group":"dataset_name: green-climate-fund",
+    "Agreement at":"Span level (0)",
+    "Precision":1.0,
+    "Recall":0.6875,
+    "Accuracy":0.6875,
+    "F1 score":0.8148148148,
+    "Support":16
+  },
+  {
+    "Group":"dataset_name: green-climate-fund",
+    "Agreement at":"Span level (0.5)",
+    "Precision":0.4166666667,
+    "Recall":0.3571428571,
+    "Accuracy":0.2380952381,
+    "F1 score":0.3846153846,
+    "Support":21
+  },
+  {
+    "Group":"dataset_name: green-climate-fund",
+    "Agreement at":"Span level (0.9)",
+    "Precision":0.2857142857,
+    "Recall":0.2857142857,
+    "Accuracy":0.1666666667,
+    "F1 score":0.2857142857,
+    "Support":24
+  },
+  {
+    "Group":"dataset_name: green-climate-fund",
+    "Agreement at":"Span level (0.99)",
+    "Precision":0.2857142857,
+    "Recall":0.2857142857,
+    "Accuracy":0.1666666667,
+    "F1 score":0.2857142857,
+    "Support":24
+  }
+]

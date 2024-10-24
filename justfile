@@ -6,6 +6,11 @@ install:
     poetry run pre-commit install
     poetry run ipython kernel install --user
 
+# install, but also include libraries for embeddings
+install-for-embeddings:
+    just install
+    poetry install --with embeddings
+
 # test the project
 test:
     poetry run pytest
@@ -31,8 +36,8 @@ train id +OPTS="":
     poetry run train --wikibase-id {{id}} {{OPTS}}
 
 # evaluate a model for a specific wikibase ID
-evaluate id:
-    poetry run python scripts/evaluate.py --wikibase-id {{id}}
+evaluate id +OPTS="":
+    poetry run evaluate --wikibase-id {{id}} {{OPTS}}
 
 # promote a model for a specific wikibase ID
 promote id +OPTS="":

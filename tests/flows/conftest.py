@@ -16,10 +16,15 @@ from cpr_sdk.parser_models import (
 )
 from moto import mock_aws
 
-from flows.inference import config
+from flows.inference import Config
 from src.identifiers import WikibaseID
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+@pytest.fixture()
+def test_config():
+    yield Config(cache_bucket="test_bucket")
 
 
 @pytest.fixture(scope="function")
@@ -38,14 +43,14 @@ def mock_s3_client(mock_aws_creds) -> Generator[str, Any, Any]:
 
 
 @pytest.fixture
-def mock_bucket(mock_aws_creds, mock_s3_client) -> Generator[str, Any, Any]:
-    test_bucket_name = "test_bucket"
-    with patch.object(config, "cache_bucket", new=test_bucket_name):
-        mock_s3_client.create_bucket(
-            Bucket=test_bucket_name,
-            CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
-        )
-        yield test_bucket_name
+def mock_bucket(
+    mock_aws_creds, mock_s3_client, test_config
+) -> Generator[str, Any, Any]:
+    mock_s3_client.create_bucket(
+        Bucket=test_config.cache_bucket,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield test_config.cache_bucket
 
 
 def load_fixture(file_name):
@@ -68,9 +73,9 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_classifiers_dir():
+def mock_classifiers_dir(test_config):
     mock_dir = Path(FIXTURE_DIR) / "classifiers"
-    with patch.object(config, "local_classifier_dir", new=mock_dir):
+    with patch.object(test_config, "local_classifier_dir", new=mock_dir):
         yield mock_dir
 
 

@@ -37,7 +37,14 @@ def main(
     console.log("✅ Connected to Argilla")
 
     with console.status("Fetching and filtering datasets from Argilla..."):
-        for dataset in rg.list_datasets():
+        datasets = rg.list_datasets()
+        if len(datasets) == 0:
+            console.log(
+                "❌ No datasets were returned from Argilla, you may need to be "
+                "granted access to the workspace(s)"
+            )
+
+        for dataset in datasets:
             try:
                 # if the dataset.name ends with our wikibase_id, then it's one we want to process
                 if WikibaseID(dataset.name.split("-")[-1]) == wikibase_id:

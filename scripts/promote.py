@@ -2,7 +2,6 @@
 
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Annotated, List, Optional
 
@@ -19,8 +18,9 @@ from rich.logging import RichHandler
 from tqdm import tqdm
 from typing_extensions import Self
 
-from scripts.platform import AwsEnv, get_s3_client, get_sts_client
+from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
 from src.identifiers import WikibaseID
+from src.version import Version
 
 logging.basicConfig(
     level="INFO",
@@ -76,67 +76,6 @@ class Within(BaseModel):
 # A really simple ADT equivalent, with some helpers from Pydantic
 # through the TypeAdapter, for initialisation.
 Promotion = TypeAdapter(Across | Within)
-
-
-class Version:
-    """A version as mandated by W&B."""
-
-    regex = r"^v\d+$"
-
-    value: int
-
-    def __init__(self, value: str):
-        """Create a new instance of Version after validation."""
-        self.value = self._validate(value)
-
-    @classmethod
-    def _validate(cls, value: str) -> int:
-        if value == "latest":
-            raise ValueError("`latest` isn't yet supported")
-
-        if not re.match(cls.regex, value):
-            raise ValueError(
-                'version must be in the format "v" followed by a number (e.g., v3)'
-            )
-
-        version_number = int(value[1:])
-
-        min_version = 0
-
-        if version_number < min_version:
-            raise ValueError(
-                f"version number must be greater than or equal to {min_version}"
-            )
-
-        return version_number
-
-    def __str__(self):
-        """Return a string representation of the Version."""
-        return f"v{self.value}"
-
-    def __repr__(self):
-        """Return a string representation of the Version object."""
-        return f"Version('v{self.value}')"
-
-    def __eq__(self, other):
-        """Check if this Version is equal to another Version or string."""
-        if isinstance(other, Version):
-            return self.value == other.value
-        return str(self) == other
-
-    def __lt__(self, other):
-        """Check if this Version is less than another Version or string."""
-        if isinstance(other, Version):
-            return self.value < other.value
-        return str(self) < other
-
-    def __hash__(self):
-        """Return a hash value for the Version."""
-        return hash(self.value)
-
-    def increment(self) -> "Version":
-        """Increment the version number by 1."""
-        return Version(f"v{self.value + 1}")
 
 
 def get_aliases(promotion: Promotion) -> Optional[List[str]]:
@@ -282,19 +221,6 @@ def upload(
     progress_bar.close()
 
 
-def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
-    """Check if the user is logged in to the specified AWS environment."""
-    try:
-        aws_env = aws_env if use_aws_profiles else None
-
-        sts = get_sts_client(aws_env)
-        sts.get_caller_identity()
-
-        return True
-    except botocore.exceptions.ClientError:
-        return False
-
-
 def throw_not_logged_in(aws_env: AwsEnv):
     """Raise a typer.BadParameter exception for a not logged in AWS environment."""
     raise typer.BadParameter(
@@ -412,7 +338,7 @@ def main(
         }
     )
 
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
 
     log.info("Validating AWS logins...")
     validate_logins(promotion, use_aws_profiles)

@@ -6,30 +6,48 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
+from prefect.blocks.system import JSON
 
+import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+
+def get_prefect_job_variable(param_name: str) -> str:
+    aws_env = os.environ["AWS_ENV"]
+    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
+    workpool_default_job_variables = JSON.load(block_name).value
+    return workpool_default_job_variables[param_name]
+
+
+def get_aws_ssm_param(param_name: str) -> str:
+    """Retrieve a parameter from AWS SSM"""
+    ssm = boto3.client("ssm")
+    response = ssm.get_parameter(Name=param_name, WithDecryption=True)
+    return response["Parameter"]["Value"]
 
 
 @dataclass()
 class Config:
     """Settings used across flow runs"""
 
-    cache_bucket: str = os.environ.get("CACHE_BUCKET")
+    cache_bucket: Optional[str] = None
     document_source_prefix: str = "embeddings_input"
     document_target_prefix: str = "labelled_passages"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
+    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
+
+    def __post_init__(self):
+        """Set default values that might need auth or other processing"""
+        if not self.cache_bucket:
+            self.cache_bucket = get_prefect_job_variable("pipeline_cache_bucket_name")
 
 
-config = Config()
-
-
-def list_bucket_doc_ids() -> list[str]:
+def list_bucket_doc_ids(config: Config) -> list[str]:
     """Scan configured bucket and return all ids"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
@@ -69,7 +87,9 @@ def determine_document_ids(
     return requested_document_ids
 
 
-def download_classifier_from_wandb_to_local(classifier_id: str, alias: str) -> str:
+def download_classifier_from_wandb_to_local(
+    config: Config, classifier_name: str, alias: str
+) -> str:
     """
     Function for downloading a classifier from W&B to local.
 
@@ -77,28 +97,27 @@ def download_classifier_from_wandb_to_local(classifier_id: str, alias: str) -> s
     download the model via the W&B API, we need access to both the s3 bucket via iam
     in your environment and WanDB via the api key.
     """
-    wandb.login(key=os.environ["WANDB_API_KEY"])
+    wandb.login(key=get_aws_ssm_param("WANDB_API_KEY"))
     run = wandb.init()
-    artifact = (
-        "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
-        f"{classifier_id}:{alias or 'latest'}"
-    )
+    artifact = config.wandb_model_registry + f"{classifier_name}:{alias or 'latest'}"
     print(f"Downloading artifact from W&B: {artifact}")
     artifact = run.use_artifact(artifact, type="model")
     return artifact.download()
 
 
-def load_classifier(classifier_id: str, alias: str) -> Classifier:
+def load_classifier(config: Config, classifier_name: str, alias: str) -> Classifier:
     """
     Loads a classifier into memory
 
     If the classifier is available locally, this will be used. Otherwise the
     classifier will be downloaded from W&B (Once implemented)
     """
-    local_classifier_path: Path = config.local_classifier_dir / classifier_id
+    local_classifier_path: Path = config.local_classifier_dir / classifier_name
 
     if not local_classifier_path.exists():
-        model_cache_dir = download_classifier_from_wandb_to_local(classifier_id, alias)
+        model_cache_dir = download_classifier_from_wandb_to_local(
+            config, classifier_name, alias
+        )
         local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
     classifier = Classifier.load(local_classifier_path)
@@ -106,7 +125,7 @@ def load_classifier(classifier_id: str, alias: str) -> Classifier:
     return classifier
 
 
-def load_document(document_id: str) -> BaseParserOutput:
+def load_document(config: Config, document_id: str) -> BaseParserOutput:
     """Downloads and opens a parser output based on a document id"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
 
@@ -140,13 +159,20 @@ def document_passages(document: BaseParserOutput):
 
 @task(log_prints=True)
 def store_labels(
-    labels: list[LabelledPassage], document_id: str, classifier_id: str
+    config: Config,
+    labels: list[LabelledPassage],
+    document_id: str,
+    classifier_name: str,
+    classifier_alias: str,
 ) -> None:
     """Stores the labels in the cache bucket"""
-    print("Storing labels for document {document_id} and classifier {classifier_id}")
     key = os.path.join(
-        config.document_target_prefix, f"{document_id}.{classifier_id}.json"
+        config.document_target_prefix,
+        classifier_name,
+        classifier_alias,
+        f"{document_id}.json",
     )
+    print(f"Storing labels for document {document_id} at {key}")
 
     data = [label.model_dump() for label in labels]
     body = BytesIO(json.dumps(data).encode("utf-8"))
@@ -171,26 +197,17 @@ def text_block_inference(
     return labelled_passage
 
 
-def determine_classifier_ids(
-    classifier_spec: Optional[list[tuple[str, str]]],
-) -> list[tuple[str, str]]:
-    """
-    To implement.
-
-    A check that requested classifiers exist, or return all the latest classifiers
-    """
-    if not classifier_spec:
-        return [("Q788", "latest")]
-    return classifier_spec
-
-
 @flow(log_prints=True)
 def run_classifier_inference_on_document(
-    document_id: str, classifier: Classifier, classifier_id: str
+    config: Config,
+    document_id: str,
+    classifier: Classifier,
+    classifier_name: str,
+    classifier_alias: str,
 ) -> None:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with id {document_id}")
-    document = load_document(document_id)
+    document = load_document(config, document_id)
 
     doc_labels = []
     for text, block_id in document_passages(document):
@@ -200,16 +217,19 @@ def run_classifier_inference_on_document(
         doc_labels.append(labelled_passage)
 
     store_labels(
+        config=config,
         labels=doc_labels,
         document_id=document_id,
-        classifier_id=classifier_id,
+        classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
     )
 
 
 @flow(log_prints=True)
 def classifier_inference(
+    classifier_spec: list[tuple[str, str]],
     document_ids: Optional[list[str]] = None,
-    classifier_spec: Optional[list[tuple[str, str]]] = None,
+    config: Optional[Config] = None,
 ):
     """
     Flow to run inference on documents within a bucket prefix
@@ -221,32 +241,31 @@ def classifier_inference(
 
     params:
     - document_ids: List of document ids to run inference on
-    - classifier_spec: List of classifier ids and aliases (alias tag for the version) to run inference with
+    - classifier_spec: List of classifier names and aliases (alias tag for the version)
+      to run inference with
+    - config: A Config object, uses the default if not given. Usually there is no need
+      to change this outside of local dev
     Example classifier_spec: ["Q788", "latest")]
     """
+    if not config:
+        config = Config()
     print(f"Running with config: {config}")
 
-    current_bucket_ids = list_bucket_doc_ids()
+    current_bucket_ids = list_bucket_doc_ids(config=config)
     validated_document_ids = determine_document_ids(
         requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
     )
-    classifier_spec = determine_classifier_ids(classifier_spec)
 
-    for classifier_id, classifier_alias in classifier_spec:
+    for classifier_name, classifier_alias in classifier_spec:
         print(
-            f"Loading classifier with id: {classifier_id}, and alias: {classifier_alias}"
+            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
         )
-        classifier = load_classifier(classifier_id, classifier_alias)
+        classifier = load_classifier(config, classifier_name, classifier_alias)
         for document_id in validated_document_ids:
             run_classifier_inference_on_document(
+                config=config,
                 document_id=document_id,
                 classifier=classifier,
-                classifier_id=classifier_id,
+                classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
             )
-
-
-if __name__ == "__main__":
-    classifier_inference(
-        document_ids=["CCLW.executive.4242.2011_translated_en_short"],
-        classifier_spec=[("Q992-RulesBasedClassifier", "latest")],
-    )
