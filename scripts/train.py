@@ -8,28 +8,16 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from wandb.sdk.wandb_run import Run
 
-from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
+from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
 from scripts.config import classifier_dir, concept_dir
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
+from src.version import Version
 from src.wikibase import WikibaseSession
 
 console = Console()
 app = typer.Typer()
-
-
-class Namespace(BaseModel):
-    """Hierarchy we use: CPR / {concept} / {classifier}"""
-
-    project: WikibaseID = Field(
-        ...,
-        description="The name of the W&B project, which is the concept ID",
-    )
-    entity: str = Field(
-        ...,
-        description="The name of the W&B entity",
-    )
 
 
 class StorageUpload(BaseModel):
@@ -287,6 +275,19 @@ def main(
     # the factory, this is effectively a no-op
     classifier.fit()
 
+    # In both scenarios, we need the next version aka the new version
+    if track or upload:
+        next_version = get_next_version(
+            namespace,
+            wikibase_id,
+            classifier,
+        )
+
+        console.log(f"Using next version {next_version}")
+
+        # Set this _before_ the model is saved to disk
+        classifier.version = Version(next_version)
+
     # Save the classifier to a file with the concept ID in the name
     classifier_path = classifier_dir / wikibase_id
     classifier.save(classifier_path)
@@ -295,12 +296,6 @@ def main(
     if upload:
         region_name = "eu-west-1"
         s3_client = get_s3_client(aws_env, region_name)
-
-        next_version = get_next_version(
-            namespace,
-            wikibase_id,
-            classifier,
-        )
 
         storage_upload = StorageUpload(
             next_version=next_version,
