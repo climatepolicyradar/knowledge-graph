@@ -64,7 +64,6 @@ jobs:
         run: |
           VERSION=$(just get-version)
           echo "version: $VERSION"
-          echo "DOCKER_TAG=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build the docker image
