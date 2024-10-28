@@ -1,6 +1,8 @@
 import os
+from datetime import datetime
 from pathlib import Path
 
+import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
@@ -9,6 +11,7 @@ from flows.index import (
     document_concepts_generator,
     get_document_passages_from_vespa,
     get_vespa_search_adapter_from_aws_secrets,
+    run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
 )
 
@@ -67,6 +70,7 @@ def test_document_concepts_generator(
         assert s3_key in expected_keys
 
 
+# TODO: Not sure we're getting all the passages out of vespa
 def test_get_document_passages_from_vespa(
     mock_vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
@@ -89,7 +93,86 @@ def test_get_document_passages_from_vespa(
     assert all([type(i) is Passage for i in document_passages])
 
 
-# TODO: Test run partial udpates
+@pytest.mark.asyncio
+async def test_run_partial_updates_of_concepts_for_document_passages(
+    mock_vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """Test that we can run partial updates of concepts for document passages."""
+    new_vespa_concepts = [
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1457",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "RuleBasedClassifier", "id": "Q788"},
+                {"name": "RuleBasedClassifier", "id": "Q789"},
+            ],
+            parent_concept_ids_flat="Q788,Q789",
+            model="RuleBasedClassifier",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
+        ),
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1273",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
+                {"name": "Q2-RuleBasedClassifier", "id": "Q3"},
+            ],
+            parent_concept_ids_flat="Q2,Q3",
+            model="RuleBasedClassifier-2.0.12",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
+        ),
+    ]
+
+    document_passages_initial = get_document_passages_from_vespa(
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    document_passages_initial__concepts = [
+        concept
+        for passage in document_passages_initial
+        if passage.concepts
+        for concept in passage.concepts
+    ]
+
+    assert len(document_passages_initial) > 0
+    assert all(
+        concept not in document_passages_initial__concepts
+        for concept in new_vespa_concepts
+    )
+
+    await run_partial_updates_of_concepts_for_document_passages(
+        document_import_id="CCLW.executive.10014.4470",
+        document_concepts=new_vespa_concepts,
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    document_passages_updated = get_document_passages_from_vespa(
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    document_passages_updated__concepts = [
+        concept
+        for passage in document_passages_updated
+        if passage.concepts
+        for concept in passage.concepts
+    ]
+
+    assert len(document_passages_updated) > 0
+    assert len(document_passages_updated__concepts) != len(
+        document_passages_initial__concepts
+    )
+    assert all(
+        [
+            any([new_vespa_concept == c for c in document_passages_updated__concepts])
+            for new_vespa_concept in new_vespa_concepts
+        ]
+    )
 
 
 # TODO: Test index_concepts_from_s3_to_vespa

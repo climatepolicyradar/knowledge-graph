@@ -85,7 +85,7 @@ def get_document_passages_from_vespa(
 
     vespa_search_response = vespa_search_adapter.search(
         parameters=SearchParameters(
-            document_ids=[document_import_id], documents_only=False
+            document_ids=[document_import_id], documents_only=False, all_results=True
         )
     )
     logger.info(
@@ -142,16 +142,26 @@ async def run_partial_updates_of_concepts_for_document_passages(
     document_passages_id_map = {
         passage.text_block_id: passage for passage in document_passages
     }
+
     for concept in document_concepts:
+        # TODO: Lift out the split into an explicit function
         passage_for_concept = document_passages_id_map.get(concept.id.split(".")[-1])
+
         if passage_for_concept:
+            if passage_for_concept.concepts:
+                passage_for_concept.concepts = passage_for_concept.concepts + [concept]
+                new_concepts = [
+                    json.loads(concept.model_dump_json())
+                    for concept in passage_for_concept.concepts
+                ]
+            else:
+                new_concepts = [json.loads(concept.model_dump_json())]
+
             vespa_search_adapter.client.update_data(
                 schema="document_passage",
-                data_id=(
-                    "id:doc_search:document_passage::"
-                    f"{document_import_id}.{passage_for_concept.text_block_id}"
-                ),
-                fields={"concept": concept.model_dump()},
+                namespace="doc_search",
+                data_id=f"{document_import_id}.{passage_for_concept.text_block_id}",
+                fields={"concepts": new_concepts},
             )
             logger.info(
                 "Updated concept for passage.",
