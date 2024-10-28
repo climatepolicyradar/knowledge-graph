@@ -1,0 +1,226 @@
+schema family_document {
+
+    document family_document {
+
+        field search_weights_ref type reference<search_weights> {
+            indexing: attribute | summary
+        }
+
+        field family_name type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field family_name_index type string {
+            indexing: index
+            index: enable-bm25
+        }
+
+        field family_description type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field family_description_index type string {
+            indexing: index
+            index: enable-bm25
+        }
+
+        field family_description_embedding type tensor<float>(x[768]) {
+            indexing: index | attribute
+            alias: search_text_embedding
+                attribute {
+                distance-metric: innerproduct
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 500
+                }
+            }
+        }
+
+        field family_import_id type string {
+            indexing: attribute | summary
+        }
+
+        field family_slug type string {
+            indexing: attribute | summary
+        }
+
+        field family_publication_ts type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field family_publication_year type int {
+            indexing: attribute
+        }
+
+        field family_category type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field family_geography type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field family_geographies type array<string> {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field family_source type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field document_import_id type string {
+            indexing: summary | attribute
+        }
+
+        field document_title type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field document_slug type string {
+            indexing: summary | attribute
+        }
+
+        field document_languages type array<string> {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field document_md5_sum type string {
+            indexing: summary | attribute
+        }
+
+        field document_content_type type string {
+            indexing: summary | attribute
+        }
+
+        field document_cdn_object type string {
+            indexing: summary | attribute
+        }
+
+        field document_source_url type string {
+            indexing: summary | attribute
+        }
+
+        field corpus_import_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+
+        }
+
+        field corpus_type_name type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field collection_title type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field collection_summary type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        struct metadata_item {
+            field name type string {}
+            field value type string {}
+        }
+
+        field metadata type array<metadata_item> {
+            indexing: summary
+
+            struct-field name {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field value {
+                indexing: attribute
+                attribute: fast-search
+            }
+        }
+    }
+
+    import field search_weights_ref.name_weight as name_weight {}
+    import field search_weights_ref.description_weight as description_weight {}
+
+    fieldset default {
+        fields: family_name_index, family_description_index
+    }
+
+    rank-profile exact inherits default {
+        function name_score() {
+            expression: attribute(name_weight) * fieldMatch(family_name_index)
+        }
+        function description_score() {
+            expression: attribute(description_weight) * fieldMatch(family_description_index)
+        }
+        first-phase {
+            expression: name_score() + description_score()
+        }
+        match-features: name_score() description_score()
+    }
+
+    rank-profile hybrid_no_closeness inherits default {
+        function name_score() {
+            expression: attribute(name_weight) * bm25(family_name_index)
+        }
+        function description_score() {
+            expression: attribute(description_weight) * bm25(family_description_index)
+        }
+        first-phase {
+            expression: name_score() + description_score()
+        }
+        match-features: name_score() description_score()
+    }
+
+    rank-profile hybrid inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+        }
+        function name_score() {
+            expression: attribute(name_weight) * bm25(family_name_index)
+        }
+        function description_score() {
+            expression: attribute(description_weight) * (bm25(family_description_index) + closeness(family_description_embedding))
+        }
+        first-phase {
+            expression: name_score() + description_score()
+        }
+        match-features: name_score() description_score()
+    }
+
+    document-summary search_summary {
+        summary family_name {}
+        summary family_description {}
+        summary family_import_id {}
+        summary family_slug {}
+        summary family_category {}
+        summary family_publication_ts {}
+        summary family_geography {}
+        summary family_geographies {}
+        summary family_source {}
+        summary document_import_id {}
+        summary document_title {}
+        summary document_slug {}
+        summary document_languages {}
+        summary document_content_type {}
+        summary document_cdn_object {}
+        summary document_source_url {}
+        summary metadata {}
+        summary corpus_import_id {}
+        summary corpus_type_name {}
+        summary collection_title {}
+        summary collection_summary {}
+    }
+}

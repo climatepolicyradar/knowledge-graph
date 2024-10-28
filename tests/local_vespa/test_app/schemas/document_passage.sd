@@ -1,0 +1,169 @@
+schema document_passage {
+
+    document document_passage {
+
+        field search_weights_ref type reference<search_weights> {
+            indexing: attribute | summary
+        }
+
+        field family_document_ref type reference<family_document> {
+            indexing: attribute | summary
+        }
+
+        field text_block_id type string {
+            indexing: attribute | summary
+        }
+
+        field text_block_coords type array<array<float>> {
+            indexing: summary
+        }
+
+        field text_block_page type int {
+            indexing: attribute | summary
+        }
+
+        field text_block_type type string {
+            indexing: attribute | summary
+        }
+
+        field text_block type string {
+            indexing: attribute | index | summary
+            index: enable-bm25
+        }
+
+        field text_embedding type tensor<float>(x[768]) {
+            indexing: index | attribute
+            alias: search_text_embedding
+            attribute {
+                distance-metric: innerproduct
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 500
+                }
+            }
+        }
+
+        struct parent_concept {
+            field id type string {}
+            field name type string {}
+        }
+
+        struct concept {
+            field name                       type string {}
+            field id                         type string {}
+            field parent_concepts            type array<parent_concept> {}
+            field parent_concept_ids_flat    type string {}
+            field start                      type int {}
+            field end                        type int {}
+            field model                      type string {}
+            field timestamp                  type string {}
+        }
+
+        field concepts type array<concept> {
+            indexing: summary
+
+            struct-field name {
+                indexing: attribute
+            }
+            struct-field id {
+                indexing: attribute
+            }
+            struct-field parent_concept_ids_flat {
+                indexing: attribute
+            }
+            struct-field model {
+                indexing: attribute
+            }
+            struct-field timestamp {
+                indexing: attribute
+            }
+        }
+    }
+
+    import field family_document_ref.family_name as family_name {}
+    import field family_document_ref.family_description as family_description {}
+    import field family_document_ref.family_import_id as family_import_id {}
+    import field family_document_ref.family_slug as family_slug {}
+    import field family_document_ref.family_category as family_category {}
+    import field family_document_ref.family_publication_ts as family_publication_ts {}
+    import field family_document_ref.family_publication_year as family_publication_year {}
+    import field family_document_ref.family_geography as family_geography {}
+    import field family_document_ref.family_geographies as family_geographies {}
+    import field family_document_ref.family_source as family_source {}
+    import field family_document_ref.document_import_id as document_import_id {}
+    import field family_document_ref.document_slug as document_slug {}
+    import field family_document_ref.document_languages as document_languages {}
+    import field family_document_ref.document_content_type as document_content_type {}
+    import field family_document_ref.document_cdn_object as document_cdn_object {}
+    import field family_document_ref.document_source_url as document_source_url {}
+    import field family_document_ref.corpus_import_id as corpus_import_id {}
+    import field family_document_ref.corpus_type_name as corpus_type_name {}
+    import field family_document_ref.metadata as metadata {}
+    import field search_weights_ref.passage_weight as passage_weight {}
+
+    fieldset default {
+        fields: text_block
+    }
+
+    document-summary search_summary {
+        summary family_name {}
+        summary family_description {}
+        summary family_import_id {}
+        summary family_slug {}
+        summary family_category {}
+        summary family_publication_ts {}
+        summary family_geography {}
+        summary family_geographies {}
+        summary family_source {}
+        summary document_import_id {}
+        summary document_slug {}
+        summary document_languages {}
+        summary document_content_type {}
+        summary document_cdn_object {}
+        summary document_source_url {}
+        summary corpus_import_id {}
+        summary corpus_type_name {}
+        summary metadata {}
+        summary text_block {}
+        summary text_block_id {}
+        summary text_block_type {}
+        summary text_block_page {}
+        summary text_block_coords {}
+        summary concepts {}
+    }
+
+    rank-profile exact inherits default {
+        function text_score() {
+            expression: attribute(passage_weight) * fieldMatch(text_block)
+        }
+        first-phase {
+            expression: text_score()
+        }
+        match-features: text_score()
+    }
+
+    rank-profile hybrid_no_closeness inherits default {
+        function text_score() {
+            expression: attribute(passage_weight) * bm25(text_block)
+        }
+        first-phase {
+            expression: text_score()
+        }
+        match-features: text_score()
+    }
+
+    rank-profile hybrid inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+        }
+        function text_score() {
+            expression: attribute(passage_weight) * (bm25(text_block) + closeness(text_embedding))
+        }
+        first-phase {
+            expression: text_score()
+        }
+        match-features: text_score()
+    }
+}

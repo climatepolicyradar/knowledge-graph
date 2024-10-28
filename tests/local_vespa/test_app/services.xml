@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. -->
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+
+    <container id="default" version="1.0">
+        <component id="msmarco-distilbert-dot-v5" type="hugging-face-embedder">
+            <transformer-model url="https://huggingface.co/onnx-models/msmarco-distilbert-dot-v5-onnx/resolve/main/model.onnx"/>
+            <tokenizer-model url="https://huggingface.co/onnx-models/msmarco-distilbert-dot-v5-onnx/resolve/main/tokenizer.json"/>
+            <transformer-token-type-ids/>
+            <transformer-output>token_embeddings</transformer-output>
+        </component>
+        <document-api/>
+        <search/>
+        <nodes deploy:environment="dev" count="1">
+            <resources vcpu="2" memory="4Gb" disk="1Gb"/>
+        </nodes>
+    </container>
+
+    <content id="family-document-passage" version="1.0">
+        <tuning>
+            <resource-limits>
+                <disk>0.98</disk>
+            </resource-limits>
+        </tuning>
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="search_weights" mode="index" global="true" />
+            <document type="family_document" mode="index" global="true" />
+            <document type="document_passage" mode="index" />
+        </documents>
+        <nodes deploy:environment="dev" count="1">
+            <resources vcpu="2" memory="4Gb" disk="1Gb"/>
+        </nodes>
+    </content>
+
+</services>
