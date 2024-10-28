@@ -2,9 +2,12 @@ import os
 from pathlib import Path
 
 from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Passage
+from cpr_sdk.search_adaptors import VespaSearchAdapter
 
 from flows.index import (
     document_concepts_generator,
+    get_document_passages_from_vespa,
     get_vespa_search_adapter_from_aws_secrets,
     s3_obj_generator,
 )
@@ -64,7 +67,26 @@ def test_document_concepts_generator(
         assert s3_key in expected_keys
 
 
-# TODO: Test get document passages from Vespa
+def test_get_document_passages_from_vespa(
+    mock_vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """Test that we can retrieve all the passages for a document in vespa."""
+    document_passages = get_document_passages_from_vespa(
+        document_import_id="test.executive.1.1",
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    assert document_passages == []
+
+    document_passages = get_document_passages_from_vespa(
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    assert len(document_passages) > 0
+    # TODO: Why 9?
+    assert len(document_passages) == 9
+    assert all([type(i) is Passage for i in document_passages])
 
 
 # TODO: Test run partial udpates

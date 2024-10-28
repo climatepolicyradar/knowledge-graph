@@ -14,8 +14,10 @@ from cpr_sdk.parser_models import (
     PDFData,
     PDFTextBlock,
 )
+from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 
+from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
 from src.identifiers import WikibaseID
 
@@ -77,6 +79,14 @@ def create_vespa_params(mock_ssm_client, mock_vespa_credentials):
         Value=mock_vespa_credentials["VESPA_PRIVATE_KEY"],
         Type="SecureString",
     )
+
+
+@pytest.fixture
+def mock_vespa_search_adapter(
+    create_vespa_params, mock_vespa_credentials, tmpdir
+) -> VespaSearchAdapter:
+    """VespaSearchAdapter instantiated from mocked ssm params."""
+    return get_vespa_search_adapter_from_aws_secrets(cert_dir=tmpdir)
 
 
 @pytest.fixture

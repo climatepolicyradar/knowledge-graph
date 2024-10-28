@@ -9,7 +9,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import SearchParameters, VespaSearchAdapter
 from prefect import flow
-from prefect.logging import get_run_logger
+from prefect.logging import get_logger, get_run_logger
 from pydantic import ValidationError
 
 from flows.inference import get_aws_ssm_param
@@ -77,7 +77,7 @@ def get_document_passages_from_vespa(
     params:
     - document_import_id: The document import id for a unique family document.
     """
-    logger = get_run_logger()
+    logger = get_logger()
     logger.info(
         "Getting document passages from vespa.",
         extra={"props": {"document_import_id": document_import_id}},
