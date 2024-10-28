@@ -7,7 +7,7 @@ from typing import Generator, Optional
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
-from cpr_sdk.search_adaptors import SearchParameters, VespaSearchAdapter
+from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.logging import get_logger, get_run_logger
 from pydantic import ValidationError
@@ -83,9 +83,11 @@ def get_document_passages_from_vespa(
         extra={"props": {"document_import_id": document_import_id}},
     )
 
-    vespa_search_response = vespa_search_adapter.search(
-        parameters=SearchParameters(
-            document_ids=[document_import_id], documents_only=False, all_results=True
+    vespa_query_response = vespa_search_adapter.client.query(
+        yql=(
+            # trunk-ignore(bandit/B608)
+            "select * from document_passage where family_document_ref contains "
+            f'"id:doc_search:family_document::{document_import_id}"'
         )
     )
     logger.info(
@@ -93,18 +95,15 @@ def get_document_passages_from_vespa(
         extra={
             "props": {
                 "document_import_id": document_import_id,
-                "total_hits": vespa_search_response.total_hits,
+                "total_hits": len(vespa_query_response.hits),
             }
         },
     )
 
-    passages = []
-    for family in vespa_search_response.families:
-        for family_hit in family.hits:
-            if type(family_hit) is VespaPassage:
-                passages.append(family_hit)
-
-    return passages
+    return [
+        VespaPassage.model_validate(passage["fields"])
+        for passage in vespa_query_response.hits
+    ]
 
 
 # TODO: Add concurrency limit.

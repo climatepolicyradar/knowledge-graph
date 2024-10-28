@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -70,11 +71,21 @@ def test_document_concepts_generator(
         assert s3_key in expected_keys
 
 
-# TODO: Not sure we're getting all the passages out of vespa
 def test_get_document_passages_from_vespa(
     mock_vespa_search_adapter: VespaSearchAdapter,
+    document_passages_test_data_file_path: str,
 ) -> None:
     """Test that we can retrieve all the passages for a document in vespa."""
+    with open(document_passages_test_data_file_path) as f:
+        document_passage_test_data = json.load(f)
+
+    family_document_passages_count_expected = sum(
+        1
+        for doc in document_passage_test_data
+        if doc["fields"]["family_document_ref"]
+        == "id:doc_search:family_document::CCLW.executive.10014.4470"
+    )
+
     document_passages = get_document_passages_from_vespa(
         document_import_id="test.executive.1.1",
         vespa_search_adapter=mock_vespa_search_adapter,
@@ -88,8 +99,7 @@ def test_get_document_passages_from_vespa(
     )
 
     assert len(document_passages) > 0
-    # TODO: Why 9?
-    assert len(document_passages) == 9
+    assert len(document_passages) == family_document_passages_count_expected
     assert all([type(i) is Passage for i in document_passages])
 
 

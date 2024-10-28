@@ -210,3 +210,9 @@ def mock_bucket_concepts(
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
+
+
+@pytest.fixture
+def document_passages_test_data_file_path() -> str:
+    """Returns the path to the document passages test data file."""
+    return "tests/local_vespa/test_documents/document_passage.json"
