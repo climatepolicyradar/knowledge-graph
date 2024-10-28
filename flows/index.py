@@ -90,6 +90,7 @@ def get_document_passages_from_vespa(
             f'"id:doc_search:family_document::{document_import_id}"'
         )
     )
+
     logger.info(
         "Vespa search response for document.",
         extra={
@@ -203,11 +204,3 @@ async def index_concepts_from_s3_to_vespa(
     ]
 
     await asyncio.gather(*sub_flows)
-
-
-if __name__ == "__main__":
-    asyncio.run(
-        index_concepts_from_s3_to_vespa(
-            s3_path="s3://labelled-concepts/some_model/some_alias"
-        )
-    )

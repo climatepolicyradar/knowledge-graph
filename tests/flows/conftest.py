@@ -192,9 +192,8 @@ def s3_prefix_concepts() -> str:
 def concept_fixture_files() -> list[str]:
     """Returns the list of concept fixture files."""
     return [
-        "CCLW.document.0.0.json",
-        "CCLW.document.1.1.json",
-        "CCLW.document.2.2.json",
+        "CCLW.executive.10014.4470.json",
+        "CCLW.executive.4934.1571.json",
     ]
 
 

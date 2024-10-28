@@ -12,6 +12,7 @@ from flows.index import (
     document_concepts_generator,
     get_document_passages_from_vespa,
     get_vespa_search_adapter_from_aws_secrets,
+    index_concepts_from_s3_to_vespa,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
 )
@@ -185,4 +186,31 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     )
 
 
-# TODO: Test index_concepts_from_s3_to_vespa
+@pytest.mark.asyncio
+async def test_index_concepts_from_s3_to_vespa(
+    mock_bucket,
+    mock_bucket_concepts,
+    s3_prefix_concepts,
+    concept_fixture_files,
+    mock_vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """Test that we can successfully index concepts from s3 into vespa."""
+    document_passages_query_response__initial = mock_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+
+    await index_concepts_from_s3_to_vespa(
+        s3_path=os.path.join("s3://", mock_bucket, s3_prefix_concepts),
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    document_passages_query_response__final = mock_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+
+    assert len(document_passages_query_response__final.hits) > len(
+        document_passages_query_response__initial.hits
+    )
+    assert len(document_passages_query_response__final.hits) == len(
+        document_passages_query_response__initial.hits
+    ) + len(concept_fixture_files)
