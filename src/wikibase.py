@@ -143,7 +143,9 @@ class WikibaseSession:
         return concept
 
     def get_concepts(
-        self, limit: Optional[int], wikibase_ids: list[WikibaseID] = []
+        self,
+        limit: Optional[int] = None,
+        wikibase_ids: Optional[list[WikibaseID]] = None,
     ) -> list[Concept]:
         """
         Get concepts from Wikibase, optionally specified by their Wikibase IDs
