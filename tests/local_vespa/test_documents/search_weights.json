@@ -1,0 +1,10 @@
+[
+    {
+        "id": "id:doc_search:search_weights::default_weights",
+        "fields": {
+            "name_weight": 2.5,
+            "passage_weight": 1.0,
+            "description_weight": 2.0
+        }
+    }
+]
