@@ -10,7 +10,9 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
 from prefect.blocks.system import JSON
+from prefect.concurrency.sync import concurrency
 
+import global_config
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -232,40 +234,46 @@ def classifier_inference(
     config: Optional[Config] = None,
 ):
     """
-    Flow to run inference on documents within a bucket prefix
+    Flow to run inference on documents within a bucket prefix.
 
-    Default behaviour is to run on everything, pass document_ids to limit to specific
-    files.
+    Default behaviour is to run on everything, pass document_ids to limit to
+    specific files.
 
     Iterates: classifiers > documents > passages. Loading output into s3
 
-    params:
+    Params:
     - document_ids: List of document ids to run inference on
-    - classifier_spec: List of classifier names and aliases (alias tag for the version)
-      to run inference with
-    - config: A Config object, uses the default if not given. Usually there is no need
-      to change this outside of local dev
-    Example classifier_spec: ["Q788", "latest")]
+    - classifier_spec: List of classifier names and aliases (alias tag for the
+      version) to run inference with
+    - config: A Config object, uses the default if not given. Usually there is
+      no need to change this outside of local dev
+
+    Example:
+    classifier_spec: ["Q788", "latest")]
     """
-    if not config:
-        config = Config()
-    print(f"Running with config: {config}")
+    with concurrency(
+        global_config.CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
+        occupy=1,
+    ):
+        if not config:
+            config = Config()
+        print(f"Running with config: {config}")
 
-    current_bucket_ids = list_bucket_doc_ids(config=config)
-    validated_document_ids = determine_document_ids(
-        requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
-    )
-
-    for classifier_name, classifier_alias in classifier_spec:
-        print(
-            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
+        current_bucket_ids = list_bucket_doc_ids(config=config)
+        validated_document_ids = determine_document_ids(
+            requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
         )
-        classifier = load_classifier(config, classifier_name, classifier_alias)
-        for document_id in validated_document_ids:
-            run_classifier_inference_on_document(
-                config=config,
-                document_id=document_id,
-                classifier=classifier,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
+
+        for classifier_name, classifier_alias in classifier_spec:
+            print(
+                f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
             )
+            classifier = load_classifier(config, classifier_name, classifier_alias)
+            for document_id in validated_document_ids:
+                run_classifier_inference_on_document(
+                    config=config,
+                    document_id=document_id,
+                    classifier=classifier,
+                    classifier_name=classifier_name,
+                    classifier_alias=classifier_alias,
+                )
