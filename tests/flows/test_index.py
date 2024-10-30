@@ -106,7 +106,16 @@ def test_get_document_passages_from_vespa(
 
     assert len(document_passages) > 0
     assert len(document_passages) == family_document_passages_count_expected
-    assert all([type(i) is Passage for i in document_passages])
+    assert all(
+        [
+            (
+                type(passage) is Passage
+                and type(passage_id) is str
+                and bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
+            )
+            for passage_id, passage in document_passages
+        ]
+    )
 
 
 @pytest.mark.asyncio
@@ -187,16 +196,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         [
             any([new_vespa_concept == c for c in document_passages_updated__concepts])
             for new_vespa_concept in new_vespa_concepts
-        ]
-    )
-
-    document_passages_updated__ids = [
-        passage[0] for passage in document_passages_updated
-    ]
-    assert all(
-        [
-            bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
-            for passage_id in document_passages_updated__ids
         ]
     )
 
