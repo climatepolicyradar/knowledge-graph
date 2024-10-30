@@ -11,9 +11,13 @@ import logging
 import os
 from typing import Any
 
-from prefect.client.orchestration import get_client
+import httpx
+import prefect
 from prefect.blocks.system import JSON
-from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
+from prefect.client.schemas.actions import ConcurrencyLimitCreate
+from prefect.client.schemas.objects import (
+    ConcurrencyLimit,
+)
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
@@ -60,23 +64,103 @@ def create_deployment(
     )
 
 
+async def read_concurrency_limit_by_name(name: str) -> ConcurrencyLimit:
+    """
+    Read a concurrency limit by name.
+
+    [1] https://github.com/PrefectHQ/prefect/blob/main/src/prefect/client/orchestration.py#L824  # noqa: E501
+    """
+    client = prefect.get_client()
+
+    try:
+        response = await client._client.get(
+            f"/concurrency_limits/{name}",
+        )
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise prefect.exceptions.ObjectNotFound(http_exc=e) from e
+        else:
+            raise
+
+    concurrency_limit_id = response.json().get("id")
+
+    if not concurrency_limit_id:
+        raise httpx.RequestError(f"Malformed response: {response}")
+
+    return ConcurrencyLimit.model_validate(response.json())
+
+
+async def delete_concurrency_limit_by_name(name: str) -> None:
+    """
+    Delete a concurrency limit by name.
+
+    [1] https://github.com/PrefectHQ/prefect/blob/main/src/prefect/client/orchestration.py#L919C1-L942C22  # noqa: E501
+    """
+    client = prefect.get_client()
+
+    try:
+        await client._client.delete(
+            f"/concurrency_limits/{name}",
+        )
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise prefect.exceptions.ObjectNotFound(http_exc=e) from e
+        else:
+            raise
+
+
+async def create_concurrency_limit(name, limit=1) -> ConcurrencyLimit:
+    client = prefect.get_client()
+
+    concurrency_limit_create = ConcurrencyLimitCreate(
+        name=name,
+        limit=limit,
+    )
+
+    response = await client._client.post(
+        "/concurrency_limits/",
+        json=concurrency_limit_create.dict(json_compatible=True),
+    )
+
+    return ConcurrencyLimit.model_validate(response.json())
+
+
+async def create_replace_global_concurrency_limit(name, limit=1) -> ConcurrencyLimit:
+    """
+    Create a global concurrency limit by name.
+
+    This checks if it already exists first, and if so, deletes it.
+
+    Prefect don't have a "nice" wrapper around this, as they do other things
+    (like `Deployment`s, above).
+
+    Instead, we'll use the same approach they take [1][2].
+
+    [1] https://docs-2.prefect.io/latest/api-ref/prefect/client/orchestration/?h=get_client#prefect.client.orchestration.PrefectClient.create_concurrency_limit  # noqa: E501
+    [2] https://github.com/PrefectHQ/prefect/blob/main/src/prefect/client/orchestration.py#L788  # noqa: E501
+    """
+    try:
+        await read_concurrency_limit_by_name(name)
+        await delete_concurrency_limit_by_name(name)
+    except prefect.exceptions.ObjectNotFound:
+        # If it doesn't exist yet, that's fine
+        pass
+    except Exception as e:
+        # Re-raise any other exceptions
+        raise e
+
+    return await create_concurrency_limit(name, limit)
+
+
 async def main():
     # Inference
-
-    client = get_client()
-
-    # > Global concurrency limits can be applied to flow runs, task
-    # > runs and any operation where you want to control concurrency.
-    concurrency_limit = GlobalConcurrencyLimitCreate(
-        name=CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
-        limit=1,
+    concurrency_limit = await create_replace_global_concurrency_limit(
+        CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
     )
 
-    global_concurrency_limit_id = await client.upsert_global_concurrency_limit_by_name(
-        concurrency_limit
+    logger.info(
+        f"Created concurrency limit (ID: {concurrency_limit.id}, Name: {CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME})"
     )
-
-    logger.info(f"Created global concurrency limit (ID: {global_concurrency_limit_id})")
 
     # create_deployment(
     #     project_name="knowledge-graph",
