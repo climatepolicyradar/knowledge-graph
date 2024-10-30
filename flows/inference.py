@@ -12,10 +12,11 @@ from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.concurrency.sync import concurrency
 
-import global_config
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME = "classifier-inference-start"
 
 
 def get_prefect_job_variable(param_name: str) -> str:
@@ -252,7 +253,7 @@ def classifier_inference(
     classifier_spec: ["Q788", "latest")]
     """
     with concurrency(
-        global_config.CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
+        CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
         occupy=1,
     ):
         if not config:

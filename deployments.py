@@ -5,15 +5,25 @@ Used to create server side representation of prefect flows, triggers, config, et
 See: https://docs-2.prefect.io/latest/concepts/deployments/
 """
 
+import asyncio
 import importlib.metadata
+import logging
 import os
 from typing import Any
 
+from prefect.client.orchestration import get_client
 from prefect.blocks.system import JSON
+from prefect.client.schemas.actions import GlobalConcurrencyLimitCreate
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
-from flows.inference import classifier_inference
+from flows.inference import (
+    CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
+    classifier_inference,
+)
+
+logger = logging.getLogger(__name__)
+
 
 MEGABYTES_PER_GIGABYTE = 1024
 
@@ -50,14 +60,35 @@ def create_deployment(
     )
 
 
-# Inference
-create_deployment(
-    project_name="knowledge-graph",
-    flow=classifier_inference,
-    description="Run concept classifier inference on document passages",
-    flow_variables={
-        "cpu": MEGABYTES_PER_GIGABYTE * 4,
-        "memory": MEGABYTES_PER_GIGABYTE * 16,
-        "ephemeralStorage": {"sizeInGiB": 50},
-    },
-)
+async def main():
+    # Inference
+
+    client = get_client()
+
+    # > Global concurrency limits can be applied to flow runs, task
+    # > runs and any operation where you want to control concurrency.
+    concurrency_limit = GlobalConcurrencyLimitCreate(
+        name=CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
+        limit=1,
+    )
+
+    global_concurrency_limit_id = await client.upsert_global_concurrency_limit_by_name(
+        concurrency_limit
+    )
+
+    logger.info(f"Created global concurrency limit (ID: {global_concurrency_limit_id})")
+
+    # create_deployment(
+    #     project_name="knowledge-graph",
+    #     flow=classifier_inference,
+    #     description="Run concept classifier inference on document passages",
+    #     flow_variables={
+    #         "cpu": MEGABYTES_PER_GIGABYTE * 4,
+    #         "memory": MEGABYTES_PER_GIGABYTE * 16,
+    #         "ephemeralStorage": {"sizeInGiB": 50},
+    #     },
+    # )
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
