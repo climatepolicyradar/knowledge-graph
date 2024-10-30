@@ -48,12 +48,14 @@ def mock_s3_client(mock_aws_creds) -> Generator:
 
 @pytest.fixture(scope="function")
 def mock_ssm_client(mock_aws_creds) -> Generator:
+    """Mocked boto3 ssm client."""
     with mock_aws():
         yield boto3.client("ssm", region_name="eu-west-1")
 
 
 @pytest.fixture()
 def mock_vespa_credentials() -> dict[str, str]:
+    """Mocked vespa credentials."""
     return {
         "VESPA_INSTANCE_URL": "http://localhost:8080",
         "VESPA_PUBLIC_CERT": "Cert Content",
@@ -62,7 +64,8 @@ def mock_vespa_credentials() -> dict[str, str]:
 
 
 @pytest.fixture
-def create_vespa_params(mock_ssm_client, mock_vespa_credentials):
+def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
+    """Creates the vespa parameters in the mock ssm client."""
     mock_ssm_client.put_parameter(
         Name="VESPA_INSTANCE_URL",
         Description="A test parameter for the vespa instance.",
