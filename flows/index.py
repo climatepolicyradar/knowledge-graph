@@ -105,7 +105,11 @@ def get_document_passages_from_vespa(
     ]
 
 
-# TODO: Add test
+def get_text_block_id_from_concept(concept: VespaConcept) -> str:
+    """Identify the text block id that a concept relates to."""
+    return concept.id.split(".")[-1]
+
+
 def get_passage_for_concept(
     concept: VespaConcept, document_passages: list[tuple[str, VespaPassage]]
 ) -> Union[tuple[str, VespaPassage], tuple[None, None]]:
@@ -123,7 +127,9 @@ def get_passage_for_concept(
         passage[1].text_block_id: passage for passage in document_passages
     }
 
-    passage_for_concept = document_passages_id_map.get(concept.id.split(".")[-1])
+    passage_for_concept = document_passages_id_map.get(
+        get_text_block_id_from_concept(concept)
+    )
 
     if passage_for_concept:
         return passage_for_concept

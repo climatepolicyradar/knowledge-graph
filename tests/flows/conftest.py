@@ -220,7 +220,7 @@ def document_passages_test_data_file_path() -> str:
 
 
 @pytest.fixture
-def new_vespa_concepts() -> list[VespaConcept]:
+def example_vespa_concepts() -> list[VespaConcept]:
     """Vespa concepts for testing."""
     return [
         VespaConcept(
