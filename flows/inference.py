@@ -1,5 +1,6 @@
 import json
 import os
+from contextlib import nullcontext
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -16,7 +17,7 @@ from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME = "classifier-inference-start"
+CLASSIFIER_INFERENCE_CONCURRENCY_LIMIT_NAME_PROD = "classifier-inference-prod"
 
 
 def get_prefect_job_variable(param_name: str) -> str:
@@ -233,6 +234,7 @@ def classifier_inference(
     classifier_spec: list[tuple[str, str]],
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
+    use_concurrency_limit_in_prod: bool = False,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
@@ -252,10 +254,14 @@ def classifier_inference(
     Example:
     classifier_spec: ["Q788", "latest")]
     """
-    with concurrency(
-        CLASSIFIER_INFERENCE_START_CONCURRENCY_LIMIT_NAME,
-        occupy=1,
-    ):
+    # Setup concurrency context, if enabled
+    concurrency_ctx = (
+        concurrency(CLASSIFIER_INFERENCE_CONCURRENCY_LIMIT_NAME_PROD, occupy=1)
+        if use_concurrency_limit_in_prod
+        else nullcontext()
+    )
+
+    with concurrency_ctx:
         if not config:
             config = Config()
         print(f"Running with config: {config}")
