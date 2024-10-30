@@ -27,7 +27,7 @@ more-itertools = "^10.3.0"
 argilla = "1.29.1"
 prefect = "2.16.8"
 griffe = "0.48.0"
-cpr-sdk = "^1.9.1"
+cpr-sdk = "^1.9.2"
 wandb = "^0.18.3"
 boto3 = "^1.35.31"
 

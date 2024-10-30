@@ -1,5 +1,6 @@
 import asyncio
 import json
+import tempfile
 from pathlib import Path
 from typing import Generator, Optional, Union
 
@@ -7,10 +8,9 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
+from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.logging import get_logger, get_run_logger
-
-from flows.inference import get_aws_ssm_param
 
 
 def get_vespa_search_adapter_from_aws_secrets(
@@ -119,12 +119,15 @@ def get_passage_for_concept(
     - ${family_import_id}.${text_block_id}.
     And thus, can be used to identify the relevant passage.
     """
-    document_passages_id_map = {
-        passage[1].text_block_id: passage for passage in document_passages
-    }
+    concept_text_block_id = get_text_block_id_from_concept(concept)
 
-    passage_for_concept = document_passages_id_map.get(
-        get_text_block_id_from_concept(concept)
+    passage_for_concept = next(
+        (
+            passage
+            for passage in document_passages
+            if passage[1].text_block_id == concept_text_block_id
+        ),
+        None,
     )
 
     if passage_for_concept:
@@ -216,7 +219,9 @@ async def index_concepts_from_s3_to_vespa(
     - The name of the files in the s3 path are the document import ids.
     """
     if not vespa_search_adapter:
-        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets()
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+            cert_dir=tempfile.mkdtemp()
+        )
     s3_obj_gen = s3_obj_generator(s3_path=s3_path)
     document_concepts_gen = document_concepts_generator(generator_func=s3_obj_gen)
 

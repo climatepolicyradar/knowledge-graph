@@ -7,6 +7,7 @@ from typing import Optional
 
 import boto3
 from cpr_sdk.parser_models import BaseParserOutput
+from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.blocks.system import JSON
 
@@ -21,14 +22,6 @@ def get_prefect_job_variable(param_name: str) -> str:
     block_name = f"default-job-variables-prefect-mvp-{aws_env}"
     workpool_default_job_variables = JSON.load(block_name).value
     return workpool_default_job_variables[param_name]
-
-
-# TODO: Update the sdk and remove this function
-def get_aws_ssm_param(param_name: str, region_name: str = "eu-west-1") -> str:
-    """Retrieve a parameter from AWS SSM"""
-    ssm = boto3.client("ssm", region_name=region_name)
-    response = ssm.get_parameter(Name=param_name, WithDecryption=True)
-    return response["Parameter"]["Value"]
 
 
 @dataclass()
