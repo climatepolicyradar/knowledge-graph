@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Generator, Optional
 
@@ -17,7 +18,7 @@ from flows.inference import get_aws_ssm_param
 
 # TODO: Move to the sdk?
 def get_vespa_search_adapter_from_aws_secrets(
-    cert_dir: str = "certs",
+    cert_dir: Optional[str] = None,
 ) -> VespaSearchAdapter:
     """
     Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager.
@@ -29,11 +30,16 @@ def get_vespa_search_adapter_from_aws_secrets(
     vespa_public_cert = get_aws_ssm_param("VESPA_PUBLIC_CERT")
     vespa_private_key = get_aws_ssm_param("VESPA_PRIVATE_KEY")
 
-    os.makedirs(cert_dir, exist_ok=True)
+    if cert_dir:
+        os.makedirs(cert_dir, exist_ok=True)
+    else:
+        cert_dir = tempfile.mkdtemp()
+
     with open(f"{cert_dir}/cert.pem", "w") as f:
         f.write(vespa_public_cert)
     with open(f"{cert_dir}/key.pem", "w") as f:
         f.write(vespa_private_key)
+
     return VespaSearchAdapter(instance_url=vespa_instance_url, cert_directory=cert_dir)
 
 
