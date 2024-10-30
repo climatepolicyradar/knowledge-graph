@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
@@ -6,6 +7,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.parser_models import (
     BaseParserOutput,
     BlockType,
@@ -215,3 +217,36 @@ def mock_bucket_concepts(
 def document_passages_test_data_file_path() -> str:
     """Returns the path to the document passages test data file."""
     return "tests/local_vespa/test_documents/document_passage.json"
+
+
+@pytest.fixture
+def new_vespa_concepts() -> list[VespaConcept]:
+    """Vespa concepts for testing."""
+    return [
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1457",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "RuleBasedClassifier", "id": "Q788"},
+                {"name": "RuleBasedClassifier", "id": "Q789"},
+            ],
+            parent_concept_ids_flat="Q788,Q789",
+            model="RuleBasedClassifier",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
+        ),
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1273",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
+                {"name": "Q2-RuleBasedClassifier", "id": "Q3"},
+            ],
+            parent_concept_ids_flat="Q2,Q3",
+            model="RuleBasedClassifier-2.0.12",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
+        ),
+    ]

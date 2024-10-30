@@ -1,7 +1,7 @@
+import asyncio
 import json
 import os
 import re
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -12,9 +12,10 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from flows.index import (
     document_concepts_generator,
     get_document_passages_from_vespa,
+    get_passage_for_concept,
     get_vespa_search_adapter_from_aws_secrets,
     index_concepts_from_s3_to_vespa,
-    run_partial_updates_of_concepts_for_document_passages,
+    run_partial_updates_of_concepts_for_document_passages_with_semaphore,
     s3_obj_generator,
 )
 
@@ -119,39 +120,11 @@ def test_get_document_passages_from_vespa(
 
 
 @pytest.mark.asyncio
-async def test_run_partial_updates_of_concepts_for_document_passages(
+async def test_run_partial_updates_of_concepts_for_document_passages_with_semaphore(
     mock_vespa_search_adapter: VespaSearchAdapter,
+    new_vespa_concepts: list[VespaConcept],
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
-    new_vespa_concepts = [
-        VespaConcept(
-            id="Q788-RuleBasedClassifier.1457",
-            name="Q788-RuleBasedClassifier",
-            parent_concepts=[
-                {"name": "RuleBasedClassifier", "id": "Q788"},
-                {"name": "RuleBasedClassifier", "id": "Q789"},
-            ],
-            parent_concept_ids_flat="Q788,Q789",
-            model="RuleBasedClassifier",
-            end=100,
-            start=0,
-            timestamp=datetime.now(),
-        ),
-        VespaConcept(
-            id="Q788-RuleBasedClassifier.1273",
-            name="Q788-RuleBasedClassifier",
-            parent_concepts=[
-                {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
-                {"name": "Q2-RuleBasedClassifier", "id": "Q3"},
-            ],
-            parent_concept_ids_flat="Q2,Q3",
-            model="RuleBasedClassifier-2.0.12",
-            end=100,
-            start=0,
-            timestamp=datetime.now(),
-        ),
-    ]
-
     document_passages_initial = get_document_passages_from_vespa(
         document_import_id="CCLW.executive.10014.4470",
         vespa_search_adapter=mock_vespa_search_adapter,
@@ -170,10 +143,11 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         for concept in new_vespa_concepts
     )
 
-    await run_partial_updates_of_concepts_for_document_passages(
+    await run_partial_updates_of_concepts_for_document_passages_with_semaphore(
         document_import_id="CCLW.executive.10014.4470",
         document_concepts=new_vespa_concepts,
         vespa_search_adapter=mock_vespa_search_adapter,
+        semaphore=asyncio.Semaphore(1),
     )
 
     document_passages_updated = get_document_passages_from_vespa(
@@ -234,3 +208,9 @@ async def test_index_concepts_from_s3_to_vespa(
     assert concepts_count__initial + len(concept_fixture_files) == (
         concepts_count__final
     )
+
+
+def test_get_passage_for_concept(new_vespa_concepts: list[VespaConcept]) -> None:
+    """Test that we can retrieve the relevant passage for a concept."""
+    for concept in new_vespa_concepts:
+        get_passage_for_concept()

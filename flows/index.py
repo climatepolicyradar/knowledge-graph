@@ -3,7 +3,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator, Optional, Union
 
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
@@ -11,12 +11,10 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.logging import get_logger, get_run_logger
-from pydantic import ValidationError
 
 from flows.inference import get_aws_ssm_param
 
 
-# TODO: Move to the sdk?
 def get_vespa_search_adapter_from_aws_secrets(
     cert_dir: Optional[str] = None,
 ) -> VespaSearchAdapter:
@@ -43,7 +41,6 @@ def get_vespa_search_adapter_from_aws_secrets(
     return VespaSearchAdapter(instance_url=vespa_instance_url, cert_directory=cert_dir)
 
 
-# TODO: Think about overrides for specific document ids etc.
 def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, None]:
     """
     A generator that yields objects from an s3 path.
@@ -67,11 +64,7 @@ def document_concepts_generator(
     Converts each yielded object from the generator to a Pydantic VespaConcept object.
     """
     for s3_key, obj in generator_func:
-        try:
-            yield s3_key, [VespaConcept(**concept) for concept in obj]
-        except ValidationError:
-            # TODO: What do we want to do here?
-            pass
+        yield s3_key, [VespaConcept(**concept) for concept in obj]
 
 
 def get_document_passages_from_vespa(
@@ -112,15 +105,38 @@ def get_document_passages_from_vespa(
     ]
 
 
-# TODO: Add concurrency limit.
-#  Concurrency limits can only be set at the deployment level, and thus we would have
-#  to trigger a deployment of this flow to set the concurrency limit. This can be done
-#  from a parent flow or using automations / events / schedules etc.
+# TODO: Add test
+def get_passage_for_concept(
+    concept: VespaConcept, document_passages: list[tuple[str, VespaPassage]]
+) -> Union[tuple[str, VespaPassage], tuple[None, None]]:
+    """
+    Return the passage and passage id that a concept relates to.
+
+    Concepts relate to a specific passage or text block within a document
+    and therefore, we must find the relevant text block to update when running partial updates.
+
+    The concept id is assumed to be in the format:
+    - ${family_import_id}.${text_block_id}.
+    And thus, can be used to identify the relevant passage.
+    """
+    document_passages_id_map = {
+        passage[1].text_block_id: passage for passage in document_passages
+    }
+
+    passage_for_concept = document_passages_id_map.get(concept.id.split(".")[-1])
+
+    if passage_for_concept:
+        return passage_for_concept
+
+    return None, None
+
+
 @flow
-async def run_partial_updates_of_concepts_for_document_passages(
+async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
     document_import_id: str,
     document_concepts: list[VespaConcept],
     vespa_search_adapter: VespaSearchAdapter,
+    semaphore: asyncio.Semaphore,
 ) -> None:
     """
     Run partial update for vespa Concepts on a text block in the document_passage index in vespa.
@@ -134,61 +150,62 @@ async def run_partial_updates_of_concepts_for_document_passages(
     """
     logger = get_run_logger()
 
-    document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id, vespa_search_adapter=vespa_search_adapter
-    )
-    if document_passages == []:
-        logger.error(
-            "No hits for document import id in vespa. "
-            "Either the document doesn't exist or there are no passages related to the document."
+    async with semaphore:
+        document_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=vespa_search_adapter,
         )
-        return
-
-    document_passages_id_map = {
-        passage[1].text_block_id: passage for passage in document_passages
-    }
-
-    for concept in document_concepts:
-        # TODO: Lift out the split into an explicit function
-        passage_id, passage_for_concept = document_passages_id_map.get(
-            concept.id.split(".")[-1]
-        )
-
-        if passage_for_concept:
-            if passage_for_concept.concepts:
-                passage_for_concept.concepts = passage_for_concept.concepts + [concept]
-                new_concepts = [
-                    json.loads(concept.model_dump_json())
-                    for concept in passage_for_concept.concepts
-                ]
-            else:
-                new_concepts = [json.loads(concept.model_dump_json())]
-
-            vespa_search_adapter.client.update_data(
-                schema="document_passage",
-                namespace="doc_search",
-                data_id=passage_id.split("::")[-1],
-                fields={"concepts": new_concepts},
-            )
-            logger.info(
-                "Updated concept for passage.",
-                extra={"props": {"concept": concept.model_dump()}},
-            )
-        else:
+        if document_passages == []:
             logger.error(
-                "No passages found for concept.",
-                extra={
-                    "props": {
-                        "concept_id": concept.id,
-                        "document_import_id": document_import_id,
-                    }
-                },
+                "No hits for document import id in vespa. "
+                "Either the document doesn't exist or there are no passages related to the document."
             )
+            return
+
+        for concept in document_concepts:
+            passage_id, passage_for_concept = get_passage_for_concept(
+                concept, document_passages
+            )
+
+            if passage_id and passage_for_concept:
+                if passage_for_concept.concepts:
+                    passage_for_concept.concepts = passage_for_concept.concepts + [
+                        concept
+                    ]
+                    new_concepts = [
+                        json.loads(concept.model_dump_json())
+                        for concept in passage_for_concept.concepts
+                    ]
+                else:
+                    new_concepts = [json.loads(concept.model_dump_json())]
+
+                vespa_search_adapter.client.update_data(
+                    schema="document_passage",
+                    namespace="doc_search",
+                    data_id=passage_id.split("::")[-1],
+                    fields={"concepts": new_concepts},
+                )
+                logger.info(
+                    "Updated concept for passage.",
+                    extra={"props": {"concept": concept.model_dump()}},
+                )
+            else:
+                logger.error(
+                    "No passages found for concept.",
+                    extra={
+                        "props": {
+                            "concept_id": concept.id,
+                            "document_import_id": document_import_id,
+                        }
+                    },
+                )
 
 
 @flow
 async def index_concepts_from_s3_to_vespa(
-    s3_path: str, vespa_search_adapter: Optional[VespaSearchAdapter] = None
+    s3_path: str,
+    vespa_search_adapter: Optional[VespaSearchAdapter] = None,
+    concurrency_limit: int = 10,
 ) -> None:
     """
     Index vespa Concept objects from s3 into vespa.
@@ -201,11 +218,14 @@ async def index_concepts_from_s3_to_vespa(
     s3_obj_gen = s3_obj_generator(s3_path=s3_path)
     document_concepts_gen = document_concepts_generator(generator_func=s3_obj_gen)
 
+    semaphore = asyncio.Semaphore(concurrency_limit)
+
     sub_flows = [
-        run_partial_updates_of_concepts_for_document_passages(
+        run_partial_updates_of_concepts_for_document_passages_with_semaphore(
             document_import_id=Path(s3_key).stem,
             document_concepts=document_concepts,
             vespa_search_adapter=vespa_search_adapter,
+            semaphore=semaphore,
         )
         for s3_key, document_concepts in document_concepts_gen
     ]

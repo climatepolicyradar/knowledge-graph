@@ -23,7 +23,7 @@ def get_prefect_job_variable(param_name: str) -> str:
     return workpool_default_job_variables[param_name]
 
 
-# TODO: Move to the sdk?
+# TODO: Update the sdk and remove this function
 def get_aws_ssm_param(param_name: str, region_name: str = "eu-west-1") -> str:
     """Retrieve a parameter from AWS SSM"""
     ssm = boto3.client("ssm", region_name=region_name)
