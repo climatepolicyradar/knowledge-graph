@@ -142,11 +142,11 @@ def get_updated_passage_concepts_dict(
     """Update a passage with a new concept."""
     if passage.concepts:
         return [
-            concept.model_dump()
-            for concept in [passage.concepts + [concept]]  # type: ignore
+            concept.model_dump(mode="json")
+            for concept in passage.concepts + [concept]  # type: ignore
         ]
 
-    return [concept.model_dump()]
+    return [concept.model_dump(mode="json")]
 
 
 @flow

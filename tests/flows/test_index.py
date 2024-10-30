@@ -56,6 +56,7 @@ def test_s3_obj_generator(
         f"{s3_prefix_concepts}/{Path(f).stem}" for f in concept_fixture_files
     ]
     s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
+
     assert sorted(s3_files_keys) == sorted(expected_keys)
 
 
@@ -84,16 +85,8 @@ def test_get_document_passages_from_vespa(
     document_passages_test_data_file_path: str,
 ) -> None:
     """Test that we can retrieve all the passages for a document in vespa."""
-    with open(document_passages_test_data_file_path) as f:
-        document_passage_test_data = json.load(f)
 
-    family_document_passages_count_expected = sum(
-        1
-        for doc in document_passage_test_data
-        if doc["fields"]["family_document_ref"]
-        == "id:doc_search:family_document::CCLW.executive.10014.4470"
-    )
-
+    # Test that we retrieve no passages for a document that doesn't exist
     document_passages = get_document_passages_from_vespa(
         document_import_id="test.executive.1.1",
         vespa_search_adapter=mock_vespa_search_adapter,
@@ -101,8 +94,21 @@ def test_get_document_passages_from_vespa(
 
     assert document_passages == []
 
+    # Test that we can retrieve all the passages for a document that does exist
+    document_import_id = "CCLW.executive.10014.4470"
+
+    with open(document_passages_test_data_file_path) as f:
+        document_passage_test_data = json.load(f)
+
+    family_document_passages_count_expected = sum(
+        1
+        for doc in document_passage_test_data
+        if doc["fields"]["family_document_ref"]
+        == f"id:doc_search:family_document::{document_import_id}"
+    )
+
     document_passages = get_document_passages_from_vespa(
-        document_import_id="CCLW.executive.10014.4470",
+        document_import_id=document_import_id,
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
@@ -126,50 +132,44 @@ async def test_run_partial_updates_of_concepts_for_document_passages_with_semaph
     example_vespa_concepts: list[VespaConcept],
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
-    document_passages_initial = get_document_passages_from_vespa(
-        document_import_id="CCLW.executive.10014.4470",
+    document_import_id = "CCLW.executive.10014.4470"
+    initial_passages = get_document_passages_from_vespa(
+        document_import_id=document_import_id,
         vespa_search_adapter=mock_vespa_search_adapter,
     )
-
-    document_passages_initial__concepts = [
+    initial_concepts = [
         concept
-        for _, passage in document_passages_initial
+        for _, passage in initial_passages
         if passage.concepts
         for concept in passage.concepts
     ]
 
-    assert len(document_passages_initial) > 0
-    assert all(
-        concept not in document_passages_initial__concepts
-        for concept in example_vespa_concepts
-    )
+    assert len(initial_passages) > 0
+    assert all(concept not in initial_concepts for concept in example_vespa_concepts)
 
     await run_partial_updates_of_concepts_for_document_passages_with_semaphore(
-        document_import_id="CCLW.executive.10014.4470",
+        document_import_id=document_import_id,
         document_concepts=example_vespa_concepts,
         vespa_search_adapter=mock_vespa_search_adapter,
         semaphore=asyncio.Semaphore(1),
     )
 
-    document_passages_updated = get_document_passages_from_vespa(
-        document_import_id="CCLW.executive.10014.4470",
+    updated_passages = get_document_passages_from_vespa(
+        document_import_id=document_import_id,
         vespa_search_adapter=mock_vespa_search_adapter,
     )
-
-    document_passages_updated__concepts = [
+    updated_concepts = [
         concept
-        for _, passage in document_passages_updated
+        for _, passage in updated_passages
         if passage.concepts
         for concept in passage.concepts
     ]
 
-    assert len(document_passages_updated) > 0
-    assert len(document_passages_updated__concepts) != len(
-        document_passages_initial__concepts
-    )
+    assert len(updated_passages) > 0
+    assert len(updated_concepts) != len(initial_concepts)
     assert all(
         [
-            any([new_vespa_concept == c for c in document_passages_updated__concepts])
+            any([new_vespa_concept == c for c in updated_concepts])
             for new_vespa_concept in example_vespa_concepts
         ]
     )
@@ -184,12 +184,11 @@ async def test_index_concepts_from_s3_to_vespa(
     mock_vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
     """Test that we can successfully index concepts from s3 into vespa."""
-    document_passages_query_response__initial = mock_vespa_search_adapter.client.query(
+    initial_passages_response = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
-    concepts_count__initial = sum(
-        len(hit["fields"]["concepts"])
-        for hit in document_passages_query_response__initial.hits
+    initial_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
     )
 
     await index_concepts_from_s3_to_vespa(
@@ -197,42 +196,41 @@ async def test_index_concepts_from_s3_to_vespa(
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
-    document_passages_query_response__final = mock_vespa_search_adapter.client.query(
+    final_passages_response = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
-    concepts_count__final = sum(
-        len(hit["fields"]["concepts"])
-        for hit in document_passages_query_response__final.hits
+    final_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
     )
 
-    assert concepts_count__initial < concepts_count__final
-    assert concepts_count__initial + len(concept_fixture_files) == (
-        concepts_count__final
-    )
+    assert initial_concepts_count < final_concepts_count
+    assert initial_concepts_count + len(concept_fixture_files) == (final_concepts_count)
 
 
-def test_get_passage_for_concept(example_vespa_concepts: list[VespaConcept]) -> None:
+@pytest.mark.parametrize("text_block_id", ["1457", "p_2_b_120"])
+def test_get_passage_for_concept(
+    example_vespa_concepts: list[VespaConcept], text_block_id: str
+) -> None:
     """Test that we can retrieve the relevant passage for a concept."""
-    text_block_id = "1457"
+    relevant_passage = (
+        "doc_id_1",
+        VespaPassage(
+            text_block="test text",
+            text_block_id=text_block_id,
+            text_block_type="test_type",
+        ),
+    )
+    irrelevant_passage = (
+        "doc_id_2",
+        VespaPassage(
+            text_block="test text",
+            text_block_id="wrong_id",
+            text_block_type="test_type",
+        ),
+    )
 
     for concept in example_vespa_concepts:
-        concept.id = "Q788-RuleBasedClassifier" + f".{text_block_id}"
-        relevant_passage = (
-            "doc_id_1",
-            VespaPassage(
-                text_block="test text",
-                text_block_id=text_block_id,
-                text_block_type="test_type",
-            ),
-        )
-        irrelevant_passage = (
-            "doc_id_2",
-            VespaPassage(
-                text_block="test text",
-                text_block_id="wrong_id",
-                text_block_type="test_type",
-            ),
-        )
+        concept.id = f"Q788-RuleBasedClassifier.{text_block_id}"
 
         passage_id, passage = get_passage_for_concept(
             concept=concept, document_passages=[relevant_passage, irrelevant_passage]
