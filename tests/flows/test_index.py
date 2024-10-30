@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -15,6 +16,10 @@ from flows.index import (
     index_concepts_from_s3_to_vespa,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
+)
+
+DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
+    r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
 )
 
 
@@ -145,7 +150,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     document_passages_initial__concepts = [
         concept
-        for passage in document_passages_initial
+        for _, passage in document_passages_initial
         if passage.concepts
         for concept in passage.concepts
     ]
@@ -169,7 +174,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     document_passages_updated__concepts = [
         concept
-        for passage in document_passages_updated
+        for _, passage in document_passages_updated
         if passage.concepts
         for concept in passage.concepts
     ]
@@ -182,6 +187,16 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         [
             any([new_vespa_concept == c for c in document_passages_updated__concepts])
             for new_vespa_concept in new_vespa_concepts
+        ]
+    )
+
+    document_passages_updated__ids = [
+        passage[0] for passage in document_passages_updated
+    ]
+    assert all(
+        [
+            bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
+            for passage_id in document_passages_updated__ids
         ]
     )
 
@@ -198,6 +213,10 @@ async def test_index_concepts_from_s3_to_vespa(
     document_passages_query_response__initial = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
+    concepts_count__initial = sum(
+        len(hit["fields"]["concepts"])
+        for hit in document_passages_query_response__initial.hits
+    )
 
     await index_concepts_from_s3_to_vespa(
         s3_path=os.path.join("s3://", mock_bucket, s3_prefix_concepts),
@@ -207,10 +226,12 @@ async def test_index_concepts_from_s3_to_vespa(
     document_passages_query_response__final = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
-
-    assert len(document_passages_query_response__final.hits) > len(
-        document_passages_query_response__initial.hits
+    concepts_count__final = sum(
+        len(hit["fields"]["concepts"])
+        for hit in document_passages_query_response__final.hits
     )
-    assert len(document_passages_query_response__final.hits) == len(
-        document_passages_query_response__initial.hits
-    ) + len(concept_fixture_files)
+
+    assert concepts_count__initial < concepts_count__final
+    assert concepts_count__initial + len(concept_fixture_files) == (
+        concepts_count__final
+    )

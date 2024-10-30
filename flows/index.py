@@ -70,7 +70,7 @@ def document_concepts_generator(
 
 def get_document_passages_from_vespa(
     document_import_id: str, vespa_search_adapter: VespaSearchAdapter
-) -> list[VespaPassage]:
+) -> list[tuple[str, VespaPassage]]:
     """
     Retrieve all the passages for a document in vespa.
 
@@ -90,7 +90,6 @@ def get_document_passages_from_vespa(
             f'"id:doc_search:family_document::{document_import_id}"'
         )
     )
-
     logger.info(
         "Vespa search response for document.",
         extra={
@@ -102,7 +101,7 @@ def get_document_passages_from_vespa(
     )
 
     return [
-        VespaPassage.model_validate(passage["fields"])
+        (passage["id"], VespaPassage.model_validate(passage["fields"]))
         for passage in vespa_query_response.hits
     ]
 
@@ -140,12 +139,14 @@ async def run_partial_updates_of_concepts_for_document_passages(
         return
 
     document_passages_id_map = {
-        passage.text_block_id: passage for passage in document_passages
+        passage[1].text_block_id: passage for passage in document_passages
     }
 
     for concept in document_concepts:
         # TODO: Lift out the split into an explicit function
-        passage_for_concept = document_passages_id_map.get(concept.id.split(".")[-1])
+        passage_id, passage_for_concept = document_passages_id_map.get(
+            concept.id.split(".")[-1]
+        )
 
         if passage_for_concept:
             if passage_for_concept.concepts:
@@ -160,7 +161,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
             vespa_search_adapter.client.update_data(
                 schema="document_passage",
                 namespace="doc_search",
-                data_id=f"{document_import_id}.{passage_for_concept.text_block_id}",
+                data_id=passage_id.split("::")[-1],
                 fields={"concepts": new_concepts},
             )
             logger.info(
