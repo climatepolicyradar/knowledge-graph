@@ -77,10 +77,10 @@ def identify_top_key_phrases(
 def main(
     docid: Annotated[
         str,
-        typer.Option(help="The Wikibase ID of the concept to fetch"),
+        typer.Option(help="The document id of a parser output"),
     ],
 ):
-    console.log(f"Extracting potential concepts from {docid}")
+    console.log(f"Extracting keywords from {docid}")
     text_blocks = get_document_text_blocks(docid)
     key_phrases = extract_keywords(text_blocks)
     top_key_phrases = identify_top_key_phrases(key_phrases)
