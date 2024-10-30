@@ -52,8 +52,8 @@ predict id:
     poetry run python scripts/predict.py --wikibase-id {{id}}
 
 # Run through text blocks in a document to identify potential future concepts
-extract_concepts docid:
-    poetry run extract_concepts --docid {{docid}}
+extract_keywords docid:
+    poetry run extract_keywords --docid {{docid}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:

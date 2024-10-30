@@ -56,7 +56,7 @@ priority = "explicit"
 train = "scripts.train:app"
 promote = "scripts.promote:app"
 evaluate = "scripts.evaluate:app"
-extract_concepts = "scripts.extract_concepts:app"
+extract_keywords = "scripts.extract_keywords:app"
 
 [tool.poetry.group.dev]
 optional = true
