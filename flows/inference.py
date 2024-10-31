@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from dataclasses import dataclass
@@ -11,17 +12,18 @@ from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.blocks.system import JSON
+from prefect.task_runners import ConcurrentTaskRunner
 
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-def get_prefect_job_variable(param_name: str) -> str:
+async def get_prefect_job_variable(param_name: str) -> str:
     aws_env = os.environ["AWS_ENV"]
     block_name = f"default-job-variables-prefect-mvp-{aws_env}"
-    workpool_default_job_variables = JSON.load(block_name).value
-    return workpool_default_job_variables[param_name]
+    workpool_default_job_variables = await JSON.load(block_name)
+    return workpool_default_job_variables.value[param_name]
 
 
 @dataclass()
@@ -35,10 +37,15 @@ class Config:
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
 
-    def __post_init__(self):
-        """Set default values that might need auth or other processing"""
-        if not self.cache_bucket:
-            self.cache_bucket = get_prefect_job_variable("pipeline_cache_bucket_name")
+    @classmethod
+    async def create(cls) -> "Config":
+        """Create a new Config instance with initialized values"""
+        config = cls()
+        if not config.cache_bucket:
+            config.cache_bucket = await get_prefect_job_variable(
+                "pipeline_cache_bucket_name"
+            )
+        return config
 
 
 def list_bucket_doc_ids(config: Config) -> list[str]:
@@ -99,7 +106,10 @@ def download_classifier_from_wandb_to_local(
     return artifact.download()
 
 
-def load_classifier(config: Config, classifier_name: str, alias: str) -> Classifier:
+@task(log_prints=True)
+async def load_classifier(
+    config: Config, classifier_name: str, alias: str
+) -> Classifier:
     """
     Loads a classifier into memory
 
@@ -177,7 +187,7 @@ def store_labels(
     )
 
 
-@task()
+@task(log_prints=True)
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
@@ -192,23 +202,35 @@ def text_block_inference(
 
 
 @flow(log_prints=True)
-def run_classifier_inference_on_document(
+async def run_classifier_inference_on_document(
     config: Config,
     document_id: str,
-    classifier: Classifier,
     classifier_name: str,
     classifier_alias: str,
 ) -> None:
     """Run the classifier inference flow on a document."""
-    print(f"Loading document with id {document_id}")
-    document = load_document(config, document_id)
+    print(
+        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
+    )
+    classifier = await load_classifier(config, classifier_name, classifier_alias)
+    print(
+        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"
+    )
 
-    doc_labels = []
+    print(f"Loading document with ID {document_id}")
+    document = load_document(config, document_id)
+    print(f"Loaded document with ID {document_id}")
+
+    futures = []
+
     for text, block_id in document_passages(document):
-        labelled_passage = text_block_inference(
-            classifier=classifier, block_id=block_id, text=text
+        futures.append(
+            text_block_inference.submit(
+                classifier=classifier, block_id=block_id, text=text
+            )
         )
-        doc_labels.append(labelled_passage)
+
+    doc_labels = [future.wait() for future in futures]
 
     store_labels(
         config=config,
@@ -219,8 +241,8 @@ def run_classifier_inference_on_document(
     )
 
 
-@flow(log_prints=True)
-def classifier_inference(
+@flow(log_prints=True, task_runner=ConcurrentTaskRunner())
+async def classifier_inference(
     classifier_spec: list[tuple[str, str]],
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
@@ -242,7 +264,8 @@ def classifier_inference(
     Example classifier_spec: ["Q788", "latest")]
     """
     if not config:
-        config = Config()
+        config = await Config.create()
+
     print(f"Running with config: {config}")
 
     current_bucket_ids = list_bucket_doc_ids(config=config)
@@ -251,15 +274,14 @@ def classifier_inference(
     )
 
     for classifier_name, classifier_alias in classifier_spec:
-        print(
-            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
-        )
-        classifier = load_classifier(config, classifier_name, classifier_alias)
-        for document_id in validated_document_ids:
+        subflows = [
             run_classifier_inference_on_document(
                 config=config,
                 document_id=document_id,
-                classifier=classifier,
                 classifier_name=classifier_name,
                 classifier_alias=classifier_alias,
             )
+            for document_id in validated_document_ids
+        ]
+
+        await asyncio.gather(*subflows)
