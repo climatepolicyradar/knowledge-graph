@@ -234,26 +234,27 @@ async def index_concepts_from_s3_to_vespa(
     Assumptions:
     - The S3 file names represent document import IDs.
     """
-    if not vespa_search_adapter:
-        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-            cert_dir=tempfile.mkdtemp(),
-            vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
-            vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
-        )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        if not vespa_search_adapter:
+            vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+                cert_dir=temp_dir,
+                vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+                vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
+            )
 
-    s3_objects = s3_obj_generator(s3_path=s3_path)
-    document_concepts = document_concepts_generator(generator_func=s3_objects)
+        s3_objects = s3_obj_generator(s3_path=s3_path)
+        document_concepts = document_concepts_generator(generator_func=s3_objects)
 
-    semaphore = asyncio.Semaphore(concurrency_limit)
+        semaphore = asyncio.Semaphore(concurrency_limit)
 
-    indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages_with_semaphore(
-            document_import_id=Path(s3_key).stem,
-            document_concepts=concepts,
-            vespa_search_adapter=vespa_search_adapter,
-            semaphore=semaphore,
-        )
-        for s3_key, concepts in document_concepts
-    ]
+        indexing_tasks = [
+            run_partial_updates_of_concepts_for_document_passages_with_semaphore(
+                document_import_id=Path(s3_key).stem,
+                document_concepts=concepts,
+                vespa_search_adapter=vespa_search_adapter,
+                semaphore=semaphore,
+            )
+            for s3_key, concepts in document_concepts
+        ]
 
-    await asyncio.gather(*indexing_tasks)
+        await asyncio.gather(*indexing_tasks)
