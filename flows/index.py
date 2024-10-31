@@ -142,14 +142,11 @@ def get_passage_for_concept(
 def get_updated_passage_concepts_dict(
     passage: VespaPassage, concept: VespaConcept
 ) -> list[dict]:
-    """Update a passage with a new concept."""
-    if passage.concepts:
-        return [
-            concept.model_dump(mode="json")
-            for concept in passage.concepts + [concept]  # type: ignore
-        ]
+    """Update a passage's concepts with the new concept."""
+    passage.concepts = list(passage.concepts) if passage.concepts else []
+    passage.concepts.append(concept)
 
-    return [concept.model_dump(mode="json")]
+    return [concept.model_dump(mode="json") for concept in passage.concepts]
 
 
 @flow
