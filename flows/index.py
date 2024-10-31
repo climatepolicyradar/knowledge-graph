@@ -11,6 +11,7 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
+from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
 
 
@@ -155,7 +156,6 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
     document_import_id: str,
     document_concepts: list[VespaConcept],
     vespa_search_adapter: VespaSearchAdapter,
-    semaphore: asyncio.Semaphore,
 ) -> None:
     """
     Run partial update for vespa Concepts on a text block in the document_passage index.
@@ -166,7 +166,7 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
     """
     logger = get_run_logger()
 
-    async with semaphore:
+    async with concurrency("concept_partial_updates", occupy=10):
         document_passages = get_document_passages_from_vespa(
             document_import_id=document_import_id,
             vespa_search_adapter=vespa_search_adapter,
@@ -223,7 +223,6 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
 async def index_concepts_from_s3_to_vespa(
     s3_path: str,
     vespa_search_adapter: Optional[VespaSearchAdapter] = None,
-    concurrency_limit: int = 10,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -246,14 +245,11 @@ async def index_concepts_from_s3_to_vespa(
         s3_objects = s3_obj_generator(s3_path=s3_path)
         document_concepts = document_concepts_generator(generator_func=s3_objects)
 
-        semaphore = asyncio.Semaphore(concurrency_limit)
-
         indexing_tasks = [
             run_partial_updates_of_concepts_for_document_passages_with_semaphore(
                 document_import_id=Path(s3_key).stem,
                 document_concepts=concepts,
                 vespa_search_adapter=vespa_search_adapter,
-                semaphore=semaphore,
             )
             for s3_key, concepts in document_concepts
         ]

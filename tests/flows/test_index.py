@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import re
@@ -155,7 +154,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages_with_semaph
         document_import_id=document_import_id,
         document_concepts=example_vespa_concepts,
         vespa_search_adapter=mock_vespa_search_adapter,
-        semaphore=asyncio.Semaphore(1),
     )
 
     updated_passages = get_document_passages_from_vespa(
