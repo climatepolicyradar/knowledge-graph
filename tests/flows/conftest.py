@@ -57,9 +57,9 @@ def mock_ssm_client(mock_aws_creds) -> Generator:
 def mock_vespa_credentials() -> dict[str, str]:
     """Mocked vespa credentials."""
     return {
-        "VESPA_INSTANCE_URL": "http://localhost:8080",
-        "VESPA_PUBLIC_CERT": "Cert Content",
-        "VESPA_PRIVATE_KEY": "Key Content",
+        "PREFECT_VESPA_INSTANCE_URL": "http://localhost:8080",
+        "PREFECT_VESPA_PUBLIC_CERT_FEED": "Cert Content",
+        "PREFECT_VESPA_PRIVATE_KEY_FEED": "Key Content",
     }
 
 
@@ -67,21 +67,21 @@ def mock_vespa_credentials() -> dict[str, str]:
 def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
     """Creates the vespa parameters in the mock ssm client."""
     mock_ssm_client.put_parameter(
-        Name="VESPA_INSTANCE_URL",
+        Name="PREFECT_VESPA_INSTANCE_URL",
         Description="A test parameter for the vespa instance.",
-        Value=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        Value=mock_vespa_credentials["PREFECT_VESPA_INSTANCE_URL"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
-        Name="VESPA_PUBLIC_CERT",
+        Name="PREFECT_VESPA_PUBLIC_CERT_FEED",
         Description="A test parameter for a vespa public cert",
-        Value=mock_vespa_credentials["VESPA_PUBLIC_CERT"],
+        Value=mock_vespa_credentials["PREFECT_VESPA_PUBLIC_CERT_FEED"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
-        Name="VESPA_PRIVATE_KEY",
+        Name="PREFECT_VESPA_PRIVATE_KEY_FEED",
         Description="A test parameter for a vespa private key",
-        Value=mock_vespa_credentials["VESPA_PRIVATE_KEY"],
+        Value=mock_vespa_credentials["PREFECT_VESPA_PRIVATE_KEY_FEED"],
         Type="SecureString",
     )
 
@@ -91,7 +91,11 @@ def mock_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmpdir
 ) -> VespaSearchAdapter:
     """VespaSearchAdapter instantiated from mocked ssm params."""
-    return get_vespa_search_adapter_from_aws_secrets(cert_dir=tmpdir)
+    return get_vespa_search_adapter_from_aws_secrets(
+        cert_dir=tmpdir,
+        vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
+        vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+    )
 
 
 @pytest.fixture

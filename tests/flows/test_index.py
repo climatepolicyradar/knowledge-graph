@@ -29,13 +29,17 @@ def test_vespa_search_adapter_from_aws_secrets(
     create_vespa_params, mock_vespa_credentials, tmpdir
 ) -> None:
     """Test that we can successfully instantiate the VespaSearchAdpater from ssm params."""
-    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(cert_dir=tmpdir)
+    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+        cert_dir=tmpdir,
+        vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
+        vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+    )
 
     assert os.path.exists(f"{tmpdir}/cert.pem")
     assert os.path.exists(f"{tmpdir}/key.pem")
     assert (
         vespa_search_adapter.instance_url
-        == mock_vespa_credentials["VESPA_INSTANCE_URL"]
+        == mock_vespa_credentials["PREFECT_VESPA_INSTANCE_URL"]
     )
     assert vespa_search_adapter.client.cert == f"{tmpdir}/cert.pem"
     assert vespa_search_adapter.client.key == f"{tmpdir}/key.pem"
