@@ -6,6 +6,7 @@ import pytest
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    _stringify,
     classifier_inference,
     determine_document_ids,
     document_passages,
@@ -13,7 +14,6 @@ from flows.inference import (
     load_classifier,
     load_document,
     store_labels,
-    stringify,
     text_block_inference,
 )
 from src.labelled_passage import LabelledPassage
@@ -83,7 +83,7 @@ def test_load_document(test_config, mock_bucket_documents):
 
 def test_stringify():
     text = ["a", " sequence", " of ", "text "]
-    result = stringify(text)
+    result = _stringify(text)
     assert result == "a sequence of text"
 
 
