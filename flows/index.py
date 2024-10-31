@@ -45,9 +45,11 @@ def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, No
     - s3_path: The path in s3 to yield objects from.
     """
     object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_path)
+    # We retrieve the bucket from the path using the second element in the path (parts[1]).
+    # Path("s3://bucket/prefix/file.json").parts -> ('s3:', 'bucket', 'prefix', 'file.json')
     bucket = Path(s3_path).parts[1]
     for key in object_keys:
-        obj = _s3_object_read_text(s3_path="s3://" + bucket + "/" + key)
+        obj = _s3_object_read_text(s3_path=(Path("s3://") / bucket / key).__str__())
         yield key, json.loads(obj)
 
 
@@ -173,7 +175,9 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
         if not document_passages:
             logger.error(
                 "No hits for document import id in vespa. "
-                "Either the document doesn't exist or there are no passages related to the document."
+                "Either the document doesn't exist or there are no passages related to "
+                "the document.",
+                extra={"props": {"document_import_id": document_import_id}},
             )
             return
 
@@ -183,6 +187,8 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
             )
 
             if passage_id and passage_for_concept:
+                # Extract data ID (last element after "::"), e.g., "CCLW.executive.10014.4470.623"
+                # from passage_id like "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
                 vespa_search_adapter.client.update_data(
                     schema="document_passage",
                     namespace="doc_search",
