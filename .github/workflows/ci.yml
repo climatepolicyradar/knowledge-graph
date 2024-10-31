@@ -35,6 +35,9 @@ jobs:
           poetry run pre-commit install
           poetry run pre-commit run --all-files --show-diff-on-failure
 
+      - name: Setup local vespa
+        run: make vespa_dev_setup
+
       - name: Test
         run: poetry run pytest -v
 
