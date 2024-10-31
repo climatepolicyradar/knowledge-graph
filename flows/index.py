@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Generator, Optional, Union
@@ -49,7 +50,7 @@ def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, No
     # Path("s3://bucket/prefix/file.json").parts -> ('s3:', 'bucket', 'prefix', 'file.json')
     bucket = Path(s3_path).parts[1]
     for key in object_keys:
-        obj = _s3_object_read_text(s3_path=(Path("s3://") / bucket / key).__str__())
+        obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
         yield key, json.loads(obj)
 
 
