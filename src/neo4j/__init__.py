@@ -11,9 +11,7 @@ console = Console()
 
 
 def get_neo4j_session(clear=False):
-    neo4j_username, neo4j_password = os.environ["NEO4J_AUTH"].split("/", maxsplit=1)
-    neo4j_connection_uri = f"bolt://{neo4j_username}:{neo4j_password}@localhost:7687"
-    config.DATABASE_URL = neo4j_connection_uri
+    neo4j_connection_uri = os.environ.get("NEO4J_CONNECTION_URI")
     db.set_connection(neo4j_connection_uri)
     wait_until_neo4j_is_live()
 
