@@ -1,0 +1,17 @@
+schema search_weights {
+
+    document search_weights {
+
+        field name_weight type float {
+            indexing: attribute | summary
+        }
+
+        field description_weight type float {
+            indexing: attribute | summary
+        }
+
+        field passage_weight type float {
+            indexing: attribute | summary
+        }
+    }
+}
