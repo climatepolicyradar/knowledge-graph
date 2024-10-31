@@ -59,10 +59,13 @@ def test_determine_document_ids__error():
         )
 
 
-def test_load_classifier__existing_classifier(
+@pytest.mark.asyncio
+async def test_load_classifier__existing_classifier(
     test_config, mock_classifiers_dir, local_classifier_id
 ):
-    classifier = load_classifier(test_config, local_classifier_id, alias="latest")
+    classifier = await load_classifier.fn(
+        test_config, local_classifier_id, alias="latest"
+    )
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
@@ -74,7 +77,7 @@ def test_download_classifier__wandb_classifier():
 def test_load_document(test_config, mock_bucket_documents):
     for doc_file_name in mock_bucket_documents:
         doc_id = Path(doc_file_name).stem
-        doc = load_document(test_config, document_id=doc_id)
+        doc = load_document.fn(test_config, document_id=doc_id)
         assert doc_id == doc.document_id
 
 
@@ -114,9 +117,12 @@ def test_store_labels(test_config, mock_bucket):
     assert labels[0] == "labelled_passages/Q9081/latest/TEST.DOC.0.1.json"
 
 
-def test_text_block_inference(test_config, mock_classifiers_dir, local_classifier_id):
+@pytest.mark.asyncio
+async def test_text_block_inference(
+    test_config, mock_classifiers_dir, local_classifier_id
+):
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier = load_classifier(test_config, local_classifier_id, "latest")
+    classifier = await load_classifier.fn(test_config, local_classifier_id, "latest")
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
@@ -128,12 +134,13 @@ def test_text_block_inference(test_config, mock_classifiers_dir, local_classifie
     assert labels.id == block_id
 
 
-def test_classifier_inference(
+@pytest.mark.asyncio
+async def test_classifier_inference(
     test_config, mock_classifiers_dir, mock_bucket, mock_bucket_documents
 ):
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
-        classifier_inference(
+        await classifier_inference(
             classifier_spec=[("Q788", "latest")],
             document_ids=doc_ids,
             config=test_config,
