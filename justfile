@@ -1,5 +1,9 @@
 set dotenv-load
 
+# Set the default command to list all available commands
+default:
+    @just --list
+
 # install dependencies and set up the project
 install:
     poetry install --with dev
