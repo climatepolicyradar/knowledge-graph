@@ -116,7 +116,8 @@ def get_passage_for_concept(
     Return the passage and passage id that a concept relates to.
 
     Concepts relate to a specific passage or text block within a document
-    and therefore, we must find the relevant text block to update when running partial updates.
+    and therefore, we must find the relevant text block to update when running
+    partial updates.
 
     The concept id is assumed to be in the format:
     - ${family_import_id}.${text_block_id}.
@@ -187,8 +188,9 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
             )
 
             if passage_id and passage_for_concept:
-                # Extract data ID (last element after "::"), e.g., "CCLW.executive.10014.4470.623"
-                # from passage_id like "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
+                # Extract data ID (last element after "::"), e.g.,
+                # "CCLW.executive.10014.4470.623" from passage_id like
+                # "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
                 vespa_search_adapter.client.update_data(
                     schema="document_passage",
                     namespace="doc_search",
@@ -226,8 +228,9 @@ async def index_concepts_from_s3_to_vespa(
     """
     Asynchronously index concepts from S3 files into Vespa.
 
-    This function retrieves concept documents from files stored in an S3 path and indexes them in a Vespa instance.
-    The name of each file in the specified S3 path is expected to represent the document's import ID.
+    This function retrieves concept documents from files stored in an S3 path and
+    indexes them in a Vespa instance. The name of each file in the specified S3 path is
+    expected to represent the document's import ID.
 
     Assumptions:
     - The S3 file names represent document import IDs.
