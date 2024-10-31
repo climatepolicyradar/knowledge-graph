@@ -19,6 +19,7 @@ from src.span import Span
 
 
 async def get_prefect_job_variable(param_name: str) -> str:
+    """Get a single variable from the Prefect job variables."""
     aws_env = os.environ["AWS_ENV"]
     block_name = f"default-job-variables-prefect-mvp-{aws_env}"
     workpool_default_job_variables = await JSON.load(block_name)
@@ -26,7 +27,7 @@ async def get_prefect_job_variable(param_name: str) -> str:
 
 
 def get_aws_ssm_param(param_name: str) -> str:
-    """Retrieve a parameter from AWS SSM"""
+    """Retrieve a parameter from AWS SSM."""
     ssm = boto3.client("ssm")
     response = ssm.get_parameter(Name=param_name, WithDecryption=True)
     return response["Parameter"]["Value"]
@@ -34,18 +35,18 @@ def get_aws_ssm_param(param_name: str) -> str:
 
 @dataclass()
 class Config:
-    """Settings used across flow runs"""
+    """Configuration used across flow runs."""
 
     cache_bucket: Optional[str] = None
     document_source_prefix: str = "embeddings_input"
     document_target_prefix: str = "labelled_passages"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"
+    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
 
     @classmethod
     async def create(cls) -> "Config":
-        """Create a new Config instance with initialized values"""
+        """Create a new Config instance with initialized values."""
         config = cls()
         if not config.cache_bucket:
             config.cache_bucket = await get_prefect_job_variable(
@@ -55,7 +56,7 @@ class Config:
 
 
 def list_bucket_doc_ids(config: Config) -> list[str]:
-    """Scan configured bucket and return all ids"""
+    """Scan configured bucket and return all IDs."""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(
@@ -79,8 +80,9 @@ def determine_document_ids(
     Confirm chosen document ids or default to all if not specified.
 
     Compares the requested_document_ids to what actually exists in the bucket.
-    If a document id has been requested but does not exist this will raise a ValueError
-    If no document id were requested, this will instead return the current_bucket_ids.
+    If a document id has been requested but does not exist this will
+    raise a ValueError If no document id were requested, this will
+    instead return the current_bucket_ids.
     """
     if requested_document_ids is None:
         return current_bucket_ids
@@ -98,11 +100,12 @@ def download_classifier_from_wandb_to_local(
     config: Config, classifier_name: str, alias: str
 ) -> str:
     """
-    Function for downloading a classifier from W&B to local.
+    Download a classifier from W&B to local.
 
-    Models referenced by weights and biases are stored in s3. This means that to
-    download the model via the W&B API, we need access to both the s3 bucket via iam
-    in your environment and WanDB via the api key.
+    Models referenced by weights and biases are stored in s3. This
+    means that to download the model via the W&B API, we need access
+    to both the s3 bucket via iam in your environment and WanDB via
+    the api key.
     """
     wandb.login(key=get_aws_ssm_param("WANDB_API_KEY"))
     run = wandb.init()
@@ -117,7 +120,7 @@ async def load_classifier(
     config: Config, classifier_name: str, alias: str
 ) -> Classifier:
     """
-    Loads a classifier into memory
+    Load a classifier into memory.
 
     If the classifier is available locally, this will be used. Otherwise the
     classifier will be downloaded from W&B (Once implemented)
@@ -136,10 +139,13 @@ async def load_classifier(
 
 
 def load_document(config: Config, document_id: str) -> BaseParserOutput:
-    """Downloads and opens a parser output based on a document id"""
+    """Download and opens a parser output based on a document ID."""
     s3 = boto3.client("s3", region_name=config.bucket_region)
 
-    file_key = os.path.join(config.document_source_prefix, f"{document_id}.json")
+    file_key = os.path.join(
+        config.document_source_prefix,
+        f"{document_id}.json",
+    )
 
     response = s3.get_object(Bucket=config.cache_bucket, Key=file_key)
     content = response["Body"].read().decode("utf-8")
@@ -147,12 +153,12 @@ def load_document(config: Config, document_id: str) -> BaseParserOutput:
     return document
 
 
-def stringify(text: list[str]) -> str:
+def _stringify(text: list[str]) -> str:
     return " ".join([line.strip() for line in text])
 
 
 def document_passages(document: BaseParserOutput):
-    """Yields the text block irrespective of content type"""
+    """Yield the text block irrespective of content type."""
     match document.document_content_type:
         case "application/pdf":
             text_blocks = document.pdf_data.text_blocks
@@ -160,11 +166,12 @@ def document_passages(document: BaseParserOutput):
             text_blocks = document.html_data.text_blocks
         case _:
             raise ValueError(
-                f"Invalid document content type: {document.document_content_type}, for "
+                "Invalid document content type: "
+                f"{document.document_content_type}, for "
                 f"document: {document.document_id}"
             )
     for text_block in text_blocks:
-        yield stringify(text_block.text), text_block.text_block_id
+        yield _stringify(text_block.text), text_block.text_block_id
 
 
 @task(log_prints=True)
@@ -175,7 +182,7 @@ def store_labels(
     classifier_name: str,
     classifier_alias: str,
 ) -> None:
-    """Stores the labels in the cache bucket"""
+    """Store the labels in the cache bucket."""
     key = os.path.join(
         config.document_target_prefix,
         classifier_name,
@@ -189,7 +196,10 @@ def store_labels(
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     s3.put_object(
-        Bucket=config.cache_bucket, Key=key, Body=body, ContentType="application/json"
+        Bucket=config.cache_bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
     )
 
 
@@ -197,7 +207,7 @@ def store_labels(
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
-    """Runs predict on a single text block"""
+    """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
     labelled_passage = LabelledPassage(
         id=block_id,
@@ -216,11 +226,15 @@ async def run_classifier_inference_on_document(
 ) -> None:
     """Run the classifier inference flow on a document."""
     print(
-        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
+        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
-    classifier = await load_classifier(config, classifier_name, classifier_alias)
+    classifier = await load_classifier(
+        config,
+        classifier_name,
+        classifier_alias,
+    )
     print(
-        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"
+        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
 
     print(f"Loading document with ID {document_id}")
@@ -254,19 +268,19 @@ async def classifier_inference(
     config: Optional[Config] = None,
 ):
     """
-    Flow to run inference on documents within a bucket prefix
+    Flow to run inference on documents within a bucket prefix.
 
-    Default behaviour is to run on everything, pass document_ids to limit to specific
-    files.
+    Default behaviour is to run on everything, pass document_ids to
+    limit to specific files.
 
     Iterates: classifiers > documents > passages. Loading output into s3
 
     params:
     - document_ids: List of document ids to run inference on
-    - classifier_spec: List of classifier names and aliases (alias tag for the version)
-      to run inference with
-    - config: A Config object, uses the default if not given. Usually there is no need
-      to change this outside of local dev
+    - classifier_spec: List of classifier names and aliases (alias tag
+      for the version) to run inference with
+    - config: A Config object, uses the default if not given. Usually
+      there is no need to change this outside of local dev
     Example classifier_spec: ["Q788", "latest")]
     """
     if not config:
@@ -276,7 +290,8 @@ async def classifier_inference(
 
     current_bucket_ids = list_bucket_doc_ids(config=config)
     validated_document_ids = determine_document_ids(
-        requested_document_ids=document_ids, current_bucket_ids=current_bucket_ids
+        requested_document_ids=document_ids,
+        current_bucket_ids=current_bucket_ids,
     )
 
     for classifier_name, classifier_alias in classifier_spec:
