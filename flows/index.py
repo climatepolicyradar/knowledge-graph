@@ -179,7 +179,9 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
                 "the document.",
                 extra={"props": {"document_import_id": document_import_id}},
             )
-            return
+            raise ValueError(
+                f"No passages found for document in vespa - {document_import_id}"
+            )
 
         for concept in document_concepts:
             passage_id, passage_for_concept = get_passage_for_concept(
