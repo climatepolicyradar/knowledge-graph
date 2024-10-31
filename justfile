@@ -1,5 +1,9 @@
 set dotenv-load
 
+# Set the default command to list all available commands
+default:
+    @just --list
+
 # install dependencies and set up the project
 install:
     poetry install --with dev
@@ -50,6 +54,10 @@ label id string:
 # find instances of the concept in a set of passages for a specific wikibase ID
 predict id:
     poetry run python scripts/predict.py --wikibase-id {{id}}
+
+# Run through text blocks in a document to identify potential future concepts
+extract_keywords docid:
+    poetry run extract_keywords --docid {{docid}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:

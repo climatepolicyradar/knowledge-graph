@@ -43,6 +43,7 @@ torch = [
   { markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'", version = "2.4.1", source = "pytorch" }
 ]
 sentence-transformers = "^3.1.1"
+keybert = "^0.8.5"
 
 
 [[tool.poetry.source]]
@@ -55,6 +56,7 @@ priority = "explicit"
 train = "scripts.train:app"
 promote = "scripts.promote:app"
 evaluate = "scripts.evaluate:app"
+extract_keywords = "scripts.extract_keywords:app"
 
 [tool.poetry.group.dev]
 optional = true
