@@ -72,6 +72,6 @@ just --list
 
 See the [docs](./docs) for more information on how to work with the knowledge graph.
 
-### As an editor
+### As an Editor
 
 You can also explore and edit the graph directly through UI like the concept store. We've documented the process of getting started with the concept store and a style guide for how to structure the data in the [concept store documentation in notion](https://www.notion.so/climatepolicyradar/Concept-store-documentation-54b91a8359664cb3a9bbe3989efb7ca0?pvs=4).
