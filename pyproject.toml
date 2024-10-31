@@ -67,6 +67,7 @@ boto3 = "^1.35.32"
 syrupy = "^4.7.1"
 moto = {extras = ["s3"], version = "^5.0.16"}
 pytest-env = "^1.1.5"
+pytest-asyncio = "^0.24.0"
 
 [tool.pytest.ini_options]
 env = [
