@@ -135,7 +135,6 @@ async def load_classifier(
     return classifier
 
 
-@task(log_prints=True)
 def load_document(config: Config, document_id: str) -> BaseParserOutput:
     """Downloads and opens a parser output based on a document id"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
