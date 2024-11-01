@@ -49,7 +49,7 @@ n_docs_per_jurisdiction = (
 # round up to the nearest integer
 median_docs_per_jurisdiction = int(n_docs_per_jurisdiction.median().round())
 sampled_litigation_df = (
-    litigation_df.groupby("Jurisdictions")
+    litigation_df.groupby("Jurisdictions")[["Title", "Document file", "Jurisdictions"]]
     .apply(lambda x: x.sample(min(len(x), median_docs_per_jurisdiction)))
     .reset_index(drop=True)
 )
@@ -65,15 +65,13 @@ console.print(
 
 # Add an identifier to each document
 sampled_litigation_df["id"] = sampled_litigation_df.apply(
-    lambda x: generate_identifier(input_string=x["Title"] + x["Document file"]), axis=1
+    lambda x: generate_identifier(x["Title"], x["Document file"]), axis=1
 )
 
-# Save the sampled litigation documents as a json file
+# Save the litigation documents as a json file
 sampled_litigation_json_path = raw_data_dir / "sampled_litigation.json"
 sampled_litigation_df.to_json(sampled_litigation_json_path, orient="records")
-console.print(
-    f"📄 Saved sampled litigation documents to {sampled_litigation_json_path}"
-)
+console.print(f"📄 Saved litigation documents to {sampled_litigation_json_path}")
 
 # Download the documents
 for doc in track(
@@ -85,5 +83,5 @@ for doc in track(
         continue
 
     response = httpx.get(doc["Document file"])
-    with open(doc_path, "wb", encoding="utf-8") as f:
+    with open(doc_path, "wb") as f:
         f.write(response.content)
