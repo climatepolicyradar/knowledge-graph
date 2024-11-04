@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
 
+import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -147,9 +147,7 @@ def load_s3_object(config: Config, document_id: str) -> str:
     return content
 
 
-def load_document_base_parser_output(
-    config: Config, document_id: str
-) -> BaseParserOutput:
+def load_base_parser_output(config: Config, document_id: str) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     s3_object = load_s3_object(config, document_id)
     return BaseParserOutput.model_validate_json(s3_object)
@@ -240,7 +238,7 @@ async def run_classifier_inference_on_document(
     )
 
     print(f"Loading document with ID {document_id}")
-    document = load_document_base_parser_output(config, document_id)
+    document = load_base_parser_output(config, document_id)
     print(f"Loaded document with ID {document_id}")
 
     futures = []
