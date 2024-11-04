@@ -89,15 +89,22 @@ push-image:
 get-version:
     poetry run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
 
-export_env_vars:
+export-env-vars:
 	export $(cat .env | xargs)
 
-prefect_login: export_env_vars
+prefect-login: export-env-vars
 	prefect cloud login -k ${PREFECT_API_KEY}
 
-deploy: prefect_login
+deploy: prefect-login
+	just deploy-deployments
+    just deploy-automations
+
+deploy-deployments: prefect-login
 	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
 	python -m deployments
+
+deploy-automations: prefect-login
+	python -m automations
 
 # Run inference over documents in a pipeline bucket
 infer +OPTS="":
