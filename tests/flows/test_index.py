@@ -15,7 +15,7 @@ from flows.index import (
     get_passage_for_concept,
     get_vespa_search_adapter_from_aws_secrets,
     index_concepts_from_s3_to_vespa,
-    run_partial_updates_of_concepts_for_document_passages_with_semaphore,
+    run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
 )
 
@@ -130,7 +130,7 @@ def test_get_document_passages_from_vespa(
 
 
 @pytest.mark.asyncio
-async def test_run_partial_updates_of_concepts_for_document_passages_with_semaphore(
+async def test_run_partial_updates_of_concepts_for_document_passages(
     mock_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts: list[VespaConcept],
 ) -> None:
@@ -150,7 +150,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages_with_semaph
     assert len(initial_passages) > 0
     assert all(concept not in initial_concepts for concept in example_vespa_concepts)
 
-    await run_partial_updates_of_concepts_for_document_passages_with_semaphore(
+    await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
         document_concepts=example_vespa_concepts,
         vespa_search_adapter=mock_vespa_search_adapter,

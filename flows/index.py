@@ -152,7 +152,7 @@ def get_updated_passage_concepts_dict(
 
 
 @flow
-async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
+async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
     document_concepts: list[VespaConcept],
     vespa_search_adapter: VespaSearchAdapter,
@@ -246,7 +246,7 @@ async def index_concepts_from_s3_to_vespa(
         document_concepts = document_concepts_generator(generator_func=s3_objects)
 
         indexing_tasks = [
-            run_partial_updates_of_concepts_for_document_passages_with_semaphore(
+            run_partial_updates_of_concepts_for_document_passages(
                 document_import_id=Path(s3_key).stem,
                 document_concepts=concepts,
                 vespa_search_adapter=vespa_search_adapter,
