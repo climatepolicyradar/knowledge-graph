@@ -2,7 +2,7 @@ import os
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import boto3
 import pytest
@@ -24,7 +24,12 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 @pytest.fixture()
 def test_config():
-    yield Config(cache_bucket="test_bucket")
+    yield Config(
+        cache_bucket="test_bucket",
+        wandb_model_registry="test_wandb_model_registry",
+        wandb_entity="test_entity",
+        wandb_api_key="test_wandb_api_key",
+    )
 
 
 @pytest.fixture(scope="function")
@@ -133,3 +138,17 @@ def parser_output_pdf(parser_output):
         ],
     )
     yield parser_output
+
+
+@pytest.fixture
+def mock_wandb(mock_s3_client):
+    with (
+        patch("wandb.init") as mock_init,
+        patch("wandb.login"),
+    ):
+        mock_run = Mock()
+        mock_artifact = Mock()
+        mock_init.return_value = mock_run
+        mock_run.use_artifact.return_value = mock_artifact
+
+        yield mock_init, mock_run, mock_artifact

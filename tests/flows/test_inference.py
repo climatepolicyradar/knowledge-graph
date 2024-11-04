@@ -12,6 +12,7 @@ from flows.inference import (
     classifier_inference,
     determine_document_ids,
     document_passages,
+    download_classifier_from_wandb_to_local,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
@@ -71,9 +72,19 @@ async def test_load_classifier__existing_classifier(
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
-def test_download_classifier__wandb_classifier():
-    # TODO mock the interface and test code path
-    pass
+def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
+    mock_init, mock_run, _ = mock_wandb
+    classifier_id = "Qtest"
+    _ = download_classifier_from_wandb_to_local(
+        test_config, classifier_id, alias="latest"
+    )
+
+    mock_init.assert_called_once_with(
+        entity="test_entity",
+        project="Qtest",
+        job_type="download_model",
+    )
+    mock_run.finish.assert_called_once()
 
 
 def test_load_document(test_config, mock_bucket_documents):
