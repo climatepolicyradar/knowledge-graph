@@ -12,6 +12,7 @@ from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
+from pydantic import BaseModel, Field
 
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
@@ -261,9 +262,21 @@ async def run_classifier_inference_on_document(
     )
 
 
+class ClassifierSpec(BaseModel):
+    """Details for a classifier to run"""
+
+    name: str = Field(
+        description="The reference of the classifier in wandb. e.g. 'Q992-RulesBasedClassifier'"
+    )
+    alias: str = Field(
+        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
+        default="latest",
+    )
+
+
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
-    classifier_spec: list[tuple[str, str]],
+    classifier_specs: list[ClassifierSpec],
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
 ):
@@ -281,7 +294,6 @@ async def classifier_inference(
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
       there is no need to change this outside of local dev
-    Example classifier_spec: ["Q788", "latest")]
     """
     if not config:
         config = await Config.create()
@@ -294,13 +306,13 @@ async def classifier_inference(
         current_bucket_ids=current_bucket_ids,
     )
 
-    for classifier_name, classifier_alias in classifier_spec:
+    for classifier_spec in classifier_specs:
         subflows = [
             run_classifier_inference_on_document(
                 config=config,
                 document_id=document_id,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
+                classifier_name=classifier_spec.name,
+                classifier_alias=classifier_spec.alias,
             )
             for document_id in validated_document_ids
         ]
