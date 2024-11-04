@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 import boto3
@@ -133,6 +134,9 @@ async def test_text_block_inference(
 
     assert len(labels.spans) > 0
     assert labels.id == block_id
+    assert labels.metadata != {}
+    assert labels.metadata["concept"] == classifier.concept.model_dump()
+    datetime.fromisoformat(labels.metadata["inference_timestamp"])
 
 
 @pytest.mark.asyncio
