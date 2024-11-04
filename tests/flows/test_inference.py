@@ -132,6 +132,10 @@ async def test_text_block_inference(
 
     assert len(labels.spans) > 0
     assert labels.id == block_id
+    assert labels.metadata != {}
+    assert (
+        labels.metadata["concept"]["subconcept_of"] == classifier.concept.subconcept_of
+    )
 
 
 @pytest.mark.asyncio

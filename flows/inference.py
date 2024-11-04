@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
 
+import wandb
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -213,6 +213,11 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
+        metadata={
+            "concept": {
+                "subconcept_of": classifier.concept.subconcept_of,
+            }
+        },
     )
     return labelled_passage
 
