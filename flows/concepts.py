@@ -87,6 +87,9 @@ async def run_convert_labelled_passage_to_concept(
     labelled_passage_concept = Concept.model_validate(
         labelled_passage.metadata["concept"]
     )
+    parent_concepts, parent_concept_ids_flat = (
+        get_parent_concepts_from_labelled_passage(concept=labelled_passage_concept)
+    )
 
     logger.info(
         "Converting labelled passage to concept.",
@@ -96,18 +99,14 @@ async def run_convert_labelled_passage_to_concept(
         VespaConcept(
             id=labelled_passage.id,
             name=labelled_passage_concept.preferred_label,
-            parent_concepts=get_parent_concepts_from_labelled_passage(
-                concept=labelled_passage_concept
-            )[0],
-            parent_concept_ids_flat=get_parent_concepts_from_labelled_passage(
-                concept=labelled_passage_concept
-            )[1],
+            parent_concepts=parent_concepts,
+            parent_concept_ids_flat=parent_concept_ids_flat,
             model=span.labellers[0],
             end=span.end_index,
             start=span.start_index,
             timestamp=labelled_passage.metadata["inference_timestamp"],
         )
-        for i, span in enumerate(labelled_passage.spans)
+        for span in labelled_passage.spans
     ]
 
     logger.info(
