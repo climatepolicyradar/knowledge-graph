@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-from datetime import datetime
 from io import BytesIO
 from typing import Optional
 
@@ -26,13 +25,10 @@ def get_concept_class_fields():
     logger.info(f"Concept class fields: {concept_fields}")
 
 
-def load_labelled_passage(
-    config: Config, document_id: str
-) -> tuple[LabelledPassage, datetime]:
+def load_labelled_passage(config: Config, document_id: str) -> LabelledPassage:
     """Download and opens a parser output based on a document ID."""
-    s3_object, timestamp = load_s3_object(config, document_id)
-    document = LabelledPassage.model_validate_json(s3_object)
-    return document, timestamp
+    s3_object = load_s3_object(config, document_id)
+    return LabelledPassage.model_validate_json(s3_object)
 
 
 def get_parent_concepts_from_labelled_passage(
@@ -87,7 +83,7 @@ async def run_convert_labelled_passage_to_concept(
     logger.info(
         "Loading document from s3.", extra={"props": {"document_id": document_id}}
     )
-    labelled_passage, timestamp = load_labelled_passage(config, document_id)
+    labelled_passage = load_labelled_passage(config, document_id)
     labelled_passage_concept = Concept.model_validate(
         labelled_passage.metadata["concept"]
     )
@@ -110,7 +106,7 @@ async def run_convert_labelled_passage_to_concept(
                 model=span.labellers[0],
                 end=span.end_index,
                 start=span.start_index,
-                timestamp=timestamp,
+                timestamp=labelled_passage.metadata["inference_timestamp"],
             )
         )
 
