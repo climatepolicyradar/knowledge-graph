@@ -92,23 +92,23 @@ async def run_convert_labelled_passage_to_concept(
         "Converting labelled passage to concept.",
         extra={"props": {"document_id": document_id}},
     )
-    concepts = []
-    for i, span in enumerate(labelled_passage.spans):
-        parent_concepts, parent_concept_ids_flat = (
-            get_parent_concepts_from_labelled_passage(concept=labelled_passage_concept)
+    concepts = [
+        VespaConcept(
+            id=f"{i}.{labelled_passage.metadata['text_block_id']}",
+            name=labelled_passage_concept.preferred_label,
+            parent_concepts=get_parent_concepts_from_labelled_passage(
+                concept=labelled_passage_concept
+            )[0],
+            parent_concept_ids_flat=get_parent_concepts_from_labelled_passage(
+                concept=labelled_passage_concept
+            )[1],
+            model=span.labellers[0],
+            end=span.end_index,
+            start=span.start_index,
+            timestamp=labelled_passage.metadata["inference_timestamp"],
         )
-        concepts.append(
-            VespaConcept(
-                id=f"{i}.{labelled_passage.metadata['text_block_id']}",
-                name=labelled_passage_concept.preferred_label,
-                parent_concepts=parent_concepts,
-                parent_concept_ids_flat=parent_concept_ids_flat,
-                model=span.labellers[0],
-                end=span.end_index,
-                start=span.start_index,
-                timestamp=labelled_passage.metadata["inference_timestamp"],
-            )
-        )
+        for i, span in enumerate(labelled_passage.spans)
+    ]
 
     logger.info(
         "Writing concepts to s3.", extra={"props": {"document_id": document_id}}
