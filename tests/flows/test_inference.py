@@ -6,6 +6,7 @@ import pytest
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    ClassifierSpec,
     _stringify,
     classifier_inference,
     determine_document_ids,
@@ -141,7 +142,7 @@ async def test_classifier_inference(
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
         await classifier_inference(
-            classifier_spec=[("Q788", "latest")],
+            classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
