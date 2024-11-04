@@ -12,7 +12,7 @@ from flows.inference import (
     document_passages,
     list_bucket_doc_ids,
     load_classifier,
-    load_document,
+    load_document_base_parser_output,
     store_labels,
     text_block_inference,
 )
@@ -74,10 +74,10 @@ def test_download_classifier__wandb_classifier():
     pass
 
 
-def test_load_document(test_config, mock_bucket_documents):
+def test_load_document_base_parser_output(test_config, mock_bucket_documents):
     for doc_file_name in mock_bucket_documents:
         doc_id = Path(doc_file_name).stem
-        doc = load_document(test_config, document_id=doc_id)
+        doc = load_document_base_parser_output(test_config, document_id=doc_id)
         assert doc_id == doc.document_id
 
 

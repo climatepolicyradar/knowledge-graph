@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -132,8 +133,8 @@ async def load_classifier(
     return classifier
 
 
-def load_document(config: Config, document_id: str) -> BaseParserOutput:
-    """Download and opens a parser output based on a document ID."""
+def load_s3_object(config: Config, document_id: str) -> tuple[str, datetime]:
+    """Load a JSON object from S3."""
     s3 = boto3.client("s3", region_name=config.bucket_region)
 
     file_key = os.path.join(
@@ -143,7 +144,16 @@ def load_document(config: Config, document_id: str) -> BaseParserOutput:
 
     response = s3.get_object(Bucket=config.cache_bucket, Key=file_key)
     content = response["Body"].read().decode("utf-8")
-    document = BaseParserOutput.model_validate_json(content)
+
+    return content, response["LastModified"]
+
+
+def load_document_base_parser_output(
+    config: Config, document_id: str
+) -> BaseParserOutput:
+    """Download and opens a parser output based on a document ID."""
+    s3_object, _ = load_s3_object(config, document_id)
+    document = BaseParserOutput.model_validate_json(s3_object)
     return document
 
 
@@ -232,7 +242,7 @@ async def run_classifier_inference_on_document(
     )
 
     print(f"Loading document with ID {document_id}")
-    document = load_document(config, document_id)
+    document = load_document_base_parser_output(config, document_id)
     print(f"Loaded document with ID {document_id}")
 
     futures = []
