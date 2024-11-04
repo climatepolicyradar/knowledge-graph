@@ -94,7 +94,7 @@ async def run_convert_labelled_passage_to_concept(
     )
     concepts = [
         VespaConcept(
-            id=f"{i}.{labelled_passage.metadata['text_block_id']}",
+            id=labelled_passage.id,
             name=labelled_passage_concept.preferred_label,
             parent_concepts=get_parent_concepts_from_labelled_passage(
                 concept=labelled_passage_concept
