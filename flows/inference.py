@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -208,6 +209,10 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
+        metadata={
+            "concept": classifier.concept.model_dump(),
+            "inference_timestamp": datetime.now().isoformat(),
+        },
     )
     return labelled_passage
 
