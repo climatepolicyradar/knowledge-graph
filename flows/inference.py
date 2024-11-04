@@ -57,7 +57,7 @@ class Config:
                 "pipeline_cache_bucket_name"
             )
         if not config.wandb_api_key:
-            config.wandb_api_key = get_aws_ssm_param("WANDB_API_KEY")
+            config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
         return config
 
 
