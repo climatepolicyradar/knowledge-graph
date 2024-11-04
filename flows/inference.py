@@ -216,7 +216,6 @@ def text_block_inference(
         spans=spans,
         metadata={
             "concept": classifier.concept.model_dump(),
-            "text_block_id": block_id,
             "inference_timestamp": datetime.now().isoformat(),
         },
     )
