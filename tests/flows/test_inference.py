@@ -134,6 +134,7 @@ async def test_text_block_inference(
     assert labels.id == block_id
     assert labels.metadata != {}
     assert labels.metadata["concept"] == classifier.concept.model_dump()
+    assert labels.metadata["text_block_id"] == block_id
 
 
 @pytest.mark.asyncio

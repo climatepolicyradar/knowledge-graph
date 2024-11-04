@@ -213,7 +213,10 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
-        metadata={"concept": classifier.concept.model_dump()},
+        metadata={
+            "concept": classifier.concept.model_dump(),
+            "text_block_id": block_id,
+        },
     )
     return labelled_passage
 
