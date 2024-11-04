@@ -81,6 +81,7 @@ def store_concepts(
 async def run_convert_labelled_passage_to_concept(
     document_id: str, config: Config
 ) -> None:
+    """Load a labelled passage from s3, extract an array of concepts and store it in s3."""
     logger = get_run_logger()
 
     logger.info(
@@ -140,7 +141,10 @@ async def convert_labelled_passages_to_concepts(
     logger = get_run_logger()
 
     if not config:
-        config = await Config.create()
+        config = await Config(
+            document_source_prefix="labelled_passages",
+            document_target_prefix="concepts",
+        ).create()
 
     logger.info(
         "Running conversion of labelled passages to concepts.",
