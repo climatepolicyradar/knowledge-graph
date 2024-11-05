@@ -19,6 +19,7 @@ from cpr_sdk.parser_models import (
 )
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
+from pydantic import SecretStr
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
@@ -34,7 +35,7 @@ def test_config():
         cache_bucket="test_bucket",
         wandb_model_registry="test_wandb_model_registry",
         wandb_entity="test_entity",
-        wandb_api_key="test_wandb_api_key",
+        wandb_api_key=SecretStr("test_wandb_api_key"),
     )
 
 

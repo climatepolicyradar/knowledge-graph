@@ -107,7 +107,7 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
-    wandb.login(key=config.wandb_api_key)
+    wandb.login(key=config.wandb_api_key.get_secret_value())
     run = wandb.init(
         entity=config.wandb_entity, project=classifier_name, job_type="download_model"
     )
