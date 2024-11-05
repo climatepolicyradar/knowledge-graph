@@ -89,6 +89,7 @@ def main(
         ),
     ] = None,
 ):
+    documents = documents or None  # Set to None if empty as Typer reads it as a list
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
     deployment_name = (
