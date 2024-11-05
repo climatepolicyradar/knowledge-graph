@@ -14,6 +14,9 @@ from prefect import flow
 from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
 
+from src.concept import Concept
+from src.labelled_passage import LabelledPassage
+
 
 def get_vespa_search_adapter_from_aws_secrets(
     cert_dir: str,
@@ -55,16 +58,16 @@ def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, No
         yield key, json.loads(obj)
 
 
-def document_concepts_generator(
+def labelled_passages_generator(
     generator_func: Generator,
-) -> Generator[tuple[str, list[VespaConcept]], None, None]:
+) -> Generator[tuple[str, list[LabelledPassage]], None, None]:
     """
     A wrapper function for the s3 object generator.
 
-    Converts each yielded object from the generator to a Pydantic VespaConcept object.
+    Converts each yielded object from the generator to a Pydantic LabelledPassage object.
     """
     for s3_key, obj in generator_func:
-        yield s3_key, [VespaConcept(**concept) for concept in obj]
+        yield s3_key, [LabelledPassage(**labelled_passage) for labelled_passage in obj]
 
 
 def get_document_passages_from_vespa(
@@ -107,7 +110,7 @@ def get_document_passages_from_vespa(
 
 def get_text_block_id_from_concept(concept: VespaConcept) -> str:
     """Identify the text block id that a concept relates to."""
-    return concept.id.split(".")[-1]
+    return concept.id
 
 
 def get_passage_for_concept(
@@ -149,6 +152,63 @@ def get_updated_passage_concepts_dict(
     passage.concepts.append(concept)
 
     return [concept.model_dump(mode="json") for concept in passage.concepts]
+
+
+def get_parent_concepts_from_labelled_passage(
+    concept: Concept,
+) -> tuple[list[dict], str]:
+    """
+    Extract parent concepts from a Concept object.
+
+    Currently we pull the name from the Classifier used to label the passage, this
+    doesn't hold the concept id. This is a temporary solution that is not desirable as
+    the relationship between concepts can change frequently and thus shouldn't be
+    coupled with inference.
+    """
+    parent_concepts = [{"id": concept.subconcept_of, "name": ""}]
+    parent_concept_ids_flat = (
+        ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
+    )
+
+    return parent_concepts, parent_concept_ids_flat
+
+
+def convert_labelled_passages_to_concepts(
+    labelled_passages: list[LabelledPassage],
+) -> list[VespaConcept]:
+    """
+    Convert a labelled passage to a list of VespaConcept objects.
+
+    The labelled passage contains a list of spans relating to concepts that we must
+    convert to vespa Concept objects.
+    """
+    concepts = []
+    for labelled_passage in labelled_passages:
+        # Loading the relating concept from the metadata of the labelled passage is a
+        # temporary solution as we haven't implemented a solution for joining a concept
+        # on the relationships from the concept store.
+        labelled_passage_concept = Concept.model_validate(
+            labelled_passage.metadata["concept"]
+        )
+        parent_concepts, parent_concept_ids_flat = (
+            get_parent_concepts_from_labelled_passage(concept=labelled_passage_concept)
+        )
+
+        concepts.extend([
+            VespaConcept(
+                id=labelled_passage.id,
+                name=labelled_passage_concept.preferred_label,
+                parent_concepts=parent_concepts,
+                parent_concept_ids_flat=parent_concept_ids_flat,
+                model=span.labellers[0],
+                end=span.end_index,
+                start=span.start_index,
+                timestamp=labelled_passage.metadata["inference_timestamp"],
+            )
+            for span in labelled_passage.spans
+        ])
+
+    return concepts
 
 
 @flow
@@ -243,7 +303,14 @@ async def index_concepts_from_s3_to_vespa(
             )
 
         s3_objects = s3_obj_generator(s3_path=s3_path)
-        document_concepts = document_concepts_generator(generator_func=s3_objects)
+        document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
+        document_concepts = [
+            (
+                s3_path,
+                convert_labelled_passages_to_concepts(labelled_passages=labelled_passages)
+            )
+            for s3_path, labelled_passages in document_labelled_passages
+        ]
 
         indexing_tasks = [
             run_partial_updates_of_concepts_for_document_passages(

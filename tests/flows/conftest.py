@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
@@ -7,7 +6,6 @@ from unittest.mock import patch
 
 import boto3
 import pytest
-from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.parser_models import (
     BaseParserOutput,
     BlockType,
@@ -22,6 +20,9 @@ from moto import mock_aws
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
 from src.identifiers import WikibaseID
+from src.labelled_passage import LabelledPassage
+from src.span import Span
+
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -192,13 +193,13 @@ def parser_output_pdf(parser_output):
 
 
 @pytest.fixture
-def s3_prefix_concepts() -> str:
+def s3_prefix_labelled_passages() -> str:
     """Returns the s3 prefix for the concepts."""
     return "labelled_concepts/Q788-RuleBasedClassifier/latest"
 
 
 @pytest.fixture()
-def concept_fixture_files() -> list[str]:
+def labelled_passage_fixture_files() -> list[str]:
     """Returns the list of concept fixture files."""
     return [
         "CCLW.executive.10014.4470.json",
@@ -207,14 +208,14 @@ def concept_fixture_files() -> list[str]:
 
 
 @pytest.fixture
-def mock_bucket_concepts(
-    mock_s3_client, mock_bucket, s3_prefix_concepts, concept_fixture_files
+def mock_bucket_labelled_passages(
+    mock_s3_client, mock_bucket, s3_prefix_labelled_passages, labelled_passage_fixture_files
 ) -> None:
     """Puts the concept fixture files in the mock bucket."""
-    for file_name in concept_fixture_files:
+    for file_name in labelled_passage_fixture_files:
         data = load_fixture(file_name)
         body = BytesIO(data.encode("utf-8"))
-        key = os.path.join(s3_prefix_concepts, file_name)
+        key = os.path.join(s3_prefix_labelled_passages, file_name)
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
@@ -227,33 +228,25 @@ def document_passages_test_data_file_path() -> str:
 
 
 @pytest.fixture
-def example_vespa_concepts() -> list[VespaConcept]:
+def example_labelled_passages() -> list[LabelledPassage]:
     """Vespa concepts for testing."""
     return [
-        VespaConcept(
-            id="Q788-RuleBasedClassifier.1457",
-            name="Q788-RuleBasedClassifier",
-            parent_concepts=[
-                {"name": "RuleBasedClassifier", "id": "Q788"},
-                {"name": "RuleBasedClassifier", "id": "Q789"},
+        LabelledPassage(
+            id="test_id",
+            text="test text",
+            spans=[
+                Span(
+                    text="test span text",
+                    start_index=0,
+                    end_index=1,
+                    concept_id=WikibaseID("test_concept_id"),
+                    labellers=["test_labeller"],
+                )
             ],
-            parent_concept_ids_flat="Q788,Q789",
-            model="RuleBasedClassifier",
-            end=100,
-            start=0,
-            timestamp=datetime.now(),
         ),
-        VespaConcept(
-            id="Q788-RuleBasedClassifier.1273",
-            name="Q788-RuleBasedClassifier",
-            parent_concepts=[
-                {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
-                {"name": "Q2-RuleBasedClassifier", "id": "Q3"},
-            ],
-            parent_concept_ids_flat="Q2,Q3",
-            model="RuleBasedClassifier-2.0.12",
-            end=100,
-            start=0,
-            timestamp=datetime.now(),
+        LabelledPassage(
+            id="test_id",
+            text="test text",
+            spans=[],
         ),
     ]

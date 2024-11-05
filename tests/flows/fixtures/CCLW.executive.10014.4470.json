@@ -1,17 +1,52 @@
 [
     {
-        "name": "test_concept_name_1",
-        "id": "test_concept_id_1.1",
-        "parent_concepts": [
+        "id": "0",
+        "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+        "spans": [
             {
-                "id": "test_parent_concept_id_1",
-                "name": "test_parent_concept_name_1"
+                "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+                "start_index": 0,
+                "end_index": 10,
+                "concept_id": "Q10014",
+                "labellers": ["Q10014-RuleBasedClassifier"]
             }
         ],
-        "parent_concept_ids_flat": "test_parent_concept_id_1",
-        "start": 1,
-        "end": 10,
-        "model": "test_model_1",
-        "timestamp": "2021-01-01T00:00:00Z"
+        "metadata": {
+            "concept": {
+                "preferred_labels": "Council Concept - Rule Based",
+                "alternative_labels": [],
+                "negative_labels": [],
+                "wikibase_id": "Q10014",
+                "subconcept_of": "Q4470",
+                "has_subconcept": ["Q4471"],
+                "relative_concepts": ["Q4470"],
+                "labelled_passages": []
+            }
+        }
+    },
+    {
+        "id": "1",
+        "text": "The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
+        "spans": [
+            {
+                "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+                "start_index": 4,
+                "end_index": 14,
+                "concept_id": "Q10014",
+                "labellers": ["Q10014-RuleBasedClassifier"]
+            }
+        ],
+        "metadata": {
+            "concept": {
+                "preferred_labels": "Council Concept - Rule Based",
+                "alternative_labels": [],
+                "negative_labels": [],
+                "wikibase_id": "Q10014",
+                "subconcept_of": "Q4470",
+                "has_subconcept": ["Q4471"],
+                "relative_concepts": ["Q4470"],
+                "labelled_passages": []
+            }
+        }
     }
 ]
