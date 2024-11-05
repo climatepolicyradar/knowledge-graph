@@ -15,6 +15,7 @@ from cpr_sdk.parser_models import (
     PDFTextBlock,
 )
 from moto import mock_aws
+from pydantic import SecretStr
 
 from flows.inference import Config
 from src.identifiers import WikibaseID
@@ -28,7 +29,7 @@ def test_config():
         cache_bucket="test_bucket",
         wandb_model_registry="test_wandb_model_registry",
         wandb_entity="test_entity",
-        wandb_api_key="test_wandb_api_key",
+        wandb_api_key=SecretStr("test_wandb_api_key"),
     )
 
 
