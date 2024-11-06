@@ -104,7 +104,7 @@ jobs:
     needs: [deploy_prefect_sandbox]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
-      aws-env: prod
+      aws-env: production
       prefect-workspace: ${{ vars.PREFECT_WORKSPACE }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}

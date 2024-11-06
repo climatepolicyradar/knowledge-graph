@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import Optional
 
 import typer
@@ -7,9 +6,8 @@ from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
 from typing_extensions import Annotated
 
-from flows.inference import (
-    ClassifierSpec,
-)
+from flows.inference import ClassifierSpec
+from scripts.cloud import AwsEnv
 
 app = typer.Typer()
 console = Console()
@@ -38,15 +36,6 @@ def convert_classifier_specs(requested_classifiers: list[str]) -> list[Classifie
     return classifier_specs
 
 
-class Env(str, Enum):
-    """Options of which environment prefect job to use"""
-
-    sandbox = "sandbox"
-    labs = "labs"
-    staging = "staging"
-    prod = "prod"
-
-
 @app.command(
     help="""Run classifier inference on documents.
         
@@ -55,10 +44,10 @@ class Env(str, Enum):
         """
 )
 def main(
-    environment: Annotated[
-        Env,
+    aws_env: Annotated[
+        AwsEnv,
         typer.Option(
-            help="AWS env to use to find and store documents",
+            help="The AWS environment to use to find and store documents",
         ),
     ],
     classifiers: Annotated[
@@ -93,7 +82,7 @@ def main(
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
     deployment_name = (
-        f"classifier-inference/knowledge-graph-classifier-inference-{environment}"
+        f"classifier-inference/knowledge-graph-classifier-inference-{aws_env}"
     )
     console.log(f"Starting run for deployment: {deployment_name}")
 
