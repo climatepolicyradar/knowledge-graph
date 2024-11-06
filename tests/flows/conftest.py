@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from io import BytesIO
@@ -23,7 +24,6 @@ from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
-from src.span import Span
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -236,7 +236,7 @@ def example_vespa_concepts() -> list[VespaConcept]:
     """Vespa concepts for testing."""
     return [
         VespaConcept(
-            id="Q788-RuleBasedClassifier.1457",
+            id="1457",
             name="Q788-RuleBasedClassifier",
             parent_concepts=[
                 {"name": "RuleBasedClassifier", "id": "Q788"},
@@ -249,7 +249,7 @@ def example_vespa_concepts() -> list[VespaConcept]:
             timestamp=datetime.now(),
         ),
         VespaConcept(
-            id="Q788-RuleBasedClassifier.1273",
+            id="1273",
             name="Q788-RuleBasedClassifier",
             parent_concepts=[
                 {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
@@ -262,3 +262,13 @@ def example_vespa_concepts() -> list[VespaConcept]:
             timestamp=datetime.now(),
         ),
     ]
+
+
+@pytest.fixture
+def example_labelled_passages(labelled_passage_fixture_files) -> list[LabelledPassage]:
+    """Returns a list of example labelled passages."""
+    labelled_passages = []
+    for file_name in labelled_passage_fixture_files:
+        data = json.loads(load_fixture(file_name))
+        labelled_passages.extend([LabelledPassage.model_validate(i) for i in data])
+    return labelled_passages

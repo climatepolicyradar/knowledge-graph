@@ -154,7 +154,8 @@ def get_updated_passage_concepts_dict(
     return [concept.model_dump(mode="json") for concept in passage.concepts]
 
 
-def get_parent_concepts_from_labelled_passage(
+# TODO: Add a test
+def get_parent_concepts_from_concept(
     concept: Concept,
 ) -> tuple[list[dict], str]:
     """
@@ -165,7 +166,9 @@ def get_parent_concepts_from_labelled_passage(
     the relationship between concepts can change frequently and thus shouldn't be
     coupled with inference.
     """
-    parent_concepts = [{"id": concept.subconcept_of, "name": ""}]
+    parent_concepts = [
+        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
+    ]
     parent_concept_ids_flat = (
         ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
     )
@@ -190,8 +193,8 @@ def convert_labelled_passages_to_concepts(
         labelled_passage_concept = Concept.model_validate(
             labelled_passage.metadata["concept"]
         )
-        parent_concepts, parent_concept_ids_flat = (
-            get_parent_concepts_from_labelled_passage(concept=labelled_passage_concept)
+        parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
+            concept=labelled_passage_concept
         )
 
         concepts.extend(

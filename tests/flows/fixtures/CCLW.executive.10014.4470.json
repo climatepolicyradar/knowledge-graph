@@ -13,15 +13,16 @@
         ],
         "metadata": {
             "concept": {
-                "preferred_labels": "Council Concept - Rule Based",
+                "preferred_label": "Council Concept - Rule Based",
                 "alternative_labels": [],
                 "negative_labels": [],
                 "wikibase_id": "Q10014",
-                "subconcept_of": "Q4470",
+                "subconcept_of": ["Q4470"],
                 "has_subconcept": ["Q4471"],
                 "relative_concepts": ["Q4470"],
                 "labelled_passages": []
-            }
+            },
+            "inference_timestamp": "2021-09-29T14:00:00.000Z"
         }
     },
     {
@@ -38,15 +39,16 @@
         ],
         "metadata": {
             "concept": {
-                "preferred_labels": "Council Concept - Rule Based",
+                "preferred_label": "Council Concept - Rule Based",
                 "alternative_labels": [],
                 "negative_labels": [],
                 "wikibase_id": "Q10014",
-                "subconcept_of": "Q4470",
+                "subconcept_of": ["Q4470"],
                 "has_subconcept": ["Q4471"],
                 "relative_concepts": ["Q4470"],
                 "labelled_passages": []
-            }
+            },
+            "inference_timestamp": "2021-09-29T14:00:00.000Z"
         }
     }
 ]

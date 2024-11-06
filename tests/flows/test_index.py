@@ -10,7 +10,9 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
 from flows.index import (
+    convert_labelled_passages_to_concepts,
     get_document_passages_from_vespa,
+    get_parent_concepts_from_concept,
     get_passage_for_concept,
     get_vespa_search_adapter_from_aws_secrets,
     index_labelled_passages_from_s3_to_vespa,
@@ -18,6 +20,8 @@ from flows.index import (
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
 )
+from src.concept import Concept
+from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
@@ -192,7 +196,7 @@ async def test_index_labelled_passages_from_s3_to_vespa(
     labelled_passage_fixture_files,
     mock_vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
-    """Test that we can successfully index concepts from s3 into vespa."""
+    """Test that we can successfully index labelled passages from s3 into vespa."""
     initial_passages_response = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
@@ -249,3 +253,25 @@ def test_get_passage_for_concept(
 
         assert passage_id == relevant_passage[0]
         assert passage == relevant_passage[1]
+
+
+def test_convert_labelled_passges_to_concepts(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test that we can correctly convert labelled passages to concepts."""
+    convert_labelled_passages_to_concepts(example_labelled_passages)
+
+
+def test_get_parent_concepts_from_concept() -> None:
+    """Test taht we can correctly retrieve the parent concepts from a concept."""
+    assert get_parent_concepts_from_concept(
+        concept=Concept(
+            preferred_label="Council Concept - Rule Based",
+            alternative_labels=[],
+            negative_labels=[],
+            wikibase_id=WikibaseID("Q10014"),
+            subconcept_of=[WikibaseID("Q4470")],
+            has_subconcept=[WikibaseID("Q4471")],
+            labelled_passages=[],
+        )
+    ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
