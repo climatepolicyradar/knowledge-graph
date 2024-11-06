@@ -259,7 +259,8 @@ def test_convert_labelled_passges_to_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
-    convert_labelled_passages_to_concepts(example_labelled_passages)
+    concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+    assert all([isinstance(concept, VespaConcept) for concept in concepts])
 
 
 def test_get_parent_concepts_from_concept() -> None:
