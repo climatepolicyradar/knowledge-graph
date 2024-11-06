@@ -194,19 +194,21 @@ def convert_labelled_passages_to_concepts(
             get_parent_concepts_from_labelled_passage(concept=labelled_passage_concept)
         )
 
-        concepts.extend([
-            VespaConcept(
-                id=labelled_passage.id,
-                name=labelled_passage_concept.preferred_label,
-                parent_concepts=parent_concepts,
-                parent_concept_ids_flat=parent_concept_ids_flat,
-                model=span.labellers[0],
-                end=span.end_index,
-                start=span.start_index,
-                timestamp=labelled_passage.metadata["inference_timestamp"],
-            )
-            for span in labelled_passage.spans
-        ])
+        concepts.extend(
+            [
+                VespaConcept(
+                    id=labelled_passage.id,
+                    name=labelled_passage_concept.preferred_label,
+                    parent_concepts=parent_concepts,
+                    parent_concept_ids_flat=parent_concept_ids_flat,
+                    model=span.labellers[0],
+                    end=span.end_index,
+                    start=span.start_index,
+                    timestamp=labelled_passage.metadata["inference_timestamp"],
+                )
+                for span in labelled_passage.spans
+            ]
+        )
 
     return concepts
 
@@ -280,7 +282,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
 
 @flow
-async def index_concepts_from_s3_to_vespa(
+async def index_labelled_passages_from_s3_to_vespa(
     s3_path: str,
     vespa_search_adapter: Optional[VespaSearchAdapter] = None,
 ) -> None:
@@ -303,11 +305,15 @@ async def index_concepts_from_s3_to_vespa(
             )
 
         s3_objects = s3_obj_generator(s3_path=s3_path)
-        document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
+        document_labelled_passages = labelled_passages_generator(
+            generator_func=s3_objects
+        )
         document_concepts = [
             (
                 s3_path,
-                convert_labelled_passages_to_concepts(labelled_passages=labelled_passages)
+                convert_labelled_passages_to_concepts(
+                    labelled_passages=labelled_passages
+                ),
             )
             for s3_path, labelled_passages in document_labelled_passages
         ]

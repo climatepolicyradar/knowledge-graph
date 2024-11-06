@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
@@ -6,6 +7,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.parser_models import (
     BaseParserOutput,
     BlockType,
@@ -22,7 +24,6 @@ from flows.inference import Config
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -209,7 +210,10 @@ def labelled_passage_fixture_files() -> list[str]:
 
 @pytest.fixture
 def mock_bucket_labelled_passages(
-    mock_s3_client, mock_bucket, s3_prefix_labelled_passages, labelled_passage_fixture_files
+    mock_s3_client,
+    mock_bucket,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
 ) -> None:
     """Puts the concept fixture files in the mock bucket."""
     for file_name in labelled_passage_fixture_files:
@@ -228,25 +232,33 @@ def document_passages_test_data_file_path() -> str:
 
 
 @pytest.fixture
-def example_labelled_passages() -> list[LabelledPassage]:
+def example_vespa_concepts() -> list[VespaConcept]:
     """Vespa concepts for testing."""
     return [
-        LabelledPassage(
-            id="test_id",
-            text="test text",
-            spans=[
-                Span(
-                    text="test span text",
-                    start_index=0,
-                    end_index=1,
-                    concept_id=WikibaseID("test_concept_id"),
-                    labellers=["test_labeller"],
-                )
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1457",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "RuleBasedClassifier", "id": "Q788"},
+                {"name": "RuleBasedClassifier", "id": "Q789"},
             ],
+            parent_concept_ids_flat="Q788,Q789",
+            model="RuleBasedClassifier",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
         ),
-        LabelledPassage(
-            id="test_id",
-            text="test text",
-            spans=[],
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1273",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
+                {"name": "Q2-RuleBasedClassifier", "id": "Q3"},
+            ],
+            parent_concept_ids_flat="Q2,Q3",
+            model="RuleBasedClassifier-2.0.12",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
         ),
     ]
