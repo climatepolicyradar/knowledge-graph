@@ -263,7 +263,7 @@ def test_convert_labelled_passges_to_concepts(
 
 
 def test_get_parent_concepts_from_concept() -> None:
-    """Test taht we can correctly retrieve the parent concepts from a concept."""
+    """Test that we can correctly retrieve the parent concepts from a concept."""
     assert get_parent_concepts_from_concept(
         concept=Concept(
             preferred_label="Council Concept - Rule Based",

@@ -16,6 +16,7 @@ from prefect.logging import get_logger, get_run_logger
 
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
+from src.span import Span
 
 
 def get_vespa_search_adapter_from_aws_secrets(
@@ -113,6 +114,16 @@ def get_text_block_id_from_concept(concept: VespaConcept) -> str:
     return concept.id
 
 
+def get_model_from_span(span: Span) -> str:
+    """
+    Get the model used to label the span.
+
+    Labellers are stored in a list and the first labeller in the context of inferenece
+    is assumed to be the model used to label the span.
+    """
+    return span.labellers[0]
+
+
 def get_passage_for_concept(
     concept: VespaConcept, document_passages: list[tuple[str, VespaPassage]]
 ) -> Union[tuple[str, VespaPassage], tuple[None, None]]:
@@ -154,7 +165,6 @@ def get_updated_passage_concepts_dict(
     return [concept.model_dump(mode="json") for concept in passage.concepts]
 
 
-# TODO: Add a test
 def get_parent_concepts_from_concept(
     concept: Concept,
 ) -> tuple[list[dict], str]:
@@ -187,24 +197,22 @@ def convert_labelled_passages_to_concepts(
     """
     concepts = []
     for labelled_passage in labelled_passages:
-        # Loading the relating concept from the metadata of the labelled passage is a
-        # temporary solution as we haven't implemented a solution for joining a concept
-        # on the relationships from the concept store.
-        labelled_passage_concept = Concept.model_validate(
-            labelled_passage.metadata["concept"]
-        )
+        # The concept used to label the passage holds some information on the parent
+        # concepts and thus this is being used as a temporary solution for providing
+        # the relationship between concepts.
+        concept = Concept.model_validate(labelled_passage.metadata["concept"])
         parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
-            concept=labelled_passage_concept
+            concept=concept
         )
 
         concepts.extend(
             [
                 VespaConcept(
                     id=labelled_passage.id,
-                    name=labelled_passage_concept.preferred_label,
+                    name=concept.preferred_label,
                     parent_concepts=parent_concepts,
                     parent_concept_ids_flat=parent_concept_ids_flat,
-                    model=span.labellers[0],
+                    model=get_model_from_span(span),
                     end=span.end_index,
                     start=span.start_index,
                     timestamp=labelled_passage.metadata["inference_timestamp"],
