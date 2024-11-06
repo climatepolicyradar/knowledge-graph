@@ -105,8 +105,8 @@ infer +OPTS="":
 
 # Run inference over documents in the sandbox pipeline bucket
 infer-sandbox +OPTS="":
-    just infer --environment sandbox {{OPTS}}
+    just infer --aws_env sandbox {{OPTS}}
 
 # Run inference over documents in the labs pipeline bucket
 infer-labs +OPTS="":
-    just infer --environment labs {{OPTS}}
+    just infer --aws_env labs {{OPTS}}
