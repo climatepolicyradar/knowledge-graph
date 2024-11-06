@@ -58,8 +58,8 @@ def mock_vespa_credentials() -> dict[str, str]:
     """Mocked vespa credentials."""
     return {
         "PREFECT_VESPA_INSTANCE_URL": "http://localhost:8080",
-        "PREFECT_VESPA_PUBLIC_CERT_FEED": "Cert Content",
-        "PREFECT_VESPA_PRIVATE_KEY_FEED": "Key Content",
+        "VESPA_PUBLIC_CERT_FULL_ACCESS": "Cert Content",
+        "VESPA_PRIVATE_KEY_FULL_ACCESS": "Key Content",
     }
 
 
@@ -73,15 +73,15 @@ def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
-        Name="PREFECT_VESPA_PUBLIC_CERT_FEED",
+        Name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         Description="A test parameter for a vespa public cert",
-        Value=mock_vespa_credentials["PREFECT_VESPA_PUBLIC_CERT_FEED"],
+        Value=mock_vespa_credentials["VESPA_PUBLIC_CERT_FULL_ACCESS"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
-        Name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+        Name="VESPA_PRIVATE_KEY_FULL_ACCESS",
         Description="A test parameter for a vespa private key",
-        Value=mock_vespa_credentials["PREFECT_VESPA_PRIVATE_KEY_FEED"],
+        Value=mock_vespa_credentials["VESPA_PRIVATE_KEY_FULL_ACCESS"],
         Type="SecureString",
     )
 
@@ -93,8 +93,8 @@ def mock_vespa_search_adapter(
     """VespaSearchAdapter instantiated from mocked ssm params."""
     return get_vespa_search_adapter_from_aws_secrets(
         cert_dir=tmpdir,
-        vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
-        vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
     )
 
 
