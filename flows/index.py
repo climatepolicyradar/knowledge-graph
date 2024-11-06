@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import os
 import tempfile
@@ -32,8 +33,11 @@ def get_vespa_search_adapter_from_aws_secrets(
     the VespaSearchAdapter.
     """
     vespa_instance_url = get_aws_ssm_param(vespa_instance_url_param_name)
-    vespa_public_cert = get_aws_ssm_param(vespa_public_cert_param_name)
-    vespa_private_key = get_aws_ssm_param(vespa_private_key_param_name)
+    vespa_public_cert_encoded = get_aws_ssm_param(vespa_public_cert_param_name)
+    vespa_private_key_encoded = get_aws_ssm_param(vespa_private_key_param_name)
+
+    vespa_public_cert = base64.b64decode(vespa_public_cert_encoded).decode("utf-8")
+    vespa_private_key = base64.b64decode(vespa_private_key_encoded).decode("utf-8")
 
     with open(f"{cert_dir}/cert.pem", "w") as f:
         f.write(vespa_public_cert)
@@ -311,8 +315,8 @@ async def index_labelled_passages_from_s3_to_vespa(
         if not vespa_search_adapter:
             vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
                 cert_dir=temp_dir,
-                vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
-                vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
+                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
             )
 
         s3_objects = s3_obj_generator(s3_path=s3_path)
