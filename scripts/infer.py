@@ -1,5 +1,3 @@
-from typing import Optional
-
 import typer
 from prefect.deployments import run_deployment
 from prefect.settings import PREFECT_UI_URL
@@ -51,7 +49,7 @@ def main(
         ),
     ],
     classifiers: Annotated[
-        Optional[list[str]],
+        list[str],
         typer.Option(
             "--classifier",
             "-c",
@@ -66,7 +64,7 @@ def main(
         ),
     ] = None,
     documents: Annotated[
-        Optional[list[str]],
+        list[str],
         typer.Option(
             "--document",
             "-d",
@@ -79,6 +77,9 @@ def main(
     ] = None,
 ):
     documents = documents or None  # Set to None if empty as Typer reads it as a list
+    classifiers = (
+        classifiers or None
+    )  # Set to None if empty as Typer reads it as a list
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
     deployment_name = (
