@@ -55,6 +55,7 @@ priority = "explicit"
 train = "scripts.train:app"
 promote = "scripts.promote:app"
 evaluate = "scripts.evaluate:app"
+infer = "scripts.infer:app"
 
 [tool.poetry.group.dev]
 optional = true

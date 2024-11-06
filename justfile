@@ -101,7 +101,7 @@ deploy: prefect_login
 
 # Run inference over documents in a pipeline bucket
 infer +OPTS="":
-    poetry run python scripts/infer.py {{OPTS}}
+    poetry run infer {{OPTS}}
 
 # Run inference over documents in the sandbox pipeline bucket
 infer-sandbox +OPTS="":
