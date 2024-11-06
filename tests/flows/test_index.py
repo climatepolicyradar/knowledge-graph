@@ -241,7 +241,7 @@ def test_get_passage_for_concept(
     )
 
     for concept in example_vespa_concepts:
-        concept.id = f"Q788-RuleBasedClassifier.{text_block_id}"
+        concept.id = text_block_id
 
         passage_id, passage = get_passage_for_concept(
             concept=concept, document_passages=[relevant_passage, irrelevant_passage]
