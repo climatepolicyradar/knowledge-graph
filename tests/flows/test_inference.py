@@ -13,6 +13,7 @@ from flows.inference import (
     determine_document_ids,
     document_passages,
     download_classifier_from_wandb_to_local,
+    get_latest_ingest_documents,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
@@ -46,17 +47,21 @@ def test_list_bucket_doc_ids(test_config, mock_bucket_documents):
         (None, ["1"], ["1"]),
     ],
 )
-def test_determine_document_ids(doc_ids, bucket_ids, expected):
+def test_determine_document_ids(test_config, doc_ids, bucket_ids, expected):
     got = determine_document_ids(
+        config=test_config,
+        use_new_and_updated=False,
         requested_document_ids=doc_ids,
         current_bucket_ids=bucket_ids,
     )
     assert got == expected
 
 
-def test_determine_document_ids__error():
+def test_determine_document_ids__error(test_config):
     with pytest.raises(ValueError):
         determine_document_ids(
+            config=test_config,
+            use_new_and_updated=False,
             requested_document_ids=["1", "2"],
             current_bucket_ids=["3", "4"],
         )
@@ -177,3 +182,11 @@ async def test_classifier_inference(
         # Some spans where identified
         with_spans = [d for d in data if len(d["spans"]) > 0]
         assert len(with_spans) > 0
+
+
+def test_get_latest_ingest_documents(
+    test_config, mock_bucket_new_and_updated_documents_json
+):
+    _, latest_docs = mock_bucket_new_and_updated_documents_json
+    doc_ids = get_latest_ingest_documents(test_config)
+    assert set(doc_ids) == latest_docs
