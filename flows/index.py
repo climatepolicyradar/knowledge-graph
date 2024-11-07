@@ -378,7 +378,9 @@ async def index_labelled_passages_from_s3_to_vespa(
                 vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
             )
 
-        if s3_paths:
+        if s3_paths and s3_prefix:
+            raise ValueError("Either s3_prefix or s3_paths must be provided, not both.")
+        elif s3_paths:
             s3_objects = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
         elif s3_prefix:
             s3_objects = s3_obj_generator_from_s3_prefix(s3_path=s3_prefix)
