@@ -1,3 +1,5 @@
+from enum import Enum
+
 import typer
 from prefect.deployments import run_deployment
 from prefect.settings import PREFECT_UI_URL
@@ -5,10 +7,18 @@ from rich.console import Console
 from typing_extensions import Annotated
 
 from flows.inference import ClassifierSpec
-from scripts.cloud import AwsEnv
 
 app = typer.Typer()
 console = Console()
+
+
+class AwsEnv(str, Enum):
+    """The only available AWS environments."""
+
+    labs = "labs"
+    sandbox = "sandbox"
+    staging = "staging"
+    production = "prod"
 
 
 def convert_classifier_specs(requested_classifiers: list[str]) -> list[ClassifierSpec]:
