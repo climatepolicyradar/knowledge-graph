@@ -383,7 +383,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         elif s3_prefix:
             s3_objects = s3_obj_generator_from_s3_prefix(s3_path=s3_prefix)
         else:
-            raise ValueError("Either s3_prefix or s3_keys must be provided.")
+            raise ValueError("Either s3_prefix or s3_paths must be provided.")
 
         document_labelled_passages = labelled_passages_generator(
             generator_func=s3_objects
