@@ -14,7 +14,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
@@ -39,6 +39,8 @@ class Config:
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
+    wandb_entity: str = "climatepolicyradar"
+    wandb_api_key: Optional[SecretStr] = None
 
     @classmethod
     async def create(cls) -> "Config":
@@ -48,6 +50,8 @@ class Config:
             config.cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
             )
+        if not config.wandb_api_key:
+            config.wandb_api_key = get_aws_ssm_param("WANDB_API_KEY")
         return config
 
 
@@ -93,7 +97,7 @@ def determine_document_ids(
 
 
 def download_classifier_from_wandb_to_local(
-    config: Config, classifier_name: str, alias: str
+    config: Config, classifier_name: str, alias: str = "latest"
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -103,12 +107,18 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
-    wandb.login(key=get_aws_ssm_param("WANDB_API_KEY"))
-    run = wandb.init()
-    artifact = config.wandb_model_registry + f"{classifier_name}:{alias or 'latest'}"
+    wandb.login(key=config.wandb_api_key)
+    run = wandb.init(
+        entity=config.wandb_entity, project=classifier_name, job_type="download_model"
+    )
+    artifact = config.wandb_model_registry + f"{classifier_name}:{alias}"
     print(f"Downloading artifact from W&B: {artifact}")
-    artifact = run.use_artifact(artifact, type="model")
-    return artifact.download()
+    try:
+        artifact = run.use_artifact(artifact, type="model")
+        classifier = artifact.download()
+        return classifier
+    finally:
+        run.finish()
 
 
 @task(log_prints=True)
