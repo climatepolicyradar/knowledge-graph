@@ -36,6 +36,10 @@ def test_vespa_search_adapter_from_aws_secrets(
 
     assert os.path.exists(f"{tmpdir}/cert.pem")
     assert os.path.exists(f"{tmpdir}/key.pem")
+    with open(f"{tmpdir}/cert.pem") as f:
+        assert f.read() == "Public cert content\n"
+    with open(f"{tmpdir}/key.pem") as f:
+        assert f.read() == "Private key content\n"
     assert (
         vespa_search_adapter.instance_url
         == mock_vespa_credentials["VESPA_INSTANCE_URL"]
