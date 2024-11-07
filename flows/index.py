@@ -221,7 +221,9 @@ def convert_labelled_passages_to_concepts(
     for labelled_passage in labelled_passages:
         # The concept used to label the passage holds some information on the parent
         # concepts and thus this is being used as a temporary solution for providing
-        # the relationship between concepts.
+        # the relationship between concepts. This has the downside that it ties a
+        # labelled passage to a particular concept when in fact the Spans that a
+        # labelled passage has can be labelled by multiple concepts.
         concept = Concept.model_validate(labelled_passage.metadata["concept"])
         parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
             concept=concept
