@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from typing import List
 from uuid import UUID
@@ -9,6 +10,17 @@ from prefect.client.schemas.objects import Deployment
 from prefect.events.actions import RunDeployment
 
 from flows.inference import classifier_inference
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create console handler and set level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Add ch to logger
+logger.addHandler(ch)
 
 
 async def read_automations_by_name(client, name: str) -> List[dict]:
@@ -104,27 +116,31 @@ async def main() -> None:
     navigator_data_s3_backup_flow_name = "navigator-data-s3-backup"
     navigator_data_s3_backup_deployment_name = f"{navigator_data_s3_backup_flow_name}/navigator-data-s3-backup-pipeline-cache-{aws_env}"
 
-    print(f"loading Deployment: {navigator_data_s3_backup_deployment_name}")
+    logger.info("Loading Deployment: %s", navigator_data_s3_backup_deployment_name)
 
     navigator_data_s3_backup_deployment = await client.read_deployment_by_name(
         name=navigator_data_s3_backup_deployment_name
     )
 
-    print(
-        f"loaded Deployment: name={navigator_data_s3_backup_deployment.name}, flow_id={navigator_data_s3_backup_deployment.flow_id}"
+    logger.info(
+        "Loaded Deployment: name=%s, flow_id=%s",
+        navigator_data_s3_backup_deployment.name,
+        navigator_data_s3_backup_deployment.flow_id,
     )
 
     classifier_inference_flow_name = classifier_inference.name
     classifier_inference_deployment_name = f"{classifier_inference_flow_name}/{project_name}-{classifier_inference.name}-{aws_env}"
 
-    print(f"loading Deployment: {classifier_inference_deployment_name}")
+    logger.info("Loading Deployment: %s", classifier_inference_deployment_name)
 
     classifier_inference_deployment = await client.read_deployment_by_name(
         name=classifier_inference_deployment_name
     )
 
-    print(
-        f"loaded Deployment: name={classifier_inference_deployment.name}, flow_id={classifier_inference_deployment.flow_id}"
+    logger.info(
+        "Loaded Deployment: name=%s, flow_id=%s",
+        classifier_inference_deployment.name,
+        classifier_inference_deployment.flow_id,
     )
 
     original = prime(
@@ -140,21 +156,19 @@ async def main() -> None:
 
     match len(automations):
         case 0:
-            print("Automation doesn't exist already, creating it")
+            logger.info("Automation doesn't exist already, creating it")
 
             automation_id = await client.create_automation(automation=original)
 
-            print(f"Created automation with id=`{automation_id}`")
+            logger.info("Created automation with id='%s'", automation_id)
         case 1:
             automation = automations[0]
 
-            print("Automation exists already, updating it")
-            print(
-                (
-                    "Read automation with "
-                    f'"id=`{automation["id"]}`, '
-                    f'name=`{automation["name"]}`'
-                )
+            logger.info("Automation exists already, updating it")
+            logger.info(
+                "Read automation with id='%s', name='%s'",
+                automation["id"],
+                automation["name"],
             )
 
             await update_automation(
@@ -163,7 +177,7 @@ async def main() -> None:
                 automation=original,
             )
 
-            print("Updated automation")
+            logger.info("Updated automation")
         case _:
             names = [auto["name"] for auto in automations]
 
