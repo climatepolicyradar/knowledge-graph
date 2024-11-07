@@ -1,32 +1,78 @@
 import asyncio
 import os
-import re
+from typing import List
+from uuid import UUID
 
-from prefect.automations import Automation
-from prefect.deployments import Deployment
-from prefect.events.schemas.automations import EventTrigger
-from prefect.server.events.actions import RunDeployment
+import prefect.events.schemas.automations as automations
+from prefect.client import get_client
+from prefect.client.schemas.objects import Deployment
+from prefect.events.actions import RunDeployment
 
 from flows.inference import classifier_inference
+
+
+async def read_automations_by_name(client, name: str) -> List[dict]:
+    response = await client._client.post(
+        "/automations/filter",
+        json={
+            "automations": {
+                "operator": "and_",
+                "name": {"any_": [name]},
+            },
+        },
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+async def update_automation(client, automation_id: UUID, automation):
+    """Updates an automation in Prefect Cloud."""
+
+    # The first step in preparing this to be serialised to JSON
+    json = automation.dict()
+
+    # Delete as it's null
+    del json["owner_resource"]
+    # Delete these as they're all sets which aren't serialisable, and
+    # also they're unused
+    del json["trigger"]["expect"]
+    del json["trigger"]["after"]
+    del json["trigger"]["for_each"]
+
+    # Transform these types to be serialisable
+    json["trigger"]["within"] = int(json["trigger"]["within"].total_seconds())
+    # This lens matches the structure returned by `prime()`.
+    json["actions"][0]["deployment_id"] = str(json["actions"][0]["deployment_id"])
+
+    response = await client._client.put(
+        f"/automations/{automation_id}",
+        json=json,
+    )
+    response.raise_for_status
 
 
 def prime(
     navigator_data_s3_backup_deployment: Deployment,
     classifier_inference_deployment: Deployment,
     aws_env: str,
-) -> Automation:
+) -> automations.Automation:
     """Return a new copy of the target Automation."""
-    return Automation(
+    return automations.Automation(
         name=f"{classifier_inference_deployment.name}-trigger",
-        trigger=EventTrigger(
+        description="Start concept store inference with classifiers.",
+        trigger=automations.EventTrigger(
             match={
                 "prefect.resource.id": "prefect.flow-run.*",
                 "prefect.resource.name": ["navigator-data-s3-backup"],
             },
-            match_related={
-                # This is the Deployment, for the specific AWS environment.
-                "prefect.resource.id": navigator_data_s3_backup_deployment.id,
-            },
+            match_related=automations.ResourceSpecification(
+                __root__={
+                    # This is the Deployment, for the specific AWS environment.
+                    "prefect.resource.id": str(navigator_data_s3_backup_deployment.id),
+                }
+            ),
             posture="Proactive",
             threshold=1,
             within=0,
@@ -51,15 +97,35 @@ async def main() -> None:
     if aws_env is None or aws_env == "":
         raise ValueError("AWS_ENV is missing")
 
-    project_name = ("knowledge-graph",)
+    project_name = "knowledge-graph"
 
-    navigator_data_s3_backup_deployment = Deployment(
-        name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
-    ).load()
+    client = get_client()
 
-    classifier_inference_deployment = Deployment(
-        name=f"{project_name}-{classifier_inference.name}-{aws_env}"
-    ).load()
+    navigator_data_s3_backup_flow_name = "navigator-data-s3-backup"
+    navigator_data_s3_backup_deployment_name = f"{navigator_data_s3_backup_flow_name}/navigator-data-s3-backup-pipeline-cache-{aws_env}"
+
+    print(f"loading Deployment: {navigator_data_s3_backup_deployment_name}")
+
+    navigator_data_s3_backup_deployment = await client.read_deployment_by_name(
+        name=navigator_data_s3_backup_deployment_name
+    )
+
+    print(
+        f"loaded Deployment: name={navigator_data_s3_backup_deployment.name}, flow_id={navigator_data_s3_backup_deployment.flow_id}"
+    )
+
+    classifier_inference_flow_name = classifier_inference.name
+    classifier_inference_deployment_name = f"{classifier_inference_flow_name}/{project_name}-{classifier_inference.name}-{aws_env}"
+
+    print(f"loading Deployment: {classifier_inference_deployment_name}")
+
+    classifier_inference_deployment = await client.read_deployment_by_name(
+        name=classifier_inference_deployment_name
+    )
+
+    print(
+        f"loaded Deployment: name={classifier_inference_deployment.name}, flow_id={classifier_inference_deployment.flow_id}"
+    )
 
     original = prime(
         navigator_data_s3_backup_deployment,
@@ -67,43 +133,43 @@ async def main() -> None:
         aws_env,
     )
 
-    try:
-        automation = await Automation.read(name=original.name)
-        print("Automation exists already, updating it")
-        print(
-            (
-                "Read automation with "
-                f"id=`{automation.id}`, "
-                f"name=`{automation.name}`"
-            )
-        )
+    automations = await read_automations_by_name(
+        client=client,
+        name=original.name,
+    )
 
-        # Set the attributes that will be updated
-        automation.trigger = original.trigger
-        automation.expect = original.expect
-        automation.actions = original.actions
-
-        automation = await automation.update()
-        print("Updated automation")
-    except ValueError as e:
-        error_message = str(e)
-        # From https://docs-2.prefect.io/latest/api-ref/prefect/automations/#prefect.automations.Automation.read
-        pattern = r"Automation with.*not found"
-
-        if re.match(pattern, error_message):
+    match len(automations):
+        case 0:
             print("Automation doesn't exist already, creating it")
 
-            automation = await original.create()
+            automation_id = await client.create_automation(automation=original)
+
+            print(f"Created automation with id=`{automation_id}`")
+        case 1:
+            automation = automations[0]
+
+            print("Automation exists already, updating it")
             print(
                 (
-                    "Created automation with "
-                    f"id=`{automation.id}`, "
-                    f"name=`{automation.name}`"
+                    "Read automation with "
+                    f'"id=`{automation["id"]}`, '
+                    f'name=`{automation["name"]}`'
                 )
             )
-        else:
-            # It was a real problem, re-raise the exception
-            raise
+
+            await update_automation(
+                client=client,
+                automation_id=UUID(automation["id"]),
+                automation=original,
+            )
+
+            print("Updated automation")
+        case _:
+            names = [auto["name"] for auto in automations]
+
+            raise ValueError(
+                f"Found multiple automations with name {original.name}: {names}"
+            )
 
 
 if __name__ == "__main__":
