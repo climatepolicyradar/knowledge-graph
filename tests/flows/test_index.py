@@ -271,7 +271,7 @@ def test_get_parent_concepts_from_concept() -> None:
     """Test that we can correctly retrieve the parent concepts from a concept."""
     assert get_parent_concepts_from_concept(
         concept=Concept(
-            preferred_label="Council Concept - Rule Based",
+            preferred_label="forestry sector",
             alternative_labels=[],
             negative_labels=[],
             wikibase_id=WikibaseID("Q10014"),
