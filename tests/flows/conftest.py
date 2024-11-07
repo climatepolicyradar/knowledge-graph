@@ -280,6 +280,7 @@ def example_labelled_passages(labelled_passage_fixture_files) -> list[LabelledPa
     return labelled_passages
 
 
+@pytest.fixture
 def mock_wandb(mock_s3_client):
     with (
         patch("wandb.init") as mock_init,
