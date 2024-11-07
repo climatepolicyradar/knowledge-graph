@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
+from pydantic import BaseModel, Field, SecretStr
 
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
@@ -37,6 +39,8 @@ class Config:
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
+    wandb_entity: str = "climatepolicyradar"
+    wandb_api_key: Optional[SecretStr] = None
 
     @classmethod
     async def create(cls) -> "Config":
@@ -46,6 +50,8 @@ class Config:
             config.cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
             )
+        if not config.wandb_api_key:
+            config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
         return config
 
 
@@ -91,7 +97,7 @@ def determine_document_ids(
 
 
 def download_classifier_from_wandb_to_local(
-    config: Config, classifier_name: str, alias: str
+    config: Config, classifier_name: str, alias: str = "latest"
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -101,12 +107,18 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
-    wandb.login(key=get_aws_ssm_param("WANDB_API_KEY"))
-    run = wandb.init()
-    artifact = config.wandb_model_registry + f"{classifier_name}:{alias or 'latest'}"
+    wandb.login(key=config.wandb_api_key.get_secret_value())
+    run = wandb.init(
+        entity=config.wandb_entity, project=classifier_name, job_type="download_model"
+    )
+    artifact = config.wandb_model_registry + f"{classifier_name}:{alias}"
     print(f"Downloading artifact from W&B: {artifact}")
-    artifact = run.use_artifact(artifact, type="model")
-    return artifact.download()
+    try:
+        artifact = run.use_artifact(artifact, type="model")
+        classifier = artifact.download()
+        return classifier
+    finally:
+        run.finish()
 
 
 @task(log_prints=True)
@@ -207,6 +219,10 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
+        metadata={
+            "concept": classifier.concept.model_dump(),
+            "inference_timestamp": datetime.now().isoformat(),
+        },
     )
     return labelled_passage
 
@@ -255,9 +271,21 @@ async def run_classifier_inference_on_document(
     )
 
 
+class ClassifierSpec(BaseModel):
+    """Details for a classifier to run"""
+
+    name: str = Field(
+        description="The reference of the classifier in wandb. e.g. 'Q992-RulesBasedClassifier'"
+    )
+    alias: str = Field(
+        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
+        default="latest",
+    )
+
+
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
-    classifier_spec: list[tuple[str, str]],
+    classifier_specs: list[ClassifierSpec],
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
 ):
@@ -275,7 +303,6 @@ async def classifier_inference(
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
       there is no need to change this outside of local dev
-    Example classifier_spec: ["Q788", "latest")]
     """
     if not config:
         config = await Config.create()
@@ -288,13 +315,13 @@ async def classifier_inference(
         current_bucket_ids=current_bucket_ids,
     )
 
-    for classifier_name, classifier_alias in classifier_spec:
+    for classifier_spec in classifier_specs:
         subflows = [
             run_classifier_inference_on_document(
                 config=config,
                 document_id=document_id,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
+                classifier_name=classifier_spec.name,
+                classifier_alias=classifier_spec.alias,
             )
             for document_id in validated_document_ids
         ]

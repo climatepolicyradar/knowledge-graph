@@ -98,3 +98,15 @@ prefect_login: export_env_vars
 deploy: prefect_login
 	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
 	python -m deployments
+
+# Run inference over documents in a pipeline bucket
+infer +OPTS="":
+    poetry run infer {{OPTS}}
+
+# Run inference over documents in the sandbox pipeline bucket
+infer-sandbox +OPTS="":
+    just infer --aws_env sandbox {{OPTS}}
+
+# Run inference over documents in the labs pipeline bucket
+infer-labs +OPTS="":
+    just infer --aws_env labs {{OPTS}}

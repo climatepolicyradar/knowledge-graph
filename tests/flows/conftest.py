@@ -3,7 +3,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import boto3
 import pytest
@@ -18,6 +18,7 @@ from cpr_sdk.parser_models import (
 )
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
+from pydantic import SecretStr
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
@@ -28,7 +29,12 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 @pytest.fixture()
 def test_config():
-    yield Config(cache_bucket="test_bucket")
+    yield Config(
+        cache_bucket="test_bucket",
+        wandb_model_registry="test_wandb_model_registry",
+        wandb_entity="test_entity",
+        wandb_api_key=SecretStr("test_wandb_api_key"),
+    )
 
 
 @pytest.fixture(scope="function")
@@ -257,3 +263,16 @@ def example_vespa_concepts() -> list[VespaConcept]:
             timestamp=datetime.now(),
         ),
     ]
+
+
+def mock_wandb(mock_s3_client):
+    with (
+        patch("wandb.init") as mock_init,
+        patch("wandb.login"),
+    ):
+        mock_run = Mock()
+        mock_artifact = Mock()
+        mock_init.return_value = mock_run
+        mock_run.use_artifact.return_value = mock_artifact
+
+        yield mock_init, mock_run, mock_artifact
