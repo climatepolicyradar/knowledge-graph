@@ -265,6 +265,7 @@ def example_vespa_concepts() -> list[VespaConcept]:
     ]
 
 
+@pytest.fixture
 def mock_wandb(mock_s3_client):
     with (
         patch("wandb.init") as mock_init,
