@@ -42,6 +42,7 @@ class Config:
     cache_bucket: Optional[str] = None
     document_source_prefix: str = "embeddings_input"
     document_target_prefix: str = "labelled_passages"
+    pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
@@ -61,14 +62,19 @@ class Config:
         return config
 
 
-def list_bucket_doc_ids(config: Config) -> list[str]:
-    """Scan configured bucket and return all IDs."""
+def get_bucket_paginator(config: Config, prefix: str):
+    """Returns an s3 paginator for the pipeline cache bucket"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
-    page_iterator = paginator.paginate(
+    return paginator.paginate(
         Bucket=config.cache_bucket,
-        Prefix=config.document_source_prefix,
+        Prefix=prefix,
     )
+
+
+def list_bucket_doc_ids(config: Config) -> list[str]:
+    """Scan configured bucket and return all IDs."""
+    page_iterator = get_bucket_paginator(config, config.document_source_prefix)
     doc_ids = []
 
     for p in page_iterator:
@@ -79,8 +85,36 @@ def list_bucket_doc_ids(config: Config) -> list[str]:
     return doc_ids
 
 
+def get_latest_ingest_documents(config: Config) -> list[str]:
+    """
+    Get ids of changed documents from the latest ingest run
+
+    Retrieves the `new_and_updated_docs.json` file from the latest ingest.
+    Extracts the ids from the file, and returns them as a single list.
+    """
+    page_iterator = get_bucket_paginator(config, config.pipeline_state_prefix)
+    file_name = "new_and_updated_documents.json"
+
+    latest = next(
+        page_iterator.search(
+            f"sort_by(Contents[?contains(Key, '{file_name}')], &Key)[-1]"
+        )
+    )
+
+    data = download_s3_file(config, latest["Key"])
+    content = json.loads(data)
+    updated = list(content["updated_documents"].keys())
+    new = [d["import_id"] for d in content["new_documents"]]
+
+    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")
+    return new + updated
+
+
 def determine_document_ids(
-    requested_document_ids: Optional[list[str]], current_bucket_ids: list[str]
+    config: Config,
+    use_new_and_updated: bool,
+    requested_document_ids: Optional[list[str]],
+    current_bucket_ids: list[str],
 ) -> list[str]:
     """
     Confirm chosen document ids or default to all if not specified.
@@ -90,7 +124,13 @@ def determine_document_ids(
     raise a ValueError If no document id were requested, this will
     instead return the current_bucket_ids.
     """
-    if requested_document_ids is None:
+    if use_new_and_updated and requested_document_ids:
+        raise ValueError(
+            "`use_new_and_updated`, and `document_ids` are mutually exclusive"
+        )
+    elif use_new_and_updated:
+        requested_document_ids = get_latest_ingest_documents(config)
+    elif requested_document_ids is None:
         return current_bucket_ids
 
     missing_from_bucket = list(set(requested_document_ids) - set(current_bucket_ids))
@@ -150,17 +190,22 @@ async def load_classifier(
     return classifier
 
 
+def download_s3_file(config: Config, key: str):
+    """Retrieve an s3 file from the pipeline cache"""
+
+    s3 = boto3.client("s3", region_name=config.bucket_region)
+    response = s3.get_object(Bucket=config.cache_bucket, Key=key)
+    content = response["Body"].read().decode("utf-8")
+    return content
+
+
 def load_document(config: Config, document_id: str) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-
     file_key = os.path.join(
         config.document_source_prefix,
         f"{document_id}.json",
     )
-
-    response = s3.get_object(Bucket=config.cache_bucket, Key=file_key)
-    content = response["Body"].read().decode("utf-8")
+    content = download_s3_file(config=config, key=file_key)
     document = BaseParserOutput.model_validate_json(content)
     return document
 
@@ -293,6 +338,7 @@ class ClassifierSpec(BaseModel):
 async def classifier_inference(
     classifier_specs: list[ClassifierSpec],
     document_ids: Optional[list[str]] = None,
+    use_new_and_updated: bool = False,
     config: Optional[Config] = None,
 ):
     """
@@ -317,6 +363,8 @@ async def classifier_inference(
 
     current_bucket_ids = list_bucket_doc_ids(config=config)
     validated_document_ids = determine_document_ids(
+        config=config,
+        use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
         current_bucket_ids=current_bucket_ids,
     )
