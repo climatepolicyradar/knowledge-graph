@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Generator, Optional, Union
+from typing import Generator, Optional, Set, Union
 
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
@@ -47,20 +47,42 @@ def get_vespa_search_adapter_from_aws_secrets(
     return VespaSearchAdapter(instance_url=vespa_instance_url, cert_directory=cert_dir)
 
 
-def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, None]:
+def s3_obj_generator_from_s3_prefix(
+    s3_path: str,
+) -> Generator[tuple[str, list[dict]], None, None]:
     """
     A generator that yields objects from an s3 path.
+
+    We retrieve the bucket from the path using the second element in the path (parts[1]).
+    Path("s3://bucket/prefix/file.json").parts -> ('s3:', 'bucket', 'prefix', 'file.json')
 
     params:
     - s3_path: The path in s3 to yield objects from.
     """
     object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_path)
-    # We retrieve the bucket from the path using the second element in the path (parts[1]).
-    # Path("s3://bucket/prefix/file.json").parts -> ('s3:', 'bucket', 'prefix', 'file.json')
     bucket = Path(s3_path).parts[1]
     for key in object_keys:
         obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
         yield key, json.loads(obj)
+
+
+def s3_obj_generator_from_s3_paths(
+    s3_paths: Set[str],
+) -> Generator[tuple[str, list[dict]], None, None]:
+    """
+    A generator that yields objects from a set of s3 paths.
+
+    We extract the key from the s3 path by removing the first two elements in the path.
+    E.g. "s3://bucket/prefix/file.json" -> "prefix/file.json"
+
+    params:
+    - s3_paths: A set of s3 paths to yield objects from.
+    """
+    for s3_path in s3_paths:
+        yield (
+            "/".join(Path(s3_path).parts[2:]),
+            json.loads(_s3_object_read_text(s3_path=s3_path)),
+        )
 
 
 def labelled_passages_generator(
@@ -298,7 +320,8 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
 @flow
 async def index_labelled_passages_from_s3_to_vespa(
-    s3_path: str,
+    s3_prefix: Optional[str] = None,
+    s3_paths: Optional[Set[str]] = None,
     vespa_search_adapter: Optional[VespaSearchAdapter] = None,
 ) -> None:
     """
@@ -308,8 +331,24 @@ async def index_labelled_passages_from_s3_to_vespa(
     indexes them in a Vespa instance. The name of each file in the specified S3 path is
     expected to represent the document's import ID.
 
+    When `s3_prefix` is provided, the function will index all files within that S3
+    prefix (directory). When `s3_paths` is provided, the function will index only the
+    files specified in the set of S3 object keys. If both are provided `s3_paths` will
+    be used.
+
     Assumptions:
     - The S3 file names represent document import IDs.
+
+    params:
+    - s3_prefix: The S3 prefix (directory) to yield objects from.
+        E.g. "s3://bucket/prefix/"
+    - s3_paths: A set of S3 object keys to yield objects from.
+        E.g. {"s3://bucket/prefix/file1.json", "s3://bucket/prefix/file2.json"}
+    - vespa_search_adapter: An instance of VespaSearchAdapter.
+        E.g. VespaSearchAdapter(
+            instance_url="https://vespa-instance-url.com",
+            cert_directory="certs/"
+        )
     """
     with tempfile.TemporaryDirectory() as temp_dir:
         if not vespa_search_adapter:
@@ -319,7 +358,13 @@ async def index_labelled_passages_from_s3_to_vespa(
                 vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
             )
 
-        s3_objects = s3_obj_generator(s3_path=s3_path)
+        if s3_paths:
+            s3_objects = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
+        elif s3_prefix:
+            s3_objects = s3_obj_generator_from_s3_prefix(s3_path=s3_prefix)
+        else:
+            raise ValueError("Either s3_prefix or s3_keys must be provided.")
+
         document_labelled_passages = labelled_passages_generator(
             generator_func=s3_objects
         )
