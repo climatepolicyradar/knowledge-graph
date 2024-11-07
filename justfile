@@ -96,7 +96,7 @@ prefect-login: export-env-vars
 	prefect cloud login -k ${PREFECT_API_KEY}
 
 deploy: prefect-login
-	just deploy-deployments
+    just deploy-deployments
     just deploy-automations
 
 deploy-deployments: prefect-login
