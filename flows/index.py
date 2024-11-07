@@ -150,6 +150,10 @@ def get_updated_passage_concepts_dict(
 ) -> list[dict]:
     """Update a passage's concepts with the new concept."""
     passage.concepts = list(passage.concepts) if passage.concepts else []
+
+    if concept not in passage.concepts:
+        passage.concepts.append(concept)
+
     passage.concepts.append(concept)
 
     return [concept.model_dump(mode="json") for concept in passage.concepts]
