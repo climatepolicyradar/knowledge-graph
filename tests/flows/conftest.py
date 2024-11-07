@@ -66,8 +66,8 @@ def mock_vespa_credentials() -> dict[str, str]:
     """Mocked vespa credentials."""
     return {
         "VESPA_INSTANCE_URL": "http://localhost:8080",
-        "VESPA_PUBLIC_CERT_FULL_ACCESS": "Cert Content",
-        "VESPA_PRIVATE_KEY_FULL_ACCESS": "Key Content",
+        "VESPA_PUBLIC_CERT_FULL_ACCESS": "UHVibGljIGNlcnQgY29udGVudAo=",  # "Public cert content"
+        "VESPA_PRIVATE_KEY_FULL_ACCESS": "UHJpdmF0ZSBrZXkgY29udGVudAo=",  # "Private key content"
     }
 
 
