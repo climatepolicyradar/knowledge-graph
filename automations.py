@@ -1,3 +1,5 @@
+"""Create automations in Prefect Cloud for running classifier inference."""
+
 import asyncio
 import logging
 import os
@@ -24,6 +26,7 @@ logger.addHandler(ch)
 
 
 async def read_automations_by_name(client, name: str) -> List[dict]:
+    """Read a list of automations from Prefect Cloud."""
     response = await client._client.post(
         "/automations/filter",
         json={
@@ -40,8 +43,7 @@ async def read_automations_by_name(client, name: str) -> List[dict]:
 
 
 async def update_automation(client, automation_id: UUID, automation):
-    """Updates an automation in Prefect Cloud."""
-
+    """Update an automation in Prefect Cloud."""
     # The first step in preparing this to be serialised to JSON
     json = automation.dict()
 
@@ -114,9 +116,15 @@ async def main() -> None:
     client = get_client()
 
     navigator_data_s3_backup_flow_name = "navigator-data-s3-backup"
-    navigator_data_s3_backup_deployment_name = f"{navigator_data_s3_backup_flow_name}/navigator-data-s3-backup-pipeline-cache-{aws_env}"
+    navigator_data_s3_backup_deployment_name = (
+        f"{navigator_data_s3_backup_flow_name}/"
+        f"navigator-data-s3-backup-pipeline-cache-{aws_env}"
+    )
 
-    logger.info("Loading Deployment: %s", navigator_data_s3_backup_deployment_name)
+    logger.info(
+        "Loading Deployment: %s",
+        navigator_data_s3_backup_deployment_name,
+    )
 
     navigator_data_s3_backup_deployment = await client.read_deployment_by_name(
         name=navigator_data_s3_backup_deployment_name
@@ -129,7 +137,10 @@ async def main() -> None:
     )
 
     classifier_inference_flow_name = classifier_inference.name
-    classifier_inference_deployment_name = f"{classifier_inference_flow_name}/{project_name}-{classifier_inference.name}-{aws_env}"
+    classifier_inference_deployment_name = (
+        f"{classifier_inference_flow_name}/"
+        f"{project_name}-{classifier_inference.name}-{aws_env}"
+    )
 
     logger.info("Loading Deployment: %s", classifier_inference_deployment_name)
 
