@@ -60,7 +60,7 @@ def prime(
 ) -> automations.Automation:
     """Return a new copy of the target Automation."""
     return automations.Automation(
-        name=f"{classifier_inference_deployment.name}-trigger",
+        name=f"trigger-{classifier_inference_deployment.name}",
         description="Start concept store inference with classifiers.",
         trigger=automations.EventTrigger(
             match={
