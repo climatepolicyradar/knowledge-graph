@@ -57,7 +57,7 @@ def mock_ssm_client(mock_aws_creds) -> Generator:
 def mock_vespa_credentials() -> dict[str, str]:
     """Mocked vespa credentials."""
     return {
-        "PREFECT_VESPA_INSTANCE_URL": "http://localhost:8080",
+        "VESPA_INSTANCE_URL": "http://localhost:8080",
         "VESPA_PUBLIC_CERT_FULL_ACCESS": "Cert Content",
         "VESPA_PRIVATE_KEY_FULL_ACCESS": "Key Content",
     }
@@ -67,9 +67,9 @@ def mock_vespa_credentials() -> dict[str, str]:
 def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
     """Creates the vespa parameters in the mock ssm client."""
     mock_ssm_client.put_parameter(
-        Name="PREFECT_VESPA_INSTANCE_URL",
+        Name="VESPA_INSTANCE_URL",
         Description="A test parameter for the vespa instance.",
-        Value=mock_vespa_credentials["PREFECT_VESPA_INSTANCE_URL"],
+        Value=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(

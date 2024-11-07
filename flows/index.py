@@ -18,9 +18,9 @@ from prefect.logging import get_logger, get_run_logger
 
 def get_vespa_search_adapter_from_aws_secrets(
     cert_dir: str,
-    vespa_instance_url_param_name: str = "PREFECT_VESPA_INSTANCE_URL",
-    vespa_public_cert_param_name: str = "PREFECT_VESPA_PUBLIC_CERT_READ",
-    vespa_private_key_param_name: str = "PREFECT_VESPA_PRIVATE_KEY_READ",
+    vespa_instance_url_param_name: str = "VESPA_INSTANCE_URL",
+    vespa_public_cert_param_name: str = "VESPA_PUBLIC_CERT_READ",
+    vespa_private_key_param_name: str = "VESPA_PRIVATE_KEY_READ",
 ) -> VespaSearchAdapter:
     """
     Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager.
