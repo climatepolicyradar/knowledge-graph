@@ -118,7 +118,7 @@ def get_model_from_span(span: Span) -> str:
     """
     Get the model used to label the span.
 
-    Labellers are stored in a list and the first labeller in the context of inferenece
+    Labellers are stored in a list and the first labeller in the context of inference
     is assumed to be the model used to label the span.
     """
     return span.labellers[0]
