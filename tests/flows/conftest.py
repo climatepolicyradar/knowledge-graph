@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from io import BytesIO
@@ -132,6 +133,43 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
     yield fixture_files
+
+
+def create_mock_new_and_updated_documents_json(
+    mock_s3_client, mock_bucket, doc_names: tuple[str, str], timestamp: str
+):
+    first_doc, second_doc = doc_names
+    content = {
+        "new_documents": [
+            {"import_id": first_doc},
+        ],
+        "updated_documents": {second_doc: []},
+    }
+    data = BytesIO(json.dumps(content).encode("utf-8"))
+    key = os.path.join("input", timestamp, "new_and_updated_documents.json")
+    mock_s3_client.put_object(
+        Bucket=mock_bucket, Key=key, Body=data, ContentType="application/json"
+    )
+
+
+@pytest.fixture
+def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
+    previous_docs = {"Previous.document.0.2", "Previous.document.0.1"}
+    create_mock_new_and_updated_documents_json(
+        mock_s3_client,
+        mock_bucket,
+        doc_names=previous_docs,
+        timestamp="2023-01-1T01.01.01.000001",
+    )
+
+    latest_docs = {"Latest.document.0.2", "Latest.document.0.1"}
+    create_mock_new_and_updated_documents_json(
+        mock_s3_client,
+        mock_bucket,
+        doc_names=latest_docs,
+        timestamp="2023-01-1T01.01.01.000001",
+    )
+    yield previous_docs, latest_docs
 
 
 @pytest.fixture
