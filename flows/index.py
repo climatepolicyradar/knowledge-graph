@@ -145,18 +145,31 @@ def get_passage_for_concept(
     return None, None
 
 
-def get_updated_passage_concepts_dict(
+def get_updated_passage_concepts(
     passage: VespaPassage, concept: VespaConcept
 ) -> list[dict]:
-    """Update a passage's concepts with the new concept."""
-    passage.concepts = list(passage.concepts) if passage.concepts else []
+    """
+    Update a passage's concepts with the new concept.
 
-    if concept not in passage.concepts:
-        passage.concepts.append(concept)
+    During the update we remove all the old concepts related to a model. This is as it
+    was decided that holding out dated concepts/spans on the passage in vespa for a
+    model is not useful.
 
-    passage.concepts.append(concept)
+    It is also, not possible to duplicate a Concept object in the concepts array as we
+    are removing all instances where the model is the same.
+    """
+    if passage.concepts:
+        filtered_concepts = [
+            passage_concept
+            for passage_concept in passage.concepts
+            if passage_concept.model != concept.model
+        ]
 
-    return [concept.model_dump(mode="json") for concept in passage.concepts]
+        updated_concepts = filtered_concepts + [concept]
+
+        return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
+
+    return [concept.model_dump(mode="json")]
 
 
 @flow
@@ -204,7 +217,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
                     namespace="doc_search",
                     data_id=passage_id.split("::")[-1],
                     fields={
-                        "concepts": get_updated_passage_concepts_dict(
+                        "concepts": get_updated_passage_concepts(
                             passage_for_concept, concept
                         )
                     },

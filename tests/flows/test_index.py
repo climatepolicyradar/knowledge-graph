@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from flows.index import (
     document_concepts_generator,
     get_document_passages_from_vespa,
     get_passage_for_concept,
+    get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
     index_concepts_from_s3_to_vespa,
     run_partial_updates_of_concepts_for_document_passages,
@@ -244,3 +246,72 @@ def test_get_passage_for_concept(
 
         assert passage_id == relevant_passage[0]
         assert passage == relevant_passage[1]
+
+
+def test_get_updated_passage_concepts(
+    example_vespa_concepts: list[VespaConcept],
+) -> None:
+    """Test that we can retrieve the updated passage concepts dict."""
+    for concept in example_vespa_concepts:
+        # Test we can add a concept to the passage concepts that doesn't already
+        # exist.
+        updated_passage_concepts = get_updated_passage_concepts(
+            concept=concept,
+            passage=VespaPassage(
+                text_block="Test text.",
+                text_block_id="1",
+                text_block_type="Text",
+                concepts=[],
+            ),
+        )
+        assert len(updated_passage_concepts) == 1
+        assert updated_passage_concepts[0] == concept.model_dump(mode="json")
+
+        # Test that we can remove old model concepts from the passage concepts and
+        # add the new one.
+        updated_passage_concepts = get_updated_passage_concepts(
+            concept=concept,
+            passage=VespaPassage(
+                text_block="Test text.",
+                text_block_id="1",
+                text_block_type="Text",
+                concepts=[
+                    VespaConcept(
+                        id="1",
+                        name="extreme weather",
+                        parent_concepts=[{"name": "weather", "id": "Q123"}],
+                        parent_concept_ids_flat="Q123,",
+                        model=concept.model,  # Ensure the models are the same
+                        end=100,
+                        start=0,
+                        timestamp=datetime.now(),
+                    )
+                ],
+            ),
+        )
+        assert len(updated_passage_concepts) == 1
+        assert updated_passage_concepts[0] == concept.model_dump(mode="json")
+
+        # Test that we can add new concepts and retain concepts from other models
+        updated_passage_concepts = get_updated_passage_concepts(
+            concept=concept,
+            passage=VespaPassage(
+                text_block="Test text.",
+                text_block_id="1",
+                text_block_type="Text",
+                concepts=[
+                    VespaConcept(
+                        id="1",
+                        name="extreme weather",
+                        parent_concepts=[{"name": "weather", "id": "Q123"}],
+                        parent_concept_ids_flat="Q123,",
+                        model="non-existent model",  # Ensure the models are NOT the same
+                        end=100,
+                        start=0,
+                        timestamp=datetime.now(),
+                    )
+                ],
+            ),
+        )
+        assert len(updated_passage_concepts) == 2
+        assert concept.model_dump(mode="json") in updated_passage_concepts
