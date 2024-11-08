@@ -33,9 +33,3 @@ model_artifact_name = "model.pickle"
 
 # aws
 aws_region = "eu-west-1"
-
-# sampling config
-SAMPLE_SIZE = 130
-NEGATIVE_PROPORTION = 0.2
-STRATIFIED_COLUMNS = ["world_bank_region", "dataset_name"]
-EQUAL_COLUMNS = ["translated"]
