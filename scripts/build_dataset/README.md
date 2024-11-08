@@ -4,11 +4,4 @@ We need to sample from datasets which haven't yet been parsed by the core pipeli
 
 The scripts are numbered according to the order in which they should be run.
 
-- `01_download_corporate_disclosures.py`
-- `02_download_litigation.py`
-- `03_add_geography.py`
-- `04_parse.py`
-- `05_translate.py`
-- `06_merge.py`
-
 The final dataset will be saved in `data/processed/combined_dataset.feather`.
