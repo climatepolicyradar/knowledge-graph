@@ -5,11 +5,12 @@ import typer
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import concept_dir, processed_data_dir
+from scripts.config import processed_data_dir
 from src.classifier import EmbeddingClassifier, KeywordClassifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
+from src.wikibase import WikibaseSession
 
 app = typer.Typer()
 console = Console()
@@ -31,10 +32,10 @@ def main(
     ),
 ):
     """
-    Equitably sample passages for concepts, and populate an argilla project for labelling.
+    Equitably sample passages for concepts from the balanced dataset.
 
-    This script is used to equitably passages from our dataset(s) for instances of a given
-    set of concepts. It fetches concept metadata for the supplied concept and all
+    This script is used to equitably passages from our dataset(s) for instances of a
+    given concept. It loads concept metadata for the supplied concept and all
     subconcept IDs, and uses their metadata to create a classifier. It then samples
     passages from the passages which are likely to be instances of the concept.
 
@@ -63,16 +64,18 @@ def main(
             "  just build-dataset"
         ) from e
 
-    # Get the concept metadata
-    try:
-        concept = Concept.load(concept_dir / f"{wikibase_id}.json")
-        console.log(f"📚 Loaded concept metadata for {wikibase_id}")
-    except FileNotFoundError as e:
-        raise FileNotFoundError(
-            f"Concept metadata not found for {wikibase_id}. If you haven't"
-            " already, you should run:\n"
-            f"  just get-concept {wikibase_id}"
-        ) from e
+    # Get the concept metadata from wikibase
+    wikibase = WikibaseSession()
+    top_level_concept = wikibase.get_concept(wikibase_id)
+    subconcepts = wikibase.get_subconcepts(wikibase_id, recursive=True)
+    concept = Concept(
+        preferred_label=top_level_concept.preferred_label,
+        description=top_level_concept.description,
+        alternative_labels=top_level_concept.all_labels
+        + [label for subconcept in subconcepts for label in subconcept.all_labels],
+        negative_labels=top_level_concept.negative_labels
+        + [label for subconcept in subconcepts for label in subconcept.negative_labels],
+    )
 
     models = []
     for model_class in [KeywordClassifier, EmbeddingClassifier]:
