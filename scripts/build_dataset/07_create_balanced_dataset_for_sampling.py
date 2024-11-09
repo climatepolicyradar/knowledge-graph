@@ -2,7 +2,7 @@ import pandas as pd
 from rich.console import Console
 
 from scripts.config import processed_data_dir
-from src.sampling import sample_balanced_dataset
+from src.sampling import create_balanced_sample
 
 console = Console()
 
@@ -12,10 +12,10 @@ console.log(f"✅ Combined dataset loaded with {len(combined_df)} rows")
 columns = ["translated", "world_bank_region", "document_metadata.corpus_type_name"]
 
 with console.status("🧪 Sampling a balanced dataset from the combined dataset"):
-    balanced_sample_dataframe: pd.DataFrame = sample_balanced_dataset(
+    balanced_sample_dataframe: pd.DataFrame = create_balanced_sample(
         df=combined_df,
         sample_size=25_000,
-        columns=columns,
+        on_columns=columns,
     )
 
 console.log(f"✅ Sampled a new dataset with {len(balanced_sample_dataframe)} rows")

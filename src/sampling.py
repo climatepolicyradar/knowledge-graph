@@ -4,10 +4,15 @@ import numpy as np
 import pandas as pd
 
 
-def sample_balanced_dataset(
+def split_evenly(n: int, k: int) -> list[int]:
+    """Split n into k values that sum to n, distributing remainder at the end"""
+    return [n // k + (1 if i < n % k else 0) for i in range(k)]
+
+
+def create_balanced_sample(
     df: pd.DataFrame,
     sample_size: int,
-    columns: list[str],
+    on_columns: list[str],
     min_samples_per_combination: int = 1,
 ) -> pd.DataFrame:
     """
@@ -21,10 +26,10 @@ def sample_balanced_dataset(
     :return pd.DataFrame: A balanced sample of the dataframe
     """
     # Input validation
-    missing_columns = set(columns) - set(df.columns)
+    missing_columns = set(on_columns) - set(df.columns)
     if missing_columns:
         raise ValueError(f"Columns {missing_columns} are not in the dataframe")
-    if len(columns) == 0:
+    if len(on_columns) == 0:
         raise ValueError("At least one column must be specified")
     if sample_size > len(df):
         raise ValueError(
@@ -32,16 +37,16 @@ def sample_balanced_dataset(
         )
 
     # Drop any rows where the column values are None or "None"
-    df = df.dropna(subset=columns)
-    df = df[~df[columns].eq("None").any(axis=1)]
+    df = df.dropna(subset=on_columns)
+    df = df[~df[on_columns].eq("None").any(axis=1)]
 
     # Pre-compute categorical values and create category codes for faster filtering
-    for col in columns:
+    for col in on_columns:
         if not pd.api.types.is_categorical_dtype(df[col]):
             df[col] = pd.Categorical(df[col])
 
     # Create a compound key for faster grouping
-    df["_group_key"] = df[columns].apply(lambda x: "_".join(x.astype(str)), axis=1)
+    df["_group_key"] = df[on_columns].apply(lambda x: "_".join(x.astype(str)), axis=1)
 
     # Get group sizes and filter out rare combinations
     group_sizes = df.groupby("_group_key").size()
