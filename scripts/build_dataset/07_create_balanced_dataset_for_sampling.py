@@ -10,11 +10,13 @@ with console.status("🚚 Loading the combined dataset") as status:
     combined_df = pd.read_feather(processed_data_dir / "combined_dataset.feather")
 console.log(f"✅ Combined dataset loaded with {len(combined_df)} rows")
 columns = ["translated", "world_bank_region", "document_metadata.corpus_type_name"]
-balanced_sample_dataframe: pd.DataFrame = sample_balanced_dataset(
-    df=combined_df,
-    sample_size=500,
-    columns=columns,
-)
+
+with console.status("🧪 Sampling a balanced dataset from the combined dataset"):
+    balanced_sample_dataframe: pd.DataFrame = sample_balanced_dataset(
+        df=combined_df,
+        sample_size=25_000,
+        columns=columns,
+    )
 
 console.log(f"✅ Sampled a new dataset with {len(balanced_sample_dataframe)} rows")
 
@@ -28,6 +30,6 @@ console.log(
 )
 
 # save the sample_df
-balanced_dataset_path = processed_data_dir / "balanced_dataset_for_sampling.featherrrrr"
+balanced_dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
 balanced_sample_dataframe.to_feather(balanced_dataset_path)
 console.log(f"💾 Saved the balanced dataset to {balanced_dataset_path}")

@@ -10,6 +10,7 @@ from src.classifier import EmbeddingClassifier, KeywordClassifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
+from src.sampling import sample_balanced_dataset
 from src.wikibase import WikibaseSession
 
 app = typer.Typer()
@@ -104,16 +105,34 @@ def main(
     # and the negative passages
     negative_samples = balanced_dataset[~positive_indices]
 
+    # calculate the number of positive and negative samples to take
     positive_sample_size = min(positive_sample_size, len(positive_samples))
     negative_sample_size = sample_size - positive_sample_size
 
-    # combine the sampled passages
+    # sample balanced datasets of positive and negative samples and concatenate them
     sampled_passages = pd.concat(
         [
-            positive_samples.sample(positive_sample_size),
-            negative_samples.sample(negative_sample_size),
+            sample_balanced_dataset(
+                df=positive_samples,
+                sample_size=positive_sample_size,
+                columns=[
+                    "translated",
+                    "world_bank_region",
+                    "document_metadata.corpus_type_name",
+                ],
+            ),
+            sample_balanced_dataset(
+                df=negative_samples,
+                sample_size=negative_sample_size,
+                columns=[
+                    "translated",
+                    "world_bank_region",
+                    "document_metadata.corpus_type_name",
+                ],
+            ),
         ]
     )
+
     # shuffle them so that the positive and negative examples are interleaved
     sampled_passages = sampled_passages.sample(frac=1)
 

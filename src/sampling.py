@@ -1,127 +1,100 @@
-from itertools import cycle, product
+import warnings
 
+import numpy as np
 import pandas as pd
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TaskProgressColumn,
-    TimeRemainingColumn,
-)
 
 
 def sample_balanced_dataset(
     df: pd.DataFrame,
     sample_size: int,
     columns: list[str],
-    show_progress: bool = True,
+    min_samples_per_combination: int = 1,
 ) -> pd.DataFrame:
     """
-    Sample a balanced dataset from a dataframe based on values in the specified columns
-
-    The function will sample `sample_size` rows from the dataframe `df` such that the
-    resulting sample is balanced over the values in the specified `columns`. For example,
-    if `columns=["A", "B"]`, the function will sample `sample_size` rows such that the
-    number of rows with each unique combination of values in columns "A" and "B" is
-    approximately equal. The function will sample without replacement, so the number of
-    unique combinations of values in the specified columns must be less than the number
-    of rows in the dataframe.
-
-    Note that the results will probably not be _perfectly_ balanced, as filtering for
-    some combinations of values in the supplied `columns` is likely to result in a
-    small/empty dataset in most real-world datasets. However, in most cases the
-    results should be much more balanced than the original dataset.
+    Sample a balanced dataset from a dataframe with improved performance and balance.
 
     :param pd.DataFrame df: The dataframe to sample from
     :param int sample_size: The number of rows to sample
     :param list[str] columns: The columns to balance the sample over
     :param bool show_progress: If True, show a progress bar. Default is True
+    :param int min_samples_per_combination: Minimum samples required per combination to be included
     :return pd.DataFrame: A balanced sample of the dataframe
     """
+    # Input validation
     missing_columns = set(columns) - set(df.columns)
     if missing_columns:
         raise ValueError(f"Columns {missing_columns} are not in the dataframe")
-
     if len(columns) == 0:
         raise ValueError("At least one column must be specified")
-
     if sample_size > len(df):
         raise ValueError(
             "Sample size should be less than the number of rows in the dataframe"
         )
 
-    # get all the unique values for each column
-    categorical_column_values = {
-        column: [
-            value
-            for value in df[column].unique()
-            if value != "None" and value is not None
-        ]
-        for column in columns
-    }
+    # Drop any rows where the column values are None or "None"
+    df = df.dropna(subset=columns)
+    df = df[~df[columns].eq("None").any(axis=1)]
 
-    # get all the combinations of values
-    combination_values = list(
-        product(*[values for values in categorical_column_values.values()])
-    )
+    # Pre-compute categorical values and create category codes for faster filtering
+    for col in columns:
+        if not pd.api.types.is_categorical_dtype(df[col]):
+            df[col] = pd.Categorical(df[col])
 
-    # create a dictionary of the combinations
-    combinations = [
-        {column: value for column, value in zip(columns, combination)}
-        for combination in combination_values
-    ]
+    # Create a compound key for faster grouping
+    df["_group_key"] = df[columns].apply(lambda x: "_".join(x.astype(str)), axis=1)
 
-    # sample without replacement from df over each combination until we have a sample of sample_size
-    balanced_sample_dataframe = pd.DataFrame()
+    # Get group sizes and filter out rare combinations
+    group_sizes = df.groupby("_group_key").size()
+    valid_groups = group_sizes[group_sizes >= min_samples_per_combination]
 
-    # first set up a cache for the rows which match each of our constraints so that we don't
-    # need to run a fresh query each time, and can instead sample from the cached rows
-    matching_rows_cache = {}
-
-    if show_progress:
-        progress_bar = Progress(
-            "[progress.description]{task.description}",
-            TaskProgressColumn(),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeRemainingColumn(),
-            transient=True,
+    if len(valid_groups) == 0:
+        raise ValueError(
+            "No valid combinations found with the specified minimum samples"
         )
-        # set up a progress bar to visualise the sampling process
-        progress_task = progress_bar.add_task(
-            description="Sampling a more balanced dataset", total=sample_size
-        )
-        progress_bar.start()
 
-    # cycle through the combinations until we have a dataset of the desired size
-    combination_cycle = cycle(combinations)
+    # Calculate the optimal number of samples per group to get as close to sample_size
+    # as possible
+    samples_per_group = np.floor(sample_size / len(valid_groups))
 
-    while len(balanced_sample_dataframe) < sample_size:
-        combination = next(combination_cycle)
-        matching_rows = matching_rows_cache.get(str(combination), None)
-        if matching_rows is None:
-            matching_rows = df.copy()
-            for column, value in combination.items():
-                matching_rows = matching_rows[matching_rows[column] == value]
-            matching_rows_cache[str(combination)] = matching_rows
+    # Sample from each group
+    result = pd.DataFrame()
 
-        if len(matching_rows) == 0:
-            continue
+    for group in valid_groups.index:
+        group_df = df[df["_group_key"] == group]
+        n_samples = min(int(samples_per_group), len(group_df))
 
+        if n_samples > 0:
+            sampled_indices = np.random.choice(
+                group_df.index, size=n_samples, replace=False
+            )
+            result = pd.concat([result, df.loc[sampled_indices]])
+
+    # Handle any remaining samples needed to reach sample_size
+    missing_rows = sample_size - len(result)
+    if missing_rows > 0:
+        remaining_df = df[~df.index.isin(result.index)]
+        if len(remaining_df) > 0:
+            try:
+                remaining_indices = np.random.choice(
+                    remaining_df.index,
+                    size=missing_rows,
+                    replace=False,
+                )
+                result = pd.concat([result, df.loc[remaining_indices]])
+            except ValueError as e:
+                warnings.warn(f"Warning: Error sampling remaining rows: {e}")
         else:
-            sampled_row = matching_rows.sample(1)
-            matching_rows_cache[str(combination)] = matching_rows.drop(
-                sampled_row.index
+            warnings.warn(
+                "Warning: Not enough remaining rows to reach the desired sample size"
             )
-            balanced_sample_dataframe = pd.concat(
-                [balanced_sample_dataframe, sampled_row]
-            )
-            if show_progress:
-                progress_bar.update(progress_task, advance=1)  # pyright: ignore
+    elif missing_rows < 0:
+        try:
+            result = result.sample(sample_size)
+        except ValueError as e:
+            warnings.warn(f"Warning: Error reducing the sample size: {e}")
 
-    balanced_sample_dataframe = balanced_sample_dataframe.reset_index(drop=True)
+    # Combine and clean up
+    result = result.reset_index(drop=True)
+    result = result.drop("_group_key", axis=1)
 
-    if show_progress:
-        progress_bar.stop()  # pyright: ignore
-
-    return balanced_sample_dataframe
+    return result
