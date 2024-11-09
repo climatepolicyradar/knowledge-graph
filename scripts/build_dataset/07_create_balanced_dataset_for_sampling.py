@@ -13,7 +13,7 @@ from rich.progress import (
 from scripts.config import processed_data_dir
 
 console = Console()
-SAMPLE_SIZE = 1_00
+SAMPLE_SIZE = 25_000
 
 with console.status("🚚 Loading the combined dataset") as status:
     combined_df = pd.read_feather(processed_data_dir / "combined_dataset.feather")
@@ -96,11 +96,6 @@ while len(balanced_sample_dataframe) < SAMPLE_SIZE:
 
 balanced_sample_dataframe = balanced_sample_dataframe.reset_index(drop=True)
 
-# save the sample_df
-balanced_dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
-balanced_sample_dataframe.to_feather(balanced_dataset_path)
-console.log(f"💾 Saved the balanced dataset to {balanced_dataset_path}")
-
 progress_bar.stop()
 
 console.log(f"✅ Sampled a new dataset with {len(balanced_sample_dataframe)} rows")
@@ -110,5 +105,16 @@ console.log("📊 Value counts for the balanced dataset:", end="\n\n")
 console.log(balanced_sample_dataframe["translated"].value_counts(), end="\n\n")
 console.log(balanced_sample_dataframe["world_bank_region"].value_counts(), end="\n\n")
 console.log(
-    balanced_sample_dataframe["document_metadata.corpus_type_name"].value_counts()
+    balanced_sample_dataframe["document_metadata.corpus_type_name"].value_counts(),
+    end="\n\n",
 )
+
+console.log(
+    "❗ Note that the counts above are probably not perfectly balanced, but should be "
+    "much closer than the original dataset.",
+)
+
+# save the sample_df
+balanced_dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
+balanced_sample_dataframe.to_feather(balanced_dataset_path)
+console.log(f"💾 Saved the balanced dataset to {balanced_dataset_path}")
