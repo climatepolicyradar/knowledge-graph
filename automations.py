@@ -10,8 +10,10 @@ import prefect.events.schemas.automations as automations
 from prefect.client import get_client
 from prefect.client.schemas.objects import Deployment
 from prefect.events.actions import RunDeployment
+from prefect.exceptions import ObjectNotFound
 
 from flows.inference import classifier_inference
+from scripts.cloud import AwsEnv
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -126,9 +128,20 @@ async def main() -> None:
         navigator_data_s3_backup_deployment_name,
     )
 
-    navigator_data_s3_backup_deployment = await client.read_deployment_by_name(
-        name=navigator_data_s3_backup_deployment_name
-    )
+    ignore = [AwsEnv.labs.value]
+
+    try:
+        navigator_data_s3_backup_deployment = await client.read_deployment_by_name(
+            name=navigator_data_s3_backup_deployment_name
+        )
+    except ObjectNotFound:
+        if aws_env in ignore:
+            logger.info(
+                f"Deployment not found in {aws_env} environment, skipping automation creation"
+            )
+            return
+
+        raise
 
     logger.info(
         "Loaded Deployment: name=%s, flow_id=%s",
