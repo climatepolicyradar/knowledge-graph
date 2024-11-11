@@ -20,7 +20,8 @@ from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
     labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
-    s3_obj_generator,
+    s3_obj_generator_from_s3_paths,
+    s3_obj_generator_from_s3_prefix,
 )
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -56,16 +57,40 @@ def test_vespa_search_adapter_from_aws_secrets(
     assert vespa_search_adapter.client.key == f"{tmpdir}/key.pem"
 
 
-def test_s3_obj_generator(
+def test_s3_obj_generator_from_s3_prefix(
     mock_bucket,
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
 ) -> None:
     """Test the s3 object generator."""
-    s3_gen = s3_obj_generator(
+    s3_gen = s3_obj_generator_from_s3_prefix(
         os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
     )
+    s3_files = list(s3_gen)
+    assert len(s3_files) == len(labelled_passage_fixture_files)
+
+    expected_keys = [
+        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+        for f in labelled_passage_fixture_files
+    ]
+    s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
+
+    assert sorted(s3_files_keys) == sorted(expected_keys)
+
+
+def test_s3_obj_generator_from_s3_paths(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+) -> None:
+    """Test the s3 object generator."""
+    s3_paths = {
+        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
+        for f in labelled_passage_fixture_files
+    }
+    s3_gen = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
     s3_files = list(s3_gen)
     assert len(s3_files) == len(labelled_passage_fixture_files)
 
@@ -85,7 +110,7 @@ def test_labelled_passages_generator(
     labelled_passage_fixture_files,
 ) -> None:
     """Test that the document concepts generator yields the correct objects."""
-    s3_gen = s3_obj_generator(
+    s3_gen = s3_obj_generator_from_s3_prefix(
         os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
     )
     labelled_passages_gen = labelled_passages_generator(generator_func=s3_gen)
@@ -212,7 +237,7 @@ async def test_index_labelled_passages_from_s3_to_vespa(
     )
 
     await index_labelled_passages_from_s3_to_vespa(
-        s3_path=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
+        s3_prefix=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
