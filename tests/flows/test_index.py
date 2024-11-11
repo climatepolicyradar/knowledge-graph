@@ -26,6 +26,7 @@ from flows.index import (
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
+from src.span import Span
 
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
     r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
@@ -364,6 +365,19 @@ def test_convert_labelled_passges_to_concepts(
     """Test that we can correctly convert labelled passages to concepts."""
     concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
     assert all([isinstance(concept, VespaConcept) for concept in concepts])
+
+    example_labelled_passages[0].spans.append(
+        Span(
+            text="Test text.",
+            start_index=0,
+            end_index=8,
+            concept_id=None,
+            labellers=[],
+        )
+    )
+    assert example_labelled_passages[0].spans[-1].concept_id is None
+    with pytest.raises(AssertionError, match="Concept ID is None."):
+        convert_labelled_passages_to_concepts(example_labelled_passages)
 
 
 def test_get_parent_concepts_from_concept() -> None:

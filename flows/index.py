@@ -246,10 +246,11 @@ def convert_labelled_passages_to_concepts(
             concept=concept
         )
 
-        concepts.extend(
-            [
+        for span in labelled_passage.spans:
+            assert span.concept_id is not None, "Concept ID is None."
+            concepts.append(
                 VespaConcept(
-                    id=labelled_passage.id,
+                    id=span.concept_id,
                     name=concept.preferred_label,
                     parent_concepts=parent_concepts,
                     parent_concept_ids_flat=parent_concept_ids_flat,
@@ -258,9 +259,7 @@ def convert_labelled_passages_to_concepts(
                     start=span.start_index,
                     timestamp=labelled_passage.metadata["inference_timestamp"],
                 )
-                for span in labelled_passage.spans
-            ]
-        )
+            )
 
     return concepts
 
