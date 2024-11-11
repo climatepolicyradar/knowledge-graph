@@ -33,7 +33,7 @@ def create_deployment(
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
     job_variables = {**default_variables, **flow_variables}
 
-    _ = classifier_inference.deploy(
+    _ = flow.deploy(
         f"{project_name}-{flow_name}-{aws_env}",
         work_pool_name=f"mvp-{aws_env}-ecs",
         version=version,
