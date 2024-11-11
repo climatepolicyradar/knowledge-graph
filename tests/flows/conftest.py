@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
@@ -7,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import boto3
 import pytest
+from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.parser_models import (
     BaseParserOutput,
     BlockType,
@@ -15,9 +17,11 @@ from cpr_sdk.parser_models import (
     PDFData,
     PDFTextBlock,
 )
+from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from pydantic import SecretStr
 
+from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
 from src.identifiers import WikibaseID
 
@@ -44,9 +48,61 @@ def mock_aws_creds():
 
 
 @pytest.fixture
-def mock_s3_client(mock_aws_creds) -> Generator[str, Any, Any]:
+def mock_s3_client(mock_aws_creds) -> Generator:
     with mock_aws():
         yield boto3.client("s3")
+
+
+@pytest.fixture(scope="function")
+def mock_ssm_client(mock_aws_creds) -> Generator:
+    """Mocked boto3 ssm client."""
+    with mock_aws():
+        yield boto3.client("ssm", region_name="eu-west-1")
+
+
+@pytest.fixture()
+def mock_vespa_credentials() -> dict[str, str]:
+    """Mocked vespa credentials."""
+    return {
+        "VESPA_INSTANCE_URL": "http://localhost:8080",
+        "VESPA_PUBLIC_CERT_FULL_ACCESS": "UHVibGljIGNlcnQgY29udGVudAo=",  # "Public cert content"
+        "VESPA_PRIVATE_KEY_FULL_ACCESS": "UHJpdmF0ZSBrZXkgY29udGVudAo=",  # "Private key content"
+    }
+
+
+@pytest.fixture
+def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
+    """Creates the vespa parameters in the mock ssm client."""
+    mock_ssm_client.put_parameter(
+        Name="VESPA_INSTANCE_URL",
+        Description="A test parameter for the vespa instance.",
+        Value=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        Type="SecureString",
+    )
+    mock_ssm_client.put_parameter(
+        Name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        Description="A test parameter for a vespa public cert",
+        Value=mock_vespa_credentials["VESPA_PUBLIC_CERT_FULL_ACCESS"],
+        Type="SecureString",
+    )
+    mock_ssm_client.put_parameter(
+        Name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+        Description="A test parameter for a vespa private key",
+        Value=mock_vespa_credentials["VESPA_PRIVATE_KEY_FULL_ACCESS"],
+        Type="SecureString",
+    )
+
+
+@pytest.fixture
+def mock_vespa_search_adapter(
+    create_vespa_params, mock_vespa_credentials, tmpdir
+) -> VespaSearchAdapter:
+    """VespaSearchAdapter instantiated from mocked ssm params."""
+    return get_vespa_search_adapter_from_aws_secrets(
+        cert_dir=tmpdir,
+        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+    )
 
 
 @pytest.fixture
@@ -177,6 +233,74 @@ def parser_output_pdf(parser_output):
         ],
     )
     yield parser_output
+
+
+@pytest.fixture
+def s3_prefix_concepts() -> str:
+    """Returns the s3 prefix for the concepts."""
+    return "labelled_concepts/Q788-RuleBasedClassifier/latest"
+
+
+@pytest.fixture()
+def concept_fixture_files() -> list[str]:
+    """Returns the list of concept fixture files."""
+    return [
+        "CCLW.executive.10014.4470.json",
+        "CCLW.executive.4934.1571.json",
+    ]
+
+
+@pytest.fixture
+def mock_bucket_concepts(
+    mock_s3_client, mock_bucket, s3_prefix_concepts, concept_fixture_files
+) -> None:
+    """Puts the concept fixture files in the mock bucket."""
+    for file_name in concept_fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join(s3_prefix_concepts, file_name)
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+
+@pytest.fixture
+def document_passages_test_data_file_path() -> str:
+    """Returns the path to the document passages test data file."""
+    return "tests/local_vespa/test_documents/document_passage.json"
+
+
+@pytest.fixture
+def example_vespa_concepts() -> list[VespaConcept]:
+    """Vespa concepts for testing."""
+    return [
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1457",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "RuleBasedClassifier", "id": "Q788"},
+                {"name": "RuleBasedClassifier", "id": "Q789"},
+            ],
+            parent_concept_ids_flat="Q788,Q789",
+            model="RuleBasedClassifier",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
+        ),
+        VespaConcept(
+            id="Q788-RuleBasedClassifier.1273",
+            name="Q788-RuleBasedClassifier",
+            parent_concepts=[
+                {"name": "Q1-RuleBasedClassifier", "id": "Q2"},
+                {"name": "Q2-RuleBasedClassifier", "id": "Q3"},
+            ],
+            parent_concept_ids_flat="Q2,Q3",
+            model="RuleBasedClassifier-2.0.12",
+            end=100,
+            start=0,
+            timestamp=datetime.now(),
+        ),
+    ]
 
 
 @pytest.fixture
