@@ -247,7 +247,8 @@ def convert_labelled_passages_to_concepts(
         )
 
         for span in labelled_passage.spans:
-            assert span.concept_id is not None, "Concept ID is None."
+            if span.concept_id is None:
+                raise ValueError("Concept ID is None.")
             concepts.append(
                 VespaConcept(
                     id=span.concept_id,

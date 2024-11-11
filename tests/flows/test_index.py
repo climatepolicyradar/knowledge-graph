@@ -376,7 +376,7 @@ def test_convert_labelled_passges_to_concepts(
         )
     )
     assert example_labelled_passages[0].spans[-1].concept_id is None
-    with pytest.raises(AssertionError, match="Concept ID is None."):
+    with pytest.raises(ValueError, match="Concept ID is None."):
         convert_labelled_passages_to_concepts(example_labelled_passages)
 
 
