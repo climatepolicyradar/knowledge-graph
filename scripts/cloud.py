@@ -29,12 +29,14 @@ class AwsEnv(str, Enum):
     labs = "labs"
     sandbox = "sandbox"
     staging = "staging"
-    production = "production"
+    production = "prod"
 
     @classmethod
     def _missing_(cls, value):
         if value == "dev":
             return cls.staging
+        if value == "production":
+            return cls.production
 
 
 def get_session(aws_env: AwsEnv) -> boto3.session.Session:

@@ -198,7 +198,7 @@ def test_get_aliases(promotion, snapshot):
         (AwsEnv.labs, "cpr-labs-models"),
         (AwsEnv.sandbox, "cpr-sandbox-models"),
         (AwsEnv.staging, "cpr-staging-models"),
-        (AwsEnv.production, "cpr-production-models"),
+        (AwsEnv.production, "cpr-prod-models"),
     ],
 )
 def test_get_bucket_name_for_aws_env(aws_env, expected_bucket):

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from flows.index import (
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_passage_for_concept,
+    get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
     index_labelled_passages_from_s3_to_vespa,
     labelled_passages_generator,
@@ -28,6 +30,7 @@ from src.labelled_passage import LabelledPassage
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
     r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
 )
+DATA_ID_PATTERN = re.compile(r"[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+")
 
 
 def test_vespa_search_adapter_from_aws_secrets(
@@ -276,12 +279,83 @@ def test_get_passage_for_concept(
     for concept in example_vespa_concepts:
         concept.id = text_block_id
 
-        passage_id, passage = get_passage_for_concept(
+        data_id, passage_id, passage = get_passage_for_concept(
             concept=concept, document_passages=[relevant_passage, irrelevant_passage]
         )
-
+        assert data_id is not None
+        data_id_pattern_match = DATA_ID_PATTERN.match(data_id) is not None
+        assert data_id_pattern_match is not None
         assert passage_id == relevant_passage[0]
         assert passage == relevant_passage[1]
+
+
+def test_get_updated_passage_concepts(
+    example_vespa_concepts: list[VespaConcept],
+) -> None:
+    """Test that we can retrieve the updated passage concepts dict."""
+    for concept in example_vespa_concepts:
+        # Test we can add a concept to the passage concepts that doesn't already
+        # exist.
+        updated_passage_concepts = get_updated_passage_concepts(
+            concept=concept,
+            passage=VespaPassage(
+                text_block="Test text.",
+                text_block_id="1",
+                text_block_type="Text",
+                concepts=[],
+            ),
+        )
+        assert len(updated_passage_concepts) == 1
+        assert updated_passage_concepts[0] == concept.model_dump(mode="json")
+
+        # Test that we can remove old model concepts from the passage concepts and
+        # add the new one.
+        updated_passage_concepts = get_updated_passage_concepts(
+            concept=concept,
+            passage=VespaPassage(
+                text_block="Test text.",
+                text_block_id="1",
+                text_block_type="Text",
+                concepts=[
+                    VespaConcept(
+                        id="1",
+                        name="extreme weather",
+                        parent_concepts=[{"name": "weather", "id": "Q123"}],
+                        parent_concept_ids_flat="Q123,",
+                        model=concept.model,  # Ensure the models are the same
+                        end=100,
+                        start=0,
+                        timestamp=datetime.now(),
+                    )
+                ],
+            ),
+        )
+        assert len(updated_passage_concepts) == 1
+        assert updated_passage_concepts[0] == concept.model_dump(mode="json")
+
+        # Test that we can add new concepts and retain concepts from other models
+        updated_passage_concepts = get_updated_passage_concepts(
+            concept=concept,
+            passage=VespaPassage(
+                text_block="Test text.",
+                text_block_id="1",
+                text_block_type="Text",
+                concepts=[
+                    VespaConcept(
+                        id="1",
+                        name="extreme weather",
+                        parent_concepts=[{"name": "weather", "id": "Q123"}],
+                        parent_concept_ids_flat="Q123,",
+                        model="non-existent model",  # Ensure the models are NOT the same
+                        end=100,
+                        start=0,
+                        timestamp=datetime.now(),
+                    )
+                ],
+            ),
+        )
+        assert len(updated_passage_concepts) == 2
+        assert concept.model_dump(mode="json") in updated_passage_concepts
 
 
 def test_convert_labelled_passges_to_concepts(

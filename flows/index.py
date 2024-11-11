@@ -170,21 +170,23 @@ def get_model_from_span(span: Span) -> str:
 
 def get_passage_for_concept(
     concept: VespaConcept, document_passages: list[tuple[str, VespaPassage]]
-) -> Union[tuple[str, VespaPassage], tuple[None, None]]:
+) -> Union[tuple[str, str, VespaPassage], tuple[None, None, None]]:
     """
-    Return the passage and passage id that a concept relates to.
+    Return the data id, passage and passage id that a concept relates to.
 
     Concepts relate to a specific passage or text block within a document
     and therefore, we must find the relevant text block to update when running
     partial updates.
 
-    The concept id is assumed to be in the format:
-    - ${family_import_id}.${text_block_id}.
-    And thus, can be used to identify the relevant passage.
+    The concept id is assumed to be text block id and thus, can be used to identify the
+    relevant passage.
+
+    Extract data ID (last element after "::"), e.g., "CCLW.executive.10014.4470.623"
+    from passage_id like "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
     """
     concept_text_block_id = get_text_block_id_from_concept(concept)
 
-    passage_for_concept = next(
+    passage = next(
         (
             passage
             for passage in document_passages
@@ -193,20 +195,13 @@ def get_passage_for_concept(
         None,
     )
 
-    if passage_for_concept:
-        return passage_for_concept
+    if passage:
+        data_id = passage[0].split("::")[-1]
+        passage_id = passage[0]
+        passage_content = passage[1]
+        return data_id, passage_id, passage_content
 
-    return None, None
-
-
-def get_updated_passage_concepts_dict(
-    passage: VespaPassage, concept: VespaConcept
-) -> list[dict]:
-    """Update a passage's concepts with the new concept."""
-    passage.concepts = list(passage.concepts) if passage.concepts else []
-    passage.concepts.append(concept)
-
-    return [concept.model_dump(mode="json") for concept in passage.concepts]
+    return None, None, None
 
 
 def get_parent_concepts_from_concept(
@@ -270,6 +265,33 @@ def convert_labelled_passages_to_concepts(
     return concepts
 
 
+def get_updated_passage_concepts(
+    passage: VespaPassage, concept: VespaConcept
+) -> list[dict]:
+    """
+    Update a passage's concepts with the new concept.
+
+    During the update we remove all the old concepts related to a model. This is as it
+    was decided that holding out dated concepts/spans on the passage in vespa for a
+    model is not useful.
+
+    It is also, not possible to duplicate a Concept object in the concepts array as we
+    are removing all instances where the model is the same.
+    """
+    if passage.concepts:
+        filtered_concepts = [
+            passage_concept
+            for passage_concept in passage.concepts
+            if passage_concept.model != concept.model
+        ]
+
+        updated_concepts = filtered_concepts + [concept]
+
+        return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
+
+    return [concept.model_dump(mode="json")]
+
+
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
@@ -302,20 +324,17 @@ async def run_partial_updates_of_concepts_for_document_passages(
             )
 
         for concept in document_concepts:
-            passage_id, passage_for_concept = get_passage_for_concept(
+            data_id, passage_id, passage_for_concept = get_passage_for_concept(
                 concept, document_passages
             )
 
-            if passage_id and passage_for_concept:
-                # Extract data ID (last element after "::"), e.g.,
-                # "CCLW.executive.10014.4470.623" from passage_id like
-                # "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
+            if data_id and passage_id and passage_for_concept:
                 vespa_search_adapter.client.update_data(
                     schema="document_passage",
                     namespace="doc_search",
-                    data_id=passage_id.split("::")[-1],
+                    data_id=data_id,
                     fields={
-                        "concepts": get_updated_passage_concepts_dict(
+                        "concepts": get_updated_passage_concepts(
                             passage_for_concept, concept
                         )
                     },

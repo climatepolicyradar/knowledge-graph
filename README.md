@@ -64,6 +64,12 @@ _or_
 just promote Q992 --classifier RulesBasedClassifier --version v7 --within-aws-env staging --no-primary
 ```
 
+You can also demote (aka disable) a promoted model version in an AWS account/environment, for a concept.
+
+```bash
+just demote Q787 labs
+```
+
 You can see the full list of commands by running:
 
 ```bash
