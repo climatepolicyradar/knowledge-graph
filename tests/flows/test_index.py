@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ from src.labelled_passage import LabelledPassage
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
     r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
 )
+DATA_ID_PATTERN = re.compile(r"[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+")
 
 
 def test_vespa_search_adapter_from_aws_secrets(
@@ -251,10 +253,12 @@ def test_get_passage_for_concept(
     for concept in example_vespa_concepts:
         concept.id = text_block_id
 
-        passage_id, passage = get_passage_for_concept(
+        data_id, passage_id, passage = get_passage_for_concept(
             concept=concept, document_passages=[relevant_passage, irrelevant_passage]
         )
-
+        assert data_id is not None
+        data_id_pattern_match = DATA_ID_PATTERN.match(data_id) is not None
+        assert data_id_pattern_match is not None
         assert passage_id == relevant_passage[0]
         assert passage == relevant_passage[1]
 
