@@ -1,9 +1,10 @@
+import json
 import os
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import boto3
 import pytest
@@ -18,6 +19,7 @@ from cpr_sdk.parser_models import (
 )
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
+from pydantic import SecretStr
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
@@ -28,7 +30,12 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 @pytest.fixture()
 def test_config():
-    yield Config(cache_bucket="test_bucket")
+    yield Config(
+        cache_bucket="test_bucket",
+        wandb_model_registry="test_wandb_model_registry",
+        wandb_entity="test_entity",
+        wandb_api_key=SecretStr("test_wandb_api_key"),
+    )
 
 
 @pytest.fixture(scope="function")
@@ -57,9 +64,9 @@ def mock_ssm_client(mock_aws_creds) -> Generator:
 def mock_vespa_credentials() -> dict[str, str]:
     """Mocked vespa credentials."""
     return {
-        "PREFECT_VESPA_INSTANCE_URL": "http://localhost:8080",
-        "PREFECT_VESPA_PUBLIC_CERT_FEED": "Cert Content",
-        "PREFECT_VESPA_PRIVATE_KEY_FEED": "Key Content",
+        "VESPA_INSTANCE_URL": "http://localhost:8080",
+        "VESPA_PUBLIC_CERT_FULL_ACCESS": "UHVibGljIGNlcnQgY29udGVudAo=",  # "Public cert content"
+        "VESPA_PRIVATE_KEY_FULL_ACCESS": "UHJpdmF0ZSBrZXkgY29udGVudAo=",  # "Private key content"
     }
 
 
@@ -67,21 +74,21 @@ def mock_vespa_credentials() -> dict[str, str]:
 def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
     """Creates the vespa parameters in the mock ssm client."""
     mock_ssm_client.put_parameter(
-        Name="PREFECT_VESPA_INSTANCE_URL",
+        Name="VESPA_INSTANCE_URL",
         Description="A test parameter for the vespa instance.",
-        Value=mock_vespa_credentials["PREFECT_VESPA_INSTANCE_URL"],
+        Value=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
-        Name="PREFECT_VESPA_PUBLIC_CERT_FEED",
+        Name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         Description="A test parameter for a vespa public cert",
-        Value=mock_vespa_credentials["PREFECT_VESPA_PUBLIC_CERT_FEED"],
+        Value=mock_vespa_credentials["VESPA_PUBLIC_CERT_FULL_ACCESS"],
         Type="SecureString",
     )
     mock_ssm_client.put_parameter(
-        Name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+        Name="VESPA_PRIVATE_KEY_FULL_ACCESS",
         Description="A test parameter for a vespa private key",
-        Value=mock_vespa_credentials["PREFECT_VESPA_PRIVATE_KEY_FEED"],
+        Value=mock_vespa_credentials["VESPA_PRIVATE_KEY_FULL_ACCESS"],
         Type="SecureString",
     )
 
@@ -93,8 +100,8 @@ def mock_vespa_search_adapter(
     """VespaSearchAdapter instantiated from mocked ssm params."""
     return get_vespa_search_adapter_from_aws_secrets(
         cert_dir=tmpdir,
-        vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
-        vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
+        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
     )
 
 
@@ -126,6 +133,43 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
     yield fixture_files
+
+
+def create_mock_new_and_updated_documents_json(
+    mock_s3_client, mock_bucket, doc_names: tuple[str, str], timestamp: str
+):
+    first_doc, second_doc = doc_names
+    content = {
+        "new_documents": [
+            {"import_id": first_doc},
+        ],
+        "updated_documents": {second_doc: []},
+    }
+    data = BytesIO(json.dumps(content).encode("utf-8"))
+    key = os.path.join("input", timestamp, "new_and_updated_documents.json")
+    mock_s3_client.put_object(
+        Bucket=mock_bucket, Key=key, Body=data, ContentType="application/json"
+    )
+
+
+@pytest.fixture
+def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
+    previous_docs = {"Previous.document.0.2", "Previous.document.0.1"}
+    create_mock_new_and_updated_documents_json(
+        mock_s3_client,
+        mock_bucket,
+        doc_names=previous_docs,
+        timestamp="2023-01-1T01.01.01.000001",
+    )
+
+    latest_docs = {"Latest.document.0.2", "Latest.document.0.1"}
+    create_mock_new_and_updated_documents_json(
+        mock_s3_client,
+        mock_bucket,
+        doc_names=latest_docs,
+        timestamp="2023-01-1T01.01.01.000001",
+    )
+    yield previous_docs, latest_docs
 
 
 @pytest.fixture
@@ -257,3 +301,17 @@ def example_vespa_concepts() -> list[VespaConcept]:
             timestamp=datetime.now(),
         ),
     ]
+
+
+@pytest.fixture
+def mock_wandb(mock_s3_client):
+    with (
+        patch("wandb.init") as mock_init,
+        patch("wandb.login"),
+    ):
+        mock_run = Mock()
+        mock_artifact = Mock()
+        mock_init.return_value = mock_run
+        mock_run.use_artifact.return_value = mock_artifact
+
+        yield mock_init, mock_run, mock_artifact

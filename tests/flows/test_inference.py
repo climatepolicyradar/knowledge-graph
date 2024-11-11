@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 import boto3
@@ -6,14 +7,17 @@ import pytest
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    ClassifierSpec,
+    _stringify,
     classifier_inference,
     determine_document_ids,
     document_passages,
+    download_classifier_from_wandb_to_local,
+    get_latest_ingest_documents,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
     store_labels,
-    stringify,
     text_block_inference,
 )
 from src.labelled_passage import LabelledPassage
@@ -43,32 +47,49 @@ def test_list_bucket_doc_ids(test_config, mock_bucket_documents):
         (None, ["1"], ["1"]),
     ],
 )
-def test_determine_document_ids(doc_ids, bucket_ids, expected):
+def test_determine_document_ids(test_config, doc_ids, bucket_ids, expected):
     got = determine_document_ids(
+        config=test_config,
+        use_new_and_updated=False,
         requested_document_ids=doc_ids,
         current_bucket_ids=bucket_ids,
     )
     assert got == expected
 
 
-def test_determine_document_ids__error():
+def test_determine_document_ids__error(test_config):
     with pytest.raises(ValueError):
         determine_document_ids(
+            config=test_config,
+            use_new_and_updated=False,
             requested_document_ids=["1", "2"],
             current_bucket_ids=["3", "4"],
         )
 
 
-def test_load_classifier__existing_classifier(
+@pytest.mark.asyncio
+async def test_load_classifier__existing_classifier(
     test_config, mock_classifiers_dir, local_classifier_id
 ):
-    classifier = load_classifier(test_config, local_classifier_id, alias="latest")
+    classifier = await load_classifier.fn(
+        test_config, local_classifier_id, alias="latest"
+    )
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
-def test_download_classifier__wandb_classifier():
-    # TODO mock the interface and test code path
-    pass
+def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
+    mock_init, mock_run, _ = mock_wandb
+    classifier_id = "Qtest"
+    _ = download_classifier_from_wandb_to_local(
+        test_config, classifier_id, alias="latest"
+    )
+
+    mock_init.assert_called_once_with(
+        entity="test_entity",
+        project="Qtest",
+        job_type="download_model",
+    )
+    mock_run.finish.assert_called_once()
 
 
 def test_load_document(test_config, mock_bucket_documents):
@@ -80,7 +101,7 @@ def test_load_document(test_config, mock_bucket_documents):
 
 def test_stringify():
     text = ["a", " sequence", " of ", "text "]
-    result = stringify(text)
+    result = _stringify(text)
     assert result == "a sequence of text"
 
 
@@ -114,9 +135,12 @@ def test_store_labels(test_config, mock_bucket):
     assert labels[0] == "labelled_passages/Q9081/latest/TEST.DOC.0.1.json"
 
 
-def test_text_block_inference(test_config, mock_classifiers_dir, local_classifier_id):
+@pytest.mark.asyncio
+async def test_text_block_inference(
+    test_config, mock_classifiers_dir, local_classifier_id
+):
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier = load_classifier(test_config, local_classifier_id, "latest")
+    classifier = await load_classifier.fn(test_config, local_classifier_id, "latest")
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
@@ -126,15 +150,19 @@ def test_text_block_inference(test_config, mock_classifiers_dir, local_classifie
 
     assert len(labels.spans) > 0
     assert labels.id == block_id
+    assert labels.metadata != {}
+    assert labels.metadata["concept"] == classifier.concept.model_dump()
+    datetime.fromisoformat(labels.metadata["inference_timestamp"])
 
 
-def test_classifier_inference(
+@pytest.mark.asyncio
+async def test_classifier_inference(
     test_config, mock_classifiers_dir, mock_bucket, mock_bucket_documents
 ):
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
-        classifier_inference(
-            classifier_spec=[("Q788", "latest")],
+        await classifier_inference(
+            classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
@@ -154,3 +182,11 @@ def test_classifier_inference(
         # Some spans where identified
         with_spans = [d for d in data if len(d["spans"]) > 0]
         assert len(with_spans) > 0
+
+
+def test_get_latest_ingest_documents(
+    test_config, mock_bucket_new_and_updated_documents_json
+):
+    _, latest_docs = mock_bucket_new_and_updated_documents_json
+    doc_ids = get_latest_ingest_documents(test_config)
+    assert set(doc_ids) == latest_docs

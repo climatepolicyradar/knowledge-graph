@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Generator, Optional, Union
@@ -10,14 +12,15 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
+from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
 
 
 def get_vespa_search_adapter_from_aws_secrets(
     cert_dir: str,
-    vespa_instance_url_param_name: str = "PREFECT_VESPA_INSTANCE_URL",
-    vespa_public_cert_param_name: str = "PREFECT_VESPA_PUBLIC_CERT_READ",
-    vespa_private_key_param_name: str = "PREFECT_VESPA_PRIVATE_KEY_READ",
+    vespa_instance_url_param_name: str = "VESPA_INSTANCE_URL",
+    vespa_public_cert_param_name: str = "VESPA_PUBLIC_CERT_READ",
+    vespa_private_key_param_name: str = "VESPA_PRIVATE_KEY_READ",
 ) -> VespaSearchAdapter:
     """
     Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager.
@@ -26,8 +29,11 @@ def get_vespa_search_adapter_from_aws_secrets(
     the VespaSearchAdapter.
     """
     vespa_instance_url = get_aws_ssm_param(vespa_instance_url_param_name)
-    vespa_public_cert = get_aws_ssm_param(vespa_public_cert_param_name)
-    vespa_private_key = get_aws_ssm_param(vespa_private_key_param_name)
+    vespa_public_cert_encoded = get_aws_ssm_param(vespa_public_cert_param_name)
+    vespa_private_key_encoded = get_aws_ssm_param(vespa_private_key_param_name)
+
+    vespa_public_cert = base64.b64decode(vespa_public_cert_encoded).decode("utf-8")
+    vespa_private_key = base64.b64decode(vespa_private_key_encoded).decode("utf-8")
 
     with open(f"{cert_dir}/cert.pem", "w") as f:
         f.write(vespa_public_cert)
@@ -45,9 +51,11 @@ def s3_obj_generator(s3_path: str) -> Generator[tuple[str, list[dict]], None, No
     - s3_path: The path in s3 to yield objects from.
     """
     object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_path)
+    # We retrieve the bucket from the path using the second element in the path (parts[1]).
+    # Path("s3://bucket/prefix/file.json").parts -> ('s3:', 'bucket', 'prefix', 'file.json')
     bucket = Path(s3_path).parts[1]
     for key in object_keys:
-        obj = _s3_object_read_text(s3_path="s3://" + bucket + "/" + key)
+        obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
         yield key, json.loads(obj)
 
 
@@ -108,20 +116,23 @@ def get_text_block_id_from_concept(concept: VespaConcept) -> str:
 
 def get_passage_for_concept(
     concept: VespaConcept, document_passages: list[tuple[str, VespaPassage]]
-) -> Union[tuple[str, VespaPassage], tuple[None, None]]:
+) -> Union[tuple[str, str, VespaPassage], tuple[None, None, None]]:
     """
-    Return the passage and passage id that a concept relates to.
+    Return the data id, passage and passage id that a concept relates to.
 
     Concepts relate to a specific passage or text block within a document
-    and therefore, we must find the relevant text block to update when running partial updates.
+    and therefore, we must find the relevant text block to update when running
+    partial updates.
 
-    The concept id is assumed to be in the format:
-    - ${family_import_id}.${text_block_id}.
-    And thus, can be used to identify the relevant passage.
+    The concept id is assumed to be text block id and thus, can be used to identify the
+    relevant passage.
+
+    Extract data ID (last element after "::"), e.g., "CCLW.executive.10014.4470.623"
+    from passage_id like "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
     """
     concept_text_block_id = get_text_block_id_from_concept(concept)
 
-    passage_for_concept = next(
+    passage = next(
         (
             passage
             for passage in document_passages
@@ -130,31 +141,47 @@ def get_passage_for_concept(
         None,
     )
 
-    if passage_for_concept:
-        return passage_for_concept
+    if passage:
+        data_id = passage[0].split("::")[-1]
+        passage_id = passage[0]
+        passage_content = passage[1]
+        return data_id, passage_id, passage_content
 
-    return None, None
+    return None, None, None
 
 
-def get_updated_passage_concepts_dict(
+def get_updated_passage_concepts(
     passage: VespaPassage, concept: VespaConcept
 ) -> list[dict]:
-    """Update a passage with a new concept."""
+    """
+    Update a passage's concepts with the new concept.
+
+    During the update we remove all the old concepts related to a model. This is as it
+    was decided that holding out dated concepts/spans on the passage in vespa for a
+    model is not useful.
+
+    It is also, not possible to duplicate a Concept object in the concepts array as we
+    are removing all instances where the model is the same.
+    """
     if passage.concepts:
-        return [
-            concept.model_dump(mode="json")
-            for concept in passage.concepts + [concept]  # type: ignore
+        filtered_concepts = [
+            passage_concept
+            for passage_concept in passage.concepts
+            if passage_concept.model != concept.model
         ]
+
+        updated_concepts = filtered_concepts + [concept]
+
+        return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
 
     return [concept.model_dump(mode="json")]
 
 
 @flow
-async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
+async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
     document_concepts: list[VespaConcept],
     vespa_search_adapter: VespaSearchAdapter,
-    semaphore: asyncio.Semaphore,
 ) -> None:
     """
     Run partial update for vespa Concepts on a text block in the document_passage index.
@@ -165,7 +192,7 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
     """
     logger = get_run_logger()
 
-    async with semaphore:
+    async with concurrency("concept_partial_updates", occupy=10):
         document_passages = get_document_passages_from_vespa(
             document_import_id=document_import_id,
             vespa_search_adapter=vespa_search_adapter,
@@ -173,22 +200,26 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
         if not document_passages:
             logger.error(
                 "No hits for document import id in vespa. "
-                "Either the document doesn't exist or there are no passages related to the document."
+                "Either the document doesn't exist or there are no passages related to "
+                "the document.",
+                extra={"props": {"document_import_id": document_import_id}},
             )
-            return
+            raise ValueError(
+                f"No passages found for document in vespa - {document_import_id}"
+            )
 
         for concept in document_concepts:
-            passage_id, passage_for_concept = get_passage_for_concept(
+            data_id, passage_id, passage_for_concept = get_passage_for_concept(
                 concept, document_passages
             )
 
-            if passage_id and passage_for_concept:
+            if data_id and passage_id and passage_for_concept:
                 vespa_search_adapter.client.update_data(
                     schema="document_passage",
                     namespace="doc_search",
-                    data_id=passage_id.split("::")[-1],
+                    data_id=data_id,
                     fields={
-                        "concepts": get_updated_passage_concepts_dict(
+                        "concepts": get_updated_passage_concepts(
                             passage_for_concept, concept
                         )
                     },
@@ -215,37 +246,35 @@ async def run_partial_updates_of_concepts_for_document_passages_with_semaphore(
 async def index_concepts_from_s3_to_vespa(
     s3_path: str,
     vespa_search_adapter: Optional[VespaSearchAdapter] = None,
-    concurrency_limit: int = 10,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
 
-    This function retrieves concept documents from files stored in an S3 path and indexes them in a Vespa instance.
-    The name of each file in the specified S3 path is expected to represent the document's import ID.
+    This function retrieves concept documents from files stored in an S3 path and
+    indexes them in a Vespa instance. The name of each file in the specified S3 path is
+    expected to represent the document's import ID.
 
     Assumptions:
     - The S3 file names represent document import IDs.
     """
-    if not vespa_search_adapter:
-        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-            cert_dir=tempfile.mkdtemp(),
-            vespa_private_key_param_name="PREFECT_VESPA_PRIVATE_KEY_FEED",
-            vespa_public_cert_param_name="PREFECT_VESPA_PUBLIC_CERT_FEED",
-        )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        if not vespa_search_adapter:
+            vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+                cert_dir=temp_dir,
+                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+            )
 
-    s3_objects = s3_obj_generator(s3_path=s3_path)
-    document_concepts = document_concepts_generator(generator_func=s3_objects)
+        s3_objects = s3_obj_generator(s3_path=s3_path)
+        document_concepts = document_concepts_generator(generator_func=s3_objects)
 
-    semaphore = asyncio.Semaphore(concurrency_limit)
+        indexing_tasks = [
+            run_partial_updates_of_concepts_for_document_passages(
+                document_import_id=Path(s3_key).stem,
+                document_concepts=concepts,
+                vespa_search_adapter=vespa_search_adapter,
+            )
+            for s3_key, concepts in document_concepts
+        ]
 
-    indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages_with_semaphore(
-            document_import_id=Path(s3_key).stem,
-            document_concepts=concepts,
-            vespa_search_adapter=vespa_search_adapter,
-            semaphore=semaphore,
-        )
-        for s3_key, concepts in document_concepts
-    ]
-
-    await asyncio.gather(*indexing_tasks)
+        await asyncio.gather(*indexing_tasks)
