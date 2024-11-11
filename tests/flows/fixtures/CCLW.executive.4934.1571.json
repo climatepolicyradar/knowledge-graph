@@ -1,18 +1,218 @@
 [
     {
-        "name": "test_concept_name_2",
-        "id": "test_concept_id_2.p_33_b_2",
-        "parent_concepts": [
+        "id": "0",
+        "text": "Some random text on climate change.",
+        "spans": [
             {
-                "id": "test_parent_concept_id_2",
-                "name": "test_parent_concept_name_2"
+                "text": "Some random text on climate change.",
+                "start_index": 10,
+                "end_index": 11,
+                "concept_id": "Q10014",
+                "labellers": [
+                    "Q10014-RuleBasedClassifier"
+                ]
             }
         ],
-        "parent_concept_ids_flat": "test_parent_concept_id_2",
-        "start": 1,
-        "end": 10,
-        "model": "test_model_2",
-        "timestamp": "2021-01-01T00:00:00Z"
+        "metadata": {
+            "concept": {
+                "preferred_label": "forestry sector",
+                "alternative_labels": [
+                    "forest pest",
+                    "wood industry",
+                    "forest industry",
+                    "silviculture",
+                    "forest management",
+                    "forestry",
+                    "forestry sector",
+                    "forest fire prevention",
+                    "logging",
+                    "lumber",
+                    "prevention of forest fires",
+                    "timber"
+                ],
+                "negative_labels": [],
+                "description": "Activities that relate to the production of goods and services from forests.",
+                "wikibase_id": "Q787",
+                "subconcept_of": [
+                    "Q709"
+                ],
+                "has_subconcept": [],
+                "related_concepts": [
+                    "Q7",
+                    "Q5",
+                    "Q4"
+                ],
+                "definition": null,
+                "labelled_passages": [
+                    {
+                        "id": "nj9a9sx4",
+                        "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                        "spans": [
+                            {
+                                "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                                "start_index": 45,
+                                "end_index": 72,
+                                "concept_id": "Q787",
+                                "labellers": [
+                                    "sion"
+                                ],
+                                "id": "2mpmqcpv",
+                                "labelled_text": "fast-growing exotic species"
+                            },
+                            {
+                                "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                                "start_index": 0,
+                                "end_index": 18,
+                                "concept_id": "Q787",
+                                "labellers": [
+                                    "sion"
+                                ],
+                                "id": "nq3z9cfc",
+                                "labelled_text": "Cultivated species"
+                            },
+                            {
+                                "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                                "start_index": 91,
+                                "end_index": 125,
+                                "concept_id": "Q787",
+                                "labellers": [
+                                    "sion"
+                                ],
+                                "id": "qvw27gxy",
+                                "labelled_text": "wood used in the forestry industry"
+                            },
+                            {
+                                "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                                "start_index": 143,
+                                "end_index": 161,
+                                "concept_id": "Q787",
+                                "labellers": [
+                                    "sion"
+                                ],
+                                "id": "45n9d99p",
+                                "labelled_text": "cultivated forests"
+                            },
+                            {
+                                "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                                "start_index": 108,
+                                "end_index": 125,
+                                "concept_id": "Q787",
+                                "labellers": [
+                                    "tabea"
+                                ],
+                                "id": "es3g9xz2",
+                                "labelled_text": "forestry industry"
+                            },
+                            {
+                                "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                                "start_index": 143,
+                                "end_index": 161,
+                                "concept_id": "Q787",
+                                "labellers": [
+                                    "tabea"
+                                ],
+                                "id": "45n9d99p",
+                                "labelled_text": "cultivated forests"
+                            }
+                        ],
+                        "metadata": {
+                            "document_id": "UNFCCC.party.62.0",
+                            "document_name": "Argentina. Biennial update report (BUR). BUR 3.",
+                            "document_source_url": "/sites/default/files/resource/3er%20Informe%20Bienal%20de%20la%20Republica%20Argentina.pdf",
+                            "document_content_type": "application/pdf",
+                            "document_md5_sum": "eeb69f674b7293a0dde43382e27759be",
+                            "languages": "",
+                            "translated": "True",
+                            "has_valid_text": "True",
+                            "pipeline_metadata": "{}",
+                            "geography": "",
+                            "publication_ts": "",
+                            "text_block_id": "p_31_b_2",
+                            "language": "en",
+                            "type": "Text",
+                            "type_confidence": "0.8882699013",
+                            "page_number": "31",
+                            "coords": "[[55.3967514038, 145.2831268311], [538.6314086914, 145.2831268311], [538.6314086914, 218.7989349365], [55.3967514038, 218.7989349365]]",
+                            "text": "Cultivated species in the country are mainly fast-growing exotic species. About 95% of the\nwood used in the forestry industry comes from these cultivated forests. Some of the main\nuses of the obtained wood are as input for building houses, to manufacture of furniture, for\nproduction of paper and for energy generation.",
+                            "block_index": "253",
+                            "dataset_name": "gst",
+                            "document_cdn_object": "",
+                            "document_description": "",
+                            "source": "GST",
+                            "collection_name": "",
+                            "collection_id": "UNFCCC.collection.11.0",
+                            "family_id": "UNFCCC.family.61.0",
+                            "geography_iso": "ARG",
+                            "family_slug": "argentina-biennial-update-report-bur-bur-3_e09b",
+                            "sectors": "",
+                            "document_slug": "",
+                            "slug": "",
+                            "category": "",
+                            "status": "PUBLISHED",
+                            "document_languages": "['en']",
+                            "variant": "nan",
+                            "role": "MAIN",
+                            "family_name": "Argentina. Biennial update report (BUR). BUR 3.",
+                            "types": "['Biennial Update Report']",
+                            "author": "['Argentina']",
+                            "link": "",
+                            "author_is_party": "1.0",
+                            "date": "2019-11-27 00:00:00",
+                            "world_bank_region": "Latin America & Caribbean",
+                            "prediction": "True"
+                        }
+                    }
+                ]
+            },
+            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+        }
+    },
+    {
+        "id": "1",
+        "text": "The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
+        "spans": [
+            {
+                "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+                "start_index": 4,
+                "end_index": 14,
+                "concept_id": "Q10014",
+                "labellers": [
+                    "Q10014-RuleBasedClassifier"
+                ]
+            }
+        ],
+        "metadata": {
+            "concept": {
+                "preferred_label": "manufacturing sector",
+                "alternative_labels": [
+                    "manufacturing",
+                    "industrial production",
+                    "manufacturing industry",
+                    "fabrication",
+                    "production sector",
+                    "manufacturing processes",
+                    "goods production",
+                    "industrial sector",
+                    "assembly line",
+                    "machinery",
+                    "processing industry"
+                ],
+                "negative_labels": [],
+                "description": "Activities related to the production of goods using labor, machinery, and other resources.",
+                "wikibase_id": "Q14956",
+                "subconcept_of": [
+                    "Q159113"
+                ],
+                "has_subconcept": [],
+                "related_concepts": [
+                    "Q14",
+                    "Q17",
+                    "Q12"
+                ],
+                "definition": null,
+                "labelled_passages": []
+            },
+            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+        }
     }
 ]
-

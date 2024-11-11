@@ -11,15 +11,20 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
 from flows.index import (
-    document_concepts_generator,
+    convert_labelled_passages_to_concepts,
     get_document_passages_from_vespa,
+    get_parent_concepts_from_concept,
     get_passage_for_concept,
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
-    index_concepts_from_s3_to_vespa,
+    index_labelled_passages_from_s3_to_vespa,
+    labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
 )
+from src.concept import Concept
+from src.identifiers import WikibaseID
+from src.labelled_passage import LabelledPassage
 
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
     r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
@@ -53,40 +58,46 @@ def test_vespa_search_adapter_from_aws_secrets(
 
 def test_s3_obj_generator(
     mock_bucket,
-    mock_bucket_concepts,
-    s3_prefix_concepts,
-    concept_fixture_files,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
 ) -> None:
     """Test the s3 object generator."""
-    s3_gen = s3_obj_generator(os.path.join("s3://", mock_bucket, s3_prefix_concepts))
+    s3_gen = s3_obj_generator(
+        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+    )
     s3_files = list(s3_gen)
-    assert len(s3_files) == len(concept_fixture_files)
+    assert len(s3_files) == len(labelled_passage_fixture_files)
 
     expected_keys = [
-        f"{s3_prefix_concepts}/{Path(f).stem}" for f in concept_fixture_files
+        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+        for f in labelled_passage_fixture_files
     ]
     s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
 
     assert sorted(s3_files_keys) == sorted(expected_keys)
 
 
-def test_document_concepts_generator(
+def test_labelled_passages_generator(
     mock_bucket,
-    mock_bucket_concepts,
-    s3_prefix_concepts,
-    concept_fixture_files,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
 ) -> None:
     """Test that the document concepts generator yields the correct objects."""
-    s3_gen = s3_obj_generator(os.path.join("s3://", mock_bucket, s3_prefix_concepts))
-    document_concepts_gen = document_concepts_generator(generator_func=s3_gen)
-    document_concepts_files = list(document_concepts_gen)
+    s3_gen = s3_obj_generator(
+        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+    )
+    labelled_passages_gen = labelled_passages_generator(generator_func=s3_gen)
+    labelled_passages_files = list(labelled_passages_gen)
     expected_keys = [
-        f"{s3_prefix_concepts}/{Path(f).stem}.json" for f in concept_fixture_files
+        f"{s3_prefix_labelled_passages}/{Path(f).stem}.json"
+        for f in labelled_passage_fixture_files
     ]
 
-    assert len(document_concepts_files) == len(concept_fixture_files)
-    for s3_key, document_concepts in document_concepts_files:
-        assert all([type(i) is VespaConcept for i in document_concepts])
+    assert len(labelled_passages_files) == len(labelled_passage_fixture_files)
+    for s3_key, labelled_passages in labelled_passages_files:
+        assert all([type(i) is LabelledPassage for i in labelled_passages])
         assert s3_key in expected_keys
 
 
@@ -185,14 +196,14 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
 
 @pytest.mark.asyncio
-async def test_index_concepts_from_s3_to_vespa(
+async def test_index_labelled_passages_from_s3_to_vespa(
     mock_bucket,
-    mock_bucket_concepts,
-    s3_prefix_concepts,
-    concept_fixture_files,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
     mock_vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
-    """Test that we can successfully index concepts from s3 into vespa."""
+    """Test that we can successfully index labelled passages from s3 into vespa."""
     initial_passages_response = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
@@ -200,8 +211,8 @@ async def test_index_concepts_from_s3_to_vespa(
         len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
     )
 
-    await index_concepts_from_s3_to_vespa(
-        s3_path=os.path.join("s3://", mock_bucket, s3_prefix_concepts),
+    await index_labelled_passages_from_s3_to_vespa(
+        s3_path=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
@@ -213,7 +224,9 @@ async def test_index_concepts_from_s3_to_vespa(
     )
 
     assert initial_concepts_count < final_concepts_count
-    assert initial_concepts_count + len(concept_fixture_files) == (final_concepts_count)
+    assert initial_concepts_count + len(labelled_passage_fixture_files) == (
+        final_concepts_count
+    )
 
 
 @pytest.mark.parametrize("text_block_id", ["1457", "p_2_b_120"])
@@ -239,7 +252,7 @@ def test_get_passage_for_concept(
     )
 
     for concept in example_vespa_concepts:
-        concept.id = f"Q788-RuleBasedClassifier.{text_block_id}"
+        concept.id = text_block_id
 
         data_id, passage_id, passage = get_passage_for_concept(
             concept=concept, document_passages=[relevant_passage, irrelevant_passage]
@@ -318,3 +331,26 @@ def test_get_updated_passage_concepts(
         )
         assert len(updated_passage_concepts) == 2
         assert concept.model_dump(mode="json") in updated_passage_concepts
+
+
+def test_convert_labelled_passges_to_concepts(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test that we can correctly convert labelled passages to concepts."""
+    concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+    assert all([isinstance(concept, VespaConcept) for concept in concepts])
+
+
+def test_get_parent_concepts_from_concept() -> None:
+    """Test that we can correctly retrieve the parent concepts from a concept."""
+    assert get_parent_concepts_from_concept(
+        concept=Concept(
+            preferred_label="forestry sector",
+            alternative_labels=[],
+            negative_labels=[],
+            wikibase_id=WikibaseID("Q10014"),
+            subconcept_of=[WikibaseID("Q4470")],
+            has_subconcept=[WikibaseID("Q4471")],
+            labelled_passages=[],
+        )
+    ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
