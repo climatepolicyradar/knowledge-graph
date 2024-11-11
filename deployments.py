@@ -13,7 +13,7 @@ from prefect.blocks.system import JSON
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
-from flows.index import index_concepts_from_s3_to_vespa
+from flows.index import index_labelled_passages_from_s3_to_vespa
 from flows.inference import classifier_inference
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -66,8 +66,8 @@ create_deployment(
 # Index
 create_deployment(
     project_name="knowledge-graph",
-    flow=index_concepts_from_s3_to_vespa,
-    description="Run partial updates of concepts stored in s3 into Vespa",
+    flow=index_labelled_passages_from_s3_to_vespa,
+    description="Run partial updates of labelled passages stored in s3 into Vespa",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,
