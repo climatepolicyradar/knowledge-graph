@@ -121,20 +121,20 @@ def get_text_block_id_from_concept(concept: VespaConcept) -> str:
 def get_model_from_span(span: Span) -> str:
     """
     Get the model used to label the span.
-    
+
     Labellers are stored in a list, these can contain many labellers as seen in the
     example below, referring to human and machine annotators.
-    
+
     [
         "alice",
         "bob",
         "68edec6f-fe74-413d-9cf1-39b1c3dad2c0",
         'KeywordClassifier("extreme weather")',
     ]
-    
+
     In the context of inference the labellers array should only hold the model used to
     label the span as seen in the example below.
-    
+
     [
         'KeywordClassifier("extreme weather")',
     ]
