@@ -47,6 +47,10 @@ evaluate id +OPTS="":
 promote id +OPTS="":
     poetry run promote --wikibase-id {{id}} {{OPTS}}
 
+# demote a model for a specific wikibase ID
+demote id aws_env:
+    poetry run demote --wikibase-id {{id}} --aws-env {{aws_env}}
+
 # run a model for a specific wikibase ID on a supplied string
 label id string:
     poetry run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
