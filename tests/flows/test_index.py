@@ -366,7 +366,8 @@ def test_convert_labelled_passges_to_concepts(
     concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
     assert all([isinstance(concept, VespaConcept) for concept in concepts])
 
-    example_labelled_passages[0].spans.append(
+    example_labelled_passage = example_labelled_passages[0].model_copy()
+    example_labelled_passage.spans.append(
         Span(
             text="Test text.",
             start_index=0,
@@ -375,9 +376,9 @@ def test_convert_labelled_passges_to_concepts(
             labellers=[],
         )
     )
-    assert example_labelled_passages[0].spans[-1].concept_id is None
+    assert example_labelled_passage.spans[-1].concept_id is None
     with pytest.raises(ValueError, match="Concept ID is None."):
-        convert_labelled_passages_to_concepts(example_labelled_passages)
+        convert_labelled_passages_to_concepts([example_labelled_passage])
 
 
 def test_get_parent_concepts_from_concept() -> None:
