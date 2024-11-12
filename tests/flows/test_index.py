@@ -226,11 +226,11 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     # confirm we remove existing concepts and add new ones based on the model
     modified_example_vespa_concepts = [
-        (concept.id, concept.model_copy()) for concept in example_vespa_concepts
+        (concept.id, concept.model_copy()) for concept in example_vespa_concepts * 2
     ]
-    for concept in modified_example_vespa_concepts:
+    for idx, concept in enumerate(modified_example_vespa_concepts):
         # Make a change to the concept but keep the same model
-        concept[1].end += 1000
+        concept[1].end = idx
 
     await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
@@ -250,7 +250,8 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     ]
 
     assert len(second_updated_passages) > 0
-    assert len(second_updated_concepts) == len(updated_concepts)
+    assert len(second_updated_concepts) != len(updated_concepts)
+    assert len(second_updated_concepts) == len(modified_example_vespa_concepts) + 2
     for _, new_vespa_concept in modified_example_vespa_concepts:
         assert new_vespa_concept in second_updated_concepts
     for example_vespa_concept in example_vespa_concepts:
