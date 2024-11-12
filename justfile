@@ -1,4 +1,5 @@
 set dotenv-load
+import "tests/local_vespa/local_vespa.just"
 
 # Set the default command to list all available commands
 default:
