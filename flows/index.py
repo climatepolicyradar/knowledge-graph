@@ -3,21 +3,74 @@ import base64
 import json
 import os
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, Optional, Set, Union
 
+import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
+from prefect.blocks.system import JSON
 from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
+from pydantic import BaseModel, Field
 
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+
+async def get_prefect_job_variable(param_name: str) -> str:
+    """Get a single variable from the Prefect job variables."""
+    aws_env = os.environ["AWS_ENV"]
+    if aws_env is None:
+        raise ValueError("AWS_ENV is not set")
+    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
+    workpool_default_job_variables = await JSON.load(block_name)
+    return workpool_default_job_variables.value[param_name]
+
+
+@dataclass()
+class Config:
+    """Configuration used across flow runs."""
+
+    cache_bucket: Optional[str] = None
+    document_source_prefix: str = "labelled_passages"
+    bucket_region: str = "eu-west-1"
+    # An instance of VespaSearchAdapter.
+    #
+    # E.g.
+    #
+    # VespaSearchAdapter(
+    #   instance_url="https://vespa-instance-url.com",
+    #   cert_directory="certs/"
+    # )
+    vespa_search_adapter: Optional[VespaSearchAdapter] = None
+
+    @classmethod
+    async def create(cls) -> "Config":
+        """Create a new Config instance with initialized values."""
+        config = cls()
+
+        if not config.cache_bucket:
+            config.cache_bucket = await get_prefect_job_variable(
+                "pipeline_cache_bucket_name"
+            )
+
+        if not config.vespa_search_adapter:
+            temp_dir = tempfile.TemporaryDirectory()
+
+            config.vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+                cert_dir=temp_dir,
+                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+            )
+
+        return config
 
 
 def get_vespa_search_adapter_from_aws_secrets(
@@ -48,7 +101,7 @@ def get_vespa_search_adapter_from_aws_secrets(
 
 
 def s3_obj_generator_from_s3_prefix(
-    s3_path: str,
+    s3_prefix: str,
 ) -> Generator[tuple[str, list[dict]], None, None]:
     """
     A generator that yields objects from an s3 path.
@@ -59,8 +112,8 @@ def s3_obj_generator_from_s3_prefix(
     params:
     - s3_path: The path in s3 to yield objects from.
     """
-    object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_path)
-    bucket = Path(s3_path).parts[1]
+    object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
+    bucket = Path(s3_prefix).parts[1]
     for key in object_keys:
         obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
         yield key, json.loads(obj)
@@ -356,11 +409,145 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 )
 
 
-@flow
-async def index_labelled_passages_from_s3_to_vespa(
+class ClassifierSpec(BaseModel):
+    """Details for a classifier to run"""
+
+    name: str = Field(
+        description="The reference of the classifier in wandb. e.g. 'Q992-RulesBasedClassifier'"
+    )
+    alias: str = Field(
+        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
+        default="latest",
+    )
+
+
+def get_bucket_paginator(config: Config):
+    """Return a S3 paginator for the pipeline cache bucket, with a prefix."""
+    s3 = boto3.client("s3", region_name=config.bucket_region)
+    paginator = s3.get_paginator("list_objects_v2")
+    return paginator.paginate(
+        Bucket=config.cache_bucket,
+        Prefix=config.document_source_prefix,
+    )
+
+
+def list_bucket_doc_ids(config: Config) -> list[str]:
+    """Scan configured bucket and return all IDs."""
+    page_iterator = get_bucket_paginator(config)
+    doc_ids = []
+
+    for p in page_iterator:
+        if "Contents" in p:
+            for o in p["Contents"]:
+                # Get just the stem, which we expect to remove `.json`
+                doc_id = Path(o["Key"]).stem
+                doc_ids.append(doc_id)
+
+    return doc_ids
+
+
+def determine_document_ids(
+    requested_document_ids: Optional[list[str]],
+    current_bucket_ids: list[str],
+) -> list[str]:
+    """
+    Confirm chosen document ids or default to all if not specified.
+
+    Compares the requested_document_ids to what actually exists in the bucket.
+    If a document id has been requested but does not exist this will
+    raise a `ValueError`.
+    """
+    missing_from_bucket = list(set(requested_document_ids) - set(current_bucket_ids))
+    if len(missing_from_bucket) > 0:
+        raise ValueError(
+            f"Requested `document_ids` not found in bucket: {missing_from_bucket}"
+        )
+
+    return requested_document_ids
+
+
+def s3_paths_or_s3_prefix(
+    classifier_spec: Optional[ClassifierSpec],
+    document_ids: Optional[list[str]],
+    config: Config,
+) -> tuple[Optional[list[str]], Optional[str]]:
+    """
+    Return the the paths or prefix for the documents and classifiers.
+
+    - s3_prefix: The S3 prefix (directory) to yield objects from.
+        E.g. "s3://bucket/prefix/"
+    - s3_paths: A set of S3 object keys to yield objects from.
+        E.g. {"s3://bucket/prefix/file1.json", "s3://bucket/prefix/file2.json"}
+    """
+    logger = get_logger()
+
+    # Run on all documents, regardless of classifier
+    if classifier_spec is None:
+        s3_prefix = "s3://" + os.path.join(
+            config.cache_bucket,
+            config.document_source_prefix,
+        )
+
+        return None, s3_prefix
+
+    # Run on all documents, for the specified classifier
+    if document_ids is None:
+        s3_prefix = "s3://" + os.path.join(
+            config.cache_bucket,
+            config.document_source_prefix,
+            classifier_spec.name,
+            classifier_spec.alias,
+        )
+
+        return None, s3_prefix
+
+    # Run on specified documents, for the specified classifier
+    elif document_ids is not None:
+        document_paths = []
+
+        s3 = boto3.client("s3", region_name=config.bucket_region)
+
+        for doc_id in document_ids:
+            # Extract bucket and key from s3_path
+            key = os.path.join(
+                config.document_source_prefix,
+                classifier_spec.name,
+                classifier_spec.alias,
+                f"{doc_id}.json",
+            )
+
+            try:
+                s3.head_object(Bucket=config.cache_bucket, Key=key)
+
+                path = "s3://" + os.path.join(
+                    config.cache_bucket,
+                    key,
+                )
+
+                document_paths.append(path)
+            except s3.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] == "404":
+                    logger.warning(
+                        "Object not found in S3",
+                        extra={
+                            "props": {
+                                "bucket": config.cache_bucket,
+                                "key": key,
+                                "document_id": doc_id,
+                            }
+                        },
+                    )
+                else:
+                    # If a different error occurred, raise it
+                    raise
+
+        return document_paths, None
+
+
+async def index_by_s3(
+    vespa_search_adapter: VespaSearchAdapter,
     s3_prefix: Optional[str] = None,
     s3_paths: Optional[Set[str]] = None,
-    vespa_search_adapter: Optional[VespaSearchAdapter] = None,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -388,43 +575,70 @@ async def index_labelled_passages_from_s3_to_vespa(
             cert_directory="certs/"
         )
     """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        if not vespa_search_adapter:
-            vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-                cert_dir=temp_dir,
-                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-            )
+    if s3_paths and s3_prefix:
+        raise ValueError("Either s3_prefix or s3_paths must be provided, not both.")
+    elif s3_paths:
+        s3_objects = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
+    elif s3_prefix:
+        s3_objects = s3_obj_generator_from_s3_prefix(s3_prefix=s3_prefix)
+    else:
+        raise ValueError("Either s3_prefix or s3_paths must be provided.")
 
-        if s3_paths and s3_prefix:
-            raise ValueError("Either s3_prefix or s3_paths must be provided, not both.")
-        elif s3_paths:
-            s3_objects = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
-        elif s3_prefix:
-            s3_objects = s3_obj_generator_from_s3_prefix(s3_path=s3_prefix)
-        else:
-            raise ValueError("Either s3_prefix or s3_paths must be provided.")
-
-        document_labelled_passages = labelled_passages_generator(
-            generator_func=s3_objects
+    document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
+    document_concepts = [
+        (
+            s3_path,
+            convert_labelled_passages_to_concepts(labelled_passages=labelled_passages),
         )
-        document_concepts = [
-            (
-                s3_path,
-                convert_labelled_passages_to_concepts(
-                    labelled_passages=labelled_passages
-                ),
-            )
-            for s3_path, labelled_passages in document_labelled_passages
-        ]
+        for s3_path, labelled_passages in document_labelled_passages
+    ]
 
-        indexing_tasks = [
-            run_partial_updates_of_concepts_for_document_passages(
-                document_import_id=Path(s3_key).stem,
-                document_concepts=concepts,
-                vespa_search_adapter=vespa_search_adapter,
-            )
-            for s3_key, concepts in document_concepts
-        ]
+    indexing_tasks = [
+        run_partial_updates_of_concepts_for_document_passages(
+            document_import_id=Path(s3_key).stem,
+            document_concepts=concepts,
+            vespa_search_adapter=vespa_search_adapter,
+        )
+        for s3_key, concepts in document_concepts
+    ]
 
-        await asyncio.gather(*indexing_tasks)
+    await asyncio.gather(*indexing_tasks)
+
+
+@flow
+async def index_labelled_passages_from_s3_to_vespa(
+    classifier_spec: Optional[ClassifierSpec] = None,
+    document_ids: Optional[list[str]] = None,
+    config: Optional[Config] = None,
+) -> None:
+    """
+    Asynchronously index concepts from into Vespa.
+
+    This function retrieves concept documents from files stored in an
+    S3 path and indexes them in a Vespa instance. The name of each
+    file in the specified S3 path is expected to represent the
+    document's import ID.
+    """
+    logger = get_run_logger()
+
+    if not config:
+        config = await Config.create()
+
+    logger.info(f"Running with config: {config}")
+
+    s3_paths, s3_prefix = s3_paths_or_s3_prefix(
+        classifier_spec,
+        document_ids,
+        config,
+    )
+
+    logger.info(
+        "S3 prefix and paths",
+        extra={"props": {"s3_prefix": s3_prefix, "s3_paths": s3_paths}},
+    )
+
+    await index_by_s3(
+        config.vespa_search_adapter,
+        s3_prefix,
+        s3_paths,
+    )

@@ -51,12 +51,14 @@ class Config:
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
         config = cls()
+
         if not config.cache_bucket:
             config.cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
             )
         if not config.wandb_api_key:
             config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
+
         return config
 
 
@@ -80,6 +82,7 @@ def list_bucket_doc_ids(config: Config) -> list[str]:
             for o in p["Contents"]:
                 doc_id = Path(o["Key"]).stem
                 doc_ids.append(doc_id)
+
     return doc_ids
 
 
@@ -119,8 +122,8 @@ def determine_document_ids(
 
     Compares the requested_document_ids to what actually exists in the bucket.
     If a document id has been requested but does not exist this will
-    raise a ValueError If no document id were requested, this will
-    instead return the current_bucket_ids.
+    raise a `ValueError`. If no document id were requested, this will
+    instead return the `current_bucket_ids`.
     """
     if use_new_and_updated and requested_document_ids:
         raise ValueError(
