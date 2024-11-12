@@ -324,7 +324,7 @@ class ClassifierSpec(BaseModel):
     """Details for a classifier to run"""
 
     name: str = Field(
-        description="The reference of the classifier in wandb. e.g. 'Q992-RulesBasedClassifier'"
+        description="The reference of the classifier in wandb. e.g. 'Q992'"
     )
     alias: str = Field(
         description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
