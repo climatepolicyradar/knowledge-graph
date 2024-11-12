@@ -333,7 +333,12 @@ class ClassifierSpec(BaseModel):
 
 
 def is_concept_model(model: ArtifactCollection) -> bool:
-    """Check if a model is a concept classifier"""
+    """
+    Check if a model is a concept classifier
+
+    This check is based on wether the model name matches the wikibase concept format.
+    For example: `Q123`, `Q972`
+    """
     return bool(re.fullmatch(WikibaseID.regex, model.name))
 
 
