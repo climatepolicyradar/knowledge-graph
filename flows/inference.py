@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -15,8 +16,10 @@ from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import BaseModel, Field, SecretStr
+from wandb.apis.public.artifacts import ArtifactCollection
 
 from src.classifier import Classifier
+from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -42,6 +45,7 @@ class Config:
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
     wandb_entity: str = "climatepolicyradar"
     wandb_api_key: Optional[SecretStr] = None
+    aws_env: str = os.environ["AWS_ENV"]
 
     @classmethod
     async def create(cls) -> "Config":
@@ -328,6 +332,49 @@ class ClassifierSpec(BaseModel):
     )
 
 
+def is_concept_model(model: ArtifactCollection) -> bool:
+    """Check if a model is a concept classifier"""
+    return bool(re.fullmatch(WikibaseID.regex, model.name))
+
+
+def get_relevant_model_version(
+    model: ArtifactCollection, aws_env: str
+) -> Optional[list[ClassifierSpec]]:
+    """Returns the model name and version if a valid model is found"""
+
+    if not is_concept_model(model):
+        return None
+
+    for model_artifacts in model.artifacts():
+        if ("aws_env", aws_env) in model_artifacts.metadata.items():
+            return ClassifierSpec(name=model.name, alias=model_artifacts.version)
+
+
+def get_all_available_classifiers(config) -> list[ClassifierSpec]:
+    """
+    Return all available models for the given environment
+
+    Current implementation relies on the wandb sdk abstraction over
+    the graphql endpoint, which queries each item as an individual
+    request.
+    """
+
+    api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
+    # artifact_collections is slow, in the future we could
+    # Switch to a custom graphql query using the api module
+    model_collections = api.artifact_collections(
+        type_name="model",
+        project_name="wandb-registry-model",
+    )
+
+    concepts = []
+    for model in model_collections:
+        if relevant_model := get_relevant_model_version(model, config.aws_env):
+            concepts.append(relevant_model)
+            print(relevant_model)
+    return concepts
+
+
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
     classifier_specs: list[ClassifierSpec],
@@ -362,6 +409,9 @@ async def classifier_inference(
         requested_document_ids=document_ids,
         current_bucket_ids=current_bucket_ids,
     )
+
+    if classifier_specs is None:
+        classifier_specs = get_all_available_classifiers(config)
 
     for classifier_spec in classifier_specs:
         subflows = [
