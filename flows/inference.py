@@ -377,7 +377,7 @@ def get_all_available_classifiers(config) -> list[ClassifierSpec]:
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
-    classifier_specs: list[ClassifierSpec],
+    classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
