@@ -14,7 +14,7 @@ This requires the [vespa cli](https://docs.vespa.ai/en/vespa-cli.html). It also 
 
 ## Skip vespa tests instead
 
-If you'd ratehr avoid this you can also run pytest without vespa using the following:
+If you'd rather avoid this you can also run pytest without vespa using the following:
 
 ```shell
 just test-without-vespa
