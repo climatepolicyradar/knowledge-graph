@@ -372,12 +372,11 @@ def get_all_available_classifiers(config) -> list[ClassifierSpec]:
         project_name="wandb-registry-model",
     )
 
-    concepts = []
+    classifier_specs = []
     for model in model_collections:
         if relevant_model := get_relevant_model_version(model, config.aws_env):
-            concepts.append(relevant_model)
-            print(relevant_model)
-    return concepts
+            classifier_specs.append(relevant_model)
+    return classifier_specs
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
