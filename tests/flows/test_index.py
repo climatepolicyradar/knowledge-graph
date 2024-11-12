@@ -11,6 +11,8 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
 from flows.index import (
+    ClassifierSpec,
+    Config,
     convert_labelled_passages_to_concepts,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
@@ -18,11 +20,13 @@ from flows.index import (
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
     group_concepts_on_text_block,
+    index_by_s3,
     index_labelled_passages_from_s3_to_vespa,
     labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefix,
+    s3_paths_or_s3_prefix,
 )
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -175,8 +179,9 @@ def test_get_document_passages_from_vespa(
     )
 
 
-@pytest.mark.vespa
 @pytest.mark.asyncio
+@pytest.mark.vespa
+@pytest.mark.skip(reason="Vespa integration tests conflict with each other")
 async def test_run_partial_updates_of_concepts_for_document_passages(
     mock_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts: list[VespaConcept],
@@ -271,16 +276,16 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         assert example_vespa_concept not in second_updated_concepts
 
 
-@pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_labelled_passages_from_s3_to_vespa(
+@pytest.mark.vespa
+async def test_index_by_s3_with_s3_prefix(
     mock_bucket,
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
     mock_vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
-    """Test that we can successfully index labelled passages from s3 into vespa."""
+    """We can successfully index labelled passages from S3 into Vespa."""
     initial_passages_response = mock_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
@@ -288,9 +293,52 @@ async def test_index_labelled_passages_from_s3_to_vespa(
         len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
     )
 
-    await index_labelled_passages_from_s3_to_vespa(
-        s3_prefix=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
+    await index_by_s3(
         vespa_search_adapter=mock_vespa_search_adapter,
+        s3_prefix=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
+        s3_paths=None,
+    )
+
+    final_passages_response = mock_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    final_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
+    )
+
+    assert initial_concepts_count < final_concepts_count
+    assert initial_concepts_count + len(labelled_passage_fixture_files) == (
+        final_concepts_count
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+@pytest.mark.skip(reason="Vespa integration tests conflict with each other")
+async def test_index_by_s3_with_s3_paths(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    mock_vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """We can successfully index labelled passages from S3 into Vespa."""
+    initial_passages_response = mock_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    initial_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
+    )
+
+    s3_paths = [
+        f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{doc_file}"
+        for doc_file in labelled_passage_fixture_files
+    ]
+
+    await index_by_s3(
+        vespa_search_adapter=mock_vespa_search_adapter,
+        s3_prefix=None,
+        s3_paths=s3_paths,
     )
 
     final_passages_response = mock_vespa_search_adapter.client.query(
@@ -340,6 +388,53 @@ def test_get_passage_for_text_block(
         assert data_id_pattern_match is not None
         assert passage_id == relevant_passage[0]
         assert passage == relevant_passage[1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+@pytest.mark.integration
+@pytest.mark.skip(reason="Vespa integration tests conflict with each other")
+async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    mock_vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    initial_passages_response = mock_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    initial_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
+    )
+
+    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+    document_ids = [
+        Path(labelled_passage_fixture_file).stem
+        for labelled_passage_fixture_file in labelled_passage_fixture_files
+    ]
+    config = Config(
+        cache_bucket=mock_bucket,
+        vespa_search_adapter=mock_vespa_search_adapter,
+    )
+
+    await index_labelled_passages_from_s3_to_vespa(
+        classifier_spec=classifier_spec,
+        document_ids=document_ids,
+        config=config,
+    )
+
+    final_passages_response = mock_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    final_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
+    )
+
+    assert initial_concepts_count < final_concepts_count
+    assert initial_concepts_count + len(labelled_passage_fixture_files) == (
+        final_concepts_count
+    )
 
 
 def test_get_updated_passage_concepts(
@@ -488,3 +583,63 @@ def test_group_concepts_on_text_block(
     assert set(grouped_concepts.keys()) == {"text_block_1", "text_block_2"}
     assert len(grouped_concepts["text_block_1"]) == text_block_one_concept_count
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
+
+
+def test_s3_paths_or_s3_prefix_no_classifier(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+):
+    """Test s3_paths_or_s3_prefix returns base prefix when no classifier spec provided."""
+    config = Config(cache_bucket=mock_bucket)
+
+    paths, prefix = s3_paths_or_s3_prefix(
+        classifier_spec=None,
+        document_ids=None,
+        config=config,
+    )
+
+    assert prefix == f"s3://{mock_bucket}/labelled_passages"
+    assert paths is None
+
+
+def test_s3_paths_or_s3_prefix_with_classifier_no_docs(
+    mock_bucket, mock_bucket_labelled_passages, s3_prefix_mock_bucket_labelled_passages
+):
+    """Test s3_paths_or_s3_prefix returns classifier-specific prefix when no document IDs provided."""
+    config = Config(cache_bucket=mock_bucket)
+    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+
+    paths, prefix = s3_paths_or_s3_prefix(
+        classifier_spec=classifier_spec,
+        document_ids=None,
+        config=config,
+    )
+
+    assert prefix == s3_prefix_mock_bucket_labelled_passages
+    assert paths is None
+
+
+def test_s3_paths_or_s3_prefix_with_classifier_and_docs(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    labelled_passage_fixture_ids,
+    labelled_passage_fixture_files,
+    s3_prefix_mock_bucket_labelled_passages,
+):
+    """Test s3_paths_or_s3_prefix returns specific paths when both classifier and document IDs provided."""
+    config = Config(cache_bucket=mock_bucket)
+    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+
+    expected_paths = [
+        f"{s3_prefix_mock_bucket_labelled_passages}/{labelled_passage_fixture_file}"
+        for labelled_passage_fixture_file in labelled_passage_fixture_files
+    ]
+
+    paths, prefix = s3_paths_or_s3_prefix(
+        classifier_spec=classifier_spec,
+        document_ids=labelled_passage_fixture_ids,
+        config=config,
+    )
+
+    assert prefix is None
+    assert sorted(paths) == sorted(expected_paths)

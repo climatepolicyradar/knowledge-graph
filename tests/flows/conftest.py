@@ -248,18 +248,41 @@ def parser_output_pdf(parser_output):
 
 
 @pytest.fixture
+def s3_prefix_mock_bucket(
+    mock_bucket: str,
+) -> str:
+    return f"s3://{mock_bucket}"
+    """Returns the s3 prefix for the concepts."""
+
+
+@pytest.fixture
+def s3_prefix_mock_bucket_labelled_passages(
+    mock_bucket: str,
+    s3_prefix_labelled_passages: str,
+) -> str:
+    return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
+    """Returns the s3 prefix for the concepts."""
+
+
+@pytest.fixture
 def s3_prefix_labelled_passages() -> str:
     """Returns the s3 prefix for the concepts."""
-    return "labelled_concepts/Q788-RuleBasedClassifier/latest"
+    return "labelled_passages/Q788/latest"
 
 
 @pytest.fixture()
-def labelled_passage_fixture_files() -> list[str]:
+def labelled_passage_fixture_ids() -> list[str]:
     """Returns the list of concept fixture files."""
     return [
-        "CCLW.executive.10014.4470.json",
-        "CCLW.executive.4934.1571.json",
+        "CCLW.executive.10014.4470",
+        "CCLW.executive.4934.1571",
     ]
+
+
+@pytest.fixture()
+def labelled_passage_fixture_files(labelled_passage_fixture_ids) -> list[str]:
+    """Returns the list of concept fixture files."""
+    return [f"{doc_id}.json" for doc_id in labelled_passage_fixture_ids]
 
 
 @pytest.fixture
