@@ -225,46 +225,36 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     )
 
     # confirm we remove existing concepts and add new ones based on the model
-    new_vespa_concepts = [
+    modified_example_vespa_concepts = [
         (concept.id, concept.model_copy()) for concept in example_vespa_concepts
     ]
-    for concept in new_vespa_concepts:
+    for concept in modified_example_vespa_concepts:
         # Make a change to the concept but keep the same model
-        concept[1].end = concept[1].end + 1000
+        concept[1].end += 1000
 
     await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
-        document_concepts=new_vespa_concepts,
+        document_concepts=modified_example_vespa_concepts,
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
-    repeat_updated_passages = get_document_passages_from_vespa(
+    second_updated_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
         vespa_search_adapter=mock_vespa_search_adapter,
     )
-    repeat_updated_concepts = [
+    second_updated_concepts = [
         concept
-        for _, passage in repeat_updated_passages
+        for _, passage in second_updated_passages
         if passage.concepts
         for concept in passage.concepts
     ]
 
-    assert len(repeat_updated_passages) > 0
-    assert len(repeat_updated_concepts) == len(updated_concepts)
-    # Check that the new concepts are in vespa.
-    assert all(
-        [
-            any([new_vespa_concept == c for c in repeat_updated_concepts])
-            for _, new_vespa_concept in new_vespa_concepts
-        ]
-    )
-    # Check that the original concepts are not in vespa.
-    assert not any(
-        [
-            any([example_vespa_concept == c for c in repeat_updated_concepts])
-            for example_vespa_concept in example_vespa_concepts
-        ]
-    )
+    assert len(second_updated_passages) > 0
+    assert len(second_updated_concepts) == len(updated_concepts)
+    for _, new_vespa_concept in modified_example_vespa_concepts:
+        assert new_vespa_concept in second_updated_concepts
+    for example_vespa_concept in example_vespa_concepts:
+        assert example_vespa_concept not in second_updated_concepts
 
 
 @pytest.mark.asyncio
