@@ -1,4 +1,6 @@
-from collections import defaultdict
+import time
+from collections import Counter, defaultdict
+from pathlib import Path
 from string import punctuation
 
 from prefect import flow, task
@@ -32,6 +34,13 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     issues.extend(ensure_positive_and_negative_labels_dont_overlap(concepts))
     issues.extend(check_description_and_definition_length(concepts))
     issues.extend(check_for_duplicate_preferred_labels(concepts))
+
+    librarian_output_dir = Path("../data/librarian")
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    html_content = create_html_report(issues)
+    (librarian_output_dir / f"librarian_report_{timestr}.html").write_text(html_content)
+    print("HTML report generated: concept_store_issues.html")
+
     return issues
 
 
@@ -209,6 +218,105 @@ def check_for_duplicate_preferred_labels(
                 )
             )
     return issues
+
+
+@task(log_prints=True)
+def create_html_report(issues: list[ConceptStoreIssue]) -> str:
+    """Create an HTML report of all issues found with tabs and shuffle functionality"""
+
+    issues_by_type = defaultdict(list)
+    for issue in issues:
+        issues_by_type[issue.issue_type].append(issue)
+
+    # Count totals
+    total_issues = len(issues)
+    type_counts = Counter(issue.issue_type for issue in issues)
+
+    # Create HTML
+    html = [
+        "<html>",
+        "<head>",
+        "<style>",
+        "body { font-family: Arial, sans-serif; margin: 2em; }",
+        ".tab { display: none; }",
+        ".tab.active { display: block; }",
+        ".tab-button { padding: 10px 20px; margin-right: 5px; cursor: pointer; }",
+        ".tab-button.active { background: #007bff; color: white; }",
+        ".issue { margin: 1em 0; padding: 0.5em; background: #f5f5f5; }",
+        ".metadata { font-family: monospace; margin-left: 1em; }",
+        ".shuffle-button { margin: 1em 0; padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; }",
+        "</style>",
+        "<script>",
+        "function openTab(evt, tabName) {",
+        "  const tabs = document.getElementsByClassName('tab');",
+        "  for (let tab of tabs) { tab.classList.remove('active'); }",
+        "  const buttons = document.getElementsByClassName('tab-button');",
+        "  for (let button of buttons) { button.classList.remove('active'); }",
+        "  document.getElementById(tabName).classList.add('active');",
+        "  evt.currentTarget.classList.add('active');",
+        "}",
+        "function shuffleIssues(tabName) {",
+        "  const tab = document.getElementById(tabName);",
+        "  const issues = tab.getElementsByClassName('issue');",
+        "  const issuesArr = Array.from(issues);",
+        "  const parent = issues[0].parentNode;",
+        "  for (let i = issuesArr.length - 1; i > 0; i--) {",
+        "    const j = Math.floor(Math.random() * (i + 1));",
+        "    [issuesArr[i], issuesArr[j]] = [issuesArr[j], issuesArr[i]];",
+        "  }",
+        "  issuesArr.forEach(issue => parent.appendChild(issue));",
+        "}",
+        "</script>",
+        "</head>",
+        "<body>",
+        "<h1>Concept Store Librarian Report 📘</h1>",
+        f"<p>Total issues found: {total_issues}</p>",
+        "<div class='tab-buttons'>",
+    ]
+
+    # Add tab buttons
+    for issue_type in issues_by_type.keys():
+        html.append(
+            f"<button class='tab-button' onclick=\"openTab(event, '{issue_type}')\">{issue_type} ({type_counts[issue_type]})</button>"
+        )
+
+    # Add tab content
+    for issue_type, issue_list in issues_by_type.items():
+        html.extend(
+            [
+                f"<div id='{issue_type}' class='tab'>",
+                f"<h2>{issue_type}</h2>",
+                f"<button class='shuffle-button' onclick=\"shuffleIssues('{issue_type}')\">Shuffle Issues</button>",
+                "<div class='issues-container'>",
+            ]
+        )
+
+        for issue in issue_list:
+            html.extend(
+                [
+                    "<div class='issue'>",
+                    f"<p>{issue.message}</p>",
+                    "<pre class='metadata'>",
+                    f"{issue.metadata}",
+                    "</pre>",
+                    "</div>",
+                ]
+            )
+
+        html.extend(["</div>", "</div>"])
+
+    # Add script to show first tab by default
+    html.extend(
+        [
+            "<script>",
+            "document.getElementsByClassName('tab-button')[0].click();",
+            "</script>",
+            "</body>",
+            "</html>",
+        ]
+    )
+
+    return "\n".join(html)
 
 
 if __name__ == "__main__":
