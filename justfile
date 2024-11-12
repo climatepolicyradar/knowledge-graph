@@ -20,6 +20,10 @@ install-for-embeddings:
 test:
     poetry run pytest
 
+# test the project, excluding tests that rely on a local vespa instance
+test-without-vespa:
+    poetry run pytest  -m 'not vespa'
+
 # update the snapshots for the tests
 test-snapshot-update:
     poetry run pytest --snapshot-update

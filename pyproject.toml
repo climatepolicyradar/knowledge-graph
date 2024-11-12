@@ -76,6 +76,7 @@ pytest-asyncio = "^0.24.0"
 env = [
     "AWS_ENV=test-env",
 ]
+markers = ["vespa"]
 
 [build-system]
 requires = ["poetry-core"]

@@ -20,6 +20,7 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from pydantic import SecretStr
+from requests.exceptions import ConnectionError
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
@@ -99,11 +100,19 @@ def mock_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmpdir
 ) -> VespaSearchAdapter:
     """VespaSearchAdapter instantiated from mocked ssm params."""
-    return get_vespa_search_adapter_from_aws_secrets(
+    adapter = get_vespa_search_adapter_from_aws_secrets(
         cert_dir=tmpdir,
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
     )
+    try:
+        adapter.client.get_application_status()
+    except ConnectionError:
+        pytest.fail(
+            "Can't connect to a local vespa instance. See guidance here: "
+            "`tests/local_vespa/README.md`"
+        )
+    return adapter
 
 
 @pytest.fixture
