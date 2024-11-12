@@ -126,6 +126,7 @@ def test_labelled_passages_generator(
         assert s3_key in expected_keys
 
 
+@pytest.mark.vespa
 def test_get_document_passages_from_vespa(
     mock_vespa_search_adapter: VespaSearchAdapter,
     document_passages_test_data_file_path: str,
@@ -172,6 +173,7 @@ def test_get_document_passages_from_vespa(
     )
 
 
+@pytest.mark.vespa
 @pytest.mark.asyncio
 async def test_run_partial_updates_of_concepts_for_document_passages(
     mock_vespa_search_adapter: VespaSearchAdapter,
@@ -220,6 +222,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     )
 
 
+@pytest.mark.vespa
 @pytest.mark.asyncio
 async def test_index_labelled_passages_from_s3_to_vespa(
     mock_bucket,
