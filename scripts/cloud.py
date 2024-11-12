@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from src.identifiers import WikibaseID
 
+PROJECT_NAME = "knowledge-graph"
+
 
 class Namespace(BaseModel):
     """Hierarchy we use: CPR / {concept} / {classifier}"""
@@ -37,6 +39,10 @@ class AwsEnv(str, Enum):
             return cls.staging
         if value == "production":
             return cls.production
+
+
+def generate_deployment_name(flow_name: str, aws_env: AwsEnv):
+    return f"{PROJECT_NAME}-{flow_name}-{aws_env}"
 
 
 def get_session(aws_env: AwsEnv) -> boto3.session.Session:
