@@ -37,6 +37,7 @@ def test_config():
         wandb_model_registry="test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
+        aws_env="test_env",
     )
 
 
@@ -338,3 +339,33 @@ def mock_wandb(mock_s3_client):
         mock_run.use_artifact.return_value = mock_artifact
 
         yield mock_init, mock_run, mock_artifact
+
+
+@pytest.fixture
+def mock_wandb_api():
+    with patch("wandb.Api") as mock_api:
+        # Create a mock for the API instance
+        api_instance = Mock()
+        mock_api.return_value = api_instance
+
+        # Create mock model collections
+        collections = []
+        for model_data in [
+            {"name": "Q111", "env": "test_env"},
+            {"name": "Q222", "env": "test_env"},
+            {"name": "Q444", "env": "some_other_env"},
+            {"name": "some_other_model", "env": "test_env"},
+        ]:
+            mock_artifact = Mock()
+            mock_artifact.version = "v1"
+            mock_artifact.metadata = {"aws_env": model_data["env"]}
+
+            mock_collection = Mock()
+            mock_collection.name = model_data["name"]
+
+            mock_collection.artifacts.return_value = [mock_artifact]
+            collections.append(mock_collection)
+
+        api_instance.artifact_collections.return_value = collections
+
+        yield mock_api
