@@ -134,15 +134,16 @@ def test_labelled_passages_generator(
 
 @pytest.mark.vespa
 def test_get_document_passages_from_vespa(
-    mock_vespa_search_adapter: VespaSearchAdapter,
+    local_vespa_search_adapter: VespaSearchAdapter,
     document_passages_test_data_file_path: str,
+    vespa_app,
 ) -> None:
     """Test that we can retrieve all the passages for a document in vespa."""
 
     # Test that we retrieve no passages for a document that doesn't exist
     document_passages = get_document_passages_from_vespa(
         document_import_id="test.executive.1.1",
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     assert document_passages == []
@@ -162,7 +163,7 @@ def test_get_document_passages_from_vespa(
 
     document_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     assert len(document_passages) > 0
@@ -181,10 +182,10 @@ def test_get_document_passages_from_vespa(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
-@pytest.mark.skip(reason="Vespa integration tests conflict with each other")
 async def test_run_partial_updates_of_concepts_for_document_passages(
-    mock_vespa_search_adapter: VespaSearchAdapter,
+    local_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts: list[VespaConcept],
+    vespa_app,
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
     document_import_id = "CCLW.executive.10014.4470"
@@ -192,7 +193,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     # Confirm that the example concepts are not in the document passages
     initial_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
     initial_concepts = [
         concept
@@ -208,12 +209,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
         document_concepts=[(c.id, c) for c in example_vespa_concepts],
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     updated_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
     updated_concepts = [
         concept
@@ -243,12 +244,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
         document_concepts=modified_example_vespa_concepts,
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     second_updated_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
     second_updated_concepts = [
         concept
@@ -283,10 +284,11 @@ async def test_index_by_s3_with_s3_prefix(
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
-    mock_vespa_search_adapter: VespaSearchAdapter,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
 ) -> None:
     """We can successfully index labelled passages from S3 into Vespa."""
-    initial_passages_response = mock_vespa_search_adapter.client.query(
+    initial_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
     initial_concepts_count = sum(
@@ -294,12 +296,12 @@ async def test_index_by_s3_with_s3_prefix(
     )
 
     await index_by_s3(
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
         s3_prefix=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
         s3_paths=None,
     )
 
-    final_passages_response = mock_vespa_search_adapter.client.query(
+    final_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
     final_concepts_count = sum(
@@ -314,16 +316,16 @@ async def test_index_by_s3_with_s3_prefix(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
-@pytest.mark.skip(reason="Vespa integration tests conflict with each other")
 async def test_index_by_s3_with_s3_paths(
     mock_bucket,
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
-    mock_vespa_search_adapter: VespaSearchAdapter,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
 ) -> None:
     """We can successfully index labelled passages from S3 into Vespa."""
-    initial_passages_response = mock_vespa_search_adapter.client.query(
+    initial_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
     initial_concepts_count = sum(
@@ -336,12 +338,12 @@ async def test_index_by_s3_with_s3_paths(
     ]
 
     await index_by_s3(
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
         s3_prefix=None,
         s3_paths=s3_paths,
     )
 
-    final_passages_response = mock_vespa_search_adapter.client.query(
+    final_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
     final_concepts_count = sum(
@@ -392,16 +394,15 @@ def test_get_passage_for_text_block(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
-@pytest.mark.integration
-@pytest.mark.skip(reason="Vespa integration tests conflict with each other")
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids(
     mock_bucket,
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
-    mock_vespa_search_adapter: VespaSearchAdapter,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
 ) -> None:
-    initial_passages_response = mock_vespa_search_adapter.client.query(
+    initial_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
     initial_concepts_count = sum(
@@ -415,7 +416,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids(
     ]
     config = Config(
         cache_bucket=mock_bucket,
-        vespa_search_adapter=mock_vespa_search_adapter,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     await index_labelled_passages_from_s3_to_vespa(
@@ -424,7 +425,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids(
         config=config,
     )
 
-    final_passages_response = mock_vespa_search_adapter.client.query(
+    final_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
     )
     final_concepts_count = sum(
