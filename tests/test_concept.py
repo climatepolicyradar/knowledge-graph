@@ -78,6 +78,7 @@ def test_whether_repr_and_str_are_correctly_formatted(
     assert str(concept) == repr(concept)
 
 
+@pytest.mark.skip(reason="Moved to concept store librarian checks")
 def test_whether_blank_preferred_label_raises_validation_error():
     with pytest.raises(ValidationError):
         Concept(preferred_label="")
