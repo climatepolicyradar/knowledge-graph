@@ -2,6 +2,7 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 from string import punctuation
+from typing import Optional
 
 from prefect import flow, task
 from pydantic import BaseModel
@@ -16,6 +17,7 @@ class ConceptStoreIssue(BaseModel):
     issue_type: str
     message: str
     metadata: dict
+    fix_wikibase_id: Optional[str] = None
 
 
 def stringify_concept(concept: Concept) -> str:
@@ -231,14 +233,16 @@ def check_for_duplicate_preferred_labels(
 
     for label, ids in duplicate_dict.items():
         if len(ids) > 1:
-            concepts = [concept for concept in concepts if concept.wikibase_id in ids]
-            concepts_string = ", ".join(
-                [stringify_concept(concept) for concept in concepts]
+            duplicate_concepts = [
+                concept for concept in concepts if concept.wikibase_id in ids
+            ]
+            duplicate_concepts_string = ", ".join(
+                [stringify_concept(concept) for concept in duplicate_concepts]
             )
             issues.append(
                 ConceptStoreIssue(
                     issue_type="duplicate_preferred_labels",
-                    message=f"{len(ids)} concepts have the same label '{label}': {concepts_string}",
+                    message=f"{len(ids)} concepts have the same label '{label}': {duplicate_concepts_string}",
                     metadata={"label": label, "concept_ids": ids},
                 )
             )
@@ -348,4 +352,4 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
 
 if __name__ == "__main__":
     issues = validate_concept_store()
-    print(issues)
+    # print(issues)
