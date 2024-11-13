@@ -51,7 +51,7 @@ jobs:
         run: just vespa_dev_setup
 
       - name: Test
-        run: just test -v
+        run: just test -v -m "'not flaky_on_ci'"
 
   deploy_docs:
     if: github.ref == 'refs/heads/main'

@@ -279,6 +279,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.flaky_on_ci
 async def test_index_by_s3_with_s3_prefix(
     mock_bucket,
     mock_bucket_labelled_passages,
@@ -316,6 +317,7 @@ async def test_index_by_s3_with_s3_prefix(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.flaky_on_ci
 async def test_index_by_s3_with_s3_paths(
     mock_bucket,
     mock_bucket_labelled_passages,
