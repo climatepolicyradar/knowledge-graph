@@ -17,6 +17,7 @@ from flows.index import (
     get_passage_for_text_block,
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
+    group_concepts_on_text_block,
     index_labelled_passages_from_s3_to_vespa,
     labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
@@ -448,3 +449,32 @@ def test_get_parent_concepts_from_concept() -> None:
             labelled_passages=[],
         )
     ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
+
+
+def test_group_concepts_on_text_block(
+    example_vespa_concepts: list[VespaConcept],
+) -> None:
+    """Test that we can successfully group concepts on the relvant text block."""
+    text_block_one_concepts_no = 2
+    text_block_one_document_concepts = [
+        ("text_block_1", example_vespa_concepts[0]),
+    ] * text_block_one_concepts_no
+
+    text_block_two_concepts_no = 11
+    text_block_two_concepts = [
+        ("text_block_2", example_vespa_concepts[0])
+    ] * text_block_two_concepts_no
+
+    grouped_concepts = group_concepts_on_text_block(
+        document_concepts=text_block_one_document_concepts + text_block_two_concepts
+    )
+
+    assert isinstance(grouped_concepts, dict)
+    for text_block_id, concepts in grouped_concepts.items():
+        assert isinstance(text_block_id, str)
+        assert all([isinstance(concept, VespaConcept) for concept in concepts])
+
+    assert len(grouped_concepts) == 2
+    assert grouped_concepts.keys() == {"text_block_1", "text_block_2"}
+    assert len(grouped_concepts["text_block_1"]) == text_block_one_concepts_no
+    assert len(grouped_concepts["text_block_2"]) == text_block_two_concepts_no
