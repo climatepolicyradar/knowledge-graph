@@ -12,24 +12,18 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
-from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import SecretStr
 from wandb.apis.public.artifacts import ArtifactCollection
 
-from scripts.cloud import AwsEnv
+from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-
-async def get_prefect_job_variable(param_name: str) -> str:
-    """Get a single variable from the Prefect job variables."""
-    aws_env = AwsEnv(os.environ["AWS_ENV"])
-    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
-    workpool_default_job_variables = await JSON.load(block_name)
-    return workpool_default_job_variables.value[param_name]
+DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
+DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 
 @dataclass()
@@ -37,8 +31,8 @@ class Config:
     """Configuration used across flow runs."""
 
     cache_bucket: Optional[str] = None
-    document_source_prefix: str = "embeddings_input"
-    document_target_prefix: str = "labelled_passages"
+    document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
+    document_target_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
     pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
@@ -320,18 +314,6 @@ async def run_classifier_inference_on_document(
         document_id=document_id,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
-    )
-
-
-class ClassifierSpec(BaseModel):
-    """Details for a classifier to run"""
-
-    name: str = Field(
-        description="The reference of the classifier in wandb. e.g. 'Q992'"
-    )
-    alias: str = Field(
-        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
-        default="latest",
     )
 
 

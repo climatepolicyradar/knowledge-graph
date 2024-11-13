@@ -4,8 +4,7 @@ from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
 from typing_extensions import Annotated
 
-from flows.inference import ClassifierSpec
-from scripts.cloud import AwsEnv
+from scripts.cloud import AwsEnv, ClassifierSpec
 
 app = typer.Typer()
 console = Console()
@@ -36,7 +35,7 @@ def convert_classifier_specs(requested_classifiers: list[str]) -> list[Classifie
 
 @app.command(
     help="""Run classifier inference on documents.
-        
+
         This triggers the deployed inference flow to run against documents in a
         pipeline cache bucket and save the labelled passage results back to s3.
         """

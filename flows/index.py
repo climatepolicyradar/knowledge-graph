@@ -14,24 +14,14 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
-from prefect.blocks.system import JSON
 from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
-from pydantic import BaseModel, Field
 
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from scripts.cloud import ClassifierSpec, get_prefect_job_variable
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-
-
-async def get_prefect_job_variable(param_name: str) -> str:
-    """Get a single variable from the Prefect job variables."""
-    aws_env = os.environ["AWS_ENV"]
-    if aws_env is None:
-        raise ValueError("AWS_ENV is not set")
-    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
-    workpool_default_job_variables = await JSON.load(block_name)
-    return workpool_default_job_variables.value[param_name]
 
 
 @dataclass()
@@ -39,7 +29,7 @@ class Config:
     """Configuration used across flow runs."""
 
     cache_bucket: Optional[str] = None
-    document_source_prefix: str = "labelled_passages"
+    document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
     bucket_region: str = "eu-west-1"
     # An instance of VespaSearchAdapter.
     #
@@ -426,18 +416,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
                         }
                     },
                 )
-
-
-class ClassifierSpec(BaseModel):
-    """Details for a classifier to run"""
-
-    name: str = Field(
-        description="The reference of the classifier in wandb. e.g. 'Q992-RulesBasedClassifier'"
-    )
-    alias: str = Field(
-        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
-        default="latest",
-    )
 
 
 def get_bucket_paginator(config: Config):
