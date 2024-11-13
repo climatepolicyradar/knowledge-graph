@@ -24,6 +24,7 @@ from requests.exceptions import ConnectionError
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
+from scripts.cloud import AwsEnv
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
@@ -37,7 +38,7 @@ def test_config():
         wandb_model_registry="test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
-        aws_env="test_env",
+        aws_env=AwsEnv("sandbox"),
     )
 
 
@@ -351,10 +352,10 @@ def mock_wandb_api():
         # Create mock model collections
         collections = []
         for model_data in [
-            {"name": "Q111", "env": "test_env"},
-            {"name": "Q222", "env": "test_env"},
-            {"name": "Q444", "env": "some_other_env"},
-            {"name": "some_other_model", "env": "test_env"},
+            {"name": "Q111", "env": "sandbox"},
+            {"name": "Q222", "env": "sandbox"},
+            {"name": "Q444", "env": "labs"},
+            {"name": "some_other_model", "env": "sandbox"},
         ]:
             mock_artifact = Mock()
             mock_artifact.version = "v1"

@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -18,6 +17,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import BaseModel, Field, SecretStr
 from wandb.apis.public.artifacts import ArtifactCollection
 
+from scripts.cloud import AwsEnv
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -26,7 +26,7 @@ from src.span import Span
 
 async def get_prefect_job_variable(param_name: str) -> str:
     """Get a single variable from the Prefect job variables."""
-    aws_env = os.environ["AWS_ENV"]
+    aws_env = AwsEnv(os.environ["AWS_ENV"])
     block_name = f"default-job-variables-prefect-mvp-{aws_env}"
     workpool_default_job_variables = await JSON.load(block_name)
     return workpool_default_job_variables.value[param_name]
@@ -45,7 +45,7 @@ class Config:
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
     wandb_entity: str = "climatepolicyradar"
     wandb_api_key: Optional[SecretStr] = None
-    aws_env: str = os.environ["AWS_ENV"]
+    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
     @classmethod
     async def create(cls) -> "Config":
@@ -336,14 +336,22 @@ def is_concept_model(model: ArtifactCollection) -> bool:
     """
     Check if a model is a concept classifier
 
-    This check is based on wether the model name matches the wikibase concept format.
+    This check is based on whether the model name can be instantiated as a WikibaseID.
     For example: `Q123`, `Q972`
     """
-    return bool(re.fullmatch(WikibaseID.regex, model.name))
+    try:
+        WikibaseID(model.name)
+
+        return True
+    except ValueError as e:
+        if "is not a valid Wikibase ID" in str(e):
+            return False
+
+        raise
 
 
 def get_relevant_model_version(
-    model: ArtifactCollection, aws_env: str
+    model: ArtifactCollection, aws_env: AwsEnv
 ) -> Optional[list[ClassifierSpec]]:
     """Returns the model name and version if a valid model is found"""
 
@@ -351,7 +359,7 @@ def get_relevant_model_version(
         return None
 
     for model_artifacts in model.artifacts():
-        if ("aws_env", aws_env) in model_artifacts.metadata.items():
+        if ("aws_env", aws_env.value) in model_artifacts.metadata.items():
             return ClassifierSpec(name=model.name, alias=model_artifacts.version)
 
 
