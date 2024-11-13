@@ -197,10 +197,9 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     assert all(concept not in initial_concepts for concept in example_vespa_concepts)
 
     # Confirm that we can add the example concepts to the document passages
-    document_concepts = [(c.id, c) for c in example_vespa_concepts]
     await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
-        document_concepts=document_concepts,
+        document_concepts=[(c.id, c) for c in example_vespa_concepts],
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
@@ -224,12 +223,13 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         ]
     )
 
-    # confirm we remove existing concepts and add new ones based on the model
+    # Confirm we remove existing concepts and add new ones based on the model field
     modified_example_vespa_concepts = [
         (concept.id, concept.model_copy()) for concept in example_vespa_concepts * 2
     ]
     for idx, concept in enumerate(modified_example_vespa_concepts):
-        # Make a change to the concept but keep the same model
+        # Make a change to the concept but keep the same model, this triggers removal
+        # of the existing concepts with the same model
         concept[1].end = idx
 
     await run_partial_updates_of_concepts_for_document_passages(
