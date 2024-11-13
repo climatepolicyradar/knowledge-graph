@@ -17,8 +17,8 @@ install-for-embeddings:
     poetry install --with embeddings
 
 # test the project
-test:
-    poetry run pytest
+test +OPTS="":
+    poetry run pytest {{OPTS}}
 
 # test the project, excluding tests that rely on a local vespa instance
 test-without-vespa:
