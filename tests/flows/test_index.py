@@ -251,7 +251,11 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     assert len(second_updated_passages) > 0
     assert len(second_updated_concepts) != len(updated_concepts)
-    assert len(second_updated_concepts) == len(modified_example_vespa_concepts) + 2
+    assert len(second_updated_concepts) == (
+        len(updated_concepts)
+        + len(modified_example_vespa_concepts)
+        - len(example_vespa_concepts)
+    )
     for _, new_vespa_concept in modified_example_vespa_concepts:
         assert new_vespa_concept in second_updated_concepts
     for example_vespa_concept in example_vespa_concepts:
@@ -296,7 +300,7 @@ async def test_index_labelled_passages_from_s3_to_vespa(
 def test_get_passage_for_text_block(
     example_vespa_concepts: list[VespaConcept], text_block_id: str
 ) -> None:
-    """Test that we can retrieve the relevant passage for a concept."""
+    """Test that we can retrieve the relevant passage for a text block."""
     relevant_passage = (
         "doc_id_1",
         VespaPassage(
@@ -336,7 +340,7 @@ def test_get_updated_passage_concepts(
         # Test we can add a concept to the passage concepts that doesn't already
         # exist.
         updated_passage_concepts = get_updated_passage_concepts(
-            concept=concept,
+            concepts=[concept],
             passage=VespaPassage(
                 text_block="Test text.",
                 text_block_id="1",
@@ -350,7 +354,7 @@ def test_get_updated_passage_concepts(
         # Test that we can remove old model concepts from the passage concepts and
         # add the new one.
         updated_passage_concepts = get_updated_passage_concepts(
-            concept=concept,
+            concepts=[concept],
             passage=VespaPassage(
                 text_block="Test text.",
                 text_block_id="1",
@@ -374,7 +378,7 @@ def test_get_updated_passage_concepts(
 
         # Test that we can add new concepts and retain concepts from other models
         updated_passage_concepts = get_updated_passage_concepts(
-            concept=concept,
+            concepts=[concept],
             passage=VespaPassage(
                 text_block="Test text.",
                 text_block_id="1",
