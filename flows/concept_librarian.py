@@ -17,11 +17,16 @@ class ConceptStoreIssue(BaseModel):
     issue_type: str
     message: str
     metadata: dict
-    fix_wikibase_id: Optional[str] = None
+    fix_concept: Optional[Concept] = None
 
 
 def stringify_concept(concept: Concept) -> str:
     return f"""{concept.preferred_label} (<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.wikibase_id}</a>)"""
+
+
+def create_fix_button(concept: Concept) -> str:
+    """Create a fix button that links to the concept's page"""
+    return f'<a href="{concept.wikibase_url}" target="_blank" class="fix-button">Fix this</a>'
 
 
 wikibase = WikibaseSession()
@@ -78,6 +83,7 @@ def validate_related_relationship_symmetry(
                     issue_type="asymmetric_related_relationship",
                     message=f"{stringify_concept(concept)} is related to {stringify_concept(related_concept)}, but {stringify_concept(related_concept)} is not related to {stringify_concept(concept)}",
                     metadata={"concept_id": concept_id, "related_id": related_id},
+                    fix_concept=related_concept,
                 )
             )
     return issues
@@ -112,6 +118,7 @@ def validate_hierarchical_relationship_symmetry(
                     issue_type="asymmetric_subconcept_relationship",
                     message=f"{stringify_concept(concept)} has subconcept {stringify_concept(subconcept)}, but {stringify_concept(subconcept)} does not have parent concept {stringify_concept(concept)}",
                     metadata={"concept_id": concept_id, "subconcept_id": subconcept_id},
+                    fix_concept=subconcept,
                 )
             )
     for concept_id, parent_concept_id in subconcept_of_relationships:
@@ -128,6 +135,7 @@ def validate_hierarchical_relationship_symmetry(
                         "concept_id": concept_id,
                         "parent_concept_id": parent_concept_id,
                     },
+                    fix_concept=parent_concept,
                 )
             )
     return issues
@@ -154,6 +162,7 @@ def validate_alternative_label_uniqueness(
                         "concept_id": concept.wikibase_id,
                         "duplicate_labels": duplicate_labels,
                     },
+                    fix_concept=concept,
                 )
             )
     return issues
@@ -198,6 +207,7 @@ def check_description_and_definition_length(
                         "concept_id": concept.wikibase_id,
                         "description": concept.description,
                     },
+                    fix_concept=concept,
                 )
             )
         if concept.definition and len(concept.definition) < minimum_length:
@@ -209,6 +219,7 @@ def check_description_and_definition_length(
                         "concept_id": concept.wikibase_id,
                         "definition": concept.definition,
                     },
+                    fix_concept=concept,
                 )
             )
     return issues
@@ -276,6 +287,7 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         ".shuffle-button { margin: 1em 0; padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; }",
         ".concept-link { color: black; text-decoration: underline dotted; }",
         "a[target='_blank']::after {content: '↗'; display: inline-block; font-size: 0.8em;}",
+        ".fix-button { padding: 5px 10px; background: white; color: #000000; border: none; cursor: pointer; margin-left: 1em; }",
         "</style>",
         "<script>",
         "function openTab(evt, tabName) {",
@@ -323,10 +335,16 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         )
 
         for issue in issue_list:
+            fix_button = (
+                create_fix_button(issue.fix_concept)
+                if issue.fix_concept is not None
+                else ""
+            )
+
             html.extend(
                 [
                     "<div class='issue'>",
-                    f"<p>{issue.message}</p>",
+                    f"<p>{issue.message}{fix_button}</p>",
                     "<pre class='metadata'>",
                     f"{issue.metadata}",
                     "</pre>",
