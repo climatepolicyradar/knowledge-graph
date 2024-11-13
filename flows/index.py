@@ -19,6 +19,7 @@ from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
 from pydantic import BaseModel, Field
 
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -39,7 +40,7 @@ class Config:
     """Configuration used across flow runs."""
 
     cache_bucket: Optional[str] = None
-    document_source_prefix: str = "labelled_passages"
+    document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
     bucket_region: str = "eu-west-1"
     # An instance of VespaSearchAdapter.
     #

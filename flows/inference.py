@@ -32,13 +32,17 @@ async def get_prefect_job_variable(param_name: str) -> str:
     return workpool_default_job_variables.value[param_name]
 
 
+DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
+DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+
+
 @dataclass()
 class Config:
     """Configuration used across flow runs."""
 
     cache_bucket: Optional[str] = None
-    document_source_prefix: str = "embeddings_input"
-    document_target_prefix: str = "labelled_passages"
+    document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
+    document_target_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
     pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
