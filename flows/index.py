@@ -295,6 +295,12 @@ def get_updated_passage_concepts(
 def group_concepts_on_text_block(
     document_concepts: list[tuple[str, VespaConcept]],
 ) -> dict[str, list[VespaConcept]]:
+    """
+    Group concepts on text block id.
+
+    Concepts relate to a specific passage or text block within a document and therefore,
+    we must group the concept updates to all of them at once.
+    """
     concepts_grouped = {}
     for text_block_id, concept in document_concepts:
         if text_block_id in concepts_grouped:
