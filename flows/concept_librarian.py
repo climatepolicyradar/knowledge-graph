@@ -282,12 +282,13 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         ".tab.active { display: block; }",
         ".tab-button { padding: 10px 20px; margin-right: 5px; cursor: pointer; }",
         ".tab-button.active { background: #007bff; color: white; }",
-        ".issue { margin: 1em 0; padding: 0.5em; background: #f5f5f5; }",
+        ".issue { margin: 1em 0; padding: 0.5em; background: #f5f5f5; display: flex; justify-content: space-between; align-items: flex-start; }",
+        ".issue-content { flex: 1; }",
         ".metadata { font-family: monospace; margin-left: 1em; }",
         ".shuffle-button { margin: 1em 0; padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; }",
         ".concept-link { color: black; text-decoration: underline dotted; }",
         "a[target='_blank']::after {content: '↗'; display: inline-block; font-size: 0.8em;}",
-        ".fix-button { padding: 5px 10px; background: white; color: #000000; border: none; cursor: pointer; margin-left: 1em; }",
+        ".fix-button { padding: 5px 10px; background: white; color: #000000; border: none; cursor: pointer; margin-left: 1em; white-space: nowrap; }",
         "</style>",
         "<script>",
         "function openTab(evt, tabName) {",
@@ -344,10 +345,13 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
             html.extend(
                 [
                     "<div class='issue'>",
-                    f"<p>{issue.message}{fix_button}</p>",
+                    "<div class='issue-content'>",
+                    f"<p>{issue.message}</p>",
                     "<pre class='metadata'>",
                     f"{issue.metadata}",
                     "</pre>",
+                    "</div>",
+                    f"<div>{fix_button}</div>",
                     "</div>",
                 ]
             )
