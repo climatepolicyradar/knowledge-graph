@@ -454,27 +454,31 @@ def test_get_parent_concepts_from_concept() -> None:
 def test_group_concepts_on_text_block(
     example_vespa_concepts: list[VespaConcept],
 ) -> None:
-    """Test that we can successfully group concepts on the relvant text block."""
-    text_block_one_concepts_no = 2
-    text_block_one_document_concepts = [
-        ("text_block_1", example_vespa_concepts[0]),
-    ] * text_block_one_concepts_no
+    """
+    Test that we can successfully group concepts on the relevant text block.
 
-    text_block_two_concepts_no = 11
+    Args:
+        example_vespa_concepts (List[VespaConcept]): List of example Vespa concepts.
+    """
+    text_block_one_concept_count = 2
+    text_block_one_concepts = [
+        ("text_block_1", example_vespa_concepts[0])
+    ] * text_block_one_concept_count
+
+    text_block_two_concept_count = 11
     text_block_two_concepts = [
         ("text_block_2", example_vespa_concepts[0])
-    ] * text_block_two_concepts_no
+    ] * text_block_two_concept_count
 
-    grouped_concepts = group_concepts_on_text_block(
-        document_concepts=text_block_one_document_concepts + text_block_two_concepts
-    )
+    all_concepts = text_block_one_concepts + text_block_two_concepts
+    grouped_concepts = group_concepts_on_text_block(all_concepts)
 
     assert isinstance(grouped_concepts, dict)
     for text_block_id, concepts in grouped_concepts.items():
         assert isinstance(text_block_id, str)
-        assert all([isinstance(concept, VespaConcept) for concept in concepts])
+        assert all(isinstance(concept, VespaConcept) for concept in concepts)
 
     assert len(grouped_concepts) == 2
-    assert grouped_concepts.keys() == {"text_block_1", "text_block_2"}
-    assert len(grouped_concepts["text_block_1"]) == text_block_one_concepts_no
-    assert len(grouped_concepts["text_block_2"]) == text_block_two_concepts_no
+    assert set(grouped_concepts.keys()) == {"text_block_1", "text_block_2"}
+    assert len(grouped_concepts["text_block_1"]) == text_block_one_concept_count
+    assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
