@@ -135,9 +135,9 @@ def get_document_passages_from_vespa(
     ]
 
 
-def get_text_block_id_from_concept(concept: VespaConcept) -> str:
-    """Identify the text block id that a concept relates to."""
-    return concept.id
+def get_text_block_id_from_labelled_passage(labelled_passage: LabelledPassage) -> str:
+    """Identify the text block id that a labelled passage relates to."""
+    return labelled_passage.id
 
 
 def get_model_from_span(span: Span) -> str:
@@ -168,29 +168,24 @@ def get_model_from_span(span: Span) -> str:
     return span.labellers[0]
 
 
-def get_passage_for_concept(
-    concept: VespaConcept, document_passages: list[tuple[str, VespaPassage]]
+def get_passage_for_text_block(
+    text_block_id: str, document_passages: list[tuple[str, VespaPassage]]
 ) -> Union[tuple[str, str, VespaPassage], tuple[None, None, None]]:
     """
-    Return the data id, passage and passage id that a concept relates to.
+    Return the data id, passage and passage id that a text block relates to.
 
     Concepts relate to a specific passage or text block within a document
     and therefore, we must find the relevant text block to update when running
     partial updates.
 
-    The concept id is assumed to be text block id and thus, can be used to identify the
-    relevant passage.
-
     Extract data ID (last element after "::"), e.g., "CCLW.executive.10014.4470.623"
     from passage_id like "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
     """
-    concept_text_block_id = get_text_block_id_from_concept(concept)
-
     passage = next(
         (
             passage
             for passage in document_passages
-            if passage[1].text_block_id == concept_text_block_id
+            if passage[1].text_block_id == text_block_id
         ),
         None,
     )
@@ -227,9 +222,9 @@ def get_parent_concepts_from_concept(
 
 def convert_labelled_passages_to_concepts(
     labelled_passages: list[LabelledPassage],
-) -> list[VespaConcept]:
+) -> list[tuple[str, VespaConcept]]:
     """
-    Convert a labelled passage to a list of VespaConcept objects.
+    Convert a labelled passage to a list of VespaConcept objects and their text block id.
 
     The labelled passage contains a list of spans relating to concepts that we must
     convert to vespa Concept objects.
@@ -245,22 +240,26 @@ def convert_labelled_passages_to_concepts(
         parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
             concept=concept
         )
+        text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
 
-        concepts.extend(
-            [
-                VespaConcept(
-                    id=labelled_passage.id,
-                    name=concept.preferred_label,
-                    parent_concepts=parent_concepts,
-                    parent_concept_ids_flat=parent_concept_ids_flat,
-                    model=get_model_from_span(span),
-                    end=span.end_index,
-                    start=span.start_index,
-                    timestamp=labelled_passage.metadata["inference_timestamp"],
+        for span in labelled_passage.spans:
+            if span.concept_id is None:
+                raise ValueError("Concept ID is None.")
+            concepts.append(
+                (
+                    text_block_id,
+                    VespaConcept(
+                        id=span.concept_id,
+                        name=concept.preferred_label,
+                        parent_concepts=parent_concepts,
+                        parent_concept_ids_flat=parent_concept_ids_flat,
+                        model=get_model_from_span(span),
+                        end=span.end_index,
+                        start=span.start_index,
+                        timestamp=labelled_passage.metadata["inference_timestamp"],
+                    ),
                 )
-                for span in labelled_passage.spans
-            ]
-        )
+            )
 
     return concepts
 
@@ -295,7 +294,7 @@ def get_updated_passage_concepts(
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
-    document_concepts: list[VespaConcept],
+    document_concepts: list[tuple[str, VespaConcept]],
     vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
     """
@@ -323,9 +322,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 f"No passages found for document in vespa - {document_import_id}"
             )
 
-        for concept in document_concepts:
-            data_id, passage_id, passage_for_concept = get_passage_for_concept(
-                concept, document_passages
+        for text_block_id, concept in document_concepts:
+            data_id, passage_id, passage_for_concept = get_passage_for_text_block(
+                text_block_id, document_passages
             )
 
             if data_id and passage_id and passage_for_concept:

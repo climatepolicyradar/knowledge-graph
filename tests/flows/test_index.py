@@ -14,7 +14,7 @@ from flows.index import (
     convert_labelled_passages_to_concepts,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
-    get_passage_for_concept,
+    get_passage_for_text_block,
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
     index_labelled_passages_from_s3_to_vespa,
@@ -26,6 +26,7 @@ from flows.index import (
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
+from src.span import Span
 
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
     r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
@@ -197,7 +198,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     await run_partial_updates_of_concepts_for_document_passages(
         document_import_id=document_import_id,
-        document_concepts=example_vespa_concepts,
+        document_concepts=[(c.id, c) for c in example_vespa_concepts],
         vespa_search_adapter=mock_vespa_search_adapter,
     )
 
@@ -258,7 +259,7 @@ async def test_index_labelled_passages_from_s3_to_vespa(
 
 
 @pytest.mark.parametrize("text_block_id", ["1457", "p_2_b_120"])
-def test_get_passage_for_concept(
+def test_get_passage_for_text_block(
     example_vespa_concepts: list[VespaConcept], text_block_id: str
 ) -> None:
     """Test that we can retrieve the relevant passage for a concept."""
@@ -282,8 +283,9 @@ def test_get_passage_for_concept(
     for concept in example_vespa_concepts:
         concept.id = text_block_id
 
-        data_id, passage_id, passage = get_passage_for_concept(
-            concept=concept, document_passages=[relevant_passage, irrelevant_passage]
+        data_id, passage_id, passage = get_passage_for_text_block(
+            text_block_id=text_block_id,
+            document_passages=[relevant_passage, irrelevant_passage],
         )
         assert data_id is not None
         data_id_pattern_match = DATA_ID_PATTERN.match(data_id) is not None
@@ -366,7 +368,30 @@ def test_convert_labelled_passges_to_concepts(
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
     concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
-    assert all([isinstance(concept, VespaConcept) for concept in concepts])
+    assert all(
+        [
+            (isinstance(text_block_id, str) and isinstance(concept, VespaConcept))
+            for text_block_id, concept in concepts
+        ]
+    )
+
+
+def test_convert_labelled_passges_to_concepts_raises_error(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test that we can correctly raise a ValueError should a Span have no concept id."""
+    example_labelled_passages[0].spans.append(
+        Span(
+            text="Test text.",
+            start_index=0,
+            end_index=8,
+            concept_id=None,
+            labellers=[],
+        )
+    )
+    assert example_labelled_passages[0].spans[-1].concept_id is None
+    with pytest.raises(ValueError, match="Concept ID is None."):
+        convert_labelled_passages_to_concepts(example_labelled_passages)
 
 
 def test_get_parent_concepts_from_concept() -> None:
