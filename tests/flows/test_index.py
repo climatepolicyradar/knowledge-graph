@@ -372,6 +372,11 @@ def test_convert_labelled_passges_to_concepts(
         ]
     )
 
+
+def test_convert_labelled_passges_to_concepts_raises_error(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test that we can correctly raise a ValueError should a Span have no concept id."""
     example_labelled_passages[0].spans.append(
         Span(
             text="Test text.",
