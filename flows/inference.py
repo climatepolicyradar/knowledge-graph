@@ -15,15 +15,18 @@ from prefect import flow, task
 from prefect.blocks.system import JSON
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import BaseModel, Field, SecretStr
+from wandb.apis.public.artifacts import ArtifactCollection
 
+from scripts.cloud import AwsEnv
 from src.classifier import Classifier
+from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
 async def get_prefect_job_variable(param_name: str) -> str:
     """Get a single variable from the Prefect job variables."""
-    aws_env = os.environ["AWS_ENV"]
+    aws_env = AwsEnv(os.environ["AWS_ENV"])
     block_name = f"default-job-variables-prefect-mvp-{aws_env}"
     workpool_default_job_variables = await JSON.load(block_name)
     return workpool_default_job_variables.value[param_name]
@@ -42,6 +45,7 @@ class Config:
     wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
     wandb_entity: str = "climatepolicyradar"
     wandb_api_key: Optional[SecretStr] = None
+    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
     @classmethod
     async def create(cls) -> "Config":
@@ -320,7 +324,7 @@ class ClassifierSpec(BaseModel):
     """Details for a classifier to run"""
 
     name: str = Field(
-        description="The reference of the classifier in wandb. e.g. 'Q992-RulesBasedClassifier'"
+        description="The reference of the classifier in wandb. e.g. 'Q992'"
     )
     alias: str = Field(
         description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
@@ -328,9 +332,64 @@ class ClassifierSpec(BaseModel):
     )
 
 
+def is_concept_model(model: ArtifactCollection) -> bool:
+    """
+    Check if a model is a concept classifier
+
+    This check is based on whether the model name can be instantiated as a WikibaseID.
+    For example: `Q123`, `Q972`
+    """
+    try:
+        WikibaseID(model.name)
+
+        return True
+    except ValueError as e:
+        if "is not a valid Wikibase ID" in str(e):
+            return False
+
+        raise
+
+
+def get_relevant_model_version(
+    model: ArtifactCollection, aws_env: AwsEnv
+) -> Optional[list[ClassifierSpec]]:
+    """Returns the model name and version if a valid model is found"""
+
+    if not is_concept_model(model):
+        return None
+
+    for model_artifacts in model.artifacts():
+        if ("aws_env", aws_env.value) in model_artifacts.metadata.items():
+            return ClassifierSpec(name=model.name, alias=model_artifacts.version)
+
+
+def get_all_available_classifiers(config) -> list[ClassifierSpec]:
+    """
+    Return all available models for the given environment
+
+    Current implementation relies on the wandb sdk abstraction over
+    the graphql endpoint, which queries each item as an individual
+    request.
+    """
+
+    api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
+    # artifact_collections is slow, in the future we could
+    # Switch to a custom graphql query using the api module
+    model_collections = api.artifact_collections(
+        type_name="model",
+        project_name="wandb-registry-model",
+    )
+
+    classifier_specs = []
+    for model in model_collections:
+        if relevant_model := get_relevant_model_version(model, config.aws_env):
+            classifier_specs.append(relevant_model)
+    return classifier_specs
+
+
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
-    classifier_specs: list[ClassifierSpec],
+    classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
@@ -362,6 +421,9 @@ async def classifier_inference(
         requested_document_ids=document_ids,
         current_bucket_ids=current_bucket_ids,
     )
+
+    if classifier_specs is None:
+        classifier_specs = get_all_available_classifiers(config)
 
     for classifier_spec in classifier_specs:
         subflows = [

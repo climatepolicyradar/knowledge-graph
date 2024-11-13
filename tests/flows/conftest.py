@@ -20,9 +20,11 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from pydantic import SecretStr
+from requests.exceptions import ConnectionError
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
+from scripts.cloud import AwsEnv
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
@@ -36,6 +38,7 @@ def test_config():
         wandb_model_registry="test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
+        aws_env=AwsEnv("sandbox"),
     )
 
 
@@ -99,11 +102,19 @@ def mock_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmpdir
 ) -> VespaSearchAdapter:
     """VespaSearchAdapter instantiated from mocked ssm params."""
-    return get_vespa_search_adapter_from_aws_secrets(
+    adapter = get_vespa_search_adapter_from_aws_secrets(
         cert_dir=tmpdir,
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
     )
+    try:
+        adapter.client.get_application_status()
+    except ConnectionError:
+        pytest.fail(
+            "Can't connect to a local vespa instance. See guidance here: "
+            "`tests/local_vespa/README.md`"
+        )
+    return adapter
 
 
 @pytest.fixture
@@ -329,3 +340,33 @@ def mock_wandb(mock_s3_client):
         mock_run.use_artifact.return_value = mock_artifact
 
         yield mock_init, mock_run, mock_artifact
+
+
+@pytest.fixture
+def mock_wandb_api():
+    with patch("wandb.Api") as mock_api:
+        # Create a mock for the API instance
+        api_instance = Mock()
+        mock_api.return_value = api_instance
+
+        # Create mock model collections
+        collections = []
+        for model_data in [
+            {"name": "Q111", "env": "sandbox"},
+            {"name": "Q222", "env": "sandbox"},
+            {"name": "Q444", "env": "labs"},
+            {"name": "some_other_model", "env": "sandbox"},
+        ]:
+            mock_artifact = Mock()
+            mock_artifact.version = "v1"
+            mock_artifact.metadata = {"aws_env": model_data["env"]}
+
+            mock_collection = Mock()
+            mock_collection.name = model_data["name"]
+
+            mock_collection.artifacts.return_value = [mock_artifact]
+            collections.append(mock_collection)
+
+        api_instance.artifact_collections.return_value = collections
+
+        yield mock_api

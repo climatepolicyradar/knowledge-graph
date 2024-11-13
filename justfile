@@ -1,4 +1,5 @@
 set dotenv-load
+import "tests/local_vespa/local_vespa.just"
 
 # Set the default command to list all available commands
 default:
@@ -18,6 +19,10 @@ install-for-embeddings:
 # test the project
 test:
     poetry run pytest
+
+# test the project, excluding tests that rely on a local vespa instance
+test-without-vespa:
+    poetry run pytest  -m 'not vespa'
 
 # update the snapshots for the tests
 test-snapshot-update:
