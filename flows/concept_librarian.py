@@ -19,7 +19,7 @@ class ConceptStoreIssue(BaseModel):
 
 
 def stringify_concept(concept: Concept) -> str:
-    return str(concept)
+    return f"""{concept.preferred_label} (<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.wikibase_id}</a>)"""
 
 
 wikibase = WikibaseSession()
@@ -231,10 +231,14 @@ def check_for_duplicate_preferred_labels(
 
     for label, ids in duplicate_dict.items():
         if len(ids) > 1:
+            concepts = [concept for concept in concepts if concept.wikibase_id in ids]
+            concepts_string = ", ".join(
+                [stringify_concept(concept) for concept in concepts]
+            )
             issues.append(
                 ConceptStoreIssue(
                     issue_type="duplicate_preferred_labels",
-                    message=f"Duplicate concept labels: {label} -> {ids}",
+                    message=f"{len(ids)} concepts have the same label '{label}': {concepts_string}",
                     metadata={"label": label, "concept_ids": ids},
                 )
             )
@@ -266,6 +270,8 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         ".issue { margin: 1em 0; padding: 0.5em; background: #f5f5f5; }",
         ".metadata { font-family: monospace; margin-left: 1em; }",
         ".shuffle-button { margin: 1em 0; padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; }",
+        ".concept-link { color: black; text-decoration: underline dotted; }",
+        "a[target='_blank']::after {content: '↗'; display: inline-block; font-size: 0.8em;}",
         "</style>",
         "<script>",
         "function openTab(evt, tabName) {",
