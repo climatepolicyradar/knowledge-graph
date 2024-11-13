@@ -277,19 +277,20 @@ def get_updated_passage_concepts(
     It is also, not possible to duplicate a Concept object in the concepts array as we
     are removing all instances where the model is the same.
     """
-    if passage.concepts:
-        concepts_models = [concept.model for concept in concepts]
-        filtered_concepts = [
-            passage_concept
-            for passage_concept in passage.concepts
-            if passage_concept.model not in concepts_models
-        ]
+    if not passage.concepts:
+        return [concept.model_dump(mode="json") for concept in concepts]
 
-        updated_concepts = filtered_concepts + concepts
+    new_concept_models = {concept.model for concept in concepts}
 
-        return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
+    existing_concepts_to_keep = [
+        concept
+        for concept in passage.concepts
+        if concept.model not in new_concept_models
+    ]
 
-    return [concept.model_dump(mode="json") for concept in concepts]
+    updated_concepts = existing_concepts_to_keep + concepts
+
+    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
 
 
 def group_concepts_on_text_block(
