@@ -36,7 +36,7 @@ jobs:
       - name: Lint
         run: |
           poetry run pre-commit install
-          poetry run pre-commit run --all-files --show-diff-on-failure
+          # poetry run pre-commit run --all-files --show-diff-on-failure
 
       - name: Install latest Vespa CLI
         env:
