@@ -82,10 +82,7 @@ def link_model_artifact(
         storage_link.bucket,
         storage_link.key,
     )
-    # Don't checksum files since that means that W&B will try
-    # and be too smart and will think a model artifact file in
-    # a different AWS environment is the same, I think.
-    artifact.add_reference(uri=uri, checksum=False)
+    artifact.add_reference(uri=uri, checksum=True)
 
     artifact = run.log_artifact(artifact)
     artifact = artifact.wait()

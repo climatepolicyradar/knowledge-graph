@@ -149,15 +149,30 @@ def test_main(
                     primary=primary,
                 )
         else:
-            main(
-                wikibase_id=wikibase_id,
-                classifier=classifier,
-                version=version,
-                from_aws_env=from_aws_env,
-                to_aws_env=to_aws_env,
-                within_aws_env=within_aws_env,
-                primary=primary,
-            )
+            if from_aws_env is not None or to_aws_env is not None:
+                with pytest.raises(
+                    NotImplementedError,
+                    match="Promotion across AWS environments is not yet implemented",
+                ):
+                    main(
+                        wikibase_id=wikibase_id,
+                        classifier=classifier,
+                        version=version,
+                        from_aws_env=from_aws_env,
+                        to_aws_env=to_aws_env,
+                        within_aws_env=within_aws_env,
+                        primary=primary,
+                    )
+            else:
+                main(
+                    wikibase_id=wikibase_id,
+                    classifier=classifier,
+                    version=version,
+                    from_aws_env=from_aws_env,
+                    to_aws_env=to_aws_env,
+                    within_aws_env=within_aws_env,
+                    primary=primary,
+                )
 
 
 def test_version_latest_not_supported():

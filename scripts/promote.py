@@ -329,6 +329,12 @@ def main(
     log.info("Starting model promotion process")
 
     log.info("Parsing promotion...")
+
+    if from_aws_env is not None or to_aws_env is not None:
+        raise NotImplementedError(
+            "Promotion across AWS environments is not yet implemented"
+        )
+
     promotion = Promotion.validate_python(
         {
             "value": within_aws_env,
