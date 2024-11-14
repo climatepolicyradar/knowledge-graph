@@ -265,7 +265,7 @@ def convert_labelled_passages_to_concepts(
 
 
 def get_updated_passage_concepts(
-    passage: VespaPassage, concept: VespaConcept
+    passage: VespaPassage, concepts: list[VespaConcept]
 ) -> list[dict]:
     """
     Update a passage's concepts with the new concept.
@@ -278,17 +278,36 @@ def get_updated_passage_concepts(
     are removing all instances where the model is the same.
     """
     if passage.concepts:
+        concepts_models = [concept.model for concept in concepts]
         filtered_concepts = [
             passage_concept
             for passage_concept in passage.concepts
-            if passage_concept.model != concept.model
+            if passage_concept.model not in concepts_models
         ]
 
-        updated_concepts = filtered_concepts + [concept]
+        updated_concepts = filtered_concepts + concepts
 
         return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
 
-    return [concept.model_dump(mode="json")]
+    return [concept.model_dump(mode="json") for concept in concepts]
+
+
+def group_concepts_on_text_block(
+    document_concepts: list[tuple[str, VespaConcept]],
+) -> dict[str, list[VespaConcept]]:
+    """
+    Group concepts on text block id.
+
+    Concepts relate to a specific passage or text block within a document and therefore,
+    we must group the concept updates to all of them at once.
+    """
+    concepts_grouped = {}
+    for text_block_id, concept in document_concepts:
+        if text_block_id in concepts_grouped:
+            concepts_grouped[text_block_id].append(concept)
+        else:
+            concepts_grouped[text_block_id] = [concept]
+    return concepts_grouped
 
 
 @flow
@@ -322,35 +341,34 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 f"No passages found for document in vespa - {document_import_id}"
             )
 
-        for text_block_id, concept in document_concepts:
-            data_id, passage_id, passage_for_concept = get_passage_for_text_block(
+        grouped_concepts = group_concepts_on_text_block(document_concepts)
+
+        for text_block_id, concepts in grouped_concepts.items():
+            data_id, passage_id, passage_for_text_block = get_passage_for_text_block(
                 text_block_id, document_passages
             )
 
-            if data_id and passage_id and passage_for_concept:
+            if data_id and passage_id and passage_for_text_block:
                 vespa_search_adapter.client.update_data(
                     schema="document_passage",
                     namespace="doc_search",
                     data_id=data_id,
                     fields={
                         "concepts": get_updated_passage_concepts(
-                            passage_for_concept, concept
+                            passage_for_text_block, concepts
                         )
                     },
                 )
                 logger.info(
-                    "Updated concept for passage.",
-                    extra={
-                        "props": {"passage_id": passage_id, "concept_id": concept.id}
-                    },
+                    "Updated concepts for passage.",
+                    extra={"props": {"passage_id": passage_id}},
                 )
             else:
                 logger.error(
-                    "No passages found for concept.",
+                    "No passages found for text block.",
                     extra={
                         "props": {
-                            "concept_id": concept.id,
-                            "document_import_id": document_import_id,
+                            "text_block_id": text_block_id,
                         }
                     },
                 )
