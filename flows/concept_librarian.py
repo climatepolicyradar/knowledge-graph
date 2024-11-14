@@ -45,6 +45,7 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     issues.extend(ensure_positive_and_negative_labels_dont_overlap(concepts))
     issues.extend(check_description_and_definition_length(concepts))
     issues.extend(check_for_duplicate_preferred_labels(concepts))
+    issues.extend(check_alternative_labels_for_pipes(concepts))
 
     librarian_output_dir = (
         Path(__file__).parent.parent / "data/processed/concept_librarian"
@@ -165,6 +166,32 @@ def validate_alternative_label_uniqueness(
                     fix_concept=concept,
                 )
             )
+    return issues
+
+
+@task(log_prints=True)
+def check_alternative_labels_for_pipes(
+    concepts: list[Concept],
+) -> list[ConceptStoreIssue]:
+    """Find all concepts that have alternative labels containing pipes (|)"""
+
+    issues = []
+    for concept in concepts:
+        if alt_labels_containing_pipes := [
+            label for label in concept.alternative_labels if "|" in label
+        ]:
+            issues.append(
+                ConceptStoreIssue(
+                    issue_type="alternative_label_contains_pipe",
+                    message=f"{stringify_concept(concept)} has alternative labels containing pipes",
+                    metadata={
+                        "concept_id": concept.wikibase_id,
+                        "aliases_with_pipes": alt_labels_containing_pipes,
+                    },
+                    fix_concept=concept,
+                )
+            )
+
     return issues
 
 
