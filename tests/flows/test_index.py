@@ -17,6 +17,7 @@ from flows.index import (
     get_passage_for_text_block,
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
+    group_concepts_on_text_block,
     index_labelled_passages_from_s3_to_vespa,
     labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
@@ -253,6 +254,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     assert len(second_updated_passages) > 0
     assert len(second_updated_concepts) != len(updated_concepts)
+    # Assert that the number of concepts after a second update in vespa is correct.
+    # This is equal to:
+    #   (all existing concepts in vespa)
+    #   - (minus concepts that have the same model as the new updates)
+    #   + (new updates)
+    #   This is as we remove old concepts for a model and replace them with the new ones.
     assert len(second_updated_concepts) == (
         len(updated_concepts)
         + len(modified_example_vespa_concepts)
@@ -448,3 +455,36 @@ def test_get_parent_concepts_from_concept() -> None:
             labelled_passages=[],
         )
     ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
+
+
+def test_group_concepts_on_text_block(
+    example_vespa_concepts: list[VespaConcept],
+) -> None:
+    """
+    Test that we can successfully group concepts on the relevant text block.
+
+    Args:
+        example_vespa_concepts (List[VespaConcept]): List of example Vespa concepts.
+    """
+    text_block_one_concept_count = 2
+    text_block_one_concepts = [
+        ("text_block_1", example_vespa_concepts[0])
+    ] * text_block_one_concept_count
+
+    text_block_two_concept_count = 11
+    text_block_two_concepts = [
+        ("text_block_2", example_vespa_concepts[0])
+    ] * text_block_two_concept_count
+
+    all_concepts = text_block_one_concepts + text_block_two_concepts
+    grouped_concepts = group_concepts_on_text_block(all_concepts)
+
+    assert isinstance(grouped_concepts, dict)
+    for text_block_id, concepts in grouped_concepts.items():
+        assert isinstance(text_block_id, str)
+        assert all(isinstance(concept, VespaConcept) for concept in concepts)
+
+    assert len(grouped_concepts) == 2
+    assert set(grouped_concepts.keys()) == {"text_block_1", "text_block_2"}
+    assert len(grouped_concepts["text_block_1"]) == text_block_one_concept_count
+    assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count

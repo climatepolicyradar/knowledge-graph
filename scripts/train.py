@@ -232,7 +232,7 @@ def main(
     if upload and (not is_logged_in(aws_env, use_aws_profiles)):
         raise typer.BadParameter(
             f"you're not logged into {aws_env.value}. "
-            f"Do `aws sso --login {aws_env.value}`"
+            f"Do `aws sso login --profile {aws_env.value}`"
         )
 
     if track:
