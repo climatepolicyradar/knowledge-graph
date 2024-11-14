@@ -42,6 +42,8 @@ REGION_NAME = "eu-west-1"
 
 
 VALID_FROM_TO_TRANSITIONS = [
+    (AwsEnv.sandbox, AwsEnv.labs),
+    (AwsEnv.sandbox, AwsEnv.staging),
     (AwsEnv.labs, AwsEnv.staging),
     (AwsEnv.staging, AwsEnv.production),
 ]
