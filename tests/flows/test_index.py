@@ -254,6 +254,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     assert len(second_updated_passages) > 0
     assert len(second_updated_concepts) != len(updated_concepts)
+    # Assert that the number of concepts after a second update in vespa is correct.
+    # This is equal to:
+    #   (all existing concepts in vespa)
+    #   - (minus concepts that have the same model as the new updates)
+    #   + (new updates)
+    #   This is as we remove old concepts for a model and replace them with the new ones.
     assert len(second_updated_concepts) == (
         len(updated_concepts)
         + len(modified_example_vespa_concepts)
