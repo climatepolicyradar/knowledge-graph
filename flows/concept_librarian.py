@@ -289,6 +289,9 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         ".concept-link { color: black; text-decoration: underline dotted; }",
         "a[target='_blank']::after {content: '↗'; display: inline-block; font-size: 0.8em;}",
         ".fix-button { padding: 5px 10px; background: white; color: #000000; border: none; cursor: pointer; margin-left: 1em; white-space: nowrap; }",
+        "#ten-things-button { background: #B55ABE; color: white; }",
+        "#ten-things { display: none; }",
+        "#ten-things.active { display: block; }",
         "</style>",
         "<script>",
         "function openTab(evt, tabName) {",
@@ -296,8 +299,24 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         "  for (let tab of tabs) { tab.classList.remove('active'); }",
         "  const buttons = document.getElementsByClassName('tab-button');",
         "  for (let button of buttons) { button.classList.remove('active'); }",
+        "  document.getElementById('ten-things').classList.remove('active');",
         "  document.getElementById(tabName).classList.add('active');",
         "  evt.currentTarget.classList.add('active');",
+        "}",
+        "function showTenThings() {",
+        "  const tabs = document.getElementsByClassName('tab');",
+        "  for (let tab of tabs) { tab.classList.remove('active'); }",
+        "  const buttons = document.getElementsByClassName('tab-button');",
+        "  for (let button of buttons) { button.classList.remove('active'); }",
+        "  const allIssues = Array.from(document.getElementsByClassName('issue'));",
+        "  const randomIssues = allIssues.sort(() => 0.5 - Math.random()).slice(0, 10);",
+        "  const tenThingsDiv = document.getElementById('ten-things');",
+        "  tenThingsDiv.innerHTML = '<h2>Ten Things to Work On</h2>';",
+        "  randomIssues.forEach(issue => {",
+        "    const clone = issue.cloneNode(true);",
+        "    tenThingsDiv.appendChild(clone);",
+        "  });",
+        "  tenThingsDiv.classList.add('active');",
         "}",
         "function shuffleIssues(tabName) {",
         "  const tab = document.getElementById(tabName);",
@@ -316,6 +335,7 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         "<h1>Concept Store Librarian Report 📘</h1>",
         f"<p>Total issues found: {total_issues}</p>",
         "<div class='tab-buttons'>",
+        "<button class='tab-button' id='ten-things-button' onclick='showTenThings()'>LUCKY DIP</button>",
     ]
 
     # Add tab buttons
@@ -323,6 +343,9 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
         html.append(
             f"<button class='tab-button' onclick=\"openTab(event, '{issue_type}')\">{issue_type} ({type_counts[issue_type]})</button>"
         )
+
+    html.append("</div>")
+    html.append("<div id='ten-things'></div>")
 
     # Add tab content
     for issue_type, issue_list in issues_by_type.items():
