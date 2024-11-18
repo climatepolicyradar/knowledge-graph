@@ -251,11 +251,11 @@ def get_passage_for_text_block(
     return None, None, None
 
 
-def get_parent_concepts_from_concept(
+def get_parent_concepts(
     subconcept_of: list[str],
 ) -> tuple[list[dict], str]:
     """
-    Extract parent concepts from a Concept object.
+    Extract parent concepts.
 
     Currently we pull the name from the Classifier used to label the passage, this
     doesn't hold the concept id. This is a temporary solution that is not desirable as
@@ -286,7 +286,7 @@ def convert_labelled_passages_to_concepts(
         # the relationship between concepts. This has the downside that it ties a
         # labelled passage to a particular concept when in fact the Spans that a
         # labelled passage has can be labelled by multiple concepts.
-        parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
+        parent_concepts, parent_concept_ids_flat = get_parent_concepts(
             subconcept_of=labelled_passage.metadata["concept_is_subconcept_of"]
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)

@@ -16,7 +16,7 @@ from flows.index import (
     Config,
     convert_labelled_passages_to_concepts,
     get_document_passages_from_vespa,
-    get_parent_concepts_from_concept,
+    get_parent_concepts,
     get_passage_for_text_block,
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
@@ -589,9 +589,9 @@ def test_convert_labelled_passges_to_concepts_raises_error(
         convert_labelled_passages_to_concepts(example_labelled_passages)
 
 
-def test_get_parent_concepts_from_concept() -> None:
+def test_get_parent_concepts() -> None:
     """Test that we can correctly retrieve the parent concepts from a concept."""
-    assert get_parent_concepts_from_concept(
+    assert get_parent_concepts(
         subconcept_of=[WikibaseID("Q4470")],
     ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
 
