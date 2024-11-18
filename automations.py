@@ -54,12 +54,12 @@ async def update_automation(client, automation_id: UUID, automation):
     del json["owner_resource"]
     # Delete these as they're all sets which aren't serialisable, and
     # also they're unused
-    del json["trigger"]["expect"]
     del json["trigger"]["after"]
     del json["trigger"]["for_each"]
 
     # Transform these types to be serialisable
     json["trigger"]["within"] = int(json["trigger"]["within"].total_seconds())
+    json["trigger"]["expect"] = list(json["trigger"]["expect"])
     # This lens matches the structure returned in the target automation.
     json["actions"][0]["deployment_id"] = str(json["actions"][0]["deployment_id"])
 
@@ -74,6 +74,7 @@ def create_target_automation(
     a_flow_name: str,
     a_deployment: Deployment,
     b_deployment: Deployment,
+    description: str,
     parameters: dict,
 ) -> automations.Automation:
     """
@@ -95,29 +96,48 @@ def create_target_automation(
         a_deployment: The `Deployment` of `Flow` A that needs to complete
         b_deployment: The `Deployment` to trigger after A completes
         parameters: Parameters to pass to `Deployment` B when it's triggered
+        description: A helpful description of what the `Automation` does.
 
     Returns:
         A Prefect Automation object configured to trigger B after A completes
     """
     return automations.Automation(
         name=f"trigger-{b_deployment.name}",
-        description="Start concept store inference with classifiers.",
+        description=description,
+        enabled=True,
+        # This is based on crafting the trigger in the web UI.
         trigger=automations.EventTrigger(
             match={
+                # The `*` is to match on any ID
                 "prefect.resource.id": "prefect.flow-run.*",
-                "prefect.resource.name": [a_flow_name],
             },
             match_related=automations.ResourceSpecification(
                 __root__={
-                    # This is the Deployment, for the specific AWS environment.
-                    "prefect.resource.id": str(a_deployment.id),
+                    # This is the Deployment, for the specific AWS
+                    # environment, that started the `flow-run`.
+                    "prefect.resource.id": f"prefect.deployment.{a_deployment.id}",
+                    "prefect.resource.role": "deployment",
+                    "prefect.resource.name": a_deployment.name,
                 }
             ),
-            posture="Proactive",
+            # > Reactive automations respond to the presence of the
+            # > expected events ...
+            posture="Reactive",
+            # > The number of events required for this Automation to
+            # > trigger (for Reactive automations), or the number of
+            # > events expected (for Proactive automations)
             threshold=1,
+            # > The time period over which the events must occur. For
+            # > Reactive triggers, this may be as low as 0 seconds,
+            # > but must be at least 10 seconds for Proactive triggers.
             within=0,
+            # > The event(s) this automation is expecting to see. If
+            # > empty, this automation will evaluate any matched
+            # > event.
+            #
+            # NB: Currently a set due to the Prefect Python class used
+            expect=set(["prefect.flow-run.Completed"]),
         ),
-        expect=["prefect.flow-run.Completed"],
         actions=[
             RunDeployment(
                 # Requires passing the Deployment ID [1]
@@ -141,6 +161,7 @@ async def a_triggers_b(
     b_flow_name: str,
     b_deployment_name: str,
     b_parameters: dict,
+    description: str,
     ignore: list[AwsEnv],
     aws_env: AwsEnv,
 ) -> None:
@@ -187,6 +208,7 @@ async def a_triggers_b(
         a_flow_name=a_flow_name,
         a_deployment=a_deployment,
         b_deployment=b_deployment,
+        description=description,
         parameters=b_parameters,
     )
 
@@ -237,6 +259,7 @@ async def main() -> None:
         b_flow_name=classifier_inference.name,
         b_deployment_name=f"{PROJECT_NAME}-{classifier_inference.name}-{aws_env}",
         b_parameters={"use_new_and_updated": True},
+        description="Start concept store inference with classifiers.",
         aws_env=aws_env,
         ignore=[AwsEnv.labs],
     )
@@ -249,6 +272,7 @@ async def main() -> None:
             index_labelled_passages_from_s3_to_vespa.name, aws_env
         ),
         b_parameters={},
+        description="Start concept store indexing with classifiers.",
         aws_env=aws_env,
         ignore=[],
     )
