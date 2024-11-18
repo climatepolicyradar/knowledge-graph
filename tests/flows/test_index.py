@@ -398,14 +398,18 @@ def test_get_passage_for_text_block(
         assert passage_id == relevant_passage[0]
         assert passage == relevant_passage[1]
 
-@pytest.mark.parametrize("doc_ids,config,classifier_spec", [
-    (None, None, None),
-    (None, Config(cache_bucket="test"), None),
-    (None, None, ClassifierSpec(name="Q788", alias="latest")),
-    (True, None, None),
-    (True, Config(cache_bucket="test"), None),
-    (True, None, ClassifierSpec(name="Q788", alias="latest")),
-])
+
+@pytest.mark.parametrize(
+    "doc_ids,config,classifier_spec",
+    [
+        (None, None, None),
+        (None, Config(cache_bucket="test"), None),
+        (None, None, ClassifierSpec(name="Q788", alias="latest")),
+        (True, None, None),
+        (True, Config(cache_bucket="test"), None),
+        (True, None, ClassifierSpec(name="Q788", alias="latest")),
+    ],
+)
 @pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_config(
@@ -417,7 +421,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     vespa_app,
     doc_ids,
     config,
-    classifier_spec
+    classifier_spec,
 ) -> None:
     initial_passages_response = local_vespa_search_adapter.client.query(
         yql="select * from document_passage where true"
@@ -426,11 +430,14 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
         len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
     )
 
-    document_ids = [
-        Path(labelled_passage_fixture_file).stem
-        for labelled_passage_fixture_file in labelled_passage_fixture_files
-    ] if doc_ids else None
-
+    document_ids = (
+        [
+            Path(labelled_passage_fixture_file).stem
+            for labelled_passage_fixture_file in labelled_passage_fixture_files
+        ]
+        if doc_ids
+        else None
+    )
 
     await index_labelled_passages_from_s3_to_vespa(
         classifier_spec=classifier_spec,
