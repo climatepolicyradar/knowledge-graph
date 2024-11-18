@@ -3,6 +3,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -400,7 +401,7 @@ def test_get_passage_for_text_block(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
-async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids(
+async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_config(
     mock_bucket,
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
@@ -442,6 +443,51 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids(
     assert initial_concepts_count + len(labelled_passage_fixture_files) == (
         final_concepts_count
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_default_config(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    with patch("flows.index.get_prefect_job_variable", return_value=mock_bucket), patch(
+        "flows.index.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        initial_passages_response = local_vespa_search_adapter.client.query(
+            yql="select * from document_passage where true"
+        )
+        initial_concepts_count = sum(
+            len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
+        )
+
+        classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+        document_ids = [
+            Path(labelled_passage_fixture_file).stem
+            for labelled_passage_fixture_file in labelled_passage_fixture_files
+        ]
+
+        await index_labelled_passages_from_s3_to_vespa(
+            classifier_spec=classifier_spec,
+            document_ids=document_ids,
+        )
+
+        final_passages_response = local_vespa_search_adapter.client.query(
+            yql="select * from document_passage where true"
+        )
+        final_concepts_count = sum(
+            len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
+        )
+
+        assert initial_concepts_count < final_concepts_count
+        assert initial_concepts_count + len(labelled_passage_fixture_files) == (
+            final_concepts_count
+        )
 
 
 def test_get_updated_passage_concepts(
