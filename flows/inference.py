@@ -362,7 +362,7 @@ def get_all_available_classifiers(config) -> list[ClassifierSpec]:
     # Switch to a custom graphql query using the api module
     model_collections = api.artifact_collections(
         type_name="model",
-        project_name="wandb-registry-model",
+        project_name=config.wandb_model_registry,
     )
 
     classifier_specs = []
