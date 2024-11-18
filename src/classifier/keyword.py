@@ -115,3 +115,11 @@ class KeywordClassifier(Classifier):
                 matched_positions.update(range(start, end))
 
         return spans
+
+    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+        """
+        Predict whether the supplied texts contain instances of the concept.
+
+        See 'predict' docstring for full details.
+        """
+        return super().predict_batch(texts)
