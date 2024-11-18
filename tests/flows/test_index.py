@@ -29,7 +29,6 @@ from flows.index import (
     s3_obj_generator_from_s3_prefix,
     s3_paths_or_s3_prefix,
 )
-from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -593,15 +592,7 @@ def test_convert_labelled_passges_to_concepts_raises_error(
 def test_get_parent_concepts_from_concept() -> None:
     """Test that we can correctly retrieve the parent concepts from a concept."""
     assert get_parent_concepts_from_concept(
-        concept=Concept(
-            preferred_label="forestry sector",
-            alternative_labels=[],
-            negative_labels=[],
-            wikibase_id=WikibaseID("Q10014"),
-            subconcept_of=[WikibaseID("Q4470")],
-            has_subconcept=[WikibaseID("Q4471")],
-            labelled_passages=[],
-        )
+        subconcept_of=[WikibaseID("Q4470")],
     ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
 
 

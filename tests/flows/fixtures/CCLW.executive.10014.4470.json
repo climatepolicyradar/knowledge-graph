@@ -12,35 +12,10 @@
             }
         ],
         "metadata": {
-            "concept":{
-                "preferred_label": "nuclear sector",
-                "alternative_labels": [
-                    "nuclear energy",
-                    "nuclear power",
-                    "nuclear industry",
-                    "atomic energy",
-                    "nuclear technology",
-                    "nuclear reactor",
-                    "nuclear fuel",
-                    "radiation protection",
-                    "nuclear engineering",
-                    "uranium processing"
-                ],
-                "negative_labels": [],
-                "description": "Activities related to the development, production, and management of nuclear energy and technology.",
-                "wikibase_id": "Q25285",
-                "subconcept_of": [
-                    "Q11434"
-                ],
-                "has_subconcept": [],
-                "related_concepts": [
-                    "Q177",
-                    "Q7397",
-                    "Q8090"
-                ],
-                "definition": null,
-                "labelled_passages": []
-            },
+            "concept_preferred_label": "nuclear sector",
+            "concept_is_subconcept_of": [
+                "Q11434"
+            ],
             "inference_timestamp": "2021-09-29T14:00:00.000Z"
         }
     },
@@ -57,35 +32,10 @@
             }
         ],
         "metadata": {
-            "concept": {
-                "preferred_label": "environmental hazards",
-                "alternative_labels": [
-                    "natural hazards",
-                    "environmental risk",
-                    "pollution",
-                    "climate hazards",
-                    "ecological risks",
-                    "environmental damage",
-                    "toxicity",
-                    "hazardous waste",
-                    "environmental contamination",
-                    "industrial pollution"
-                ],
-                "negative_labels": [],
-                "description": "Factors or events that pose potential harm to the environment and living organisms.",
-                "wikibase_id": "Q720855",
-                "subconcept_of": [
-                    "Q42689"
-                ],
-                "has_subconcept": [],
-                "related_concepts": [
-                    "Q5019",
-                    "Q198504",
-                    "Q11394"
-                ],
-                "definition": null,
-                "labelled_passages": []
-            },
+            "concept_preferred_label": "environmental hazards",
+            "concept_is_subconcept_of": [
+                "Q42689"
+            ],
             "inference_timestamp": "2021-09-29T14:00:00.000Z"
         }
     }
