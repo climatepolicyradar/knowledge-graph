@@ -52,7 +52,7 @@ class Config:
             )
 
         if not config.vespa_search_adapter:
-            temp_dir = tempfile.TemporaryDirectory()
+            temp_dir = tempfile.TemporaryDirectory().name
 
             config.vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
                 cert_dir=temp_dir,
