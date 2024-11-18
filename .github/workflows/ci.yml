@@ -31,12 +31,12 @@ jobs:
           cache: poetry
 
       - name: Install dependencies
-        run: poetry install --with dev
+        run: |
+          poetry install --with dev
+          poetry run pre-commit install
 
       - name: Lint
-        run: |
-          poetry run pre-commit install
-          poetry run pre-commit run --all-files --show-diff-on-failure
+        run: just lint-all
 
       - name: Install latest Vespa CLI
         env:
