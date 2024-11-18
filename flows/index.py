@@ -614,10 +614,10 @@ async def index_labelled_passages_from_s3_to_vespa(
     # wasn't needed.
     if not config:
         cm = tempfile.TemporaryDirectory()
-
         config = await Config.create(temp_dir=cm.name)
     else:
         cm = contextlib.nullcontext()
+        await config.create()
 
     with cm:
         logger.info(f"Running with config: {config}")
