@@ -134,11 +134,11 @@ def delete_all_documents(app):
 
 @pytest.fixture
 def local_vespa_search_adapter(
-    create_vespa_params, mock_vespa_credentials, tmpdir
+    create_vespa_params, mock_vespa_credentials, tmp_path
 ) -> VespaSearchAdapter:
     """VespaSearchAdapter instantiated from mocked ssm params."""
     adapter = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=tmpdir,
+        cert_dir=str(tmp_path),
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
     )
@@ -149,7 +149,8 @@ def local_vespa_search_adapter(
             "Can't connect to a local vespa instance. See guidance here: "
             "`tests/local_vespa/README.md`"
         )
-    return adapter
+
+    yield adapter
 
 
 @pytest.fixture

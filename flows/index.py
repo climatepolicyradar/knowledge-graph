@@ -75,6 +75,10 @@ def get_vespa_search_adapter_from_aws_secrets(
     We then save the secrets to local files in the cert_dir directory and instantiate
     the VespaSearchAdapter.
     """
+    cert_dir_path = Path(cert_dir)
+    if not cert_dir_path.exists():
+        raise FileNotFoundError(f"Certificate directory does not exist: {cert_dir}")
+
     vespa_instance_url = get_aws_ssm_param(vespa_instance_url_param_name)
     vespa_public_cert_encoded = get_aws_ssm_param(vespa_public_cert_param_name)
     vespa_private_key_encoded = get_aws_ssm_param(vespa_private_key_param_name)
@@ -82,12 +86,19 @@ def get_vespa_search_adapter_from_aws_secrets(
     vespa_public_cert = base64.b64decode(vespa_public_cert_encoded).decode("utf-8")
     vespa_private_key = base64.b64decode(vespa_private_key_encoded).decode("utf-8")
 
-    with open(f"{cert_dir}/cert.pem", "w") as f:
+    cert_path = cert_dir_path / "cert.pem"
+    key_path = cert_dir_path / "key.pem"
+
+    with open(cert_path, "w", encoding="utf-8") as f:
         f.write(vespa_public_cert)
-    with open(f"{cert_dir}/key.pem", "w") as f:
+
+    with open(key_path, "w", encoding="utf-8") as f:
         f.write(vespa_private_key)
 
-    return VespaSearchAdapter(instance_url=vespa_instance_url, cert_directory=cert_dir)
+    return VespaSearchAdapter(
+        instance_url=vespa_instance_url,
+        cert_directory=str(cert_dir_path),
+    )
 
 
 def s3_obj_generator_from_s3_prefix(
