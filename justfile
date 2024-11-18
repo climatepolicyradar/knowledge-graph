@@ -28,8 +28,12 @@ test-without-vespa:
 test-snapshot-update:
     poetry run pytest --snapshot-update
 
-# run linters and code formatters
+# run linters and code formatters on relevant files
 lint:
+    poetry run pre-commit run --show-diff-on-failure
+
+# run linters and code formatters on all files
+lint-all:
     poetry run pre-commit run --all-files --show-diff-on-failure
 
 # build a dataset of passages
