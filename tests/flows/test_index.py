@@ -40,27 +40,31 @@ DATA_ID_PATTERN = re.compile(r"[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+")
 
 
 def test_vespa_search_adapter_from_aws_secrets(
-    create_vespa_params, mock_vespa_credentials, tmpdir
+    create_vespa_params, mock_vespa_credentials, tmp_path
 ) -> None:
     """Test that we can successfully instantiate the VespaSearchAdpater from ssm params."""
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=tmpdir,
+        cert_dir=str(tmp_path),
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
     )
 
-    assert os.path.exists(f"{tmpdir}/cert.pem")
-    assert os.path.exists(f"{tmpdir}/key.pem")
-    with open(f"{tmpdir}/cert.pem") as f:
+    cert_path = tmp_path / "cert.pem"
+    assert cert_path.exists()
+
+    key_path = tmp_path / "key.pem"
+    assert key_path.exists()
+
+    with open(cert_path, "r", encoding="utf-8") as f:
         assert f.read() == "Public cert content\n"
-    with open(f"{tmpdir}/key.pem") as f:
+    with open(key_path, "r", encoding="utf-8") as f:
         assert f.read() == "Private key content\n"
     assert (
         vespa_search_adapter.instance_url
         == mock_vespa_credentials["VESPA_INSTANCE_URL"]
     )
-    assert vespa_search_adapter.client.cert == f"{tmpdir}/cert.pem"
-    assert vespa_search_adapter.client.key == f"{tmpdir}/key.pem"
+    assert vespa_search_adapter.client.cert == str(cert_path)
+    assert vespa_search_adapter.client.key == str(key_path)
 
 
 def test_s3_obj_generator_from_s3_prefix(
