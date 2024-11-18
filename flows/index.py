@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import contextlib
 import json
 import os
 import tempfile
@@ -42,7 +43,7 @@ class Config:
     vespa_search_adapter: Optional[VespaSearchAdapter] = None
 
     @classmethod
-    async def create(cls) -> "Config":
+    async def create(cls, temp_dir: Optional[str] = None) -> "Config":
         """Create a new Config instance with initialized values."""
         config = cls()
 
@@ -52,8 +53,6 @@ class Config:
             )
 
         if not config.vespa_search_adapter:
-            temp_dir = tempfile.TemporaryDirectory().name
-
             config.vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
                 cert_dir=temp_dir,
                 vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
@@ -607,24 +606,35 @@ async def index_labelled_passages_from_s3_to_vespa(
     """
     logger = get_run_logger()
 
+    # We want the directory used for the `VespaSearchAdapter` to be
+    # automatically cleaned up.
+    #
+    # To do this, we rely on the `tempfile.TemporaryDirectory`'s behaviour,
+    # or, a `contextlib.nullcontext` no-op, if a temporary directory
+    # wasn't needed.
     if not config:
-        config = await Config.create()
+        cm = tempfile.TemporaryDirectory()
 
-    logger.info(f"Running with config: {config}")
+        config = await Config.create(temp_dir=cm.name)
+    else:
+        cm = contextlib.nullcontext()
 
-    s3_paths, s3_prefix = s3_paths_or_s3_prefix(
-        classifier_spec,
-        document_ids,
-        config,
-    )
+    with cm:
+        logger.info(f"Running with config: {config}")
 
-    logger.info(
-        "S3 prefix and paths",
-        extra={"props": {"s3_prefix": s3_prefix, "s3_paths": s3_paths}},
-    )
+        s3_paths, s3_prefix = s3_paths_or_s3_prefix(
+            classifier_spec,
+            document_ids,
+            config,
+        )
 
-    await index_by_s3(
-        config.vespa_search_adapter,
-        s3_prefix,
-        s3_paths,
-    )
+        logger.info(
+            "S3 prefix and paths",
+            extra={"props": {"s3_prefix": s3_prefix, "s3_paths": s3_paths}},
+        )
+
+        await index_by_s3(
+            config.vespa_search_adapter,
+            s3_prefix,
+            s3_paths,
+        )
