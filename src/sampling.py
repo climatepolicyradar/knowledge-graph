@@ -33,7 +33,7 @@ def create_balanced_sample(
         raise ValueError("At least one column must be specified")
     if sample_size > len(df):
         raise ValueError(
-            "Sample size should be less than the number of rows in the dataframe"
+            "Sample size should be less than or equal to the number of rows in the dataframe"
         )
 
     # Drop any rows where the column values are None or "None"
