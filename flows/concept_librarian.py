@@ -392,7 +392,7 @@ def validate_concepts_have_labels(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="empty_label",
-                    message=f"Concept {stringify_concept(concept)} has an empty preferred label",
+                    message=f"{stringify_concept(concept)} has an empty preferred label",
                     metadata={"concept_id": concept.wikibase_id},
                     fix_concept=concept,
                 )
@@ -413,7 +413,7 @@ def validate_concept_label_casing(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="label_mixed_casing",
-                    message=f"Concept {stringify_concept(concept)} has a label that uses mixed casing.",
+                    message=f"{stringify_concept(concept)} has a label that uses mixed casing.",
                     metadata={"concept_id": concept.wikibase_id},
                     fix_concept=concept,
                 )
