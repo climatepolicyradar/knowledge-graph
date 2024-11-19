@@ -22,7 +22,7 @@
 # ---
 # name: test_get_aliases[promotion5]
   list([
-    'production',
+    'prod',
   ])
 # ---
 # name: test_get_object_key[Q123-TestClassifier-version0]

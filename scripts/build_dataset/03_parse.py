@@ -24,6 +24,8 @@ Make sure you've set up your AWS credentials for the labs profile by running
 You'll also need a set of environment variables for the Azure API credentials:
 AZURE_PROCESSOR_KEY
 AZURE_PROCESSOR_ENDPOINT
+
+The script will save the output in `data/interim/output/`.
 """
 
 from azure_pdf_parser.run import run_parser

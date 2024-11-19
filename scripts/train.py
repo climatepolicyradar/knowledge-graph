@@ -82,10 +82,7 @@ def link_model_artifact(
         storage_link.bucket,
         storage_link.key,
     )
-    # Don't checksum files since that means that W&B will try
-    # and be too smart and will think a model artifact file in
-    # a different AWS environment is the same, I think.
-    artifact.add_reference(uri=uri, checksum=False)
+    artifact.add_reference(uri=uri, checksum=True)
 
     artifact = run.log_artifact(artifact)
     artifact = artifact.wait()
@@ -232,7 +229,7 @@ def main(
     if upload and (not is_logged_in(aws_env, use_aws_profiles)):
         raise typer.BadParameter(
             f"you're not logged into {aws_env.value}. "
-            f"Do `aws sso --login {aws_env.value}`"
+            f"Do `aws sso login --profile {aws_env.value}`"
         )
 
     if track:

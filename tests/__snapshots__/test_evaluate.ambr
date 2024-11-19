@@ -1,9 +1,9 @@
 # serializer version: 1
 # name: test_build_metrics_path[Q123]
-  PosixPath('processed/classifiers_performance/Q123.json')
+  Path('processed/classifiers_performance/Q123.json')
 # ---
 # name: test_build_metrics_path[Q330]
-  PosixPath('processed/classifiers_performance/Q330.json')
+  Path('processed/classifiers_performance/Q330.json')
 # ---
 # name: test_calculate_performance_metrics
   list([

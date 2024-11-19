@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from typing import Optional
 
@@ -5,9 +6,32 @@ import boto3
 import boto3.session
 import botocore
 import botocore.client
+from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
 from src.identifiers import WikibaseID
+
+PROJECT_NAME = "knowledge-graph"
+
+
+class ClassifierSpec(BaseModel):
+    """Details for a classifier to run"""
+
+    name: str = Field(
+        description="The reference of the classifier in wandb. e.g. 'Q992'"
+    )
+    alias: str = Field(
+        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
+        default="latest",
+    )
+
+
+async def get_prefect_job_variable(param_name: str) -> str:
+    """Get a single variable from the Prefect job variables."""
+    aws_env = AwsEnv(os.environ["AWS_ENV"])
+    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
+    workpool_default_job_variables = await JSON.load(block_name)
+    return workpool_default_job_variables.value[param_name]
 
 
 class Namespace(BaseModel):
@@ -29,12 +53,18 @@ class AwsEnv(str, Enum):
     labs = "labs"
     sandbox = "sandbox"
     staging = "staging"
-    production = "production"
+    production = "prod"
 
     @classmethod
     def _missing_(cls, value):
         if value == "dev":
             return cls.staging
+        if value == "production":
+            return cls.production
+
+
+def generate_deployment_name(flow_name: str, aws_env: AwsEnv):
+    return f"{PROJECT_NAME}-{flow_name}-{aws_env}"
 
 
 def get_session(aws_env: AwsEnv) -> boto3.session.Session:

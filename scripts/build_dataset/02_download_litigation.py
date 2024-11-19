@@ -1,8 +1,23 @@
 """
-Download litigation documents to a local directory
+Download litigation documents to a local directory.
 
-Usage:
-poetry run python scripts/sampling_for_sectors_classifier/download_litigation_docs.py
+This script loads and combines US and non-US litigation documents from CSV files stored
+in the `data/raw` directory. The dataset is heavily geographically imbalanced, so the
+script samples the dataset to ensure balanced representation of jurisdictions before
+downloading the documents.
+
+The sampling strategy:
+- Takes the median number of documents from the top 100 jurisdictions
+- Applies this as a cap for all jurisdictions
+- Ensures no jurisdiction is over-represented in the final dataset
+
+Input files:
+- data/raw/litigation-us.csv: US litigation documents
+- data/raw/litigation-non-us.csv: Non-US litigation documents
+
+Output files:
+- data/raw/sampled_litigation.json: Metadata for sampled documents
+- data/raw/pdfs/litigation/*.pdf: Downloaded PDF documents
 """
 
 import httpx
@@ -49,7 +64,7 @@ n_docs_per_jurisdiction = (
 # round up to the nearest integer
 median_docs_per_jurisdiction = int(n_docs_per_jurisdiction.median().round())
 sampled_litigation_df = (
-    litigation_df.groupby("Jurisdictions")
+    litigation_df.groupby("Jurisdictions")[["Title", "Document file", "Jurisdictions"]]
     .apply(lambda x: x.sample(min(len(x), median_docs_per_jurisdiction)))
     .reset_index(drop=True)
 )
@@ -65,15 +80,13 @@ console.print(
 
 # Add an identifier to each document
 sampled_litigation_df["id"] = sampled_litigation_df.apply(
-    lambda x: generate_identifier(input_string=x["Title"] + x["Document file"]), axis=1
+    lambda x: generate_identifier(x["Title"], x["Document file"]), axis=1
 )
 
-# Save the sampled litigation documents as a json file
+# Save the litigation documents as a json file
 sampled_litigation_json_path = raw_data_dir / "sampled_litigation.json"
 sampled_litigation_df.to_json(sampled_litigation_json_path, orient="records")
-console.print(
-    f"📄 Saved sampled litigation documents to {sampled_litigation_json_path}"
-)
+console.print(f"📄 Saved litigation documents to {sampled_litigation_json_path}")
 
 # Download the documents
 for doc in track(
@@ -85,5 +98,5 @@ for doc in track(
         continue
 
     response = httpx.get(doc["Document file"])
-    with open(doc_path, "wb", encoding="utf-8") as f:
+    with open(doc_path, "wb") as f:
         f.write(response.content)
