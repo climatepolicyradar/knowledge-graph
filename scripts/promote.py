@@ -14,7 +14,6 @@ from pydantic import (
     TypeAdapter,
     model_validator,
 )
-from rich.logging import RichHandler
 from tqdm import tqdm
 from typing_extensions import Self
 
@@ -22,17 +21,10 @@ from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
 from src.identifiers import WikibaseID
 from src.version import Version
 
-logging.basicConfig(
-    level="INFO",
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[
-        RichHandler(rich_tracebacks=True),
-    ],
-)
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
-log = logging.getLogger("rich")
-
+# This magic value was from the W&B webapp.
 ORG_ENTITY = "climatepolicyradar_UZODYJSN66HCQ"
 REGISTRY_NAME = "model"
 ENTITY = "climatepolicyradar"
@@ -271,6 +263,58 @@ def parse_aws_env(value: str) -> str:
             raise typer.BadParameter(str(e))
 
 
+def find_artifact_by_version(
+    model_collection, version: Version
+) -> Optional[wandb.Artifact]:
+    """Find an artifact with the specified version in the model collection."""
+    return next(
+        (art for art in model_collection.artifacts() if art.version == str(version)),
+        None,
+    )
+
+
+def check_existing_artifact_aliases(
+    api: wandb.Api,
+    target_path: str,
+    version: Version,
+    aws_env: AwsEnv,
+) -> None:
+    """Check if an artifact exists and has conflicting AWS environment aliases."""
+    if not api.artifact_collection_exists(
+        type="model",
+        name=target_path,
+    ):
+        log.info("Model collection doesn't already exist")
+        return None
+
+    log.info("Model collection does already exist")
+    model_collection = api.artifact_collection(
+        type_name="model",
+        name=target_path,
+    )
+
+    target_artifact = find_artifact_by_version(model_collection, version)
+
+    # It's okay if there isn't yet an artifact for this version, and
+    # if there isn't, then there's nothing to check.
+    if not target_artifact:
+        log.info(f"Model collection artifact with version {version} not found")
+        return None
+
+    log.info(f"Model collection artifact with version {version} found")
+
+    # Get all AWS env values except the one we're promoting to
+    other_env_values = {env.value for env in AwsEnv} - {aws_env.value}
+    # Check if any other AWS environment values are present as aliases
+    existing_env_aliases = set(target_artifact.aliases) & other_env_values
+
+    if existing_env_aliases:
+        raise typer.BadParameter(
+            "An artifact already exists with AWS environment aliases "
+            f"{existing_env_aliases} in collection {target_path}."
+        )
+
+
 @app.command()
 def main(
     wikibase_id: Annotated[
@@ -332,11 +376,6 @@ def main(
 
     log.info("Parsing promotion...")
 
-    if from_aws_env is not None or to_aws_env is not None:
-        raise NotImplementedError(
-            "Promotion across AWS environments is not yet implemented"
-        )
-
     promotion = Promotion.validate_python(
         {
             "value": within_aws_env,
@@ -346,10 +385,31 @@ def main(
         }
     )
 
+    if isinstance(promotion, Across):
+        raise NotImplementedError(
+            "Promotion across AWS environments is not yet implemented. "
+            "Please train the model in the destination AWS "
+            "environment."
+        )
+
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
 
     log.info("Validating AWS logins...")
     validate_logins(promotion, use_aws_profiles)
+
+    collection_name = wikibase_id
+
+    # This is the hierarchy we use: CPR / {concept} / {model architecture}(s)
+    #
+    # The concept aka Wikibase ID is the collection name.
+    #
+    # > W&B automatically creates a collection with the name you specify
+    # > in the target path if you try to link an artifact to a collection
+    # > that does not exist. [1]
+    #
+    # [1] https://docs.wandb.ai/guides/registry/create_collection#programmatically-create-a-collection
+    target_path = f"wandb-registry-{REGISTRY_NAME}/{collection_name}"
+    log.info(f"Using model collection: {target_path}...")
 
     log.info("Initializing Weights & Biases run...")
     run = wandb.init(entity=ENTITY, project=wikibase_id, job_type=JOB_TYPE)
@@ -360,11 +420,22 @@ def main(
     # artifiact not existing. That is, when trying to `use_artifact`
     # below, it'll throw an exception.
     artifact_id = f"{wikibase_id}/{classifier}:{version}"
-    log.info(f"Using artifact: {artifact_id}")
+    log.info(f"Using model artifact: {artifact_id}...")
     artifact: wandb.Artifact = run.use_artifact(artifact_id)
+
+    api = wandb.Api()
 
     match promotion:
         case Across():
+            # Check if it already exists, and if so, was created for
+            # the destination AWS environment.
+            check_existing_artifact_aliases(
+                api,
+                target_path,
+                version,
+                promotion.src.value,
+            )
+
             log.info("Copying artifact between AWS environments...")
 
             from_version = version
@@ -388,6 +459,7 @@ def main(
             # Re-set this variable to the new artifact
             log.info("Creating new W&B artifact...")
 
+            # Create the new Artifact for in the new AWS environment
             artifact: wandb.Artifact = wandb.Artifact(
                 name=classifier,
                 type="model",
@@ -416,30 +488,21 @@ def main(
                 f"{artifact._version}, name: {artifact._name}"
             )
         case Within():
+            # Check if it already exists, and if so, was created for
+            # this AWS environment.
+            check_existing_artifact_aliases(
+                api, target_path, version, promotion.value.value
+            )
+
             to_bucket = get_bucket_name_for_aws_env(promotion.value)
             to_object_key = get_object_key(wikibase_id, classifier, version)
 
     aliases = get_aliases(promotion)
 
-    collection_name = wikibase_id
-
-    # This magic value was from the W&B webapp.
-    #
-    # This is the hierarchy we use: CPR / {concept} / {model architecture}(s)
-    #
-    # The concept aka Wikibase ID is the collection name.
-    #
-    # > W&B automatically creates a collection with the name you specify
-    # > in the target path if you try to link an artifact to a collection
-    # > that does not exist. [1]
-    #
-    # [1] https://docs.wandb.ai/guides/registry/create_collection#programmatically-create-a-collection
-    target_path = f"{ORG_ENTITY}/wandb-registry-{REGISTRY_NAME}/{collection_name}"
-
     # Link the artifact to a collection
     #
-    # It will either be the Artifact that we originally used, if a _within_, or a newly logged
-    # Artifact, if _across_.
+    # It will either be the Artifact that we originally used, if a
+    # _within_, or a newly logged Artifact, if _across_.
     log.info(f"Linking artifact to collection: {target_path}...")
     run.link_artifact(
         artifact=artifact,

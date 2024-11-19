@@ -10,7 +10,9 @@ from scripts.promote import (
     Across,
     Version,
     Within,
+    check_existing_artifact_aliases,
     download,
+    find_artifact_by_version,
     get_aliases,
     get_bucket_name_for_aws_env,
     get_object_key,
@@ -120,6 +122,7 @@ def test_main(
     from scripts.promote import main
 
     os.environ["USE_AWS_PROFILES"] = "false"
+    os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
 
     mock_validate_login = Mock(return_value=None)
 
@@ -288,6 +291,113 @@ def test_validate_logins(promotion, login_states, expected_exception):
             else [((promotion.src, False),), ((promotion.dst, False),)]
         )
         assert mock_is_logged_in.call_args_list == expected_calls
+
+
+@pytest.mark.parametrize(
+    "collection_exists,artifact_aliases,version,promotion,target_path,expected_error",
+    [
+        # Collection doesn't exist
+        (
+            False,
+            [],
+            Version("v1"),
+            Within(value=AwsEnv.labs, primary=True),
+            "test/path",
+            None,
+        ),
+        # Artifact exists with no conflicting aliases
+        (
+            True,
+            ["labs"],
+            Version("v1"),
+            Within(value=AwsEnv.labs, primary=True),
+            "test/path",
+            None,
+        ),
+        # Artifact exists with conflicting alias
+        (
+            True,
+            ["staging"],
+            Version("v1"),
+            Within(value=AwsEnv.labs, primary=True),
+            "test/path",
+            "An artifact already exists with AWS environment aliases {'staging'}",
+        ),
+    ],
+)
+def test_check_existing_artifact_aliases(
+    collection_exists,
+    artifact_aliases,
+    version,
+    promotion,
+    target_path,
+    expected_error,
+):
+    """Test checking for existing artifacts with conflicting aliases."""
+    mock_api = Mock()
+    mock_api.artifact_collection_exists.return_value = collection_exists
+
+    if collection_exists:
+        mock_artifact = Mock(aliases=artifact_aliases, version=str(version))
+        mock_collection = Mock()
+        mock_collection.artifacts.return_value = [mock_artifact]
+        mock_api.artifact_collection.return_value = mock_collection
+
+    if expected_error:
+        with pytest.raises(typer.BadParameter, match=expected_error):
+            check_existing_artifact_aliases(
+                mock_api,
+                target_path,
+                version,
+                promotion,
+            )
+    else:
+        check_existing_artifact_aliases(
+            mock_api,
+            target_path,
+            version,
+            promotion,
+        )
+
+
+@pytest.mark.parametrize(
+    "artifacts,version,expected",
+    [
+        # No artifacts
+        ([], "v1", None),
+        # One matching artifact
+        ([Mock(version="v1", aliases=["prod"])], "v1", "snapshot1"),
+        # Multiple artifacts, one match
+        (
+            [
+                Mock(version="v1", aliases=["prod"]),
+                Mock(version="v2", aliases=["staging"]),
+            ],
+            "v1",
+            "snapshot1",
+        ),
+        # Multiple artifacts, no match
+        (
+            [
+                Mock(version="v1", aliases=["prod"]),
+                Mock(version="v2", aliases=["staging"]),
+            ],
+            "v3",
+            None,
+        ),
+    ],
+)
+def test_find_artifact_by_version(artifacts, version, expected):
+    """Test finding artifacts by version."""
+    mock_collection = Mock()
+    mock_collection.artifacts.return_value = artifacts
+
+    result = find_artifact_by_version(mock_collection, Version(version))
+
+    if expected is None:
+        assert result is None
+    else:
+        assert result
 
 
 @pytest.mark.parametrize(
