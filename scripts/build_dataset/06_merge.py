@@ -1,3 +1,23 @@
+"""
+Merge local and remote document datasets into a single combined dataset.
+
+This script combines the core CPR dataset in huggingface with the locally parsed and
+translated documents.
+
+After creating a combined dataset, the script:
+- Removes any very short text passages (< 20 characters)
+- Filters to only include passages in English
+- Adds World Bank region metadata based on document geography ISO codes
+
+Input files:
+- HuggingFace dataset: "ClimatePolicyRadar/all-document-text-data-weekly"
+- data/processed/documents/*/*.json: Locally parsed and translated documents. At the
+  moment, these are sample documents for litigation and corporate-disclosures.
+
+Output file:
+- data/processed/combined_dataset.feather: Combined and cleaned dataset
+"""
+
 import json
 
 import pandas as pd

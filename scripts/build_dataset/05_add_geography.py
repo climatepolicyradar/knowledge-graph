@@ -1,8 +1,11 @@
 """
 Add jurisdiction information to the litigation dataset.
 
-Usage:
-poetry run python scripts/sampling_for_sectors_classifier/add_geography_to_litigation.py
+The script assumes that a set of translated document objects are stored in
+`data/interim/translated`. The output will be saved in `data/processed/documents`.
+
+The script uses the `data/raw/geography-iso-3166-backend.csv` file from the CPR backend
+to map jurisdiction strings to ISO codes. "XAB" is used for international documents.
 """
 
 import json
