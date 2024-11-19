@@ -48,6 +48,8 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     issues.extend(check_alternative_labels_for_pipes(concepts))
     issues.extend(validate_circular_hierarchical_relationships(concepts))
     issues.extend(check_for_unconnected_concepts(concepts))
+    issues.extend(validate_concepts_have_labels(concepts))
+    issues.extend(validate_concept_label_casing(concepts))
 
     librarian_output_dir = (
         Path(__file__).parent.parent / "data/processed/concept_librarian"
@@ -57,8 +59,9 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
 
     timestr = time.strftime("%Y%m%d-%H%M%S")
     html_content = create_html_report(issues)
-    (librarian_output_dir / f"librarian_report_{timestr}.html").write_text(html_content)
-    print("HTML report generated: concept_store_issues.html")
+    output_path = librarian_output_dir / f"librarian_report_{timestr}.html"
+    output_path.write_text(html_content)
+    print(f"HTML report generated: {output_path.resolve()}")
 
     return issues
 
@@ -373,6 +376,46 @@ def check_for_duplicate_preferred_labels(
                     issue_type="duplicate_preferred_labels",
                     message=f"{len(ids)} concepts have the same label '{label}': {duplicate_concepts_string}",
                     metadata={"label": label, "concept_ids": ids},
+                )
+            )
+    return issues
+
+
+@task(log_prints=True)
+def validate_concepts_have_labels(
+    concepts: list[Concept],
+):
+    """Make sure there are no empty label concepts"""
+    issues = []
+    for concept in concepts:
+        if not concept.preferred_label:
+            issues.append(
+                ConceptStoreIssue(
+                    issue_type="empty_label",
+                    message=f"Concept {stringify_concept(concept)} has an empty preferred label",
+                    metadata={"concept_id": concept.wikibase_id},
+                    fix_concept=concept,
+                )
+            )
+    return issues
+
+
+@task(log_prints=True)
+def validate_concept_label_casing(
+    concepts: list[Concept],
+):
+    """Find concepts with labels that are not UPPERCASED or lowercased"""
+    issues = []
+    for concept in concepts:
+        if concept.preferred_label and not (
+            concept.preferred_label.isupper() or concept.preferred_label.islower()
+        ):
+            issues.append(
+                ConceptStoreIssue(
+                    issue_type="label_mixed_casing",
+                    message=f"Concept {stringify_concept(concept)} has a label that uses mixed casing.",
+                    metadata={"concept_id": concept.wikibase_id},
+                    fix_concept=concept,
                 )
             )
     return issues
