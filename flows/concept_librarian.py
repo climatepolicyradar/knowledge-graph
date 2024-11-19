@@ -46,6 +46,8 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     issues.extend(check_description_and_definition_length(concepts))
     issues.extend(check_for_duplicate_preferred_labels(concepts))
     issues.extend(check_alternative_labels_for_pipes(concepts))
+    issues.extend(validate_circular_hierarchical_relationships(concepts))
+    issues.extend(check_for_unconnected_concepts(concepts))
 
     librarian_output_dir = (
         Path(__file__).parent.parent / "data/processed/concept_librarian"
@@ -137,6 +139,95 @@ def validate_hierarchical_relationship_symmetry(
                         "parent_concept_id": parent_concept_id,
                     },
                     fix_concept=parent_concept,
+                )
+            )
+    return issues
+
+
+@task(log_prints=True)
+def validate_circular_hierarchical_relationships(
+    concepts: list[Concept],
+) -> list[ConceptStoreIssue]:
+    """Make sure hierarchical relationships are not circular"""
+
+    issues = []
+
+    has_subconcept_relationships = [
+        (concept.wikibase_id, subconcept_id)
+        for concept in concepts
+        for subconcept_id in concept.has_subconcept
+    ]
+
+    subconcept_of_relationships = [
+        (concept.wikibase_id, parent_concept_id)
+        for concept in concepts
+        for parent_concept_id in concept.subconcept_of
+    ]
+
+    has_subconcept_pairs_processed: list[set] = []
+
+    for concept_id, subconcept_id in has_subconcept_relationships:
+        if (subconcept_id, concept_id) in has_subconcept_relationships:
+            if {concept_id, subconcept_id} not in has_subconcept_pairs_processed:
+                has_subconcept_pairs_processed.append({concept_id, subconcept_id})
+                concept = next(
+                    concept for concept in concepts if concept.wikibase_id == concept_id
+                )
+                subconcept = wikibase.get_concept(subconcept_id)
+                issues.append(
+                    ConceptStoreIssue(
+                        issue_type="circular_subconcept_relationship",
+                        message=f"{stringify_concept(concept)} has subconcept {stringify_concept(subconcept)}, and {stringify_concept(subconcept)} has subconcept {stringify_concept(concept)}",
+                        metadata={
+                            "concept_id": concept_id,
+                            "subconcept_id": subconcept_id,
+                        },
+                    )
+                )
+
+    subconcept_of_pairs_processed: list[set] = []
+    for concept_id, parent_concept_id in subconcept_of_relationships:
+        if (parent_concept_id, concept_id) in subconcept_of_relationships:
+            if {concept_id, parent_concept_id} not in subconcept_of_pairs_processed:
+                subconcept_of_pairs_processed.append({concept_id, parent_concept_id})
+                concept = next(
+                    concept for concept in concepts if concept.wikibase_id == concept_id
+                )
+                parent_concept = wikibase.get_concept(parent_concept_id)
+                issues.append(
+                    ConceptStoreIssue(
+                        issue_type="circular_subconcept_relationship",
+                        message=f"{stringify_concept(concept)} is subconcept of {stringify_concept(parent_concept)}, and {stringify_concept(parent_concept)} is a subconcept of {stringify_concept(concept)}",
+                        metadata={
+                            "concept_id": concept_id,
+                            "parent_concept_id": parent_concept_id,
+                        },
+                    )
+                )
+
+    return issues
+
+
+@task(log_prints=True)
+def check_for_unconnected_concepts(
+    concepts: list[Concept],
+) -> list[ConceptStoreIssue]:
+    """Find all concepts that are not connected to any other concepts"""
+    issues = []
+    for concept in concepts:
+        # TODO: a better way of doing this would be to query all properties with data type
+        # "item" and check if each concept has a value for any of those properties
+        if (
+            not concept.related_concepts
+            and not concept.has_subconcept
+            and not concept.subconcept_of
+        ):
+            issues.append(
+                ConceptStoreIssue(
+                    issue_type="unconnected_concept",
+                    message=f"{stringify_concept(concept)} is not connected to any other concepts",
+                    metadata={"concept_id": concept.wikibase_id},
+                    fix_concept=concept,
                 )
             )
     return issues
