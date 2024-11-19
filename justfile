@@ -36,9 +36,15 @@ lint:
 lint-all:
     poetry run pre-commit run --all-files --show-diff-on-failure
 
-# build a dataset of passages
+# build a dataset of passages for sampling
 build-dataset:
-    poetry run python scripts/build_dataset.py
+    poetry run python scripts/01_download_corporate_disclosures.py
+    poetry run python scripts/02_download_litigation.py
+    poetry run python scripts/03_parse.py
+    poetry run python scripts/04_translate.py
+    poetry run python scripts/05_add_geography.py
+    poetry run python scripts/06_merge.py
+    poetry run python scripts/07_test_dataset_features.py
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
