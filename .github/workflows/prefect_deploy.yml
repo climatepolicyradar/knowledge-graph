@@ -41,7 +41,7 @@ jobs:
 
       - name: Install dependencies
         run: poetry install
-        
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
@@ -92,3 +92,4 @@ jobs:
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
         run: |
            poetry run python -m deployments
+           poetry run python -m automations

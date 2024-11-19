@@ -1,4 +1,5 @@
 set dotenv-load
+import "tests/local_vespa/local_vespa.just"
 
 # Set the default command to list all available commands
 default:
@@ -16,20 +17,34 @@ install-for-embeddings:
     poetry install --with embeddings
 
 # test the project
-test:
-    poetry run pytest
+test +OPTS="":
+    poetry run pytest {{OPTS}}
+
+# test the project, excluding tests that rely on a local vespa instance
+test-without-vespa:
+    poetry run pytest -m 'not vespa'
 
 # update the snapshots for the tests
 test-snapshot-update:
     poetry run pytest --snapshot-update
 
-# run linters and code formatters
+# run linters and code formatters on relevant files
 lint:
+    poetry run pre-commit run --show-diff-on-failure
+
+# run linters and code formatters on all files
+lint-all:
     poetry run pre-commit run --all-files --show-diff-on-failure
 
-# build a dataset of passages
+# build a dataset of passages for sampling
 build-dataset:
-    poetry run python scripts/build_dataset.py
+    poetry run python scripts/01_download_corporate_disclosures.py
+    poetry run python scripts/02_download_litigation.py
+    poetry run python scripts/03_parse.py
+    poetry run python scripts/04_translate.py
+    poetry run python scripts/05_add_geography.py
+    poetry run python scripts/06_merge.py
+    poetry run python scripts/07_test_dataset_features.py
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
@@ -46,6 +61,10 @@ evaluate id +OPTS="":
 # promote a model for a specific wikibase ID
 promote id +OPTS="":
     poetry run promote --wikibase-id {{id}} {{OPTS}}
+
+# demote a model for a specific wikibase ID
+demote id aws_env:
+    poetry run demote --wikibase-id {{id}} --aws-env {{aws_env}}
 
 # run a model for a specific wikibase ID on a supplied string
 label id string:
@@ -89,12 +108,31 @@ push-image:
 get-version:
     poetry run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
 
-export_env_vars:
+export-env-vars:
 	export $(cat .env | xargs)
 
-prefect_login: export_env_vars
+prefect-login: export-env-vars
 	prefect cloud login -k ${PREFECT_API_KEY}
 
-deploy: prefect_login
+deploy: prefect-login
+    just deploy-deployments
+    just deploy-automations
+
+deploy-deployments: prefect-login
 	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
 	python -m deployments
+
+deploy-automations: prefect-login
+	python -m automations
+
+# Run inference over documents in a pipeline bucket
+infer +OPTS="":
+    poetry run infer {{OPTS}}
+
+# Run inference over documents in the sandbox pipeline bucket
+infer-sandbox +OPTS="":
+    just infer --aws_env sandbox {{OPTS}}
+
+# Run inference over documents in the labs pipeline bucket
+infer-labs +OPTS="":
+    just infer --aws_env labs {{OPTS}}

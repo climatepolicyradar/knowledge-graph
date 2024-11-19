@@ -4,8 +4,11 @@ Translate parsed documents to English
 Takes a directory full of parsed documents, and uses the google cloud translate API to
 convert text to English.
 
-Usage:
-poetry run python scripts/sampling_for_sectors_classifier/translate_docs.py
+The script assumes that the parsed document objects are stored in `data/interim/output`.
+The translated documents will be saved in `data/interim/translated`.
+
+You'll need a local file called `google-credentials.json` in the root directory with
+a set of Google Cloud API credentials.
 """
 
 import json

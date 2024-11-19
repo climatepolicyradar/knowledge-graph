@@ -1,0 +1,92 @@
+[
+    {
+        "id": "0",
+        "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+        "spans": [
+            {
+                "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+                "start_index": 0,
+                "end_index": 10,
+                "concept_id": "Q10014",
+                "labellers": ["Q10014-RuleBasedClassifier"]
+            }
+        ],
+        "metadata": {
+            "concept":{
+                "preferred_label": "nuclear sector",
+                "alternative_labels": [
+                    "nuclear energy",
+                    "nuclear power",
+                    "nuclear industry",
+                    "atomic energy",
+                    "nuclear technology",
+                    "nuclear reactor",
+                    "nuclear fuel",
+                    "radiation protection",
+                    "nuclear engineering",
+                    "uranium processing"
+                ],
+                "negative_labels": [],
+                "description": "Activities related to the development, production, and management of nuclear energy and technology.",
+                "wikibase_id": "Q25285",
+                "subconcept_of": [
+                    "Q11434"
+                ],
+                "has_subconcept": [],
+                "related_concepts": [
+                    "Q177",
+                    "Q7397",
+                    "Q8090"
+                ],
+                "definition": null,
+                "labelled_passages": []
+            },
+            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+        }
+    },
+    {
+        "id": "1",
+        "text": "The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
+        "spans": [
+            {
+                "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+                "start_index": 4,
+                "end_index": 14,
+                "concept_id": "Q10014",
+                "labellers": ["Q10014-RuleBasedClassifier"]
+            }
+        ],
+        "metadata": {
+            "concept": {
+                "preferred_label": "environmental hazards",
+                "alternative_labels": [
+                    "natural hazards",
+                    "environmental risk",
+                    "pollution",
+                    "climate hazards",
+                    "ecological risks",
+                    "environmental damage",
+                    "toxicity",
+                    "hazardous waste",
+                    "environmental contamination",
+                    "industrial pollution"
+                ],
+                "negative_labels": [],
+                "description": "Factors or events that pose potential harm to the environment and living organisms.",
+                "wikibase_id": "Q720855",
+                "subconcept_of": [
+                    "Q42689"
+                ],
+                "has_subconcept": [],
+                "related_concepts": [
+                    "Q5019",
+                    "Q198504",
+                    "Q11394"
+                ],
+                "definition": null,
+                "labelled_passages": []
+            },
+            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+        }
+    }
+]

@@ -1,1 +1,5 @@
-* @climatepolicyradar/deng @climatepolicyradar/datascience
+tests/flows/    @climatepolicyradar/deng
+flows/          @climatepolicyradar/deng
+automations.py  @climatepolicyradar/deng
+deployments.py  @climatepolicyradar/deng
+*               @climatepolicyradar/deng @climatepolicyradar/datascience

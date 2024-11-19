@@ -13,27 +13,31 @@ from prefect.blocks.system import JSON
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
+from flows.index import index_labelled_passages_from_s3_to_vespa
 from flows.inference import classifier_inference
+from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
 
 
 def create_deployment(
-    project_name: str, flow: Flow, description: str, flow_variables: dict[str, Any]
+    flow: Flow,
+    description: str,
+    flow_variables: dict[str, Any],
 ) -> None:
     """Create a deployment for the specified flow"""
-    aws_env = os.getenv("AWS_ENV", "sandbox")
-    version = importlib.metadata.version(project_name)
+    aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
+    version = importlib.metadata.version(PROJECT_NAME)
     flow_name = flow.name
     docker_registry = os.environ["DOCKER_REGISTRY"]
-    docker_repository = os.getenv("DOCKER_REPOSITORY", project_name)
+    docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
     image_name = os.path.join(docker_registry, docker_repository)
 
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
     job_variables = {**default_variables, **flow_variables}
 
-    _ = classifier_inference.deploy(
-        f"{project_name}-{flow_name}-{aws_env}",
+    _ = flow.deploy(
+        generate_deployment_name(flow_name, aws_env),
         work_pool_name=f"mvp-{aws_env}-ecs",
         version=version,
         image=DeploymentImage(
@@ -52,9 +56,19 @@ def create_deployment(
 
 # Inference
 create_deployment(
-    project_name="knowledge-graph",
     flow=classifier_inference,
     description="Run concept classifier inference on document passages",
+    flow_variables={
+        "cpu": MEGABYTES_PER_GIGABYTE * 4,
+        "memory": MEGABYTES_PER_GIGABYTE * 16,
+        "ephemeralStorage": {"sizeInGiB": 50},
+    },
+)
+
+# Index
+create_deployment(
+    flow=index_labelled_passages_from_s3_to_vespa,
+    description="Run partial updates of labelled passages stored in s3 into Vespa",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,
