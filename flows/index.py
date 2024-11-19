@@ -20,6 +20,7 @@ from prefect.logging import get_logger, get_run_logger
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from scripts.cloud import ClassifierSpec, get_prefect_job_variable
+from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -251,18 +252,20 @@ def get_passage_for_text_block(
     return None, None, None
 
 
-def get_parent_concepts(
-    subconcept_of: list[str],
+def get_parent_concepts_from_concept(
+    concept: Concept,
 ) -> tuple[list[dict], str]:
     """
-    Extract parent concepts.
+    Extract parent concepts from a Concept object.
 
     Currently we pull the name from the Classifier used to label the passage, this
     doesn't hold the concept id. This is a temporary solution that is not desirable as
     the relationship between concepts can change frequently and thus shouldn't be
     coupled with inference.
     """
-    parent_concepts = [{"id": subconcept, "name": ""} for subconcept in subconcept_of]
+    parent_concepts = [
+        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
+    ]
     parent_concept_ids_flat = (
         ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
     )
@@ -286,8 +289,9 @@ def convert_labelled_passages_to_concepts(
         # the relationship between concepts. This has the downside that it ties a
         # labelled passage to a particular concept when in fact the Spans that a
         # labelled passage has can be labelled by multiple concepts.
-        parent_concepts, parent_concept_ids_flat = get_parent_concepts(
-            subconcept_of=labelled_passage.metadata["concept_is_subconcept_of"]
+        concept = Concept.model_validate(labelled_passage.metadata["concept"])
+        parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
+            concept=concept
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
 
@@ -299,7 +303,7 @@ def convert_labelled_passages_to_concepts(
                     text_block_id,
                     VespaConcept(
                         id=span.concept_id,
-                        name=labelled_passage.metadata["concept_preferred_label"],
+                        name=concept.preferred_label,
                         parent_concepts=parent_concepts,
                         parent_concept_ids_flat=parent_concept_ids_flat,
                         model=get_model_from_span(span),
