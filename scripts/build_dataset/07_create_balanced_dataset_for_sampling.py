@@ -19,7 +19,7 @@ those dimensions than the original dataset.
 import pandas as pd
 from rich.console import Console
 
-from scripts.config import processed_data_dir
+from scripts.config import equity_columns, processed_data_dir
 from src.sampling import create_balanced_sample
 
 console = Console()
@@ -27,19 +27,17 @@ console = Console()
 with console.status("🚚 Loading the combined dataset") as status:
     combined_df = pd.read_feather(processed_data_dir / "combined_dataset.feather")
 console.log(f"✅ Combined dataset loaded with {len(combined_df)} rows")
-columns = ["translated", "world_bank_region", "document_metadata.corpus_type_name"]
-
 with console.status("🧪 Sampling a balanced dataset from the combined dataset"):
     balanced_sample_dataframe: pd.DataFrame = create_balanced_sample(
         df=combined_df,
         sample_size=25_000,
-        on_columns=columns,
+        on_columns=equity_columns,
     )
 
 console.log(f"✅ Sampled a new dataset with {len(balanced_sample_dataframe)} rows")
 
 console.log("📊 Value counts for the balanced dataset:", end="\n\n")
-for column in columns:
+for column in equity_columns:
     console.log(balanced_sample_dataframe[column].value_counts(), end="\n\n")
 
 console.log(

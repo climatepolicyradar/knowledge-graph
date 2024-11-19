@@ -33,3 +33,10 @@ model_artifact_name = "model.pickle"
 
 # aws
 aws_region = "eu-west-1"
+
+# sampling
+equity_columns = [
+    "translated",
+    "world_bank_region",
+    "document_metadata.corpus_type_name",
+]
