@@ -261,12 +261,16 @@ def text_block_inference(
 ) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
+    # Remove the labelled passages from the concept to reduce the size of the metadata.
+    concept_no_labelled_passages = classifier.concept.model_copy(
+        update={"labelled_passages": []}
+    )
     labelled_passage = LabelledPassage(
         id=block_id,
         text=text,
         spans=spans,
         metadata={
-            "concept": classifier.concept.model_dump(),
+            "concept": concept_no_labelled_passages.model_dump(),
             "inference_timestamp": datetime.now().isoformat(),
         },
     )

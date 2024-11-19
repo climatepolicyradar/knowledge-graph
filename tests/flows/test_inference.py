@@ -154,7 +154,10 @@ async def test_text_block_inference(
     assert len(labels.spans) > 0
     assert labels.id == block_id
     assert labels.metadata != {}
-    assert labels.metadata["concept"] == classifier.concept.model_dump()
+    # Set the labelled passages as empty as we are removing them.
+    expected_concept_metadata = classifier.concept.model_dump()
+    expected_concept_metadata["labelled_passages"] = []
+    assert labels.metadata["concept"] == expected_concept_metadata
     datetime.fromisoformat(labels.metadata["inference_timestamp"])
 
 
