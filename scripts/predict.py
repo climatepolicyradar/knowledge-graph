@@ -55,7 +55,7 @@ def main(
 
     try:
         classifier_path = classifier_path or classifier_dir / wikibase_id
-        classifier = Classifier.load(classifier_dir / wikibase_id)
+        classifier = Classifier.load(classifier_path)
         console.log(f"Loaded {classifier} from {classifier_dir}")
     except FileNotFoundError as e:
         raise FileNotFoundError(
