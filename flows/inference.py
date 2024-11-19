@@ -8,19 +8,19 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.apis.public.artifacts import ArtifactCollection
 
+import wandb
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from wandb.apis.public.artifacts import ArtifactCollection
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"

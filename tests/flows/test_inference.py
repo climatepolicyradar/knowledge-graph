@@ -5,7 +5,6 @@ from pathlib import Path
 import boto3
 import pytest
 from prefect.testing.utilities import prefect_test_harness
-from wandb.apis.public.artifacts import ArtifactCollection
 
 from flows.inference import (
     ClassifierSpec,
@@ -25,6 +24,7 @@ from flows.inference import (
 )
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from wandb.apis.public.artifacts import ArtifactCollection
 
 
 def helper_list_labels_in_bucket(test_config, bucket_name):
