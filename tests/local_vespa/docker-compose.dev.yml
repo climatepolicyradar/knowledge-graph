@@ -1,0 +1,13 @@
+services:
+  vespadaltest:
+    image: vespaengine/vespa:8.396.18
+    container_name: vespadaltest
+    ports:
+      - 8080:8080
+      - 19071:19071
+    healthcheck:
+      test: curl -s -f http://vespadaltest:19071/status.html >/dev/null || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s

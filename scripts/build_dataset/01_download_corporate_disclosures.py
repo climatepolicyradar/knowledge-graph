@@ -1,7 +1,7 @@
 """
-Prompt the user to download the corporate-disclosures documents from the Google Drive link.
+Prompt the user to download the corporate-disclosures documents from Google Drive.
 
-The downloaded files should be saved to the `corporate_disclosures_pdf_dir` directory.
+The downloaded files should be saved to `data/raw/pdfs/corporate-disclosures`.
 
 The script can't download the files directly from the Google Drive link because the
 link is not publicly accessible. We assume that the user is a member of the CPR team

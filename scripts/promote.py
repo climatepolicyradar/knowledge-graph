@@ -42,6 +42,8 @@ REGION_NAME = "eu-west-1"
 
 
 VALID_FROM_TO_TRANSITIONS = [
+    (AwsEnv.sandbox, AwsEnv.labs),
+    (AwsEnv.sandbox, AwsEnv.staging),
     (AwsEnv.labs, AwsEnv.staging),
     (AwsEnv.staging, AwsEnv.production),
 ]
@@ -323,12 +325,18 @@ def main(
     Promote a model from one account to another.
 
     Optionally as the primary model. If a W&B model registry
-    collection doesn't exist for the concept-classifier, it'll
+    collection doesn't exist for the concept, it'll
     automatically be made as part of this script.
     """
     log.info("Starting model promotion process")
 
     log.info("Parsing promotion...")
+
+    if from_aws_env is not None or to_aws_env is not None:
+        raise NotImplementedError(
+            "Promotion across AWS environments is not yet implemented"
+        )
+
     promotion = Promotion.validate_python(
         {
             "value": within_aws_env,
@@ -411,12 +419,15 @@ def main(
             to_bucket = get_bucket_name_for_aws_env(promotion.value)
             to_object_key = get_object_key(wikibase_id, classifier, version)
 
-    collection_name = f"{wikibase_id}-{classifier}"
-
     aliases = get_aliases(promotion)
 
-    # This magic value was from the W&B webapp
-    # This is the hierarchy we use: CPR / {concept}-{classifier}
+    collection_name = wikibase_id
+
+    # This magic value was from the W&B webapp.
+    #
+    # This is the hierarchy we use: CPR / {concept} / {model architecture}(s)
+    #
+    # The concept aka Wikibase ID is the collection name.
     #
     # > W&B automatically creates a collection with the name you specify
     # > in the target path if you try to link an artifact to a collection

@@ -1,8 +1,23 @@
 """
-Download litigation documents to a local directory
+Download litigation documents to a local directory.
 
-Usage:
-poetry run python scripts/sampling_for_sectors_classifier/download_litigation_docs.py
+This script loads and combines US and non-US litigation documents from CSV files stored
+in the `data/raw` directory. The dataset is heavily geographically imbalanced, so the
+script samples the dataset to ensure balanced representation of jurisdictions before
+downloading the documents.
+
+The sampling strategy:
+- Takes the median number of documents from the top 100 jurisdictions
+- Applies this as a cap for all jurisdictions
+- Ensures no jurisdiction is over-represented in the final dataset
+
+Input files:
+- data/raw/litigation-us.csv: US litigation documents
+- data/raw/litigation-non-us.csv: Non-US litigation documents
+
+Output files:
+- data/raw/sampled_litigation.json: Metadata for sampled documents
+- data/raw/pdfs/litigation/*.pdf: Downloaded PDF documents
 """
 
 import httpx

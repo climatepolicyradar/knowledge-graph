@@ -1,3 +1,21 @@
+"""
+Create a balanced subset of the combined dataset for use in downstream tasks.
+
+This script takes the output of the previous scripts
+(data/processed/combined_dataset.feather) and creates a balanced sample of passages
+based on three attributes:
+- Whether the text was translated
+- The World Bank region of the document
+- The corpus type of the document (eg litigation, corporate disclosures, etc)
+
+The dataset will be saved to `data/processed/balanced_dataset_for_sampling.feather` for
+use in downstream tasks.
+
+Note that the shape of the original dataset might mean that a perfectly balanced sample
+won't be possible, but in theory, the sampled dataset should be _better_ across
+those dimensions than the original dataset.
+"""
+
 import pandas as pd
 from rich.console import Console
 

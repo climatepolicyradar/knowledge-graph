@@ -23,7 +23,7 @@ from src.identifiers import WikibaseID
         (AwsEnv.labs, "cpr-labs-models"),
         (AwsEnv.sandbox, "cpr-sandbox-models"),
         (AwsEnv.staging, "cpr-staging-models"),
-        (AwsEnv.production, "cpr-production-models"),
+        (AwsEnv.production, "cpr-prod-models"),
     ],
 )
 def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
@@ -117,7 +117,7 @@ def test_link_model_artifact():
 
         # Then the S3 reference was added to the artifact
         mock_artifact_instance.add_reference.assert_called_once_with(
-            uri=f"s3://{bucket}/{key}", checksum=False
+            uri=f"s3://{bucket}/{key}", checksum=True
         )
 
         # Then the artifact was logged in W&B
