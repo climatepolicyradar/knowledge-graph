@@ -617,7 +617,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         config = await Config.create(temp_dir=cm.name)
     else:
         cm = contextlib.nullcontext()
-        await config.create()
+        config = await config.create()
 
     with cm:
         logger.info(f"Running with config: {config}")
