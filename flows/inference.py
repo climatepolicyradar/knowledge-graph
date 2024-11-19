@@ -36,7 +36,7 @@ class Config:
     pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model/"  # noqa: E501
+    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model"  # noqa: E501
     wandb_entity: str = "climatepolicyradar"
     wandb_api_key: Optional[SecretStr] = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
@@ -152,7 +152,7 @@ def download_classifier_from_wandb_to_local(
     run = wandb.init(
         entity=config.wandb_entity, project=classifier_name, job_type="download_model"
     )
-    artifact = config.wandb_model_registry + f"{classifier_name}:{alias}"
+    artifact = os.path.join(config.wandb_model_registry, f"{classifier_name}:{alias}")
     print(f"Downloading artifact from W&B: {artifact}")
     try:
         artifact = run.use_artifact(artifact, type="model")
