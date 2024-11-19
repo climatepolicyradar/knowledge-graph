@@ -35,7 +35,7 @@ def main(
     ),
 ):
     """
-    Equitably sample passages for concepts from the balanced dataset.
+    Evenly sample passages for concepts from the balanced dataset.
 
     This script is used to equitably passages from our dataset(s) for instances of a
     given concept. It loads concept metadata for the supplied concept and all
