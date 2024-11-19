@@ -5,3 +5,6 @@ We need to sample from datasets which haven't yet been parsed by the core pipeli
 The scripts are numbered according to the order in which they should be run. You can run all of the scripts in sequence with `just build-dataset`.
 
 The final dataset will be saved in `data/processed/combined_dataset.feather`.
+
+**NOTE:** The final step in this process filters out any passages which are less than 20 characters long from the dataset. In practice, we've found that such short passages are too short to be useful for evaluation.  
+We're also making a small assumption here that upcoming work on our text chunking process will make evaluation of such short, semantically empty passages redundant, as the future version will produce them far less often.
