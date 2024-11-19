@@ -14,6 +14,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
+from wandb.apis.public import ArtifactType
 from wandb.apis.public.artifacts import ArtifactCollection
 
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
@@ -36,7 +37,8 @@ class Config:
     pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_registry: str = "climatepolicyradar_UZODYJSN66HCQ/wandb-registry-model"  # noqa: E501
+    wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
+    wandb_model_registry: str = "wandb-registry-model"
     wandb_entity: str = "climatepolicyradar"
     wandb_api_key: Optional[SecretStr] = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
@@ -362,12 +364,13 @@ def get_all_available_classifiers(config) -> list[ClassifierSpec]:
     """
 
     api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
-    # artifact_collections is slow, in the future we could
-    # Switch to a custom graphql query using the api module
-    model_collections = api.artifact_collections(
+    model_type = ArtifactType(
+        api.client,
+        entity=config.wandb_model_org,
+        project=config.wandb_model_registry,
         type_name="model",
-        project_name=config.wandb_model_registry,
     )
+    model_collections = model_type.collections()
 
     classifier_specs = []
     for model in model_collections:
