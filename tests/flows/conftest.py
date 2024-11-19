@@ -23,6 +23,7 @@ from moto import mock_aws
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
+from wandb.apis.public import ArtifactType
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
@@ -37,7 +38,7 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 def test_config():
     yield Config(
         cache_bucket="test_bucket",
-        wandb_model_registry="test_wandb_model_registry",
+        wandb_model_registry="test_org/test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
         aws_env=AwsEnv("sandbox"),
@@ -403,7 +404,10 @@ def mock_wandb(mock_s3_client):
 
 @pytest.fixture
 def mock_wandb_api():
-    with patch("wandb.Api") as mock_api:
+    with (
+        patch("wandb.Api") as mock_api,
+        patch("wandb.apis.public.ArtifactType") as mock_artifact_type,
+    ):
         # Create a mock for the API instance
         api_instance = Mock()
         mock_api.return_value = api_instance
@@ -422,10 +426,15 @@ def mock_wandb_api():
 
             mock_collection = Mock()
             mock_collection.name = model_data["name"]
-
             mock_collection.artifacts.return_value = [mock_artifact]
             collections.append(mock_collection)
 
-        api_instance.artifact_collections.return_value = collections
+        mock_type_instance = Mock()
+        mock_type_instance.collections.return_value = collections
 
-        yield mock_api
+        mock_artifact_type.return_value = mock_type_instance
+        with (
+            patch.object(ArtifactType, "load", return_value="mocked"),
+            patch.object(ArtifactType, "collections", return_value=collections),
+        ):
+            yield mock_api
