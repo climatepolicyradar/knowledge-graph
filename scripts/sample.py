@@ -6,7 +6,7 @@ import typer
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import processed_data_dir
+from scripts.config import equity_columns, processed_data_dir
 from src.classifier import EmbeddingClassifier, KeywordClassifier
 from src.classifier.classifier import Classifier
 from src.concept import Concept
@@ -129,11 +129,7 @@ def main(
             sampled_df = create_balanced_sample(
                 df=df,
                 sample_size=min(optimal_sample_size, len(df)),
-                on_columns=[
-                    "translated",
-                    "world_bank_region",
-                    "document_metadata.corpus_type_name",
-                ],
+                on_columns=equity_columns,
             )
             positive_samples_list.append(sampled_df)
 
@@ -152,11 +148,7 @@ def main(
     negative_samples = create_balanced_sample(
         df=negative_candidates,
         sample_size=negative_sample_size,
-        on_columns=[
-            "translated",
-            "world_bank_region",
-            "document_metadata.corpus_type_name",
-        ],
+        on_columns=equity_columns,
     )
 
     console.log(
@@ -179,12 +171,8 @@ def main(
         console.log(f"{model.name}: {len(positive_samples)}")
 
     console.log("\n📊 Value counts for the sampled dataset:")
-    console.log(sampled_passages["translated"].value_counts(), end="\n\n")
-    console.log(sampled_passages["world_bank_region"].value_counts(), end="\n\n")
-    console.log(
-        sampled_passages["document_metadata.corpus_type_name"].value_counts(),
-        end="\n\n",
-    )
+    for column in equity_columns:
+        console.log(sampled_passages[column].value_counts(), end="\n\n")
 
     # Convert sampled passage rows to LabelledPassage objects and save them
     labelled_passages = []
@@ -197,7 +185,7 @@ def main(
 
     sampled_passages_dir = processed_data_dir / "sampled_passages"
     sampled_passages_dir.mkdir(parents=True, exist_ok=True)
-    sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.json"
+    sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
 
     with open(sampled_passages_path, "w", encoding="utf-8") as f:
         f.writelines([entry.model_dump_json() + "\n" for entry in labelled_passages])

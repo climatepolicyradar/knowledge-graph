@@ -62,17 +62,18 @@ def create_balanced_sample(
     samples_per_group = np.floor(sample_size / len(valid_groups))
 
     # Sample from each group
-    result = pd.DataFrame()
+    group_dfs: list[pd.DataFrame] = []
 
     for group in valid_groups.index:
         group_df = df[df["_group_key"] == group]
         n_samples = min(int(samples_per_group), len(group_df))
 
-        if n_samples > 0:
-            sampled_indices = np.random.choice(
-                group_df.index, size=n_samples, replace=False
-            )
-            result = pd.concat([result, df.loc[sampled_indices]])
+        sampled_indices = np.random.choice(
+            group_df.index, size=n_samples, replace=False
+        )
+        group_dfs.append(df.loc[sampled_indices])
+
+    result = pd.concat(group_dfs)
 
     # Handle any remaining samples needed to reach sample_size
     missing_rows = sample_size - len(result)
