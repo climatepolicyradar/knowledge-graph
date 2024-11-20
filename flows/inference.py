@@ -173,17 +173,18 @@ async def load_classifier(
     If the classifier is available locally, this will be used. Otherwise the
     classifier will be downloaded from W&B (Once implemented)
     """
-    local_classifier_path: Path = config.local_classifier_dir / classifier_name
+    async with concurrency("load_classifier", occupy=5):
+        local_classifier_path: Path = config.local_classifier_dir / classifier_name
 
-    if not local_classifier_path.exists():
-        model_cache_dir = download_classifier_from_wandb_to_local(
-            config, classifier_name, alias
-        )
-        local_classifier_path = Path(model_cache_dir) / "model.pickle"
+        if not local_classifier_path.exists():
+            model_cache_dir = download_classifier_from_wandb_to_local(
+                config, classifier_name, alias
+            )
+            local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
-    classifier = Classifier.load(local_classifier_path)
+        classifier = Classifier.load(local_classifier_path)
 
-    return classifier
+        return classifier
 
 
 def download_s3_file(config: Config, key: str):
@@ -257,25 +258,26 @@ def store_labels(
 
 
 @task(log_prints=True)
-def text_block_inference(
+async def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
     """Run predict on a single text block."""
-    spans: list[Span] = classifier.predict(text)
-    # Remove the labelled passages from the concept to reduce the size of the metadata.
-    concept_no_labelled_passages = classifier.concept.model_copy(
-        update={"labelled_passages": []}
-    )
-    labelled_passage = LabelledPassage(
-        id=block_id,
-        text=text,
-        spans=spans,
-        metadata={
-            "concept": concept_no_labelled_passages.model_dump(),
-            "inference_timestamp": datetime.now().isoformat(),
-        },
-    )
-    return labelled_passage
+    async with concurrency("text_block_inference", occupy=1):
+        spans: list[Span] = classifier.predict(text)
+        # Remove the labelled passages from the concept to reduce the size of the metadata.
+        concept_no_labelled_passages = classifier.concept.model_copy(
+            update={"labelled_passages": []}
+        )
+        labelled_passage = LabelledPassage(
+            id=block_id,
+            text=text,
+            spans=spans,
+            metadata={
+                "concept": concept_no_labelled_passages.model_dump(),
+                "inference_timestamp": datetime.now().isoformat(),
+            },
+        )
+        return labelled_passage
 
 
 @flow(log_prints=True)
@@ -303,16 +305,14 @@ async def run_classifier_inference_on_document(
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
 
-        futures = []
-
-        for text, block_id in document_passages(document):
-            futures.append(
-                text_block_inference.submit(
-                    classifier=classifier, block_id=block_id, text=text
-                )
+        subflows = [
+            text_block_inference.submit(
+                classifier=classifier, block_id=block_id, text=text
             )
+            for text, block_id in document_passages(document)
+        ]
 
-        doc_labels = [future.wait() for future in futures]
+        doc_labels = await asyncio.gather(*subflows)
 
         store_labels(
             config=config,

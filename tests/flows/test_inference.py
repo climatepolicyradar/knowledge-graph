@@ -144,7 +144,7 @@ async def test_text_block_inference(
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
-    labels = text_block_inference.fn(
+    labels = await text_block_inference.fn(
         classifier=classifier, block_id=block_id, text=text
     )
 
