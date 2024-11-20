@@ -19,7 +19,8 @@ from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from scripts.cloud import ClassifierSpec, get_prefect_job_variable
+from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
+from scripts.update_classifier_spec import parse_spec_file
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -41,6 +42,7 @@ class Config:
     #   cert_directory="certs/"
     # )
     vespa_search_adapter: Optional[VespaSearchAdapter] = None
+    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
     @classmethod
     async def create(cls, temp_dir: Optional[str] = None) -> "Config":
@@ -637,6 +639,9 @@ async def index_labelled_passages_from_s3_to_vespa(
 
     with cm:
         logger.info(f"Running with config: {config}")
+
+        if classifier_specs is None:
+            classifier_specs = parse_spec_file(config.aws_env)
 
         s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
             classifier_specs,

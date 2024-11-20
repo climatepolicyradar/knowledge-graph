@@ -15,14 +15,21 @@ PROJECT_NAME = "knowledge-graph"
 
 
 class ClassifierSpec(BaseModel):
-    """Details for a classifier to run"""
+    """Details for a classifier to run."""
 
     name: str = Field(
-        description="The reference of the classifier in wandb. e.g. 'Q992'"
+        description="The reference of the classifier in wandb. e.g. 'Q992'",
+        min_length=1,
+        strip_whitespace=True,
     )
     alias: str = Field(
-        description="The alias tag for the version to use for inference. e.g 'latest' or 'v2'",
+        description=(
+            "The alias tag for the version to use for inference. "
+            "e.g 'latest' or 'v2'"
+        ),
         default="latest",
+        min_length=1,
+        strip_whitespace=True,
     )
 
 
