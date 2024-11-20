@@ -17,15 +17,12 @@ repos:
         args: [ --fix ]
       - id: ruff-format
         types_or: [ python, pyi, jupyter ]
-  - repo: local
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.389
     hooks:
       - id: pyright
-        name: pyright
-        entry: pyright
-        language: node
-        files: ^src/
+        files: ^(src/|scripts/|flows/)
         types: [python]
-        additional_dependencies: ['pyright@1.1.294']
   - repo: https://github.com/python-poetry/poetry
     rev: 1.8.0
     hooks:

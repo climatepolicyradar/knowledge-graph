@@ -56,7 +56,7 @@ for subdir in processed_documents_dir.iterdir():
             document_metadata_dict = {
                 k: v
                 for k, v in document.model_dump(
-                    exclude=["text_blocks", "document_metadata", "page_metadata"]
+                    exclude=["text_blocks", "document_metadata", "page_metadata"]  # type: ignore
                 ).items()
             }
             document_metadata_dict.update(
@@ -66,7 +66,7 @@ for subdir in processed_documents_dir.iterdir():
                 }
             )
             document_text_blocks = []
-            for text_block in document.text_blocks:
+            for text_block in document.text_blocks:  # type: ignore
                 text_block_dict = {
                     f"text_block.{k}": v for k, v in text_block.model_dump().items()
                 }
@@ -87,14 +87,14 @@ dataset_name = "ClimatePolicyRadar/all-document-text-data-weekly"
 huggingface_dataset = load_dataset(dataset_name, split="train")
 console.log(f'✅ Loaded "{dataset_name}" from huggingface')
 with console.status("🐼 Converting the huggingface dataset into a pandas dataframe"):
-    huggingface_dataframe = huggingface_dataset.to_pandas()
+    huggingface_dataframe = huggingface_dataset.to_pandas()  # type: ignore
 console.log(f'✅ Converted "{dataset_name}" to a dataframe')
-console.log(f'🔢 "{dataset_name}" contains {len(huggingface_dataframe)} passages')
+console.log(f'🔢 "{dataset_name}" contains {len(huggingface_dataframe)} passages')  # type: ignore
 
 # Combine the datasets
 console.log("🤝 Combining the datasets")
-combined_dataset = pd.concat(
-    [local_documents_dataframe, huggingface_dataframe],
+combined_dataset = pd.concat(  # type: ignore
+    [local_documents_dataframe, huggingface_dataframe],  # type: ignore
     ignore_index=True,
     sort=False,
     axis=0,

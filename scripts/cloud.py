@@ -20,7 +20,6 @@ class ClassifierSpec(BaseModel):
     name: str = Field(
         description="The reference of the classifier in wandb. e.g. 'Q992'",
         min_length=1,
-        strip_whitespace=True,
     )
     alias: str = Field(
         description=(
@@ -29,7 +28,6 @@ class ClassifierSpec(BaseModel):
         ),
         default="latest",
         min_length=1,
-        strip_whitespace=True,
     )
 
 
@@ -117,16 +115,16 @@ def get_sts_client(
 def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
     """Check if the user is logged in to the specified AWS environment."""
     try:
-        aws_env = aws_env if use_aws_profiles else None
+        aws_env_as_profile = aws_env if use_aws_profiles else None
 
-        sts = get_sts_client(aws_env)
+        sts = get_sts_client(aws_env_as_profile)
         sts.get_caller_identity()
 
         return True
     except (
-        botocore.exceptions.ClientError,
-        botocore.exceptions.NoCredentialsError,
-        botocore.exceptions.SSOTokenLoadError,
+        botocore.exceptions.ClientError,  # type: ignore
+        botocore.exceptions.NoCredentialsError,  # type: ignore
+        botocore.exceptions.SSOTokenLoadError,  # type: ignore
     ) as e:
         print(f"determining that not logged in due to exception: {e}")
         return False

@@ -49,11 +49,11 @@ def main(
                 # if the dataset.name ends with our wikibase_id, then it's one we want to process
                 if WikibaseID(dataset.name.split("-")[-1]) == wikibase_id:
                     console.log(
-                        f'🕵️  Found "{dataset.name}" in the "{dataset.workspace.name}" workspace'
+                        f'🕵️  Found "{dataset.name}" in the "{dataset.workspace.name}" workspace'  # type: ignore
                     )
                     concept.labelled_passages = [
                         LabelledPassage.from_argilla_record(record)
-                        for record in dataset.records
+                        for record in dataset.records  # type: ignore
                     ]
                     console.log(
                         f"📚 Found {len(concept.labelled_passages)} labelled passages"

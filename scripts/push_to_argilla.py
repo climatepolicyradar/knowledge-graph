@@ -3,7 +3,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm  # type: ignore
 
 import argilla as rg
 from scripts.config import concept_dir, processed_data_dir
@@ -84,7 +84,9 @@ def main(
         try:
             password = generate_identifier(username)
             user = rg.User.create(
-                username=username, password=password, role="annotator"
+                username=username,
+                password=password,
+                role="annotator",  # type: ignore
             )
             console.log(f'✅ Created user "{username}" with password "{password}"')
         except KeyError:
@@ -115,10 +117,10 @@ def main(
     dataset = rg.FeedbackDataset(
         guidelines="Highlight the entity if it is present in the text",
         fields=[
-            rg.TextField(name="text", title="Text", use_markdown=True),
+            rg.TextField(name="text", title="Text", use_markdown=True),  # type: ignore
         ],
-        questions=[
-            rg.SpanQuestion(
+        questions=[  # type: ignore
+            rg.SpanQuestion(  # type: ignore
                 name="entities",
                 labels={concept.wikibase_id: concept.preferred_label},
                 field="text",
@@ -132,7 +134,7 @@ def main(
         rg.FeedbackRecord(fields={"text": passage.text}, metadata=passage.metadata)
         for passage in labelled_passages
     ]
-    dataset.add_records(records)
+    dataset.add_records(records)  # type: ignore
     dataset_in_argilla = dataset.push_to_argilla(
         name=dataset_name, workspace=workspace_name, show_progress=False
     )

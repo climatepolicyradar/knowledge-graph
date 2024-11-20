@@ -5,10 +5,9 @@ from typing import List, Optional
 
 import typer
 import wandb
-import yaml
+import yaml  # type: ignore
 from rich.console import Console
-from wandb.apis.public import ArtifactType
-from wandb.apis.public.artifacts import ArtifactCollection
+from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
@@ -23,7 +22,7 @@ WANDB_MODEL_REGISTRY = "wandb-registry-model"
 SPEC_DIR = Path("flows") / "classifier_specs"
 
 
-def build_spec_file_path(aws_env: AwsEnv) -> str:
+def build_spec_file_path(aws_env: AwsEnv) -> Path:
     file_path = SPEC_DIR / f"{aws_env}.yaml"
     return file_path
 
@@ -47,13 +46,13 @@ def parse_spec_file(aws_env: AwsEnv) -> List[ClassifierSpec]:
     return classifier_specs
 
 
-def write_spec_file(file_path: str, data: list[str]):
+def write_spec_file(file_path: Path, data: list[str]):
     """Save a classifier spec YAML"""
     with open(file_path, "w") as file:
         yaml.dump(data, file, explicit_start=True)
 
 
-def is_concept_model(model: ArtifactCollection) -> bool:
+def is_concept_model(model_artifact) -> bool:
     """
     Check if a model is a concept classifier
 
@@ -61,7 +60,7 @@ def is_concept_model(model: ArtifactCollection) -> bool:
     For example: `Q123`, `Q972`
     """
     try:
-        WikibaseID(model.name)
+        WikibaseID(model_artifact.name)  # type: ignore
 
         return True
     except ValueError as e:
@@ -93,7 +92,7 @@ def is_latest_model_in_env(classifier_specs: list, model_name: str) -> bool:
 @app.command()
 def get_all_available_classifiers(
     aws_envs: Optional[list[AwsEnv]] = None,
-) -> list[str]:
+) -> None:
     """
     Return all available models for the given environment
 
@@ -102,7 +101,7 @@ def get_all_available_classifiers(
     request.
     """
     if not aws_envs:
-        aws_envs = [e.value for e in AwsEnv]
+        aws_envs = [e for e in AwsEnv]
 
     api_key = os.environ["WANDB_API_KEY"]
     api = wandb.Api(api_key=api_key)
@@ -121,7 +120,7 @@ def get_all_available_classifiers(
 
         console.log(f"Checking for matching environments for model: {model.name}")
         for model_artifacts in model.artifacts():
-            model_env = model_artifacts.metadata.get("aws_env")
+            model_env = AwsEnv(model_artifacts.metadata.get("aws_env"))
             if model_env not in aws_envs:
                 continue
 
@@ -129,6 +128,7 @@ def get_all_available_classifiers(
                 classifier_specs[model_env].append(model_artifacts.name)
 
     for aws_env, specs in classifier_specs.items():
+        aws_env = AwsEnv(aws_env)
         spec_path = build_spec_file_path(aws_env)
         write_spec_file(spec_path, data=specs)
 

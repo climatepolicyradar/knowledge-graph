@@ -38,7 +38,7 @@ def create_balanced_sample(
 
     # Drop any rows where the column values are None or "None"
     df = df.dropna(subset=on_columns)
-    df = df[~df[on_columns].eq("None").any(axis=1)]
+    df = df[~df[on_columns].eq("None").any(axis=1)]  # type: ignore
 
     # Pre-compute categorical values and create category codes for faster filtering
     for col in on_columns:
@@ -64,7 +64,7 @@ def create_balanced_sample(
     # Sample from each group
     group_dfs: list[pd.DataFrame] = []
 
-    for group in valid_groups.index:
+    for group in valid_groups.index:  # type: ignore
         group_df = df[df["_group_key"] == group]
         n_samples = min(int(samples_per_group), len(group_df))
 

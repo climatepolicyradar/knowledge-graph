@@ -149,7 +149,7 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
-    wandb.login(key=config.wandb_api_key.get_secret_value())
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # type: ignore
     run = wandb.init(
         entity=config.wandb_entity, project=classifier_name, job_type="download_model"
     )
@@ -215,9 +215,9 @@ def document_passages(document: BaseParserOutput):
     """Yield the text block irrespective of content type."""
     match document.document_content_type:
         case "application/pdf":
-            text_blocks = document.pdf_data.text_blocks
+            text_blocks = document.pdf_data.text_blocks  # type: ignore
         case "text/html":
-            text_blocks = document.html_data.text_blocks
+            text_blocks = document.html_data.text_blocks  # type: ignore
         case _:
             raise ValueError(
                 "Invalid document content type: "
@@ -306,7 +306,7 @@ async def run_classifier_inference_on_document(
         print(f"Loaded document with ID {document_id}")
 
         subflows = [
-            text_block_inference.submit(
+            text_block_inference.submit(  # type: ignore
                 classifier=classifier, block_id=block_id, text=text
             )
             for text, block_id in document_passages(document)
@@ -316,7 +316,7 @@ async def run_classifier_inference_on_document(
 
         store_labels(
             config=config,
-            labels=doc_labels,
+            labels=doc_labels,  # type: ignore
             document_id=document_id,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,

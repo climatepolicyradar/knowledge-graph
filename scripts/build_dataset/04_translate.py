@@ -15,7 +15,9 @@ import json
 
 from cpr_sdk.models import BaseDocument
 from cpr_sdk.parser_models import BaseParserOutput
-from navigator_document_parser.translator.translate import translate_parser_output
+from navigator_document_parser.translator.translate import (  # type: ignore
+    translate_parser_output,
+)
 from rich.console import Console
 from rich.progress import track
 
@@ -47,7 +49,7 @@ for path in track(
     if output_path.exists():
         continue
 
-    if target_language not in document.languages:
+    if target_language not in document.languages:  # type: ignore
         console.log(f"Translating {path}")
         translated_parser_output = translate_parser_output(
             parser_output, target_language

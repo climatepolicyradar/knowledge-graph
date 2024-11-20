@@ -28,8 +28,8 @@ __all__ = [
     "Classifier",
     "KeywordClassifier",
     "RulesBasedClassifier",
-    "EmbeddingClassifier",
-    "StemmedKeywordClassifier",
+    "EmbeddingClassifier",  # type: ignore
+    "StemmedKeywordClassifier",  # type: ignore
 ]
 
 

@@ -12,12 +12,12 @@ console = Console()
 
 def get_neo4j_session(clear=False):
     neo4j_connection_uri = os.environ.get("NEO4J_CONNECTION_URI")
-    db.set_connection(neo4j_connection_uri)
+    db.set_connection(neo4j_connection_uri)  # type: ignore
     wait_until_neo4j_is_live()
 
     if clear:
         console.log("Clearing neo4j database")
-        db.clear_neo4j_database(db)
+        db.clear_neo4j_database(db)  # type: ignore
 
     # we don't care about the output of install_all_labels so we redirect it to /dev/null
     with open(os.devnull, "w", encoding="utf-8") as dev_null:

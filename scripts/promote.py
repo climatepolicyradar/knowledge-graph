@@ -3,18 +3,19 @@
 import logging
 import os
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Optional, Union
 
 import botocore
 import botocore.client
 import typer
 import wandb
+import wandb.apis.public.api
 from pydantic import (
     BaseModel,
     TypeAdapter,
     model_validator,
 )
-from tqdm import tqdm
+from tqdm import tqdm  # type: ignore
 from typing_extensions import Self
 
 from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
@@ -69,10 +70,11 @@ class Within(BaseModel):
 
 # A really simple ADT equivalent, with some helpers from Pydantic
 # through the TypeAdapter, for initialisation.
-Promotion = TypeAdapter(Across | Within)
+PromotionKind = Union[Across, Within]
+Promotion = TypeAdapter(PromotionKind)
 
 
-def get_aliases(promotion: Promotion) -> Optional[List[str]]:
+def get_aliases(promotion: PromotionKind) -> Optional[List[str]]:
     """
     Get the aliases that will be attached to the entry in the model registry.
 
@@ -99,13 +101,13 @@ def get_object_key(concept: str, classifier: str, version: Version) -> Path:
 
 
 def copy_across_aws_envs(
-    promotion: Promotion,
+    across: Across,
     concept: str,
     classifier: str,
     from_version: Version,
     to_version: Version,
     use_aws_profiles: bool,
-) -> [str, str]:
+) -> tuple[str, Path]:
     """
     Copy a model artifact from one AWS environment to another.
 
@@ -117,13 +119,13 @@ def copy_across_aws_envs(
     cache_dir = Path.home() / ".cache" / "climatepolicyradar" / "models"
 
     # Make model cache directories
-    from_file = cache_dir / promotion.src.value / from_object_key
+    from_file = cache_dir / across.src.value / from_object_key
 
     os.makedirs(from_file.parent, exist_ok=True)
 
     # Set bucket names (adjust these as needed)
-    from_bucket = get_bucket_name_for_aws_env(promotion.src)
-    to_bucket = get_bucket_name_for_aws_env(promotion.dst)
+    from_bucket = get_bucket_name_for_aws_env(across.src)
+    to_bucket = get_bucket_name_for_aws_env(across.dst)
 
     log.info(
         "Copying model artifact "
@@ -134,8 +136,8 @@ def copy_across_aws_envs(
     # Create S3 clients for both environments
     region_name = "eu-west-1"
 
-    src_aws_env = promotion.src if use_aws_profiles else None
-    dst_aws_env = promotion.dst if use_aws_profiles else None
+    src_aws_env = across.src if use_aws_profiles else None
+    dst_aws_env = across.dst if use_aws_profiles else None
 
     from_s3_client = get_s3_client(src_aws_env, region_name)
     to_s3_client = get_s3_client(dst_aws_env, region_name)
@@ -224,7 +226,7 @@ def throw_not_logged_in(aws_env: AwsEnv):
 
 
 def validate_logins(
-    promotion: Promotion,
+    promotion: PromotionKind,
     use_aws_profiles: bool,
 ) -> None:
     """Validate that the user is logged in to the necessary AWS environments."""
@@ -274,7 +276,7 @@ def find_artifact_by_version(
 
 
 def check_existing_artifact_aliases(
-    api: wandb.Api,
+    api: wandb.apis.public.api.Api,
     target_path: str,
     version: Version,
     aws_env: AwsEnv,
@@ -433,7 +435,7 @@ def main(
                 api,
                 target_path,
                 version,
-                promotion.src.value,
+                promotion.src,
             )
 
             log.info("Copying artifact between AWS environments...")
@@ -491,7 +493,10 @@ def main(
             # Check if it already exists, and if so, was created for
             # this AWS environment.
             check_existing_artifact_aliases(
-                api, target_path, version, promotion.value.value
+                api,
+                target_path,
+                version,
+                promotion.value,
             )
 
             to_bucket = get_bucket_name_for_aws_env(promotion.value)
