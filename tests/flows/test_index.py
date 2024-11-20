@@ -427,7 +427,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     )
 
     await index_labelled_passages_from_s3_to_vespa(
-        classifier_spec=classifier_spec,
+        classifier_specs=[classifier_spec],
         document_ids=document_ids,
         config=config,
     )
@@ -473,7 +473,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
         ]
 
         await index_labelled_passages_from_s3_to_vespa(
-            classifier_spec=classifier_spec,
+            classifier_specs=[classifier_spec],
             document_ids=document_ids,
         )
 

@@ -592,7 +592,7 @@ async def index_by_s3(
 
 @flow
 async def index_labelled_passages_from_s3_to_vespa(
-    classifier_spec: Optional[ClassifierSpec] = None,
+    classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
 ) -> None:
@@ -605,6 +605,11 @@ async def index_labelled_passages_from_s3_to_vespa(
     document's import ID.
     """
     logger = get_run_logger()
+
+    if classifier_specs:
+        if len(classifier_specs) > 1:
+            raise ValueError("only 1 classifier spec allowed")
+        classifier_spec = classifier_specs[0]
 
     # We want the directory used for the `VespaSearchAdapter` to be
     # automatically cleaned up.
