@@ -6,7 +6,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, Optional, Set, Union
+from typing import Generator, List, Optional, Union
 
 import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -100,36 +100,28 @@ def get_vespa_search_adapter_from_aws_secrets(
     )
 
 
-def s3_obj_generator_from_s3_prefix(
-    s3_prefix: str,
-) -> Generator[tuple[str, list[dict]], None, None]:
-    """
-    A generator that yields objects from an s3 path.
-
-    We retrieve the bucket from the path using the second element in the path (parts[1]).
-    Path("s3://bucket/prefix/file.json").parts -> ('s3:', 'bucket', 'prefix', 'file.json')
-
-    params:
-    - s3_path: The path in s3 to yield objects from.
-    """
-    object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
-    bucket = Path(s3_prefix).parts[1]
-    for key in object_keys:
-        obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
-        yield key, json.loads(obj)
+def s3_obj_generator_from_s3_prefixes(
+    s3_prefixes: List[str],
+) -> Generator[tuple[str, List[dict]], None, None]:
+    for s3_prefix in s3_prefixes:
+        object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
+        bucket = Path(s3_prefix).parts[1]
+        for key in object_keys:
+            obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
+            yield key, json.loads(obj)
 
 
 def s3_obj_generator_from_s3_paths(
-    s3_paths: Set[str],
-) -> Generator[tuple[str, list[dict]], None, None]:
+    s3_paths: List[str],
+) -> Generator[tuple[str, List[dict]], None, None]:
     """
-    A generator that yields objects from a set of s3 paths.
+    A generator that yields objects from a list of s3 paths.
 
     We extract the key from the s3 path by removing the first two elements in the path.
     E.g. "s3://bucket/prefix/file.json" -> "prefix/file.json"
 
     params:
-    - s3_paths: A set of s3 paths to yield objects from.
+    - s3_paths: A list of s3 paths to yield objects from.
     """
     for s3_path in s3_paths:
         yield (
@@ -140,7 +132,7 @@ def s3_obj_generator_from_s3_paths(
 
 def labelled_passages_generator(
     generator_func: Generator,
-) -> Generator[tuple[str, list[LabelledPassage]], None, None]:
+) -> Generator[tuple[str, List[LabelledPassage]], None, None]:
     """
     A wrapper function for the s3 object generator.
 
@@ -152,7 +144,7 @@ def labelled_passages_generator(
 
 def get_document_passages_from_vespa(
     document_import_id: str, vespa_search_adapter: VespaSearchAdapter
-) -> list[tuple[str, VespaPassage]]:
+) -> List[tuple[str, VespaPassage]]:
     """
     Retrieve all the passages for a document in vespa.
 
@@ -222,7 +214,7 @@ def get_model_from_span(span: Span) -> str:
 
 
 def get_passage_for_text_block(
-    text_block_id: str, document_passages: list[tuple[str, VespaPassage]]
+    text_block_id: str, document_passages: List[tuple[str, VespaPassage]]
 ) -> Union[tuple[str, str, VespaPassage], tuple[None, None, None]]:
     """
     Return the data id, passage and passage id that a text block relates to.
@@ -254,7 +246,7 @@ def get_passage_for_text_block(
 
 def get_parent_concepts_from_concept(
     concept: Concept,
-) -> tuple[list[dict], str]:
+) -> tuple[List[dict], str]:
     """
     Extract parent concepts from a Concept object.
 
@@ -274,8 +266,8 @@ def get_parent_concepts_from_concept(
 
 
 def convert_labelled_passages_to_concepts(
-    labelled_passages: list[LabelledPassage],
-) -> list[tuple[str, VespaConcept]]:
+    labelled_passages: List[LabelledPassage],
+) -> List[tuple[str, VespaConcept]]:
     """
     Convert a labelled passage to a list of VespaConcept objects and their text block id.
 
@@ -318,8 +310,8 @@ def convert_labelled_passages_to_concepts(
 
 
 def get_updated_passage_concepts(
-    passage: VespaPassage, concepts: list[VespaConcept]
-) -> list[dict]:
+    passage: VespaPassage, concepts: List[VespaConcept]
+) -> List[dict]:
     """
     Update a passage's concepts with the new concept.
 
@@ -347,8 +339,8 @@ def get_updated_passage_concepts(
 
 
 def group_concepts_on_text_block(
-    document_concepts: list[tuple[str, VespaConcept]],
-) -> dict[str, list[VespaConcept]]:
+    document_concepts: List[tuple[str, VespaConcept]],
+) -> dict[str, List[VespaConcept]]:
     """
     Group concepts on text block id.
 
@@ -367,7 +359,7 @@ def group_concepts_on_text_block(
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
-    document_concepts: list[tuple[str, VespaConcept]],
+    document_concepts: List[tuple[str, VespaConcept]],
     vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
     """
@@ -438,7 +430,7 @@ def get_bucket_paginator(config: Config):
     )
 
 
-def list_bucket_doc_ids(config: Config) -> list[str]:
+def list_bucket_doc_ids(config: Config) -> List[str]:
     """Scan configured bucket and return all IDs."""
     page_iterator = get_bucket_paginator(config)
     doc_ids = []
@@ -454,9 +446,9 @@ def list_bucket_doc_ids(config: Config) -> list[str]:
 
 
 def determine_document_ids(
-    requested_document_ids: Optional[list[str]],
-    current_bucket_ids: list[str],
-) -> list[str]:
+    requested_document_ids: Optional[List[str]],
+    current_bucket_ids: List[str],
+) -> List[str]:
     """
     Confirm chosen document ids or default to all if not specified.
 
@@ -473,66 +465,92 @@ def determine_document_ids(
     return requested_document_ids
 
 
-def s3_paths_or_s3_prefix(
+def s3_paths_or_s3_prefixes(
     classifier_spec: Optional[ClassifierSpec],
-    document_ids: Optional[list[str]],
+    document_ids: Optional[List[str]],
     config: Config,
-) -> tuple[Optional[list[str]], Optional[str]]:
+) -> tuple[Optional[List[str]], Optional[List[str]]]:
     """
-    Return the the paths or prefix for the documents and classifiers.
+    Return the paths or prefix for the documents and classifiers.
 
-    - s3_prefix: The S3 prefix (directory) to yield objects from.
-        E.g. "s3://bucket/prefix/"
-    - s3_paths: A set of S3 object keys to yield objects from.
-        E.g. {"s3://bucket/prefix/file1.json", "s3://bucket/prefix/file2.json"}
+    - s3_prefix: The S3 prefix (directory) to yield objects from. Example:
+      "s3://cpr-sandbox-data-pipeline-cache/labelled_passages"
+    - s3_paths: A list of S3 object keys to yield objects from. Example:
+      [
+        "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json",
+        "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json",
+      ]
     """
-    # Run on all documents, regardless of classifier
-    if classifier_spec is None:
-        s3_prefix = "s3://" + os.path.join(
-            config.cache_bucket,
-            config.document_source_prefix,
-        )
+    match (classifier_spec, document_ids):
+        case (None, None):
+            # Run on all documents, regardless of classifier
+            s3_prefix = "s3://" + os.path.join(
+                config.cache_bucket,
+                config.document_source_prefix,
+            )
+            return None, [s3_prefix]
 
-        return None, s3_prefix
-
-    # Run on all documents, for the specified classifier
-    if document_ids is None:
-        s3_prefix = "s3://" + os.path.join(
-            config.cache_bucket,
-            config.document_source_prefix,
-            classifier_spec.name,
-            classifier_spec.alias,
-        )
-
-        return None, s3_prefix
-
-    # Run on specified documents, for the specified classifier
-    elif document_ids is not None:
-        document_paths = []
-
-        for doc_id in document_ids:
-            # Extract bucket and key from s3_path
-            key = os.path.join(
+        case (ClassifierSpec(), None):
+            # Run on all documents, for the specified classifier
+            s3_prefix = "s3://" + os.path.join(
+                config.cache_bucket,
                 config.document_source_prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
-                f"{doc_id}.json",
+            )
+            return None, [s3_prefix]
+
+        case (ClassifierSpec(), list()):
+            # Run on specified documents, for the specified classifier
+            document_paths = [
+                "s3://"
+                + os.path.join(
+                    config.cache_bucket,
+                    config.document_source_prefix,
+                    classifier_spec.name,
+                    classifier_spec.alias,
+                    f"{doc_id}.json",
+                )
+                for doc_id in document_ids
+            ]
+            return document_paths, None
+
+        case (None, list()):
+            raise ValueError(
+                "if document IDs are specified, a classifier "
+                "specifcation must also be specified, since they're "
+                "namespaced by classifiers (e.g. "
+                "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
+                "v4/CCLW.legislative.10695.6015.json`)"
             )
 
-            path = "s3://" + os.path.join(
-                config.cache_bucket,
-                key,
+
+def s3_obj_generator(
+    s3_prefixes: Optional[List[str]],
+    s3_paths: Optional[List[str]],
+):
+    match (s3_prefixes, s3_paths):
+        case (list(), list()):
+            raise ValueError(
+                "Either s3_prefixes or s3_paths must be provided, not both."
             )
-
-            document_paths.append(path)
-
-        return document_paths, None
+        case (list(), None):
+            return s3_obj_generator_from_s3_prefixes(s3_prefixes=s3_prefixes)
+        case (None, list()):
+            return s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
+        case (None, None):
+            raise ValueError("Either s3_prefix or s3_paths must be provided.")
+        case (_, _):
+            raise ValueError(
+                f"Unexpected types: `s3_prefixes={type(s3_prefixes)}`, "
+                f"`s3_paths={type(s3_paths)}`"
+            )
 
 
 async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter,
-    s3_prefix: Optional[str] = None,
-    s3_paths: Optional[Set[str]] = None,
+    s3_prefixes: Optional[List[str]] = None,
+    s3_paths: Optional[List[str]] = None,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -543,7 +561,7 @@ async def index_by_s3(
 
     When `s3_prefix` is provided, the function will index all files within that S3
     prefix (directory). When `s3_paths` is provided, the function will index only the
-    files specified in the set of S3 object keys. If both are provided `s3_paths` will
+    files specified in the list of S3 object keys. If both are provided `s3_paths` will
     be used.
 
     Assumptions:
@@ -552,7 +570,7 @@ async def index_by_s3(
     params:
     - s3_prefix: The S3 prefix (directory) to yield objects from.
         E.g. "s3://bucket/prefix/"
-    - s3_paths: A set of S3 object keys to yield objects from.
+    - s3_paths: A list of S3 object keys to yield objects from.
         E.g. {"s3://bucket/prefix/file1.json", "s3://bucket/prefix/file2.json"}
     - vespa_search_adapter: An instance of VespaSearchAdapter.
         E.g. VespaSearchAdapter(
@@ -560,14 +578,7 @@ async def index_by_s3(
             cert_directory="certs/"
         )
     """
-    if s3_paths and s3_prefix:
-        raise ValueError("Either s3_prefix or s3_paths must be provided, not both.")
-    elif s3_paths:
-        s3_objects = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
-    elif s3_prefix:
-        s3_objects = s3_obj_generator_from_s3_prefix(s3_prefix=s3_prefix)
-    else:
-        raise ValueError("Either s3_prefix or s3_paths must be provided.")
+    s3_objects = s3_obj_generator(s3_prefixes, s3_paths)
 
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
     document_concepts = [
@@ -593,7 +604,7 @@ async def index_by_s3(
 @flow
 async def index_labelled_passages_from_s3_to_vespa(
     classifier_spec: Optional[ClassifierSpec] = None,
-    document_ids: Optional[list[str]] = None,
+    document_ids: Optional[List[str]] = None,
     config: Optional[Config] = None,
 ) -> None:
     """
@@ -622,7 +633,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     with cm:
         logger.info(f"Running with config: {config}")
 
-        s3_paths, s3_prefix = s3_paths_or_s3_prefix(
+        s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
             classifier_spec,
             document_ids,
             config,
@@ -630,11 +641,11 @@ async def index_labelled_passages_from_s3_to_vespa(
 
         logger.info(
             "S3 prefix and paths",
-            extra={"props": {"s3_prefix": s3_prefix, "s3_paths": s3_paths}},
+            extra={"props": {"s3_prefix": s3_prefixes, "s3_paths": s3_paths}},
         )
 
         await index_by_s3(
             config.vespa_search_adapter,
-            s3_prefix,
+            s3_prefixes,
             s3_paths,
         )

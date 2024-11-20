@@ -165,6 +165,18 @@ def mock_bucket(
     yield test_config.cache_bucket
 
 
+@pytest.fixture
+def mock_bucket_b(
+    mock_aws_creds, mock_s3_client, test_config
+) -> Generator[str, Any, Any]:
+    bucket = test_config.cache_bucket + "b"
+    mock_s3_client.create_bucket(
+        Bucket=bucket,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield bucket
+
+
 def load_fixture(file_name):
     fixture_path = FIXTURE_DIR / file_name
     with open(fixture_path) as f:
@@ -173,6 +185,19 @@ def load_fixture(file_name):
 
 @pytest.fixture
 def mock_bucket_documents(mock_s3_client, mock_bucket):
+    fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
+    for file_name in fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join("embeddings_input", file_name)
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+    yield fixture_files
+
+
+@pytest.fixture
+def mock_bucket_documents_b(mock_s3_client, mock_bucket_b):
     fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
     for file_name in fixture_files:
         data = load_fixture(file_name)
@@ -297,8 +322,8 @@ def s3_prefix_mock_bucket_labelled_passages(
     mock_bucket: str,
     s3_prefix_labelled_passages: str,
 ) -> str:
-    return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
     """Returns the s3 prefix for the concepts."""
+    return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
 
 
 @pytest.fixture
@@ -336,6 +361,23 @@ def mock_bucket_labelled_passages(
         key = os.path.join(s3_prefix_labelled_passages, file_name)
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+
+@pytest.fixture
+def mock_bucket_labelled_passages_b(
+    mock_s3_client,
+    mock_bucket_b,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+) -> None:
+    """Puts the concept fixture files in the mock bucket."""
+    for file_name in labelled_passage_fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join(s3_prefix_labelled_passages, file_name)
+        mock_s3_client.put_object(
+            Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
         )
 
 
