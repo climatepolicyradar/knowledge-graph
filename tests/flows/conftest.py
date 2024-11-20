@@ -403,7 +403,7 @@ def mock_wandb(mock_s3_client):
 
 
 @pytest.fixture
-def mock_wandb_api():
+def mock_wandb_api(mock_wandb):
     with (
         patch("wandb.Api") as mock_api,
         patch("wandb.apis.public.ArtifactType") as mock_artifact_type,

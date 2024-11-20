@@ -362,21 +362,25 @@ def get_all_available_classifiers(config) -> list[ClassifierSpec]:
     the graphql endpoint, which queries each item as an individual
     request.
     """
+    wandb.login(key=config.wandb_api_key.get_secret_value())
+    run = wandb.init(entity=config.wandb_entity, job_type="list_models")
+    try:
+        api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
+        model_type = ArtifactType(
+            api.client,
+            entity=config.wandb_model_org,
+            project=config.wandb_model_registry,
+            type_name="model",
+        )
+        model_collections = model_type.collections()
 
-    api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
-    model_type = ArtifactType(
-        api.client,
-        entity=config.wandb_model_org,
-        project=config.wandb_model_registry,
-        type_name="model",
-    )
-    model_collections = model_type.collections()
-
-    classifier_specs = []
-    for model in model_collections:
-        if relevant_model := get_relevant_model_version(model, config.aws_env):
-            classifier_specs.append(relevant_model)
-    return classifier_specs
+        classifier_specs = []
+        for model in model_collections:
+            if relevant_model := get_relevant_model_version(model, config.aws_env):
+                classifier_specs.append(relevant_model)
+        return classifier_specs
+    finally:
+        run.finish()
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
