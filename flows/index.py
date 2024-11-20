@@ -466,7 +466,7 @@ def determine_document_ids(
 
 
 def s3_paths_or_s3_prefixes(
-    classifier_spec: Optional[ClassifierSpec],
+    classifier_specs: Optional[List[ClassifierSpec]],
     document_ids: Optional[List[str]],
     config: Config,
 ) -> tuple[Optional[List[str]], Optional[List[str]]]:
@@ -481,7 +481,7 @@ def s3_paths_or_s3_prefixes(
         "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json",
       ]
     """
-    match (classifier_spec, document_ids):
+    match (classifier_specs, document_ids):
         case (None, None):
             # Run on all documents, regardless of classifier
             s3_prefix = "s3://" + os.path.join(
@@ -490,17 +490,21 @@ def s3_paths_or_s3_prefixes(
             )
             return None, [s3_prefix]
 
-        case (ClassifierSpec(), None):
+        case (list(), None):
             # Run on all documents, for the specified classifier
-            s3_prefix = "s3://" + os.path.join(
-                config.cache_bucket,
-                config.document_source_prefix,
-                classifier_spec.name,
-                classifier_spec.alias,
-            )
-            return None, [s3_prefix]
+            s3_prefixes = [
+                "s3://"
+                + os.path.join(
+                    config.cache_bucket,
+                    config.document_source_prefix,
+                    classifier_spec.name,
+                    classifier_spec.alias,
+                )
+                for classifier_spec in classifier_specs
+            ]
+            return None, s3_prefixes
 
-        case (ClassifierSpec(), list()):
+        case (list(), list()):
             # Run on specified documents, for the specified classifier
             document_paths = [
                 "s3://"
@@ -511,6 +515,7 @@ def s3_paths_or_s3_prefixes(
                     classifier_spec.alias,
                     f"{doc_id}.json",
                 )
+                for classifier_spec in classifier_specs
                 for doc_id in document_ids
             ]
             return document_paths, None
@@ -603,7 +608,7 @@ async def index_by_s3(
 
 @flow
 async def index_labelled_passages_from_s3_to_vespa(
-    classifier_spec: Optional[ClassifierSpec] = None,
+    classifier_specs: Optional[List[ClassifierSpec]] = None,
     document_ids: Optional[List[str]] = None,
     config: Optional[Config] = None,
 ) -> None:
@@ -634,7 +639,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         logger.info(f"Running with config: {config}")
 
         s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
-            classifier_spec,
+            classifier_specs,
             document_ids,
             config,
         )

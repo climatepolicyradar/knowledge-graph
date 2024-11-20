@@ -437,7 +437,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     )
 
     await index_labelled_passages_from_s3_to_vespa(
-        classifier_spec=classifier_spec,
+        classifier_specs=[classifier_spec],
         document_ids=document_ids,
         config=config,
     )
@@ -483,7 +483,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
         ]
 
         await index_labelled_passages_from_s3_to_vespa(
-            classifier_spec=classifier_spec,
+            classifier_specs=[classifier_spec],
             document_ids=document_ids,
         )
 
@@ -656,7 +656,7 @@ def test_s3_paths_or_s3_prefixes_no_classifier(
     config = Config(cache_bucket=mock_bucket)
 
     paths, prefixes = s3_paths_or_s3_prefixes(
-        classifier_spec=None,
+        classifier_specs=None,
         document_ids=None,
         config=config,
     )
@@ -683,26 +683,30 @@ def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
         "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
     ):
         s3_paths_or_s3_prefixes(
-            classifier_spec=None,
+            classifier_specs=None,
             document_ids=labelled_passage_fixture_ids,
             config=config,
         )
 
 
 def test_s3_paths_or_s3_prefixes_with_classifier_no_docs(
-    mock_bucket, mock_bucket_labelled_passages, s3_prefix_mock_bucket_labelled_passages
+    mock_bucket,
 ):
     """Test s3_paths_or_s3_prefixes returns classifier-specific prefix when no document IDs provided."""
     config = Config(cache_bucket=mock_bucket)
-    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+    classifier_spec_q788 = ClassifierSpec(name="Q788", alias="latest")
+    classifier_spec_q699 = ClassifierSpec(name="Q699", alias="latest")
 
     paths, prefixes = s3_paths_or_s3_prefixes(
-        classifier_spec=classifier_spec,
+        classifier_specs=[classifier_spec_q788, classifier_spec_q699],
         document_ids=None,
         config=config,
     )
 
-    assert prefixes == [s3_prefix_mock_bucket_labelled_passages]
+    assert prefixes == [
+        f"s3://{mock_bucket}/labelled_passages/Q788/latest",
+        f"s3://{mock_bucket}/labelled_passages/Q699/latest",
+    ]
     assert paths is None
 
 
@@ -723,7 +727,7 @@ def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
     ]
 
     paths, prefixes = s3_paths_or_s3_prefixes(
-        classifier_spec=classifier_spec,
+        classifier_specs=[classifier_spec],
         document_ids=labelled_passage_fixture_ids,
         config=config,
     )
