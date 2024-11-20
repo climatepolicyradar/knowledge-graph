@@ -5,7 +5,6 @@ from pathlib import Path
 import boto3
 import pytest
 from prefect.testing.utilities import prefect_test_harness
-from wandb.apis.public.artifacts import ArtifactCollection
 
 from flows.inference import (
     ClassifierSpec,
@@ -14,9 +13,7 @@ from flows.inference import (
     determine_document_ids,
     document_passages,
     download_classifier_from_wandb_to_local,
-    get_all_available_classifiers,
     get_latest_ingest_documents,
-    is_concept_model,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
@@ -159,31 +156,6 @@ async def test_text_block_inference(
     expected_concept_metadata["labelled_passages"] = []
     assert labels.metadata["concept"] == expected_concept_metadata
     datetime.fromisoformat(labels.metadata["inference_timestamp"])
-
-
-def test_is_concept_model():
-    # Make the artifact collection mockable
-    def mocked_artifact_init(self, name):
-        self.name = name
-
-    ArtifactCollection.__init__ = mocked_artifact_init
-
-    # Some other model
-    not_concept_model = ArtifactCollection(name="other_model")
-    assert not is_concept_model(not_concept_model)
-
-    # Concept model
-    concept_model = ArtifactCollection(name="Q123456")
-    assert is_concept_model(concept_model)
-
-
-def test_get_all_available_classifiers(test_config, mock_wandb_api):
-    got_spec = get_all_available_classifiers(test_config)
-    expected_spec = [
-        ClassifierSpec(name="Q111", alias="v1"),
-        ClassifierSpec(name="Q222", alias="v1"),
-    ]
-    assert got_spec == expected_spec
 
 
 @pytest.mark.asyncio

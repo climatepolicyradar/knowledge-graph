@@ -8,19 +8,17 @@ from pathlib import Path
 from typing import Optional
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.concurrency.asyncio import concurrency
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.apis.public import ArtifactType
-from wandb.apis.public.artifacts import ArtifactCollection
 
+import wandb
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
+from scripts.update_classifier_spec import read_spec_file
 from src.classifier import Classifier
-from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -325,59 +323,14 @@ async def run_classifier_inference_on_document(
         )
 
 
-def is_concept_model(model: ArtifactCollection) -> bool:
-    """
-    Check if a model is a concept classifier
-
-    This check is based on whether the model name can be instantiated as a WikibaseID.
-    For example: `Q123`, `Q972`
-    """
-    try:
-        WikibaseID(model.name)
-
-        return True
-    except ValueError as e:
-        if "is not a valid Wikibase ID" in str(e):
-            return False
-
-        raise
-
-
-def get_relevant_model_version(
-    model: ArtifactCollection, aws_env: AwsEnv
-) -> Optional[list[ClassifierSpec]]:
-    """Returns the model name and version if a valid model is found"""
-
-    if not is_concept_model(model):
-        return None
-
-    for model_artifacts in model.artifacts():
-        if ("aws_env", aws_env.value) in model_artifacts.metadata.items():
-            return ClassifierSpec(name=model.name, alias=model_artifacts.version)
-
-
-def get_all_available_classifiers(config) -> list[ClassifierSpec]:
-    """
-    Return all available models for the given environment
-
-    Current implementation relies on the wandb sdk abstraction over
-    the graphql endpoint, which queries each item as an individual
-    request.
-    """
-
-    api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
-    model_type = ArtifactType(
-        api.client,
-        entity=config.wandb_model_org,
-        project=config.wandb_model_registry,
-        type_name="model",
-    )
-    model_collections = model_type.collections()
-
+def get_all_available_classifiers(config: Config) -> list[ClassifierSpec]:
+    """Return all available models for the given environment"""
+    contents = read_spec_file(config.aws_env)
     classifier_specs = []
-    for model in model_collections:
-        if relevant_model := get_relevant_model_version(model, config.aws_env):
-            classifier_specs.append(relevant_model)
+    for item in contents:
+        name, alias = item.split(":")
+        classifier_specs.append(ClassifierSpec(name=name, alias=alias))
+
     return classifier_specs
 
 
