@@ -530,10 +530,30 @@ def s3_paths_or_s3_prefix(
             )
 
 
+def s3_obj_generator(
+    s3_prefix: Optional[str],
+    s3_paths: Optional[list[str]],
+):
+    match (s3_prefix, s3_paths):
+        case (str(), list()):
+            raise ValueError("Either s3_prefix or s3_paths must be provided, not both.")
+        case (str(), None):
+            return s3_obj_generator_from_s3_prefix(s3_prefix=s3_prefix)
+        case (None, list()):
+            return s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
+        case (None, None):
+            raise ValueError("Either s3_prefix or s3_paths must be provided.")
+        case (_, _):
+            raise ValueError(
+                f"Unexpected types: `s3_prefix={type(s3_prefix)}`, "
+                f"`s3_paths={type(s3_paths)}`"
+            )
+
+
 async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter,
     s3_prefix: Optional[str] = None,
-    s3_paths: Optional[Set[str]] = None,
+    s3_paths: Optional[list[str]] = None,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -561,14 +581,7 @@ async def index_by_s3(
             cert_directory="certs/"
         )
     """
-    if s3_paths and s3_prefix:
-        raise ValueError("Either s3_prefix or s3_paths must be provided, not both.")
-    elif s3_paths:
-        s3_objects = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
-    elif s3_prefix:
-        s3_objects = s3_obj_generator_from_s3_prefix(s3_prefix=s3_prefix)
-    else:
-        raise ValueError("Either s3_prefix or s3_paths must be provided.")
+    s3_objects = s3_obj_generator(s3_prefix, s3_paths)
 
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
     document_concepts = [
