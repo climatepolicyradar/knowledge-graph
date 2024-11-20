@@ -421,6 +421,11 @@ async def classifier_inference(
     if classifier_specs is None:
         classifier_specs = get_all_available_classifiers(config)
 
+    print(
+        f"Running with {len(classifier_specs)} classifiers "
+        "and {len(validated_document_ids)} documents"
+    )
+
     for classifier_spec in classifier_specs:
         subflows = [
             run_classifier_inference_on_document(
