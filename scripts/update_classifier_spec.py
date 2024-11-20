@@ -73,7 +73,7 @@ def get_relevant_model_version(
 
 @app.command()
 def get_all_available_classifiers(
-    aws_envs: list[AwsEnv] = [e.value for e in AwsEnv],
+    aws_envs: Optional[list[AwsEnv]] = None,
 ) -> list[str]:
     """
     Return all available models for the given environment
@@ -82,6 +82,8 @@ def get_all_available_classifiers(
     the graphql endpoint, which queries each item as an individual
     request.
     """
+    if aws_envs is None:
+        aws_envs = [e.value for e in AwsEnv]
 
     api_key = os.environ["WANDB_API_KEY"]
     api = wandb.Api(api_key=api_key)
