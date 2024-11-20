@@ -3,14 +3,14 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import pytest
+from wandb.apis.public import ArtifactType
+from wandb.apis.public.artifacts import ArtifactCollection
 
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
     is_concept_model,
     read_spec_file,
 )
-from wandb.apis.public import ArtifactType
-from wandb.apis.public.artifacts import ArtifactCollection
 
 
 @pytest.fixture

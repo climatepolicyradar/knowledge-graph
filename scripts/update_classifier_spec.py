@@ -4,14 +4,14 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+import wandb
 import yaml
 from rich.console import Console
-
-import wandb
-from scripts.cloud import AwsEnv
-from src.identifiers import WikibaseID
 from wandb.apis.public import ArtifactType
 from wandb.apis.public.artifacts import ArtifactCollection
+
+from scripts.cloud import AwsEnv
+from src.identifiers import WikibaseID
 
 console = Console()
 
