@@ -6,11 +6,11 @@ repos:
       - id: detect-aws-credentials
         args: [ --allow-missing-credentials ]
   - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
+    rev: 0.8.1
     hooks:
       - id: nbstripout
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.7.4
     hooks:
       - id: ruff
         types_or: [ python, pyi, jupyter ]
@@ -30,4 +30,3 @@ repos:
     rev: 1.8.0
     hooks:
     -   id: poetry-check
-
