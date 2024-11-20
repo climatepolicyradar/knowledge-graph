@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          poetry install --with dev
+          poetry install --with dev,nltk
           poetry run pre-commit install
 
       - name: Lint

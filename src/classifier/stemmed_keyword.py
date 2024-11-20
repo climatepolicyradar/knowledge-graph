@@ -6,6 +6,8 @@ from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.span import Span
 
+nltk.download("punkt", quiet=True)
+
 
 class StemmedKeywordClassifier(RulesBasedClassifier):
     """
@@ -23,7 +25,7 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
 
         :param Concept concept: The concept which the classifier will identify in text
         """
-        nltk.download("punkt", quiet=True)
+
         self.stemmer = PorterStemmer()
 
         positive_labels = list(

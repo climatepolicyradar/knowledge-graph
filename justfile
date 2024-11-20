@@ -17,6 +17,12 @@ install-for-embeddings:
     just install
     poetry install --with embeddings
 
+# install, but also include libraries and data for working with nltk
+install-for-nltk:
+    just install
+    poetry install --with nltk
+    poetry run python -c "import nltk; nltk.download('punkt', quiet=True)"
+
 # test the project
 test +OPTS="":
     poetry run pytest {{OPTS}}
