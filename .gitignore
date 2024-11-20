@@ -171,3 +171,6 @@ artifacts/*
 
 !data/raw/litigation-non-us.csv
 !data/raw/litigation-us.csv
+
+tmp/
+scratch/
