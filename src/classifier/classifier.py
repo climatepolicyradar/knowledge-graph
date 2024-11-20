@@ -37,6 +37,16 @@ class Classifier(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+        """
+        Predict whether the supplied texts contain instances of the concept.
+
+        :param list[str] texts: The texts to predict on
+        :return list[list[Span]]: A list of spans in the texts for each text
+        """
+        return [self.predict(text) for text in texts]
+
     def __repr__(self):
         """Return a string representation of the classifier."""
         return f'{self.name}("{self.concept.preferred_label}")'
