@@ -482,51 +482,43 @@ def s3_paths_or_s3_prefix(
     Return the the paths or prefix for the documents and classifiers.
 
     - s3_prefix: The S3 prefix (directory) to yield objects from.
-        E.g. "s3://bucket/prefix/"
+        E.g. "s3://cpr-sandbox-data-pipeline-cache/labelled_passages"
     - s3_paths: A set of S3 object keys to yield objects from.
-        E.g. {"s3://bucket/prefix/file1.json", "s3://bucket/prefix/file2.json"}
+        E.g. ["s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json", "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json"]
     """
-    # Run on all documents, regardless of classifier
-    if classifier_spec is None:
-        s3_prefix = "s3://" + os.path.join(
-            config.cache_bucket,
-            config.document_source_prefix,
-        )
+    match (classifier_spec, document_ids):
+        case (None, None):
+            # Run on all documents, regardless of classifier
+            s3_prefix = "s3://" + os.path.join(
+                config.cache_bucket,
+                config.document_source_prefix,
+            )
+            return None, s3_prefix
 
-        return None, s3_prefix
-
-    # Run on all documents, for the specified classifier
-    if document_ids is None:
-        s3_prefix = "s3://" + os.path.join(
-            config.cache_bucket,
-            config.document_source_prefix,
-            classifier_spec.name,
-            classifier_spec.alias,
-        )
-
-        return None, s3_prefix
-
-    # Run on specified documents, for the specified classifier
-    elif document_ids is not None:
-        document_paths = []
-
-        for doc_id in document_ids:
-            # Extract bucket and key from s3_path
-            key = os.path.join(
+        case (ClassifierSpec(), None):
+            # Run on all documents, for the specified classifier
+            s3_prefix = "s3://" + os.path.join(
+                config.cache_bucket,
                 config.document_source_prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
-                f"{doc_id}.json",
             )
+            return None, s3_prefix
 
-            path = "s3://" + os.path.join(
-                config.cache_bucket,
-                key,
-            )
-
-            document_paths.append(path)
-
-        return document_paths, None
+        case (ClassifierSpec(), list()):
+            # Run on specified documents, for the specified classifier
+            document_paths = [
+                "s3://"
+                + os.path.join(
+                    config.cache_bucket,
+                    config.document_source_prefix,
+                    classifier_spec.name,
+                    classifier_spec.alias,
+                    f"{doc_id}.json",
+                )
+                for doc_id in document_ids
+            ]
+            return document_paths, None
 
 
 async def index_by_s3(
