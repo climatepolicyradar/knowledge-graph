@@ -1,4 +1,5 @@
 set dotenv-load
+export WANDB_DIR := "./data/wandb"
 import "tests/local_vespa/local_vespa.just"
 
 # Set the default command to list all available commands
