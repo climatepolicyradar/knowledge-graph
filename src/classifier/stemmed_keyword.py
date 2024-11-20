@@ -6,8 +6,6 @@ from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.span import Span
 
-nltk.download("punkt")
-
 
 class StemmedKeywordClassifier(RulesBasedClassifier):
     """
@@ -25,13 +23,17 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
 
         :param Concept concept: The concept which the classifier will identify in text
         """
+        nltk.download("punkt", quiet=True)
         self.stemmer = PorterStemmer()
+        self._original_concept = concept
 
         stemmed_concept = Concept(
             wikibase_id=concept.wikibase_id,
-            preferred_label=self._stem_label(concept.preferred_label),
+            # keep the preferred label intact for naming and hashing purposes
+            preferred_label=concept.preferred_label,
             alternative_labels=[
-                self._stem_label(label) for label in concept.alternative_labels
+                self._stem_label(label)
+                for label in concept.alternative_labels + [concept.preferred_label]
             ],
             negative_labels=[
                 self._stem_label(label) for label in concept.negative_labels
@@ -57,7 +59,14 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
             tokens and their positions in the text
         """
         tokens = word_tokenize(text)
-        stemmed_tokens = [self.stemmer.stem(token) for token in tokens]
+
+        # For non-ASCII characters, keep the original token instead of stemming
+        stemmed_tokens = []
+        for token in tokens:
+            if all(ord(char) < 128 for char in token):
+                stemmed_tokens.append(self.stemmer.stem(token))
+            else:
+                stemmed_tokens.append(token)
 
         token_info = []
         position = 0

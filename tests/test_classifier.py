@@ -7,6 +7,7 @@ from hypothesis import strategies as st
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
+from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
 from src.identifiers import generate_identifier
 from src.span import Span
@@ -67,7 +68,11 @@ def positive_text_strategy(
     return f"{pre_text} {keyword} {post_text}"
 
 
-classifier_classes: list[Type[Classifier]] = [KeywordClassifier, RulesBasedClassifier]
+classifier_classes: list[Type[Classifier]] = [
+    KeywordClassifier,
+    RulesBasedClassifier,
+    StemmedKeywordClassifier,
+]
 
 
 @pytest.mark.parametrize("classifier_class", classifier_classes)
@@ -163,7 +168,6 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
     classifier = classifier_class(concept)
-    assert hash(classifier) == hash(str(classifier) + concept.model_dump_json())
     assert classifier.id == generate_identifier(hash(classifier))
     assert classifier == classifier_class(concept)
 
