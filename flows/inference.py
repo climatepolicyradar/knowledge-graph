@@ -307,16 +307,14 @@ async def run_classifier_inference_on_document(
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
 
-        futures = []
-
-        for text, block_id in document_passages(document):
-            futures.append(
-                text_block_inference.submit(
-                    classifier=classifier, block_id=block_id, text=text
-                )
+        subflows = [
+            text_block_inference.submit(
+                classifier=classifier, block_id=block_id, text=text
             )
+            for text, block_id in document_passages(document)
+        ]
 
-        doc_labels = [future.wait() for future in futures]
+        doc_labels = await asyncio.gather(*subflows)
 
         store_labels(
             config=config,
