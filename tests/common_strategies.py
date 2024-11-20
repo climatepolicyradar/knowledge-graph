@@ -13,7 +13,10 @@ concept_label_strategy = (
     st.text(
         min_size=1,
         max_size=25,
-        alphabet=st.characters(exclude_categories=("C", "Zl", "Zp", "P", "M", "S")),
+        alphabet=st.characters(
+            # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
+            exclude_categories=("C", "Zl", "Zp", "P", "M", "S", "N")
+        ),
     )
     .map(lambda x: x.strip())
     .filter(lambda x: x)

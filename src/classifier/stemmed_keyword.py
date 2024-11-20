@@ -12,34 +12,51 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
     Uses positive and negative keywords to find concepts in lightly-analysed text.
 
     This classifier is a modified version of the RulesBasedClassifier that uses stemmed
-    keywords to match concepts in stemmed text. This allows for variations in word
-    forms. For example, looking for the term "horse" should match "horse","horses",
-    "horsing", "horsed", etc.
+    keywords to match concepts in stemmed text, allowing for variations in word forms.
+    For example, looking for the term "horse" will match "horse","horses", "horsing",
+    "horsed", etc.
     """
 
     def __init__(self, concept: Concept):
         """
-        Create a new RulesBasedClassifier instance.
+        Create a new StemmedKeywordClassifier instance.
 
         :param Concept concept: The concept which the classifier will identify in text
         """
         nltk.download("punkt", quiet=True)
         self.stemmer = PorterStemmer()
-        self._original_concept = concept
 
-        stemmed_concept = Concept(
-            wikibase_id=concept.wikibase_id,
-            # keep the preferred label intact for naming and hashing purposes
-            preferred_label=concept.preferred_label,
-            alternative_labels=[
-                self._stem_label(label)
-                for label in concept.alternative_labels + [concept.preferred_label]
-            ],
-            negative_labels=[
-                self._stem_label(label) for label in concept.negative_labels
-            ],
+        positive_labels = list(
+            set([self._stem_label(label) for label in concept.all_labels])
         )
-        super().__init__(stemmed_concept)
+        # Stem negative labels, but keep them in their original form if they match a
+        # stemmed positive label, eg we would include an unstemmed "horsing" in the
+        # negative labels if there was a positive label for "horse", as both have the
+        # stemmed form "hors"
+        negative_labels = list(
+            set(
+                [
+                    self._stem_label(label)
+                    if self._stem_label(label) not in positive_labels
+                    else label
+                    for label in concept.negative_labels
+                ]
+            )
+        )
+        self.stemmed_concept = Concept(
+            wikibase_id=concept.wikibase_id,
+            preferred_label=concept.preferred_label,
+            alternative_labels=positive_labels,
+            negative_labels=negative_labels,
+        )
+
+        # initialise the parent RulesBasedClassifier with the stemmed concept so that it
+        # uses the stemmed forms of the labels in its regex patterns
+        super().__init__(self.stemmed_concept)
+
+        # override the classifier's internal .concept so that its id, name, hash etc are
+        # based on the original concept
+        self.concept = concept
 
     def _stem_label(self, label: str) -> str:
         """
@@ -60,13 +77,13 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
         """
         tokens = word_tokenize(text)
 
-        # For non-ASCII characters, keep the original token instead of stemming
-        stemmed_tokens = []
-        for token in tokens:
-            if all(ord(char) < 128 for char in token):
-                stemmed_tokens.append(self.stemmer.stem(token))
-            else:
-                stemmed_tokens.append(token)
+        # For numbers or non-ASCII characters, keep the original token instead of stemming
+        stemmed_tokens = [
+            token
+            if token.isdigit() or not all(ord(char) < 128 for char in token)
+            else self.stemmer.stem(token)
+            for token in tokens
+        ]
 
         token_info = []
         position = 0
@@ -116,13 +133,13 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
 
             for i in range(len(stemmed_tokens) - match_len + 1):
                 if stemmed_tokens[i : i + match_len] == stemmed_match_tokens:
-                    pos_key = (
+                    position_key = (
                         token_info[i]["original_start"],
                         token_info[i + match_len - 1]["original_end"],
                     )
 
-                    if pos_key not in seen_positions:
-                        seen_positions.add(pos_key)
+                    if position_key not in seen_positions:
+                        seen_positions.add(position_key)
                         result_spans.append(
                             Span(
                                 text=text,
@@ -133,4 +150,40 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
                             )
                         )
 
-        return result_spans
+        # Finally, filter spans for any negative labels. Because we match on the stemmed
+        # version of the input text, we need to filter out any negative labels that match
+        # the stemmed version of the positive labels. For example, if we're given a
+        # concept like:
+        #   Concept(preferred_label="horse", negative_labels=["horsing"])
+        # we want to filter out any spans containing the word "Horsing" which would be
+        # treated as a positive match by the regex for stemmed "horse".
+
+        # Split negative labels into case sensitive and insensitive lists
+        case_sensitive_negative_labels = {
+            label
+            for label in self.stemmed_concept.negative_labels
+            if any(c.isupper() for c in label)
+        }
+        case_insensitive_negative_labels = {
+            label.lower()
+            for label in self.stemmed_concept.negative_labels
+            if not any(c.isupper() for c in label)
+        }
+
+        # Filter spans for any negative labels
+        filtered_spans = [
+            span
+            for span in result_spans
+            if not any(
+                token == label
+                for label in case_sensitive_negative_labels
+                for token in span.labelled_text.split()
+            )
+            and not any(
+                token == label.lower()
+                for label in case_insensitive_negative_labels
+                for token in span.labelled_text.lower().split()
+            )
+        ]
+
+        return filtered_spans

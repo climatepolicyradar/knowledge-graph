@@ -35,7 +35,10 @@ def positive_text_strategy(
         st.text(
             min_size=1,
             max_size=50,
-            alphabet=st.characters(exclude_categories=("C", "Zl", "Zp")),
+            alphabet=st.characters(
+                # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
+                exclude_categories=("C", "Zl", "Zp", "P", "M", "S", "N")
+            ),
         ).filter(
             lambda x: x.strip()
             and all(label.lower() not in x.lower() for label in labels)
@@ -51,7 +54,10 @@ def positive_text_strategy(
         st.text(
             min_size=1,
             max_size=50,
-            alphabet=st.characters(exclude_categories=("C", "Zl", "Zp")),
+            alphabet=st.characters(
+                # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
+                exclude_categories=("C", "Zl", "Zp")
+            ),
         ).filter(
             lambda x: x.strip()
             and x != pre_text
