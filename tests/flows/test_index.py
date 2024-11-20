@@ -655,6 +655,30 @@ def test_s3_paths_or_s3_prefix_no_classifier(
     assert paths is None
 
 
+def test_s3_paths_or_s3_prefix_no_classifier_and_docs(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    labelled_passage_fixture_ids,
+    labelled_passage_fixture_files,
+    s3_prefix_mock_bucket_labelled_passages,
+):
+    config = Config(cache_bucket=mock_bucket)
+
+    with pytest.raises(
+        ValueError,
+        match="if document IDs are specified, a classifier "
+        "specifcation must also be specified, since they're "
+        "namespaced by classifiers \\(e\\.g\\. "
+        "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
+        "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
+    ):
+        s3_paths_or_s3_prefix(
+            classifier_spec=None,
+            document_ids=labelled_passage_fixture_ids,
+            config=config,
+        )
+
+
 def test_s3_paths_or_s3_prefix_with_classifier_no_docs(
     mock_bucket, mock_bucket_labelled_passages, s3_prefix_mock_bucket_labelled_passages
 ):

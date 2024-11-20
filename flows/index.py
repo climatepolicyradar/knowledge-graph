@@ -520,6 +520,15 @@ def s3_paths_or_s3_prefix(
             ]
             return document_paths, None
 
+        case (None, list()):
+            raise ValueError(
+                "if document IDs are specified, a classifier "
+                "specifcation must also be specified, since they're "
+                "namespaced by classifiers (e.g. "
+                "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
+                "v4/CCLW.legislative.10695.6015.json`)"
+            )
+
 
 async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter,
