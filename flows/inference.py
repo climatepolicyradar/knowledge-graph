@@ -152,7 +152,10 @@ def download_classifier_from_wandb_to_local(
     """
     wandb.login(key=config.wandb_api_key.get_secret_value())
     run = wandb.init(
-        entity=config.wandb_entity, project=classifier_name, job_type="download_model"
+        entity=config.wandb_entity,
+        project=classifier_name,
+        job_type="download_model",
+        reinit=True,
     )
     artifact = os.path.join(config.wandb_model_registry, f"{classifier_name}:{alias}")
     print(f"Downloading artifact from W&B: {artifact}")
