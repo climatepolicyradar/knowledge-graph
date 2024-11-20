@@ -3,6 +3,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional, Type
 from unittest.mock import patch
 
 import pytest
@@ -25,9 +26,10 @@ from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
     labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
+    s3_obj_generator,
     s3_obj_generator_from_s3_paths,
-    s3_obj_generator_from_s3_prefix,
-    s3_paths_or_s3_prefix,
+    s3_obj_generator_from_s3_prefixes,
+    s3_paths_or_s3_prefixes,
 )
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -68,20 +70,28 @@ def test_vespa_search_adapter_from_aws_secrets(
     assert vespa_search_adapter.client.key == str(key_path)
 
 
-def test_s3_obj_generator_from_s3_prefix(
+def test_s3_obj_generator_from_s3_prefixes(
     mock_bucket,
+    mock_bucket_b,
     mock_bucket_labelled_passages,
+    mock_bucket_labelled_passages_b,
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
 ) -> None:
     """Test the s3 object generator."""
-    s3_gen = s3_obj_generator_from_s3_prefix(
-        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+    s3_gen = s3_obj_generator_from_s3_prefixes(
+        [
+            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
+            os.path.join("s3://", mock_bucket_b, s3_prefix_labelled_passages),
+        ],
     )
     s3_files = list(s3_gen)
-    assert len(s3_files) == len(labelled_passage_fixture_files)
+    assert len(s3_files) == len(labelled_passage_fixture_files * 2)
 
     expected_keys = [
+        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+        for f in labelled_passage_fixture_files
+    ] + [
         f"{s3_prefix_labelled_passages}/{Path(f).stem}"
         for f in labelled_passage_fixture_files
     ]
@@ -121,8 +131,8 @@ def test_labelled_passages_generator(
     labelled_passage_fixture_files,
 ) -> None:
     """Test that the document concepts generator yields the correct objects."""
-    s3_gen = s3_obj_generator_from_s3_prefix(
-        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+    s3_gen = s3_obj_generator_from_s3_prefixes(
+        [os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)]
     )
     labelled_passages_gen = labelled_passages_generator(generator_func=s3_gen)
     labelled_passages_files = list(labelled_passages_gen)
@@ -285,7 +295,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 @pytest.mark.asyncio
 @pytest.mark.vespa
 @pytest.mark.flaky_on_ci
-async def test_index_by_s3_with_s3_prefix(
+async def test_index_by_s3_with_s3_prefixes(
     mock_bucket,
     mock_bucket_labelled_passages,
     s3_prefix_labelled_passages,
@@ -303,7 +313,7 @@ async def test_index_by_s3_with_s3_prefix(
 
     await index_by_s3(
         vespa_search_adapter=local_vespa_search_adapter,
-        s3_prefix=os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
+        s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
     )
 
@@ -346,7 +356,7 @@ async def test_index_by_s3_with_s3_paths(
 
     await index_by_s3(
         vespa_search_adapter=local_vespa_search_adapter,
-        s3_prefix=None,
+        s3_prefixes=None,
         s3_paths=s3_paths,
     )
 
@@ -638,24 +648,24 @@ def test_group_concepts_on_text_block(
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
 
 
-def test_s3_paths_or_s3_prefix_no_classifier(
+def test_s3_paths_or_s3_prefixes_no_classifier(
     mock_bucket,
     mock_bucket_labelled_passages,
 ):
-    """Test s3_paths_or_s3_prefix returns base prefix when no classifier spec provided."""
+    """Test s3_paths_or_s3_prefixes returns base prefix when no classifier spec provided."""
     config = Config(cache_bucket=mock_bucket)
 
-    paths, prefix = s3_paths_or_s3_prefix(
+    paths, prefixes = s3_paths_or_s3_prefixes(
         classifier_spec=None,
         document_ids=None,
         config=config,
     )
 
-    assert prefix == f"s3://{mock_bucket}/labelled_passages"
+    assert prefixes == [f"s3://{mock_bucket}/labelled_passages"]
     assert paths is None
 
 
-def test_s3_paths_or_s3_prefix_no_classifier_and_docs(
+def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
     mock_bucket,
     mock_bucket_labelled_passages,
     labelled_passage_fixture_ids,
@@ -672,38 +682,38 @@ def test_s3_paths_or_s3_prefix_no_classifier_and_docs(
         "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
         "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
     ):
-        s3_paths_or_s3_prefix(
+        s3_paths_or_s3_prefixes(
             classifier_spec=None,
             document_ids=labelled_passage_fixture_ids,
             config=config,
         )
 
 
-def test_s3_paths_or_s3_prefix_with_classifier_no_docs(
+def test_s3_paths_or_s3_prefixes_with_classifier_no_docs(
     mock_bucket, mock_bucket_labelled_passages, s3_prefix_mock_bucket_labelled_passages
 ):
-    """Test s3_paths_or_s3_prefix returns classifier-specific prefix when no document IDs provided."""
+    """Test s3_paths_or_s3_prefixes returns classifier-specific prefix when no document IDs provided."""
     config = Config(cache_bucket=mock_bucket)
     classifier_spec = ClassifierSpec(name="Q788", alias="latest")
 
-    paths, prefix = s3_paths_or_s3_prefix(
+    paths, prefixes = s3_paths_or_s3_prefixes(
         classifier_spec=classifier_spec,
         document_ids=None,
         config=config,
     )
 
-    assert prefix == s3_prefix_mock_bucket_labelled_passages
+    assert prefixes == [s3_prefix_mock_bucket_labelled_passages]
     assert paths is None
 
 
-def test_s3_paths_or_s3_prefix_with_classifier_and_docs(
+def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
     mock_bucket,
     mock_bucket_labelled_passages,
     labelled_passage_fixture_ids,
     labelled_passage_fixture_files,
     s3_prefix_mock_bucket_labelled_passages,
 ):
-    """Test s3_paths_or_s3_prefix returns specific paths when both classifier and document IDs provided."""
+    """Test s3_paths_or_s3_prefixes returns specific paths when both classifier and document IDs provided."""
     config = Config(cache_bucket=mock_bucket)
     classifier_spec = ClassifierSpec(name="Q788", alias="latest")
 
@@ -712,11 +722,83 @@ def test_s3_paths_or_s3_prefix_with_classifier_and_docs(
         for labelled_passage_fixture_file in labelled_passage_fixture_files
     ]
 
-    paths, prefix = s3_paths_or_s3_prefix(
+    paths, prefixes = s3_paths_or_s3_prefixes(
         classifier_spec=classifier_spec,
         document_ids=labelled_passage_fixture_ids,
         config=config,
     )
 
-    assert prefix is None
+    assert prefixes is None
     assert sorted(paths) == sorted(expected_paths)
+
+
+@pytest.mark.parametrize(
+    "s3_prefixes,s3_paths,expected_error,error_match",
+    [
+        # Both provided - should raise error
+        (
+            ["s3://bucket/prefix"],
+            ["s3://bucket/prefix/file.json"],
+            ValueError,
+            "Either s3_prefixes or s3_paths must be provided, not both.",
+        ),
+        # Neither provided - should raise error
+        (
+            None,
+            None,
+            ValueError,
+            "Either s3_prefix or s3_paths must be provided.",
+        ),
+        # Invalid types - should raise error
+        (
+            "invalid",
+            "invalid",
+            ValueError,
+            r"Unexpected types: `s3_prefixes=<class 'str'>`, `s3_paths=<class 'str'>`",
+        ),
+    ],
+)
+def test_s3_obj_generator_errors(
+    s3_prefixes: Optional[List[str]],
+    s3_paths: Optional[List[str]],
+    expected_error: Type[Exception],
+    error_match: str,
+) -> None:
+    """Test s3_obj_generator error cases."""
+    with pytest.raises(expected_error, match=error_match):
+        s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
+
+
+@pytest.mark.parametrize(
+    "use_prefixes",
+    [True, False],
+    ids=["using_prefixes", "using_paths"],
+)
+def test_s3_obj_generator_valid_cases(
+    mock_bucket: str,
+    mock_bucket_labelled_passages: None,
+    s3_prefix_labelled_passages: str,
+    labelled_passage_fixture_files: List[str],
+    use_prefixes: bool,
+) -> None:
+    """Test s3_obj_generator with valid inputs using either prefixes or paths."""
+    if use_prefixes:
+        s3_prefixes = [os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)]
+        s3_paths = None
+    else:
+        s3_prefixes = None
+        s3_paths = [
+            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
+            for f in labelled_passage_fixture_files
+        ]
+
+    gen = s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
+    s3_files = list(gen)
+
+    assert len(s3_files) == len(labelled_passage_fixture_files)
+    expected_keys = [
+        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+        for f in labelled_passage_fixture_files
+    ]
+    s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
+    assert sorted(s3_files_keys) == sorted(expected_keys)
