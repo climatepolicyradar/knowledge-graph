@@ -12,6 +12,7 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
+from prefect.concurrency.asyncio import concurrency
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.apis.public import ArtifactType
@@ -287,40 +288,41 @@ async def run_classifier_inference_on_document(
     classifier_alias: str,
 ) -> None:
     """Run the classifier inference flow on a document."""
-    print(
-        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-    )
-    classifier = await load_classifier(
-        config,
-        classifier_name,
-        classifier_alias,
-    )
-    print(
-        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-    )
-
-    print(f"Loading document with ID {document_id}")
-    document = load_document(config, document_id)
-    print(f"Loaded document with ID {document_id}")
-
-    futures = []
-
-    for text, block_id in document_passages(document):
-        futures.append(
-            text_block_inference.submit(
-                classifier=classifier, block_id=block_id, text=text
-            )
+    async with concurrency("classifier_inference", occupy=1):
+        print(
+            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+        )
+        classifier = await load_classifier(
+            config,
+            classifier_name,
+            classifier_alias,
+        )
+        print(
+            f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
         )
 
-    doc_labels = [future.wait() for future in futures]
+        print(f"Loading document with ID {document_id}")
+        document = load_document(config, document_id)
+        print(f"Loaded document with ID {document_id}")
 
-    store_labels(
-        config=config,
-        labels=doc_labels,
-        document_id=document_id,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
-    )
+        futures = []
+
+        for text, block_id in document_passages(document):
+            futures.append(
+                text_block_inference.submit(
+                    classifier=classifier, block_id=block_id, text=text
+                )
+            )
+
+        doc_labels = [future.wait() for future in futures]
+
+        store_labels(
+            config=config,
+            labels=doc_labels,
+            document_id=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
 
 
 def is_concept_model(model: ArtifactCollection) -> bool:
