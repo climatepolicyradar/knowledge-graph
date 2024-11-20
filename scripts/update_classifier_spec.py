@@ -111,9 +111,9 @@ def get_all_available_classifiers(
             if model.name not in env_models:
                 classifier_specs[model_env].append(model_artifacts.name)
 
-    for aws_env, spec in classifier_specs.items():
+    for aws_env, specs in classifier_specs.items():
         spec_path = build_spec_file_path(aws_env)
-        write_spec_file(spec_path, data=spec)
+        write_spec_file(spec_path, data=specs)
 
 
 if __name__ == "__main__":
