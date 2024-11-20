@@ -71,6 +71,12 @@ def get_relevant_model_version(
             return model_artifacts.name
 
 
+def is_latest_model_in_env(classifier_specs: list, model_name: str) -> bool:
+    """Check to see if this model already has a version found for the env"""
+    env_models = [m.split(":")[0] for m in classifier_specs]
+    return model_name not in env_models
+
+
 @app.command()
 def get_all_available_classifiers(
     aws_envs: Optional[list[AwsEnv]] = None,
@@ -82,7 +88,7 @@ def get_all_available_classifiers(
     the graphql endpoint, which queries each item as an individual
     request.
     """
-    if aws_envs is None:
+    if not aws_envs:
         aws_envs = [e.value for e in AwsEnv]
 
     api_key = os.environ["WANDB_API_KEY"]
@@ -95,7 +101,7 @@ def get_all_available_classifiers(
     )
     model_collections = model_type.collections()
 
-    classifier_specs = defaultdict(list)
+    classifier_specs: dict[str, list] = defaultdict(list)
     for model in model_collections:
         if not is_concept_model(model):
             continue
@@ -106,9 +112,7 @@ def get_all_available_classifiers(
             if model_env not in aws_envs:
                 continue
 
-            # Ignore older models for the same env
-            env_models = [m.split(":")[0] for m in classifier_specs[model_env]]
-            if model.name not in env_models:
+            if is_latest_model_in_env(classifier_specs[model_env], model.name):
                 classifier_specs[model_env].append(model_artifacts.name)
 
     for aws_env, specs in classifier_specs.items():

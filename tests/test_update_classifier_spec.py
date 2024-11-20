@@ -9,6 +9,7 @@ from wandb.apis.public.artifacts import ArtifactCollection
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
     is_concept_model,
+    is_latest_model_in_env,
     read_spec_file,
 )
 
@@ -65,6 +66,12 @@ def test_is_concept_model():
     # Concept model
     concept_model = ArtifactCollection(name="Q123456")
     assert is_concept_model(concept_model)
+
+
+def test_is_latest_model_in_env():
+    classifier_specs = ["Q11:v2", "Q22:v1"]
+    assert not is_latest_model_in_env(classifier_specs, model_name="Q11")
+    assert is_latest_model_in_env(classifier_specs, model_name="Q33")
 
 
 def test_get_all_available_classifiers(mock_wandb_api):
