@@ -558,4 +558,3 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
 
 if __name__ == "__main__":
     issues = validate_concept_store()
-    # print(issues)
