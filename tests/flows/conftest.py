@@ -23,7 +23,6 @@ from moto import mock_aws
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
-from wandb.apis.public import ArtifactType
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config
@@ -165,6 +164,18 @@ def mock_bucket(
     yield test_config.cache_bucket
 
 
+@pytest.fixture
+def mock_bucket_b(
+    mock_aws_creds, mock_s3_client, test_config
+) -> Generator[str, Any, Any]:
+    bucket = test_config.cache_bucket + "b"
+    mock_s3_client.create_bucket(
+        Bucket=bucket,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield bucket
+
+
 def load_fixture(file_name):
     fixture_path = FIXTURE_DIR / file_name
     with open(fixture_path) as f:
@@ -173,6 +184,19 @@ def load_fixture(file_name):
 
 @pytest.fixture
 def mock_bucket_documents(mock_s3_client, mock_bucket):
+    fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
+    for file_name in fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join("embeddings_input", file_name)
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+    yield fixture_files
+
+
+@pytest.fixture
+def mock_bucket_documents_b(mock_s3_client, mock_bucket_b):
     fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
     for file_name in fixture_files:
         data = load_fixture(file_name)
@@ -297,8 +321,8 @@ def s3_prefix_mock_bucket_labelled_passages(
     mock_bucket: str,
     s3_prefix_labelled_passages: str,
 ) -> str:
-    return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
     """Returns the s3 prefix for the concepts."""
+    return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
 
 
 @pytest.fixture
@@ -336,6 +360,23 @@ def mock_bucket_labelled_passages(
         key = os.path.join(s3_prefix_labelled_passages, file_name)
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+
+@pytest.fixture
+def mock_bucket_labelled_passages_b(
+    mock_s3_client,
+    mock_bucket_b,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+) -> None:
+    """Puts the concept fixture files in the mock bucket."""
+    for file_name in labelled_passage_fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join(s3_prefix_labelled_passages, file_name)
+        mock_s3_client.put_object(
+            Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
         )
 
 
@@ -400,41 +441,3 @@ def mock_wandb(mock_s3_client):
         mock_run.use_artifact.return_value = mock_artifact
 
         yield mock_init, mock_run, mock_artifact
-
-
-@pytest.fixture
-def mock_wandb_api():
-    with (
-        patch("wandb.Api") as mock_api,
-        patch("wandb.apis.public.ArtifactType") as mock_artifact_type,
-    ):
-        # Create a mock for the API instance
-        api_instance = Mock()
-        mock_api.return_value = api_instance
-
-        # Create mock model collections
-        collections = []
-        for model_data in [
-            {"name": "Q111", "env": "sandbox"},
-            {"name": "Q222", "env": "sandbox"},
-            {"name": "Q444", "env": "labs"},
-            {"name": "some_other_model", "env": "sandbox"},
-        ]:
-            mock_artifact = Mock()
-            mock_artifact.version = "v1"
-            mock_artifact.metadata = {"aws_env": model_data["env"]}
-
-            mock_collection = Mock()
-            mock_collection.name = model_data["name"]
-            mock_collection.artifacts.return_value = [mock_artifact]
-            collections.append(mock_collection)
-
-        mock_type_instance = Mock()
-        mock_type_instance.collections.return_value = collections
-
-        mock_artifact_type.return_value = mock_type_instance
-        with (
-            patch.object(ArtifactType, "load", return_value="mocked"),
-            patch.object(ArtifactType, "collections", return_value=collections),
-        ):
-            yield mock_api

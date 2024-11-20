@@ -32,6 +32,7 @@ wandb = "^0.18.3"
 boto3 = "^1.35.31"
 pyvespa = "^0.50.0"
 nltk = "^3.9.1"
+pyyaml = "^6.0.2"
 
 [tool.poetry.group.embeddings.dependencies]
 # Torch CPU versions: https://download.pytorch.org/whl/torch/
@@ -59,6 +60,7 @@ promote = "scripts.promote:app"
 demote = "scripts.demote:app"
 evaluate = "scripts.evaluate:app"
 infer = "scripts.infer:app"
+update_inference_classifiers = "scripts.update_classifier_spec:app"
 
 [tool.poetry.group.dev]
 optional = true

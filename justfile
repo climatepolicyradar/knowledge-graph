@@ -137,3 +137,8 @@ infer-sandbox +OPTS="":
 # Run inference over documents in the labs pipeline bucket
 infer-labs +OPTS="":
     just infer --aws_env labs {{OPTS}}
+
+# Update what classifiers we are going to run for during inference.
+# Checks for latest versions of classifiers in wandb and updates spec files
+update-inference-classifiers +OPTS="":
+    poetry run update_inference_classifiers {{OPTS}}

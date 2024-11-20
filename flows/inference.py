@@ -12,14 +12,13 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
+from prefect.concurrency.asyncio import concurrency
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.apis.public import ArtifactType
-from wandb.apis.public.artifacts import ArtifactCollection
 
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
+from scripts.update_classifier_spec import read_spec_file
 from src.classifier import Classifier
-from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -174,17 +173,18 @@ async def load_classifier(
     If the classifier is available locally, this will be used. Otherwise the
     classifier will be downloaded from W&B (Once implemented)
     """
-    local_classifier_path: Path = config.local_classifier_dir / classifier_name
+    async with concurrency("load_classifier", occupy=5):
+        local_classifier_path: Path = config.local_classifier_dir / classifier_name
 
-    if not local_classifier_path.exists():
-        model_cache_dir = download_classifier_from_wandb_to_local(
-            config, classifier_name, alias
-        )
-        local_classifier_path = Path(model_cache_dir) / "model.pickle"
+        if not local_classifier_path.exists():
+            model_cache_dir = download_classifier_from_wandb_to_local(
+                config, classifier_name, alias
+            )
+            local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
-    classifier = Classifier.load(local_classifier_path)
+        classifier = Classifier.load(local_classifier_path)
 
-    return classifier
+        return classifier
 
 
 def download_s3_file(config: Config, key: str):
@@ -258,25 +258,26 @@ def store_labels(
 
 
 @task(log_prints=True)
-def text_block_inference(
+async def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
     """Run predict on a single text block."""
-    spans: list[Span] = classifier.predict(text)
-    # Remove the labelled passages from the concept to reduce the size of the metadata.
-    concept_no_labelled_passages = classifier.concept.model_copy(
-        update={"labelled_passages": []}
-    )
-    labelled_passage = LabelledPassage(
-        id=block_id,
-        text=text,
-        spans=spans,
-        metadata={
-            "concept": concept_no_labelled_passages.model_dump(),
-            "inference_timestamp": datetime.now().isoformat(),
-        },
-    )
-    return labelled_passage
+    async with concurrency("text_block_inference", occupy=1):
+        spans: list[Span] = classifier.predict(text)
+        # Remove the labelled passages from the concept to reduce the size of the metadata.
+        concept_no_labelled_passages = classifier.concept.model_copy(
+            update={"labelled_passages": []}
+        )
+        labelled_passage = LabelledPassage(
+            id=block_id,
+            text=text,
+            spans=spans,
+            metadata={
+                "concept": concept_no_labelled_passages.model_dump(),
+                "inference_timestamp": datetime.now().isoformat(),
+            },
+        )
+        return labelled_passage
 
 
 @flow(log_prints=True)
@@ -287,95 +288,49 @@ async def run_classifier_inference_on_document(
     classifier_alias: str,
 ) -> None:
     """Run the classifier inference flow on a document."""
-    print(
-        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-    )
-    classifier = await load_classifier(
-        config,
-        classifier_name,
-        classifier_alias,
-    )
-    print(
-        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-    )
+    async with concurrency("classifier_inference", occupy=1):
+        print(
+            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+        )
+        classifier = await load_classifier(
+            config,
+            classifier_name,
+            classifier_alias,
+        )
+        print(
+            f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+        )
 
-    print(f"Loading document with ID {document_id}")
-    document = load_document(config, document_id)
-    print(f"Loaded document with ID {document_id}")
+        print(f"Loading document with ID {document_id}")
+        document = load_document(config, document_id)
+        print(f"Loaded document with ID {document_id}")
 
-    futures = []
-
-    for text, block_id in document_passages(document):
-        futures.append(
+        subflows = [
             text_block_inference.submit(
                 classifier=classifier, block_id=block_id, text=text
             )
+            for text, block_id in document_passages(document)
+        ]
+
+        doc_labels = await asyncio.gather(*subflows)
+
+        store_labels(
+            config=config,
+            labels=doc_labels,
+            document_id=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
         )
 
-    doc_labels = [future.wait() for future in futures]
 
-    store_labels(
-        config=config,
-        labels=doc_labels,
-        document_id=document_id,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
-    )
-
-
-def is_concept_model(model: ArtifactCollection) -> bool:
-    """
-    Check if a model is a concept classifier
-
-    This check is based on whether the model name can be instantiated as a WikibaseID.
-    For example: `Q123`, `Q972`
-    """
-    try:
-        WikibaseID(model.name)
-
-        return True
-    except ValueError as e:
-        if "is not a valid Wikibase ID" in str(e):
-            return False
-
-        raise
-
-
-def get_relevant_model_version(
-    model: ArtifactCollection, aws_env: AwsEnv
-) -> Optional[list[ClassifierSpec]]:
-    """Returns the model name and version if a valid model is found"""
-
-    if not is_concept_model(model):
-        return None
-
-    for model_artifacts in model.artifacts():
-        if ("aws_env", aws_env.value) in model_artifacts.metadata.items():
-            return ClassifierSpec(name=model.name, alias=model_artifacts.version)
-
-
-def get_all_available_classifiers(config) -> list[ClassifierSpec]:
-    """
-    Return all available models for the given environment
-
-    Current implementation relies on the wandb sdk abstraction over
-    the graphql endpoint, which queries each item as an individual
-    request.
-    """
-
-    api = wandb.Api(api_key=config.wandb_api_key.get_secret_value())
-    model_type = ArtifactType(
-        api.client,
-        entity=config.wandb_model_org,
-        project=config.wandb_model_registry,
-        type_name="model",
-    )
-    model_collections = model_type.collections()
-
+def get_all_available_classifiers(config: Config) -> list[ClassifierSpec]:
+    """Return all available models for the given environment"""
+    contents = read_spec_file(config.aws_env)
     classifier_specs = []
-    for model in model_collections:
-        if relevant_model := get_relevant_model_version(model, config.aws_env):
-            classifier_specs.append(relevant_model)
+    for item in contents:
+        name, alias = item.split(":")
+        classifier_specs.append(ClassifierSpec(name=name, alias=alias))
+
     return classifier_specs
 
 

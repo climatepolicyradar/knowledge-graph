@@ -95,14 +95,20 @@ def main(
         model.fit()
         console.log(f"🤖 Created a {model}")
 
-        predictions = [
-            model.predict(text)
-            for text in track(
-                raw_text_passages,
-                description=f"Predicting spans for {model}",
-                transient=True,
-            )
-        ]
+        if isinstance(model, EmbeddingClassifier):
+            console.log(f"Predicting spans for {model}")
+            predictions = model.predict_batch(raw_text_passages)
+        else:
+            # Keeping other classifiers using stock 'predict' as logging is better
+            # and the classifiers are manually selected just above here.
+            predictions = [
+                model.predict(text)
+                for text in track(
+                    raw_text_passages,
+                    description=f"Predicting spans for {model}",
+                    transient=True,
+                )
+            ]
 
         # Add a column to the dataset for each classifier's predictions
         balanced_dataset[model.name] = predictions

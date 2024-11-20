@@ -56,3 +56,32 @@ class EmbeddingClassifier(Classifier):
                 )
             ]
         return spans
+
+    def predict_batch(
+        self, texts: list[str], threshold: float = 0.65
+    ) -> list[list[Span]]:
+        """
+        Predict whether the supplied texts contain instances of the concept.
+
+        :param list[str] texts: The texts to predict on
+        :return list[list[Span]]: A list of spans in the texts for each text
+        """
+        text_embeddings = self.embedding_model.encode(texts, show_progress_bar=True)
+        spans_per_text = []
+
+        for text, text_embedding in zip(texts, text_embeddings):
+            similarity = self.concept_embedding @ text_embedding.T
+            spans = []
+            if similarity > threshold:
+                spans = [
+                    Span(
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
+                        start_index=0,
+                        end_index=len(text),
+                        labellers=[str(self)],
+                    )
+                ]
+            spans_per_text.append(spans)
+
+        return spans_per_text
