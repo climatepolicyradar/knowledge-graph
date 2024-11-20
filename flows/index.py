@@ -473,10 +473,13 @@ def s3_paths_or_s3_prefixes(
     """
     Return the paths or prefix for the documents and classifiers.
 
-    - s3_prefix: The S3 prefix (directory) to yield objects from.
-        E.g. "s3://cpr-sandbox-data-pipeline-cache/labelled_passages"
-    - s3_paths: A list of S3 object keys to yield objects from.
-        E.g. ["s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json", "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json"]
+    - s3_prefix: The S3 prefix (directory) to yield objects from. Example:
+      "s3://cpr-sandbox-data-pipeline-cache/labelled_passages"
+    - s3_paths: A list of S3 object keys to yield objects from. Example:
+      [
+        "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json",
+        "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json",
+      ]
     """
     match (classifier_spec, document_ids):
         case (None, None):
