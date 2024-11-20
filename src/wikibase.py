@@ -5,6 +5,7 @@ from typing import Dict, Optional
 
 import dotenv
 import httpx
+from pydantic import ValidationError
 
 from src.concept import Concept, WikibaseID
 
@@ -179,8 +180,13 @@ class WikibaseSession:
 
         concepts = []
         for wikibase_id in wikibase_ids:
-            concept = self.get_concept(wikibase_id)
-            concepts.append(concept)
+            try:
+                concept = self.get_concept(wikibase_id)
+                concepts.append(concept)
+            except ValidationError as e:
+                logger.warning(
+                    f"Failed to fetch concept with Wikibase ID: {wikibase_id} with error: {e}"
+                )
 
         return concepts
 

@@ -48,7 +48,6 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     issues.extend(check_alternative_labels_for_pipes(concepts))
     issues.extend(validate_circular_hierarchical_relationships(concepts))
     issues.extend(check_for_unconnected_concepts(concepts))
-    issues.extend(validate_concepts_have_labels(concepts))
     issues.extend(validate_concept_label_casing(concepts))
 
     librarian_output_dir = (
@@ -375,25 +374,6 @@ def check_for_duplicate_preferred_labels(
                     issue_type="duplicate_preferred_labels",
                     message=f"{len(ids)} concepts have the same label '{label}': {duplicate_concepts_string}",
                     metadata={"label": label, "concept_ids": ids},
-                )
-            )
-    return issues
-
-
-@task(log_prints=True)
-def validate_concepts_have_labels(
-    concepts: list[Concept],
-):
-    """Make sure there are no empty label concepts"""
-    issues = []
-    for concept in concepts:
-        if not concept.preferred_label:
-            issues.append(
-                ConceptStoreIssue(
-                    issue_type="empty_label",
-                    message=f"{stringify_concept(concept)} has an empty preferred label",
-                    metadata={"concept_id": concept.wikibase_id},
-                    fix_concept=concept,
                 )
             )
     return issues
