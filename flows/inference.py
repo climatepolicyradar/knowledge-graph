@@ -354,6 +354,7 @@ def get_relevant_model_version(
             return ClassifierSpec(name=model.name, alias=model_artifacts.version)
 
 
+@task(log_prints=True)
 def get_all_available_classifiers(config) -> list[ClassifierSpec]:
     """
     Return all available models for the given environment
