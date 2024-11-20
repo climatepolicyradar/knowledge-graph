@@ -173,3 +173,4 @@ artifacts/*
 !data/raw/litigation-us.csv
 
 tmp/
+scratch/
