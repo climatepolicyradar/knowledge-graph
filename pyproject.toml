@@ -31,6 +31,7 @@ cpr-sdk = "^1.9.3"
 wandb = "^0.18.3"
 boto3 = "^1.35.31"
 pyvespa = "^0.50.0"
+pyyaml = "^6.0.2"
 
 [tool.poetry.group.embeddings.dependencies]
 # Torch CPU versions: https://download.pytorch.org/whl/torch/
