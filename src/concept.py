@@ -52,6 +52,10 @@ class Concept(BaseModel):
         default_factory=list,
         description="List of labelled passages which mention the concept",
     )
+    deleted: bool = Field(
+        default=False,
+        description="Whether the concept has been deleted from the concept store",
+    )
 
     @field_validator("alternative_labels", mode="before")
     @classmethod
@@ -100,6 +104,19 @@ class Concept(BaseModel):
         for key in ["alternative_labels", "negative_labels"]:
             values[key] = [label.strip() for label in values.get(key, [])]
         values["preferred_label"] = values["preferred_label"].strip()
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def _check_whether_concept_deleted(cls, values: Dict) -> Dict:
+        """Fill in the preferred label column if the concept used to exist but has been deleted"""
+
+        concept_values = [v for k, v in values.items() if k != "wikibase_id"]
+
+        if all(not v for v in concept_values):
+            values["preferred_label"] = "*DELETED*"
+            values["deleted"] = True
+
         return values
 
     def __repr__(self) -> str:
