@@ -89,7 +89,6 @@ def validate_related_relationship_symmetry(
                     issue_type="asymmetric_related_relationship",
                     message=f"{stringify_concept(concept)} is related to {stringify_concept(related_concept)}, but {stringify_concept(related_concept)} is not related to {stringify_concept(concept)}",
                     metadata={"concept_id": concept_id, "related_id": related_id},
-                    fix_concept=related_concept,
                 )
             )
     return issues
