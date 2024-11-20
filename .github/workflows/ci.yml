@@ -31,9 +31,7 @@ jobs:
           cache: poetry
 
       - name: Install dependencies
-        run: |
-          poetry install --with dev,nltk
-          poetry run pre-commit install
+        run: just install-for-nltk
 
       - name: Lint
         run: just lint-all

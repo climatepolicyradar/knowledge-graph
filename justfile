@@ -13,13 +13,11 @@ install:
     poetry run ipython kernel install --user
 
 # install, but also include libraries for embeddings
-install-for-embeddings:
-    just install
+install-for-embeddings: install
     poetry install --with embeddings
 
 # install, but also include libraries and data for working with nltk
-install-for-nltk:
-    just install
+install-for-nltk: install
     poetry install --with nltk
     poetry run python -c "import nltk; nltk.download('punkt', quiet=True)"
 
