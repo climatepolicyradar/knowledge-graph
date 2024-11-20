@@ -6,7 +6,7 @@ from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.span import Span
 
-nltk.download("punkt", quiet=True)
+nltk.download("punkt_tab", quiet=True)
 
 
 class StemmedKeywordClassifier(RulesBasedClassifier):

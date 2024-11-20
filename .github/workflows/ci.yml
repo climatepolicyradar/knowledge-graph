@@ -31,7 +31,7 @@ jobs:
           cache: poetry
 
       - name: Install dependencies
-        run: just install-for-nltk
+        run: just install
 
       - name: Lint
         run: just lint-all

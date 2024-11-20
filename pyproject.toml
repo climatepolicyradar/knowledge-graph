@@ -32,8 +32,6 @@ wandb = "^0.18.3"
 boto3 = "^1.35.31"
 pyvespa = "^0.50.0"
 pyyaml = "^6.0.2"
-
-[tool.poetry.group.nltk.dependencies]
 nltk = "^3.9.1"
 
 [tool.poetry.group.embeddings.dependencies]
