@@ -14,8 +14,6 @@ console = Console()
 
 app = typer.Typer()
 
-SAMPLE_SIZE = 250_000
-
 
 @app.command()
 def main(
@@ -27,6 +25,14 @@ def main(
             parser=WikibaseID,
         ),
     ],
+    sample_size: int = typer.Option(
+        250_000,
+        help="The number of passages to sample from the combined dataset",
+    ),
+    classifier_path: str = typer.Option(
+        None,
+        help="The path to the classifier to use",
+    ),
 ):
     """
     Run classifiers on the documents in the combined dataset, and save the results
@@ -39,7 +45,7 @@ def main(
     combined_dataset_path = processed_data_dir / "combined_dataset.feather"
     try:
         df = pd.read_feather(combined_dataset_path)
-        df = df.dropna(subset=["text"]).sample(SAMPLE_SIZE)
+        df = df.dropna(subset=["text"]).sample(sample_size)
         console.log(f"✅ Loaded {len(df)} passages from local file")
     except FileNotFoundError as e:
         raise FileNotFoundError(
@@ -48,11 +54,12 @@ def main(
         ) from e
 
     try:
-        classifier = Classifier.load(classifier_dir / wikibase_id)
+        classifier_path = classifier_path or classifier_dir / wikibase_id
+        classifier = Classifier.load(classifier_path)
         console.log(f"Loaded {classifier} from {classifier_dir}")
     except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"Classifier for {wikibase_id} not found. \n"
+            f"Classifier for {wikibase_id} not found in {classifier_path}.\n"
             "If you haven't already, you should run:\n"
             f"  just train {wikibase_id}"
         ) from e

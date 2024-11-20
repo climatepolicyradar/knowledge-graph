@@ -14,10 +14,9 @@ from wandb.wandb_run import Run
 
 from scripts.cloud import Namespace
 from scripts.config import (
-    EQUAL_COLUMNS,
-    STRATIFIED_COLUMNS,
     classifier_dir,
     concept_dir,
+    equity_columns,
     metrics_dir,
     model_artifact_name,
 )
@@ -166,7 +165,7 @@ def calculate_performance_metrics(
     ) in group_passages_by_equity_strata(
         human_labelled_passages=gold_standard_labelled_passages,
         model_labelled_passages=model_labelled_passages,
-        equity_strata=EQUAL_COLUMNS + STRATIFIED_COLUMNS,
+        equity_strata=equity_columns,
     ):
         confusion_matrices[group]["Passage level"] = count_passage_level_metrics(
             gold_standard_labelled_passages, model_labelled_passages

@@ -44,7 +44,7 @@ def main(
     ],
 ):
     sampled_passages_dir = processed_data_dir / "sampled_passages"
-    sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.json"
+    sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
 
     console.log(f"Loading sampled passages for {wikibase_id}")
     try:
