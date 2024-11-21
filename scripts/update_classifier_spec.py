@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 import wandb
@@ -10,7 +10,7 @@ from rich.console import Console
 from wandb.apis.public import ArtifactType
 from wandb.apis.public.artifacts import ArtifactCollection
 
-from scripts.cloud import AwsEnv
+from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
 
 console = Console()
@@ -32,6 +32,19 @@ def read_spec_file(aws_env: AwsEnv) -> list[str]:
     file_path = build_spec_file_path(aws_env)
     with open(file_path, "r") as file:
         return yaml.load(file, Loader=yaml.FullLoader)
+
+
+def parse_spec_file(aws_env: AwsEnv) -> List[ClassifierSpec]:
+    contents = read_spec_file(aws_env)
+    classifier_specs = []
+    for item in contents:
+        try:
+            name, alias = item.split(":")
+            classifier_specs.append(ClassifierSpec(name=name, alias=alias))
+        except ValueError:
+            raise ValueError(f"Invalid format in spec file: {item}")
+
+    return classifier_specs
 
 
 def write_spec_file(file_path: str, data: list[str]):

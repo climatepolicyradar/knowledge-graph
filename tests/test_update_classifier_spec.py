@@ -6,10 +6,12 @@ import pytest
 from wandb.apis.public import ArtifactType
 from wandb.apis.public.artifacts import ArtifactCollection
 
+from scripts.cloud import ClassifierSpec
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
     is_concept_model,
     is_latest_model_in_env,
+    parse_spec_file,
     read_spec_file,
 )
 
@@ -80,3 +82,68 @@ def test_get_all_available_classifiers(mock_wandb_api):
             get_all_available_classifiers(aws_envs=["sandbox"])
             specs = read_spec_file("sandbox")
             assert specs == ["Q111:v1", "Q222:v1"]
+
+
+@pytest.mark.parametrize(
+    "spec_contents,expected_specs",
+    [
+        # Test valid single entry
+        (["Q123:v1"], [ClassifierSpec(name="Q123", alias="v1")]),
+        # Test valid multiple entries
+        (
+            ["Q123:v1", "Q456:v2"],
+            [
+                ClassifierSpec(name="Q123", alias="v1"),
+                ClassifierSpec(name="Q456", alias="v2"),
+            ],
+        ),
+        # Test empty list
+        ([], []),
+    ],
+)
+def test_parse_spec_file(spec_contents, expected_specs, tmp_path):
+    # Create a temporary spec file
+    test_env = "test"
+    spec_dir = tmp_path / "classifier_specs"
+    spec_dir.mkdir(parents=True)
+    spec_file = spec_dir / f"{test_env}.yaml"
+
+    # Write test contents
+    import yaml
+
+    with open(spec_file, "w") as f:
+        yaml.dump(spec_contents, f)
+
+    # Patch the SPEC_DIR to use our temporary directory
+    with patch("scripts.update_classifier_spec.SPEC_DIR", spec_dir):
+        result = parse_spec_file(test_env)
+        assert result == expected_specs
+
+
+@pytest.mark.parametrize(
+    "invalid_contents",
+    [
+        ["invalid_format"],  # Missing colon separator
+        ["Q123:v1:extra"],  # Too many separators
+        ["Q123"],  # No version
+        [":v1"],  # No name
+        ["Q123:"],  # No version after separator
+    ],
+)
+def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
+    # Create a temporary spec file
+    test_env = "test"
+    spec_dir = tmp_path / "classifier_specs"
+    spec_dir.mkdir(parents=True)
+    spec_file = spec_dir / f"{test_env}.yaml"
+
+    # Write test contents
+    import yaml
+
+    with open(spec_file, "w") as f:
+        yaml.dump(invalid_contents, f)
+
+    # Patch the SPEC_DIR to use our temporary directory
+    with patch("scripts.update_classifier_spec.SPEC_DIR", spec_dir):
+        with pytest.raises(ValueError):
+            parse_spec_file(test_env)

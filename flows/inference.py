@@ -17,7 +17,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
-from scripts.update_classifier_spec import read_spec_file
+from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -323,17 +323,6 @@ async def run_classifier_inference_on_document(
         )
 
 
-def get_all_available_classifiers(config: Config) -> list[ClassifierSpec]:
-    """Return all available models for the given environment"""
-    contents = read_spec_file(config.aws_env)
-    classifier_specs = []
-    for item in contents:
-        name, alias = item.split(":")
-        classifier_specs.append(ClassifierSpec(name=name, alias=alias))
-
-    return classifier_specs
-
-
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
@@ -370,7 +359,7 @@ async def classifier_inference(
     )
 
     if classifier_specs is None:
-        classifier_specs = get_all_available_classifiers(config)
+        classifier_specs = parse_spec_file(config.aws_env)
 
     for classifier_spec in classifier_specs:
         subflows = [
