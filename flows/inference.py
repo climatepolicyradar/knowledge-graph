@@ -15,6 +15,7 @@ from prefect import flow, task
 from prefect.concurrency.asyncio import concurrency
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
+from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from scripts.update_classifier_spec import parse_spec_file
@@ -139,7 +140,7 @@ def determine_document_ids(
 
 
 def download_classifier_from_wandb_to_local(
-    config: Config, classifier_name: str, alias: str = "latest"
+    run: Run, config: Config, classifier_name: str, alias: str = "latest"
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -149,23 +150,16 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # type: ignore
-    run = wandb.init(
-        entity=config.wandb_entity, project=classifier_name, job_type="download_model"
-    )
     artifact = os.path.join(config.wandb_model_registry, f"{classifier_name}:{alias}")
     print(f"Downloading artifact from W&B: {artifact}")
-    try:
-        artifact = run.use_artifact(artifact, type="model")
-        classifier = artifact.download()
-        return classifier
-    finally:
-        run.finish()
+    artifact = run.use_artifact(artifact, type="model")
+    classifier = artifact.download()
+    return classifier
 
 
 @task(log_prints=True)
 async def load_classifier(
-    config: Config, classifier_name: str, alias: str
+    run: Run, config: Config, classifier_name: str, alias: str
 ) -> Classifier:
     """
     Load a classifier into memory.
@@ -178,7 +172,7 @@ async def load_classifier(
 
         if not local_classifier_path.exists():
             model_cache_dir = download_classifier_from_wandb_to_local(
-                config, classifier_name, alias
+                run, config, classifier_name, alias
             )
             local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
@@ -282,6 +276,7 @@ async def text_block_inference(
 
 @flow(log_prints=True)
 async def run_classifier_inference_on_document(
+    run,
     config: Config,
     document_id: str,
     classifier_name: str,
@@ -293,6 +288,7 @@ async def run_classifier_inference_on_document(
             f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
         )
         classifier = await load_classifier(
+            run,
             config,
             classifier_name,
             classifier_alias,
@@ -300,7 +296,6 @@ async def run_classifier_inference_on_document(
         print(
             f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
         )
-
         print(f"Loading document with ID {document_id}")
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
@@ -361,9 +356,16 @@ async def classifier_inference(
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
+    wandb.login(key=config.wandb_api_key.get_secret_value())
+    run = wandb.init(
+        entity=config.wandb_entity,
+        job_type="concept_inference",
+    )
+
     for classifier_spec in classifier_specs:
         subflows = [
             run_classifier_inference_on_document(
+                run=run,
                 config=config,
                 document_id=document_id,
                 classifier_name=classifier_spec.name,

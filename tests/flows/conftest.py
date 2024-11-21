@@ -435,9 +435,12 @@ def mock_wandb(mock_s3_client):
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
-        mock_run = Mock()
         mock_artifact = Mock()
-        mock_init.return_value = mock_run
-        mock_run.use_artifact.return_value = mock_artifact
 
+        class StubbedRun:
+            def use_artifact(self, *args, **kwargs):
+                return mock_artifact
+
+        mock_run = StubbedRun()
+        mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
