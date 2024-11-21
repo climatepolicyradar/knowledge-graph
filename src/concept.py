@@ -1,12 +1,18 @@
 import os
+import random
 import warnings
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
+
+if TYPE_CHECKING:
+    # only import this circular dependency if we're running in a type-checking
+    # environment, eg for pyright
+    from src.wikibase import WikibaseSession
 
 
 class Concept(BaseModel):
@@ -103,12 +109,16 @@ class Concept(BaseModel):
         return values
 
     def __repr__(self) -> str:
-        """Return a string representation of the concept"""
+        """Return a short string representation of the concept"""
         return f"{self.preferred_label} ({self.wikibase_id})"
 
     def __str__(self) -> str:
-        """Return a string representation of the concept"""
+        """Return a short string representation of the concept"""
         return self.__repr__()
+
+    def __hash__(self) -> int:
+        """Return a unique hash for the concept"""
+        return hash((self.wikibase_id, self.preferred_label, *self.alternative_labels))
 
     @property
     def wikibase_url(self) -> str:
@@ -126,9 +136,104 @@ class Concept(BaseModel):
         """Return a list of all unique labels for the concept"""
         return list(set([self.preferred_label] + self.alternative_labels))
 
-    def __hash__(self) -> int:
-        """Return a unique hash for the concept"""
-        return hash((self.wikibase_id, self.preferred_label, *self.alternative_labels))
+    def to_markdown(self, wikibase: Optional["WikibaseSession"] = None) -> str:
+        """
+        Return a complete representation of the concept in natural language
+
+        Rather than outputting a machine-readable form of the concept (eg in JSON), the
+        output should be human-readable, suitable for human or LLM consumption. For
+        example, these formatted versions of the concept might be used to ground a RAG
+        response if the concept is mentioned in the query.
+
+        :param WikibaseSession wikibase: A Wikibase session
+        """
+        formatted_concept = [f"# {self.preferred_label}"]
+
+        if self.description:
+            formatted_concept.extend(["\n## Description", self.description, ""])
+
+        if self.definition:
+            formatted_concept.extend(["## Definition", self.definition, ""])
+
+        if self.alternative_labels:
+            formatted_concept.extend(
+                [
+                    "## Alternative Names",
+                    "\n".join(f"- {label}" for label in self.alternative_labels),
+                    "",
+                ]
+            )
+
+        if self.negative_labels:
+            formatted_concept.extend(
+                [
+                    "## Not to be Confused With",
+                    "\n".join(f"- {label}" for label in self.negative_labels),
+                    "",
+                ]
+            )
+
+        if wikibase:
+            parent_names = [
+                wikibase.get_concept(parent_id).preferred_label
+                for parent_id in self.subconcept_of
+            ]
+            if parent_names:
+                formatted_concept.extend(
+                    [
+                        "## Parent Concepts",
+                        "\n".join(f"- {name}" for name in parent_names),
+                        "",
+                    ]
+                )
+
+            subconcept_names = [
+                wikibase.get_concept(subconcept_id).preferred_label
+                for subconcept_id in self.has_subconcept
+            ]
+            if subconcept_names:
+                formatted_concept.extend(
+                    [
+                        "## Subconcepts",
+                        "\n".join(f"- {name}" for name in subconcept_names),
+                        "",
+                    ]
+                )
+
+            related_names = [
+                wikibase.get_concept(related_id).preferred_label
+                for related_id in self.related_concepts
+            ]
+            if related_names:
+                formatted_concept.extend(
+                    [
+                        "## Related Concepts",
+                        "\n".join(f"- {name}" for name in related_names),
+                        "",
+                    ]
+                )
+
+        positive_labelled_passages = [
+            passage
+            for passage in self.labelled_passages
+            if any(span.concept_id == self.wikibase_id for span in passage.spans)
+        ]
+
+        if positive_labelled_passages:
+            formatted_concept.extend(
+                [
+                    "## Example Passages",
+                    *[
+                        "> " + passage.text.replace("\n", "\n> ") + "\n"
+                        for passage in random.sample(
+                            positive_labelled_passages,
+                            min(5, len(positive_labelled_passages)),
+                        )
+                    ],
+                ]
+            )
+
+        return "\n".join(formatted_concept)
 
     def save(self, path: Union[str, Path]) -> None:
         """
