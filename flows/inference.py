@@ -356,6 +356,11 @@ async def classifier_inference(
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
+    print(
+        f"Running with {len(validated_document_ids)} documents and "
+        f"{len(classifier_specs)} classifiers"
+    )
+
     wandb.login(key=config.wandb_api_key.get_secret_value())
     run = wandb.init(
         entity=config.wandb_entity,
