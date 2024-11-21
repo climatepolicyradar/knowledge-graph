@@ -308,13 +308,14 @@ async def run_classifier_inference_on_document(
             if labelled_passages:
                 doc_labels.append(labelled_passages)
 
-        store_labels(
-            config=config,
-            labels=doc_labels,
-            document_id=document_id,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-        )
+        if doc_labels:
+            store_labels(
+                config=config,
+                labels=doc_labels,
+                document_id=document_id,
+                classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
+            )
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
