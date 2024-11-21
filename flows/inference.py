@@ -297,14 +297,12 @@ async def run_classifier_inference_on_document(
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
 
-        subflows = [
-            text_block_inference.submit(  # type: ignore
+        doc_labels = [
+            text_block_inference(  # type: ignore
                 classifier=classifier, block_id=block_id, text=text
             )
             for text, block_id in document_passages(document)
         ]
-
-        doc_labels = await asyncio.gather(*subflows)
 
         store_labels(
             config=config,
