@@ -302,13 +302,14 @@ async def run_classifier_inference_on_document(
             for text, block_id in document_passages(document)
         ]
 
-        store_labels(
-            config=config,
-            labels=doc_labels,
-            document_id=document_id,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-        )
+        if doc_labels:
+            store_labels(
+                config=config,
+                labels=doc_labels,
+                document_id=document_id,
+                classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
+            )
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
