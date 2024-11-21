@@ -361,7 +361,7 @@ async def classifier_inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
     run = wandb.init(
         entity=config.wandb_entity,
         job_type="concept_inference",
