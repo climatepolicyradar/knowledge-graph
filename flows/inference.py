@@ -12,7 +12,7 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
-from prefect.concurrency.asyncio import concurrency
+from prefect.concurrency.asyncio import concurrency, rate_limit
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 
@@ -138,7 +138,7 @@ def determine_document_ids(
     return requested_document_ids
 
 
-def download_classifier_from_wandb_to_local(
+async def download_classifier_from_wandb_to_local(
     config: Config, classifier_name: str, alias: str = "latest"
 ) -> str:
     """
@@ -149,6 +149,7 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
+    await rate_limit("wandb_api")
     wandb.login(key=config.wandb_api_key.get_secret_value())
     run = wandb.init(
         entity=config.wandb_entity, project=classifier_name, job_type="download_model"
@@ -177,7 +178,7 @@ async def load_classifier(
         local_classifier_path: Path = config.local_classifier_dir / classifier_name
 
         if not local_classifier_path.exists():
-            model_cache_dir = download_classifier_from_wandb_to_local(
+            model_cache_dir = await download_classifier_from_wandb_to_local(
                 config, classifier_name, alias
             )
             local_classifier_path = Path(model_cache_dir) / "model.pickle"

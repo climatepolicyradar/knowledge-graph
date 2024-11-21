@@ -77,10 +77,11 @@ async def test_load_classifier__existing_classifier(
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
-def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
+@pytest.mark.asyncio
+async def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
     mock_init, mock_run, _ = mock_wandb
     classifier_id = "Qtest"
-    _ = download_classifier_from_wandb_to_local(
+    _ = await download_classifier_from_wandb_to_local(
         test_config, classifier_id, alias="latest"
     )
 
