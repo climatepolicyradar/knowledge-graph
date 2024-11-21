@@ -110,7 +110,7 @@ def test_s3_obj_generator_from_s3_paths(
     s3_paths = {
         os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
         for f in labelled_passage_fixture_files
-    }
+    } | {"gibberish"}
     s3_gen = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
     s3_files = list(s3_gen)
     assert len(s3_files) == len(labelled_passage_fixture_files)
@@ -133,6 +133,7 @@ def test_labelled_passages_generator(
     """Test that the document concepts generator yields the correct objects."""
     s3_gen = s3_obj_generator_from_s3_prefixes(
         [os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)]
+        + ["gibberish"]
     )
     labelled_passages_gen = labelled_passages_generator(generator_func=s3_gen)
     labelled_passages_files = list(labelled_passages_gen)
