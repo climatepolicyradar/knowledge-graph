@@ -1,14 +1,37 @@
+import os
 import time
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from string import punctuation
 from typing import Optional
 
+import typer
 from prefect import flow, task
 from pydantic import BaseModel
 
+from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.wikibase import WikibaseSession
+
+REPORT_TARGET_PREFIX_DEFAULT = "None"
+cli = typer.Typer()
+
+
+@dataclass()
+class Config:
+    """Configuration used across flow runs."""
+
+    report_target_prefix: str = REPORT_TARGET_PREFIX_DEFAULT
+    bucket_region: str = "eu-west-1"
+    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
+
+    @classmethod
+    async def create(cls) -> "Config":
+        """Create a new Config instance with initialized values."""
+        config = cls()
+
+        return config
 
 
 class ConceptStoreIssue(BaseModel):
@@ -535,5 +558,25 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
     return "\n".join(html)
 
 
+def run_as_cli(deploy: bool):
+    """Method to run this as a CLI using Typer"""
+
+    if deploy:
+        # TODO: this needs to load secret blocks for argilla and concept store access.
+
+        # TODO: ideally we use create_deployment from deployments.py to deploy this flow,
+        # but it can't currently be imported as it's above the src directory. Do we move
+        # that, deploy this from deployments.py, or something else?
+        # create_deployment(
+        #     flow=validate_concept_store,
+        #     description="Run concept store checks",
+        #     flow_variables={},
+        # )
+        pass
+    else:
+        issues = validate_concept_store()
+        print(f"Found {len(issues)} issues")
+
+
 if __name__ == "__main__":
-    issues = validate_concept_store()
+    cli()
