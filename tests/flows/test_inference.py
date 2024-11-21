@@ -100,10 +100,10 @@ def test_stringify():
 
 
 def test_document_passages__invalid_content_type(parser_output):
-    # When the content type is borked
+    # When the content type is none, empty list
     parser_output.document_content_type = None
-    with pytest.raises(ValueError):
-        document_passages(parser_output).__next__()
+    result = [i for i in document_passages(parser_output)]
+    assert result == []
 
 
 def test_document_passages__html(parser_output_html):
@@ -141,9 +141,7 @@ async def test_text_block_inference(
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
-    labels = await text_block_inference(
-        classifier=classifier, block_id=block_id, text=text
-    )
+    labels = text_block_inference(classifier=classifier, block_id=block_id, text=text)
 
     assert len(labels.spans) > 0
     assert labels.id == block_id

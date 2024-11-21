@@ -212,8 +212,9 @@ def document_passages(document: BaseParserOutput):
         case "text/html":
             text_blocks = document.html_data.text_blocks  # type: ignore
         case _:
-            raise ValueError(
-                "Invalid document content type: "
+            text_blocks = []
+            print(
+                "Unsupported document content type: "
                 f"{document.document_content_type}, for "
                 f"document: {document.document_id}"
             )
@@ -249,26 +250,25 @@ def store_labels(
     )
 
 
-async def text_block_inference(
+def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
     """Run predict on a single text block."""
-    async with concurrency("text_block_inference", occupy=1):
-        spans: list[Span] = classifier.predict(text)
-        # Remove the labelled passages from the concept to reduce the size of the metadata.
-        concept_no_labelled_passages = classifier.concept.model_copy(
-            update={"labelled_passages": []}
-        )
-        labelled_passage = LabelledPassage(
-            id=block_id,
-            text=text,
-            spans=spans,
-            metadata={
-                "concept": concept_no_labelled_passages.model_dump(),
-                "inference_timestamp": datetime.now().isoformat(),
-            },
-        )
-        return labelled_passage
+    spans: list[Span] = classifier.predict(text)
+    # Remove the labelled passages from the concept to reduce the size of the metadata.
+    concept_no_labelled_passages = classifier.concept.model_copy(
+        update={"labelled_passages": []}
+    )
+    labelled_passage = LabelledPassage(
+        id=block_id,
+        text=text,
+        spans=spans,
+        metadata={
+            "concept": concept_no_labelled_passages.model_dump(),
+            "inference_timestamp": datetime.now().isoformat(),
+        },
+    )
+    return labelled_passage
 
 
 @flow(log_prints=True)
@@ -297,18 +297,14 @@ async def run_classifier_inference_on_document(
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
 
-        subflows = [
-            text_block_inference.submit(  # type: ignore
-                classifier=classifier, block_id=block_id, text=text
-            )
+        doc_labels = [
+            text_block_inference(classifier=classifier, block_id=block_id, text=text)
             for text, block_id in document_passages(document)
         ]
 
-        doc_labels = await asyncio.gather(*subflows)
-
         store_labels(
             config=config,
-            labels=doc_labels,  # type: ignore
+            labels=doc_labels,
             document_id=document_id,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
