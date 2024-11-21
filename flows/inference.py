@@ -157,7 +157,6 @@ def download_classifier_from_wandb_to_local(
     return classifier
 
 
-@task(log_prints=True)
 async def load_classifier(
     run: Run, config: Config, classifier_name: str, alias: str
 ) -> Classifier:
@@ -222,7 +221,6 @@ def document_passages(document: BaseParserOutput):
         yield _stringify(text_block.text), text_block.text_block_id
 
 
-@task(log_prints=True)
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
@@ -251,7 +249,6 @@ def store_labels(
     )
 
 
-@task(log_prints=True)
 async def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:

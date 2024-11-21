@@ -72,7 +72,7 @@ async def test_load_classifier__existing_classifier(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
     _, mock_run, _ = mock_wandb
-    classifier = await load_classifier.fn(
+    classifier = await load_classifier(
         mock_run, test_config, local_classifier_id, alias="latest"
     )
     assert local_classifier_id == classifier.concept.wikibase_id
@@ -121,7 +121,7 @@ def test_store_labels(test_config, mock_bucket):
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    store_labels.fn(test_config, labels, "TEST.DOC.0.1", "Q9081", "latest")
+    store_labels(test_config, labels, "TEST.DOC.0.1", "Q9081", "latest")
 
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
@@ -135,13 +135,13 @@ async def test_text_block_inference(
 ):
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier = await load_classifier.fn(
+    classifier = await load_classifier(
         mock_run, test_config, local_classifier_id, "latest"
     )
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
-    labels = await text_block_inference.fn(
+    labels = await text_block_inference(
         classifier=classifier, block_id=block_id, text=text
     )
 
