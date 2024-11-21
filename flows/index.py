@@ -105,31 +105,46 @@ def get_vespa_search_adapter_from_aws_secrets(
 def s3_obj_generator_from_s3_prefixes(
     s3_prefixes: list[str],
 ) -> Generator[tuple[str, list[dict]], None, None]:
+    """Return a generator that yields objects from a list of S3 prefixes."""
+    logger = get_logger()
     for s3_prefix in s3_prefixes:
-        object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
-        bucket = Path(s3_prefix).parts[1]
-        for key in object_keys:
-            obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
-            yield key, json.loads(obj)
+        try:
+            object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
+            bucket = Path(s3_prefix).parts[1]
+            for key in object_keys:
+                obj = _s3_object_read_text(s3_path=(os.path.join("s3://", bucket, key)))
+                yield key, json.loads(obj)
+        except Exception as e:
+            logger.error(
+                "failed to yield object from S3 prefix",
+                extra={"error": str(e)},
+            )
+            continue
 
 
 def s3_obj_generator_from_s3_paths(
     s3_paths: list[str],
 ) -> Generator[tuple[str, list[dict]], None, None]:
     """
-    A generator that yields objects from a list of s3 paths.
+    Return a generator that yields objects from a list of S3 paths.
 
-    We extract the key from the s3 path by removing the first two elements in the path.
+    We extract the key from the S3 path by removing the first two
+    elements in the path.
+
     E.g. "s3://bucket/prefix/file.json" -> "prefix/file.json"
-
-    params:
-    - s3_paths: A list of s3 paths to yield objects from.
     """
+    logger = get_logger()
     for s3_path in s3_paths:
-        yield (
-            "/".join(Path(s3_path).parts[2:]),
-            json.loads(_s3_object_read_text(s3_path=s3_path)),
-        )
+        try:
+            key = "/".join(Path(s3_path).parts[2:])
+            body = json.loads(_s3_object_read_text(s3_path=s3_path))
+            yield key, body
+        except Exception as e:
+            logger.error(
+                "failed to yield object from S3 path",
+                extra={"error": str(e)},
+            )
+            continue
 
 
 def labelled_passages_generator(
