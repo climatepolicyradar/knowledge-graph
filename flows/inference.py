@@ -11,7 +11,7 @@ import boto3
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput
 from cpr_sdk.ssm import get_aws_ssm_param
-from prefect import flow, task
+from prefect import flow
 from prefect.concurrency.asyncio import concurrency
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
