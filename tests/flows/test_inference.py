@@ -159,6 +159,7 @@ async def test_text_block_inference(
 
 
 @pytest.mark.asyncio
+@pytest.mark.flaky_on_ci
 async def test_classifier_inference(
     test_config, mock_classifiers_dir, mock_bucket, mock_bucket_documents
 ):

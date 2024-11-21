@@ -7,25 +7,18 @@ from src.concept import Concept
 
 
 def __getattr__(name):
-    """
-    Only import embeddings when we want it
-
-    This adds a special case for embeddings because they rely on very large external
-    libraries. Importing these libraries is very slow and having them installed
-    requires much more disc space, so we gave them a distinct group in the
-    pyproject.toml file (see: f53a404).
-
-    This makes it so we only import them when we explicitly want to. So the following
-    import statments will both work, but only the second requires the embeddings group
-    to have been installed with poetry:
-
-    ```
-    from src.classifier import Classifier
-    from src.classifier import EmbeddingClassifier
-    ```
-    """
+    """Only import particular classifiers when they are actually requested"""
     if name == "EmbeddingClassifier":
+        # This adds a special case for embeddings because they rely on very large external
+        # libraries. Importing these libraries is very slow and having them installed
+        # requires much more disc space, so we gave them a distinct group in the
+        # pyproject.toml file (see: f53a404).
         module = importlib.import_module(".embedding", __package__)
+        return getattr(module, name)
+    if name == "StemmedKeywordClassifier":
+        # For similar reasons, only import the stemmed keyword classifier and download
+        # the nltk data when we actually request it.
+        module = importlib.import_module(".stemmed_keyword", __package__)
         return getattr(module, name)
     else:
         return globals()[name]
@@ -36,6 +29,7 @@ __all__ = [
     "KeywordClassifier",
     "RulesBasedClassifier",
     "EmbeddingClassifier",
+    "StemmedKeywordClassifier",
 ]
 
 
