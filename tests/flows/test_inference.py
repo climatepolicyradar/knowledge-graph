@@ -69,27 +69,21 @@ def test_determine_document_ids__error(test_config):
 
 @pytest.mark.asyncio
 async def test_load_classifier__existing_classifier(
-    test_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
+    _, mock_run, _ = mock_wandb
     classifier = await load_classifier.fn(
-        test_config, local_classifier_id, alias="latest"
+        mock_run, test_config, local_classifier_id, alias="latest"
     )
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
 def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
-    mock_init, mock_run, _ = mock_wandb
+    _, mock_run, _ = mock_wandb
     classifier_id = "Qtest"
     _ = download_classifier_from_wandb_to_local(
-        test_config, classifier_id, alias="latest"
+        mock_run, test_config, classifier_id, alias="latest"
     )
-
-    mock_init.assert_called_once_with(
-        entity="test_entity",
-        project="Qtest",
-        job_type="download_model",
-    )
-    mock_run.finish.assert_called_once()
 
 
 def test_load_document(test_config, mock_bucket_documents):
@@ -137,10 +131,13 @@ def test_store_labels(test_config, mock_bucket):
 
 @pytest.mark.asyncio
 async def test_text_block_inference(
-    test_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
+    _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier = await load_classifier.fn(test_config, local_classifier_id, "latest")
+    classifier = await load_classifier.fn(
+        mock_run, test_config, local_classifier_id, "latest"
+    )
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
@@ -161,8 +158,9 @@ async def test_text_block_inference(
 @pytest.mark.asyncio
 @pytest.mark.flaky_on_ci
 async def test_classifier_inference(
-    test_config, mock_classifiers_dir, mock_bucket, mock_bucket_documents
+    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
 ):
+    mock_wandb_init, _, _ = mock_wandb
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
         await classifier_inference(
@@ -170,6 +168,11 @@ async def test_classifier_inference(
             document_ids=doc_ids,
             config=test_config,
         )
+
+    mock_wandb_init.assert_called_once_with(
+        entity="test_entity",
+        job_type="concept_inference",
+    )
 
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
