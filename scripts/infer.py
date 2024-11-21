@@ -1,5 +1,7 @@
+from typing import Optional
+
 import typer
-from prefect.deployments import run_deployment
+from prefect.deployments import run_deployment  # type: ignore
 from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
 from typing_extensions import Annotated
@@ -48,7 +50,7 @@ def main(
         ),
     ],
     classifiers: Annotated[
-        list[str],
+        Optional[list[str]],
         typer.Option(
             "--classifier",
             "-c",
@@ -61,9 +63,9 @@ def main(
             ),
             callback=convert_classifier_specs,
         ),
-    ] = None,
+    ] = [],
     documents: Annotated[
-        list[str],
+        Optional[list[str]],
         typer.Option(
             "--document",
             "-d",
@@ -73,12 +75,12 @@ def main(
                 "-d CCLW.executive.10002.4495 -d CCLW.executive.10126.4646"
             ),
         ),
-    ] = None,
+    ] = [],
 ):
-    documents = documents or None  # Set to None if empty as Typer reads it as a list
-    classifiers = (
-        classifiers or None
-    )  # Set to None if empty as Typer reads it as a list
+    # Set to None if empty as Typer reads it as a list
+    documents = documents or None  # type: ignore
+    # Set to None if empty as Typer reads it as a list
+    classifiers = classifiers or None  # type: ignore
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
     deployment_name = (
@@ -95,7 +97,7 @@ def main(
         },
     )
 
-    flow_url = f"{PREFECT_UI_URL.value()}/runs/flow-run/{flow_run.id}"
+    flow_url = f"{PREFECT_UI_URL.value()}/runs/flow-run/{flow_run.id}"  # type: ignore
     console.log(f"See progress at: {flow_url}")
 
 

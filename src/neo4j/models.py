@@ -21,7 +21,7 @@ class PassageNode(StructuredNode):
 
     text = StringProperty(required=True)
     concepts = RelationshipTo("ConceptNode", "MENTIONS_CONCEPT", cardinality=ZeroOrMore)
-    source_document = RelationshipFrom("DocumentNode", "HAS_PASSAGE", cardinality=One)
+    source_document = RelationshipFrom("DocumentNode", "HAS_PASSAGE", cardinality=One)  # type: ignore
 
 
 class ConceptNode(StructuredNode):

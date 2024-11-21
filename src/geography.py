@@ -26,11 +26,11 @@ def geography_string_to_iso(geography_string: str) -> str:
     best_match = ""
     best_score = 0
     for _, row in geography_df.iterrows():
-        score = fuzz.ratio(geography_string, row["Name"])
+        score = fuzz.ratio(geography_string, row["Name"])  # type: ignore
         if score > best_score:
             best_score = score
             best_match = row["Iso"]
-    return best_match
+    return best_match  # type: ignore
 
 
 iso_to_world_bank_region = geography_df.set_index("Iso")["World Bank Region"].to_dict()

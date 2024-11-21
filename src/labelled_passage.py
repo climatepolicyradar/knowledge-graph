@@ -3,7 +3,7 @@ import itertools
 
 from pydantic import BaseModel, Field, model_validator
 
-from argilla import FeedbackRecord, User
+from argilla import FeedbackRecord, User  # type: ignore
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
 
@@ -37,7 +37,7 @@ class LabelledPassage(BaseModel):
         return self
 
     @classmethod
-    def from_argilla_record(cls, record: FeedbackRecord) -> "LabelledPassage":
+    def from_argilla_record(cls, record: FeedbackRecord) -> "LabelledPassage":  # type: ignore
         """
         Create a LabelledPassage object from an Argilla record
 
@@ -45,17 +45,17 @@ class LabelledPassage(BaseModel):
         object from
         :return LabelledPassage: The created LabelledPassage object
         """
-        text = html.unescape(record.fields.get("text", ""))
+        text = html.unescape(record.fields.get("text", ""))  # type: ignore
 
-        metadata = record.metadata or {}
+        metadata = record.metadata or {}  # type: ignore
         spans = []
 
         # we've observed that users can submit multiple annotations for the same text!
         # we should only consider the most recent annotation from each.
         most_recent_annotation_from_each_user = [
             max(group, key=lambda record: record.updated_at)
-            for _, group in itertools.groupby(
-                sorted(record.responses, key=lambda response: response.user_id),
+            for _, group in itertools.groupby(  # type: ignore
+                sorted(record.responses, key=lambda response: response.user_id),  # type: ignore
                 key=lambda response: response.user_id,
             )
         ]

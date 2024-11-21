@@ -1,6 +1,6 @@
-import nltk
-from nltk.stem import PorterStemmer
-from nltk.tokenize import word_tokenize
+import nltk  # type: ignore
+from nltk.stem import PorterStemmer  # type: ignore
+from nltk.tokenize import word_tokenize  # type: ignore
 
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
@@ -38,9 +38,11 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
         negative_labels = list(
             set(
                 [
-                    self._stem_label(label)
-                    if self._stem_label(label) not in positive_labels
-                    else label
+                    (
+                        self._stem_label(label)
+                        if self._stem_label(label) not in positive_labels
+                        else label
+                    )
                     for label in concept.negative_labels
                 ]
             )
@@ -81,9 +83,11 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
 
         # For numbers or non-ASCII characters, keep the original token instead of stemming
         stemmed_tokens = [
-            token
-            if token.isdigit() or not all(ord(char) < 128 for char in token)
-            else self.stemmer.stem(token)
+            (
+                token
+                if token.isdigit() or not all(ord(char) < 128 for char in token)
+                else self.stemmer.stem(token)
+            )
             for token in tokens
         ]
 

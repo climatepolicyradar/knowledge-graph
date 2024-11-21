@@ -1,4 +1,5 @@
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Union
 
 import pandas as pd
 import typer
@@ -53,13 +54,16 @@ def main(
             "  just build-dataset"
         ) from e
 
+    classifier_path_with_fallback: Union[str, Path] = (
+        classifier_path or classifier_dir / wikibase_id
+    )
+
     try:
-        classifier_path = classifier_path or classifier_dir / wikibase_id
-        classifier = Classifier.load(classifier_path)
+        classifier = Classifier.load(classifier_path_with_fallback)
         console.log(f"Loaded {classifier} from {classifier_dir}")
     except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"Classifier for {wikibase_id} not found in {classifier_path}.\n"
+            f"Classifier for {wikibase_id} not found in {classifier_path_with_fallback}.\n"
             "If you haven't already, you should run:\n"
             f"  just train {wikibase_id}"
         ) from e

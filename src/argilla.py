@@ -31,7 +31,7 @@ def distribute_labelling_projects(
             yield dataset, next(labeller_cycle)
 
 
-def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:
+def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:  # type: ignore
     """
     Combine an arbitrary number of argilla datasets into one.
 
@@ -42,33 +42,33 @@ def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:
     if not datasets:
         raise ValueError("At least one dataset must be provided")
 
-    combined_dataset = FeedbackDataset(
-        fields=datasets[0].fields,
-        questions=datasets[0].questions,
-        metadata_properties=datasets[0].metadata_properties,
-        vectors_settings=datasets[0].vectors_settings,
-        guidelines=datasets[0].guidelines,
-        allow_extra_metadata=datasets[0].allow_extra_metadata,
+    combined_dataset = FeedbackDataset(  # type: ignore
+        fields=datasets[0].fields,  # type: ignore
+        questions=datasets[0].questions,  # type: ignore
+        metadata_properties=datasets[0].metadata_properties,  # type: ignore
+        vectors_settings=datasets[0].vectors_settings,  # type: ignore
+        guidelines=datasets[0].guidelines,  # type: ignore
+        allow_extra_metadata=datasets[0].allow_extra_metadata,  # type: ignore
     )
 
-    records_dict: Dict[str, FeedbackRecord] = {}
+    records_dict: Dict[str, FeedbackRecord] = {}  # type: ignore
     for dataset in datasets:
-        for record in dataset.records:
+        for record in dataset.records:  # type: ignore
             # Use the 'text' field as the key (assuming it's unique)
             key = record.fields.get("text", "")
 
             if key in records_dict:
                 # If the record already exists, merge the responses
                 existing_record = records_dict[key]
-                existing_record.responses.extend(record.responses)
+                existing_record.responses.extend(record.responses)  # type: ignore
             else:
                 # If it's a new record, add it to the dictionary
-                records_dict[key] = record
+                records_dict[key] = record  # type: ignore
 
     # Convert the dictionary values back to a list of records
     combined_records = list(records_dict.values())
 
     # Add the combined records to the new dataset
-    combined_dataset.add_records(combined_records)
+    combined_dataset.add_records(combined_records)  # type: ignore
 
     return combined_dataset

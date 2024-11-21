@@ -14,4 +14,4 @@ def get_repo_info(repo_name: str = "PrefectHQ/prefect"):
 
 
 if __name__ == "__main__":
-    get_repo_info.serve(name="my-first-deployment")
+    get_repo_info.serve(name="my-first-deployment")  # type: ignore

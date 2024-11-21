@@ -59,10 +59,10 @@ litigation_pdf_dir.mkdir(exist_ok=True, parents=True)
 # common jurisdictions
 n_jurisdictions = len(litigation_df["Jurisdictions"].unique())
 n_docs_per_jurisdiction = (
-    litigation_df.groupby("Jurisdictions").size().sort_values(ascending=False).head(100)
+    litigation_df.groupby("Jurisdictions").size().sort_values(ascending=False).head(100)  # type: ignore
 )
 # round up to the nearest integer
-median_docs_per_jurisdiction = int(n_docs_per_jurisdiction.median().round())
+median_docs_per_jurisdiction = int(n_docs_per_jurisdiction.median().round())  # type: ignore
 sampled_litigation_df = (
     litigation_df.groupby("Jurisdictions")[["Title", "Document file", "Jurisdictions"]]
     .apply(lambda x: x.sample(min(len(x), median_docs_per_jurisdiction)))
@@ -90,7 +90,8 @@ console.print(f"📄 Saved litigation documents to {sampled_litigation_json_path
 
 # Download the documents
 for doc in track(
-    sampled_litigation_df.to_dict(orient="records"), description="Downloading documents"
+    sampled_litigation_df.to_dict(orient="records"),  # type: ignore
+    description="Downloading documents",
 ):
     doc_path = litigation_pdf_dir / f"{doc['id']}.pdf"
 

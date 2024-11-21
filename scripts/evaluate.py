@@ -430,7 +430,7 @@ def main(
     concept = load_concept(wikibase_id)
     console.log(f'📚 Loaded concept "{concept}" from {concept_dir}')
     if track:
-        run.config["preferred_label"] = concept.preferred_label
+        run.config["preferred_label"] = concept.preferred_label  # type: ignore
 
     console.log("🥇 Creating a list of gold-standard labelled passages")
     gold_standard_labelled_passages = create_gold_standard_labelled_passages(concept)
@@ -441,28 +441,31 @@ def main(
     )
 
     if track:
-        run.config["n_gold_standard_labelled_passages"] = len(
+        run.config["n_gold_standard_labelled_passages"] = len(  # type: ignore
             gold_standard_labelled_passages
         )
-        run.config["n_annotations"] = n_annotations
+        run.config["n_annotations"] = n_annotations  # type: ignore
 
     match source:
         case Source.LOCAL:
-            classifier = load_classifier_local(wikibase_id)
-            console.log(f"🤖 Loaded classifier {classifier} from {classifier_dir}")
+            loaded_classifier = load_classifier_local(wikibase_id)
+            console.log(
+                f"🤖 Loaded classifier {loaded_classifier} from {classifier_dir}"
+            )
             if track:
-                add_artifact_to_run_lineage_local(run, classifier, wikibase_id)
+                add_artifact_to_run_lineage_local(run, classifier, wikibase_id)  # type: ignore
         case Source.REMOTE:
-            classifier = load_classifier_remote(
-                run,
-                classifier,
-                version,
+            loaded_classifier = load_classifier_remote(
+                run,  # type: ignore
+                classifier,  # type: ignore
+                version,  # type: ignore
                 wikibase_id,
             )
 
     console.log("🤖 Labelling passages with the classifier")
     model_labelled_passages = label_passages_with_classifier(
-        classifier, gold_standard_labelled_passages
+        loaded_classifier,
+        gold_standard_labelled_passages,  # type: ignore
     )
     n_annotations = count_annotations(model_labelled_passages)
     console.log(
@@ -470,7 +473,7 @@ def main(
         f"with {n_annotations} individual annotations"
     )
     if track:
-        run.config["n_model_labelled_passages"] = len(model_labelled_passages)
+        run.config["n_model_labelled_passages"] = len(model_labelled_passages)  # type: ignore
 
     console.log(f"📊 Calculating performance metrics for {concept}")
 
@@ -486,8 +489,8 @@ def main(
     console.log(f"📄 Saved performance metrics to {metrics_path}")
 
     if track:
-        log_metrics(run, df)
-        run.finish()
+        log_metrics(run, df)  # type: ignore
+        run.finish()  # type: ignore
 
 
 if __name__ == "__main__":

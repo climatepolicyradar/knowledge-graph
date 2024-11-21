@@ -20,8 +20,9 @@ def get_git_root() -> Optional[Path]:
 
 
 # directories
+DEFAULT_DATA_DIR_NAME = "data"
 root_dir = get_git_root()
-data_dir = root_dir / "data"
+data_dir = root_dir / DEFAULT_DATA_DIR_NAME if root_dir else Path(DEFAULT_DATA_DIR_NAME)
 raw_data_dir = data_dir / "raw"
 interim_data_dir = data_dir / "interim"
 processed_data_dir = data_dir / "processed"

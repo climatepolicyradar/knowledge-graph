@@ -133,7 +133,7 @@ def main(
 
         if len(df) > 0:  # Only sample if we have positives
             sampled_df = create_balanced_sample(
-                df=df,
+                df=df,  # type: ignore
                 sample_size=min(optimal_sample_size, len(df)),
                 on_columns=equity_columns,
             )
@@ -152,7 +152,7 @@ def main(
 
     # Sample negative examples
     negative_samples = create_balanced_sample(
-        df=negative_candidates,
+        df=negative_candidates,  # type: ignore
         sample_size=negative_sample_size,
         on_columns=equity_columns,
     )
@@ -186,7 +186,7 @@ def main(
         metadata = row.to_dict()
         metadata.pop("text_block.text")
         labelled_passages.append(
-            LabelledPassage(text=row["text_block.text"], metadata=metadata, spans=[])
+            LabelledPassage(text=row["text_block.text"], metadata=metadata, spans=[])  # type: ignore
         )
 
     sampled_passages_dir = processed_data_dir / "sampled_passages"

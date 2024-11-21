@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 from typing import Annotated, Any
 
 import typer
@@ -112,8 +113,8 @@ def get_next_version(
     try:
         api = wandb.Api()
         latest = api.artifact(f"{namespace.project}/{classifier.name}:latest")._version
-        version = int(latest[1:]) + 1
-    except wandb.errors.CommError as e:
+        version = int(latest[1:]) + 1  # type: ignore
+    except wandb.errors.CommError as e:  # type: ignore
         error_message = str(e)
         pattern = rf"artifact '{classifier.name}:latest' not found in '{namespace.entity}/{wikibase_id}'"
 
@@ -125,7 +126,7 @@ def get_next_version(
 
 def upload_model_artifact(
     classifier: Classifier,
-    classifier_path: str,
+    classifier_path: Path,
     storage_upload: StorageUpload,
     namespace: Namespace,
     s3_client: Any,
@@ -136,7 +137,7 @@ def upload_model_artifact(
     :param classifier: The classifier object.
     :type classifier: Classifier
     :param classifier_path: The path to the classifier file.
-    :type classifier_path: str
+    :type classifier_path: Path
     :param storage_upload: The configuration for uploading the artifact.
     :type storage_upload: StorageUpload
     :param namespace: The W&B configuration containing project and entity.
@@ -295,7 +296,7 @@ def main(
         s3_client = get_s3_client(aws_env, region_name)
 
         storage_upload = StorageUpload(
-            next_version=next_version,
+            next_version=next_version,  # type: ignore
             aws_env=aws_env,
         )
 
@@ -310,18 +311,18 @@ def main(
     if track:
         if upload:
             storage_link = StorageLink(
-                bucket=bucket,
-                key=key,
+                bucket=bucket,  # type: ignore
+                key=key,  # type: ignore
                 aws_env=aws_env,
             )
 
             link_model_artifact(
-                run,
+                run,  # type: ignore
                 classifier,
                 storage_link,
             )
 
-        run.finish()
+        run.finish()  # type: ignore
 
 
 if __name__ == "__main__":
