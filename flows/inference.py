@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 import boto3
 import wandb
@@ -318,12 +318,19 @@ async def run_classifier_inference_on_document(
             )
 
 
+def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
+    """Generate batches from a list with a specified size."""
+    for i in range(0, len(data), batch_size):
+        yield data[i : i + batch_size]
+
+
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
+    batch_size: int = 400,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
@@ -368,15 +375,16 @@ async def classifier_inference(
     )
 
     for classifier_spec in classifier_specs:
-        subflows = [
-            run_classifier_inference_on_document(
-                run=run,
-                config=config,
-                document_id=document_id,
-                classifier_name=classifier_spec.name,
-                classifier_alias=classifier_spec.alias,
-            )
-            for document_id in validated_document_ids
-        ]
+        for batch in iterate_batch(validated_document_ids, batch_size):
+            subflows = []
+            for document_id in batch:
+                subflow = run_classifier_inference_on_document(
+                    run=run,
+                    config=config,
+                    document_id=document_id,
+                    classifier_name=classifier_spec.name,
+                    classifier_alias=classifier_spec.alias,
+                )
+                subflows.append(subflow)
 
-        await asyncio.gather(*subflows)
+            await asyncio.gather(*subflows)
