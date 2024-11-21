@@ -252,9 +252,12 @@ def store_labels(
 
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
-) -> LabelledPassage:
+) -> Optional[LabelledPassage]:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
+    if not spans:
+        return None
+
     # Remove the labelled passages from the concept to reduce the size of the metadata.
     concept_no_labelled_passages = classifier.concept.model_copy(
         update={"labelled_passages": []}
@@ -297,10 +300,13 @@ async def run_classifier_inference_on_document(
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
 
-        doc_labels = [
-            text_block_inference(classifier=classifier, block_id=block_id, text=text)
-            for text, block_id in document_passages(document)
-        ]
+        doc_labels = []
+        for text, block_id in document_passages(document):
+            labelled_passages = text_block_inference(
+                classifier=classifier, block_id=block_id, text=text
+            )
+            if labelled_passages:
+                doc_labels.append(labelled_passages)
 
         store_labels(
             config=config,
