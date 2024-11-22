@@ -81,7 +81,7 @@ class LLMClassifier(Classifier):
         Example output structure:
         {EXAMPLE_OUTPUT}
 
-        Begin your concept identification process now, followed by the final output in the specified JSON format. Apart from what's contained within the <concept_identification> tags and the final json output, there should be no other text in your response.
+        Begin your concept identification process now, followed by the final output in the specified JSON format. Apart from what's contained within the <concept_identification> tags and the final JSON output, there should be no other text in your response.
         """
 
         self.model = model
@@ -155,7 +155,6 @@ class LLMClassifier(Classifier):
 
         # remove all superfluous whitespace from the lines of the prompt
         prompt = "\n".join(line.strip() for line in prompt.split("\n"))
-        print(prompt)
 
         llm_response = (
             self.client.messages.create(
@@ -169,7 +168,6 @@ class LLMClassifier(Classifier):
 
         # remove <concept_identification> tags from the response so that we're just left
         # with the JSON output
-        print(llm_response)
         stripped_response = re.sub(
             r"<concept_identification>.*?</concept_identification>",
             "",
