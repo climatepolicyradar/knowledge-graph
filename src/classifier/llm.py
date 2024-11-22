@@ -17,7 +17,7 @@ class LLMClassifier(Classifier):
 
     def __init__(self, concept: Concept, model: str = "claude-3-5-haiku-20241022"):
         self.concept = concept
-        default_examples = """<INPUT>
+        default_examples = """<input>
         
         {
             "a8h3hcxj": "I worked on a horse farm when I was a kid. I was in charge of feeding the ponies.",
@@ -25,9 +25,9 @@ class LLMClassifier(Classifier):
             "fh7akadd": "I have a pet dog."
         }
         
-        </INPUT>
+        </input>
 
-        <OUTPUT>
+        <output>
         
         {
             "a8h3hcxj": "I worked on a <CONCEPT>horse</CONCEPT> farm when I was a kid. I was in charge of feeding the <CONCEPT>ponies</CONCEPT>.",
@@ -35,49 +35,54 @@ class LLMClassifier(Classifier):
             "fh7akadd": "I have a pet dog."
         }
         
-        </OUTPUT>
+        </output>
         """
 
-        examples = (
+        self.examples = (
             self._create_labelled_examples(self.concept.labelled_passages)
             if self.concept.labelled_passages
             else default_examples
         )
 
-        self.prompt = f"""We're trying to identify instances of the concept "{self.concept.preferred_label}" in climate policy documents. You will be given a set of passages of text from climate policy documents, which may contain instances of the concept. Your task is to identify any instances of the concept in the text passages.
-        
-        Passages may contain multiple instances of the concept, and you should identify all of them if they are present. If a passage does not contain any instances of the concept, you should still include it in the output, exactly as it was given  to you. Concepts may be referred to by different names in different passages, so you should not make assumptions about what the concept might be called.
+        self.prompt_template = """
+        You are an AI assistant specialized in analyzing climate policy documents to identify mentions of the "{PREFERRED_LABEL}" concept. Your task is to process input passages and mark any references to the concept of "{PREFERRED_LABEL}" with XML tags.
 
-        You should mark instances of the concept by surrounding the relevant text in XML tags like <CONCEPT>relevant text</CONCEPT>.
+        First, carefully review the following description of the concept of "{PREFERRED_LABEL}":
 
-        The input passages will be given to you in json format, and you should output your answer in the same format. Here is an example of the input and output format, based on the concept of "{self.concept.preferred_label if self.concept.labelled_passages else "horse"}":
+        <concept_description>
+        {CONCEPT_DESCRIPTION}
+        </concept_description>
 
-        {examples}
+        Now, you will be given a set of passages from climate policy documents in JSON format. Your task is to identify any instances of "{PREFERRED_LABEL}" in these passages and mark them with <CONCEPT> tags.
 
-        The identifiers (keys) for each passage are unique, and those in the output should correspond exactly to those in the input.
-        
-        In this case, you will need to identify spans which refer to the concept of "{self.concept.preferred_label}" based on the following description. You should use this description to identify the concept in the input passages, even if the concept is referred to indirectly, or by a different name in some of thepassages.
+        <input_passages>
+        {INPUT_PASSAGES}
+        </input_passages>
 
-        Here is the complete description of the concept, based on our knowledge of the climate policy domain:
+        Instructions:
+        1. Read through each passage carefully.
+        2. Identify any mentions of the concept of "{PREFERRED_LABEL}", including direct references and related terms as described in the concept description.
+        3. Surround the identified text with <CONCEPT> tags.
+        4. If a passage contains multiple instances of the concept, mark all of them.
+        5. If a passage does not contain any instances of the concept, include it in the output exactly as it was given to you.
+        6. Maintain the original JSON structure in your output, using the same identifiers (keys) as in the input.
+        7. Apart from the <CONCEPT> tags, you should not change the text of the passages in any way.
 
-        <CONCEPT_DESCRIPTION>
+        Before providing your final output, wrap your thought process for each passage in <concept_identification> tags. This process should include:
+        1. Listing key terms and phrases from the concept description.
+        2. For each passage, identifying potential matches and explaining why they fit or don't fit the concept.
+        3. Counting the number of identified concepts in each passage.
 
-        {self.concept.to_markdown()}
-        
-        </CONCEPT_DESCRIPTION>
+        This will help ensure a thorough and accurate identification of the concept.
 
-        Here is the input text for this task:
+        Output Format:
+        Present your final output in JSON format, matching the structure of the input but with added <CONCEPT> tags where appropriate. Each key-value pair should be on a new line for readability.
 
-        <INPUT>
+        Example output structure:
+        {EXAMPLE_OUTPUT}
 
-        __INPUT_PASSAGES__
-        
-        </INPUT>
-
-        Begin generating the response now, presenting your output in the specified JSON format. Do not include any additional content, preamble, or explanation in your response."""
-
-        # remove all superfluous whitespace from the lines of the prompt
-        self.prompt = "\n".join(line.strip() for line in self.prompt.split("\n"))
+        Begin your concept identification process now, followed by the final output in the specified JSON format. Apart from what's contained within the <concept_identification> tags and the final json output, there should be no other text in your response.
+        """
 
         self.model = model
         self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -113,17 +118,17 @@ class LLMClassifier(Classifier):
             for labelled_passage in sampled_examples
         }
 
-        return f"""<INPUT>
+        return f"""<input>
 
         {json.dumps(unlabelled, indent=2)}
 
-        </INPUT>
+        </input>
 
-        <OUTPUT>
+        <output>
 
         {json.dumps(labelled, indent=2)}
 
-        </OUTPUT>
+        </output>
         """
 
     def _get_spans_from_string(self, text: str) -> list[tuple[int, int]]:
@@ -141,9 +146,17 @@ class LLMClassifier(Classifier):
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """Predict the presence of the concept in a batch of texts."""
         input_passages = {generate_identifier(text): text for text in texts}
-        prompt = self.prompt.replace(
-            "__INPUT_PASSAGES__", json.dumps(input_passages, indent=2)
+        prompt = self.prompt_template.format(
+            PREFERRED_LABEL=self.concept.preferred_label,
+            CONCEPT_DESCRIPTION=self.concept.to_markdown(),
+            EXAMPLE_OUTPUT=self.examples,
+            INPUT_PASSAGES=json.dumps(input_passages, indent=2),
         )
+
+        # remove all superfluous whitespace from the lines of the prompt
+        prompt = "\n".join(line.strip() for line in prompt.split("\n"))
+        print(prompt)
+
         llm_response = (
             self.client.messages.create(
                 model=self.model,
@@ -153,8 +166,18 @@ class LLMClassifier(Classifier):
             .content[0]
             .text
         )
+
+        # remove <concept_identification> tags from the response so that we're just left
+        # with the JSON output
+        print(llm_response)
+        stripped_response = re.sub(
+            r"<concept_identification>.*?</concept_identification>",
+            "",
+            llm_response,
+            flags=re.DOTALL,  # DOTALL ensures we can match tags across multi-line strings
+        ).strip()
         try:
-            json_output = json.loads(llm_response)
+            json_output = json.loads(stripped_response)
         except json.JSONDecodeError:
             raise ValueError(f"Invalid JSON output: {llm_response}")
 
