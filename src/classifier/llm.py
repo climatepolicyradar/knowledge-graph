@@ -2,6 +2,7 @@ import json
 import os
 import random
 import re
+from typing import Optional
 
 from anthropic import Anthropic
 
@@ -10,13 +11,20 @@ from src.concept import Concept
 from src.identifiers import generate_identifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from src.wikibase import WikibaseSession
 
 
 class LLMClassifier(Classifier):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
-    def __init__(self, concept: Concept, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(
+        self,
+        concept: Concept,
+        model: str = "claude-3-5-haiku-20241022",
+        wikibase: Optional[WikibaseSession] = None,
+    ):
         self.concept = concept
+        self.wikibase = wikibase
         default_examples = """<input>
         
         {
@@ -66,7 +74,13 @@ class LLMClassifier(Classifier):
         4. If a passage contains multiple instances of the concept, mark all of them.
         5. If a passage does not contain any instances of the concept, include it in the output exactly as it was given to you.
         6. Maintain the original JSON structure in your output, using the same identifiers (keys) as in the input.
-        7. Apart from the <CONCEPT> tags, you should not change the text of the passages in any way.
+        7. CRITICAL: The output text must be EXACTLY identical to the input text, character-for-character, with the only difference being the addition of <CONCEPT> tags. This means:
+           - No changing of spacing or punctuation
+           - No fixing of typos or grammatical errors
+           - No changing of capitalization
+           - No removal or addition of any characters whatsoever
+           - No reformatting or restructuring of any kind, including spacing or line breaks
+        8. Apart from the <CONCEPT> tags, you must not modify the text in any way, no matter how small the change might seem.
 
         Before providing your final output, wrap your thought process for each passage in <concept_identification> tags. This process should include:
         1. Listing key terms and phrases from the concept description.
@@ -101,9 +115,9 @@ class LLMClassifier(Classifier):
             for labelled_passage in labelled_passages
             if len(labelled_passage.spans) == 0
         ]
-        sampled_examples = random.sample(positive_examples, 2) + random.sample(
-            negative_examples, 1
-        )
+        sampled_examples = random.sample(
+            positive_examples, min(2, len(positive_examples))
+        ) + random.sample(negative_examples, min(1, len(negative_examples)))
 
         unlabelled = {
             generate_identifier(labelled_passage.text): labelled_passage.text
@@ -148,7 +162,7 @@ class LLMClassifier(Classifier):
         input_passages = {generate_identifier(text): text for text in texts}
         prompt = self.prompt_template.format(
             PREFERRED_LABEL=self.concept.preferred_label,
-            CONCEPT_DESCRIPTION=self.concept.to_markdown(),
+            CONCEPT_DESCRIPTION=self.concept.to_markdown(wikibase=self.wikibase),
             EXAMPLE_OUTPUT=self.examples,
             INPUT_PASSAGES=json.dumps(input_passages, indent=2),
         )
