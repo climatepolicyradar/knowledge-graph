@@ -141,99 +141,114 @@ class Concept(BaseModel):
         Return a complete representation of the concept in natural language
 
         Rather than outputting a machine-readable form of the concept (eg in JSON), the
-        output should be human-readable, suitable for human or LLM consumption. For
-        example, these formatted versions of the concept might be used to ground a RAG
-        response if the concept is mentioned in the query.
+        output should be human-readable, suitable for human or LLM consumption.
 
         :param WikibaseSession wikibase: A Wikibase session
         """
-        formatted_concept = [f"# {self.preferred_label}"]
+        sections = []
 
+        # Title
+        sections.append(f"# {self.preferred_label}")
+
+        # Description and Definition
         if self.description:
-            formatted_concept.extend(["\n## Description", self.description, ""])
+            sections.append("## Description")
+            sections.append(self.description)
 
         if self.definition:
-            formatted_concept.extend(["## Definition", self.definition, ""])
+            sections.append("## Definition")
+            sections.append(self.definition)
 
+        # Labels
         if self.alternative_labels:
-            formatted_concept.extend(
-                [
-                    "## Alternative Names",
-                    "\n".join(f"- {label}" for label in self.alternative_labels),
-                    "",
-                ]
+            sections.append(
+                "## Alternative labels, synonyms, acronyms, and related terms"
+            )
+            sections.append(
+                "\n".join(f"- {label}" for label in self.alternative_labels)
             )
 
         if self.negative_labels:
-            formatted_concept.extend(
-                [
-                    "## Not to be Confused With",
-                    "\n".join(f"- {label}" for label in self.negative_labels),
-                    "",
-                ]
+            sections.append("## Not to be confused with")
+            sections.append("\n".join(f"- {label}" for label in self.negative_labels))
+
+        # Concept neighbourhood
+        if wikibase:
+            sections.append("## Concept neighbourhood")
+            sections.append(
+                "This concept exists within a knowledge graph of other concepts, "
+                "with hierarchical and non-hierarchical relationships. Solid arrows "
+                "denote hierarchical relationships, where subconcepts are wholly "
+                "semantically/conceptually entailed by their parent concept. Dashed "
+                "lines show non-hierarchical relationships, which imply semantic "
+                "or real-world relatedness between the two concepts which may be "
+                "less strict than a hierarchical relationship."
             )
 
-        if wikibase:
-            parent_names = [
-                wikibase.get_concept(parent_id).preferred_label
-                for parent_id in self.subconcept_of
-            ]
-            if parent_names:
-                formatted_concept.extend(
-                    [
-                        "## Parent Concepts",
-                        "\n".join(f"- {name}" for name in parent_names),
-                        "",
-                    ]
+            def sanitize_concept_label(label: str) -> str:
+                return label.replace(" ", "_").replace("-", "_")
+
+            mermaid_lines = ["graph TD"]
+            self_label = sanitize_concept_label(self.preferred_label)
+
+            # Add parent relationships
+            for parent_id in self.subconcept_of:
+                parent = wikibase.get_concept(parent_id)
+                parent_label = sanitize_concept_label(parent.preferred_label)
+                mermaid_lines.append(
+                    f"    {parent_label}-->|has subconcept|{self_label}"
                 )
 
-            subconcept_names = [
-                wikibase.get_concept(subconcept_id).preferred_label
-                for subconcept_id in self.has_subconcept
-            ]
-            if subconcept_names:
-                formatted_concept.extend(
-                    [
-                        "## Subconcepts",
-                        "\n".join(f"- {name}" for name in subconcept_names),
-                        "",
-                    ]
+                # Add sibling relationships via the parent
+                for child_id in parent.has_subconcept:
+                    if child_id != self.wikibase_id:
+                        child = wikibase.get_concept(child_id)
+                        child_label = sanitize_concept_label(child.preferred_label)
+                        mermaid_lines.append(
+                            f"    {parent_label}-->|has subconcept|{child_label}"
+                        )
+
+            # Add child relationships
+            for child_id in self.has_subconcept:
+                child = wikibase.get_concept(child_id)
+                child_label = sanitize_concept_label(child.preferred_label)
+                mermaid_lines.append(
+                    f"    {self_label}-->|has subconcept|{child_label}"
                 )
 
-            related_names = [
-                wikibase.get_concept(related_id).preferred_label
-                for related_id in self.related_concepts
-            ]
-            if related_names:
-                formatted_concept.extend(
-                    [
-                        "## Related Concepts",
-                        "\n".join(f"- {name}" for name in related_names),
-                        "",
-                    ]
-                )
+            # Add related concept relationships
+            for related_id in self.related_concepts:
+                related = wikibase.get_concept(related_id)
+                related_label = sanitize_concept_label(related.preferred_label)
+                mermaid_lines.append(f"    {self_label}-.->|related to|{related_label}")
 
-        positive_labelled_passages = [
+            # Add styling to highlight the current concept
+            mermaid_lines.append(
+                f"    style {self_label} "
+                "fill:#e8f4f8,stroke:#2c5282,stroke-width:2px,rx:5"
+            )
+
+            sections.append("```mermaid\n" + "\n".join(mermaid_lines) + "\n```")
+
+        # Example passages
+        positive_passages = [
             passage
             for passage in self.labelled_passages
             if any(span.concept_id == self.wikibase_id for span in passage.spans)
         ]
 
-        if positive_labelled_passages:
-            formatted_concept.extend(
-                [
-                    "## Example Passages",
-                    *[
-                        "> " + passage.text.replace("\n", "\n> ") + "\n"
-                        for passage in random.sample(
-                            positive_labelled_passages,
-                            min(5, len(positive_labelled_passages)),
-                        )
-                    ],
-                ]
+        if positive_passages:
+            sections.append("## Example passages")
+            sections.append(
+                "These are examples of passages from real documents which mention the "
+                "concept. They are not exhaustive, but should give a sense of the "
+                "concept's meaning and usage."
             )
+            sample_size = min(5, len(positive_passages))
+            for passage in random.sample(positive_passages, sample_size):
+                sections.append("> " + passage.text.replace("\n", "\n> "))
 
-        return "\n".join(formatted_concept)
+        return "\n\n".join(sections)
 
     def save(self, path: Union[str, Path]) -> None:
         """
