@@ -4,6 +4,7 @@ from pathlib import Path
 
 import boto3
 import pytest
+from cpr_sdk.parser_models import BlockType
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
@@ -98,6 +99,29 @@ def test_stringify():
     text = ["a", " sequence", " of ", "text "]
     result = _stringify(text)
     assert result == "a sequence of text"
+
+
+def test_document_passages__blocked_types(parser_output_pdf):
+    # Add a page number block that should be filtered out
+    from cpr_sdk.parser_models import TextBlock
+
+    parser_output_pdf.pdf_data.text_blocks.append(
+        TextBlock(
+            text=["Page 1"],
+            text_block_id="page_1",
+            type=BlockType.PAGE_NUMBER,
+            type_confidence=0.5,
+        )
+    )
+
+    # Get all passages
+    results = list(document_passages(parser_output_pdf))
+
+    # Should only get the non-page-number block
+    assert len(results) == 1
+    assert results[0] == ("test pdf text", "2")
+    # Verify the page number block was filtered out
+    assert not any(block_id == "page_1" for _, block_id in results)
 
 
 def test_document_passages__invalid_content_type(parser_output):
