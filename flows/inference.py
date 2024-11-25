@@ -330,7 +330,7 @@ async def classifier_inference(
     document_ids: Optional[list[str]] = None,
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
-    batch_size: int = 200,
+    batch_size: int = 400,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
