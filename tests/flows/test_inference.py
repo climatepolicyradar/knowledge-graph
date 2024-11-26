@@ -14,6 +14,7 @@ from flows.inference import (
     document_passages,
     download_classifier_from_wandb_to_local,
     get_latest_ingest_documents,
+    iterate_batch,
     list_bucket_doc_ids,
     load_classifier,
     load_document,
@@ -100,10 +101,10 @@ def test_stringify():
 
 
 def test_document_passages__invalid_content_type(parser_output):
-    # When the content type is borked
+    # When the content type is none, empty list
     parser_output.document_content_type = None
-    with pytest.raises(ValueError):
-        document_passages(parser_output).__next__()
+    result = [i for i in document_passages(parser_output)]
+    assert result == []
 
 
 def test_document_passages__html(parser_output_html):
@@ -141,9 +142,7 @@ async def test_text_block_inference(
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
-    labels = await text_block_inference(
-        classifier=classifier, block_id=block_id, text=text
-    )
+    labels = text_block_inference(classifier=classifier, block_id=block_id, text=text)
 
     assert len(labels.spans) > 0
     assert labels.id == block_id
@@ -197,3 +196,16 @@ def test_get_latest_ingest_documents(
     _, latest_docs = mock_bucket_new_and_updated_documents_json
     doc_ids = get_latest_ingest_documents(test_config)
     assert set(doc_ids) == latest_docs
+
+
+@pytest.mark.parametrize(
+    "data, expected_lengths",
+    [
+        (list(range(50)), [50]),
+        (list(range(850)), [400, 400, 50]),
+        ([], [0]),
+    ],
+)
+def test_iterate_batch(data, expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+        assert len(batch) == expected

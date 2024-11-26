@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Generator, Optional
 
 import boto3
 import wandb
@@ -212,8 +212,9 @@ def document_passages(document: BaseParserOutput):
         case "text/html":
             text_blocks = document.html_data.text_blocks  # type: ignore
         case _:
-            raise ValueError(
-                "Invalid document content type: "
+            text_blocks = []
+            print(
+                "Unsupported document content type: "
                 f"{document.document_content_type}, for "
                 f"document: {document.document_id}"
             )
@@ -249,26 +250,28 @@ def store_labels(
     )
 
 
-async def text_block_inference(
+def text_block_inference(
     classifier: Classifier, block_id: str, text: str
-) -> LabelledPassage:
+) -> Optional[LabelledPassage]:
     """Run predict on a single text block."""
-    async with concurrency("text_block_inference", occupy=1):
-        spans: list[Span] = classifier.predict(text)
-        # Remove the labelled passages from the concept to reduce the size of the metadata.
-        concept_no_labelled_passages = classifier.concept.model_copy(
-            update={"labelled_passages": []}
-        )
-        labelled_passage = LabelledPassage(
-            id=block_id,
-            text=text,
-            spans=spans,
-            metadata={
-                "concept": concept_no_labelled_passages.model_dump(),
-                "inference_timestamp": datetime.now().isoformat(),
-            },
-        )
-        return labelled_passage
+    spans: list[Span] = classifier.predict(text)
+    if not spans:
+        return None
+
+    # Remove the labelled passages from the concept to reduce the size of the metadata.
+    concept_no_labelled_passages = classifier.concept.model_copy(
+        update={"labelled_passages": []}
+    )
+    labelled_passage = LabelledPassage(
+        id=block_id,
+        text=text,
+        spans=spans,
+        metadata={
+            "concept": concept_no_labelled_passages.model_dump(),
+            "inference_timestamp": datetime.now().isoformat(),
+        },
+    )
+    return labelled_passage
 
 
 @flow(log_prints=True)
@@ -297,22 +300,28 @@ async def run_classifier_inference_on_document(
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
 
-        subflows = [
-            text_block_inference.submit(  # type: ignore
+        doc_labels = []
+        for text, block_id in document_passages(document):
+            labelled_passages = text_block_inference(
                 classifier=classifier, block_id=block_id, text=text
             )
-            for text, block_id in document_passages(document)
-        ]
+            if labelled_passages:
+                doc_labels.append(labelled_passages)
 
-        doc_labels = await asyncio.gather(*subflows)
+        if doc_labels:
+            store_labels(
+                config=config,
+                labels=doc_labels,
+                document_id=document_id,
+                classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
+            )
 
-        store_labels(
-            config=config,
-            labels=doc_labels,  # type: ignore
-            document_id=document_id,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-        )
+
+def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
+    """Generate batches from a list with a specified size."""
+    for i in range(0, len(data), batch_size):
+        yield data[i : i + batch_size]
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
@@ -321,6 +330,7 @@ async def classifier_inference(
     document_ids: Optional[list[str]] = None,
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
+    batch_size: int = 400,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
@@ -365,15 +375,16 @@ async def classifier_inference(
     )
 
     for classifier_spec in classifier_specs:
-        subflows = [
-            run_classifier_inference_on_document(
-                run=run,
-                config=config,
-                document_id=document_id,
-                classifier_name=classifier_spec.name,
-                classifier_alias=classifier_spec.alias,
-            )
-            for document_id in validated_document_ids
-        ]
+        for batch in iterate_batch(validated_document_ids, batch_size):
+            subflows = []
+            for document_id in batch:
+                subflow = run_classifier_inference_on_document(
+                    run=run,
+                    config=config,
+                    document_id=document_id,
+                    classifier_name=classifier_spec.name,
+                    classifier_alias=classifier_spec.alias,
+                )
+                subflows.append(subflow)
 
-        await asyncio.gather(*subflows)
+            await asyncio.gather(*subflows)
