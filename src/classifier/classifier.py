@@ -37,7 +37,6 @@ class Classifier(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """
         Predict whether the supplied texts contain instances of the concept.
