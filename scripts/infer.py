@@ -1,23 +1,28 @@
+import asyncio
 from typing import Optional
 
 import typer
 from prefect.deployments import run_deployment  # type: ignore
 from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
+from typer import Typer
 from typing_extensions import Annotated
 
-from scripts.cloud import AwsEnv, ClassifierSpec
+from flows.inference import classifier_inference
+from scripts.cloud import AwsEnv, ClassifierSpec, generate_deployment_name
 
-app = typer.Typer()
+app = Typer()
 console = Console()
 
 
-def convert_classifier_specs(requested_classifiers: list[str]) -> list[ClassifierSpec]:
+def convert_classifier_specs(
+    requested_classifiers: list[str],
+) -> list[ClassifierSpec]:
     """
-    Prepares the requested classifiers
+    Prepare the requested classifiers.
 
-    Validates the classifier parameter and converts it to json ready to submit to
-    prefect cloud
+    Validates the classifier parameter and converts it to json ready
+    to submit to prefect cloud
     """
     classifier_specs = []
     for i, classifier in enumerate(requested_classifiers):
@@ -42,7 +47,7 @@ def convert_classifier_specs(requested_classifiers: list[str]) -> list[Classifie
         pipeline cache bucket and save the labelled passage results back to s3.
         """
 )
-def main(
+async def main(
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
@@ -83,23 +88,26 @@ def main(
     classifiers = classifiers or None  # type: ignore
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
-    deployment_name = (
-        f"classifier-inference/knowledge-graph-classifier-inference-{aws_env}"
-    )
+    deployment_name = f"{classifier_inference.name}/{generate_deployment_name(classifier_inference.name, aws_env)}"  # pyright: ignore[reportFunctionMemberAccess]
     console.log(f"Starting run for deployment: {deployment_name}")
 
-    flow_run = run_deployment(
-        name=deployment_name,
-        timeout=0,  # Don't wait for the flow to finish before continuing script
-        parameters={
-            "classifier_specs": classifiers,
-            "document_ids": documents,
-        },
-    )
+    try:
+        flow_run = await run_deployment(
+            name=deployment_name,
+            # Don't wait for the flow to finish before continuing script
+            timeout=0,
+            parameters={
+                "classifier_specs": classifiers,
+                "document_ids": documents,
+            },
+        )
+    except Exception as e:
+        console.log(f"[red]Error running deployment: {e}[/red]")
+        raise typer.Exit(1)
 
     flow_url = f"{PREFECT_UI_URL.value()}/runs/flow-run/{flow_run.id}"  # type: ignore
-    console.log(f"See progress at: {flow_url}")
+    console.log(f"See progress at: [green]{flow_url}[/green]")
 
 
 if __name__ == "__main__":
-    app()
+    asyncio.run(app())

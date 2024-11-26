@@ -1,15 +1,16 @@
 import asyncio
 import json
 import os
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Final, Optional
 
 import boto3
 import wandb
-from cpr_sdk.parser_models import BaseParserOutput
+from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.concurrency.asyncio import concurrency
@@ -24,6 +25,12 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
+# NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
+BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
+    BlockType.PAGE_NUMBER,
+    BlockType.TABLE,
+    BlockType.FIGURE,
+}
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 
@@ -204,7 +211,9 @@ def _stringify(text: list[str]) -> str:
     return " ".join([line.strip() for line in text])
 
 
-def document_passages(document: BaseParserOutput):
+def document_passages(
+    document: BaseParserOutput,
+) -> Generator[tuple[str, str], None, None]:
     """Yield the text block irrespective of content type."""
     match document.document_content_type:
         case "application/pdf":
@@ -219,7 +228,8 @@ def document_passages(document: BaseParserOutput):
                 f"document: {document.document_id}"
             )
     for text_block in text_blocks:
-        yield _stringify(text_block.text), text_block.text_block_id
+        if text_block.type not in BLOCKED_BLOCK_TYPES:
+            yield _stringify(text_block.text), text_block.text_block_id
 
 
 def store_labels(

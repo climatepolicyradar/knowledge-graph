@@ -46,7 +46,7 @@ def main(
     combined_dataset_path = processed_data_dir / "combined_dataset.feather"
     try:
         df = pd.read_feather(combined_dataset_path)
-        df = df.dropna(subset=["text"]).sample(sample_size)
+        df = df.dropna(subset=["text_block.text"]).sample(sample_size)
         console.log(f"✅ Loaded {len(df)} passages from local file")
     except FileNotFoundError as e:
         raise FileNotFoundError(
@@ -76,7 +76,7 @@ def main(
         total=len(df),
         description=f"Running {classifier} on {len(df)} passages",
     ):
-        text = row.get("text", "")
+        text = row.get("text_block.text", "")
         if text:
             spans = classifier.predict(text)
             if spans:
