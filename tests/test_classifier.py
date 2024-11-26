@@ -115,7 +115,7 @@ def test_whether_classifier_respects_negative_labels(
     classifier_class: Type[Classifier], data: st.DataObject
 ):
     if not issubclass(classifier_class, RulesBasedClassifier):
-        pytest.skip("This test only applies to RulesBasedClassifier")
+        pytest.skip("This test only applies to RulesBasedClassifiers")
 
     # Create a positive label and a negative which contains the positive label.
     positive_label = data.draw(concept_label_strategy)
@@ -139,6 +139,69 @@ def test_whether_classifier_respects_negative_labels(
     spans = classifier.predict(text)
 
     assert not spans, f"{classifier} matched text in '{text}'"
+
+
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@pytest.mark.parametrize(
+    "concept_data,test_text,should_match",
+    [
+        (
+            {
+                "preferred_label": "gas",
+                "negative_labels": ["greenhouse gas", "gas industry"],
+            },
+            "I need to fill up my gas tank.",
+            True,
+        ),
+        (
+            {
+                "preferred_label": "gas",
+                "negative_labels": ["greenhouse gas", "gas industry"],
+            },
+            "Greenhouse gas emissions are a major contributor to climate change.",
+            False,
+        ),
+        (
+            {
+                "preferred_label": "conflict",
+                "negative_labels": ["conflict of interest"],
+            },
+            "The conflict in Sudan has major implications for the region.",
+            True,
+        ),
+        (
+            {
+                "preferred_label": "conflict",
+                "negative_labels": ["conflict of interest"],
+            },
+            "This conflict of interest is a major contributor to climate change.",
+            False,
+        ),
+    ],
+)
+def test_concrete_negative_label_examples(
+    classifier_class: Type[Classifier],
+    concept_data: dict,
+    test_text: str,
+    should_match: bool,
+):
+    """Test specific examples of positive and negative label matching."""
+    if not issubclass(classifier_class, RulesBasedClassifier):
+        pytest.skip("This test only applies to RulesBasedClassifiers")
+
+    concept = Concept(wikibase_id="Q123", **concept_data)
+    classifier = classifier_class(concept)
+    spans = classifier.predict(test_text)
+
+    if should_match:
+        assert spans, f"{classifier} did not match text in '{test_text}'"
+        assert all(
+            span.labelled_text.lower()
+            in [label.lower() for label in concept.all_labels]
+            for span in spans
+        )
+    else:
+        assert not spans, f"{classifier} incorrectly matched text in '{test_text}'"
 
 
 @pytest.mark.parametrize("classifier_class", classifier_classes)

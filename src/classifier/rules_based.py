@@ -29,21 +29,28 @@ class RulesBasedClassifier(Classifier):
         super(RulesBasedClassifier, self).__init__(concept)
         self.positive_matcher = KeywordClassifier(
             concept=Concept(
+                wikibase_id=self.concept.wikibase_id,
                 preferred_label=self.concept.preferred_label,
                 alternative_labels=self.concept.all_labels,
             )
         )
-        self.negative_matcher = KeywordClassifier(
-            concept=Concept(
-                preferred_label=self.concept.negative_labels[0],
-                alternative_labels=self.concept.negative_labels,
+        if self.concept.negative_labels:
+            self.negative_matcher = KeywordClassifier(
+                concept=Concept(
+                    wikibase_id=self.concept.wikibase_id,
+                    preferred_label=self.concept.negative_labels[0],
+                    alternative_labels=self.concept.negative_labels,
+                )
             )
-        )
+        else:
+            self.negative_matcher = None
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
         positive_matches = self.positive_matcher.predict(text)
-        negative_matches = self.negative_matcher.predict(text)
+        negative_matches = (
+            self.negative_matcher.predict(text) if self.negative_matcher else []
+        )
 
         # filter out any positive matches which overlap with negative matches
         filtered_matches = [
