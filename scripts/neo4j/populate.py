@@ -3,14 +3,48 @@ import pandas as pd
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import processed_data_dir
-from src.classifier import Classifier, ClassifierFactory
+from scripts.config import classifier_dir, processed_data_dir
+from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.neo4j import get_neo4j_session
 from src.neo4j.models import ConceptNode, DocumentNode, PassageNode
 from src.wikibase import WikibaseSession
 
 console = Console()
+
+wikibase_ids = [
+    "Q368",
+    "Q374",
+    "Q404",
+    "Q412",
+    "Q757",
+    "Q760",
+    "Q761",
+    "Q762",
+    "Q763",
+    "Q764",
+    "Q765",
+    "Q766",
+    "Q767",
+    "Q768",
+    "Q769",
+    "Q774",
+    "Q775",
+    "Q777",
+    "Q778",
+    "Q779",
+    "Q786",
+    "Q787",
+    "Q788",
+    "Q818",
+    "Q857",
+    "Q954",
+    "Q955",
+    "Q956",
+    "Q973",
+    "Q983",
+    "Q986",
+]
 
 session = get_neo4j_session(clear=True)
 
@@ -83,22 +117,21 @@ console.log("Finished creating concept graph")
 
 console.log("Creating classifiers...")
 classifiers: list[Classifier] = []
-for concept in track(
-    all_concepts,
+for wikibase_id in track(
+    wikibase_ids,
     console=console,
     description="Creating classifiers",
-    total=len(all_concepts),
+    total=len(wikibase_ids),
     transient=True,
 ):
-    classifier = ClassifierFactory.create(concept=concept)
-    classifier.fit()
+    classifier = Classifier.load(classifier_dir / wikibase_id)
     classifiers.append(classifier)
     console.log(f"Created {classifier}")
 
 console.log(f"Created {len(classifiers)} classifiers")
 
 labelled_passages: list[LabelledPassage] = []
-passages_dataset_path = processed_data_dir / "mini.feather"
+passages_dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
 passages_df = pd.read_feather(passages_dataset_path)
 console.log(f"Loaded document dataset from {passages_dataset_path}")
 
@@ -111,7 +144,7 @@ for classifier in classifiers:
         total=len(passages_df),
         description=f"Running {classifier} on {len(passages_df)} passages",
     ):
-        if text := row.get("text", ""):
+        if text := row.get("text_block.text", ""):
             spans = classifier.predict(text)
             if spans:
                 concept_labelled_passages.append(
@@ -119,6 +152,7 @@ for classifier in classifiers:
                         text=text, spans=spans, metadata=row.astype(str).to_dict()
                     )
                 )
+
     labelled_passages.extend(concept_labelled_passages)
     n_passages = len(concept_labelled_passages)
     n_spans = sum([len(entry.spans) for entry in concept_labelled_passages])
@@ -127,9 +161,6 @@ for classifier in classifiers:
         f"Found {n_passages} positive passages with {n_spans} individual spans"
     )
 
-n_unique_passages = len(set([entry.id for entry in labelled_passages]))
-console.log(f"Found {n_unique_passages} passages containing a mention of a concepts")
-
 unique_documents = set(
     (
         labelled_passage.metadata["document_id"],
@@ -137,10 +168,15 @@ unique_documents = set(
     )
     for labelled_passage in labelled_passages
 )
+
 n_unique_spans = sum([len(entry.spans) for entry in labelled_passages])
+n_unique_passages = len(set([entry.id for entry in labelled_passages]))
+n_unique_documents = len(unique_documents)
 console.log(
-    f"Found {n_unique_spans} spans across {len(unique_documents)} unique documents"
+    f"Found {n_unique_spans} spans across {n_unique_passages} passages "
+    f"from {n_unique_documents} unique documents"
 )
+
 
 for document_id, document_name in track(
     unique_documents,
@@ -162,8 +198,12 @@ for labelled_passage in track(labelled_passages, console=console):
         document_id=labelled_passage.metadata["document_id"]
     )
 
-    passage_node = PassageNode(text=labelled_passage.text).get_or_create()
-    console.log(f'Created passage node for "{labelled_passage.id}"')
+    passage_node = PassageNode.nodes.first_or_none(text=labelled_passage.text)
+    if not passage_node:
+        passage_node = PassageNode(text=labelled_passage.text).save()
+        console.log(f'Created new passage node for "{labelled_passage.id}"')
+    else:
+        console.log(f'Found existing passage node for "{labelled_passage.id}"')
 
     document_node.passages.connect(passage_node)
 
