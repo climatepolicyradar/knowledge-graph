@@ -57,10 +57,7 @@ class RulesBasedClassifier(Classifier):
             match
             for match in positive_matches
             if not any(
-                negative_match.start_index
-                <= match.start_index
-                <= negative_match.end_index
-                for negative_match in negative_matches
+                match.overlaps(negative_match) for negative_match in negative_matches
             )
         ]
         return filtered_matches
