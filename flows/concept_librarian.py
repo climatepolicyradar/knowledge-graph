@@ -7,6 +7,7 @@ from typing import Optional
 from prefect import flow, task
 from pydantic import BaseModel, ValidationError
 
+from scripts.cloud import AwsEnv, get_s3_client
 from src.concept import Concept, WikibaseID
 from src.wikibase import WikibaseSession
 
@@ -44,6 +45,17 @@ def create_fix_button(concept: Concept) -> str:
 wikibase = WikibaseSession()
 
 
+def upload_report_to_s3_static_site(report_path: Path):
+    """Uploads the report to a static site hosted in labs"""
+
+    s3_client = get_s3_client(AwsEnv.labs, region_name="eu-west-1")
+    s3_client.upload_file(
+        str(report_path),
+        "concept-librarian",
+        "index.html",
+    )
+
+
 @flow(log_prints=True)
 def validate_concept_store() -> list[ConceptStoreIssue]:
     print("Fetching all concepts from wikibase")
@@ -73,6 +85,8 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     output_path = librarian_output_dir / f"librarian_report_{timestr}.html"
     output_path.write_text(html_content)
     print(f"HTML report generated: {output_path.resolve()}")
+
+    upload_report_to_s3_static_site(output_path)
 
     return issues
 
@@ -421,6 +435,7 @@ def create_html_report(issues: list[ConceptStoreIssue]) -> str:
 
     # Create HTML
     html = [
+        """<meta charset="UTF-8">""",
         "<html>",
         "<head>",
         "<style>",
