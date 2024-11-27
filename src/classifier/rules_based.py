@@ -1,15 +1,23 @@
-import re
-
-from src.classifier import KeywordClassifier
+from src.classifier import Classifier
+from src.classifier.keyword import KeywordClassifier
 from src.concept import Concept
+from src.span import Span
 
 
-class RulesBasedClassifier(KeywordClassifier):
+class RulesBasedClassifier(Classifier):
     """
     Classifier uses keyword matching to find instances of a concept in text.
 
-    This modified version of the KeywordClassifier uses regular expressions to match
-    positive labels, while excluding matches that appear within negative labels.
+    This classifier uses two KeywordClassifiers: one for the positive labels and one for
+    the negative labels. It then filters out any positive matches which overlap with
+    negative matches.
+
+    For example, given a concept like:
+        Concept(preferred_label="gas", negative_labels=["greenhouse gas"])
+    the classifier will match
+        "I need to fill up my gas tank"
+    but not
+        "The greenhouse gas emissions are a major contributor to climate change."
     """
 
     def __init__(self, concept: Concept):
@@ -18,55 +26,38 @@ class RulesBasedClassifier(KeywordClassifier):
 
         :param Concept concept: The concept which the classifier will identify in text
         """
-        super().__init__(concept)
-
-        def create_pattern(positive_labels, negative_labels):
-            # Sort labels by length in descending order to ensure longer matches take precedence
-            positive_labels = sorted(positive_labels, key=len, reverse=True)
-            negative_labels = sorted(negative_labels, key=len, reverse=True)
-
-            # Escape special regex characters in labels
-            positive_labels = [re.escape(label) for label in positive_labels]
-            negative_labels = [re.escape(label) for label in negative_labels]
-
-            # Create the positive pattern
-            positive_pattern = r"\b(?:" + "|".join(positive_labels) + r")\b"
-
-            # If there are negative labels, create a pattern that excludes them
-            if negative_labels:
-                negative_pattern = r"\b(?:" + "|".join(negative_labels) + r")\b"
-                # The final pattern matches a positive label only if it's not part of a negative label
-                return f"(?!{negative_pattern})({positive_pattern})"
-            else:
-                return f"({positive_pattern})"
-
-        # Create case-sensitive and case-insensitive patterns
-        self.case_sensitive_pattern = re.compile(
-            create_pattern(
-                [
-                    label
-                    for label in self.concept.all_labels
-                    if any(c.isupper() for c in label)
-                ],
-                [
-                    label
-                    for label in self.concept.negative_labels
-                    if any(c.isupper() for c in label)
-                ],
+        super(RulesBasedClassifier, self).__init__(concept)
+        self.positive_matcher = KeywordClassifier(
+            concept=Concept(
+                wikibase_id=self.concept.wikibase_id,
+                preferred_label=self.concept.preferred_label,
+                alternative_labels=self.concept.all_labels,
             )
         )
-        self.case_insensitive_pattern = re.compile(
-            create_pattern(
-                [
-                    label.lower()
-                    for label in self.concept.all_labels
-                    if not any(c.isupper() for c in label)
-                ],
-                [
-                    label.lower()
-                    for label in self.concept.negative_labels
-                    if not any(c.isupper() for c in label)
-                ],
-            ),
-            re.IGNORECASE,
+        if self.concept.negative_labels:
+            self.negative_matcher = KeywordClassifier(
+                concept=Concept(
+                    wikibase_id=self.concept.wikibase_id,
+                    preferred_label=self.concept.negative_labels[0],
+                    alternative_labels=self.concept.negative_labels,
+                )
+            )
+        else:
+            self.negative_matcher = None
+
+    def predict(self, text: str) -> list[Span]:
+        """Predict whether the supplied text contains an instance of the concept."""
+        positive_matches = self.positive_matcher.predict(text)
+        negative_matches = (
+            self.negative_matcher.predict(text) if self.negative_matcher else []
         )
+
+        # filter out any positive matches which overlap with negative matches
+        filtered_matches = [
+            match
+            for match in positive_matches
+            if not any(
+                match.overlaps(negative_match) for negative_match in negative_matches
+            )
+        ]
+        return filtered_matches
