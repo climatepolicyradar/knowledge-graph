@@ -177,6 +177,26 @@ def test_whether_classifier_respects_negative_labels(
             "This conflict of interest is a major contributor to climate change.",
             False,
         ),
+        # in practice, the following situations are unlikely to occur, but we should
+        # check that the classifier behaves as expected anyway. These situations are
+        # better suited to non-keyword-based classifiers which will respect the semantic
+        # nuance of these sorts of positive and negative labels.
+        (
+            {
+                "preferred_label": "greenhouse gas",
+                "negative_labels": ["gas"],
+            },
+            "Greenhouse gas emissions are a major contributor to climate change.",
+            False,
+        ),
+        (
+            {
+                "preferred_label": "greenhouse gas",
+                "negative_labels": ["gas"],
+            },
+            "I need to fill up my gas tank.",
+            False,
+        ),
     ],
 )
 def test_concrete_negative_label_examples(
