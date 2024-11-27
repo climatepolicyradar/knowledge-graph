@@ -5,9 +5,9 @@ from string import punctuation
 from typing import Optional
 
 from prefect import flow, task
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from src.concept import Concept
+from src.concept import Concept, WikibaseID
 from src.wikibase import WikibaseSession
 
 
@@ -20,8 +20,20 @@ class ConceptStoreIssue(BaseModel):
     fix_concept: Optional[Concept] = None
 
 
-def stringify_concept(concept: Concept) -> str:
-    return f"""{concept.preferred_label} (<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.wikibase_id}</a>)"""
+def stringify_concept(
+    wikibase_id: Optional[WikibaseID], all_concepts: list[Concept]
+) -> str:
+    # This is here as the `wikibase_id` property of `Concept` is Optional
+    if wikibase_id is None:
+        raise ValueError("wikibase_id cannot be None")
+
+    single_concept_list = [c for c in all_concepts if c.wikibase_id == wikibase_id]
+
+    if single_concept_list:
+        concept = single_concept_list[0]
+        return f"""{concept.preferred_label} (<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.wikibase_id}</a>)"""
+    else:
+        return f"{wikibase_id} (empty)"
 
 
 def create_fix_button(concept: Concept) -> str:
@@ -79,14 +91,10 @@ def validate_related_relationship_symmetry(
     print(f"Found {len(related_relationships)} related concepts relationships")
     for concept_id, related_id in related_relationships:
         if (related_id, concept_id) not in related_relationships:
-            concept = next(
-                concept for concept in concepts if concept.wikibase_id == concept_id
-            )
-            related_concept = wikibase.get_concept(related_id)
             issues.append(
                 ConceptStoreIssue(
                     issue_type="asymmetric_related_relationship",
-                    message=f"{stringify_concept(concept)} is related to {stringify_concept(related_concept)}, but {stringify_concept(related_concept)} is not related to {stringify_concept(concept)}",
+                    message=f"{stringify_concept(concept_id, concepts)} is related to {stringify_concept(related_id, concepts)}, but {stringify_concept(related_id, concepts)} is not related to {stringify_concept(concept_id, concepts)}",
                     metadata={"concept_id": concept_id, "related_id": related_id},
                 )
             )
@@ -113,28 +121,32 @@ def validate_hierarchical_relationship_symmetry(
     print(f"Found {len(subconcept_of_relationships)} subconcept_of relationships")
     for concept_id, subconcept_id in has_subconcept_relationships:
         if (subconcept_id, concept_id) not in subconcept_of_relationships:
-            concept = next(
-                concept for concept in concepts if concept.wikibase_id == concept_id
-            )
-            subconcept = wikibase.get_concept(subconcept_id)
+            try:
+                subconcept = wikibase.get_concept(subconcept_id)
+            except ValidationError:
+                subconcept = Concept(
+                    wikibase_id=subconcept_id, preferred_label="unknown"
+                )
             issues.append(
                 ConceptStoreIssue(
                     issue_type="asymmetric_subconcept_relationship",
-                    message=f"{stringify_concept(concept)} has subconcept {stringify_concept(subconcept)}, but {stringify_concept(subconcept)} does not have parent concept {stringify_concept(concept)}",
+                    message=f"{stringify_concept(concept_id, concepts)} has subconcept {stringify_concept(subconcept_id, concepts)}, but {stringify_concept(subconcept_id, concepts)} does not have parent concept {stringify_concept(concept_id, concepts)}",
                     metadata={"concept_id": concept_id, "subconcept_id": subconcept_id},
                     fix_concept=subconcept,
                 )
             )
     for concept_id, parent_concept_id in subconcept_of_relationships:
         if (parent_concept_id, concept_id) not in has_subconcept_relationships:
-            concept = next(
-                concept for concept in concepts if concept.wikibase_id == concept_id
-            )
-            parent_concept = wikibase.get_concept(parent_concept_id)
+            try:
+                parent_concept = wikibase.get_concept(parent_concept_id)
+            except ValidationError:
+                parent_concept = Concept(
+                    wikibase_id=parent_concept_id, preferred_label="unknown"
+                )
             issues.append(
                 ConceptStoreIssue(
                     issue_type="asymmetric_subconcept_relationship",
-                    message=f"{stringify_concept(concept)} is subconcept of {stringify_concept(parent_concept)}, but {stringify_concept(parent_concept)} does not have subconcept {stringify_concept(concept)}",
+                    message=f"{stringify_concept(concept_id, concepts)} is subconcept of {stringify_concept(parent_concept_id, concepts)}, but {stringify_concept(parent_concept_id, concepts)} does not have subconcept {stringify_concept(concept_id, concepts)}",
                     metadata={
                         "concept_id": concept_id,
                         "parent_concept_id": parent_concept_id,
@@ -171,14 +183,10 @@ def validate_circular_hierarchical_relationships(
         if (subconcept_id, concept_id) in has_subconcept_relationships:
             if {concept_id, subconcept_id} not in has_subconcept_pairs_processed:
                 has_subconcept_pairs_processed.append({concept_id, subconcept_id})
-                concept = next(
-                    concept for concept in concepts if concept.wikibase_id == concept_id
-                )
-                subconcept = wikibase.get_concept(subconcept_id)
                 issues.append(
                     ConceptStoreIssue(
                         issue_type="circular_subconcept_relationship",
-                        message=f"{stringify_concept(concept)} has subconcept {stringify_concept(subconcept)}, and {stringify_concept(subconcept)} has subconcept {stringify_concept(concept)}",
+                        message=f"{stringify_concept(concept_id, concepts)} has subconcept {stringify_concept(subconcept_id, concepts)}, and {stringify_concept(subconcept_id, concepts)} has subconcept {stringify_concept(concept_id, concepts)}",
                         metadata={
                             "concept_id": concept_id,
                             "subconcept_id": subconcept_id,
@@ -191,14 +199,10 @@ def validate_circular_hierarchical_relationships(
         if (parent_concept_id, concept_id) in subconcept_of_relationships:
             if {concept_id, parent_concept_id} not in subconcept_of_pairs_processed:
                 subconcept_of_pairs_processed.append({concept_id, parent_concept_id})
-                concept = next(
-                    concept for concept in concepts if concept.wikibase_id == concept_id
-                )
-                parent_concept = wikibase.get_concept(parent_concept_id)
                 issues.append(
                     ConceptStoreIssue(
                         issue_type="circular_subconcept_relationship",
-                        message=f"{stringify_concept(concept)} is subconcept of {stringify_concept(parent_concept)}, and {stringify_concept(parent_concept)} is a subconcept of {stringify_concept(concept)}",
+                        message=f"{stringify_concept(concept_id, concepts)} is subconcept of {stringify_concept(parent_concept_id, concepts)}, and {stringify_concept(parent_concept_id, concepts)} is a subconcept of {stringify_concept(concept_id, concepts)}",
                         metadata={
                             "concept_id": concept_id,
                             "parent_concept_id": parent_concept_id,
@@ -226,7 +230,7 @@ def check_for_unconnected_concepts(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="unconnected_concept",
-                    message=f"{stringify_concept(concept)} is not connected to any other concepts",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} is not connected to any other concepts",
                     metadata={"concept_id": concept.wikibase_id},
                     fix_concept=concept,
                 )
@@ -250,7 +254,7 @@ def validate_alternative_label_uniqueness(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="duplicate_alternative_labels",
-                    message=f"{stringify_concept(concept)} has duplicate alternative labels: {duplicate_labels}",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} has duplicate alternative labels: {duplicate_labels}",
                     metadata={
                         "concept_id": concept.wikibase_id,
                         "duplicate_labels": duplicate_labels,
@@ -275,7 +279,7 @@ def check_alternative_labels_for_pipes(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="alternative_label_contains_pipe",
-                    message=f"{stringify_concept(concept)} has alternative labels containing pipes",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} has alternative labels containing pipes",
                     metadata={
                         "concept_id": concept.wikibase_id,
                         "aliases_with_pipes": alt_labels_containing_pipes,
@@ -299,7 +303,7 @@ def ensure_positive_and_negative_labels_dont_overlap(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="overlapping_labels",
-                    message=f"{stringify_concept(concept)} has negative labels which appear in its positive labels: {overlapping_labels}",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} has negative labels which appear in its positive labels: {overlapping_labels}",
                     metadata={
                         "concept_id": concept.wikibase_id,
                         "overlapping_labels": list(overlapping_labels),
@@ -321,7 +325,7 @@ def check_description_and_definition_length(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="short_description",
-                    message=f"{stringify_concept(concept)} has a short description",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} has a short description",
                     metadata={
                         "concept_id": concept.wikibase_id,
                         "description": concept.description,
@@ -333,7 +337,7 @@ def check_description_and_definition_length(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="short_definition",
-                    message=f"{stringify_concept(concept)} has a short definition",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} has a short definition",
                     metadata={
                         "concept_id": concept.wikibase_id,
                         "definition": concept.definition,
@@ -367,7 +371,10 @@ def check_for_duplicate_preferred_labels(
                 concept for concept in concepts if concept.wikibase_id in ids
             ]
             duplicate_concepts_string = ", ".join(
-                [stringify_concept(concept) for concept in duplicate_concepts]
+                [
+                    stringify_concept(concept.wikibase_id, concepts)
+                    for concept in duplicate_concepts
+                ]
             )
             issues.append(
                 ConceptStoreIssue(
@@ -392,7 +399,7 @@ def validate_concept_label_casing(
             issues.append(
                 ConceptStoreIssue(
                     issue_type="label_mixed_casing",
-                    message=f"{stringify_concept(concept)} has a label that uses mixed casing.",
+                    message=f"{stringify_concept(concept.wikibase_id, concepts)} has a label that uses mixed casing.",
                     metadata={"concept_id": concept.wikibase_id},
                     fix_concept=concept,
                 )
