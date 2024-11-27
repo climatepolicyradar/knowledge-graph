@@ -60,7 +60,7 @@ sentence-transformers = "^3.1.1"
 optional = true
 
 [tool.poetry.group.librarian.dependencies]
-fastapi = "^0.115.5"
+jinja2 = "^3.1.4"
 
 [[tool.poetry.source]]
 name = "pytorch"
