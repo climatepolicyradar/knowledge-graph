@@ -4,7 +4,6 @@ from pathlib import Path
 from string import punctuation
 from typing import Optional
 
-from prefect import flow, task
 from pydantic import BaseModel
 
 from src.concept import Concept
@@ -32,7 +31,6 @@ def create_fix_button(concept: Concept) -> str:
 wikibase = WikibaseSession()
 
 
-@flow(log_prints=True)
 def validate_concept_store() -> list[ConceptStoreIssue]:
     print("Fetching all concepts from wikibase")
     concepts: list[Concept] = wikibase.get_concepts()
@@ -65,7 +63,6 @@ def validate_concept_store() -> list[ConceptStoreIssue]:
     return issues
 
 
-@task(log_prints=True)
 def validate_related_relationship_symmetry(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -93,7 +90,6 @@ def validate_related_relationship_symmetry(
     return issues
 
 
-@task(log_prints=True)
 def validate_hierarchical_relationship_symmetry(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -145,7 +141,6 @@ def validate_hierarchical_relationship_symmetry(
     return issues
 
 
-@task(log_prints=True)
 def validate_circular_hierarchical_relationships(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -209,7 +204,6 @@ def validate_circular_hierarchical_relationships(
     return issues
 
 
-@task(log_prints=True)
 def check_for_unconnected_concepts(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -234,7 +228,6 @@ def check_for_unconnected_concepts(
     return issues
 
 
-@task(log_prints=True)
 def validate_alternative_label_uniqueness(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -261,7 +254,6 @@ def validate_alternative_label_uniqueness(
     return issues
 
 
-@task(log_prints=True)
 def check_alternative_labels_for_pipes(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -287,7 +279,6 @@ def check_alternative_labels_for_pipes(
     return issues
 
 
-@task(log_prints=True)
 def ensure_positive_and_negative_labels_dont_overlap(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -309,7 +300,6 @@ def ensure_positive_and_negative_labels_dont_overlap(
     return issues
 
 
-@task(log_prints=True)
 def check_description_and_definition_length(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -344,7 +334,6 @@ def check_description_and_definition_length(
     return issues
 
 
-@task(log_prints=True)
 def check_for_duplicate_preferred_labels(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -379,7 +368,6 @@ def check_for_duplicate_preferred_labels(
     return issues
 
 
-@task(log_prints=True)
 def validate_concept_label_casing(
     concepts: list[Concept],
 ):
@@ -400,7 +388,6 @@ def validate_concept_label_casing(
     return issues
 
 
-@task(log_prints=True)
 def create_html_report(issues: list[ConceptStoreIssue]) -> str:
     """Create an HTML report of all issues found with tabs and shuffle functionality"""
 
