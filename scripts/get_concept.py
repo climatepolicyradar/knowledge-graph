@@ -6,8 +6,8 @@ from rich.console import Console
 
 import argilla as rg
 from scripts.config import concept_dir
+from src.argilla import dataset_name_to_wikibase_id, dataset_to_labelled_passages
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession
 
 console = Console()
@@ -47,14 +47,11 @@ def main(
         for dataset in datasets:
             try:
                 # if the dataset.name ends with our wikibase_id, then it's one we want to process
-                if WikibaseID(dataset.name.split("-")[-1]) == wikibase_id:
+                if dataset_name_to_wikibase_id(dataset.name) == wikibase_id:
                     console.log(
-                        f'🕵️  Found "{dataset.name}" in the "{dataset.workspace.name}" workspace'  # type: ignore
+                        f'🕵️  Found "{dataset.name}" in the "{dataset.workspace.name}" workspace'
                     )
-                    concept.labelled_passages = [
-                        LabelledPassage.from_argilla_record(record)
-                        for record in dataset.records  # type: ignore
-                    ]
+                    concept.labelled_passages = dataset_to_labelled_passages(dataset)
                     console.log(
                         f"📚 Found {len(concept.labelled_passages)} labelled passages"
                     )

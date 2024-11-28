@@ -1,74 +1,56 @@
-from itertools import cycle
-from typing import Any, Dict, Generator, Tuple
+from argilla.feedback import FeedbackDataset, FeedbackRecord
+from argilla.feedback.fields import TextField
+from argilla.feedback.questions import SpanQuestion
+from src.identifiers import WikibaseID
+from src.labelled_passage import LabelledPassage
+from src.wikibase import Concept
 
-from argilla import FeedbackDataset, FeedbackRecord
+
+def concept_to_dataset_name(concept: Concept) -> str:
+    return f"{concept.preferred_label}-{concept.wikibase_id}".replace(" ", "-")
 
 
-def distribute_labelling_projects(
-    datasets: list, labellers: list[str], min_labellers: int = 2
-) -> Generator[Tuple[Any, str], None, None]:
+def dataset_name_to_wikibase_id(name: str) -> WikibaseID:
+    return WikibaseID(name.split("-")[-1])
+
+
+def labelled_passages_to_feedback_dataset(
+    labelled_passages: list[LabelledPassage], concept: Concept
+) -> FeedbackDataset:
     """
-    Distribute labelling projects to labellers.
+    Convert a list of LabelledPassages into an Argilla FeedbackDataset.
 
-    For efficient labelling, tasks should be distributed such that each dataset is
-    labelled by at least `min_labellers` labellers, and each labeller is assigned to a
-    minimal number of datasets.
+    Args:
+        labelled_passages: List of LabelledPassage objects to convert
+        concept: The concept being annotated
 
-    :param list[] datasets: datasets to distribute among labellers
-    :param list[str] labellers: list of labellers
-    :param int min_labellers: minimum number of labellers per dataset, defaults to 2
-    :return Generator[Tuple[Any, str], None, None]: a generator of tuples containing
-        the dataset and the labeller assigned to it
+    Returns:
+        An Argilla FeedbackDataset ready to be pushed
     """
-    if len(labellers) < min_labellers:
-        raise ValueError(
-            "number of items in labellers must be greater than or equal to min_labellers"
-        )
-
-    labeller_cycle = cycle(labellers)
-    for dataset in datasets:
-        for _ in range(min_labellers):
-            yield dataset, next(labeller_cycle)
-
-
-def combine_datasets(*datasets: FeedbackDataset) -> FeedbackDataset:  # type: ignore
-    """
-    Combine an arbitrary number of argilla datasets into one.
-
-    :param FeedbackDataset *datasets: Unspecified number of datasets to combine, at
-    least one.
-    :return FeedbackDataset: The combined dataset
-    """
-    if not datasets:
-        raise ValueError("At least one dataset must be provided")
-
-    combined_dataset = FeedbackDataset(  # type: ignore
-        fields=datasets[0].fields,  # type: ignore
-        questions=datasets[0].questions,  # type: ignore
-        metadata_properties=datasets[0].metadata_properties,  # type: ignore
-        vectors_settings=datasets[0].vectors_settings,  # type: ignore
-        guidelines=datasets[0].guidelines,  # type: ignore
-        allow_extra_metadata=datasets[0].allow_extra_metadata,  # type: ignore
+    dataset = FeedbackDataset(
+        guidelines="Highlight the entity if it is present in the text",
+        fields=[
+            TextField(name="text", title="Text", use_markdown=True),
+        ],
+        questions=[
+            SpanQuestion(
+                name="entities",
+                labels={concept.wikibase_id: concept.preferred_label},
+                field="text",
+                required=True,
+                allow_overlapping=False,
+            )
+        ],
     )
 
-    records_dict: Dict[str, FeedbackRecord] = {}  # type: ignore
-    for dataset in datasets:
-        for record in dataset.records:  # type: ignore
-            # Use the 'text' field as the key (assuming it's unique)
-            key = record.fields.get("text", "")
+    records = [
+        FeedbackRecord(fields={"text": passage.text}, metadata=passage.metadata)
+        for passage in labelled_passages
+    ]
+    dataset.add_records(records)
 
-            if key in records_dict:
-                # If the record already exists, merge the responses
-                existing_record = records_dict[key]
-                existing_record.responses.extend(record.responses)  # type: ignore
-            else:
-                # If it's a new record, add it to the dictionary
-                records_dict[key] = record  # type: ignore
+    return dataset
 
-    # Convert the dictionary values back to a list of records
-    combined_records = list(records_dict.values())
 
-    # Add the combined records to the new dataset
-    combined_dataset.add_records(combined_records)  # type: ignore
-
-    return combined_dataset
+def dataset_to_labelled_passages(dataset: FeedbackDataset) -> list[LabelledPassage]:
+    return [LabelledPassage.from_argilla_record(record) for record in dataset.records]
