@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone
 from logging import getLogger
 from typing import Dict, Optional
 
@@ -100,51 +101,130 @@ class WikibaseSession:
         sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
         return sorted_properties
 
-    def get_concept(self, wikibase_id: WikibaseID) -> Concept:
+    def get_concept(
+        self, wikibase_id: WikibaseID, timestamp: Optional[datetime] = None
+    ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
 
         :param WikibaseID wikibase_id: The Wikibase ID of the concept
+        :param Optional[datetime] timestamp: The timestamp to fetch the concept at.
+            If not provided, the latest version of the concept will be fetched.
         :return Concept: The concept with the given Wikibase ID
         """
-        response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "wbgetentities",
-                "format": "json",
-                "ids": wikibase_id,
-            },
-        ).json()
+        try:
+            if timestamp:
+                # make sure the timestamp is in UTC, and is in the past
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.astimezone(timezone.utc)
+                if timestamp > datetime.now(timezone.utc):
+                    raise ValueError(
+                        "Can't fetch concepts from the future... "
+                        "The value of timestamp must be in the past"
+                    )
 
-        entity = response["entities"][wikibase_id]
+                # Use the revisions API to get historical content from wikibase
+                # https://www.mediawiki.org/wiki/API:Revisions
 
-        concept = Concept(
-            preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
-            alternative_labels=[
-                alias.get("value") for alias in entity.get("aliases", {}).get("en", [])
-            ],
-            description=entity.get("descriptions", {}).get("en", {}).get("value", ""),
-            wikibase_id=wikibase_id,
-        )
+                # first we need to get the pageid for this wikibase ID (they aren't the same thing)
+                page_id_response = self.session.get(
+                    url=self.api_url,
+                    params={
+                        "action": "wbgetentities",
+                        "format": "json",
+                        "ids": wikibase_id,
+                        "props": "info",
+                    },
+                ).json()
 
-        if "claims" in entity:
-            for claim in entity["claims"].values():
-                for statement in claim:
-                    if statement["mainsnak"]["snaktype"] == "value":
-                        property_id = statement["mainsnak"]["property"]
-                        value = statement["mainsnak"]["datavalue"]["value"]
-                        if property_id == self.subconcept_of_property_id:
-                            concept.subconcept_of.append(value["id"])
-                        elif property_id == self.has_subconcept_property_id:
-                            concept.has_subconcept.append(value["id"])
-                        elif property_id == self.related_concept_property_id:
-                            concept.related_concepts.append(value["id"])
-                        elif property_id == self.negative_labels_property_id:
-                            concept.negative_labels.append(value)
-                        elif property_id == self.definition_property_id:
-                            concept.definition = value
+                page_id = str(
+                    page_id_response.get("entities", {})
+                    .get(wikibase_id, {})
+                    .get("pageid")
+                )
+                if not page_id:
+                    raise ValueError(f"Could not find entity with ID: {wikibase_id}")
 
-        return concept
+                # then we can use that pageid to get the revision history, selecting the most
+                # recent revision from before the provided timestamp (ie the latest update
+                # to the item at that time)
+                revisions_response = self.session.get(
+                    url=self.api_url,
+                    params={
+                        "action": "query",
+                        "format": "json",
+                        "pageids": page_id,
+                        "prop": "revisions",
+                        "rvdir": "older",
+                        "rvlimit": 1,
+                        "rvprop": "content",
+                        "rvslots": "main",
+                        "rvstart": timestamp.isoformat(),
+                    },
+                ).json()
+
+                # Extract content from revision
+                pages = revisions_response.get("query", {}).get("pages", {})
+                if not pages:
+                    raise ValueError(f"No page found for ID: {wikibase_id}")
+
+                page = next(iter(pages.values()))
+                revisions = page.get("revisions", [])
+                if not revisions:
+                    raise ValueError(
+                        f"No revision found for ID: {wikibase_id} at timestamp: {timestamp}"
+                    )
+
+                entity = json.loads(
+                    revisions[0].get("slots", {}).get("main", {}).get("*")
+                )
+            else:
+                # Use wbgetentities for current version
+                revisions_response = self.session.get(
+                    url=self.api_url,
+                    params={
+                        "action": "wbgetentities",
+                        "format": "json",
+                        "ids": wikibase_id,
+                    },
+                ).json()
+                entity = revisions_response["entities"][wikibase_id]
+
+            concept = Concept(
+                preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
+                alternative_labels=[
+                    alias.get("value")
+                    for alias in entity.get("aliases", {}).get("en", [])
+                ],
+                description=entity.get("descriptions", {})
+                .get("en", {})
+                .get("value", ""),
+                wikibase_id=wikibase_id,
+            )
+
+            if "claims" in entity:
+                for claim in entity["claims"].values():
+                    for statement in claim:
+                        if statement["mainsnak"]["snaktype"] == "value":
+                            property_id = statement["mainsnak"]["property"]
+                            value = statement["mainsnak"]["datavalue"]["value"]
+                            if property_id == self.subconcept_of_property_id:
+                                concept.subconcept_of.append(value["id"])
+                            elif property_id == self.has_subconcept_property_id:
+                                concept.has_subconcept.append(value["id"])
+                            elif property_id == self.related_concept_property_id:
+                                concept.related_concepts.append(value["id"])
+                            elif property_id == self.negative_labels_property_id:
+                                concept.negative_labels.append(value)
+                            elif property_id == self.definition_property_id:
+                                concept.definition = value
+
+            return concept
+        except Exception as e:
+            logger.warning(
+                f"Failed to fetch concept with Wikibase ID {wikibase_id}: {e}"
+            )
+            raise e
 
     def get_concepts(
         self,
