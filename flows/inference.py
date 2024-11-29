@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Final, Optional
+from typing import Final, Optional, Set, Tuple, TypeAlias
 
 import boto3
+import prefect.artifacts as artifacts
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
@@ -32,6 +33,8 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.FIGURE,
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+
+DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
 
 
 @dataclass()
@@ -284,6 +287,36 @@ def text_block_inference(
     return labelled_passage
 
 
+def _name_document_run_identifiers_set(
+    documents: Set[DocumentRunIdentifier],
+) -> list[dict]:
+    keys = ("document_id", "classifier_name", "classifier_alias")
+    return [dict(zip(keys, doc)) for doc in documents]
+
+
+async def report_documents_runs(
+    queued: Set[DocumentRunIdentifier],
+    completed: Set[DocumentRunIdentifier],
+) -> None:
+    try:
+        queued_rows = _name_document_run_identifiers_set(queued)
+
+        await artifacts.create_table_artifact(
+            table=queued_rows,
+            description="# Queued Documents",
+        )
+
+        completed_rows = _name_document_run_identifiers_set(completed)
+
+        await artifacts.create_table_artifact(
+            table=completed_rows,
+            description="# Completed Documents",
+        )
+    except Exception:
+        # Do nothing, not even log. It'll be too noisy.
+        pass
+
+
 @flow(log_prints=True)
 async def run_classifier_inference_on_document(
     run,
@@ -291,7 +324,7 @@ async def run_classifier_inference_on_document(
     document_id: str,
     classifier_name: str,
     classifier_alias: str,
-) -> None:
+) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
     async with concurrency("classifier_inference", occupy=1):
         print(
@@ -326,6 +359,8 @@ async def run_classifier_inference_on_document(
                 classifier_name=classifier_name,
                 classifier_alias=classifier_alias,
             )
+
+        return (document_id, classifier_name, classifier_alias)
 
 
 def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
@@ -384,9 +419,14 @@ async def classifier_inference(
         job_type="concept_inference",
     )
 
+    # Store this across the loops below
+    queued: Set[DocumentRunIdentifier] = set()
+    completed: Set[DocumentRunIdentifier] = set()
+
     for classifier_spec in classifier_specs:
         for batch in iterate_batch(validated_document_ids, batch_size):
             subflows = []
+
             for document_id in batch:
                 subflow = run_classifier_inference_on_document(
                     run=run,
@@ -395,6 +435,22 @@ async def classifier_inference(
                     classifier_name=classifier_spec.name,
                     classifier_alias=classifier_spec.alias,
                 )
+
+                queued.add(
+                    (
+                        document_id,
+                        classifier_spec.name,
+                        classifier_spec.alias,
+                    )
+                )
+
                 subflows.append(subflow)
 
-            await asyncio.gather(*subflows)
+            # Handle whichever is the next document to finish
+            for next_document in asyncio.as_completed(subflows):
+                document = await next_document
+
+                queued.discard(document)
+                completed.add(document)
+
+                await report_documents_runs(queued, completed)
