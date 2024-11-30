@@ -2,6 +2,8 @@ import importlib
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
+from src.classifier.keyword_expansion import KeywordExpansionClassifier
+from src.classifier.llm import LLMClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 
@@ -30,6 +32,8 @@ __all__ = [
     "RulesBasedClassifier",
     "EmbeddingClassifier",  # type: ignore
     "StemmedKeywordClassifier",  # type: ignore
+    "KeywordExpansionClassifier",  # type: ignore
+    "LLMClassifier",  # type: ignore
 ]
 
 
