@@ -1,5 +1,6 @@
 name: ci
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - main
@@ -77,7 +78,7 @@ jobs:
         run: poetry run mkdocs gh-deploy --force
 
   deploy_prefect_sandbox:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     needs: [test]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
