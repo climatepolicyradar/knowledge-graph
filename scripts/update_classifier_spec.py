@@ -133,7 +133,9 @@ def get_all_available_classifiers(
     for aws_env, specs in classifier_specs.items():
         aws_env = AwsEnv(aws_env)
         spec_path = build_spec_file_path(aws_env)
-        write_spec_file(spec_path, data=specs)
+        # Have stable ordering
+        sorted_specs = sorted(specs, key=lambda x: x.split(":")[0])
+        write_spec_file(spec_path, data=sorted_specs)
 
 
 if __name__ == "__main__":
