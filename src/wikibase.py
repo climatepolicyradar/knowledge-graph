@@ -141,7 +141,8 @@ class WikibaseSession:
         if not page_id:
             raise ValueError(f"Could not find entity with ID: {wikibase_id}")
 
-        # Get revision using the pageid
+        # Use the pageid to get the latest revision before the supplied timestamp
+        # https://www.mediawiki.org/wiki/API:Revisions
         revisions_response = self.session.get(
             url=self.api_url,
             params={
@@ -157,7 +158,7 @@ class WikibaseSession:
             },
         ).json()
 
-        # Extract content from revision
+        # Extract useful content from the revision response
         pages = revisions_response.get("query", {}).get("pages", {})
         if not pages:
             raise ValueError(f"No page found for ID: {wikibase_id}")
