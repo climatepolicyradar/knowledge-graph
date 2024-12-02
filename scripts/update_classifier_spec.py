@@ -6,11 +6,14 @@ from typing import List, Optional
 import typer
 import wandb
 import yaml  # type: ignore
+from dotenv import load_dotenv
 from rich.console import Console
 from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
+
+load_dotenv()
 
 console = Console()
 
