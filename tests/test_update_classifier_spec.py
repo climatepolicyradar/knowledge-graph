@@ -30,9 +30,9 @@ def mock_wandb_api():
         collections = []
         for model_data in [
             {"name": "Q111", "env": "sandbox"},
-            {"name": "Q222", "env": "sandbox"},
             {"name": "Q444", "env": "labs"},
             {"name": "some_other_model", "env": "sandbox"},
+            {"name": "Q222", "env": "sandbox"},
         ]:
             mock_artifact = Mock()
             mock_artifact.name = f"{model_data['name']}:v1"
@@ -71,7 +71,7 @@ def test_is_concept_model():
 
 
 def test_is_latest_model_in_env():
-    classifier_specs = ["Q11:v2", "Q22:v1"]
+    classifier_specs = ["Q22:v1", "Q11:v2"]
     assert not is_latest_model_in_env(classifier_specs, model_name="Q11")
     assert is_latest_model_in_env(classifier_specs, model_name="Q33")
 
