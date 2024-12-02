@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone
 from logging import getLogger
 from typing import Dict, Optional
 
@@ -100,23 +101,77 @@ class WikibaseSession:
         sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
         return sorted_properties
 
-    def get_concept(self, wikibase_id: WikibaseID) -> Concept:
+    def get_concept(
+        self, wikibase_id: WikibaseID, timestamp: Optional[datetime] = None
+    ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
 
         :param WikibaseID wikibase_id: The Wikibase ID of the concept
+        :param Optional[datetime] timestamp: The timestamp to fetch the concept at.
+            If not provided, the latest version of the concept will be fetched.
         :return Concept: The concept with the given Wikibase ID
         """
-        response = self.session.get(
+
+        if timestamp:
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.astimezone(timezone.utc)
+            if timestamp > datetime.now(timezone.utc):
+                raise ValueError(
+                    "Can't fetch concepts from the future... "
+                    "The value of timestamp must be in the past"
+                )
+        else:
+            timestamp = datetime.now(timezone.utc)
+
+        # First get the pageid for this wikibase ID
+        page_id_response = self.session.get(
             url=self.api_url,
             params={
                 "action": "wbgetentities",
                 "format": "json",
                 "ids": wikibase_id,
+                "props": "info",
             },
         ).json()
 
-        entity = response["entities"][wikibase_id]
+        page_id = str(
+            page_id_response.get("entities", {}).get(wikibase_id, {}).get("pageid")
+        )
+        if not page_id:
+            raise ValueError(f"Could not find entity with ID: {wikibase_id}")
+
+        # Use the pageid to get the latest revision before the supplied timestamp
+        # https://www.mediawiki.org/wiki/API:Revisions
+        revisions_response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "format": "json",
+                "pageids": page_id,
+                "prop": "revisions",
+                "rvdir": "older",
+                "rvlimit": 1,
+                "rvprop": "content",
+                "rvslots": "main",
+                "rvstart": timestamp.isoformat(),
+            },
+        ).json()
+
+        # Extract useful content from the revision response
+        pages = revisions_response.get("query", {}).get("pages", {})
+        if not pages:
+            raise ValueError(f"No page found for ID: {wikibase_id}")
+
+        page = next(iter(pages.values()))
+        revisions = page.get("revisions", [])
+        if not revisions:
+            raise ValueError(
+                f"No revision found for ID: {wikibase_id}"
+                + (f" at timestamp: {timestamp}" if timestamp else "")
+            )
+
+        entity = json.loads(revisions[0].get("slots", {}).get("main", {}).get("*"))
 
         concept = Concept(
             preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
