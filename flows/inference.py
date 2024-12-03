@@ -311,6 +311,7 @@ async def report_documents_runs(
         await artifacts.create_table_artifact(
             table=all_rows,
             description="# Document Processing Status",
+            key="classifier-inference-document-processing-status",
         )
     except Exception:
         # Do nothing, not even log. It'll be too noisy.
