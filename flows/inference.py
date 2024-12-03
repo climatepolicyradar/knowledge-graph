@@ -289,9 +289,11 @@ def text_block_inference(
 
 def _name_document_run_identifiers_set(
     documents: Set[DocumentRunIdentifier],
-) -> list[dict]:
-    keys = ("document_id", "classifier_name", "classifier_alias")
-    return [dict(zip(keys, doc)) for doc in documents]
+    status: str,
+) -> list[dict[str, str]]:
+    """Convert a set of document run identifiers for table rows."""
+    keys = ("document_id", "classifier_name", "classifier_alias", "status")
+    return [dict(zip(keys, doc + (status,))) for doc in documents]
 
 
 async def report_documents_runs(
@@ -299,18 +301,16 @@ async def report_documents_runs(
     completed: Set[DocumentRunIdentifier],
 ) -> None:
     try:
-        queued_rows = _name_document_run_identifiers_set(queued)
+        # Create rows for both queued and completed documents with status
+        queued_rows = _name_document_run_identifiers_set(queued, "queued")
+        completed_rows = _name_document_run_identifiers_set(completed, "completed")
+
+        # Combine both sets of rows
+        all_rows = queued_rows + completed_rows
 
         await artifacts.create_table_artifact(
-            table=queued_rows,
-            description="# Queued Documents",
-        )
-
-        completed_rows = _name_document_run_identifiers_set(completed)
-
-        await artifacts.create_table_artifact(
-            table=completed_rows,
-            description="# Completed Documents",
+            table=all_rows,
+            description="# Document Processing Status",
         )
     except Exception:
         # Do nothing, not even log. It'll be too noisy.
