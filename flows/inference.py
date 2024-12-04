@@ -3,7 +3,6 @@ import json
 import os
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional
@@ -276,10 +275,7 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
-        metadata={
-            "concept": concept_no_labelled_passages.model_dump(),
-            "inference_timestamp": datetime.now().isoformat(),
-        },
+        metadata={"concept": concept_no_labelled_passages.model_dump()},
     )
     return labelled_passage
 

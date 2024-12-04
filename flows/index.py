@@ -318,7 +318,9 @@ def convert_labelled_passages_to_concepts(
                         model=get_model_from_span(span),
                         end=span.end_index,
                         start=span.start_index,
-                        timestamp=labelled_passage.metadata["inference_timestamp"],
+                        # these timestamps _should_ all be the same, but just in case,
+                        # take the latest
+                        timestamp=max(span.timestamps),
                     ),
                 )
             )

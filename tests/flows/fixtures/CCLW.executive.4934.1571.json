@@ -10,6 +10,9 @@
                 "concept_id": "Q10014",
                 "labellers": [
                     "Q10014-RuleBasedClassifier"
+                ],
+                "timestamps": [
+                    "2021-09-29T14:00:00.000Z"
                 ]
             }
         ],
@@ -163,8 +166,7 @@
                         }
                     }
                 ]
-            },
-            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+            }
         }
     },
     {
@@ -178,6 +180,9 @@
                 "concept_id": "Q10014",
                 "labellers": [
                     "Q10014-RuleBasedClassifier"
+                ],
+                "timestamps": [
+                    "2021-09-29T14:00:00.000Z"
                 ]
             }
         ],
@@ -211,8 +216,7 @@
                 ],
                 "definition": null,
                 "labelled_passages": []
-            },
-            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+            }
         }
     }
 ]

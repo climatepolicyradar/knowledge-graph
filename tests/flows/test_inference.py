@@ -175,7 +175,9 @@ async def test_text_block_inference(
     expected_concept_metadata = classifier.concept.model_dump()
     expected_concept_metadata["labelled_passages"] = []
     assert labels.metadata["concept"] == expected_concept_metadata
-    datetime.fromisoformat(labels.metadata["inference_timestamp"])
+    # check whether the timestamps are valid
+    for span in labels.spans:
+        datetime.fromisoformat(span.timestamps[0])
 
 
 @pytest.mark.asyncio
