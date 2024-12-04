@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from hypothesis import strategies as st
@@ -47,17 +48,38 @@ def concept_strategy(draw):
 
 
 @st.composite
+def timestamp_strategy(draw) -> datetime:
+    """Strategy to generate timestamps within a reasonable range."""
+    return draw(
+        st.datetimes(
+            min_value=datetime(2020, 1, 1),
+            max_value=datetime(2025, 12, 31),
+        )
+    )
+
+
+@st.composite
 def span_strategy(draw, text: Optional[str] = None):
     if text is None:
         text = draw(text_strategy)
     start_index = draw(st.integers(min_value=0, max_value=len(text) - 1))
     end_index = draw(st.integers(min_value=start_index + 1, max_value=len(text)))
     concept_id = draw(st.one_of(wikibase_id_strategy, st.none()))
-    labellers = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
+    num_items = draw(st.integers(min_value=1, max_value=3))
+    labellers = draw(
+        st.lists(labeller_strategy, min_size=num_items, max_size=num_items)
+    )
+    timestamps = draw(
+        st.one_of(
+            st.just([]),
+            st.lists(timestamp_strategy(), min_size=num_items, max_size=num_items),
+        )
+    )
     return Span(
         text=text,
         start_index=start_index,
         end_index=end_index,
         concept_id=concept_id,
         labellers=labellers,
+        timestamps=timestamps,
     )

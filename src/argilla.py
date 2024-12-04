@@ -1,4 +1,6 @@
 import os
+from datetime import datetime
+from typing import Optional
 
 import argilla as rg
 from argilla import SpanQuestion, TextField
@@ -68,8 +70,68 @@ def dataset_to_labelled_passages(dataset: FeedbackDataset) -> list[LabelledPassa
     return [LabelledPassage.from_argilla_record(record) for record in dataset.records]
 
 
+def is_between_timestamps(
+    timestamp: datetime,
+    before_timestamp: Optional[datetime],
+    after_timestamp: Optional[datetime],
+) -> bool:
+    if before_timestamp and timestamp > before_timestamp:
+        return False
+    if after_timestamp and timestamp < after_timestamp:
+        return False
+    return True
+
+
+def filter_labelled_passages_by_timestamp(
+    labelled_passages: list[LabelledPassage],
+    before_timestamp: Optional[datetime] = None,
+    after_timestamp: Optional[datetime] = None,
+) -> list[LabelledPassage]:
+    filtered_passages = []
+    for passage in labelled_passages:
+        passage_copy = passage.model_copy(
+            update={"spans": []}
+        )  # make sure these are empty so that we don't set up an infinite loop!
+        for span in passage.spans:
+            span_copy = span.model_copy(
+                update={"labellers": [], "timestamps": []}
+            )  # likewise, make sure these are empty
+            for labeller, timestamp in zip(span.labellers, span.timestamps):
+                if is_between_timestamps(
+                    timestamp=timestamp,
+                    before_timestamp=before_timestamp,
+                    after_timestamp=after_timestamp,
+                ):
+                    span_copy.labellers.append(labeller)
+                    span_copy.timestamps.append(timestamp)
+
+            if len(span_copy.labellers) > 0:
+                passage_copy.spans.append(span_copy)
+
+        if len(passage_copy.spans) > 0:
+            filtered_passages.append(passage_copy)
+
+    return filtered_passages
+
+
 @init_argilla_client
-def get_labelled_passages_from_argilla(concept: Concept) -> list[LabelledPassage]:
+def get_labelled_passages_from_argilla(
+    concept: Concept,
+    before_timestamp: Optional[datetime] = None,
+    after_timestamp: Optional[datetime] = None,
+) -> list[LabelledPassage]:
+    """
+    Get the labelled passages from Argilla for a given concept.
+
+    Args:
+        concept: The concept to get the labelled passages for
+        before_timestamp: Only get the passage annotations made before this timestamp
+        after_timestamp: Only get the passage annotations made after this timestamp
+
+    Returns:
+        A list of LabelledPassage objects
+    """
+
     # First, see whether the dataset exists with the name we expect
     dataset_name = concept_to_dataset_name(concept)
     dataset = rg.load(name=dataset_name)  # type: ignore
@@ -97,4 +159,9 @@ def get_labelled_passages_from_argilla(concept: Concept) -> list[LabelledPassage
             f'No dataset matching the concept ID "{concept.wikibase_id}" was found in Argilla'
         )
 
-    return dataset_to_labelled_passages(dataset)
+    labelled_passages = dataset_to_labelled_passages(dataset)
+    if before_timestamp or after_timestamp:
+        labelled_passages = filter_labelled_passages_by_timestamp(
+            labelled_passages, before_timestamp, after_timestamp
+        )
+    return labelled_passages

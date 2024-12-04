@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, model_validator
@@ -33,6 +34,14 @@ class Span(BaseModel):
             'KeywordClassifier("extreme weather")',
         ],
     )
+    timestamps: list[datetime] = Field(
+        default_factory=list,
+        description=(
+            "The timestamps at which the span was labelled. "
+            "The list of timestamps should be aligned with the list of labellers, "
+            "ie they should be the same length, and their order should match."
+        ),
+    )
 
     @computed_field
     def id(self) -> str:
@@ -52,6 +61,18 @@ class Span(BaseModel):
             raise ValueError(
                 f"The end index must be less than the length of the text. Got {self}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def check_whether_timestamps_are_aligned(self):
+        """Check whether the list of timestamps is aligned with the list of labellers."""
+        if self.timestamps:  # timestamps can be an empty list
+            if len(self.labellers) != len(self.timestamps):
+                # but if they're supplied, they should be aligned with the labellers
+                raise ValueError(
+                    f"The lists of labellers and timestamps must be the same length. "
+                    f"Got {self}"
+                )
         return self
 
     @computed_field
