@@ -4,6 +4,7 @@ from typing import Optional
 
 import argilla as rg
 from argilla import SpanQuestion, TextField
+from argilla.client.sdk.commons.errors import NotFoundApiError
 from argilla.feedback import FeedbackDataset, FeedbackRecord
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -134,7 +135,10 @@ def get_labelled_passages_from_argilla(
 
     # First, see whether the dataset exists with the name we expect
     dataset_name = concept_to_dataset_name(concept)
-    dataset = rg.load(name=dataset_name)  # type: ignore
+    try:
+        dataset = rg.load(name=dataset_name)  # type: ignore
+    except NotFoundApiError:
+        dataset = None
 
     # If it doesn't exist with the exact name, we can still try to find it by the
     # wikibase_id. This might happen if the concept has been renamed.
