@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import nltk  # type: ignore
 from nltk.stem import PorterStemmer  # type: ignore
 from nltk.tokenize import word_tokenize  # type: ignore
@@ -153,6 +155,7 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
                                 start_index=token_info[i]["original_start"],
                                 end_index=token_info[i + match_len - 1]["original_end"],
                                 labellers=[str(self)],
+                                timestamps=[datetime.now()],
                             )
                         )
 
