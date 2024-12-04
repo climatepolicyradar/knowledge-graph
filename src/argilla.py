@@ -35,12 +35,9 @@ def labelled_passages_to_feedback_dataset(
     """
     Convert a list of LabelledPassages into an Argilla FeedbackDataset.
 
-    Args:
-        labelled_passages: List of LabelledPassage objects to convert
-        concept: The concept being annotated
-
-    Returns:
-        An Argilla FeedbackDataset ready to be pushed
+    :param list[LabelledPassage] labelled_passages: The labelled passages to convert
+    :param Concept concept: The concept being annotated
+    :return FeedbackDataset: An Argilla FeedbackDataset, ready to be pushed
     """
     dataset = FeedbackDataset(
         guidelines="Highlight the entity if it is present in the text",
@@ -68,40 +65,50 @@ def labelled_passages_to_feedback_dataset(
 
 
 def dataset_to_labelled_passages(dataset: FeedbackDataset) -> list[LabelledPassage]:
+    """
+    Convert an Argilla FeedbackDataset into a list of LabelledPassages.
+
+    :param FeedbackDataset dataset: The Argilla FeedbackDataset to convert
+    :return list[LabelledPassage]: A list of LabelledPassage objects
+    """
     return [LabelledPassage.from_argilla_record(record) for record in dataset.records]
 
 
 def is_between_timestamps(
     timestamp: datetime,
-    before_timestamp: Optional[datetime],
-    after_timestamp: Optional[datetime],
+    min_timestamp: Optional[datetime],
+    max_timestamp: Optional[datetime],
 ) -> bool:
-    if before_timestamp and timestamp > before_timestamp:
+    """
+    Check whether a timestamp falls within a given time range.
+
+    :param datetime timestamp: The timestamp to check
+    :param Optional[datetime] min_timestamp: The minimum timestamp (inclusive). If None, no minimum limit.
+    :param Optional[datetime] max_timestamp: The maximum timestamp (inclusive). If None, no maximum limit.
+    :return bool: True if the timestamp is within the range, False otherwise
+    """
+    if max_timestamp and timestamp > max_timestamp:
         return False
-    if after_timestamp and timestamp < after_timestamp:
+    if min_timestamp and timestamp < min_timestamp:
         return False
     return True
 
 
 def filter_labelled_passages_by_timestamp(
     labelled_passages: list[LabelledPassage],
-    before_timestamp: Optional[datetime] = None,
-    after_timestamp: Optional[datetime] = None,
+    min_timestamp: Optional[datetime] = None,
+    max_timestamp: Optional[datetime] = None,
 ) -> list[LabelledPassage]:
     filtered_passages = []
     for passage in labelled_passages:
-        passage_copy = passage.model_copy(
-            update={"spans": []}
-        )  # make sure these are empty so that we don't set up an infinite loop!
+        passage_copy = passage.model_copy(update={"spans": []})
         for span in passage.spans:
-            span_copy = span.model_copy(
-                update={"labellers": [], "timestamps": []}
-            )  # likewise, make sure these are empty
+            span_copy = span.model_copy(update={"labellers": [], "timestamps": []})
             for labeller, timestamp in zip(span.labellers, span.timestamps):
                 if is_between_timestamps(
                     timestamp=timestamp,
-                    before_timestamp=before_timestamp,
-                    after_timestamp=after_timestamp,
+                    min_timestamp=min_timestamp,
+                    max_timestamp=max_timestamp,
                 ):
                     span_copy.labellers.append(labeller)
                     span_copy.timestamps.append(timestamp)
@@ -118,21 +125,19 @@ def filter_labelled_passages_by_timestamp(
 @init_argilla_client
 def get_labelled_passages_from_argilla(
     concept: Concept,
-    before_timestamp: Optional[datetime] = None,
-    after_timestamp: Optional[datetime] = None,
+    min_timestamp: Optional[datetime] = None,
+    max_timestamp: Optional[datetime] = None,
 ) -> list[LabelledPassage]:
     """
     Get the labelled passages from Argilla for a given concept.
 
-    Args:
-        concept: The concept to get the labelled passages for
-        before_timestamp: Only get the passage annotations made before this timestamp
-        after_timestamp: Only get the passage annotations made after this timestamp
-
-    Returns:
-        A list of LabelledPassage objects
+    :param Concept concept: The concept to get the labelled passages for
+    :param Optional[datetime] min_timestamp: Only get annotations made after this timestamp (inclusive), defaults to None
+    :param Optional[datetime] max_timestamp: Only get annotations made before this timestamp (inclusive), defaults to None
+    :raises ValueError: If no dataset matching the concept ID was found in Argilla
+    :raises ValueError: If no datasets were found in Argilla, you may need to be granted access to the workspace(s)
+    :return list[LabelledPassage]: A list of LabelledPassage objects
     """
-
     # First, see whether the dataset exists with the name we expect
     dataset_name = concept_to_dataset_name(concept)
     try:
@@ -164,8 +169,8 @@ def get_labelled_passages_from_argilla(
         )
 
     labelled_passages = dataset_to_labelled_passages(dataset)
-    if before_timestamp or after_timestamp:
+    if min_timestamp or max_timestamp:
         labelled_passages = filter_labelled_passages_by_timestamp(
-            labelled_passages, before_timestamp, after_timestamp
+            labelled_passages, min_timestamp, max_timestamp
         )
     return labelled_passages

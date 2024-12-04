@@ -17,16 +17,18 @@ from tests.common_strategies import (
 
 @given(
     timestamp=timestamp_strategy(),
-    before=st.one_of(timestamp_strategy(), st.none()),
-    after=st.one_of(timestamp_strategy(), st.none()),
+    max_timestamp=st.one_of(timestamp_strategy(), st.none()),
+    min_timestamp=st.one_of(timestamp_strategy(), st.none()),
 )
-def test_is_between_timestamps(
-    timestamp: datetime, before: Optional[datetime], after: Optional[datetime]
+def test_whether_timestamp_filtering_works(
+    timestamp: datetime,
+    max_timestamp: Optional[datetime],
+    min_timestamp: Optional[datetime],
 ):
-    result = is_between_timestamps(timestamp, before, after)
-    if before and timestamp > before:
+    result = is_between_timestamps(timestamp, min_timestamp, max_timestamp)
+    if max_timestamp and timestamp > max_timestamp:
         assert not result
-    elif after and timestamp < after:
+    elif min_timestamp and timestamp < min_timestamp:
         assert not result
     else:
         assert result
@@ -34,24 +36,26 @@ def test_is_between_timestamps(
 
 @given(
     text=text_strategy,
-    before=st.one_of(timestamp_strategy(), st.none()),
-    after=st.one_of(timestamp_strategy(), st.none()),
+    max_timestamp=st.one_of(timestamp_strategy(), st.none()),
+    min_timestamp=st.one_of(timestamp_strategy(), st.none()),
     data=st.data(),
 )
 def test_whether_valid_timestamps_are_retained(
     text: str,
-    before: Optional[datetime],
-    after: Optional[datetime],
+    max_timestamp: Optional[datetime],
+    min_timestamp: Optional[datetime],
     data: st.DataObject,
 ):
     spans = data.draw(st.lists(span_strategy(text), min_size=1, max_size=5))
     passage = LabelledPassage(text=text, spans=spans)
-    filtered_passages = filter_labelled_passages_by_timestamp([passage], before, after)
+    filtered_passages = filter_labelled_passages_by_timestamp(
+        [passage], min_timestamp, max_timestamp
+    )
 
     for filtered_passage in filtered_passages:
         for span in filtered_passage.spans:
             assert all(
-                is_between_timestamps(timestamp, before, after)
+                is_between_timestamps(timestamp, min_timestamp, max_timestamp)
                 for timestamp in span.timestamps
             )
             assert len(span.timestamps) == len(span.labellers)
@@ -66,8 +70,8 @@ def test_whether_a_mixed_set_of_timestamps_are_filtered_correctly(
     text: str, labellers: list[str]
 ):
     now = datetime.now()
-    before = now + timedelta(days=1)
-    after = now - timedelta(days=1)
+    max_timestamp = now + timedelta(days=1)
+    min_timestamp = now - timedelta(days=1)
 
     span = Span(
         text=text,
@@ -82,7 +86,9 @@ def test_whether_a_mixed_set_of_timestamps_are_filtered_correctly(
     )
 
     passages = [LabelledPassage(text=text, spans=[span])]
-    filtered = filter_labelled_passages_by_timestamp(passages, before, after)
+    filtered = filter_labelled_passages_by_timestamp(
+        passages, min_timestamp, max_timestamp
+    )
 
     assert len(filtered) == 1
     assert len(filtered[0].spans) == 1
@@ -99,8 +105,8 @@ def test_whether_a_mixed_set_of_timestamps_are_filtered_correctly(
 def test_whether_invalid_timestamps_are_filtered(text: str):
     # Create a window that the timestamp can't be within
     now = datetime.now()
-    before = now - timedelta(days=1)
-    after = now + timedelta(days=1)
+    min_timestamp = now + timedelta(days=1)
+    max_timestamp = now - timedelta(days=1)
 
     span = Span(
         text=text,
@@ -111,7 +117,9 @@ def test_whether_invalid_timestamps_are_filtered(text: str):
     )
 
     passages = [LabelledPassage(text=text, spans=[span])]
-    filtered = filter_labelled_passages_by_timestamp(passages, before, after)
+    filtered = filter_labelled_passages_by_timestamp(
+        passages, min_timestamp, max_timestamp
+    )
 
     # After filtering, there should be no remaining passages
     assert len(filtered) == 0
