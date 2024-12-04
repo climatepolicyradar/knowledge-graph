@@ -3,6 +3,7 @@ import json
 import os
 from collections.abc import Generator
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional
@@ -231,6 +232,16 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    """Convert datetime objects to strings"""
+
+    def default(self, o):
+        """Convert datetime objects to strings"""
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
+
+
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
@@ -248,7 +259,9 @@ def store_labels(
     print(f"Storing labels for document {document_id} at {key}")
 
     data = [label.model_dump() for label in labels]
-    body = BytesIO(json.dumps(data).encode("utf-8"))
+
+    # Use the custom datetime encoder when dumping to JSON
+    body = BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     s3.put_object(

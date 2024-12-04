@@ -177,7 +177,7 @@ async def test_text_block_inference(
     assert labels.metadata["concept"] == expected_concept_metadata
     # check whether the timestamps are valid
     for span in labels.spans:
-        datetime.fromisoformat(span.timestamps[0])
+        assert isinstance(span.timestamps[0], datetime)
 
 
 @pytest.mark.asyncio
