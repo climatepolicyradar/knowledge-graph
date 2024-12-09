@@ -30,6 +30,36 @@ def load_predictions(wikibase_id: WikibaseID) -> List[LabelledPassage]:
     return predictions
 
 
+def get_available_regions(predictions: List[LabelledPassage]) -> List[str]:
+    """Extract unique World Bank regions from predictions."""
+    regions: set[str] = set()
+    for prediction in predictions:
+        region = prediction.metadata.get("world_bank_region")
+        if region and isinstance(region, str) and region.strip():
+            regions.add(region)
+    return sorted(list(regions))
+
+
+def get_available_translated_statuses(predictions: List[LabelledPassage]) -> List[str]:
+    """Extract unique translated statuses from predictions."""
+    translated_statuses: set[str] = set()
+    for prediction in predictions:
+        translated = prediction.metadata.get("translated")
+        if translated and isinstance(translated, str) and translated.strip():
+            translated_statuses.add(translated)
+    return sorted(list(translated_statuses))
+
+
+def get_available_corpora(predictions: List[LabelledPassage]) -> List[str]:
+    """Extract unique corpora from predictions."""
+    corpora: set[str] = set()
+    for prediction in predictions:
+        corpus = prediction.metadata.get("dataset_name")
+        if corpus and isinstance(corpus, str) and corpus.strip():
+            corpora.add(corpus)
+    return sorted(list(corpora))
+
+
 def get_available_concepts() -> List[dict]:
     """Get list of available concepts with their details."""
     concepts = []
@@ -75,6 +105,10 @@ async def get_predictions_html(request: Request, wikibase_id: WikibaseID):
         predictions = load_predictions(wikibase_id)
         wikibase = WikibaseSession()
         concept = wikibase.get_concept(wikibase_id)
+        regions = get_available_regions(predictions)
+        translated_statuses = get_available_translated_statuses(predictions)
+        available_corpora = get_available_corpora(predictions)
+
         return templates.TemplateResponse(
             "predictions.html",
             {
@@ -84,6 +118,9 @@ async def get_predictions_html(request: Request, wikibase_id: WikibaseID):
                 "total_count": len(predictions),
                 "wikibase_url": concept.wikibase_url,
                 "concept_str": str(concept),
+                "available_regions": regions,
+                "available_translated_statuses": translated_statuses,
+                "available_corpora": available_corpora,
             },
         )
     except FileNotFoundError:

@@ -3,11 +3,14 @@ document.addEventListener("DOMContentLoaded", function () {
   const passagesContainer = document.getElementById("passages-container");
   const visibleCountSpan = document.getElementById("visible-count");
   const passages = document.querySelectorAll(".passage-card");
+  const regionSelect = document.getElementById("region");
+  const translatedStatusSelect = document.getElementById("translated-status");
+  const corpusSelect = document.getElementById("corpus");
   const totalCount = passages.length;
 
   function updateVisibleCount() {
     const visiblePassages = document.querySelectorAll(
-      ".passage-card:not(.hidden)"
+      ".passage-card:not(.search-hidden):not(.region-hidden):not(.translated-hidden):not(.corpus-hidden)"
     );
     if (visibleCountSpan) {
       visibleCountSpan.textContent = visiblePassages.length;
@@ -31,7 +34,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function searchPassages(searchTerm) {
     if (!searchTerm) {
       passages.forEach((passage) => {
-        passage.classList.remove("hidden");
+        passage.classList.remove("search-hidden");
         const passageText = passage.querySelector(".passage-text");
         passageText.innerHTML =
           passageText.getAttribute("data-original-text") ||
@@ -90,16 +93,65 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
 
-      passage.classList.toggle("hidden", !isMatch);
+      passage.classList.toggle("search-hidden", !isMatch);
       passageTextEl.innerHTML = highlightedText;
     });
 
     updateVisibleCount();
   }
 
+  // Region filter functionality
+  function filterByRegion(selectedRegion) {
+    passages.forEach((passage) => {
+      const passageRegion = passage.dataset.region;
+      const shouldShow = !selectedRegion || passageRegion === selectedRegion;
+      passage.classList.toggle("region-hidden", !shouldShow);
+    });
+    updateVisibleCount();
+  }
+
+  // Translated status filter functionality
+  function filterByTranslatedStatus(selectedStatus) {
+    passages.forEach((passage) => {
+      const passageTranslated = passage.dataset.translated;
+      const shouldShow =
+        !selectedStatus || passageTranslated === selectedStatus;
+      passage.classList.toggle("translated-hidden", !shouldShow);
+    });
+    updateVisibleCount();
+  }
+
+  // Corpus filter functionality
+  function filterByCorpus(selectedCorpus) {
+    passages.forEach((passage) => {
+      const passageCorpus = passage.dataset.datasetName;
+      const shouldShow = !selectedCorpus || passageCorpus === selectedCorpus;
+      passage.classList.toggle("corpus-hidden", !shouldShow);
+    });
+    updateVisibleCount();
+  }
+
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       searchPassages(e.target.value);
+    });
+  }
+
+  if (regionSelect) {
+    regionSelect.addEventListener("change", (e) => {
+      filterByRegion(e.target.value);
+    });
+  }
+
+  if (translatedStatusSelect) {
+    translatedStatusSelect.addEventListener("change", (e) => {
+      filterByTranslatedStatus(e.target.value);
+    });
+  }
+
+  if (corpusSelect) {
+    corpusSelect.addEventListener("change", (e) => {
+      filterByCorpus(e.target.value);
     });
   }
 
@@ -120,25 +172,30 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (sortLengthButton) {
     // Add a data attribute to track sort direction
-    sortLengthButton.setAttribute('data-sort-direction', 'desc');
-    
+    sortLengthButton.setAttribute("data-sort-direction", "desc");
+
     sortLengthButton.addEventListener("click", () => {
       const passagesArray = Array.from(passages);
-      const currentDirection = sortLengthButton.getAttribute('data-sort-direction');
-      
+      const currentDirection = sortLengthButton.getAttribute(
+        "data-sort-direction"
+      );
+
       // Sort based on current direction
       passagesArray.sort((a, b) => {
-        const lengthDiff = parseInt(b.dataset.length) - parseInt(a.dataset.length);
-        return currentDirection === 'desc' ? lengthDiff : -lengthDiff;
+        const lengthDiff =
+          parseInt(b.dataset.length) - parseInt(a.dataset.length);
+        return currentDirection === "desc" ? lengthDiff : -lengthDiff;
       });
-      
+
       // Toggle direction for next click
-      const newDirection = currentDirection === 'desc' ? 'asc' : 'desc';
-      sortLengthButton.setAttribute('data-sort-direction', newDirection);
-      
+      const newDirection = currentDirection === "desc" ? "asc" : "desc";
+      sortLengthButton.setAttribute("data-sort-direction", newDirection);
+
       // Update button text to indicate current sort
-      sortLengthButton.textContent = `Sort by Length (${newDirection === 'desc' ? '↓' : '↑'})`;
-      
+      sortLengthButton.textContent = `Sort by Length (${
+        newDirection === "desc" ? "↓" : "↑"
+      })`;
+
       // Clear and repopulate container
       passagesContainer.innerHTML = "";
       passagesArray.forEach((passage) =>
