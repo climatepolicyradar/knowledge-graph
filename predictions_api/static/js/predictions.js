@@ -119,11 +119,27 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   if (sortLengthButton) {
+    // Add a data attribute to track sort direction
+    sortLengthButton.setAttribute('data-sort-direction', 'desc');
+    
     sortLengthButton.addEventListener("click", () => {
       const passagesArray = Array.from(passages);
+      const currentDirection = sortLengthButton.getAttribute('data-sort-direction');
+      
+      // Sort based on current direction
       passagesArray.sort((a, b) => {
-        return parseInt(b.dataset.length) - parseInt(a.dataset.length);
+        const lengthDiff = parseInt(b.dataset.length) - parseInt(a.dataset.length);
+        return currentDirection === 'desc' ? lengthDiff : -lengthDiff;
       });
+      
+      // Toggle direction for next click
+      const newDirection = currentDirection === 'desc' ? 'asc' : 'desc';
+      sortLengthButton.setAttribute('data-sort-direction', newDirection);
+      
+      // Update button text to indicate current sort
+      sortLengthButton.textContent = `Sort by Length (${newDirection === 'desc' ? '↓' : '↑'})`;
+      
+      // Clear and repopulate container
       passagesContainer.innerHTML = "";
       passagesArray.forEach((passage) =>
         passagesContainer.appendChild(passage)

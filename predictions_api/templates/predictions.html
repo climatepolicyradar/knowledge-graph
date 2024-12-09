@@ -5,73 +5,146 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ wikibase_id }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .search-hidden {
+        display: none !important;
+      }
+    </style>
   </head>
-  <body>
-    <div class="max-w-7xl mx-auto p-6">
-      <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h1 class="text-2xl font-bold mb-4">
-          Predictions for <a href="{{ wikibase_url }}" class="text-blue-600 hover:text-blue-800">{{ concept_str }}</a>
-        </h1>
-        
-        <div class="mb-4 max-w-2xl">
-          <input
-            type="text"
-            id="search"
-            placeholder="Search passages (case-insensitive by default)"
-            title="Basic search is case-insensitive. Use /pattern/i for case-insensitive regex, or /pattern/ for case-sensitive regex"
-            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <div class="mt-1 text-sm text-gray-500">
-            Examples: "climate" (basic search), "/climate|weather/" (climate OR weather), "/\b\w+ing\b/i" (words ending in 'ing')
+  <body class="bg-white text-gray-900 p-6">
+    <div class="max-w-7xl mx-auto">
+      <!-- Controls section including header -->
+      <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <!-- Header and search section -->
+        <div
+          class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8"
+        >
+          <div>
+            <h1 class="text-xl font-semibold text-slate-800">
+              Predictions for
+              <a
+                href="{{ wikibase_url }}"
+                class="text-blue-600 hover:text-blue-800"
+                >{{ concept_str }}</a
+              >
+            </h1>
+          </div>
+          <div class="w-full lg:w-[500px]">
+            <div class="relative">
+              <input
+                type="text"
+                id="search"
+                placeholder="Search passages"
+                title="Basic search is case-insensitive. Use /pattern/i for case-insensitive regex, or /pattern/ for case-sensitive regex"
+                class="bg-white w-full pr-11 h-12 pl-4 py-2 bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md"
+              />
+              <button
+                class="absolute h-8 w-8 right-2 top-2 my-auto px-2 flex items-center bg-white rounded"
+                type="button"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="3"
+                  stroke="currentColor"
+                  class="w-8 h-8 text-slate-600"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div class="pl-4 mt-2 text-sm text-slate-500">
+              Examples:
+              <table class="mt-1 w-full">
+                <tr>
+                  <td class="pr-4">climate</td>
+                  <td class="text-slate-400">basic search</td>
+                </tr>
+                <tr>
+                  <td class="pr-4">/climate|weather/</td>
+                  <td class="text-slate-400">climate OR weather</td>
+                </tr>
+                <tr>
+                  <td class="pr-4">/\b\w+ing\b/i</td>
+                  <td class="text-slate-400">words ending in 'ing'</td>
+                </tr>
+              </table>
+            </div>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          <div class="flex flex-col">
-            <label for="region" class="font-medium mb-1">World Bank Region:</label>
-            <select id="region" class="px-3 py-2 border border-gray-300 rounded-md">
-              <option value="">All Regions</option>
-            </select>
+        <!-- Filters and buttons -->
+        <div class="border-t border-slate-200 pt-6">
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4"
+          >
+            <div class="flex flex-col">
+              <label for="region" class="font-medium mb-1 text-slate-700"
+                >World Bank Region:</label
+              >
+              <select
+                id="region"
+                class="px-3 py-2 border border-slate-200 rounded-md focus:border-slate-400 hover:border-slate-400"
+              >
+                <option value="">All Regions</option>
+              </select>
+            </div>
           </div>
-          <!-- Repeat for other filter groups -->
-        </div>
 
-        <div class="space-x-2">
-          <button id="shuffle" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Shuffle Passages</button>
-          <button id="sortLength" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Sort by Length</button>
+          <div class="space-x-2">
+            <button
+              id="shuffle"
+              class="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition duration-300"
+            >
+              Shuffle Passages
+            </button>
+            <button
+              id="sortLength"
+              class="px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition duration-300"
+            >
+              Sort by Length (↓)
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="text-lg font-semibold mb-4">
-        Showing <span id="visible-count">{{ total_count }}</span> of {{ total_count }} passages
+      <!-- Count display -->
+      <div class="text-sm font-medium text-slate-600 mb-4">
+        Showing <span id="visible-count">{{ total_count }}</span> of {{
+        total_count }} passages
       </div>
 
+      <!-- Passages container -->
       <div id="passages-container" class="space-y-4">
         {% for prediction in predictions %}
         <div
-          class="passage-card bg-white rounded-lg shadow-sm p-6"
+          class="passage-card bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition duration-300"
           data-metadata="{{ prediction.metadata | tojson }}"
           data-length="{{ prediction.text|length }}"
         >
-          <div class="text-sm text-gray-600 mb-2">
-            <strong>Document:</strong> {{ prediction.metadata.document_name }}
-            {% if prediction.metadata.translated == "True" %} |
+          <div class="text-sm text-slate-500 mb-2">
+            <strong class="text-slate-700">Document:</strong> {{
+            prediction.metadata.document_name }} {% if
+            prediction.metadata.translated == "True" %} |
             <span>Translated</span>
-            {% endif %}
-            {% if prediction.metadata.world_bank_region %} |
+            {% endif %} {% if prediction.metadata.world_bank_region %} |
             <span>Region: {{ prediction.metadata.world_bank_region }}</span>
-            {% endif %}
-            {% if prediction.metadata.source %} |
+            {% endif %} {% if prediction.metadata.source %} |
             <span>Source: {{ prediction.metadata.source }}</span>
             {% endif %}
           </div>
-          <div class="passage-text">
-            {% set highlighted = prediction.get_highlighted_text() %}
-            {% set html_highlighted = highlighted
-              .replace("[cyan]", '<span class="bg-red-100 px-1 border-b-2 border-red-300" data-concept="' + prediction.spans[0].concept_id + '">')
-              .replace("[/cyan]", '</span>')
-            %}
-            {{ html_highlighted | safe }}
+          <div class="passage-text text-slate-700">
+            {% set highlighted = prediction.get_highlighted_text() %} {% set
+            html_highlighted = highlighted .replace("[cyan]", '<span
+              class="bg-red-100 px-1 border-b-2 border-red-300"
+              data-concept="' + prediction.spans[0].concept_id + '"
+              >') .replace("[/cyan]", '</span
+            >') %} {{ html_highlighted | safe }}
           </div>
         </div>
         {% endfor %}
