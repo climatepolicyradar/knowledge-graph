@@ -14,7 +14,10 @@ from src.wikibase import WikibaseSession
 app = FastAPI(title="Predictions API")
 base_dir = Path(__file__).parent
 templates = Jinja2Templates(directory=base_dir / "templates")
-app.mount("/static", StaticFiles(directory=base_dir / "static"), name="static")
+
+# Mount the static directory
+static_dir = base_dir / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 predictions_dir = processed_data_dir / "predictions"
 
@@ -40,6 +43,7 @@ def get_available_concepts() -> List[dict]:
                 {
                     "id": wikibase_id,
                     "label": concept.preferred_label,
+                    "str": str(concept),
                     "description": concept.description,
                     "url": concept.wikibase_url,
                 }
@@ -47,16 +51,20 @@ def get_available_concepts() -> List[dict]:
         except Exception:
             continue
 
-    return sorted(concepts, key=lambda x: x["label"])
+    return sorted(concepts, key=lambda x: x["id"])
 
 
 @app.get("/")
-async def homepage(request: Request):
+async def index(request: Request):
     """Display homepage with list of available concepts."""
     concepts = get_available_concepts()
     return templates.TemplateResponse(
-        "home.html",
-        {"request": request, "concepts": concepts, "total_count": len(concepts)},
+        "index.html",
+        {
+            "request": request,
+            "concepts": concepts,
+            "total_count": len(concepts),
+        },
     )
 
 

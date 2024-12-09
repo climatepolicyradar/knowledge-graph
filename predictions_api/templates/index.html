@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Predictions API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .search-hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body class="bg-white text-gray-900 p-6">
+    <div class="max-w-7xl mx-auto">
+      <div class="w-full flex justify-between items-center mb-3 mt-1 pl-3">
+        <div>
+          <h1 class="text-lg font-semibold text-slate-800">Predictions</h1>
+        </div>
+        <div class="ml-3">
+          <div class="w-full max-w-sm min-w-[200px] relative">
+            <div class="relative">
+              <input
+                id="search"
+                class="bg-white w-full pr-11 h-10 pl-3 py-2 bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md"
+                placeholder="Search for a concept..."
+              />
+              <button
+                class="absolute h-8 w-8 right-1 top-1 my-auto px-2 flex items-center bg-white rounded"
+                type="button"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="3"
+                  stroke="currentColor"
+                  class="w-8 h-8 text-slate-600"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="relative flex flex-col w-full h-full overflow-scroll text-gray-700 bg-white shadow-md rounded-lg bg-clip-border"
+      >
+        <table class="w-full text-left table-auto">
+          <thead>
+            <tr>
+              <th class="p-4 border-b border-slate-300 bg-slate-50 w-48">
+                <p
+                  class="block text-sm font-normal leading-none text-slate-500"
+                >
+                  Concept
+                </p>
+              </th>
+              <th class="p-4 border-b border-slate-300 bg-slate-50">
+                <p
+                  class="block text-sm font-normal leading-none text-slate-500"
+                >
+                  Description
+                </p>
+              </th>
+              <th class="p-4 border-b border-slate-300 bg-slate-50 w-32">
+                <p
+                  class="block text-sm font-normal leading-none text-slate-500"
+                >
+                  Predictions
+                </p>
+              </th>
+              <th class="p-4 border-b border-slate-300 bg-slate-50 w-20">
+                <p
+                  class="block text-sm font-normal leading-none text-slate-500"
+                >
+                  JSON
+                </p>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="text-sm">
+            {% for concept in concepts|sort(attribute='id') %}
+            <tr class="hover:bg-slate-50">
+              <td class="p-4 border-b border-slate-200 py-5">
+                <p class="text-slate-800 break-words">{{ concept.str }}</p>
+              </td>
+              <td class="p-4 border-b border-slate-200 py-5">
+                <p class="text-slate-500 break-words">
+                  {{ concept.description }}
+                </p>
+              </td>
+              <td class="p-4 border-b border-slate-200 py-5">
+                <p class="text-slate-500">
+                  <a
+                    href="/{{ concept.id }}"
+                    class="text-blue-500 hover:text-blue-700"
+                    >View Predictions</a
+                  >
+                </p>
+              </td>
+              <td class="p-4 border-b border-slate-200 py-5 text-center">
+                <a
+                  href="/{{ concept.id }}/json"
+                  title="Download JSON"
+                  class="inline-block"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="feather feather-download"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <script src="{{ url_for('static', path='js/index.js') }}"></script>
+  </body>
+</html>
