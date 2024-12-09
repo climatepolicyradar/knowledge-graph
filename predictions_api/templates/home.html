@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Predictions API - Available Concepts</title>
+    <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>Available Concepts</h1>
+        <p>Found {{ total_count }} concepts with predictions</p>
+        
+        <div class="concepts-list">
+            {% for concept in concepts %}
+            <div class="concept-card">
+                <h3>
+                    <a href="/{{ concept.id }}">{{ concept.label }}</a>
+                </h3>
+                {% if concept.description %}
+                <p>{{ concept.description }}</p>
+                {% endif %}
+                <div class="links">
+                    <a href="/{{ concept.id }}" class="view-link">View Predictions</a>
+                    <a href="/{{ concept.id }}/json" class="json-link">JSON</a>
+                    <a href="{{ concept.url }}" class="wikibase-link" target="_blank">Wikibase</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html> 

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ wikibase_id }}</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', path='css/style.css') }}?v={{ range(1, 1000) | random }}"
+    />
+  </head>
+  <body>
+    <div class="controls">
+      <h1>
+        Predictions for <a href="{{ wikibase_url }}">{{ concept_str }}</a>
+      </h1>
+      <div class="search-container">
+        <input
+          type="text"
+          id="search"
+          placeholder="Search passages (case-insensitive by default)"
+          title="Basic search is case-insensitive. Use /pattern/i for case-insensitive regex, or /pattern/ for case-sensitive regex"
+        />
+        <div class="search-help">
+          <small>
+            Examples: "climate" (basic search), "/climate|weather/" (climate OR
+            weather), "/\b\w+ing\b/i" (words ending in 'ing')
+          </small>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="filter-group">
+          <label for="region">World Bank Region:</label>
+          <select id="region">
+            <option value="">All Regions</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="source">Source:</label>
+          <select id="source">
+            <option value="">All Sources</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="type">Document Type:</label>
+          <select id="type">
+            <option value="">All Types</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="translated">Translation Status:</label>
+          <select id="translated">
+            <option value="">All</option>
+            <option value="True">Translated</option>
+            <option value="False">Original</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <button id="shuffle">Shuffle Passages</button>
+        <button id="sortLength">Sort by Length</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      Showing <span id="visible-count">{{ total_count }}</span> of {{
+      total_count }} passages
+    </div>
+
+    <div id="passages-container">
+      {% for prediction in predictions %}
+      <div
+        class="passage-card"
+        data-metadata="{{ prediction.metadata | tojson }}"
+        data-length="{{ prediction.text|length }}"
+      >
+        <div class="passage-metadata">
+          <strong>Document:</strong> {{ prediction.metadata.document_name }} {%
+          if prediction.metadata.translated == "True" %} |
+          <span>Translated</span> {% endif %} {% if
+          prediction.metadata.world_bank_region %} |
+          <span>Region: {{ prediction.metadata.world_bank_region }}</span> {%
+          endif %} {% if prediction.metadata.source %} |
+          <span>Source: {{ prediction.metadata.source }}</span>
+          {% endif %}
+        </div>
+        <div class="passage-text">
+          {% set highlighted = prediction.get_highlighted_text() %} {% set
+          html_highlighted = highlighted .replace("[cyan]", '<span
+            class="highlight"
+            data-concept="' + prediction.spans[0].concept_id + '"
+            >') .replace("[/cyan]", '</span
+          >') %} {{ html_highlighted | safe }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <script src="{{ url_for('static', path='js/predictions.js') }}"></script>
+  </body>
+</html>

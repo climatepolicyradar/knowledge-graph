@@ -6,7 +6,7 @@ authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
 readme = "README.md"
 packages = [
-  { include = "src", from = "." },
+  { include = "src", from = ".", to = "knowledge_graph" },
   { include = "tests", from = "." },
   { include = "scripts", from = "." },
 ]
@@ -17,7 +17,6 @@ httpx = "^0.26.0"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
-azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
 neomodel = "^5.3.3"
 typer = "0.9.4"
 rapidfuzz = "^3.10.0"
@@ -32,6 +31,8 @@ boto3 = "^1.35.31"
 pyvespa = "^0.50.0"
 pyyaml = "^6.0.2"
 nltk = "^3.9.1"
+fastapi = "^0.115.6"
+jinja2 = "^3.1.4"
 
 [tool.poetry.group.llm]
 optional = true
@@ -44,15 +45,15 @@ optional = true
 
 [tool.poetry.group.embeddings.dependencies]
 # Torch CPU versions: https://download.pytorch.org/whl/torch/
-torch = [
-  # Mac x86_64
-  # Pinned to 2.2.2 because pytorch stopped supported intel-macs after 2.2.2: https://github.com/pytorch/pytorch/issues/114602
-  { markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'", url = "https://download.pytorch.org/whl/cpu/torch-2.2.2-cp310-none-macosx_10_9_x86_64.whl" },
-  # Mac arm64
-  { markers = "sys_platform == 'darwin' and platform_machine == 'arm64'", url = "https://download.pytorch.org/whl/cpu/torch-2.4.1-cp310-none-macosx_11_0_arm64.whl" },
-  # Linux
-  { markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'", version = "2.4.1", source = "pytorch" }
-]
+# torch = [
+#   # Mac x86_64
+#   # Pinned to 2.2.2 because pytorch stopped supported intel-macs after 2.2.2: https://github.com/pytorch/pytorch/issues/114602
+#   { markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'", url = "https://download.pytorch.org/whl/cpu/torch-2.2.2-cp310-none-macosx_10_9_x86_64.whl" },
+#   # Mac arm64
+#   { markers = "sys_platform == 'darwin' and platform_machine == 'arm64'", url = "https://download.pytorch.org/whl/cpu/torch-2.4.1-cp310-none-macosx_11_0_arm64.whl" },
+#   # Linux
+#   { markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'", version = "2.4.1", source = "pytorch" }
+# ]
 sentence-transformers = "^3.1.1"
 
 
@@ -74,6 +75,7 @@ update_inference_classifiers = "scripts.update_classifier_spec:app"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
+azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
 pytest = "^8.3.2"
 hypothesis = "^6.112.2"
 mkdocs-material = "^9.5.39"
