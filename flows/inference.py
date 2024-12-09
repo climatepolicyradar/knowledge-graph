@@ -3,7 +3,6 @@ import json
 import os
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional
@@ -22,7 +21,7 @@ from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
-from src.span import Span
+from src.span import DateTimeEncoder, Span
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -232,16 +231,6 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
-class DateTimeEncoder(json.JSONEncoder):
-    """Convert datetime objects to strings"""
-
-    def default(self, o):
-        """Convert datetime objects to strings"""
-        if isinstance(o, datetime):
-            return o.isoformat()
-        return super().default(o)
-
-
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
@@ -260,7 +249,7 @@ def store_labels(
 
     data = [label.model_dump() for label in labels]
 
-    # Use the custom datetime encoder when dumping to JSON
+    # Use the datetime encoder from the span module when dumping to JSON
     body = BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
 
     s3 = boto3.client("s3", region_name=config.bucket_region)

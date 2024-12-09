@@ -1,9 +1,20 @@
+import json
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
 from src.identifiers import WikibaseID, generate_identifier
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Convert datetime objects to ISO strings for JSON serialization."""
+
+    def default(self, o):
+        """Convert datetime objects to ISO strings for JSON serialization."""
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
 
 
 class Span(BaseModel):
