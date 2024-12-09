@@ -71,6 +71,7 @@ class LabelledPassage(BaseModel):
                                 end_index=entity.end,
                                 concept_id=entity.label,
                                 labellers=[user_name],
+                                timestamps=[response.updated_at],
                             )
                         ]
                     )

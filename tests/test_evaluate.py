@@ -147,11 +147,9 @@ def test_validate_args(
 )
 def test_build_metrics_path(wikibase_id: str, snapshot: SnapshotAssertion):
     path = build_metrics_path(wikibase_id)
-    # Convert to relative path for consistent snapshot testing across
-    # environments
-    relative_path = Path(
-        *path.parts[-3:]
-    )  # Take last 3 parts: classifiers_performance/Q123.json
+    # Convert to relative path for consistent snapshot testing across environments
+    # Take last 3 parts: processed/classifiers_performance/Q123.json
+    relative_path = Path(*path.parts[-3:])
     assert relative_path == snapshot
 
 

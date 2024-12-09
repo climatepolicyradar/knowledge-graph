@@ -8,11 +8,16 @@
                 "start_index": 0,
                 "end_index": 10,
                 "concept_id": "Q10014",
-                "labellers": ["Q10014-RuleBasedClassifier"]
+                "labellers": [
+                    "Q10014-RuleBasedClassifier"
+                ],
+                "timestamps": [
+                    "2021-09-29T14:00:00.000Z"
+                ]
             }
         ],
         "metadata": {
-            "concept":{
+            "concept": {
                 "preferred_label": "nuclear sector",
                 "alternative_labels": [
                     "nuclear energy",
@@ -40,8 +45,7 @@
                 ],
                 "definition": null,
                 "labelled_passages": []
-            },
-            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+            }
         }
     },
     {
@@ -53,7 +57,12 @@
                 "start_index": 4,
                 "end_index": 14,
                 "concept_id": "Q10014",
-                "labellers": ["Q10014-RuleBasedClassifier"]
+                "labellers": [
+                    "Q10014-RuleBasedClassifier"
+                ],
+                "timestamps": [
+                    "2021-09-29T14:00:00.000Z"
+                ]
             }
         ],
         "metadata": {
@@ -85,8 +94,7 @@
                 ],
                 "definition": null,
                 "labelled_passages": []
-            },
-            "inference_timestamp": "2021-09-29T14:00:00.000Z"
+            }
         }
     }
 ]

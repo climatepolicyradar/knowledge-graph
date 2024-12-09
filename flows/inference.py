@@ -3,7 +3,6 @@ import json
 import os
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, Set, Tuple, TypeAlias
@@ -23,7 +22,7 @@ from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
-from src.span import Span
+from src.span import DateTimeEncoder, Span
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -252,7 +251,9 @@ def store_labels(
     print(f"Storing labels for document {document_id} at {key}")
 
     data = [label.model_dump() for label in labels]
-    body = BytesIO(json.dumps(data).encode("utf-8"))
+
+    # Use the datetime encoder from the span module when dumping to JSON
+    body = BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     s3.put_object(
@@ -279,10 +280,7 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
-        metadata={
-            "concept": concept_no_labelled_passages.model_dump(),
-            "inference_timestamp": datetime.now().isoformat(),
-        },
+        metadata={"concept": concept_no_labelled_passages.model_dump()},
     )
     return labelled_passage
 

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sentence_transformers import SentenceTransformer
 
 from src.classifier.classifier import Classifier
@@ -53,6 +55,7 @@ class EmbeddingClassifier(Classifier):
                     start_index=0,
                     end_index=len(text),
                     labellers=[str(self)],
+                    timestamps=[datetime.now()],
                 )
             ]
         return spans
@@ -80,6 +83,7 @@ class EmbeddingClassifier(Classifier):
                         start_index=0,
                         end_index=len(text),
                         labellers=[str(self)],
+                        timestamps=[datetime.now()],
                     )
                 ]
             spans_per_text.append(spans)
