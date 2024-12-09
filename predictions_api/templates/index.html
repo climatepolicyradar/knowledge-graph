@@ -5,24 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Predictions API</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'media'
+      }
+    </script>
     <style>
       .search-hidden {
         display: none !important;
       }
     </style>
   </head>
-  <body class="bg-white text-gray-900 p-6">
+  <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-6">
     <div class="max-w-7xl mx-auto">
       <div class="w-full flex justify-between items-center mb-3 mt-1 pl-3">
         <div>
-          <h1 class="text-lg font-semibold text-slate-800">Predictions</h1>
+          <h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Predictions</h1>
         </div>
         <div class="ml-3">
           <div class="w-full max-w-sm min-w-[200px] relative">
             <div class="relative">
               <input
                 id="search"
-                class="bg-white w-full pr-11 h-10 pl-3 py-2 bg-transparent placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md"
+                class="bg-white dark:bg-gray-700 w-full pr-11 h-10 pl-3 py-2 bg-transparent placeholder:text-slate-400 text-slate-700 dark:text-slate-200 text-sm border border-slate-200 dark:border-slate-600 rounded transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-400 shadow-sm focus:shadow-md"
                 placeholder="Search for a concept"
               />
               <button
@@ -50,35 +55,35 @@
       </div>
 
       <div
-        class="relative flex flex-col w-full h-full overflow-scroll text-gray-700 bg-white shadow-md rounded-lg bg-clip-border"
+        class="relative flex flex-col w-full h-full overflow-scroll text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 shadow-md rounded-lg bg-clip-border"
       >
         <table class="w-full text-left table-auto">
           <thead>
             <tr>
-              <th class="p-4 border-b border-slate-300 bg-slate-50 w-48">
+              <th class="p-4 border-b border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-gray-700 w-48">
                 <p
-                  class="block text-sm font-normal leading-none text-slate-500"
+                  class="block text-sm font-normal leading-none text-slate-500 dark:text-slate-400"
                 >
                   Concept
                 </p>
               </th>
-              <th class="p-4 border-b border-slate-300 bg-slate-50">
+              <th class="p-4 border-b border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-gray-700">
                 <p
-                  class="block text-sm font-normal leading-none text-slate-500"
+                  class="block text-sm font-normal leading-none text-slate-500 dark:text-slate-400"
                 >
                   Description
                 </p>
               </th>
-              <th class="p-4 border-b border-slate-300 bg-slate-50 w-32">
+              <th class="p-4 border-b border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-gray-700 w-32">
                 <p
-                  class="block text-sm font-normal leading-none text-slate-500"
+                  class="block text-sm font-normal leading-none text-slate-500 dark:text-slate-400"
                 >
                   Predictions
                 </p>
               </th>
-              <th class="p-4 border-b border-slate-300 bg-slate-50 w-20">
+              <th class="p-4 border-b border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-gray-700 w-20">
                 <p
-                  class="block text-sm font-normal leading-none text-slate-500"
+                  class="block text-sm font-normal leading-none text-slate-500 dark:text-slate-400"
                 >
                   JSON
                 </p>
@@ -87,17 +92,17 @@
           </thead>
           <tbody class="text-sm">
             {% for concept in concepts|sort(attribute='id') %}
-            <tr class="hover:bg-slate-50">
-              <td class="p-4 border-b border-slate-200 py-5">
-                <p class="text-slate-800 break-words">{{ concept.str }}</p>
+            <tr class="hover:bg-slate-50 dark:hover:bg-gray-700">
+              <td class="p-4 border-b border-slate-200 dark:border-slate-600 py-5">
+                <p class="text-slate-800 dark:text-slate-200 break-words">{{ concept.str }}</p>
               </td>
-              <td class="p-4 border-b border-slate-200 py-5">
-                <p class="text-slate-500 break-words">
+              <td class="p-4 border-b border-slate-200 dark:border-slate-600 py-5">
+                <p class="text-slate-500 dark:text-slate-400 break-words">
                   {{ concept.description }}
                 </p>
               </td>
-              <td class="p-4 border-b border-slate-200 py-5">
-                <p class="text-slate-500">
+              <td class="p-4 border-b border-slate-200 dark:border-slate-600 py-5">
+                <p class="text-slate-500 dark:text-slate-400">
                   <a
                     href="/{{ concept.id }}"
                     class="text-blue-500 hover:text-blue-700"
@@ -105,7 +110,7 @@
                   >
                 </p>
               </td>
-              <td class="p-4 border-b border-slate-200 py-5 text-center">
+              <td class="p-4 border-b border-slate-200 dark:border-slate-600 py-5 text-center">
                 <a
                   href="/{{ concept.id }}/json"
                   title="Download JSON"
