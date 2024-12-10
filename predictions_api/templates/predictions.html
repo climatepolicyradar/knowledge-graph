@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ wikibase_id }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', path='favicon.png') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -187,7 +188,7 @@
           <div class="passage-text text-slate-700 dark:text-slate-200">
             {% set highlighted = prediction.get_highlighted_text() %} {% set
             html_highlighted = highlighted .replace("[cyan]", '<span
-              class="bg-red-100 dark:bg-red-900/50 px-1 border-b-2 border-red-300 dark:border-red-700"
+              class="bg-red-100 dark:bg-red-200 px-1 border-b-2 border-red-300 dark:border-red-400 dark:text-black"
               data-concept="' + prediction.spans[0].concept_id + '"
               >') .replace("[/cyan]", '</span
             >') %} {{ html_highlighted | safe }}
