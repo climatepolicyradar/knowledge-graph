@@ -22,12 +22,20 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 predictions_dir = processed_data_dir / "predictions"
 
 
-def load_predictions(wikibase_id: WikibaseID) -> List[LabelledPassage]:
+def load_predictions(wikibase_id: WikibaseID, classifier: str) -> List[LabelledPassage]:
     """Read a JSONL file and return a list of predictions."""
-    file_path = predictions_dir / f"{wikibase_id}.jsonl"
+    file_path = predictions_dir / wikibase_id / f"{classifier}.jsonl"
     with open(file_path, encoding="utf-8") as f:
         predictions = [LabelledPassage.model_validate_json(line) for line in f]
     return predictions
+
+
+def get_available_classifiers(wikibase_id: WikibaseID) -> List[str]:
+    """Get list of available classifiers for a concept."""
+    concept_dir = predictions_dir / wikibase_id
+    if not concept_dir.exists():
+        return []
+    return [f.stem for f in concept_dir.glob("*.jsonl")]
 
 
 def get_available_regions(predictions: List[LabelledPassage]) -> List[str]:
@@ -65,10 +73,14 @@ def get_available_concepts() -> List[dict]:
     concepts = []
     wikibase = WikibaseSession()
 
-    for file_path in predictions_dir.glob("*.jsonl"):
-        wikibase_id = WikibaseID(file_path.stem)
+    for concept_dir in predictions_dir.iterdir():
+        if not concept_dir.is_dir():
+            continue
+
+        wikibase_id = WikibaseID(concept_dir.name)
         try:
             concept = wikibase.get_concept(wikibase_id)
+            classifiers = get_available_classifiers(wikibase_id)
             concepts.append(
                 {
                     "id": wikibase_id,
@@ -76,6 +88,7 @@ def get_available_concepts() -> List[dict]:
                     "str": str(concept),
                     "description": concept.description,
                     "url": concept.wikibase_url,
+                    "classifiers": classifiers,
                 }
             )
         except Exception:
@@ -99,10 +112,40 @@ async def index(request: Request):
 
 
 @app.get("/{wikibase_id}")
-async def get_predictions_html(request: Request, wikibase_id: WikibaseID):
-    """Return predictions for a concept in HTML format."""
+async def get_concept_page(request: Request, wikibase_id: WikibaseID):
+    """Display concept page with available classifiers."""
     try:
-        predictions = load_predictions(wikibase_id)
+        wikibase = WikibaseSession()
+        concept = wikibase.get_concept(wikibase_id)
+        classifiers = get_available_classifiers(wikibase_id)
+
+        if not classifiers:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No predictions found for concept {wikibase_id}",
+            )
+
+        return templates.TemplateResponse(
+            "concept.html",
+            {
+                "request": request,
+                "wikibase_id": wikibase_id,
+                "concept_str": str(concept),
+                "wikibase_url": concept.wikibase_url,
+                "classifiers": classifiers,
+            },
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Concept {wikibase_id} not found")
+
+
+@app.get("/{wikibase_id}/{classifier}")
+async def get_predictions_html(
+    request: Request, wikibase_id: WikibaseID, classifier: str
+):
+    """Return predictions for a concept and classifier in HTML format."""
+    try:
+        predictions = load_predictions(wikibase_id, classifier)
         wikibase = WikibaseSession()
         concept = wikibase.get_concept(wikibase_id)
         regions = get_available_regions(predictions)
@@ -115,6 +158,7 @@ async def get_predictions_html(request: Request, wikibase_id: WikibaseID):
                 "request": request,
                 "predictions": predictions,
                 "wikibase_id": wikibase_id,
+                "classifier": classifier,
                 "total_count": len(predictions),
                 "wikibase_url": concept.wikibase_url,
                 "concept_str": str(concept),
@@ -124,18 +168,25 @@ async def get_predictions_html(request: Request, wikibase_id: WikibaseID):
             },
         )
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Concept {wikibase_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Predictions not found for concept {wikibase_id} and classifier {classifier}",
+        )
 
 
-@app.get("/{wikibase_id}/json")
-async def get_predictions_json(wikibase_id: WikibaseID):
-    """Return predictions for a concept in JSON format."""
+@app.get("/{wikibase_id}/{classifier}/json")
+async def get_predictions_json(wikibase_id: WikibaseID, classifier: str):
+    """Return predictions for a concept and classifier in JSON format."""
     try:
-        predictions = load_predictions(wikibase_id)
+        predictions = load_predictions(wikibase_id, classifier)
         return {
             "wikibase_id": wikibase_id,
+            "classifier": classifier,
             "total_count": len(predictions),
             "predictions": predictions,
         }
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Concept {wikibase_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Predictions not found for concept {wikibase_id} and classifier {classifier}",
+        )

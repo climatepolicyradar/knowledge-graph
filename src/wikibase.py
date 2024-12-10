@@ -173,12 +173,26 @@ class WikibaseSession:
 
         entity = json.loads(revisions[0].get("slots", {}).get("main", {}).get("*"))
 
+        preferred_label = entity.get("labels", {}).get("en", {}).get("value", "")
+
+        if isinstance(entity["aliases"], dict):
+            alternative_labels = [
+                alias.get("value")
+                for alias in entity.get("aliases", {}).get("en", [])
+                if alias.get("language") == "en"
+            ]
+        else:
+            alternative_labels = []
+
+        description = (
+            entity.get("descriptions", {}).get("en", {}).get("value", "")
+            if isinstance(entity["descriptions"], dict)
+            else ""
+        )
         concept = Concept(
-            preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
-            alternative_labels=[
-                alias.get("value") for alias in entity.get("aliases", {}).get("en", [])
-            ],
-            description=entity.get("descriptions", {}).get("en", {}).get("value", ""),
+            preferred_label=preferred_label,
+            alternative_labels=alternative_labels,
+            description=description,
             wikibase_id=wikibase_id,
         )
 
