@@ -110,7 +110,8 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
 
     if not matching_files:
         raise ValueError(
-            f"failed to find {file_name} in {config.pipeline_state_prefix}"
+            f"failed to find any `{file_name}` files in "
+            f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
         )
 
     # Sort by Key and get the last one
