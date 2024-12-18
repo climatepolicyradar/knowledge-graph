@@ -93,7 +93,7 @@ def list_bucket_doc_ids(config: Config) -> list[str]:
 
 def get_latest_ingest_documents(config: Config) -> list[str]:
     """
-    Get ids of changed documents from the latest ingest run
+    Get IDs of changed documents from the latest ingest run
 
     Retrieves the `new_and_updated_docs.json` file from the latest ingest.
     Extracts the ids from the file, and returns them as a single list.
@@ -101,11 +101,20 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     page_iterator = get_bucket_paginator(config, config.pipeline_state_prefix)
     file_name = "new_and_updated_documents.json"
 
-    latest = next(
-        page_iterator.search(
-            f"sort_by(Contents[?contains(Key, '{file_name}')], &Key)[-1]"
+    # First get all matching files, then sort them
+    matching_files = [
+        item
+        for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
+        if item is not None
+    ]
+
+    if not matching_files:
+        raise ValueError(
+            f"failed to find {file_name} in {config.pipeline_state_prefix}"
         )
-    )
+
+    # Sort by Key and get the last one
+    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
 
     data = download_s3_file(config, latest["Key"])
     content = json.loads(data)
