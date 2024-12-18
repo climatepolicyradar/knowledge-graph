@@ -224,6 +224,18 @@ def test_get_latest_ingest_documents(
     assert set(doc_ids) == latest_docs
 
 
+def test_get_latest_ingest_documents_no_latest(
+    test_config,
+    # Setup the empty bucket
+    mock_bucket,
+):
+    with pytest.raises(
+        ValueError,
+        match="failed to find",
+    ):
+        get_latest_ingest_documents(test_config)
+
+
 @pytest.mark.parametrize(
     "data, expected_lengths",
     [
