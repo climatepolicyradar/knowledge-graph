@@ -16,6 +16,8 @@ on:
         required: true
       PREFECT_API_KEY:
         required: true
+      PREFECT_API_URL:
+        required: true
 
 jobs:
   deploy:
@@ -53,12 +55,6 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Login to Prefect
-        uses: PrefectHQ/actions-prefect-auth@v2
-        with:
-          prefect-api-key: ${{ secrets.PREFECT_API_KEY }}
-          prefect-workspace: ${{ inputs.prefect-workspace }}
-
       - name: Get version
         id: get_version
         run: |
@@ -90,6 +86,7 @@ jobs:
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
           DOCKER_TAG: ${{ steps.get_version.outputs.docker_tag }}
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+          PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
         run: |
            poetry run python -m deployments
            poetry run python -m automations
