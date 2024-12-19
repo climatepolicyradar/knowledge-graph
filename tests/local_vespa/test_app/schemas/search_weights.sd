@@ -13,5 +13,6 @@ schema search_weights {
         field passage_weight type float {
             indexing: attribute | summary
         }
+        
     }
 }
