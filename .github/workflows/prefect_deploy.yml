@@ -25,7 +25,7 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
 
-      - uses: extractions/setup-just@v1
+      - uses: extractions/setup-just@v2
         with:
           just-version: 1.36.0
 
@@ -54,7 +54,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Login to Prefect
-        uses: PrefectHQ/actions-prefect-auth@v1
+        uses: PrefectHQ/actions-prefect-auth@v2
         with:
           prefect-api-key: ${{ secrets.PREFECT_API_KEY }}
           prefect-workspace: ${{ inputs.prefect-workspace }}
