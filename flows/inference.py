@@ -307,6 +307,7 @@ def _name_document_run_identifiers_set(
 async def report_documents_runs(
     queued: Set[DocumentRunIdentifier],
     completed: Set[DocumentRunIdentifier],
+    aws_env: AwsEnv,
 ) -> None:
     try:
         # Create rows for both queued and completed documents with status
@@ -318,8 +319,8 @@ async def report_documents_runs(
 
         await artifacts.create_table_artifact(
             table=all_rows,
-            description="# Document Processing Status",
-            key="classifier-inference-document-processing-status",
+            description=f"# Document Processing Status ({aws_env.value})",
+            key=f"classifier-inference-document-processing-status-{aws_env.value}",
         )
     except Exception:
         # Do nothing, not even log. It'll be too noisy.
@@ -462,4 +463,4 @@ async def classifier_inference(
                 queued.discard(document)
                 completed.add(document)
 
-                await report_documents_runs(queued, completed)
+                await report_documents_runs(queued, completed, config.aws_env)
