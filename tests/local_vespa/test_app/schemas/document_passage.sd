@@ -134,6 +134,37 @@ schema document_passage {
         summary concepts {}
     }
 
+    document-summary search_summary_with_tokens {
+        summary family_name {}
+        summary family_description {}
+        summary family_import_id {}
+        summary family_slug {}
+        summary family_category {}
+        summary family_publication_ts {}
+        summary family_geography {}
+        summary family_geographies {}
+        summary family_source {}
+        summary document_import_id {}
+        summary document_slug {}
+        summary document_languages {}
+        summary document_content_type {}
+        summary document_cdn_object {}
+        summary document_source_url {}
+        summary corpus_import_id {}
+        summary corpus_type_name {}
+        summary metadata {}
+        summary text_block {}
+        summary text_block_id {}
+        summary text_block_type {}
+        summary text_block_page {}
+        summary text_block_coords {}
+        summary concepts {}
+        summary text_block_tokens {
+            source: text_block
+            tokens
+        }
+    }
+
     rank-profile exact inherits default {
         function text_score() {
             expression: attribute(passage_weight) * fieldMatch(text_block)
@@ -141,7 +172,17 @@ schema document_passage {
         first-phase {
             expression: text_score()
         }
-        match-features: text_score()
+        summary-features: text_score() fieldMatch(text_block)
+    }
+    
+    rank-profile exact_not_stemmed inherits default {
+        function text_score() {
+            expression: attribute(passage_weight) * fieldMatch(text_block_not_stemmed)
+        }
+        first-phase {
+            expression: text_score()
+        }
+        summary-features: text_score() fieldMatch(text_block)
     }
 
     rank-profile hybrid_no_closeness inherits default {
@@ -151,7 +192,7 @@ schema document_passage {
         first-phase {
             expression: text_score()
         }
-        match-features: text_score()
+        summary-features: text_score() bm25(text_block)
     }
 
     rank-profile hybrid inherits default {
@@ -164,6 +205,20 @@ schema document_passage {
         first-phase {
             expression: text_score()
         }
-        match-features: text_score()
+        summary-features: text_score() bm25(text_block) closeness(text_embedding)
+    }
+    
+    rank-profile hybrid_custom_weight inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+            query(bm25_weight) double
+        }
+        function text_score() {
+            expression: attribute(passage_weight) * (query(bm25_weight) * bm25(text_block) + closeness(text_embedding))
+        }
+        first-phase {
+            expression: text_score()
+        }
+        summary-features: text_score() bm25(text_block) closeness(text_embedding)
     }
 }
