@@ -1,5 +1,15 @@
 schema family_document {
 
+    field family_name_not_stemmed type string {
+        indexing: input family_name_index | index
+        stemming: none
+    }
+
+    field family_description_not_stemmed type string {
+        indexing: input family_description_index | index
+        stemming: none
+    }
+
     document family_document {
 
         field search_weights_ref type reference<search_weights> {
@@ -168,7 +178,20 @@ schema family_document {
         first-phase {
             expression: name_score() + description_score()
         }
-        match-features: name_score() description_score()
+        summary-features: name_score() description_score()
+    }
+    
+    rank-profile exact_not_stemmed inherits default {
+        function name_score() {
+            expression: attribute(name_weight) * fieldMatch(family_name_not_stemmed)
+        }
+        function description_score() {
+            expression: attribute(description_weight) * fieldMatch(family_description_not_stemmed)
+        }
+        first-phase {
+            expression: name_score() + description_score()
+        }
+        summary-features: name_score() description_score()
     }
 
     rank-profile hybrid_no_closeness inherits default {
@@ -181,7 +204,7 @@ schema family_document {
         first-phase {
             expression: name_score() + description_score()
         }
-        match-features: name_score() description_score()
+        summary-features: name_score() description_score()
     }
 
     rank-profile hybrid inherits default {
@@ -197,8 +220,42 @@ schema family_document {
         first-phase {
             expression: name_score() + description_score()
         }
-        match-features: name_score() description_score()
+        summary-features: name_score() description_score()
     }
+    
+    rank-profile hybrid_no_description_embedding inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+        }
+        function name_score() {
+            expression: attribute(name_weight) * bm25(family_name_index)
+        }
+        function description_score() {
+            expression: attribute(description_weight) * bm25(family_description_index)
+        }
+        first-phase {
+            expression: name_score() + description_score()
+        }
+        summary-features: name_score() description_score()
+    }
+
+    rank-profile hybrid_custom_weight inherits default {
+        inputs {
+            query(query_embedding) tensor<float>(x[768])
+            query(bm25_weight) double
+        }
+        function name_score() {
+            expression: attribute(name_weight) * bm25(family_name_index)
+        }
+        function description_score() {
+            expression: attribute(description_weight) * bm25(family_description_index)
+        }
+        first-phase {
+            expression: name_score() + description_score()
+        }
+        summary-features: name_score() description_score()
+    }
+
 
     document-summary search_summary {
         summary family_name {}
@@ -222,5 +279,40 @@ schema family_document {
         summary corpus_type_name {}
         summary collection_title {}
         summary collection_summary {}
+    }
+
+    document-summary search_summary_with_tokens {
+        summary family_name {}
+        summary family_description {}
+        summary family_import_id {}
+        summary family_slug {}
+        summary family_category {}
+        summary family_publication_ts {}
+        summary family_geography {}
+        summary family_geographies {}
+        summary family_source {}
+        summary document_import_id {}
+        summary document_title {}
+        summary document_slug {}
+        summary document_languages {}
+        summary document_content_type {}
+        summary document_cdn_object {}
+        summary document_source_url {}
+        summary metadata {}
+        summary corpus_import_id {}
+        summary corpus_type_name {}
+        summary collection_title {}
+        summary collection_summary {}
+        summary family_name_index {}
+        summary family_name_index_tokens {
+            source: family_name_index
+            tokens
+        }
+        summary family_description_index {}
+        summary family_description_index_tokens {
+            source: family_description_index
+            tokens
+        }
+        from-disk
     }
 }
