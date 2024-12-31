@@ -442,6 +442,26 @@ def group_concepts_on_text_block(
     return concepts_grouped
 
 
+def get_concept_counts(
+    document_concepts: list[tuple[str, VespaConcept]],
+) -> dict[str, int]:
+    """
+    Get the concept counts for a document.
+
+    The concept counts are used to update the family document with the counts of the
+    concepts related to the document.
+    """
+    concept_counts = {}
+    for _, concept in document_concepts:
+        if not isinstance(concept, VespaConcept):
+            continue
+        if concept.id in concept_counts:
+            concept_counts[concept.id] += 1
+        else:
+            concept_counts[concept.id] = 1
+    return concept_counts
+
+
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
@@ -545,6 +565,25 @@ async def run_partial_updates_of_concepts_for_document_passages(
                     logger.error(
                         f"failed to do partial update for concept `{concept}`: {str(result)}",
                     )
+
+        # Convert document_concepts to concept counts
+        concept_counts = get_concept_counts(loaded_document_concepts)
+
+        # Run partial updates of the family documents to add the concept counts
+        vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+            schema="family_document",
+            namespace="doc_search",
+            data_id=document_import_id,
+            fields={
+                "concept_counts": {
+                    concept_id: count for concept_id, count in concept_counts.items()
+                }
+            },
+        )
+        logger.info(
+            "Updated concept metadata for family_document.",
+            extra={"props": {"family_document": document_import_id}},
+        )
 
 
 async def partial_update_text_block(

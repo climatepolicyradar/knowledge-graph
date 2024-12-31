@@ -336,6 +336,15 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         for example_vespa_concept in example_vespa_concepts:
             assert example_vespa_concept not in second_updated_concepts
 
+        # Check that concept counts are indexed.
+        response = local_vespa_search_adapter.client.query(
+            yql=(
+                "select * from family_document "
+                "where concept_counts contains sameElement(value > 1)"
+            )
+        )
+        assert len(response.hits) > 0
+
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
