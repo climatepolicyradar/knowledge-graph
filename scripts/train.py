@@ -202,7 +202,7 @@ def main(
             help="AWS environment to use for S3 uploads",
         ),
     ] = AwsEnv.labs,
-):
+) -> Classifier:
     """
     Main function to train the model and optionally upload the artifact.
 
@@ -323,6 +323,8 @@ def main(
             )
 
         run.finish()  # type: ignore
+
+    return classifier
 
 
 if __name__ == "__main__":
