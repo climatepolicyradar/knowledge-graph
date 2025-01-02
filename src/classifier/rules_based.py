@@ -26,7 +26,8 @@ class RulesBasedClassifier(Classifier):
 
         :param Concept concept: The concept which the classifier will identify in text
         """
-        super(RulesBasedClassifier, self).__init__(concept)
+        super().__init__(concept)
+
         self.positive_matcher = KeywordClassifier(
             concept=Concept(
                 wikibase_id=self.concept.wikibase_id,
