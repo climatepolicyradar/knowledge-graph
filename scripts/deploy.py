@@ -98,7 +98,7 @@ def new(
         list[WikibaseID],
         typer.Option(
             help="List of Wikibase IDs to deploy",
-            parser=lambda x: [WikibaseID(id) for id in x.split(",")],
+            parser=lambda x: WikibaseID(x),
         ),
     ] = [],
     get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
