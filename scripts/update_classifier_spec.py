@@ -106,6 +106,10 @@ def get_all_available_classifiers(
     if not aws_envs:
         aws_envs = [e for e in AwsEnv]
 
+    console.log(
+        f"Running for AWS environments: {[aws_env.value for aws_env in aws_envs]}"
+    )
+
     api_key = os.environ["WANDB_API_KEY"]
     api = wandb.Api(api_key=api_key)
     model_type = ArtifactType(
@@ -136,6 +140,8 @@ def get_all_available_classifiers(
         # Have stable ordering
         sorted_specs = sorted(specs, key=lambda x: x.split(":")[0])
         write_spec_file(spec_path, data=sorted_specs)
+
+    console.log("Finished!")
 
 
 if __name__ == "__main__":

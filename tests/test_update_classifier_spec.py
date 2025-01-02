@@ -6,7 +6,7 @@ import pytest
 from wandb.apis.public import ArtifactType
 from wandb.apis.public.artifacts import ArtifactCollection
 
-from scripts.cloud import ClassifierSpec
+from scripts.cloud import AwsEnv, ClassifierSpec
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
     is_concept_model,
@@ -79,7 +79,7 @@ def test_is_latest_model_in_env():
 def test_get_all_available_classifiers(mock_wandb_api):
     with TemporaryDirectory() as temp_dir:
         with patch("scripts.update_classifier_spec.SPEC_DIR", Path(temp_dir)):
-            get_all_available_classifiers(aws_envs=["sandbox"])
+            get_all_available_classifiers(aws_envs=[AwsEnv.sandbox])
             specs = read_spec_file("sandbox")
             assert specs == ["Q111:v1", "Q222:v1"]
 
