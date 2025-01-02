@@ -18,7 +18,13 @@ from pydantic import (
 from tqdm import tqdm  # type: ignore
 from typing_extensions import Self
 
-from scripts.cloud import AwsEnv, get_s3_client, is_logged_in
+from scripts.cloud import (
+    AwsEnv,
+    get_s3_client,
+    is_logged_in,
+    parse_aws_env,
+    validate_transition,
+)
 from src.identifiers import WikibaseID
 from src.version import Version
 
@@ -34,14 +40,6 @@ JOB_TYPE = "promote_model"
 REGION_NAME = "eu-west-1"
 
 
-VALID_FROM_TO_TRANSITIONS = [
-    (AwsEnv.sandbox, AwsEnv.labs),
-    (AwsEnv.sandbox, AwsEnv.staging),
-    (AwsEnv.labs, AwsEnv.staging),
-    (AwsEnv.staging, AwsEnv.production),
-]
-
-
 class Across(BaseModel):
     """Promoting a model across 2 different AWS environments."""
 
@@ -55,8 +53,7 @@ class Across(BaseModel):
         if self.src == self.dst:
             raise ValueError("src and dst must be different")
 
-        if (self.src, self.dst) not in VALID_FROM_TO_TRANSITIONS:
-            raise ValueError(f"cannot promote from {self.src.value} → {self.dst.value}")
+        validate_transition(self.src, self.dst)
 
         return self
 
@@ -242,27 +239,6 @@ def validate_logins(
 
 
 app = typer.Typer()
-
-
-def parse_aws_env(value: str) -> str:
-    """
-    Parse a string a string as a possible enum value.
-
-    We rely on a somewhat custom enum, to allow `"dev"`|`"staging"` for
-    `staging`.
-    """
-    try:
-        # This would convert `"dev"` to `AwsEnv.staging`.
-        #
-        # The raw value is returned, since we can't return an `AwsEnv` from
-        # this function.
-        return AwsEnv(value).value
-    except ValueError as e:
-        if "is not a valid AwsEnv" in str(e):
-            valid = ", ".join([f"'{env.value}'" for env in AwsEnv])
-            raise typer.BadParameter(f"'{value}' is not one of {valid}.")
-        else:
-            raise typer.BadParameter(str(e))
 
 
 def find_artifact_by_version(

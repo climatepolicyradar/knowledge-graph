@@ -69,6 +69,7 @@ demote = "scripts.demote:app"
 evaluate = "scripts.evaluate:app"
 infer = "scripts.infer:app"
 update_inference_classifiers = "scripts.update_classifier_spec:app"
+deploy = "scripts.deploy:app"
 
 [tool.poetry.group.dev]
 optional = true
