@@ -9,3 +9,11 @@ The API has three main endpoints:
 - `GET /` renders a list of all available concepts in HTML using a Jinja2 template.
 - `GET /predictions/{concept_id}` renders the predictions for a concept in HTML using a Jinja2 template.
 - `GET /predictions/{concept_id}/json` returns the predictions in raw JSON format.
+
+## Running the API
+
+From the root of the repository, run:
+
+```bash
+poetry run uvicorn predictions_api.main:app --reload
+```

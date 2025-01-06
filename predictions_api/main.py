@@ -62,7 +62,7 @@ def get_available_corpora(predictions: List[LabelledPassage]) -> List[str]:
     """Extract unique corpora from predictions."""
     corpora: set[str] = set()
     for prediction in predictions:
-        corpus = prediction.metadata.get("dataset_name")
+        corpus = prediction.metadata.get("document_metadata.corpus_type_name")
         if corpus and isinstance(corpus, str) and corpus.strip():
             corpora.add(corpus)
     return sorted(list(corpora))
