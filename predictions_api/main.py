@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
@@ -22,7 +21,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 predictions_dir = processed_data_dir / "predictions"
 
 
-def load_predictions(wikibase_id: WikibaseID, classifier: str) -> List[LabelledPassage]:
+def load_predictions(wikibase_id: WikibaseID, classifier: str) -> list[LabelledPassage]:
     """Read a JSONL file and return a list of predictions."""
     file_path = predictions_dir / wikibase_id / f"{classifier}.jsonl"
     with open(file_path, encoding="utf-8") as f:
@@ -30,7 +29,7 @@ def load_predictions(wikibase_id: WikibaseID, classifier: str) -> List[LabelledP
     return predictions
 
 
-def get_available_classifiers(wikibase_id: WikibaseID) -> List[str]:
+def get_available_classifiers(wikibase_id: WikibaseID) -> list[str]:
     """Get list of available classifiers for a concept."""
     concept_dir = predictions_dir / wikibase_id
     if not concept_dir.exists():
@@ -38,7 +37,7 @@ def get_available_classifiers(wikibase_id: WikibaseID) -> List[str]:
     return [f.stem for f in concept_dir.glob("*.jsonl")]
 
 
-def get_available_regions(predictions: List[LabelledPassage]) -> List[str]:
+def get_available_regions(predictions: list[LabelledPassage]) -> list[str]:
     """Extract unique World Bank regions from predictions."""
     regions: set[str] = set()
     for prediction in predictions:
@@ -48,7 +47,7 @@ def get_available_regions(predictions: List[LabelledPassage]) -> List[str]:
     return sorted(list(regions))
 
 
-def get_available_translated_statuses(predictions: List[LabelledPassage]) -> List[str]:
+def get_available_translated_statuses(predictions: list[LabelledPassage]) -> list[str]:
     """Extract unique translated statuses from predictions."""
     translated_statuses: set[str] = set()
     for prediction in predictions:
@@ -58,7 +57,7 @@ def get_available_translated_statuses(predictions: List[LabelledPassage]) -> Lis
     return sorted(list(translated_statuses))
 
 
-def get_available_corpora(predictions: List[LabelledPassage]) -> List[str]:
+def get_available_corpora(predictions: list[LabelledPassage]) -> list[str]:
     """Extract unique corpora from predictions."""
     corpora: set[str] = set()
     for prediction in predictions:
@@ -68,7 +67,7 @@ def get_available_corpora(predictions: List[LabelledPassage]) -> List[str]:
     return sorted(list(corpora))
 
 
-def get_available_concepts() -> List[dict]:
+def get_available_concepts() -> list[dict]:
     """Get list of available concepts with their details."""
     concepts = []
     wikibase = WikibaseSession()
