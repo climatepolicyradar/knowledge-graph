@@ -13,6 +13,8 @@ from src.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
 
+# Test linting works on main
+
 
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
