@@ -67,8 +67,8 @@ def get_available_corpora(predictions: list[LabelledPassage]) -> list[str]:
     return sorted(list(corpora))
 
 
-def get_available_concepts() -> list[dict]:
-    """Get list of available concepts with their details."""
+def get_available_concepts_with_classifiers() -> list[dict]:
+    """Get list of available concepts with a list of classifiers and some metadata."""
     concepts = []
     wikibase = WikibaseSession()
 
@@ -99,7 +99,7 @@ def get_available_concepts() -> list[dict]:
 @app.get("/")
 async def index(request: Request):
     """Display homepage with list of available concepts."""
-    concepts = get_available_concepts()
+    concepts = get_available_concepts_with_classifiers()
     return templates.TemplateResponse(
         "index.html",
         {
