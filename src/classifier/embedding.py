@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sentence_transformers import SentenceTransformer
 
@@ -23,18 +24,22 @@ class EmbeddingClassifier(Classifier):
         embedding_model: SentenceTransformer = SentenceTransformer(
             "BAAI/bge-small-en-v1.5"
         ),
+        threshold: float = 0.65,
     ):
         super().__init__(concept)
-        self.concept = concept
         self.embedding_model = embedding_model
+        self.threshold = threshold
 
-        # this is a VERY naive way of representing a concept as text. i'd like to
-        # refine this and incorporate a bit more structure from the original concept at
-        # some point
-        self.concept_text = ", ".join(self.concept.all_labels)
+        self.concept_text = self.concept.to_markdown()
         self.concept_embedding = self.embedding_model.encode(self.concept_text)
 
-    def predict(self, text: str, threshold: float = 0.65) -> list[Span]:
+    def __repr__(self):
+        """Return a string representation of the classifier."""
+        return (
+            f'{self.name}("{self.concept.preferred_label}", threshold={self.threshold})'
+        )
+
+    def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
@@ -44,6 +49,7 @@ class EmbeddingClassifier(Classifier):
         will be returned, covering the full text. Otherwise, an empty list will be
         returned.
         """
+        threshold = threshold or self.threshold
         query_embedding = self.embedding_model.encode(text)
         similarity = self.concept_embedding @ query_embedding.T
         spans = []
@@ -61,7 +67,7 @@ class EmbeddingClassifier(Classifier):
         return spans
 
     def predict_batch(
-        self, texts: list[str], threshold: float = 0.65
+        self, texts: list[str], threshold: Optional[float] = None
     ) -> list[list[Span]]:
         """
         Predict whether the supplied texts contain instances of the concept.
@@ -69,6 +75,7 @@ class EmbeddingClassifier(Classifier):
         :param list[str] texts: The texts to predict on
         :return list[list[Span]]: A list of spans in the texts for each text
         """
+        threshold = threshold or self.threshold
         text_embeddings = self.embedding_model.encode(texts, show_progress_bar=True)
         spans_per_text = []
 

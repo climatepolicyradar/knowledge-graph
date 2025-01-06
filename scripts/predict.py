@@ -1,4 +1,4 @@
-from typing import Annotated, Type
+from typing import Annotated
 
 import pandas as pd
 import typer
@@ -6,7 +6,6 @@ from rich.console import Console
 from rich.progress import track
 
 from scripts.config import classifier_dir, processed_data_dir
-from src.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
@@ -68,30 +67,25 @@ def main(
         concept.negative_labels = list(all_negative_labels)
     console.log(f"✅ Fetched {concept} from Wikibase")
 
-    classifier_specs: list[tuple[Type[Classifier], float | None]] = [
-        # (classifier_class, threshold)
-        (KeywordClassifier, None),
-        (RulesBasedClassifier, None),
-        (StemmedKeywordClassifier, None),
-        (EmbeddingClassifier, 0.3),
-        (EmbeddingClassifier, 0.6),
-        (EmbeddingClassifier, 0.9),
+    classifiers = [
+        KeywordClassifier(concept),
+        RulesBasedClassifier(concept),
+        StemmedKeywordClassifier(concept),
+        EmbeddingClassifier(concept, threshold=0.3),
+        EmbeddingClassifier(concept, threshold=0.6),
+        EmbeddingClassifier(concept, threshold=0.9),
     ]
-
-    for classifier_class, threshold in classifier_specs:
-        classifier = classifier_class(concept)
+    for classifier in classifiers:
         classifier.fit()
         console.log(
             f"✅ Trained a {classifier.name} classifier for {concept.wikibase_id}"
         )
         classifier_path = (
-            classifier_dir
-            / str(concept.wikibase_id)
-            / f"{classifier.name}{f'_{threshold}' if threshold else ''}.pickle"
+            classifier_dir / str(concept.wikibase_id) / f"{classifier.id}.pickle"
         )
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
         classifier.save(classifier_path)
-        console.log(f"Saved {classifier.name} classifier to {classifier_path}")
+        console.log(f"Saved {classifier} to {classifier_path}")
 
         labelled_passages: list[LabelledPassage] = []
         for _, row in track(
@@ -103,15 +97,8 @@ def main(
         ):
             text = row.get("text_block.text", "")
             if text:
-                if (
-                    isinstance(classifier, EmbeddingClassifier)
-                    and threshold is not None
-                ):
-                    spans = classifier.predict(text, threshold)
-                else:
-                    spans = classifier.predict(text)
+                spans = classifier.predict(text)
                 if spans:
-                    # only save the passage if the classifier found something
                     labelled_passages.append(
                         LabelledPassage(
                             text=text,
@@ -128,10 +115,7 @@ def main(
         )
 
         predictions_path = (
-            processed_data_dir
-            / "predictions"
-            / wikibase_id
-            / f"{classifier.name}.jsonl"
+            processed_data_dir / "predictions" / wikibase_id / f"{classifier.id}.jsonl"
         )
         predictions_path.parent.mkdir(parents=True, exist_ok=True)
         with open(predictions_path, "w", encoding="utf-8") as f:
