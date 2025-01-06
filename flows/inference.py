@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from collections.abc import Generator
@@ -9,20 +8,21 @@ from typing import Final, Optional, Set, Tuple, TypeAlias
 
 import boto3
 import prefect.artifacts as artifacts
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.concurrency.asyncio import concurrency
+from prefect.deployments import run_deployment
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.sdk.wandb_run import Run
 
+import wandb
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import DateTimeEncoder, Span
+from wandb.sdk.wandb_run import Run
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -32,6 +32,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.FIGURE,
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+AWS_ENV = os.environ["AWS_ENV"]
 
 DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
 
@@ -379,6 +380,26 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
+@flow
+async def run_classifier_inference_on_batch_of_documents(
+    batch: list[str], config: Config, classifier_spec: ClassifierSpec, run: Run
+) -> None:
+    """
+    Run classifier inference on a batch of documents.
+
+    This reflects the unit of work that should be run in one of many paralellised
+    docker containers.
+    """
+    for document_id in batch:
+        await run_classifier_inference_on_document(
+            run=run,
+            config=config,
+            document_id=document_id,
+            classifier_name=classifier_spec.name,
+            classifier_alias=classifier_spec.alias,
+        )
+
+
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
 async def classifier_inference(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
@@ -435,32 +456,31 @@ async def classifier_inference(
 
     for classifier_spec in classifier_specs:
         for batch in iterate_batch(validated_document_ids, batch_size):
-            subflows = []
+            print(f"Running classifier {classifier_spec.name} on batch {batch}")
+
+            # TODO: Look at using a decorator to handle this
+            for document_id in batch:
+                queued.add((document_id, classifier_spec.name, classifier_spec.alias))
+            await report_documents_runs(queued, completed, config.aws_env)
+
+            await run_deployment(
+                "run_classifier_inference_on_batch_of_documents/"
+                f"knowledge-graph-run_classifier_inference_on_batch_of_documents-{AWS_ENV}",
+                parameters={
+                    "batch": batch,
+                    "config": config,
+                    "classifier_spec": classifier_spec,
+                    "run": run,
+                },
+                timeout=600,
+                as_subflow=True,
+            )
 
             for document_id in batch:
-                subflow = run_classifier_inference_on_document(
-                    run=run,
-                    config=config,
-                    document_id=document_id,
-                    classifier_name=classifier_spec.name,
-                    classifier_alias=classifier_spec.alias,
+                queued.discard(
+                    (document_id, classifier_spec.name, classifier_spec.alias)
                 )
-
-                queued.add(
-                    (
-                        document_id,
-                        classifier_spec.name,
-                        classifier_spec.alias,
-                    )
+                completed.add(
+                    (document_id, classifier_spec.name, classifier_spec.alias)
                 )
-
-                subflows.append(subflow)
-
-            # Handle whichever is the next document to finish
-            for next_document in asyncio.as_completed(subflows):
-                document = await next_document
-
-                queued.discard(document)
-                completed.add(document)
-
-                await report_documents_runs(queued, completed, config.aws_env)
+            await report_documents_runs(queued, completed, config.aws_env)
