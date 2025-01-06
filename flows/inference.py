@@ -8,6 +8,7 @@ from typing import Final, Optional, Set, Tuple, TypeAlias
 
 import boto3
 import prefect.artifacts as artifacts
+import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -15,14 +16,13 @@ from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
+from wandb.sdk.wandb_run import Run
 
-import wandb
 from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import DateTimeEncoder, Span
-from wandb.sdk.wandb_run import Run
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
