@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 
 from src.classifier.classifier import Classifier, Span
 from src.concept import Concept
@@ -95,6 +96,7 @@ class KeywordClassifier(Classifier):
                         start_index=start,
                         end_index=end,
                         labellers=[str(self)],
+                        timestamps=[datetime.now()],
                     )
                 )
                 matched_positions.update(range(start, end))
@@ -110,6 +112,7 @@ class KeywordClassifier(Classifier):
                         start_index=start,
                         end_index=end,
                         labellers=[str(self)],
+                        timestamps=[datetime.now()],
                     )
                 )
                 matched_positions.update(range(start, end))

@@ -3,7 +3,6 @@ import json
 import os
 from collections.abc import Generator
 from dataclasses import dataclass
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, Set, Tuple, TypeAlias
@@ -23,7 +22,7 @@ from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
-from src.span import Span
+from src.span import DateTimeEncoder, Span
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -94,7 +93,7 @@ def list_bucket_doc_ids(config: Config) -> list[str]:
 
 def get_latest_ingest_documents(config: Config) -> list[str]:
     """
-    Get ids of changed documents from the latest ingest run
+    Get IDs of changed documents from the latest ingest run
 
     Retrieves the `new_and_updated_docs.json` file from the latest ingest.
     Extracts the ids from the file, and returns them as a single list.
@@ -102,11 +101,21 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     page_iterator = get_bucket_paginator(config, config.pipeline_state_prefix)
     file_name = "new_and_updated_documents.json"
 
-    latest = next(
-        page_iterator.search(
-            f"sort_by(Contents[?contains(Key, '{file_name}')], &Key)[-1]"
+    # First get all matching files, then sort them
+    matching_files = [
+        item
+        for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
+        if item is not None
+    ]
+
+    if not matching_files:
+        raise ValueError(
+            f"failed to find any `{file_name}` files in "
+            f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
         )
-    )
+
+    # Sort by Key and get the last one
+    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
 
     data = download_s3_file(config, latest["Key"])
     content = json.loads(data)
@@ -252,7 +261,9 @@ def store_labels(
     print(f"Storing labels for document {document_id} at {key}")
 
     data = [label.model_dump() for label in labels]
-    body = BytesIO(json.dumps(data).encode("utf-8"))
+
+    # Use the datetime encoder from the span module when dumping to JSON
+    body = BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     s3.put_object(
@@ -279,10 +290,7 @@ def text_block_inference(
         id=block_id,
         text=text,
         spans=spans,
-        metadata={
-            "concept": concept_no_labelled_passages.model_dump(),
-            "inference_timestamp": datetime.now().isoformat(),
-        },
+        metadata={"concept": concept_no_labelled_passages.model_dump()},
     )
     return labelled_passage
 
@@ -299,6 +307,7 @@ def _name_document_run_identifiers_set(
 async def report_documents_runs(
     queued: Set[DocumentRunIdentifier],
     completed: Set[DocumentRunIdentifier],
+    aws_env: AwsEnv,
 ) -> None:
     try:
         # Create rows for both queued and completed documents with status
@@ -310,8 +319,8 @@ async def report_documents_runs(
 
         await artifacts.create_table_artifact(
             table=all_rows,
-            description="# Document Processing Status",
-            key="classifier-inference-document-processing-status",
+            description=f"# Document Processing Status ({aws_env.value})",
+            key=f"classifier-inference-document-processing-status-{aws_env.value}",
         )
     except Exception:
         # Do nothing, not even log. It'll be too noisy.
@@ -454,4 +463,4 @@ async def classifier_inference(
                 queued.discard(document)
                 completed.add(document)
 
-                await report_documents_runs(queued, completed)
+                await report_documents_runs(queued, completed, config.aws_env)

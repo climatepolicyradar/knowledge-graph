@@ -175,7 +175,9 @@ async def test_text_block_inference(
     expected_concept_metadata = classifier.concept.model_dump()
     expected_concept_metadata["labelled_passages"] = []
     assert labels.metadata["concept"] == expected_concept_metadata
-    datetime.fromisoformat(labels.metadata["inference_timestamp"])
+    # check whether the timestamps are valid
+    for span in labels.spans:
+        assert isinstance(span.timestamps[0], datetime)
 
 
 @pytest.mark.asyncio
@@ -220,6 +222,18 @@ def test_get_latest_ingest_documents(
     _, latest_docs = mock_bucket_new_and_updated_documents_json
     doc_ids = get_latest_ingest_documents(test_config)
     assert set(doc_ids) == latest_docs
+
+
+def test_get_latest_ingest_documents_no_latest(
+    test_config,
+    # Setup the empty bucket
+    mock_bucket,
+):
+    with pytest.raises(
+        ValueError,
+        match="failed to find",
+    ):
+        get_latest_ingest_documents(test_config)
 
 
 @pytest.mark.parametrize(

@@ -68,6 +68,21 @@ class AwsEnv(str, Enum):
             return cls.production
 
 
+VALID_FROM_TO_TRANSITIONS = [
+    (AwsEnv.sandbox, AwsEnv.labs),
+    (AwsEnv.sandbox, AwsEnv.staging),
+    (AwsEnv.labs, AwsEnv.staging),
+    (AwsEnv.staging, AwsEnv.production),
+]
+
+
+def validate_transition(from_aws_env: AwsEnv, to_aws_env: AwsEnv) -> None:
+    if (from_aws_env, to_aws_env) not in VALID_FROM_TO_TRANSITIONS:
+        raise ValueError(
+            f"cannot deploy from {from_aws_env.value} → {to_aws_env.value}"
+        )
+
+
 def generate_deployment_name(flow_name: str, aws_env: AwsEnv):
     return f"{PROJECT_NAME}-{flow_name}-{aws_env}"
 
@@ -93,6 +108,27 @@ def get_s3_client(
         case aws_env:
             session = get_session(aws_env)
             return session.client("s3", region_name=region_name)
+
+
+def parse_aws_env(value: str) -> str:
+    """
+    Parse a string a string as a possible enum value.
+
+    We rely on a somewhat custom enum, to allow `"dev"`|`"staging"` for
+    `staging`.
+    """
+    try:
+        # This would convert `"dev"` to `AwsEnv.staging`.
+        #
+        # The raw value is returned, since we can't return an `AwsEnv` from
+        # this function.
+        return AwsEnv(value).value
+    except ValueError as e:
+        if "is not a valid AwsEnv" in str(e):
+            valid = ", ".join([f"'{env.value}'" for env in AwsEnv])
+            raise ValueError(f"'{value}' is not one of {valid}.")
+        else:
+            raise ValueError(str(e))
 
 
 def get_sts_client(

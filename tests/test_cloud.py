@@ -4,7 +4,7 @@ import botocore
 import pytest
 from moto import mock_aws
 
-from scripts.cloud import AwsEnv, is_logged_in
+from scripts.cloud import AwsEnv, is_logged_in, parse_aws_env
 
 
 def test_init_awsenv():
@@ -41,3 +41,12 @@ def test_is_logged_in(aws_env, use_aws_profiles, is_logged_in_result):
         expected_aws_env = aws_env if use_aws_profiles else None
         mock_get_sts_client.assert_called_once_with(expected_aws_env)
         mock_sts.get_caller_identity.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "invalid_input",
+    ["invalid", "test"],
+)
+def test_parse_aws_env_invalid(invalid_input):
+    with pytest.raises(ValueError, match=f"'{invalid_input}' is not one of"):
+        parse_aws_env(invalid_input)

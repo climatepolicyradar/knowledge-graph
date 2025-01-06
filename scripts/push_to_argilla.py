@@ -7,6 +7,7 @@ from tqdm.auto import tqdm  # type: ignore
 
 import argilla as rg
 from scripts.config import concept_dir, processed_data_dir
+from src.argilla import concept_to_dataset_name, labelled_passages_to_feedback_dataset
 from src.concept import Concept
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage
@@ -111,30 +112,10 @@ def main(
             "If you haven't already, you should run:\n"
             f"  just get-concept {wikibase_id}\n"
         ) from e
-    dataset_name = f"{concept.preferred_label}-{concept.wikibase_id}".replace(" ", "-")
+    dataset_name = concept_to_dataset_name(concept)
     console.log(f"✅ Loaded metadata for {concept}")
 
-    dataset = rg.FeedbackDataset(
-        guidelines="Highlight the entity if it is present in the text",
-        fields=[
-            rg.TextField(name="text", title="Text", use_markdown=True),  # type: ignore
-        ],
-        questions=[  # type: ignore
-            rg.SpanQuestion(  # type: ignore
-                name="entities",
-                labels={concept.wikibase_id: concept.preferred_label},
-                field="text",
-                required=True,
-                allow_overlapping=False,
-            )
-        ],
-    )
-
-    records = [
-        rg.FeedbackRecord(fields={"text": passage.text}, metadata=passage.metadata)
-        for passage in labelled_passages
-    ]
-    dataset.add_records(records)  # type: ignore
+    dataset = labelled_passages_to_feedback_dataset(labelled_passages, concept)
     dataset_in_argilla = dataset.push_to_argilla(
         name=dataset_name, workspace=workspace_name, show_progress=False
     )

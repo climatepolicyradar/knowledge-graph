@@ -16,7 +16,6 @@ from scripts.promote import (
     get_aliases,
     get_bucket_name_for_aws_env,
     get_object_key,
-    parse_aws_env,
     upload,
     validate_logins,
 )
@@ -61,15 +60,6 @@ def test_version_sorting_with_larger_numbers():
     ]
     sorted_versions = sorted(versions)
     assert [str(v) for v in sorted_versions] == ["v1", "v2", "v3", "v10", "v20"]
-
-
-@pytest.mark.parametrize(
-    "invalid_input",
-    ["invalid", "test"],
-)
-def test_parse_aws_env_invalid(invalid_input):
-    with pytest.raises(typer.BadParameter, match=f"'{invalid_input}' is not one of"):
-        parse_aws_env(invalid_input)
 
 
 @pytest.mark.parametrize(

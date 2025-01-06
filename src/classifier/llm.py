@@ -1,6 +1,7 @@
 import os
 import random
 import re
+from datetime import datetime
 from typing import Optional
 
 from anthropic import Anthropic
@@ -158,6 +159,7 @@ class LLMClassifier(Classifier):
                     end_index=end_index,
                     concept_id=self.concept.wikibase_id,
                     labellers=[str(self)],
+                    timestamps=[datetime.now()],
                 )
             )
         return spans
