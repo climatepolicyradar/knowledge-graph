@@ -6,7 +6,7 @@ authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
 readme = "README.md"
 packages = [
-  { include = "src", from = "." },
+  { include = "src", from = ".", to = "knowledge_graph" },
   { include = "tests", from = "." },
   { include = "scripts", from = "." },
 ]
@@ -17,7 +17,6 @@ httpx = "^0.26.0"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
-azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
 neomodel = "^5.3.3"
 typer = "0.9.4"
 rapidfuzz = "^3.10.0"
@@ -32,6 +31,14 @@ boto3 = "^1.35.31"
 pyvespa = "^0.50.0"
 pyyaml = "^6.0.2"
 nltk = "^3.9.1"
+datasets = "^2.18.0"
+
+[tool.poetry.group.predictions_api]
+optional = true
+
+[tool.poetry.group.predictions_api.dependencies]
+fastapi = "^0.115.6"
+jinja2 = "^3.1.4"
 
 [tool.poetry.group.llm]
 optional = true
@@ -75,6 +82,7 @@ deploy = "scripts.deploy:app"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
+azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
 pytest = "^8.3.2"
 hypothesis = "^6.112.2"
 mkdocs-material = "^9.5.39"
