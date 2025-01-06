@@ -15,5 +15,9 @@ The API has three main endpoints:
 From the root of the repository, run:
 
 ```bash
+poetry install --with predictions_api
+```
+
+```bash
 poetry run uvicorn predictions_api.main:app --reload
 ```
