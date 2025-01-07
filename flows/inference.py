@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from collections.abc import Generator
@@ -23,6 +24,7 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import DateTimeEncoder, Span
+
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -478,15 +480,15 @@ async def classifier_inference(
     completed: Set[DocumentRunIdentifier] = set()
 
     for classifier_spec in classifier_specs:
-        for batch in iterate_batch(validated_document_ids, batch_size):
-            print(f"Running classifier {classifier_spec.name} on batch {batch}")
+        batches = iterate_batch(validated_document_ids, batch_size)
 
-            # TODO: Look at using a decorator to handle this
+        for batch in batches:
             for document_id in batch:
                 queued.add((document_id, classifier_spec.name, classifier_spec.alias))
-            await report_documents_runs(queued, completed, config.aws_env)
+        await report_documents_runs(queued, completed, config.aws_env)
 
-            await run_deployment(
+        tasks = [
+            run_deployment(
                 "run-classifier-inference-on-batch-of-documents/"
                 f"knowledge-graph-run-classifier-inference-on-batch-of-documents-{AWS_ENV}",
                 parameters={
@@ -498,7 +500,12 @@ async def classifier_inference(
                 timeout=600,
                 as_subflow=True,
             )
+            for batch in batches
+        ]
 
+        await asyncio.gather(*tasks)
+
+        for batch in batches:
             for document_id in batch:
                 queued.discard(
                     (document_id, classifier_spec.name, classifier_spec.alias)
@@ -506,4 +513,4 @@ async def classifier_inference(
                 completed.add(
                     (document_id, classifier_spec.name, classifier_spec.alias)
                 )
-            await report_documents_runs(queued, completed, config.aws_env)
+        await report_documents_runs(queued, completed, config.aws_env)
