@@ -42,6 +42,10 @@ def positive_text_strategy(
         ).filter(
             lambda x: x.strip()
             and all(label.lower() not in x.lower() for label in labels)
+            and all(
+                not any(word in label.lower() for word in x.lower().split())
+                for label in labels
+            )  # Prevent extra partial matches
             and (
                 negative_labels is None
                 or all(
@@ -62,6 +66,10 @@ def positive_text_strategy(
             lambda x: x.strip()
             and x != pre_text
             and all(label.lower() not in x.lower() for label in labels)
+            and all(
+                not any(word in label.lower() for word in x.lower().split())
+                for label in labels
+            )  # Prevent extra partial matches
             and (
                 negative_labels is None
                 or all(

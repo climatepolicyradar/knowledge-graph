@@ -6,9 +6,6 @@ on:
       aws-env:
         required: true
         type: string
-      prefect-workspace:
-        required: true
-        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
