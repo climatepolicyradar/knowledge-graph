@@ -67,6 +67,26 @@ class Config:
 
         return config
 
+    # TODO: Probably a better way to do this
+    def to_json(self) -> dict:
+        """Convert the config to a JSON serializable dictionary."""
+        return {
+            "cache_bucket": self.cache_bucket,
+            "document_source_prefix": self.document_source_prefix,
+            "document_target_prefix": self.document_target_prefix,
+            "pipeline_state_prefix": self.pipeline_state_prefix,
+            "bucket_region": self.bucket_region,
+            "local_classifier_dir": self.local_classifier_dir,
+            "wandb_model_org": self.wandb_model_org,
+            "wandb_model_registry": self.wandb_model_registry,
+            "wandb_entity": self.wandb_entity,
+            "wandb_api_key": (
+                self.wandb_api_key.get_secret_value()
+                if self.wandb_api_key else None
+            ),
+            "aws_env": self.aws_env,
+        }
+
 
 def get_bucket_paginator(config: Config, prefix: str):
     """Returns an s3 paginator for the pipeline cache bucket"""
@@ -382,7 +402,7 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
 
 @flow
 async def run_classifier_inference_on_batch_of_documents(
-    batch: list[str], config: Config, classifier_spec: ClassifierSpec, run: Run
+    batch: list[str], config_json: dict, classifier_name: str, classifier_alias: str
 ) -> None:
     """
     Run classifier inference on a batch of documents.
@@ -390,13 +410,22 @@ async def run_classifier_inference_on_batch_of_documents(
     This reflects the unit of work that should be run in one of many paralellised
     docker containers.
     """
+    config_json["wandb_api_key"] = SecretStr(config_json["wandb_api_key"])
+    config = Config(**config_json)
+
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
+    run = wandb.init(
+        entity=config.wandb_entity,
+        job_type="concept_inference",
+    )
+
     for document_id in batch:
         await run_classifier_inference_on_document(
             run=run,
             config=config,
             document_id=document_id,
-            classifier_name=classifier_spec.name,
-            classifier_alias=classifier_spec.alias,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
         )
 
 
@@ -444,12 +473,6 @@ async def classifier_inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
-    run = wandb.init(
-        entity=config.wandb_entity,
-        job_type="concept_inference",
-    )
-
     # Store this across the loops below
     queued: Set[DocumentRunIdentifier] = set()
     completed: Set[DocumentRunIdentifier] = set()
@@ -464,13 +487,13 @@ async def classifier_inference(
             await report_documents_runs(queued, completed, config.aws_env)
 
             await run_deployment(
-                "run_classifier_inference_on_batch_of_documents/"
-                f"knowledge-graph-run_classifier_inference_on_batch_of_documents-{AWS_ENV}",
+                "run-classifier-inference-on-batch-of-documents/"
+                f"knowledge-graph-run-classifier-inference-on-batch-of-documents-{AWS_ENV}",
                 parameters={
                     "batch": batch,
-                    "config": config,
-                    "classifier_spec": classifier_spec,
-                    "run": run,
+                    "config_json": config.to_json(),
+                    "classifier_name": classifier_spec.name,
+                    "classifier_alias": classifier_spec.alias,
                 },
                 timeout=600,
                 as_subflow=True,
