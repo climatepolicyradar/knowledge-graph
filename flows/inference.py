@@ -81,8 +81,7 @@ class Config:
             "wandb_model_registry": self.wandb_model_registry,
             "wandb_entity": self.wandb_entity,
             "wandb_api_key": (
-                self.wandb_api_key.get_secret_value()
-                if self.wandb_api_key else None
+                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
             ),
             "aws_env": self.aws_env,
         }
