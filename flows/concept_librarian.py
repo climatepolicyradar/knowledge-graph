@@ -9,6 +9,7 @@ from pydantic import BaseModel, ValidationError
 
 from scripts.cloud import AwsEnv, get_s3_client
 from src.concept import Concept, WikibaseID
+from src.exceptions import ConceptNotFoundError
 from src.wikibase import WikibaseSession
 
 
@@ -137,7 +138,7 @@ def validate_hierarchical_relationship_symmetry(
         if (subconcept_id, concept_id) not in subconcept_of_relationships:
             try:
                 subconcept = wikibase.get_concept(subconcept_id)
-            except ValidationError:
+            except (ValidationError, ConceptNotFoundError):
                 subconcept = Concept(
                     wikibase_id=subconcept_id, preferred_label="unknown"
                 )
@@ -153,7 +154,7 @@ def validate_hierarchical_relationship_symmetry(
         if (parent_concept_id, concept_id) not in has_subconcept_relationships:
             try:
                 parent_concept = wikibase.get_concept(parent_concept_id)
-            except ValidationError:
+            except (ValidationError, ConceptNotFoundError):
                 parent_concept = Concept(
                     wikibase_id=parent_concept_id, preferred_label="unknown"
                 )

@@ -9,6 +9,7 @@ import httpx
 from pydantic import ValidationError
 
 from src.concept import Concept, WikibaseID
+from src.exceptions import ConceptNotFoundError, RevisionNotFoundError
 
 logger = getLogger(__name__)
 
@@ -139,7 +140,7 @@ class WikibaseSession:
             page_id_response.get("entities", {}).get(wikibase_id, {}).get("pageid")
         )
         if not page_id:
-            raise ValueError(f"Could not find entity with ID: {wikibase_id}")
+            raise ConceptNotFoundError(wikibase_id)
 
         # Use the pageid to get the latest revision before the supplied timestamp
         # https://www.mediawiki.org/wiki/API:Revisions
@@ -161,28 +162,40 @@ class WikibaseSession:
         # Extract useful content from the revision response
         pages = revisions_response.get("query", {}).get("pages", {})
         if not pages:
-            raise ValueError(f"No page found for ID: {wikibase_id}")
+            raise ConceptNotFoundError(wikibase_id)
 
         page = next(iter(pages.values()))
         revisions = page.get("revisions", [])
         if not revisions:
-            raise ValueError(
-                f"No revision found for ID: {wikibase_id}"
-                + (f" at timestamp: {timestamp}" if timestamp else "")
-            )
+            raise RevisionNotFoundError(wikibase_id, timestamp)
 
         entity = json.loads(revisions[0].get("slots", {}).get("main", {}).get("*"))
 
+        preferred_label = entity.get("labels", {}).get("en", {}).get("value", "")
+
+        if isinstance(entity["aliases"], dict):
+            alternative_labels = [
+                alias.get("value")
+                for alias in entity.get("aliases", {}).get("en", [])
+                if alias.get("language") == "en"
+            ]
+        else:
+            alternative_labels = []
+
+        description = (
+            entity.get("descriptions", {}).get("en", {}).get("value", "")
+            if isinstance(entity["descriptions"], dict)
+            else ""
+        )
+
         concept = Concept(
-            preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
-            alternative_labels=[
-                alias.get("value") for alias in entity.get("aliases", {}).get("en", [])
-            ],
-            description=entity.get("descriptions", {}).get("en", {}).get("value", ""),
+            preferred_label=preferred_label,
+            alternative_labels=alternative_labels,
+            description=description,
             wikibase_id=wikibase_id,
         )
 
-        if "claims" in entity:
+        if "claims" in entity and entity["claims"] != []:
             for claim in entity["claims"].values():
                 for statement in claim:
                     if statement["mainsnak"]["snaktype"] == "value":
