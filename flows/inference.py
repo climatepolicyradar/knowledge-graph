@@ -25,7 +25,6 @@ from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import DateTimeEncoder, Span
 
-
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
 BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
