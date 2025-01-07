@@ -411,6 +411,7 @@ async def run_classifier_inference_on_batch_of_documents(
     docker containers.
     """
     config_json["wandb_api_key"] = SecretStr(config_json["wandb_api_key"])
+    config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
     wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
