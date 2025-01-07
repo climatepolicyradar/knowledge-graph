@@ -69,7 +69,6 @@ class Config:
 
         return config
 
-    # TODO: Probably a better way to do this
     def to_json(self) -> dict:
         """Convert the config to a JSON serializable dictionary."""
         return {
@@ -480,7 +479,7 @@ async def classifier_inference(
     completed: Set[DocumentRunIdentifier] = set()
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(validated_document_ids, batch_size)
+        batches = list(iterate_batch(validated_document_ids, batch_size))
 
         for batch in batches:
             for document_id in batch:
@@ -514,3 +513,5 @@ async def classifier_inference(
                     (document_id, classifier_spec.name, classifier_spec.alias)
                 )
         await report_documents_runs(queued, completed, config.aws_env)
+
+    print("Finished running classifier inference.")
