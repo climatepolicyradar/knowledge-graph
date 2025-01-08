@@ -1,11 +1,16 @@
+import tempfile
+from pathlib import Path
 from typing import Annotated
 
+import boto3
 import pandas as pd
 import typer
+from mypy_boto3_s3.client import S3Client
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import classifier_dir, processed_data_dir
+from scripts.config import aws_region, classifier_dir, processed_data_dir
+from src.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
@@ -29,81 +34,122 @@ def main(
             parser=WikibaseID,
         ),
     ],
+    save_to_s3: bool = typer.Option(
+        False,
+        help=(
+            "Whether to save the results to S3. "
+            "If false, the results will be saved to the local filesystem."
+        ),
+    ),
 ):
     """
-    Run classifiers on the documents in the combined dataset, and save the results
+    Run classifiers on the balanced dataset, and save the results.
 
-    This script runs inference of all the classifiers specified in the config on all of the
-    documents in the combined dataset, and saves the resulting positive passages for each
-    concept to a file.
+    This script runs inference for a set of classifiers on the balanced dataset, and
+    saves the resulting positive passages for each concept to a file. The results can
+    be saved to S3 or the local filesystem, and used for visualisation (see
+    the /predictions_api directory). The predictions_api will read the results from
+    S3.
+
+    The script assumes you have already run the `build-dataset` command to create a
+    local copy of the balanced dataset.
     """
+    if save_to_s3:
+        session = boto3.Session(profile_name="labs")
+        s3_client: S3Client = session.client("s3", region_name=aws_region)
+        bucket_name = "prediction-visualisation"
+
+        # Create the bucket if it doesn't exist
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+        except s3_client.exceptions.ClientError:
+            s3_client.create_bucket(
+                Bucket=bucket_name,
+                CreateBucketConfiguration={"LocationConstraint": aws_region},
+            )
+            console.log(f"✅ Created S3 bucket: {bucket_name}")
+    else:
+        s3_client = None
+        bucket_name = None
 
     dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
+
     try:
         with console.status("🚚 Loading combined dataset"):
             df = pd.read_feather(dataset_path)
         console.log(f"✅ Loaded {len(df)} passages from {dataset_path}")
     except FileNotFoundError as e:
         raise FileNotFoundError(
-            "Combined dataset not found. If you haven't already, you should run:\n"
+            f"{dataset_path} not found locally. If you haven't already, please run:\n"
             "  just build-dataset"
         ) from e
 
     with console.status("🔍 Fetching concept and subconcepts from Wikibase"):
         wikibase = WikibaseSession()
-        concept = wikibase.get_concept(wikibase_id)
-        # Fetch all of its subconcepts recursively
-        subconcepts = wikibase.get_subconcepts(wikibase_id, recursive=True)
+        concept = wikibase.get_concept(
+            wikibase_id, include_labels_from_subconcepts=True
+        )
 
-        # fetch all of the labels and negative_labels for all of the subconcepts
-        # and the concept itself
-        all_positive_labels = set(concept.all_labels)
-        all_negative_labels = set(concept.negative_labels)
-        for subconcept in subconcepts:
-            all_positive_labels.update(subconcept.all_labels)
-            all_negative_labels.update(subconcept.negative_labels)
-
-        concept.alternative_labels = list(all_positive_labels)
-        concept.negative_labels = list(all_negative_labels)
     console.log(f"✅ Fetched {concept} from Wikibase")
 
-    classifiers = [
+    classifiers: list[Classifier] = [
         KeywordClassifier(concept),
         RulesBasedClassifier(concept),
         StemmedKeywordClassifier(concept),
-        EmbeddingClassifier(concept, threshold=0.3),
-        EmbeddingClassifier(concept, threshold=0.6),
-        EmbeddingClassifier(concept, threshold=0.9),
+        EmbeddingClassifier(concept, threshold=0.5),
+        EmbeddingClassifier(concept, threshold=0.65),
+        EmbeddingClassifier(concept, threshold=0.8),
+        EmbeddingClassifier(concept, threshold=0.95),
     ]
+
     for classifier in classifiers:
         classifier.fit()
-        console.log(
-            f"✅ Trained a {classifier.name} classifier for {concept.wikibase_id}"
-        )
+        console.log(f"✅ Created a {classifier}")
         classifier_path = (
-            classifier_dir / str(concept.wikibase_id) / f"{classifier.id}.pickle"
+            Path("classifiers") / str(concept.wikibase_id) / f"{classifier.id}.pickle"
         )
-        classifier_path.parent.mkdir(parents=True, exist_ok=True)
-        classifier.save(classifier_path)
-        console.log(f"Saved {classifier} to {classifier_path}")
+
+        if save_to_s3 and s3_client is not None:
+            with tempfile.NamedTemporaryFile() as tmp:
+                classifier.save(tmp.name)
+                tmp.flush()
+                object_name = str(classifier_path).lstrip("/")
+                s3_client.upload_file(
+                    Filename=tmp.name,
+                    Bucket=bucket_name,
+                    Key=object_name,
+                )
+            console.log(f"✅ Saved {classifier} to s3://{bucket_name}/{object_name}")
+        else:
+            classifier_path = classifier_dir / classifier_path
+            classifier_path.parent.mkdir(parents=True, exist_ok=True)
+            classifier.save(classifier_path)
+            console.log(f"✅ Saved {classifier} to {classifier_path}")
 
         labelled_passages: list[LabelledPassage] = []
-        for _, row in track(
-            df.iterrows(),
+
+        batch_size = 25
+        n_batches = len(df) // batch_size + (1 if len(df) % batch_size else 0)
+        for batch_start in track(
+            range(0, len(df), batch_size),
             console=console,
             transient=True,
-            total=len(df),
-            description=f"Running {classifier} on {len(df)} passages",
+            total=n_batches,
+            description=f"Running {classifier} on {len(df)} passages in batches of {batch_size}",
         ):
-            text = row.get("text_block.text", "")
-            if text:
-                spans = classifier.predict(text)
+            batch_end = min(batch_start + batch_size, len(df))
+            batch_df = df.iloc[batch_start:batch_end]
+
+            texts = batch_df["text_block.text"].fillna("").tolist()
+            spans_batch = classifier.predict_batch(texts)
+
+            for row, text, spans in zip(batch_df.itertuples(), texts, spans_batch):
                 if spans:
                     labelled_passages.append(
                         LabelledPassage(
                             text=text,
                             spans=spans,
-                            metadata=row.astype(str).to_dict(),
+                            metadata=row._asdict(),
                         )
                     )
 
@@ -114,16 +160,31 @@ def main(
             f'"{classifier.concept}", with {n_spans} individual spans'
         )
 
-        predictions_path = (
-            processed_data_dir / "predictions" / wikibase_id / f"{classifier.id}.jsonl"
+        predictions = "\n".join(
+            [entry.model_dump_json() for entry in labelled_passages]
         )
-        predictions_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(predictions_path, "w", encoding="utf-8") as f:
-            f.writelines(
-                [entry.model_dump_json() + "\n" for entry in labelled_passages]
-            )
+        predictions_path = (
+            Path("predictions") / str(wikibase_id) / f"{classifier.id}.jsonl"
+        )
 
-        console.log(f"Saved passages with predictions to {predictions_path}")
+        if save_to_s3 and s3_client is not None and bucket_name is not None:
+            try:
+                s3_client.put_object(
+                    Bucket=bucket_name,
+                    Key=str(predictions_path).lstrip("/"),
+                    Body=predictions,
+                )
+                console.log(
+                    f"✅ Saved predictions to s3://{bucket_name}/{predictions_path}"
+                )
+            except Exception as e:
+                console.log(f"❌ S3 upload failed: {str(e)}")
+        else:
+            predictions_path = processed_data_dir / predictions_path
+            predictions_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(predictions_path, "w", encoding="utf-8") as f:
+                f.write(predictions)
+            console.log(f"✅ Saved passages with predictions to {predictions_path}")
 
 
 if __name__ == "__main__":

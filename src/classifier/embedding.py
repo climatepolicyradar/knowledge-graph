@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
+from src.identifiers import deterministic_hash
 from src.span import Span
 
 
@@ -39,6 +40,18 @@ class EmbeddingClassifier(Classifier):
             f'{self.name}("{self.concept.preferred_label}", threshold={self.threshold})'
         )
 
+    def __hash__(self):
+        """Return a hash of the classifier."""
+        return deterministic_hash(
+            [
+                self.__class__.__name__,
+                self.concept.__hash__(),
+                str(self.embedding_model),
+                self.threshold,
+                self.version if self.version else None,
+            ]
+        )
+
     def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
@@ -67,7 +80,10 @@ class EmbeddingClassifier(Classifier):
         return spans
 
     def predict_batch(
-        self, texts: list[str], threshold: Optional[float] = None
+        self,
+        texts: list[str],
+        threshold: Optional[float] = None,
+        show_progress_bar: bool = False,
     ) -> list[list[Span]]:
         """
         Predict whether the supplied texts contain instances of the concept.
@@ -76,7 +92,9 @@ class EmbeddingClassifier(Classifier):
         :return list[list[Span]]: A list of spans in the texts for each text
         """
         threshold = threshold or self.threshold
-        text_embeddings = self.embedding_model.encode(texts, show_progress_bar=True)
+        text_embeddings = self.embedding_model.encode(
+            texts, show_progress_bar=show_progress_bar
+        )
         spans_per_text = []
 
         for text, text_embedding in zip(texts, text_embeddings):

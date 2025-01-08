@@ -8,7 +8,8 @@ import dotenv
 import httpx
 from pydantic import ValidationError
 
-from src.concept import Concept, WikibaseID
+from src.concept import Concept
+from src.identifiers import WikibaseID
 
 logger = getLogger(__name__)
 
@@ -102,7 +103,10 @@ class WikibaseSession:
         return sorted_properties
 
     def get_concept(
-        self, wikibase_id: WikibaseID, timestamp: Optional[datetime] = None
+        self,
+        wikibase_id: WikibaseID,
+        timestamp: Optional[datetime] = None,
+        include_labels_from_subconcepts: bool = False,
     ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
@@ -110,6 +114,8 @@ class WikibaseSession:
         :param WikibaseID wikibase_id: The Wikibase ID of the concept
         :param Optional[datetime] timestamp: The timestamp to fetch the concept at.
             If not provided, the latest version of the concept will be fetched.
+        :param bool include_labels_from_subconcepts: Whether to include the labels
+            from subconcepts in the concept
         :return Concept: The concept with the given Wikibase ID
         """
 
@@ -172,13 +178,27 @@ class WikibaseSession:
             )
 
         entity = json.loads(revisions[0].get("slots", {}).get("main", {}).get("*"))
+        preferred_label = entity.get("labels", {}).get("en", {}).get("value", "")
+
+        if isinstance(entity["aliases"], dict):
+            alternative_labels = [
+                alias.get("value")
+                for alias in entity.get("aliases", {}).get("en", [])
+                if alias.get("language") == "en"
+            ]
+        else:
+            alternative_labels = []
+
+        description = (
+            entity.get("descriptions", {}).get("en", {}).get("value", "")
+            if isinstance(entity["descriptions"], dict)
+            else ""
+        )
 
         concept = Concept(
-            preferred_label=entity.get("labels", {}).get("en", {}).get("value", ""),
-            alternative_labels=[
-                alias.get("value") for alias in entity.get("aliases", {}).get("en", [])
-            ],
-            description=entity.get("descriptions", {}).get("en", {}).get("value", ""),
+            preferred_label=preferred_label,
+            alternative_labels=alternative_labels,
+            description=description,
             wikibase_id=wikibase_id,
         )
 
@@ -189,15 +209,35 @@ class WikibaseSession:
                         property_id = statement["mainsnak"]["property"]
                         value = statement["mainsnak"]["datavalue"]["value"]
                         if property_id == self.subconcept_of_property_id:
-                            concept.subconcept_of.append(value["id"])
+                            concept.subconcept_of = concept.subconcept_of + [
+                                value["id"]
+                            ]
                         elif property_id == self.has_subconcept_property_id:
-                            concept.has_subconcept.append(value["id"])
+                            concept.has_subconcept = concept.has_subconcept + [
+                                value["id"]
+                            ]
                         elif property_id == self.related_concept_property_id:
-                            concept.related_concepts.append(value["id"])
+                            concept.related_concepts = concept.related_concepts + [
+                                value["id"]
+                            ]
                         elif property_id == self.negative_labels_property_id:
-                            concept.negative_labels.append(value)
+                            concept.negative_labels = concept.negative_labels + [value]
                         elif property_id == self.definition_property_id:
                             concept.definition = value
+
+        if include_labels_from_subconcepts:
+            subconcepts = self.get_subconcepts(wikibase_id, recursive=True)
+
+            # fetch all of the labels and negative_labels for all of the subconcepts
+            # and the concept itself
+            all_positive_labels = set(concept.all_labels)
+            all_negative_labels = set(concept.negative_labels)
+            for subconcept in subconcepts:
+                all_positive_labels.update(subconcept.all_labels)
+                all_negative_labels.update(subconcept.negative_labels)
+
+            concept.alternative_labels = list(all_positive_labels)
+            concept.negative_labels = list(all_negative_labels)
 
         return concept
 
