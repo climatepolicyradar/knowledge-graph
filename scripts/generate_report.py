@@ -1,8 +1,19 @@
 """
 Generate a markdown report of classifier performance
 
-The script will output a table of performance metrics for each concept, followed by a
-table of outlier groups for each concept that failed the consistency check.
+The script generates a markdown report of classifier performance, beginning with a
+table of performance metrics for each concept, and a check on the consistency of those
+metrics across strata within the dataset. It then pulls out the outlier groups and
+displays example human and machine-labelled passages from each, to help the user
+understand where/why the classifier is performing inconsistently.
+
+NB inconsistent performance on a group does not necessarily mean that the classifier is
+performing poorly! The classifier might perform _better_ on that group, or the group
+may be too small to generate reliable metrics. These numbers and symbols should be
+interpreted with caution!
+
+Run the script as follows:
+    COLUMNS=1000 poetry run python scripts/generate_report.py > report.md
 """
 
 import pandas as pd
@@ -17,6 +28,7 @@ from src.labelled_passage import LabelledPassage
 
 console = Console(highlight=False)
 
+# replace with the list of wikibase IDs that you want to evaluate
 wikibase_ids = [
     "Q676",
     "Q684",
@@ -135,10 +147,10 @@ for wikibase_id in inconsistent_concepts:
         )
     console.print(table)
 
-    # Display example passages from each outlier group
+    # Display the passages from each outlier group
     for _, row in outlier_groups.iterrows():
         group, value = row["Group"].split(": ")
-        print(f"\n### Examples from {group}: {value}\n")
+        print(f"\n### Passages from {group}: {value}\n")
 
         passages = []
         for passage in concept.labelled_passages:
@@ -148,19 +160,16 @@ for wikibase_id in inconsistent_concepts:
 
         print(f"Found {len(passages)} passages in this group:\n")
 
-        for i, passage in enumerate(passages[:3]):  # Show first 3 examples
-            print(f"{i+1}. Ground truth:")
-            # Format ground truth with markdown bold
-            text = passage.text
-            for span in passage.spans:
-                text = (
-                    text[: span.start_index]
-                    + f"**{text[span.start_index:span.end_index]}**"
-                    + text[span.end_index :]
-                )
-            print(f"   {text}\n")
+        for i, passage in enumerate(passages):
+            print(f"{i+1}.\tGround truth:")
+            # Format labelled passages with markdown bolding instead of the rich colour codes
+            highlighted_ground_truth = (
+                passage.get_highlighted_text()
+                .replace("[cyan]", "**")
+                .replace("[/cyan]", "**")
+            )
+            print(f"\t{highlighted_ground_truth}\n")
 
-            # Format predictions with markdown bold
             prediction = LabelledPassage(
                 text=passage.text, spans=classifier.predict(passage.text)
             )
@@ -169,5 +178,5 @@ for wikibase_id in inconsistent_concepts:
                 .replace("[cyan]", "**")
                 .replace("[/cyan]", "**")
             )
-            print("   Prediction:")
-            print(f"   {highlighted_prediction}\n")
+            print("\tPrediction:")
+            print(f"\t{highlighted_prediction}\n")
