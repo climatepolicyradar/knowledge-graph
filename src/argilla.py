@@ -15,7 +15,9 @@ from src.wikibase import Concept
 def init_argilla_client(func):
     def wrapper(*args, **kwargs):
         rg.init(  # type: ignore
-            api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL")
+            api_key=os.getenv("ARGILLA_API_KEY"),
+            api_url=os.getenv("ARGILLA_API_URL"),
+            workspace=os.getenv("ARGILLA_WORKSPACE"),
         )
         return func(*args, **kwargs)
 
