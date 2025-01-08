@@ -14,6 +14,22 @@ from src.wikibase import Concept
 
 def init_argilla_client(func):
     def wrapper(*args, **kwargs):
+        must_be_set = [
+            "ARGILLA_API_KEY",
+            "ARGILLA_API_URL",
+            "ARGILLA_WORKSPACE",
+        ]
+        missing = [
+            variable_name
+            for variable_name in must_be_set
+            if not os.getenv(variable_name)
+        ]
+        if missing:
+            raise ValueError(
+                "The following environment variables were not found, but must be set: "
+                + ", ".join(missing)
+            )
+
         rg.init(  # type: ignore
             api_key=os.getenv("ARGILLA_API_KEY"),
             api_url=os.getenv("ARGILLA_API_URL"),
