@@ -334,21 +334,10 @@ async def run_classifier_inference_on_document(
     document_id: str,
     classifier_name: str,
     classifier_alias: str,
+    classifier: Classifier,
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
     async with concurrency("classifier_inference", occupy=1):
-        print(
-            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-        )
-        classifier = await load_classifier(
-            run,
-            config,
-            classifier_name,
-            classifier_alias,
-        )
-        print(
-            f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-        )
         print(f"Loading document with ID {document_id}")
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
@@ -434,6 +423,18 @@ async def classifier_inference(
     completed: Set[DocumentRunIdentifier] = set()
 
     for classifier_spec in classifier_specs:
+        print(
+            f"Loading classifier with name: {classifier_spec.name}, and alias: {classifier_spec.alias}"  # noqa: E501
+        )
+        classifier = await load_classifier(
+            run,
+            config,
+            classifier_spec.name,
+            classifier_spec.alias,
+        )
+        print(
+            f"Loaded classifier with name: {classifier_spec.name}, and alias: {classifier_spec.alias}"  # noqa: E501
+        )
         for batch in iterate_batch(validated_document_ids, batch_size):
             subflows = []
 
@@ -444,6 +445,7 @@ async def classifier_inference(
                     document_id=document_id,
                     classifier_name=classifier_spec.name,
                     classifier_alias=classifier_spec.alias,
+                    classifier=classifier,
                 )
 
                 queued.add(
