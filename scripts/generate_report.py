@@ -193,7 +193,12 @@ def main(
         # Create outlier groups table
         outlier_data = []
         for _, row in outlier_groups.iterrows():
-            group, value = row["Group"].split(": ")
+            group_parts = row["Group"].split(": ")
+            if len(group_parts) == 2:
+                group, value = group_parts
+            else:
+                group = group_parts[0]
+                value = group_parts[0]
             n_passages = len(
                 [
                     passage
@@ -216,7 +221,12 @@ def main(
 
             # Display example passages from each outlier group
             for _, row in outlier_groups.iterrows():
-                group, value = row["Group"].split(": ")
+                group_parts = row["Group"].split(": ")
+                if len(group_parts) == 2:
+                    group, value = group_parts
+                else:
+                    group = group_parts[0]
+                    value = group_parts[0]
                 html_content += f"""
                     <div class="mt-6">
                         <h3 class="text-md font-semibold text-slate-700 dark:text-slate-200 mb-2">
