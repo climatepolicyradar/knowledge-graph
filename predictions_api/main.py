@@ -1,16 +1,74 @@
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import boto3
 from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from mypy_boto3_s3.client import S3Client
 
-from scripts.config import processed_data_dir
+from scripts.config import aws_region, processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession
 
-app = FastAPI(title="Predictions API")
+logger = logging.getLogger("uvicorn")
+
+
+def sync_s3_to_local() -> None:
+    """Sync the prediction-visualisation S3 bucket to the local file system"""
+    bucket_name = "prediction-visualisation"
+    session = boto3.Session(profile_name="labs")
+    s3_client: S3Client = session.client("s3", region_name=aws_region)
+
+    processed_data_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Starting sync from s3://{bucket_name} to {processed_data_dir}")
+
+    try:
+        # Check whether thebucket exists
+        s3_client.head_bucket(Bucket=bucket_name)
+    except s3_client.exceptions.ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        if error_code == "404":
+            raise ValueError(f"Bucket {bucket_name} does not exist") from e
+        elif error_code == "403":
+            raise ValueError(
+                f"Missing permission to access bucket {bucket_name}"
+            ) from e
+        else:
+            raise ValueError(
+                f"Error accessing bucket {bucket_name}: {error_code}"
+            ) from e
+
+    files_synced = 0
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket_name):
+        if "Contents" not in page:
+            continue
+
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            local_path = processed_data_dir / key
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            s3_client.download_file(bucket_name, key, str(local_path))
+            files_synced += 1
+
+    logger.info(f"Successfully synced {files_synced} files from s3://{bucket_name}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    try:
+        sync_s3_to_local()
+    except ValueError as e:
+        logger.warning(f"S3 sync failed - {str(e)}")
+    yield
+
+
+app = FastAPI(title="Predictions API", lifespan=lifespan)
 base_dir = Path(__file__).parent
 templates = Jinja2Templates(directory=base_dir / "templates")
 
@@ -29,7 +87,9 @@ def load_predictions(wikibase_id: WikibaseID, classifier: str) -> list[LabelledP
     return predictions
 
 
-def get_available_classifiers(wikibase_id: WikibaseID) -> list[str]:
+def get_available_classifiers(
+    wikibase_id: WikibaseID,
+) -> list[str]:
     """Get list of available classifiers for a concept."""
     concept_dir = predictions_dir / wikibase_id
     if not concept_dir.exists():
