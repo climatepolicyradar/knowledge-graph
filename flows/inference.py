@@ -347,28 +347,17 @@ async def report_documents_runs(
         pass
 
 
-@flow(log_prints=True)
+# @flow(log_prints=True)
 async def run_classifier_inference_on_document(
     run,
     config: Config,
     document_id: str,
     classifier_name: str,
     classifier_alias: str,
+    classifier: Classifier,
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
     async with concurrency("classifier_inference", occupy=1):
-        print(
-            f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-        )
-        classifier = await load_classifier(
-            run,
-            config,
-            classifier_name,
-            classifier_alias,
-        )
-        print(
-            f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-        )
         print(f"Loading document with ID {document_id}")
         document = load_document(config, document_id)
         print(f"Loaded document with ID {document_id}")
@@ -423,6 +412,19 @@ async def run_classifier_inference_on_batch_of_documents(
         job_type="concept_inference",
     )
 
+    print(
+        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+    )
+    classifier = await load_classifier(
+        run,
+        config,
+        classifier_name,
+        classifier_alias,
+    )
+    print(
+        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+    )
+
     tasks = [
         run_classifier_inference_on_document(
             run=run,
@@ -430,6 +432,7 @@ async def run_classifier_inference_on_batch_of_documents(
             document_id=document_id,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
+            classifier=classifier,
         )
         for document_id in batch
     ]
@@ -481,17 +484,8 @@ async def classifier_inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    # Store this across the loops below
-    queued: Set[DocumentRunIdentifier] = set()
-    completed: Set[DocumentRunIdentifier] = set()
-
     for classifier_spec in classifier_specs:
-        batches = list(iterate_batch(validated_document_ids, batch_size))
-
-        for batch in batches:
-            for document_id in batch:
-                queued.add((document_id, classifier_spec.name, classifier_spec.alias))
-        await report_documents_runs(queued, completed, config.aws_env)
+        batches = iterate_batch(validated_document_ids, batch_size)
 
         tasks = [
             run_deployment(
@@ -510,15 +504,5 @@ async def classifier_inference(
         ]
 
         await asyncio.gather(*tasks)
-
-        for batch in batches:
-            for document_id in batch:
-                queued.discard(
-                    (document_id, classifier_spec.name, classifier_spec.alias)
-                )
-                completed.add(
-                    (document_id, classifier_spec.name, classifier_spec.alias)
-                )
-        await report_documents_runs(queued, completed, config.aws_env)
 
     print("Finished running classifier inference.")
