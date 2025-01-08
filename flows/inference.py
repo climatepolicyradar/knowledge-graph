@@ -10,6 +10,7 @@ from typing import Final, Optional, Set, Tuple, TypeAlias
 import boto3
 import prefect.artifacts as artifacts
 import wandb
+from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -347,7 +348,6 @@ async def report_documents_runs(
         pass
 
 
-# @flow(log_prints=True)
 async def run_classifier_inference_on_document(
     run,
     config: Config,
@@ -358,7 +358,14 @@ async def run_classifier_inference_on_document(
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with ID {document_id}")
-    document = load_document(config, document_id)
+    try:
+        document = load_document(config, document_id)
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            print(f"Document with ID {document_id} not found in cache bucket")
+            return (document_id, classifier_name, classifier_alias)
+        else:
+            raise
     print(f"Loaded document with ID {document_id}")
 
     doc_labels = []
