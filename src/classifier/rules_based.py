@@ -61,4 +61,10 @@ class RulesBasedClassifier(Classifier):
                 match.overlaps(negative_match) for negative_match in negative_matches
             )
         ]
+
+        # Update the labeller name on each span from KeywordClassifier to
+        # RulesBasedClassifier
+        for match in filtered_matches:
+            match.labellers = [str(self)]
+
         return filtered_matches
