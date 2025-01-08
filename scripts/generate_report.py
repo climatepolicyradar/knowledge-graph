@@ -54,20 +54,12 @@ def dataframe_to_html_table(df: pd.DataFrame, classes: str = "") -> str:
     return html
 
 
-def format_text_with_spans(text: str, spans: list) -> str:
+def format_text_with_spans(labelled_passage: LabelledPassage) -> str:
     """Format text with highlighted spans using HTML."""
-    formatted_text = text
-    offset = 0
-    for span in sorted(spans, key=lambda x: x.start_index):
-        start = span.start_index + offset
-        end = span.end_index + offset
-        formatted_text = (
-            formatted_text[:start]
-            + f'<span class="bg-yellow-200 dark:bg-yellow-800">{formatted_text[start:end]}</span>'
-            + formatted_text[end:]
-        )
-        offset += len('<span class="bg-yellow-200 dark:bg-yellow-800"></span>')
-    return formatted_text
+    pre_tag = '<span class="bg-yellow-200 dark:bg-yellow-800">'
+    post_tag = "</span>"
+    highlighted_text = labelled_passage.get_highlighted_text()
+    return highlighted_text.replace("[cyan]", pre_tag).replace("[/cyan]", post_tag)
 
 
 @app.command()
@@ -251,7 +243,7 @@ def main(
                         <div class="mb-6 bg-slate-50 dark:bg-gray-700 p-4 rounded-lg">
                             <p class="font-medium text-slate-700 dark:text-slate-200 mb-2">{i+1}. Ground truth:</p>
                             <p class="text-slate-600 dark:text-slate-300 mb-4 font-mono">
-                                {format_text_with_spans(passage.text, passage.spans)}
+                                {format_text_with_spans(passage)}
                             </p>
                             
                             <p class="font-medium text-slate-700 dark:text-slate-200 mb-2">Prediction:</p>
@@ -262,7 +254,7 @@ def main(
                     )
                     html_content += f"""
                             <p class="text-slate-600 dark:text-slate-300 font-mono">
-                                {format_text_with_spans(prediction.text, prediction.spans)}
+                                {format_text_with_spans(prediction)}
                             </p>
                         </div>
                     """
