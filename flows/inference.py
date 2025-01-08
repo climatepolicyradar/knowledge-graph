@@ -71,7 +71,7 @@ class Config:
     def to_json(self) -> dict:
         """Convert the config to a JSON serializable dictionary."""
         return {
-            "cache_bucket": self.cache_bucket,
+            "cache_bucket": self.cache_bucket if self.cache_bucket else None,
             "document_source_prefix": self.document_source_prefix,
             "document_target_prefix": self.document_target_prefix,
             "pipeline_state_prefix": self.pipeline_state_prefix,
@@ -409,7 +409,11 @@ async def run_classifier_inference_on_batch_of_documents(
     This reflects the unit of work that should be run in one of many paralellised
     docker containers.
     """
-    config_json["wandb_api_key"] = SecretStr(config_json["wandb_api_key"])
+    config_json["wandb_api_key"] = (
+        SecretStr(config_json["wandb_api_key"])
+        if config_json["wandb_api_key"]
+        else None
+    )
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
@@ -419,14 +423,18 @@ async def run_classifier_inference_on_batch_of_documents(
         job_type="concept_inference",
     )
 
-    for document_id in batch:
-        await run_classifier_inference_on_document(
+    tasks = [
+        run_classifier_inference_on_document(
             run=run,
             config=config,
             document_id=document_id,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )
+        for document_id in batch
+    ]
+
+    await asyncio.gather(*tasks)
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
