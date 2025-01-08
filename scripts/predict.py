@@ -9,7 +9,7 @@ from mypy_boto3_s3.client import S3Client
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import aws_region, classifier_dir, processed_data_dir
+from scripts.config import aws_region, processed_data_dir
 from src.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
@@ -121,7 +121,7 @@ def main(
                 )
             console.log(f"✅ Saved {classifier} to s3://{bucket_name}/{object_name}")
         else:
-            classifier_path = classifier_dir / classifier_path
+            classifier_path = processed_data_dir / classifier_path
             classifier_path.parent.mkdir(parents=True, exist_ok=True)
             classifier.save(classifier_path)
             console.log(f"✅ Saved {classifier} to {classifier_path}")
