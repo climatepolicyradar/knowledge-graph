@@ -90,11 +90,8 @@ create-labelling-task id usernames workspace:
     just sample --wikibase-id {{id}}
     just push-to-argilla --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
 
-# visualise IAA, model vs gold-standard agreement, and positive predictions on the full dataset
-visualise-labels id:
-    poetry run python scripts/visualise_labels.py --wikibase-id {{id}}
 
-analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id) (visualise-labels id)
+analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id)
 
 build-image:
     docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
