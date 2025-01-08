@@ -8,10 +8,9 @@ import dotenv
 import httpx
 from pydantic import ValidationError
 
-
-from src.identifiers import WikibaseID
 from src.concept import Concept
 from src.exceptions import ConceptNotFoundError, RevisionNotFoundError
+from src.identifiers import WikibaseID
 
 logger = getLogger(__name__)
 
