@@ -90,6 +90,10 @@ create-labelling-task id usernames workspace:
     just sample --wikibase-id {{id}}
     just push-to-argilla --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
 
+# generate an HTML report of classifier performance
+generate-report wikibase-ids:
+    poetry run python scripts/generate_report.py --wikibase-ids {{wikibase-ids}}
+
 # visualise IAA, model vs gold-standard agreement, and positive predictions on the full dataset
 visualise-labels id:
     poetry run python scripts/visualise_labels.py --wikibase-id {{id}}
