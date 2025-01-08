@@ -357,29 +357,28 @@ async def run_classifier_inference_on_document(
     classifier: Classifier,
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
-    async with concurrency("classifier_inference", occupy=1):
-        print(f"Loading document with ID {document_id}")
-        document = load_document(config, document_id)
-        print(f"Loaded document with ID {document_id}")
+    print(f"Loading document with ID {document_id}")
+    document = load_document(config, document_id)
+    print(f"Loaded document with ID {document_id}")
 
-        doc_labels = []
-        for text, block_id in document_passages(document):
-            labelled_passages = text_block_inference(
-                classifier=classifier, block_id=block_id, text=text
-            )
-            if labelled_passages:
-                doc_labels.append(labelled_passages)
+    doc_labels = []
+    for text, block_id in document_passages(document):
+        labelled_passages = text_block_inference(
+            classifier=classifier, block_id=block_id, text=text
+        )
+        if labelled_passages:
+            doc_labels.append(labelled_passages)
 
-        if doc_labels:
-            store_labels(
-                config=config,
-                labels=doc_labels,
-                document_id=document_id,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
-            )
+    if doc_labels:
+        store_labels(
+            config=config,
+            labels=doc_labels,
+            document_id=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
 
-        return (document_id, classifier_name, classifier_alias)
+    return (document_id, classifier_name, classifier_alias)
 
 
 def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
