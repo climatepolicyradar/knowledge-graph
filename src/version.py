@@ -1,5 +1,7 @@
 import re
 
+from src.identifiers import deterministic_hash
+
 
 class Version:
     """A version as mandated by W&B."""
@@ -55,7 +57,7 @@ class Version:
 
     def __hash__(self):
         """Return a hash value for the Version."""
-        return hash(self.value)
+        return deterministic_hash(self.value)
 
     def increment(self) -> "Version":
         """Increment the version number by 1."""

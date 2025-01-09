@@ -98,7 +98,7 @@ generate-report wikibase-ids:
 visualise-labels id:
     poetry run python scripts/visualise_labels.py --wikibase-id {{id}}
 
-analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id) (visualise-labels id)
+analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id)
 
 build-image:
     docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .

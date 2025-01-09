@@ -45,14 +45,14 @@
         </div>
 
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
-          {% for classifier in classifiers %}
+          {% for classifier_id, classifier_name in classifiers.items() %}
           <div
-            onclick="window.location='/{{ wikibase_id }}/{{ classifier }}'"
+            onclick="window.location='/{{ wikibase_id }}/{{ classifier_id }}'"
             class="p-6 hover:bg-slate-50 dark:hover:bg-gray-700 transition duration-150 cursor-pointer"
           >
             <div class="flex items-center justify-between">
               <span class="text-slate-700 dark:text-slate-200">
-                {{ classifier }}
+                {{ classifier_name }}
               </span>
               <svg
                 xmlns="http://www.w3.org/2000/svg"

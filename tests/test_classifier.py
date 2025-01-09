@@ -265,7 +265,7 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
     classifier = classifier_class(concept)
-    assert classifier.id == generate_identifier(hash(classifier))
+    assert classifier.id == generate_identifier(classifier.__hash__())
     assert classifier == classifier_class(concept)
 
 

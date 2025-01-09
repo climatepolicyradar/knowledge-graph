@@ -25,6 +25,18 @@ class WikibaseID(str):
         return str.__new__(cls, validated_value)
 
 
+def deterministic_hash(*args) -> int:
+    """
+    Generate a deterministic hash of the input data using SHA-256.
+
+    Hashes should be consistent across different runs of a program.
+    """
+    input_string = "".join([str(arg) for arg in args])
+    return int.from_bytes(
+        hashlib.sha256(input_string.encode()).digest()[:8], byteorder="big"
+    )
+
+
 def generate_identifier(*args) -> str:
     """
     Generates a neat identifier using eight unambiguous lowercase and numeric characters
@@ -41,14 +53,5 @@ def generate_identifier(*args) -> str:
     # the following list of characters excludes "i", "l", "1", "o", "0" to minimise
     # ambiguity when reading the identifiers
     characters = "abcdefghjkmnpqrstuvwxyz23456789"
-
-    input_string = "".join([str(arg) for arg in args])
-    hashed_data = hashlib.sha256(input_string.encode()).digest()
-
-    output = []
-    for i in range(8):
-        hash_byte = hashed_data[i]
-        character_index = hash_byte % len(characters)
-        output.append(characters[character_index])
-
-    return "".join(output)
+    hashed_data = hashlib.sha256("".join([str(arg) for arg in args]).encode()).digest()
+    return "".join(characters[b % len(characters)] for b in hashed_data[:8])
