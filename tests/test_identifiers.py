@@ -77,11 +77,11 @@ def test_whether_default_python_hash_is_consistent_across_distinct_python_proces
 def test_whether_deterministic_hash_is_consistent_across_distinct_python_processes():
     """Deterministic hashes should be the same from python session to python session"""
     # Get hash from current process
-    hash_a = str(deterministic_hash("test"))
+    hash_a = deterministic_hash("test")
 
     # Get hash from a separate Python process
     cmd = "python3 -c \"from src.identifiers import deterministic_hash; print(deterministic_hash('test'))\""
-    hash_b = subprocess.check_output(cmd, shell=True).decode().strip()
+    hash_b = int(subprocess.check_output(cmd, shell=True).decode().strip())
 
     assert (
         hash_a == hash_b
