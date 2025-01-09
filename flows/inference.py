@@ -10,10 +10,12 @@ from typing import Final, Optional, Set, Tuple, TypeAlias
 import boto3
 import prefect.artifacts as artifacts
 import wandb
+from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.concurrency.asyncio import concurrency
+from prefect.deployments import run_deployment
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
@@ -32,6 +34,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.FIGURE,
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+AWS_ENV = os.environ["AWS_ENV"]
 
 DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
 
@@ -65,6 +68,24 @@ class Config:
             config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
 
         return config
+
+    def to_json(self) -> dict:
+        """Convert the config to a JSON serializable dictionary."""
+        return {
+            "cache_bucket": self.cache_bucket if self.cache_bucket else None,
+            "document_source_prefix": self.document_source_prefix,
+            "document_target_prefix": self.document_target_prefix,
+            "pipeline_state_prefix": self.pipeline_state_prefix,
+            "bucket_region": self.bucket_region,
+            "local_classifier_dir": self.local_classifier_dir,
+            "wandb_model_org": self.wandb_model_org,
+            "wandb_model_registry": self.wandb_model_registry,
+            "wandb_entity": self.wandb_entity,
+            "wandb_api_key": (
+                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
+            ),
+            "aws_env": self.aws_env,
+        }
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -327,7 +348,6 @@ async def report_documents_runs(
         pass
 
 
-@flow(log_prints=True)
 async def run_classifier_inference_on_document(
     run,
     config: Config,
@@ -337,35 +357,93 @@ async def run_classifier_inference_on_document(
     classifier: Classifier,
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
-    async with concurrency("classifier_inference", occupy=1):
-        print(f"Loading document with ID {document_id}")
+    print(f"Loading document with ID {document_id}")
+    try:
         document = load_document(config, document_id)
-        print(f"Loaded document with ID {document_id}")
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "NoSuchKey":
+            print(f"Document with ID {document_id} not found in cache bucket")
+            return (document_id, classifier_name, classifier_alias)
+        else:
+            raise
+    print(f"Loaded document with ID {document_id}")
 
-        doc_labels = []
-        for text, block_id in document_passages(document):
-            labelled_passages = text_block_inference(
-                classifier=classifier, block_id=block_id, text=text
-            )
-            if labelled_passages:
-                doc_labels.append(labelled_passages)
+    doc_labels = []
+    for text, block_id in document_passages(document):
+        labelled_passages = text_block_inference(
+            classifier=classifier, block_id=block_id, text=text
+        )
+        if labelled_passages:
+            doc_labels.append(labelled_passages)
 
-        if doc_labels:
-            store_labels(
-                config=config,
-                labels=doc_labels,
-                document_id=document_id,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
-            )
+    if doc_labels:
+        store_labels(
+            config=config,
+            labels=doc_labels,
+            document_id=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
 
-        return (document_id, classifier_name, classifier_alias)
+    return (document_id, classifier_name, classifier_alias)
 
 
 def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
     """Generate batches from a list with a specified size."""
     for i in range(0, len(data), batch_size):
         yield data[i : i + batch_size]
+
+
+@flow
+async def run_classifier_inference_on_batch_of_documents(
+    batch: list[str], config_json: dict, classifier_name: str, classifier_alias: str
+) -> None:
+    """
+    Run classifier inference on a batch of documents.
+
+    This reflects the unit of work that should be run in one of many paralellised
+    docker containers.
+    """
+    config_json["wandb_api_key"] = (
+        SecretStr(config_json["wandb_api_key"])
+        if config_json["wandb_api_key"]
+        else None
+    )
+    config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
+    config = Config(**config_json)
+
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
+    run = wandb.init(
+        entity=config.wandb_entity,
+        job_type="concept_inference",
+    )
+
+    print(
+        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+    )
+    classifier = await load_classifier(
+        run,
+        config,
+        classifier_name,
+        classifier_alias,
+    )
+    print(
+        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+    )
+
+    tasks = [
+        run_classifier_inference_on_document(
+            run=run,
+            config=config,
+            document_id=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+            classifier=classifier,
+        )
+        for document_id in batch
+    ]
+
+    await asyncio.gather(*tasks)
 
 
 @flow(log_prints=True, task_runner=ConcurrentTaskRunner())
@@ -412,57 +490,25 @@ async def classifier_inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
-    run = wandb.init(
-        entity=config.wandb_entity,
-        job_type="concept_inference",
-    )
-
-    # Store this across the loops below
-    queued: Set[DocumentRunIdentifier] = set()
-    completed: Set[DocumentRunIdentifier] = set()
-
     for classifier_spec in classifier_specs:
-        print(
-            f"Loading classifier with name: {classifier_spec.name}, and alias: {classifier_spec.alias}"  # noqa: E501
-        )
-        classifier = await load_classifier(
-            run,
-            config,
-            classifier_spec.name,
-            classifier_spec.alias,
-        )
-        print(
-            f"Loaded classifier with name: {classifier_spec.name}, and alias: {classifier_spec.alias}"  # noqa: E501
-        )
-        for batch in iterate_batch(validated_document_ids, batch_size):
-            subflows = []
+        batches = iterate_batch(validated_document_ids, batch_size)
 
-            for document_id in batch:
-                subflow = run_classifier_inference_on_document(
-                    run=run,
-                    config=config,
-                    document_id=document_id,
-                    classifier_name=classifier_spec.name,
-                    classifier_alias=classifier_spec.alias,
-                    classifier=classifier,
-                )
+        tasks = [
+            run_deployment(
+                "run-classifier-inference-on-batch-of-documents/"
+                f"knowledge-graph-run-classifier-inference-on-batch-of-documents-{AWS_ENV}",
+                parameters={
+                    "batch": batch,
+                    "config_json": config.to_json(),
+                    "classifier_name": classifier_spec.name,
+                    "classifier_alias": classifier_spec.alias,
+                },
+                timeout=1200,
+                as_subflow=True,
+            )
+            for batch in batches
+        ]
 
-                queued.add(
-                    (
-                        document_id,
-                        classifier_spec.name,
-                        classifier_spec.alias,
-                    )
-                )
+        await asyncio.gather(*tasks)
 
-                subflows.append(subflow)
-
-            # Handle whichever is the next document to finish
-            for next_document in asyncio.as_completed(subflows):
-                document = await next_document
-
-                queued.discard(document)
-                completed.add(document)
-
-                await report_documents_runs(queued, completed, config.aws_env)
+    print("Finished running classifier inference.")
