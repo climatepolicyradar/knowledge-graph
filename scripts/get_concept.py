@@ -39,6 +39,8 @@ def main(
             style="yellow",
         )
 
+    concept.labelled_passages = labelled_passages
+
     # Save the concept to disk
     output_path = concept_dir / f"{wikibase_id}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
