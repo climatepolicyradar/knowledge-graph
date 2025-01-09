@@ -28,18 +28,17 @@ def main(
     concept = wikibase.get_concept(wikibase_id)
     console.log(f'🔍 Fetched metadata for "{concept.preferred_label}" from wikibase')
 
-    labelled_passages = get_labelled_passages_from_argilla(concept)
-    if labelled_passages:
+    try:
+        labelled_passages = get_labelled_passages_from_argilla(concept)
         console.log(
             f"🏷️ Fetched {len(labelled_passages)} labelled passages for {wikibase_id} from Argilla"
         )
-    else:
+        concept.labelled_passages = labelled_passages
+    except ValueError:
         console.log(
             f"⚠️ No labelled passages found for {wikibase_id} in Argilla",
             style="yellow",
         )
-
-    concept.labelled_passages = labelled_passages
 
     # Save the concept to disk
     output_path = concept_dir / f"{wikibase_id}.json"

@@ -1,0 +1,152 @@
+bipoc +> "black indigenous and people of colour";
+black indigenous and people of colour +> bipoc;
+
+bur +> "biennial update report";
+biennial update report +> bur;
+
+c2h6 +> "ethane";
+ethane +> c2h6;
+
+c3h8 +> "propane";
+propane +> c3h8;
+
+c4h10 +> "butane";
+butane +> c4h10;
+
+cbam +> "carbon border adjustment mechanism";
+carbon border adjustment mechanism +> cbam;
+
+cbews +> "community based early warning system";
+community based early warning system +> cbews;
+
+cfc +> "chlorofluorocarbon";
+chlorofluorocarbon +> cfc;
+
+cfcs +> "chlorofluorocarbons";
+chlorofluorocarbons +> cfcs;
+
+ch4 +> "methane";
+methane +> ch4;
+
+co2 +> "carbon dioxide";
+carbon dioxide +> co2;
+
+csrd +> "corporate sustainability reporting directive";
+corporate sustainability reporting directive +> csrd;
+
+dfi +> "development finance institutions";
+development finance institutions +> dfi;
+
+drm +> "disaster risk management";
+disaster risk management +> drm;
+
+erf +> "emission reduction fund";
+emission reduction fund +> erf;
+
+ets +> "emission trading system";
+emission trading system +> ets;
+
+ews +> "early warning systems";
+early warning systems +> ews;
+
+fgm +> "female genital mutilation";
+female genital mutilation +> fgm;
+
+gga +> "global goal on adaptation";
+global goal on adaptation +> gga;
+
+ghg +> "greenhouse gas";
+greenhouse gas +> ghg;
+
+glof +> "glacial lake outburst flood";
+glacial lake outburst flood +> glof;
+
+glofs +> "glacial lake outburst floods";
+glacial lake outburst floods +> glofs;
+
+glp +> "liquefied petroleum gas";
+liquefied petroleum gas +> glp;
+
+gst +> "global stocktake";
+global stocktake +> gst;
+
+hcfc +> "hydrochlorofluorocarbon";
+hydrochlorofluorocarbon +> hcfc;
+
+hcfcs +> "hydrochlorofluorocarbons";
+hydrochlorofluorocarbons +> hcfcs;
+
+hfc +> "hydrofluorocarbons";
+hydrofluorocarbons +> hfc;
+
+ifrs +> "international financial reporting standards";
+international financial reporting standards +> ifrs;
+
+indc +> "initial nationally determined contribution";
+initial nationally determined contribution +> indc;
+
+ipcc +> "intergovernmental panel on climate change";
+intergovernmental panel on climate change +> ipcc;
+
+lez +> "low emission zone";
+low emission zone +> lez;
+
+lng +> "liquified natural gas";
+liquified natural gas +> lng;
+
+lpg +> "liquefied petroleum gas";
+liquefied petroleum gas +> lpg;
+
+mhews +> "multi hazard early warning systems";
+multi hazard early warning systems +> mhews;
+
+n2o +> "nitrous oxide";
+nitrous oxide +> n2o;
+
+ndc +> "nationally determined contribution";
+nationally determined contribution +> ndc;
+
+nf3 +> "nitrogen trifluoride";
+nitrogen trifluoride +> nf3;
+
+ngo +> "non governmental organisation";
+non governmental organisation +> ngo;
+
+nh3 +> "ammonia";
+ammonia +> nh3;
+
+o2 +> "oxygen";
+oxygen +> o2;
+
+o3 +> "ozone";
+ozone +> o3;
+
+pfc +> "perfluorocarbon";
+perfluorocarbon +> pfc;
+
+pfcs +> "perfluorocarbons";
+perfluorocarbons +> pfcs;
+
+ril +> "reduced impact logging";
+reduced impact logging +> ril;
+
+sdg +> "sustainable development goal";
+sustainable development goal +> sdg;
+
+sf6 +> "sulphur hexafluoride";
+sulphur hexafluoride +> sf6;
+
+slr +> "sea level rise";
+sea level rise +> slr;
+
+ulez +> "ultra low emission zone";
+ultra low emission zone +> ulez;
+
+wfp +> "world food programme";
+world food programme +> wfp;
+
+zev +> "zero emissons vehicle";
+zero emissons vehicle +> zev;
+
+pv +> "photovoltaic";
+photovoltaic +> pv;

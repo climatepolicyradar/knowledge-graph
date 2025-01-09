@@ -14,7 +14,10 @@ from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
 from flows.index import index_labelled_passages_from_s3_to_vespa
-from flows.inference import classifier_inference
+from flows.inference import (
+    classifier_inference,
+    run_classifier_inference_on_batch_of_documents,
+)
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -69,6 +72,17 @@ create_deployment(
 create_deployment(
     flow=index_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in s3 into Vespa",
+    flow_variables={
+        "cpu": MEGABYTES_PER_GIGABYTE * 4,
+        "memory": MEGABYTES_PER_GIGABYTE * 16,
+        "ephemeralStorage": {"sizeInGiB": 50},
+    },
+)
+
+# Inference - Batch of Documents
+create_deployment(
+    flow=run_classifier_inference_on_batch_of_documents,
+    description="Run concept classifier inference on a batch of documents",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,

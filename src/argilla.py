@@ -173,14 +173,17 @@ def get_labelled_passages_from_argilla(
                 "No datasets were found in Argilla, "
                 "you may need to be granted access to the workspace(s)"
             )
-        for dataset in datasets:
+        matching_datasets = []
+        for _dataset in datasets:
             try:
-                # If the dataset.name ends with our wikibase_id, then it's one we want
-                # to process
-                if dataset_name_to_wikibase_id(dataset.name) == concept.wikibase_id:
-                    break
+                wikibase_id = dataset_name_to_wikibase_id(_dataset.name)
+                if wikibase_id == concept.wikibase_id:
+                    matching_datasets.append(_dataset)
             except ValueError:
                 continue
+
+        if matching_datasets:
+            dataset = matching_datasets[0]
 
     if not dataset:
         raise ValueError(
