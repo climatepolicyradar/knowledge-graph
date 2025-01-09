@@ -11,6 +11,7 @@ from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
 from scripts.config import classifier_dir, concept_dir
+from scripts.utils import get_local_classifier_path
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -287,7 +288,8 @@ def main(
         classifier.version = Version(next_version)
 
     # Save the classifier to a file with the concept ID in the name
-    classifier_path = classifier_dir / wikibase_id
+    classifier_path = get_local_classifier_path(concept, classifier)
+    classifier_path.parent.mkdir(parents=True, exist_ok=True)
     classifier.save(classifier_path)
     console.log(f"Saved {classifier} to {classifier_path}")
 
