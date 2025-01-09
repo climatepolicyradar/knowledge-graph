@@ -1,10 +1,12 @@
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
+from scripts.config import get_git_root
 from src.classifier import Classifier
 from src.concept import Concept
 
@@ -29,6 +31,11 @@ def metrics_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def concept_wikibase_id() -> str:
+    return "Q787"
+
+
+@pytest.fixture
 def concept() -> Concept:
     fixture_path = Path("tests/fixtures/data/processed/concepts/Q787.json")
     return Concept.load(fixture_path)
@@ -38,3 +45,20 @@ def concept() -> Concept:
 def classifier() -> Classifier:
     fixture_path = Path("tests/fixtures/data/processed/classifiers/Q787")
     return Classifier.load(fixture_path)
+
+
+@pytest.fixture
+def run_just_command():
+    repo_root = get_git_root()
+    if repo_root is None:
+        raise ValueError("Could not find the root of the git repository")
+
+    def _run_command(command_name):
+        # Split the command into parts to handle arguments correctly
+        command_parts = command_name.split()
+        result = subprocess.run(
+            ["just"] + command_parts, capture_output=True, text=True, cwd=repo_root
+        )
+        return result
+
+    return _run_command
