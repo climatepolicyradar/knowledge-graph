@@ -503,7 +503,7 @@ async def classifier_inference(
                     "classifier_name": classifier_spec.name,
                     "classifier_alias": classifier_spec.alias,
                 },
-                timeout=600,
+                timeout=1200,
                 as_subflow=True,
             )
             for batch in batches
