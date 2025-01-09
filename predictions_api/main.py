@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     try:
         sync_s3_to_local()
-    except ValueError as e:
+    except Exception as e:
         logger.warning(f"S3 sync failed - {str(e)}")
     yield
 
