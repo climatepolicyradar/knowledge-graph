@@ -5,10 +5,17 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from prefect.testing.utilities import prefect_test_harness
 
 from scripts.config import get_git_root
 from src.classifier import Classifier
 from src.concept import Concept
+
+
+@pytest.fixture(autouse=True, scope="session")
+def prefect_test_fixture():
+    with prefect_test_harness():
+        yield
 
 
 @pytest.fixture(scope="function")

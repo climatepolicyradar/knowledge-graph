@@ -1,6 +1,5 @@
 import pytest
 import typer
-from prefect.testing.utilities import prefect_test_harness
 from typer.testing import CliRunner
 
 from scripts.infer import app, convert_classifier_specs
@@ -36,35 +35,32 @@ def test_convert_classifier_specs_invalid_format():
 
 @pytest.mark.asyncio
 async def test_main_command_basic():
-    with prefect_test_harness():
-        result = runner.invoke(app, ["--aws-env", "staging", "-c", "Q123"])
+    result = runner.invoke(app, ["--aws-env", "staging", "-c", "Q123"])
 
-        assert result.exit_code == 0
+    assert result.exit_code == 0
 
 
 @pytest.mark.asyncio
 async def test_main_command_with_documents():
-    with prefect_test_harness():
-        result = runner.invoke(
-            app,
-            [
-                "--aws-env",
-                "staging",
-                "-c",
-                "Q123:v1",
-                "-d",
-                "doc1",
-                "-d",
-                "doc2",
-            ],
-        )
+    result = runner.invoke(
+        app,
+        [
+            "--aws-env",
+            "staging",
+            "-c",
+            "Q123:v1",
+            "-d",
+            "doc1",
+            "-d",
+            "doc2",
+        ],
+    )
 
-        assert result.exit_code == 0
+    assert result.exit_code == 0
 
 
 @pytest.mark.asyncio
 async def test_main_command_no_options():
-    with prefect_test_harness():
-        result = runner.invoke(app, ["--aws-env", "staging"])
+    result = runner.invoke(app, ["--aws-env", "staging"])
 
-        assert result.exit_code == 0
+    assert result.exit_code == 0
