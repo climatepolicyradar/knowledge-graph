@@ -41,6 +41,10 @@ def main(
             "If false, the results will be saved to the local filesystem."
         ),
     ),
+    batch_size: int = typer.Option(
+        25,
+        help="Number of passages to process in each batch",
+    ),
 ):
     """
     Run classifiers on the balanced dataset, and save the results.
@@ -128,7 +132,6 @@ def main(
 
         labelled_passages: list[LabelledPassage] = []
 
-        batch_size = 25
         n_batches = len(df) // batch_size + (1 if len(df) % batch_size else 0)
         for batch_start in track(
             range(0, len(df), batch_size),
