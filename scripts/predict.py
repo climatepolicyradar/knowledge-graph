@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.progress import track
 
 from scripts.config import aws_region, processed_data_dir
+from scripts.utils import get_local_classifier_path
 from src.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
@@ -121,7 +122,7 @@ def main(
                 )
             console.log(f"✅ Saved {classifier} to s3://{bucket_name}/{object_name}")
         else:
-            classifier_path = processed_data_dir / classifier_path
+            classifier_path = get_local_classifier_path(concept, classifier)
             classifier_path.parent.mkdir(parents=True, exist_ok=True)
             classifier.save(classifier_path)
             console.log(f"✅ Saved {classifier} to {classifier_path}")
