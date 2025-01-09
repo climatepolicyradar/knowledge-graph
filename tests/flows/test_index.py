@@ -207,93 +207,96 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     vespa_app,
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
-    document_import_id = "CCLW.executive.10014.4470"
+    with disable_run_logger():
+        document_import_id = "CCLW.executive.10014.4470"
 
-    # Confirm that the example concepts are not in the document passages
-    initial_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-    initial_concepts = [
-        concept
-        for _, passage in initial_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
-
-    assert len(initial_passages) > 0
-    assert all(concept not in initial_concepts for concept in example_vespa_concepts)
-
-    # Confirm that we can add the example concepts to the document passages
-    await run_partial_updates_of_concepts_for_document_passages(
-        document_import_id=document_import_id,
-        document_concepts=[(c.id, c) for c in example_vespa_concepts],
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    updated_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-    updated_concepts = [
-        concept
-        for _, passage in updated_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
-
-    assert len(updated_passages) > 0
-    assert len(updated_concepts) != len(initial_concepts)
-    assert all(
-        [
-            any([new_vespa_concept == c for c in updated_concepts])
-            for new_vespa_concept in example_vespa_concepts
+        # Confirm that the example concepts are not in the document passages
+        initial_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        initial_concepts = [
+            concept
+            for _, passage in initial_passages
+            if passage.concepts
+            for concept in passage.concepts
         ]
-    )
 
-    # Confirm we remove existing concepts and add new ones based on the model field
-    modified_example_vespa_concepts = [
-        (concept.id, concept.model_copy()) for concept in example_vespa_concepts * 2
-    ]
-    for idx, concept in enumerate(modified_example_vespa_concepts):
-        # Make a change to the concept but keep the same model, this triggers removal
-        # of the existing concepts with the same model
-        concept[1].end = idx
+        assert len(initial_passages) > 0
+        assert all(
+            concept not in initial_concepts for concept in example_vespa_concepts
+        )
 
-    await run_partial_updates_of_concepts_for_document_passages(
-        document_import_id=document_import_id,
-        document_concepts=modified_example_vespa_concepts,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+        # Confirm that we can add the example concepts to the document passages
+        await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_import_id=document_import_id,
+            document_concepts=[(c.id, c) for c in example_vespa_concepts],
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
 
-    second_updated_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-    second_updated_concepts = [
-        concept
-        for _, passage in second_updated_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
+        updated_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        updated_concepts = [
+            concept
+            for _, passage in updated_passages
+            if passage.concepts
+            for concept in passage.concepts
+        ]
 
-    assert len(second_updated_passages) > 0
-    assert len(second_updated_concepts) != len(updated_concepts)
-    # Assert that the number of concepts after a second update in vespa is correct.
-    # This is equal to:
-    #   (all existing concepts in vespa)
-    #   - (minus concepts that have the same model as the new updates)
-    #   + (new updates)
-    #   This is as we remove old concepts for a model and replace them with the new ones.
-    assert len(second_updated_concepts) == (
-        len(updated_concepts)
-        + len(modified_example_vespa_concepts)
-        - len(example_vespa_concepts)
-    )
-    for _, new_vespa_concept in modified_example_vespa_concepts:
-        assert new_vespa_concept in second_updated_concepts
-    for example_vespa_concept in example_vespa_concepts:
-        assert example_vespa_concept not in second_updated_concepts
+        assert len(updated_passages) > 0
+        assert len(updated_concepts) != len(initial_concepts)
+        assert all(
+            [
+                any([new_vespa_concept == c for c in updated_concepts])
+                for new_vespa_concept in example_vespa_concepts
+            ]
+        )
+
+        # Confirm we remove existing concepts and add new ones based on the model field
+        modified_example_vespa_concepts = [
+            (concept.id, concept.model_copy()) for concept in example_vespa_concepts * 2
+        ]
+        for idx, concept in enumerate(modified_example_vespa_concepts):
+            # Make a change to the concept but keep the same model, this triggers removal
+            # of the existing concepts with the same model
+            concept[1].end = idx
+
+        await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_import_id=document_import_id,
+            document_concepts=modified_example_vespa_concepts,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        second_updated_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        second_updated_concepts = [
+            concept
+            for _, passage in second_updated_passages
+            if passage.concepts
+            for concept in passage.concepts
+        ]
+
+        assert len(second_updated_passages) > 0
+        assert len(second_updated_concepts) != len(updated_concepts)
+        # Assert that the number of concepts after a second update in vespa is correct.
+        # This is equal to:
+        #   (all existing concepts in vespa)
+        #   - (minus concepts that have the same model as the new updates)
+        #   + (new updates)
+        #   This is as we remove old concepts for a model and replace them with the new ones.
+        assert len(second_updated_concepts) == (
+            len(updated_concepts)
+            + len(modified_example_vespa_concepts)
+            - len(example_vespa_concepts)
+        )
+        for _, new_vespa_concept in modified_example_vespa_concepts:
+            assert new_vespa_concept in second_updated_concepts
+        for example_vespa_concept in example_vespa_concepts:
+            assert example_vespa_concept not in second_updated_concepts
 
 
 @pytest.mark.asyncio

@@ -14,7 +14,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
-from prefect import flow
+from prefect import flow, task
 from prefect.concurrency.asyncio import concurrency
 from prefect.logging import get_logger, get_run_logger
 
@@ -292,6 +292,7 @@ def convert_labelled_passages_to_concepts(
     that we must convert to VespaConcept objects.
     """
     concepts = []
+
     for labelled_passage in labelled_passages:
         # The concept used to label the passage holds some information on the parent
         # concepts and thus this is being used as a temporary solution for providing
@@ -375,7 +376,7 @@ def group_concepts_on_text_block(
     return concepts_grouped
 
 
-@flow
+@task
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
     document_concepts: list[tuple[str, VespaConcept]],
@@ -531,10 +532,10 @@ def s3_obj_generator(
                 "Either s3_prefixes or s3_paths must be provided, not both."
             )
         case (list(), None):
-            logger.info("S3 object generator from prefixes")
+            logger.info("S3 object generator: prefixes")
             return s3_obj_generator_from_s3_prefixes(s3_prefixes=s3_prefixes)
         case (None, list()):
-            logger.info("S3 object generator from paths")
+            logger.info("S3 object generator: paths")
             return s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
         case (None, None):
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
@@ -545,6 +546,7 @@ def s3_obj_generator(
             )
 
 
+@flow
 async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter,
     s3_prefixes: Optional[list[str]] = None,
@@ -578,9 +580,13 @@ async def index_by_s3(
     """
     logger = get_run_logger()
 
+    logger.info("geting S3 object generator")
     s3_objects = s3_obj_generator(s3_prefixes, s3_paths)
 
+    logger.info("geting S3 labelled passages generator")
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
+
+    logger.info("converting labelled passages to concepts")
     document_concepts = [
         (
             s3_path,
