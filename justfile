@@ -50,6 +50,12 @@ build-dataset:
 get-concept id:
     poetry run python scripts/get_concept.py --wikibase-id {{id}}
 
+# fetch metadata and labelled passages for multiple wikibase IDs
+get-concepts *ids:
+    @for id in {{ids}}; do \
+        just get-concept $id; \
+    done
+
 # train a model for a specific wikibase ID
 train id +OPTS="":
     poetry run train --wikibase-id {{id}} {{OPTS}}
