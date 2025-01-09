@@ -144,13 +144,13 @@ def main(
             texts = batch_df["text_block.text"].fillna("").tolist()
             spans_batch = classifier.predict_batch(texts)
 
-            for row, text, spans in zip(batch_df.itertuples(), texts, spans_batch):
+            for (_, row), text, spans in zip(batch_df.iterrows(), texts, spans_batch):
                 if spans:
                     labelled_passages.append(
                         LabelledPassage(
                             text=text,
                             spans=spans,
-                            metadata=row._asdict(),
+                            metadata=row.to_dict(),
                         )
                     )
 
