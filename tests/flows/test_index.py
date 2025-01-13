@@ -17,6 +17,7 @@ from flows.index import (
     Config,
     convert_labelled_passages_to_concepts,
     convert_labelled_passages_to_document_concepts,
+    dump_document_concepts,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_passage_for_text_block,
@@ -27,12 +28,14 @@ from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
     iterate_batch,
     labelled_passages_generator,
+    load_document_concepts,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
 )
+from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -320,9 +323,11 @@ async def test_index_by_s3_with_s3_prefixes(
     )
 
     await index_by_s3(
+        aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
+        as_subflow=False,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -363,9 +368,11 @@ async def test_index_by_s3_with_s3_paths(
     ]
 
     await index_by_s3(
+        aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
         s3_paths=s3_paths,
+        as_subflow=False,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -443,6 +450,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
         config = Config(
             cache_bucket=mock_bucket,
             vespa_search_adapter=local_vespa_search_adapter,
+            as_subflow=False,
         )
 
         await index_labelled_passages_from_s3_to_vespa(
@@ -466,6 +474,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.skip(reason="cannot test due to run_deployment usage")
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_default_config(
     mock_bucket,
     mock_bucket_labelled_passages,
@@ -676,6 +685,73 @@ def test_convert_labelled_passages_to_document_concepts(
         assert isinstance(result[0][1], list)
         assert all(isinstance(concept, tuple) for concept in result[0][1])
         assert all(isinstance(concept[1], VespaConcept) for concept in result[0][1])
+
+
+def test_dump_document_concepts(example_vespa_concepts: list[VespaConcept]):
+    """Test dumping document concepts to JSON strings."""
+    # Create test input with text block IDs and VespaConcepts
+    document_concepts = [
+        ("block_1", example_vespa_concepts[0]),
+        ("block_2", example_vespa_concepts[1]),
+    ]
+
+    # Dump to JSON strings
+    dumped = dump_document_concepts(document_concepts)
+
+    # Verify structure and types
+    assert len(dumped) == len(document_concepts)
+    for (orig_id, orig_concept), (dumped_id, dumped_json) in zip(
+        document_concepts, dumped
+    ):
+        assert dumped_id == orig_id
+        assert isinstance(dumped_json, str)
+        # Verify the JSON string can be loaded back into an equivalent object
+        loaded_concept = VespaConcept.model_validate_json(dumped_json)
+        assert loaded_concept == orig_concept
+
+
+def test_load_document_concepts(example_vespa_concepts: list[VespaConcept]):
+    """Test loading document concepts from JSON strings."""
+    # Create test input with text block IDs and JSON strings
+    document_concepts = [
+        ("block_1", example_vespa_concepts[0].model_dump_json()),
+        ("block_2", example_vespa_concepts[1].model_dump_json()),
+    ]
+
+    # Load from JSON strings
+    loaded = load_document_concepts(document_concepts)
+
+    # Verify structure and types
+    assert len(loaded) == len(document_concepts)
+    for (orig_id, orig_json), (loaded_id, loaded_concept) in zip(
+        document_concepts, loaded
+    ):
+        assert loaded_id == orig_id
+        assert isinstance(loaded_concept, VespaConcept)
+        # Verify the loaded object matches the original
+        original_concept = VespaConcept.model_validate_json(orig_json)
+        assert loaded_concept == original_concept
+
+
+def test_dump_load_document_concepts_roundtrip(
+    example_vespa_concepts: list[VespaConcept],
+):
+    """Test that dumping and loading document concepts preserves data."""
+    # Create test input
+    original = [
+        ("block_1", example_vespa_concepts[0]),
+        ("block_2", example_vespa_concepts[1]),
+    ]
+
+    # Round trip through dump and load
+    dumped = dump_document_concepts(original)
+    loaded = load_document_concepts(dumped)
+
+    # Verify nothing was lost
+    assert len(loaded) == len(original)
+    for (orig_id, orig_concept), (loaded_id, loaded_concept) in zip(original, loaded):
+        assert loaded_id == orig_id
+        assert loaded_concept == orig_concept
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier(
