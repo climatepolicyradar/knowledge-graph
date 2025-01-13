@@ -163,6 +163,12 @@ schema family_document {
                 attribute: fast-search
             }
         }
+
+        field concept_counts type map<string, int> {
+            indexing: summary
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
     }
 
     import field search_weights_ref.name_weight as name_weight {}
@@ -245,6 +251,7 @@ schema family_document {
         summary document_cdn_object {}
         summary document_source_url {}
         summary metadata {}
+        summary concept_counts {}
         summary corpus_import_id {}
         summary corpus_type_name {}
         summary collection_title {}
