@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Generator, Optional, Union
 
-import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
@@ -111,7 +110,17 @@ def get_vespa_search_adapter_from_aws_secrets(
 
 def s3_obj_generator_from_s3_prefixes(
     s3_prefixes: list[str],
-) -> Generator[tuple[str, list[dict]], None, None]:
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[dict],
+    ],
+    None,
+    None,
+]:
     """Return a generator that yields objects from a list of S3 prefixes."""
     logger = get_logger()
     for s3_prefix in s3_prefixes:
@@ -131,7 +140,17 @@ def s3_obj_generator_from_s3_prefixes(
 
 def s3_obj_generator_from_s3_paths(
     s3_paths: list[str],
-) -> Generator[tuple[str, list[dict]], None, None]:
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[dict],
+    ],
+    None,
+    None,
+]:
     """
     Return a generator that yields objects from a list of S3 paths.
 
@@ -156,11 +175,22 @@ def s3_obj_generator_from_s3_paths(
 
 def labelled_passages_generator(
     generator_func: Generator,
-) -> Generator[tuple[str, list[LabelledPassage]], None, None]:
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[LabelledPassage],
+    ],
+    None,
+    None,
+]:
     """
-    A wrapper function for the s3 object generator.
+    Transforms the S3 objects bodies into LabelledPassages objects.
 
-    Converts each yielded object from the generator to a Pydantic LabelledPassage object.
+    Effectively a wrapper for the other generator. Each yielded object
+    from the generator to a LabelledPassage object.
     """
     for s3_key, obj in generator_func:
         yield s3_key, [LabelledPassage(**labelled_passage) for labelled_passage in obj]
@@ -284,16 +314,27 @@ def get_parent_concepts_from_concept(
 
 def convert_labelled_passages_to_concepts(
     labelled_passages: list[LabelledPassage],
-) -> list[tuple[str, VespaConcept]]:
+) -> list[
+    tuple[
+        # Text block (aka span) ID
+        str,
+        VespaConcept,
+    ]
+]:
     """
-    Convert a labelled passage to a list of VespaConcept objects and their text block id.
+    Convert a labelled passage to a list of VespaConcept objects and their text block ID.
 
     The labelled passage contains a list of spans relating to concepts
     that we must convert to VespaConcept objects.
     """
+    logger = get_run_logger()
+
     concepts = []
 
     for labelled_passage in labelled_passages:
+        logger.info(
+            f"converting labelled passage (ID: `{labelled_passage.id}`) to Vespa concept"
+        )
         # The concept used to label the passage holds some information on the parent
         # concepts and thus this is being used as a temporary solution for providing
         # the relationship between concepts. This has the downside that it ties a
@@ -307,7 +348,7 @@ def convert_labelled_passages_to_concepts(
 
         for span in labelled_passage.spans:
             if span.concept_id is None:
-                raise ValueError("Concept ID is None.")
+                raise ValueError("concept ID is missing")
             concepts.append(
                 (
                     text_block_id,
@@ -379,11 +420,19 @@ def group_concepts_on_text_block(
 @task
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
-    document_concepts: list[tuple[str, VespaConcept]],
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            VespaConcept,
+        ]
+    ],
     vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
     """
-    Run partial update for VespaConcepts on a text block in the document_passage index.
+    Run partial update for VespaConcepts on text blocks for a document.
+
+    This is done in the document_passage index.
 
     Assumptions:
 
@@ -440,14 +489,32 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 logger.error(f"No passages found for text block: {text_block_id}")
 
 
-def get_bucket_paginator(config: Config):
-    """Return a S3 paginator for the pipeline cache bucket, with a prefix."""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    paginator = s3.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=config.cache_bucket,
-        Prefix=config.document_source_prefix,
-    )
+def convert_labelled_passages_to_document_concepts(
+    document_labelled_passages: Generator[
+        tuple[
+            # Object: Key
+            str,
+            # Object: body. It's a list since we store the labelled
+            # passages as JSONL.
+            list[LabelledPassage],
+        ],
+        None,
+        None,
+    ],
+) -> list[
+    tuple[
+        str,
+        list[tuple[str, VespaConcept]],
+    ]
+]:
+    """Convert labelled passages to document concepts for Vespa indexing."""
+    return [
+        (
+            s3_path,
+            convert_labelled_passages_to_concepts(labelled_passages=labelled_passages),
+        )
+        for s3_path, labelled_passages in document_labelled_passages
+    ]
 
 
 def s3_paths_or_s3_prefixes(
@@ -523,7 +590,23 @@ def s3_paths_or_s3_prefixes(
 def s3_obj_generator(
     s3_prefixes: Optional[list[str]],
     s3_paths: Optional[list[str]],
-):
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[dict],
+    ],
+    None,
+    None,
+]:
+    """
+    Return a generator that returns S3 objects for each path or prefix.
+
+    These will be for each output from the inference stage, of
+    labelled passages.
+    """
     logger = get_run_logger()
 
     match (s3_prefixes, s3_paths):
@@ -551,6 +634,7 @@ async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter,
     s3_prefixes: Optional[list[str]] = None,
     s3_paths: Optional[list[str]] = None,
+    batch_size: int = 400,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -580,35 +664,57 @@ async def index_by_s3(
     """
     logger = get_run_logger()
 
-    logger.info("geting S3 object generator")
+    logger.info("getting S3 object generator")
     s3_objects = s3_obj_generator(s3_prefixes, s3_paths)
 
-    logger.info("geting S3 labelled passages generator")
+    logger.info("getting S3 labelled passages generator")
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
 
-    logger.info("converting labelled passages to concepts")
-    document_concepts = [
-        (
-            s3_path,
-            convert_labelled_passages_to_concepts(labelled_passages=labelled_passages),
-        )
-        for s3_path, labelled_passages in document_labelled_passages
-    ]
+    logger.info("converting labelled passages to Vespa concepts")
+    document_concepts = convert_labelled_passages_to_document_concepts(
+        document_labelled_passages
+    )
 
     logger.info(
         f"starting indexing tasks with {len(document_concepts)} document concepts"
     )
-    indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages(
-            document_import_id=Path(s3_key).stem,
-            document_concepts=concepts,
-            vespa_search_adapter=vespa_search_adapter,
-        )
-        for s3_key, concepts in document_concepts
-    ]
+    batches = iterate_batch(document_concepts, batch_size=batch_size)
+    for batch_num, batch in enumerate(batches, start=1):
+        logger.info(f"processing batch {batch_num}")
+        indexing_tasks = [
+            run_partial_updates_of_concepts_for_document_passages(
+                document_import_id=Path(s3_key).stem,
+                document_concepts=concepts,
+                vespa_search_adapter=vespa_search_adapter,
+            )
+            for s3_key, concepts in batch
+        ]
 
-    logger.info("gathering indexing tasks")
-    await asyncio.gather(*indexing_tasks)
+        logger.info(f"gathering indexing tasks for batch {batch_num}")
+        await asyncio.gather(*indexing_tasks)
+
+
+def iterate_batch(
+    data: list[
+        tuple[
+            str,
+            list[tuple[str, VespaConcept]],
+        ]
+    ],
+    batch_size: int = 400,
+) -> Generator[
+    list[
+        tuple[
+            str,
+            list[tuple[str, VespaConcept]],
+        ]
+    ],
+    None,
+    None,
+]:
+    """Generate batches from a list with a specified size."""
+    for i in range(0, len(data), batch_size):
+        yield data[i : i + batch_size]
 
 
 @flow
@@ -616,6 +722,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
+    batch_size: int = 400,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
@@ -662,4 +769,5 @@ async def index_labelled_passages_from_s3_to_vespa(
             config.vespa_search_adapter,  # type: ignore
             s3_prefixes,
             s3_paths,
+            batch_size=batch_size,
         )

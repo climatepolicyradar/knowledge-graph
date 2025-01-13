@@ -68,10 +68,10 @@ create_deployment(
     },
 )
 
-# Index
+# Inference - Batch of Documents
 create_deployment(
-    flow=index_labelled_passages_from_s3_to_vespa,
-    description="Run partial updates of labelled passages stored in s3 into Vespa",
+    flow=run_classifier_inference_on_batch_of_documents,
+    description="Run concept classifier inference on a batch of documents",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,
@@ -79,10 +79,10 @@ create_deployment(
     },
 )
 
-# Inference - Batch of Documents
+# Index
 create_deployment(
-    flow=run_classifier_inference_on_batch_of_documents,
-    description="Run concept classifier inference on a batch of documents",
+    flow=index_labelled_passages_from_s3_to_vespa,
+    description="Run partial updates of labelled passages stored in s3 into Vespa",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,
