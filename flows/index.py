@@ -553,8 +553,8 @@ async def partial_update_text_block(
         logger.error(f"No passages found for text block: {text_block_id}")
 
 
-def convert_labelled_passages_to_document_concepts(
-    document_labelled_passages: Generator[
+async def convert_labelled_passages_to_document_concepts(
+    document_labelled_passages: list[
         tuple[
             # Object: Key
             str,
@@ -562,8 +562,6 @@ def convert_labelled_passages_to_document_concepts(
             # passages as JSONL.
             list[LabelledPassage],
         ],
-        None,
-        None,
     ],
 ) -> list[
     tuple[
@@ -743,17 +741,34 @@ async def index_by_s3(
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
 
     logger.info("converting labelled passages to Vespa concepts")
-    document_concepts = convert_labelled_passages_to_document_concepts(
-        document_labelled_passages
+
+    document_labelled_passages_batches = iterate_batch(
+        document_labelled_passages, batch_size=batch_size
     )
 
-    logger.info(
-        f"starting indexing tasks with {len(document_concepts)} document concepts"
-    )
-    batches = iterate_batch(document_concepts, batch_size=batch_size)
+    convert_labelled_passages_to_document_concepts_task = [
+        convert_labelled_passages_to_document_concepts(document_labelled_passages_batch)
+        for (
+            document_labelled_passages_batch_num,
+            document_labelled_passages_batch,
+        ) in enumerate(document_labelled_passages_batches, start=1)
+    ]
 
-    for batch_num, batch in enumerate(batches, start=1):
-        logger.info(f"processing batch {batch_num}")
+    # We gather all the documents concepts, and ended up with a nested array.
+    #
+    # Since we have that, it's effectively still in the batches that were created
+    # for the conversion.
+    document_concepts_batches = await asyncio.gather(
+        *convert_labelled_passages_to_document_concepts_task
+    )
+
+    logger.info("starting indexing tasks with document concepts")
+
+    # Use the "original" batches created for conversion above.
+    for document_concepts_batch_num, document_concepts_batch in enumerate(
+        document_concepts_batches, start=1
+    ):
+        logger.info(f"processing batch {document_concepts_batch_num}")
 
         indexing_tasks = [
             run_partial_updates_of_concepts_for_document_passages_as(
@@ -762,10 +777,10 @@ async def index_by_s3(
                 as_subflow,
                 aws_env=aws_env,
             )
-            for s3_key, document_concepts in batch
+            for s3_key, document_concepts in document_concepts_batch
         ]
 
-        logger.info(f"gathering indexing tasks for batch {batch_num}")
+        logger.info(f"gathering indexing tasks for batch {document_concepts_batch_num}")
         await asyncio.gather(*indexing_tasks)
 
 
@@ -873,16 +888,28 @@ def maybe_load_document_concepts(
 
 
 def iterate_batch(
-    data: list[Any],
+    data: Union[list[Any], Generator[Any, None, None]],
     batch_size: int = 400,
 ) -> Generator[
     list[Any],
     None,
     None,
 ]:
-    """Generate batches from a list with a specified size."""
-    for i in range(0, len(data), batch_size):
-        yield data[i : i + batch_size]
+    """Generate batches from a list or generator with a specified size."""
+    if isinstance(data, list):
+        # For lists, we can use list slicing
+        for i in range(0, len(data), batch_size):
+            yield data[i : i + batch_size]
+    else:
+        # For generators, accumulate items until we reach batch size
+        batch = []
+        for item in data:
+            batch.append(item)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:  # Don't forget to yield the last partial batch
+            yield batch
 
 
 @flow
