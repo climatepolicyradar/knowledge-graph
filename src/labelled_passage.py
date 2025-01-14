@@ -1,5 +1,6 @@
 import html
 import itertools
+import re
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -92,6 +93,8 @@ class LabelledPassage(BaseModel):
         """
         # Decode HTML entities
         decoded_text = html.unescape(self.text)
+        # remove all html tags
+        decoded_text = re.sub(r"<[^>]*>", "", decoded_text)
 
         # merge any overlapping spans
         merged_spans = merge_overlapping_spans(self.spans)
