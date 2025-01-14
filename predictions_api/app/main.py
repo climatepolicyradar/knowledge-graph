@@ -263,3 +263,9 @@ async def get_predictions_json(wikibase_id: WikibaseID, classifier_id: str):
             status_code=404,
             detail=f"Predictions not found for concept {wikibase_id} and classifier {classifier_id}",
         )
+
+
+@app.get("/health-check")
+async def health_check():
+    """Health check endpoint for ECS."""
+    return {"status": "ok"}
