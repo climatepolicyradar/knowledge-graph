@@ -51,6 +51,18 @@ services:
     volumes:
       - argilla_data:/var/lib/argilla
 
+  predictions_api:
+    build:
+      context: .
+      dockerfile: predictions_api/Dockerfile
+    ports:
+      - 8000:8000
+    volumes:
+      # need to include aws credentials so that we can sync the data from S3
+      - ~/.aws:/root/.aws
+    env_file:
+      - .env
+
 volumes:
   elasticsearch_data:
   argilla_data:

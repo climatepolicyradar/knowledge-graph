@@ -145,3 +145,7 @@ infer-labs +OPTS="":
 # Checks for latest versions of classifiers in wandb and updates spec files
 update-inference-classifiers +OPTS="":
     poetry run update_inference_classifiers {{OPTS}}
+
+# Run the predictions API locally
+run-predictions-api:
+    docker compose up --build predictions_api

@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "knowledge-graph"
+name = "knowledge_graph"
 version = "0.1.0"
 description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
 readme = "README.md"
 packages = [
-  { include = "src", from = ".", to = "knowledge_graph" },
+  { include = "src", from = "." },
   { include = "tests", from = "." },
   { include = "scripts", from = "." },
 ]
@@ -93,6 +93,9 @@ syrupy = "^4.7.1"
 moto = {extras = ["s3"], version = "^5.0.16"}
 pytest-env = "^1.1.5"
 pytest-asyncio = "^0.24.0"
+pulumi = "^3.145.0"
+pulumi-aws = "^6.66.2"
+
 
 [tool.pytest.ini_options]
 env = ["AWS_ENV=sandbox"]
