@@ -29,6 +29,7 @@ processed_data_dir = data_dir / "processed"
 classifier_dir = processed_data_dir / "classifiers"
 metrics_dir = processed_data_dir / "classifiers_performance"
 concept_dir = processed_data_dir / "concepts"
+external_keywords_dir = processed_data_dir / "external_keywords"
 # files
 model_artifact_name = "model.pickle"
 

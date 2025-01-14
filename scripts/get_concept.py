@@ -6,6 +6,7 @@ from rich.console import Console
 from scripts.config import concept_dir
 from src.argilla import get_labelled_passages_from_argilla
 from src.identifiers import WikibaseID
+from src.keywords_from_csv import load_concept_keywords_from_csv
 from src.wikibase import WikibaseSession
 
 console = Console()
@@ -37,6 +38,19 @@ def main(
     except ValueError:
         console.log(
             f"⚠️ No labelled passages found for {wikibase_id} in Argilla",
+            style="yellow",
+        )
+
+    try:
+        csv_keywords = load_concept_keywords_from_csv(concept)
+        console.log(
+            f"🔗 Fetched {len(csv_keywords)} keywords for {wikibase_id} from CSV. Adding as aliases."
+        )
+        concept.alternative_labels.extend(csv_keywords)
+
+    except FileNotFoundError:
+        console.log(
+            f"⚠️ No external keywords found for {wikibase_id}",
             style="yellow",
         )
 
