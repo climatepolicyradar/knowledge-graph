@@ -1,8 +1,10 @@
+import subprocess
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.identifiers import WikibaseID, generate_identifier
+from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
 from tests.common_strategies import wikibase_id_strategy
 
 invalid_wikibase_id_strategy = st.text().filter(
@@ -58,3 +60,29 @@ def test_whether_identifier_generation_is_deterministic(input_strings):
 def test_whether_identifiers_are_unique_for_unique_input_strings(input_strings):
     identifiers = [generate_identifier(input_string) for input_string in input_strings]
     assert len(identifiers) == len(set(identifiers))
+
+
+def test_whether_default_python_hash_is_consistent_across_distinct_python_processes():
+    """Default hashes should not be the same from python session to python session"""
+    # Get hash from current process
+    hash_a = hash("test")
+
+    # Get hash from a separate Python process
+    cmd = "python3 -c \"print(hash('test'))\""
+    hash_b = int(subprocess.check_output(cmd, shell=True).decode().strip())
+
+    assert hash_a != hash_b, "Hashes should be different across Python processes"
+
+
+def test_whether_deterministic_hash_is_consistent_across_distinct_python_processes():
+    """Deterministic hashes should be the same from python session to python session"""
+    # Get hash from current process
+    hash_a = deterministic_hash("test")
+
+    # Get hash from a separate Python process
+    cmd = "python3 -c \"from src.identifiers import deterministic_hash; print(deterministic_hash('test'))\""
+    hash_b = int(subprocess.check_output(cmd, shell=True).decode().strip())
+
+    assert (
+        hash_a == hash_b
+    ), "Deterministic hashes should be identical across Python processes"

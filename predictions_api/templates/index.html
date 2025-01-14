@@ -91,7 +91,7 @@
                 <p
                   class="block text-sm font-normal leading-none text-slate-500 dark:text-slate-400"
                 >
-                  Classifiers
+                  Classifier{{ 's' if total_count != 1 }}
                 </p>
               </th>
             </tr>
@@ -120,8 +120,8 @@
                 class="p-4 border-b border-slate-200 dark:border-slate-600 py-5"
               >
                 <p class="text-slate-500 dark:text-slate-400">
-                  {{ concept.classifiers|length }} classifier{{ 's' if
-                  concept.classifiers|length != 1 }}
+                  {{ concept.classifier_names|length }} classifier{{ 's' if
+                  concept.classifier_names|length != 1 }}
                 </p>
               </td>
             </tr>

@@ -4,22 +4,28 @@ import contextlib
 import json
 import os
 import tempfile
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generator, Optional, Union
+from typing import Any, Generator, Optional, Union
 
-import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
-from prefect.concurrency.asyncio import concurrency
+from prefect.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
+from scripts.cloud import (
+    AwsEnv,
+    ClassifierSpec,
+    function_to_flow_name,
+    generate_deployment_name,
+    get_prefect_job_variable,
+)
 from scripts.update_classifier_spec import parse_spec_file
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
@@ -43,22 +49,21 @@ class Config:
     # )
     vespa_search_adapter: Optional[VespaSearchAdapter] = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
+    as_subflow: bool = True
 
     @classmethod
-    async def create(cls, temp_dir: Optional[str] = None) -> "Config":
+    async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
+        logger = get_run_logger()
+
         config = cls()
 
         if not config.cache_bucket:
+            logger.info(
+                "no cache bucket provided, getting it from Prefect job variable"
+            )
             config.cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
-            )
-
-        if not config.vespa_search_adapter:
-            config.vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-                cert_dir=temp_dir,  # type: ignore
-                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
             )
 
         return config
@@ -104,7 +109,17 @@ def get_vespa_search_adapter_from_aws_secrets(
 
 def s3_obj_generator_from_s3_prefixes(
     s3_prefixes: list[str],
-) -> Generator[tuple[str, list[dict]], None, None]:
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[dict],
+    ],
+    None,
+    None,
+]:
     """Return a generator that yields objects from a list of S3 prefixes."""
     logger = get_logger()
     for s3_prefix in s3_prefixes:
@@ -124,7 +139,17 @@ def s3_obj_generator_from_s3_prefixes(
 
 def s3_obj_generator_from_s3_paths(
     s3_paths: list[str],
-) -> Generator[tuple[str, list[dict]], None, None]:
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[dict],
+    ],
+    None,
+    None,
+]:
     """
     Return a generator that yields objects from a list of S3 paths.
 
@@ -149,11 +174,22 @@ def s3_obj_generator_from_s3_paths(
 
 def labelled_passages_generator(
     generator_func: Generator,
-) -> Generator[tuple[str, list[LabelledPassage]], None, None]:
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[LabelledPassage],
+    ],
+    None,
+    None,
+]:
     """
-    A wrapper function for the s3 object generator.
+    Transforms the S3 objects bodies into LabelledPassages objects.
 
-    Converts each yielded object from the generator to a Pydantic LabelledPassage object.
+    Effectively a wrapper for the other generator. Each yielded object
+    from the generator to a LabelledPassage object.
     """
     for s3_key, obj in generator_func:
         yield s3_key, [LabelledPassage(**labelled_passage) for labelled_passage in obj]
@@ -163,16 +199,14 @@ def get_document_passages_from_vespa(
     document_import_id: str, vespa_search_adapter: VespaSearchAdapter
 ) -> list[tuple[str, VespaPassage]]:
     """
-    Retrieve all the passages for a document in vespa.
+    Retrieve all the passages for a document in Vespa.
 
     params:
     - document_import_id: The document import id for a unique family document.
     """
     logger = get_logger()
-    logger.info(
-        "Getting document passages from vespa.",
-        extra={"props": {"document_import_id": document_import_id}},
-    )
+
+    logger.info(f"Getting document passages from Vespa: {document_import_id}")
 
     vespa_query_response = vespa_search_adapter.client.query(
         yql=(
@@ -182,13 +216,8 @@ def get_document_passages_from_vespa(
         )
     )
     logger.info(
-        "Vespa search response for document.",
-        extra={
-            "props": {
-                "document_import_id": document_import_id,
-                "total_hits": len(vespa_query_response.hits),
-            }
-        },
+        f"Vespa search response for document: {document_import_id} "
+        f"with {len(vespa_query_response.hits)} hits"
     )
 
     return [
@@ -234,7 +263,7 @@ def get_passage_for_text_block(
     text_block_id: str, document_passages: list[tuple[str, VespaPassage]]
 ) -> Union[tuple[str, str, VespaPassage], tuple[None, None, None]]:
     """
-    Return the data id, passage and passage id that a text block relates to.
+    Return the data ID, passage and passage ID that a text block relates to.
 
     Concepts relate to a specific passage or text block within a document
     and therefore, we must find the relevant text block to update when running
@@ -284,15 +313,27 @@ def get_parent_concepts_from_concept(
 
 def convert_labelled_passages_to_concepts(
     labelled_passages: list[LabelledPassage],
-) -> list[tuple[str, VespaConcept]]:
+) -> list[
+    tuple[
+        # Text block (aka span) ID
+        str,
+        VespaConcept,
+    ]
+]:
     """
-    Convert a labelled passage to a list of VespaConcept objects and their text block id.
+    Convert a labelled passage to a list of VespaConcept objects and their text block ID.
 
-    The labelled passage contains a list of spans relating to concepts that we must
-    convert to vespa Concept objects.
+    The labelled passage contains a list of spans relating to concepts
+    that we must convert to VespaConcept objects.
     """
+    logger = get_run_logger()
+
     concepts = []
+
     for labelled_passage in labelled_passages:
+        logger.info(
+            f"converting labelled passage (ID: `{labelled_passage.id}`) to Vespa concept"
+        )
         # The concept used to label the passage holds some information on the parent
         # concepts and thus this is being used as a temporary solution for providing
         # the relationship between concepts. This has the downside that it ties a
@@ -304,9 +345,11 @@ def convert_labelled_passages_to_concepts(
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
 
+        logger.info(f"converting {len(labelled_passage.spans)} spans to concepts")
+
         for span in labelled_passage.spans:
             if span.concept_id is None:
-                raise ValueError("Concept ID is None.")
+                raise ValueError("concept ID is missing")
             concepts.append(
                 (
                     text_block_id,
@@ -361,7 +404,7 @@ def group_concepts_on_text_block(
     document_concepts: list[tuple[str, VespaConcept]],
 ) -> dict[str, list[VespaConcept]]:
     """
-    Group concepts on text block id.
+    Group concepts on text block ID.
 
     Concepts relate to a specific passage or text block within a document and therefore,
     we must group the concept updates to all of them at once.
@@ -378,75 +421,159 @@ def group_concepts_on_text_block(
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id: str,
-    document_concepts: list[tuple[str, VespaConcept]],
-    vespa_search_adapter: VespaSearchAdapter,
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            Union[
+                VespaConcept,
+                # Serialised JSON of object
+                str,
+            ],
+        ]
+    ],
+    vespa_search_adapter: Optional[VespaSearchAdapter] = None,
 ) -> None:
     """
-    Run partial update for vespa Concepts on a text block in the document_passage index.
+    Run partial update for VespaConcepts on text blocks for a document.
+
+    This is done in the document_passage index.
 
     Assumptions:
-    - The id field of the Concept object holds the context of the text block that it
-    relates to. E.g. the concept id 1.10 would relate to the text block id 10.
+
+    - The ID field of the VespaConcept object holds the
+    context of the text block that it relates to. E.g. the concept ID
+    1.10 would relate to the text block ID 10.
     """
     logger = get_run_logger()
 
-    async with concurrency("concept_partial_updates", occupy=10):
+    # We want the directory used for the `VespaSearchAdapter` to be
+    # automatically cleaned up.
+    #
+    # To do this, we rely on the `tempfile.TemporaryDirectory`'s behaviour,
+    # or, a `contextlib.nullcontext` no-op, if a temporary directory
+    # wasn't needed.
+    if vespa_search_adapter is None:
+        logger.info("no Vespa search adapter, getting it from AWS secrets")
+        cm = tempfile.TemporaryDirectory()
+
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+            cert_dir=cm.name,  # type: ignore
+            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        )
+    else:
+        logger.info("Vespa search adapter provided")
+        cm = contextlib.nullcontext()
+
+    with cm:
+        logger.info(
+            "getting document passages from Vespa for document "
+            f"import ID {document_import_id}"
+        )
         document_passages = get_document_passages_from_vespa(
             document_import_id=document_import_id,
             vespa_search_adapter=vespa_search_adapter,
         )
+
         if not document_passages:
             logger.error(
-                "No hits for document import id in vespa. "
+                f"No hits for document import ID {document_import_id} in Vespa. "
                 "Either the document doesn't exist or there are no passages related to "
                 "the document.",
-                extra={"props": {"document_import_id": document_import_id}},
             )
             raise ValueError(
-                f"No passages found for document in vespa - {document_import_id}"
+                f"No passages found for document in Vespa: {document_import_id}"
             )
 
-        grouped_concepts = group_concepts_on_text_block(document_concepts)
+        loaded_document_concepts = maybe_load_document_concepts(document_concepts)
+        grouped_concepts = group_concepts_on_text_block(loaded_document_concepts)
 
-        for text_block_id, concepts in grouped_concepts.items():
-            data_id, passage_id, passage_for_text_block = get_passage_for_text_block(
-                text_block_id, document_passages
-            )
+        logger.info(
+            f"starting partial updates for {len(grouped_concepts)} grouped concepts"
+        )
 
-            if data_id and passage_id and passage_for_text_block:
-                vespa_search_adapter.client.update_data(
-                    schema="document_passage",
-                    namespace="doc_search",
-                    data_id=data_id,
-                    fields={
-                        "concepts": get_updated_passage_concepts(
-                            passage_for_text_block, concepts
-                        )
-                    },
+        batches = iterate_batch(list(grouped_concepts.items()))
+
+        for batch_num, batch in enumerate(batches, start=1):
+            logger.info(f"processing partial updates batch {batch_num}")
+
+            partial_update_tasks = [
+                partial_update_text_block(
+                    text_block_id,
+                    document_passages,
+                    vespa_search_adapter,
+                    concepts,
                 )
-                logger.info(
-                    "Updated concepts for passage.",
-                    extra={"props": {"passage_id": passage_id}},
-                )
-            else:
-                logger.error(
-                    "No passages found for text block.",
-                    extra={
-                        "props": {
-                            "text_block_id": text_block_id,
-                        }
-                    },
-                )
+                for text_block_id, concepts in batch
+            ]
+
+            logger.info(f"gathering partial updates tasks for batch {batch_num}")
+            await asyncio.gather(*partial_update_tasks)
 
 
-def get_bucket_paginator(config: Config):
-    """Return a S3 paginator for the pipeline cache bucket, with a prefix."""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    paginator = s3.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=config.cache_bucket,
-        Prefix=config.document_source_prefix,
+async def partial_update_text_block(
+    text_block_id: str,
+    document_passages: list[tuple[str, VespaPassage]],
+    vespa_search_adapter: VespaSearchAdapter,
+    concepts: list[VespaConcept],
+):
+    """Partial update a singular text block and its concepts."""
+    logger = get_run_logger()
+
+    data_id, passage_id, passage_for_text_block = get_passage_for_text_block(
+        text_block_id, document_passages
     )
+
+    if data_id and passage_id and passage_for_text_block:
+        logger.info(f"Updating concepts for passage: {passage_id}")
+        vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+            schema="document_passage",
+            namespace="doc_search",
+            data_id=data_id,
+            fields={
+                "concepts": get_updated_passage_concepts(
+                    passage_for_text_block, concepts
+                )
+            },
+        )
+        logger.info(f"Updated concepts for passage: {passage_id}")
+    else:
+        logger.error(f"No passages found for text block: {text_block_id}")
+
+
+def convert_labelled_passages_to_document_concepts(
+    document_labelled_passages: Generator[
+        tuple[
+            # Object: Key
+            str,
+            # Object: body. It's a list since we store the labelled
+            # passages as JSONL.
+            list[LabelledPassage],
+        ],
+        None,
+        None,
+    ],
+) -> list[
+    tuple[
+        str,
+        list[
+            tuple[
+                # Text block (aka span) ID
+                str,
+                VespaConcept,
+            ]
+        ],
+    ]
+]:
+    """Convert labelled passages to document concepts for Vespa indexing."""
+    return [
+        (
+            s3_path,
+            convert_labelled_passages_to_concepts(labelled_passages=labelled_passages),
+        )
+        for s3_path, labelled_passages in document_labelled_passages
+    ]
 
 
 def s3_paths_or_s3_prefixes(
@@ -465,9 +592,12 @@ def s3_paths_or_s3_prefixes(
         "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json",
       ]
     """
+    logger = get_run_logger()
+
     match (classifier_specs, document_ids):
         case (None, None):
             # Run on all documents, regardless of classifier
+            logger.info("run on all documents, regardless of classifier")
             s3_prefix = "s3://" + os.path.join(  # type: ignore
                 config.cache_bucket,  # type: ignore
                 config.document_source_prefix,
@@ -476,6 +606,7 @@ def s3_paths_or_s3_prefixes(
 
         case (list(), None):
             # Run on all documents, for the specified classifier
+            logger.info("run on all documents, for the specified classifier")
             s3_prefixes = [
                 "s3://"
                 + os.path.join(  # type: ignore
@@ -490,6 +621,7 @@ def s3_paths_or_s3_prefixes(
 
         case (list(), list()):
             # Run on specified documents, for the specified classifier
+            logger.info("run on specified documents, for the specified classifier")
             document_paths = [
                 "s3://"
                 + os.path.join(  # type: ignore
@@ -517,15 +649,35 @@ def s3_paths_or_s3_prefixes(
 def s3_obj_generator(
     s3_prefixes: Optional[list[str]],
     s3_paths: Optional[list[str]],
-):
+) -> Generator[
+    tuple[
+        # Object: key
+        str,
+        # Object: body. It's a list since we store the labelled
+        # passages as JSONL.
+        list[dict],
+    ],
+    None,
+    None,
+]:
+    """
+    Return a generator that returns S3 objects for each path or prefix.
+
+    These will be for each output from the inference stage, of
+    labelled passages.
+    """
+    logger = get_run_logger()
+
     match (s3_prefixes, s3_paths):
         case (list(), list()):
             raise ValueError(
                 "Either s3_prefixes or s3_paths must be provided, not both."
             )
         case (list(), None):
+            logger.info("S3 object generator: prefixes")
             return s3_obj_generator_from_s3_prefixes(s3_prefixes=s3_prefixes)
         case (None, list()):
+            logger.info("S3 object generator: paths")
             return s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
         case (None, None):
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
@@ -536,10 +688,14 @@ def s3_obj_generator(
             )
 
 
+@flow
 async def index_by_s3(
-    vespa_search_adapter: VespaSearchAdapter,
+    aws_env: AwsEnv,
+    vespa_search_adapter: Optional[VespaSearchAdapter] = None,
     s3_prefixes: Optional[list[str]] = None,
     s3_paths: Optional[list[str]] = None,
+    batch_size: int = 400,
+    as_subflow=True,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -567,27 +723,155 @@ async def index_by_s3(
             cert_directory="certs/"
         )
     """
+    logger = get_run_logger()
+
+    logger.info("getting S3 object generator")
     s3_objects = s3_obj_generator(s3_prefixes, s3_paths)
 
+    logger.info("getting S3 labelled passages generator")
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
-    document_concepts = [
-        (
-            s3_path,
-            convert_labelled_passages_to_concepts(labelled_passages=labelled_passages),
+
+    logger.info("converting labelled passages to Vespa concepts")
+    document_concepts = convert_labelled_passages_to_document_concepts(
+        document_labelled_passages
+    )
+
+    logger.info(
+        f"starting indexing tasks with {len(document_concepts)} document concepts"
+    )
+    batches = iterate_batch(document_concepts, batch_size=batch_size)
+
+    for batch_num, batch in enumerate(batches, start=1):
+        logger.info(f"processing batch {batch_num}")
+
+        indexing_tasks = [
+            run_partial_updates_of_concepts_for_document_passages_as(
+                s3_key,
+                document_concepts,
+                as_subflow,
+                aws_env=aws_env,
+            )
+            for s3_key, document_concepts in batch
+        ]
+
+        logger.info(f"gathering indexing tasks for batch {batch_num}")
+        await asyncio.gather(*indexing_tasks)
+
+
+def run_partial_updates_of_concepts_for_document_passages_as(
+    s3_key: str,
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            VespaConcept,
+        ]
+    ],
+    as_subflow: bool,
+    aws_env: AwsEnv,
+) -> Awaitable:
+    """Run partial updates for document passages, either as a subflow or directly."""
+    document_import_id = Path(s3_key).stem
+
+    if as_subflow:
+        flow_name = function_to_flow_name(
+            run_partial_updates_of_concepts_for_document_passages
         )
-        for s3_path, labelled_passages in document_labelled_passages
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+
+        return run_deployment(
+            name=f"{flow_name}/{deployment_name}",
+            parameters={
+                "document_import_id": document_import_id,
+                "document_concepts": dump_document_concepts(document_concepts),
+            },
+            timeout=1200,
+            as_subflow=True,
+        )
+    else:
+        return run_partial_updates_of_concepts_for_document_passages(  # pyright: ignore[reportCallIssue]
+            document_import_id=document_import_id,
+            document_concepts=document_concepts,  # pyright: ignore[reportArgumentType]
+        )
+
+
+def dump_document_concepts(
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            VespaConcept,
+        ]
+    ],
+):
+    """Dump document concepts for serialisation."""
+    return [
+        (text_block_id, concept.model_dump_json())
+        for text_block_id, concept in document_concepts
     ]
 
-    indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages(
-            document_import_id=Path(s3_key).stem,
-            document_concepts=concepts,
-            vespa_search_adapter=vespa_search_adapter,
-        )
-        for s3_key, concepts in document_concepts
+
+def load_document_concepts(
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            # JSON string representation of VespaConcept
+            str,
+        ]
+    ],
+) -> list[tuple[str, VespaConcept]]:
+    """Load document concepts from serialised JSON back into VespaConcept objects."""
+    return [
+        (text_block_id, VespaConcept.model_validate_json(concept_json))
+        for text_block_id, concept_json in document_concepts
     ]
 
-    await asyncio.gather(*indexing_tasks)
+
+def maybe_load_document_concepts(
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            Union[
+                VespaConcept,
+                # Serialised JSON of object
+                str,
+            ],
+        ]
+    ],
+) -> list[
+    tuple[
+        # Text block (aka span) ID
+        str,
+        VespaConcept,
+    ]
+]:
+    """Maybe load document concepts from serialised JSON back into VespaConcept objects."""
+    # Nothing to do if there's none
+    if len(document_concepts) == 0:
+        return document_concepts  # pyright: ignore[reportReturnType]
+
+    # Based on the first document concept, if it's a string, then
+    # deserialise all of them
+    (text_block_id, vespa_concept) = document_concepts[0]
+    if isinstance(vespa_concept, str):
+        return load_document_concepts(document_concepts)  # pyright: ignore[reportArgumentType]
+
+    return document_concepts  # pyright: ignore[reportReturnType]
+
+
+def iterate_batch(
+    data: list[Any],
+    batch_size: int = 400,
+) -> Generator[
+    list[Any],
+    None,
+    None,
+]:
+    """Generate batches from a list with a specified size."""
+    for i in range(0, len(data), batch_size):
+        yield data[i : i + batch_size]
 
 
 @flow
@@ -595,6 +879,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
+    batch_size: int = 400,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
@@ -606,38 +891,33 @@ async def index_labelled_passages_from_s3_to_vespa(
     """
     logger = get_run_logger()
 
-    # We want the directory used for the `VespaSearchAdapter` to be
-    # automatically cleaned up.
-    #
-    # To do this, we rely on the `tempfile.TemporaryDirectory`'s behaviour,
-    # or, a `contextlib.nullcontext` no-op, if a temporary directory
-    # wasn't needed.
     if not config:
-        cm = tempfile.TemporaryDirectory()
+        logger.info("no config provided, creating one")
 
-        config = await Config.create(temp_dir=cm.name)
+        config = await Config.create()
     else:
-        cm = contextlib.nullcontext()
+        logger.info("config provided")
 
-    with cm:
-        logger.info(f"Running with config: {config}")
+    logger.info(f"running with config: {config}")
 
-        if classifier_specs is None:
-            classifier_specs = parse_spec_file(config.aws_env)
+    if classifier_specs is None:
+        logger.info("no classifier specs. passed in, loading from file")
+        classifier_specs = parse_spec_file(config.aws_env)
 
-        s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
-            classifier_specs,
-            document_ids,
-            config,
-        )
+    logger.info(f"running with classifier specs.: {classifier_specs}")
+    s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
+        classifier_specs,
+        document_ids,
+        config,
+    )
 
-        logger.info(
-            "S3 prefix and paths",
-            extra={"props": {"s3_prefix": s3_prefixes, "s3_paths": s3_paths}},
-        )
+    logger.info(f"s3_prefix: {s3_prefixes}, s3_paths: {s3_paths}")
 
-        await index_by_s3(
-            config.vespa_search_adapter,  # type: ignore
-            s3_prefixes,
-            s3_paths,
-        )
+    await index_by_s3(
+        aws_env=config.aws_env,
+        vespa_search_adapter=config.vespa_search_adapter,  # type: ignore
+        s3_prefixes=s3_prefixes,
+        s3_paths=s3_paths,
+        batch_size=batch_size,
+        as_subflow=config.as_subflow,
+    )

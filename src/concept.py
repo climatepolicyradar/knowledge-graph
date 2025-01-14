@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from src.identifiers import WikibaseID
+from src.identifiers import WikibaseID, deterministic_hash
 from src.labelled_passage import LabelledPassage
 
 if TYPE_CHECKING:
@@ -117,8 +117,17 @@ class Concept(BaseModel):
         return self.__repr__()
 
     def __hash__(self) -> int:
-        """Return a unique hash for the concept"""
-        return hash((self.wikibase_id, self.preferred_label, *self.alternative_labels))
+        """Return a hash for the concept"""
+        return deterministic_hash(
+            [
+                str(self.wikibase_id),
+                self.preferred_label,
+                self.description,
+                self.definition,
+                *sorted(self.alternative_labels),  # Sort for deterministic ordering
+                *sorted(self.negative_labels),  # Sort for deterministic ordering
+            ]
+        )
 
     @property
     def wikibase_url(self) -> str:

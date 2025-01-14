@@ -4,7 +4,11 @@ import botocore
 import pytest
 from moto import mock_aws
 
-from scripts.cloud import AwsEnv, is_logged_in, parse_aws_env
+from scripts.cloud import AwsEnv, function_to_flow_name, is_logged_in, parse_aws_env
+
+
+def test_function_to_flow_name():
+    assert function_to_flow_name(is_logged_in) == "is-logged-in"
 
 
 def test_init_awsenv():

@@ -13,7 +13,10 @@ from prefect.blocks.system import JSON
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
-from flows.index import index_labelled_passages_from_s3_to_vespa
+from flows.index import (
+    index_labelled_passages_from_s3_to_vespa,
+    run_partial_updates_of_concepts_for_document_passages,
+)
 from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
@@ -58,6 +61,7 @@ def create_deployment(
 
 
 # Inference
+
 create_deployment(
     flow=classifier_inference,
     description="Run concept classifier inference on document passages",
@@ -68,10 +72,9 @@ create_deployment(
     },
 )
 
-# Index
 create_deployment(
-    flow=index_labelled_passages_from_s3_to_vespa,
-    description="Run partial updates of labelled passages stored in s3 into Vespa",
+    flow=run_classifier_inference_on_batch_of_documents,
+    description="Run concept classifier inference on a batch of documents",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,
@@ -79,10 +82,21 @@ create_deployment(
     },
 )
 
-# Inference - Batch of Documents
+# Index
+
 create_deployment(
-    flow=run_classifier_inference_on_batch_of_documents,
-    description="Run concept classifier inference on a batch of documents",
+    flow=run_partial_updates_of_concepts_for_document_passages,
+    description="Co-ordinate updating inference results for concepts in Vespa",
+    flow_variables={
+        "cpu": MEGABYTES_PER_GIGABYTE * 4,
+        "memory": MEGABYTES_PER_GIGABYTE * 16,
+        "ephemeralStorage": {"sizeInGiB": 50},
+    },
+)
+
+create_deployment(
+    flow=index_labelled_passages_from_s3_to_vespa,
+    description="Run partial updates of labelled passages stored in S3 into Vespa",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 4,
         "memory": MEGABYTES_PER_GIGABYTE * 16,

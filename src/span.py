@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
-from src.identifiers import WikibaseID, generate_identifier
+from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -97,7 +97,14 @@ class Span(BaseModel):
 
     def __hash__(self) -> int:
         """Return a unique hash for the span."""
-        return hash(self.id)
+        return deterministic_hash(
+            [
+                self.text,
+                self.start_index,
+                self.end_index,
+                self.concept_id,
+            ]
+        )
 
     def __eq__(self, other: object) -> bool:
         """Check whether two spans are equal."""

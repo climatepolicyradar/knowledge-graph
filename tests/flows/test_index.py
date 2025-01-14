@@ -8,14 +8,16 @@ from unittest.mock import patch
 
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
-from cpr_sdk.models.search import Passage
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
+from prefect.logging import disable_run_logger
 
 from flows.index import (
     ClassifierSpec,
     Config,
     convert_labelled_passages_to_concepts,
+    convert_labelled_passages_to_document_concepts,
+    dump_document_concepts,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_passage_for_text_block,
@@ -24,13 +26,16 @@ from flows.index import (
     group_concepts_on_text_block,
     index_by_s3,
     index_labelled_passages_from_s3_to_vespa,
+    iterate_batch,
     labelled_passages_generator,
+    load_document_concepts,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
 )
+from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -79,25 +84,26 @@ def test_s3_obj_generator_from_s3_prefixes(
     labelled_passage_fixture_files,
 ) -> None:
     """Test the s3 object generator."""
-    s3_gen = s3_obj_generator_from_s3_prefixes(
-        [
-            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
-            os.path.join("s3://", mock_bucket_b, s3_prefix_labelled_passages),
-        ],
-    )
-    s3_files = list(s3_gen)
-    assert len(s3_files) == len(labelled_passage_fixture_files * 2)
+    with disable_run_logger():
+        s3_gen = s3_obj_generator_from_s3_prefixes(
+            [
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
+                os.path.join("s3://", mock_bucket_b, s3_prefix_labelled_passages),
+            ],
+        )
+        s3_files = list(s3_gen)
+        assert len(s3_files) == len(labelled_passage_fixture_files * 2)
 
-    expected_keys = [
-        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
-        for f in labelled_passage_fixture_files
-    ] + [
-        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
-        for f in labelled_passage_fixture_files
-    ]
-    s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
+        expected_keys = [
+            f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+            for f in labelled_passage_fixture_files
+        ] + [
+            f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+            for f in labelled_passage_fixture_files
+        ]
+        s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
 
-    assert sorted(s3_files_keys) == sorted(expected_keys)
+        assert sorted(s3_files_keys) == sorted(expected_keys)
 
 
 def test_s3_obj_generator_from_s3_paths(
@@ -107,21 +113,22 @@ def test_s3_obj_generator_from_s3_paths(
     labelled_passage_fixture_files,
 ) -> None:
     """Test the s3 object generator."""
-    s3_paths = {
-        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
-        for f in labelled_passage_fixture_files
-    } | {"gibberish"}
-    s3_gen = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
-    s3_files = list(s3_gen)
-    assert len(s3_files) == len(labelled_passage_fixture_files)
+    with disable_run_logger():
+        s3_paths = {
+            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
+            for f in labelled_passage_fixture_files
+        } | {"gibberish"}
+        s3_gen = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
+        s3_files = list(s3_gen)
+        assert len(s3_files) == len(labelled_passage_fixture_files)
 
-    expected_keys = [
-        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
-        for f in labelled_passage_fixture_files
-    ]
-    s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
+        expected_keys = [
+            f"{s3_prefix_labelled_passages}/{Path(f).stem}"
+            for f in labelled_passage_fixture_files
+        ]
+        s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
 
-    assert sorted(s3_files_keys) == sorted(expected_keys)
+        assert sorted(s3_files_keys) == sorted(expected_keys)
 
 
 def test_labelled_passages_generator(
@@ -187,7 +194,7 @@ def test_get_document_passages_from_vespa(
     assert all(
         [
             (
-                type(passage) is Passage
+                type(passage) is VespaPassage
                 and type(passage_id) is str
                 and bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
             )
@@ -204,93 +211,96 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     vespa_app,
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
-    document_import_id = "CCLW.executive.10014.4470"
+    with disable_run_logger():
+        document_import_id = "CCLW.executive.10014.4470"
 
-    # Confirm that the example concepts are not in the document passages
-    initial_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-    initial_concepts = [
-        concept
-        for _, passage in initial_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
-
-    assert len(initial_passages) > 0
-    assert all(concept not in initial_concepts for concept in example_vespa_concepts)
-
-    # Confirm that we can add the example concepts to the document passages
-    await run_partial_updates_of_concepts_for_document_passages(
-        document_import_id=document_import_id,
-        document_concepts=[(c.id, c) for c in example_vespa_concepts],
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    updated_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-    updated_concepts = [
-        concept
-        for _, passage in updated_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
-
-    assert len(updated_passages) > 0
-    assert len(updated_concepts) != len(initial_concepts)
-    assert all(
-        [
-            any([new_vespa_concept == c for c in updated_concepts])
-            for new_vespa_concept in example_vespa_concepts
+        # Confirm that the example concepts are not in the document passages
+        initial_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        initial_concepts = [
+            concept
+            for _, passage in initial_passages
+            if passage.concepts
+            for concept in passage.concepts
         ]
-    )
 
-    # Confirm we remove existing concepts and add new ones based on the model field
-    modified_example_vespa_concepts = [
-        (concept.id, concept.model_copy()) for concept in example_vespa_concepts * 2
-    ]
-    for idx, concept in enumerate(modified_example_vespa_concepts):
-        # Make a change to the concept but keep the same model, this triggers removal
-        # of the existing concepts with the same model
-        concept[1].end = idx
+        assert len(initial_passages) > 0
+        assert all(
+            concept not in initial_concepts for concept in example_vespa_concepts
+        )
 
-    await run_partial_updates_of_concepts_for_document_passages(
-        document_import_id=document_import_id,
-        document_concepts=modified_example_vespa_concepts,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+        # Confirm that we can add the example concepts to the document passages
+        await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_import_id=document_import_id,
+            document_concepts=[(c.id, c) for c in example_vespa_concepts],
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
 
-    second_updated_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-    second_updated_concepts = [
-        concept
-        for _, passage in second_updated_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
+        updated_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        updated_concepts = [
+            concept
+            for _, passage in updated_passages
+            if passage.concepts
+            for concept in passage.concepts
+        ]
 
-    assert len(second_updated_passages) > 0
-    assert len(second_updated_concepts) != len(updated_concepts)
-    # Assert that the number of concepts after a second update in vespa is correct.
-    # This is equal to:
-    #   (all existing concepts in vespa)
-    #   - (minus concepts that have the same model as the new updates)
-    #   + (new updates)
-    #   This is as we remove old concepts for a model and replace them with the new ones.
-    assert len(second_updated_concepts) == (
-        len(updated_concepts)
-        + len(modified_example_vespa_concepts)
-        - len(example_vespa_concepts)
-    )
-    for _, new_vespa_concept in modified_example_vespa_concepts:
-        assert new_vespa_concept in second_updated_concepts
-    for example_vespa_concept in example_vespa_concepts:
-        assert example_vespa_concept not in second_updated_concepts
+        assert len(updated_passages) > 0
+        assert len(updated_concepts) != len(initial_concepts)
+        assert all(
+            [
+                any([new_vespa_concept == c for c in updated_concepts])
+                for new_vespa_concept in example_vespa_concepts
+            ]
+        )
+
+        # Confirm we remove existing concepts and add new ones based on the model field
+        modified_example_vespa_concepts = [
+            (concept.id, concept.model_copy()) for concept in example_vespa_concepts * 2
+        ]
+        for idx, concept in enumerate(modified_example_vespa_concepts):
+            # Make a change to the concept but keep the same model, this triggers removal
+            # of the existing concepts with the same model
+            concept[1].end = idx
+
+        await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_import_id=document_import_id,
+            document_concepts=modified_example_vespa_concepts,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        second_updated_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        second_updated_concepts = [
+            concept
+            for _, passage in second_updated_passages
+            if passage.concepts
+            for concept in passage.concepts
+        ]
+
+        assert len(second_updated_passages) > 0
+        assert len(second_updated_concepts) != len(updated_concepts)
+        # Assert that the number of concepts after a second update in vespa is correct.
+        # This is equal to:
+        #   (all existing concepts in vespa)
+        #   - (minus concepts that have the same model as the new updates)
+        #   + (new updates)
+        #   This is as we remove old concepts for a model and replace them with the new ones.
+        assert len(second_updated_concepts) == (
+            len(updated_concepts)
+            + len(modified_example_vespa_concepts)
+            - len(example_vespa_concepts)
+        )
+        for _, new_vespa_concept in modified_example_vespa_concepts:
+            assert new_vespa_concept in second_updated_concepts
+        for example_vespa_concept in example_vespa_concepts:
+            assert example_vespa_concept not in second_updated_concepts
 
 
 @pytest.mark.asyncio
@@ -313,9 +323,11 @@ async def test_index_by_s3_with_s3_prefixes(
     )
 
     await index_by_s3(
+        aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
+        as_subflow=False,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -356,9 +368,11 @@ async def test_index_by_s3_with_s3_paths(
     ]
 
     await index_by_s3(
+        aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
         s3_paths=s3_paths,
+        as_subflow=False,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -420,44 +434,47 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ) -> None:
-    initial_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    initial_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
-    )
+    with disable_run_logger():
+        initial_passages_response = local_vespa_search_adapter.client.query(
+            yql="select * from document_passage where true"
+        )
+        initial_concepts_count = sum(
+            len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
+        )
 
-    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
-    document_ids = [
-        Path(labelled_passage_fixture_file).stem
-        for labelled_passage_fixture_file in labelled_passage_fixture_files
-    ]
-    config = Config(
-        cache_bucket=mock_bucket,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+        classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+        document_ids = [
+            Path(labelled_passage_fixture_file).stem
+            for labelled_passage_fixture_file in labelled_passage_fixture_files
+        ]
+        config = Config(
+            cache_bucket=mock_bucket,
+            vespa_search_adapter=local_vespa_search_adapter,
+            as_subflow=False,
+        )
 
-    await index_labelled_passages_from_s3_to_vespa(
-        classifier_specs=[classifier_spec],
-        document_ids=document_ids,
-        config=config,
-    )
+        await index_labelled_passages_from_s3_to_vespa(
+            classifier_specs=[classifier_spec],
+            document_ids=document_ids,
+            config=config,
+        )
 
-    final_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    final_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
-    )
+        final_passages_response = local_vespa_search_adapter.client.query(
+            yql="select * from document_passage where true"
+        )
+        final_concepts_count = sum(
+            len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
+        )
 
-    assert initial_concepts_count < final_concepts_count
-    assert initial_concepts_count + len(labelled_passage_fixture_files) == (
-        final_concepts_count
-    )
+        assert initial_concepts_count < final_concepts_count
+        assert initial_concepts_count + len(labelled_passage_fixture_files) == (
+            final_concepts_count
+        )
 
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.skip(reason="cannot test due to run_deployment usage")
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_default_config(
     mock_bucket,
     mock_bucket_labelled_passages,
@@ -469,7 +486,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
     with patch("flows.index.get_prefect_job_variable", return_value=mock_bucket), patch(
         "flows.index.get_vespa_search_adapter_from_aws_secrets",
         return_value=local_vespa_search_adapter,
-    ):
+    ), disable_run_logger():
         initial_passages_response = local_vespa_search_adapter.client.query(
             yql="select * from document_passage where true"
         )
@@ -574,31 +591,33 @@ def test_convert_labelled_passges_to_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
-    concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
-    assert all(
-        [
-            (isinstance(text_block_id, str) and isinstance(concept, VespaConcept))
-            for text_block_id, concept in concepts
-        ]
-    )
+    with disable_run_logger():
+        concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+        assert all(
+            [
+                (isinstance(text_block_id, str) and isinstance(concept, VespaConcept))
+                for text_block_id, concept in concepts
+            ]
+        )
 
 
 def test_convert_labelled_passges_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test that we can correctly raise a ValueError should a Span have no concept id."""
-    example_labelled_passages[0].spans.append(
-        Span(
-            text="Test text.",
-            start_index=0,
-            end_index=8,
-            concept_id=None,
-            labellers=[],
+    with disable_run_logger():
+        example_labelled_passages[0].spans.append(
+            Span(
+                text="Test text.",
+                start_index=0,
+                end_index=8,
+                concept_id=None,
+                labellers=[],
+            )
         )
-    )
-    assert example_labelled_passages[0].spans[-1].concept_id is None
-    with pytest.raises(ValueError, match="Concept ID is None."):
-        convert_labelled_passages_to_concepts(example_labelled_passages)
+        assert example_labelled_passages[0].spans[-1].concept_id is None
+        with pytest.raises(ValueError, match="concept ID is missing"):
+            convert_labelled_passages_to_concepts(example_labelled_passages)
 
 
 def test_get_parent_concepts_from_concept() -> None:
@@ -649,21 +668,108 @@ def test_group_concepts_on_text_block(
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
 
 
+def test_convert_labelled_passages_to_document_concepts(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test conversion of labelled passages to document concepts."""
+    with disable_run_logger():
+
+        def mock_generator():
+            yield "s3://bucket/path1.json", example_labelled_passages[:2]
+            yield "s3://bucket/path2.json", example_labelled_passages[2:]
+
+        result = convert_labelled_passages_to_document_concepts(mock_generator())
+
+        assert len(result) == 2
+        assert isinstance(result[0][0], str)
+        assert isinstance(result[0][1], list)
+        assert all(isinstance(concept, tuple) for concept in result[0][1])
+        assert all(isinstance(concept[1], VespaConcept) for concept in result[0][1])
+
+
+def test_dump_document_concepts(example_vespa_concepts: list[VespaConcept]):
+    """Test dumping document concepts to JSON strings."""
+    # Create test input with text block IDs and VespaConcepts
+    document_concepts = [
+        ("block_1", example_vespa_concepts[0]),
+        ("block_2", example_vespa_concepts[1]),
+    ]
+
+    # Dump to JSON strings
+    dumped = dump_document_concepts(document_concepts)
+
+    # Verify structure and types
+    assert len(dumped) == len(document_concepts)
+    for (orig_id, orig_concept), (dumped_id, dumped_json) in zip(
+        document_concepts, dumped
+    ):
+        assert dumped_id == orig_id
+        assert isinstance(dumped_json, str)
+        # Verify the JSON string can be loaded back into an equivalent object
+        loaded_concept = VespaConcept.model_validate_json(dumped_json)
+        assert loaded_concept == orig_concept
+
+
+def test_load_document_concepts(example_vespa_concepts: list[VespaConcept]):
+    """Test loading document concepts from JSON strings."""
+    # Create test input with text block IDs and JSON strings
+    document_concepts = [
+        ("block_1", example_vespa_concepts[0].model_dump_json()),
+        ("block_2", example_vespa_concepts[1].model_dump_json()),
+    ]
+
+    # Load from JSON strings
+    loaded = load_document_concepts(document_concepts)
+
+    # Verify structure and types
+    assert len(loaded) == len(document_concepts)
+    for (orig_id, orig_json), (loaded_id, loaded_concept) in zip(
+        document_concepts, loaded
+    ):
+        assert loaded_id == orig_id
+        assert isinstance(loaded_concept, VespaConcept)
+        # Verify the loaded object matches the original
+        original_concept = VespaConcept.model_validate_json(orig_json)
+        assert loaded_concept == original_concept
+
+
+def test_dump_load_document_concepts_roundtrip(
+    example_vespa_concepts: list[VespaConcept],
+):
+    """Test that dumping and loading document concepts preserves data."""
+    # Create test input
+    original = [
+        ("block_1", example_vespa_concepts[0]),
+        ("block_2", example_vespa_concepts[1]),
+    ]
+
+    # Round trip through dump and load
+    dumped = dump_document_concepts(original)
+    loaded = load_document_concepts(dumped)
+
+    # Verify nothing was lost
+    assert len(loaded) == len(original)
+    for (orig_id, orig_concept), (loaded_id, loaded_concept) in zip(original, loaded):
+        assert loaded_id == orig_id
+        assert loaded_concept == orig_concept
+
+
 def test_s3_paths_or_s3_prefixes_no_classifier(
     mock_bucket,
     mock_bucket_labelled_passages,
 ):
     """Test s3_paths_or_s3_prefixes returns base prefix when no classifier spec provided."""
-    config = Config(cache_bucket=mock_bucket)
+    with disable_run_logger():
+        config = Config(cache_bucket=mock_bucket)
 
-    paths, prefixes = s3_paths_or_s3_prefixes(
-        classifier_specs=None,
-        document_ids=None,
-        config=config,
-    )
+        paths, prefixes = s3_paths_or_s3_prefixes(
+            classifier_specs=None,
+            document_ids=None,
+            config=config,
+        )
 
-    assert prefixes == [f"s3://{mock_bucket}/labelled_passages"]
-    assert paths is None
+        assert prefixes == [f"s3://{mock_bucket}/labelled_passages"]
+        assert paths is None
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
@@ -682,7 +788,7 @@ def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
         "namespaced by classifiers \\(e\\.g\\. "
         "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
         "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
-    ):
+    ), disable_run_logger():
         s3_paths_or_s3_prefixes(
             classifier_specs=None,
             document_ids=labelled_passage_fixture_ids,
@@ -694,21 +800,22 @@ def test_s3_paths_or_s3_prefixes_with_classifier_no_docs(
     mock_bucket,
 ):
     """Test s3_paths_or_s3_prefixes returns classifier-specific prefix when no document IDs provided."""
-    config = Config(cache_bucket=mock_bucket)
-    classifier_spec_q788 = ClassifierSpec(name="Q788", alias="latest")
-    classifier_spec_q699 = ClassifierSpec(name="Q699", alias="latest")
+    with disable_run_logger():
+        config = Config(cache_bucket=mock_bucket)
+        classifier_spec_q788 = ClassifierSpec(name="Q788", alias="latest")
+        classifier_spec_q699 = ClassifierSpec(name="Q699", alias="latest")
 
-    paths, prefixes = s3_paths_or_s3_prefixes(
-        classifier_specs=[classifier_spec_q788, classifier_spec_q699],
-        document_ids=None,
-        config=config,
-    )
+        paths, prefixes = s3_paths_or_s3_prefixes(
+            classifier_specs=[classifier_spec_q788, classifier_spec_q699],
+            document_ids=None,
+            config=config,
+        )
 
-    assert prefixes == [
-        f"s3://{mock_bucket}/labelled_passages/Q788/latest",
-        f"s3://{mock_bucket}/labelled_passages/Q699/latest",
-    ]
-    assert paths is None
+        assert prefixes == [
+            f"s3://{mock_bucket}/labelled_passages/Q788/latest",
+            f"s3://{mock_bucket}/labelled_passages/Q699/latest",
+        ]
+        assert paths is None
 
 
 def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
@@ -719,22 +826,23 @@ def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
     s3_prefix_mock_bucket_labelled_passages,
 ):
     """Test s3_paths_or_s3_prefixes returns specific paths when both classifier and document IDs provided."""
-    config = Config(cache_bucket=mock_bucket)
-    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+    with disable_run_logger():
+        config = Config(cache_bucket=mock_bucket)
+        classifier_spec = ClassifierSpec(name="Q788", alias="latest")
 
-    expected_paths = [
-        f"{s3_prefix_mock_bucket_labelled_passages}/{labelled_passage_fixture_file}"
-        for labelled_passage_fixture_file in labelled_passage_fixture_files
-    ]
+        expected_paths = [
+            f"{s3_prefix_mock_bucket_labelled_passages}/{labelled_passage_fixture_file}"
+            for labelled_passage_fixture_file in labelled_passage_fixture_files
+        ]
 
-    paths, prefixes = s3_paths_or_s3_prefixes(
-        classifier_specs=[classifier_spec],
-        document_ids=labelled_passage_fixture_ids,
-        config=config,
-    )
+        paths, prefixes = s3_paths_or_s3_prefixes(
+            classifier_specs=[classifier_spec],
+            document_ids=labelled_passage_fixture_ids,
+            config=config,
+        )
 
-    assert prefixes is None
-    assert sorted(paths) == sorted(expected_paths)
+        assert prefixes is None
+        assert sorted(paths) == sorted(expected_paths)
 
 
 @pytest.mark.parametrize(
@@ -770,7 +878,7 @@ def test_s3_obj_generator_errors(
     error_match: str,
 ) -> None:
     """Test s3_obj_generator error cases."""
-    with pytest.raises(expected_error, match=error_match):
+    with pytest.raises(expected_error, match=error_match), disable_run_logger():
         s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
 
 
@@ -787,23 +895,39 @@ def test_s3_obj_generator_valid_cases(
     use_prefixes: bool,
 ) -> None:
     """Test s3_obj_generator with valid inputs using either prefixes or paths."""
-    if use_prefixes:
-        s3_prefixes = [os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)]
-        s3_paths = None
-    else:
-        s3_prefixes = None
-        s3_paths = [
-            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
+    with disable_run_logger():
+        if use_prefixes:
+            s3_prefixes = [
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+            ]
+            s3_paths = None
+        else:
+            s3_prefixes = None
+            s3_paths = [
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
+                for f in labelled_passage_fixture_files
+            ]
+
+        gen = s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
+        s3_files = list(gen)
+
+        assert len(s3_files) == len(labelled_passage_fixture_files)
+        expected_keys = [
+            f"{s3_prefix_labelled_passages}/{Path(f).stem}"
             for f in labelled_passage_fixture_files
         ]
+        s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
+        assert sorted(s3_files_keys) == sorted(expected_keys)
 
-    gen = s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
-    s3_files = list(gen)
 
-    assert len(s3_files) == len(labelled_passage_fixture_files)
-    expected_keys = [
-        f"{s3_prefix_labelled_passages}/{Path(f).stem}"
-        for f in labelled_passage_fixture_files
-    ]
-    s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
-    assert sorted(s3_files_keys) == sorted(expected_keys)
+@pytest.mark.parametrize(
+    "data, expected_lengths",
+    [
+        (list(range(50)), [50]),
+        (list(range(850)), [400, 400, 50]),
+        ([], [0]),
+    ],
+)
+def test_iterate_batch(data, expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+        assert len(batch) == expected

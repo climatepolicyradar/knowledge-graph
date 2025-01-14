@@ -20,7 +20,13 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from scripts.cloud import AwsEnv, ClassifierSpec, get_prefect_job_variable
+from scripts.cloud import (
+    AwsEnv,
+    ClassifierSpec,
+    function_to_flow_name,
+    generate_deployment_name,
+    get_prefect_job_variable,
+)
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
@@ -34,7 +40,6 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.FIGURE,
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
-AWS_ENV = os.environ["AWS_ENV"]
 
 DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
 
@@ -396,7 +401,10 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
 
 @flow
 async def run_classifier_inference_on_batch_of_documents(
-    batch: list[str], config_json: dict, classifier_name: str, classifier_alias: str
+    batch: list[str],
+    config_json: dict,
+    classifier_name: str,
+    classifier_alias: str,
 ) -> None:
     """
     Run classifier inference on a batch of documents.
@@ -452,7 +460,7 @@ async def classifier_inference(
     document_ids: Optional[list[str]] = None,
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
-    batch_size: int = 400,
+    batch_size: int = 1000,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
@@ -490,13 +498,17 @@ async def classifier_inference(
         f"{len(classifier_specs)} classifiers"
     )
 
+    flow_name = function_to_flow_name(run_classifier_inference_on_batch_of_documents)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=config.aws_env
+    )
+
     for classifier_spec in classifier_specs:
         batches = iterate_batch(validated_document_ids, batch_size)
 
         tasks = [
             run_deployment(
-                "run-classifier-inference-on-batch-of-documents/"
-                f"knowledge-graph-run-classifier-inference-on-batch-of-documents-{AWS_ENV}",
+                name=f"{flow_name}/{deployment_name}",
                 parameters={
                     "batch": batch,
                     "config_json": config.to_json(),

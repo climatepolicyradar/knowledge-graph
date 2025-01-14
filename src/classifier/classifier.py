@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from src.concept import Concept
-from src.identifiers import generate_identifier
+from src.identifiers import deterministic_hash, generate_identifier
 from src.span import Span
 from src.version import Version
 
@@ -57,21 +57,29 @@ class Classifier(ABC):
 
     def __hash__(self):
         """
-        Return a hash of the classifier.
+        Return a deterministic hash of the classifier using SHA-256.
 
-        NB. This should be re-implemented for classifiers whose behaviour could be
-        affected by different training runs.
+        The hash is based on:
+        1. The classifier's class name
+        2. The concept's core data in a deterministically ordered format
+        3. The version if it exists
         """
-        return hash(str(self) + self.concept.model_dump_json())
+        return deterministic_hash(
+            [
+                self.__class__.__name__,
+                self.concept.__hash__(),
+                self.version if self.version else None,
+            ]
+        )
 
     def __eq__(self, other):
         """Return whether two classifiers are equal."""
-        return hash(self) == hash(other)
+        return self.__hash__() == other.__hash__()
 
     @property
     def id(self):
         """Return a neat human-readable identifier for the classifier."""
-        return generate_identifier(hash(self))
+        return generate_identifier(self.__hash__())
 
     def save(self, path: Union[str, Path]):
         """
