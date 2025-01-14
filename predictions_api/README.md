@@ -1,23 +1,15 @@
 # Predictions API
 
-A FastAPI application that uses Jinja2 templates to render predictions from candidate concept classifiers.
+This service provides an API for making predictions using our models.
 
-The data for each concept is stored in a static JSON file in `data/processed/predictions/{concept_id}.json`.
+## Local Development
 
-The API has three main endpoints:
+1. Make sure you have Docker and Docker Compose installed.
 
-- `GET /` renders a list of all available concepts in HTML using a Jinja2 template.
-- `GET /predictions/{concept_id}` renders the predictions for a concept in HTML using a Jinja2 template.
-- `GET /predictions/{concept_id}/json` returns the predictions in raw JSON format.
-
-## Running the API
-
-From the root of the repository, run:
+2. Build and run the service:
 
 ```bash
-poetry install --with predictions_api
+just run-predictions-api
 ```
 
-```bash
-poetry run uvicorn predictions_api.main:app --reload
-```
+The API service will start in a container and should be available at `http://localhost:8000`.
