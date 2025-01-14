@@ -331,7 +331,7 @@ def convert_labelled_passages_to_concepts(
     concepts = []
 
     for labelled_passage in labelled_passages:
-        logger.info(
+        logger.debug(
             f"converting labelled passage (ID: `{labelled_passage.id}`) to Vespa concept"
         )
         # The concept used to label the passage holds some information on the parent
@@ -345,7 +345,7 @@ def convert_labelled_passages_to_concepts(
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
 
-        logger.info(f"converting {len(labelled_passage.spans)} spans to concepts")
+        logger.debug(f"converting {len(labelled_passage.spans)} spans to concepts")
 
         for span_idx, span in enumerate(labelled_passage.spans):
             if span.concept_id is None:
@@ -746,29 +746,15 @@ async def index_by_s3(
         document_labelled_passages, batch_size=batch_size
     )
 
-    convert_labelled_passages_to_document_concepts_task = [
-        convert_labelled_passages_to_document_concepts(document_labelled_passages_batch)
-        for (
-            document_labelled_passages_batch_num,
-            document_labelled_passages_batch,
-        ) in enumerate(document_labelled_passages_batches, start=1)
-    ]
+    for (
+        document_labelled_passages_batch_num,
+        document_labelled_passages_batch,
+    ) in enumerate(document_labelled_passages_batches, start=1):
+        document_concepts_batch = await convert_labelled_passages_to_document_concepts(
+            document_labelled_passages_batch
+        )
 
-    # We gather all the documents concepts, and ended up with a nested array.
-    #
-    # Since we have that, it's effectively still in the batches that were created
-    # for the conversion.
-    document_concepts_batches = await asyncio.gather(
-        *convert_labelled_passages_to_document_concepts_task
-    )
-
-    logger.info("starting indexing tasks with document concepts")
-
-    # Use the "original" batches created for conversion above.
-    for document_concepts_batch_num, document_concepts_batch in enumerate(
-        document_concepts_batches, start=1
-    ):
-        logger.info(f"processing batch {document_concepts_batch_num}")
+        logger.info(f"processing batch {document_labelled_passages_batch_num}")
 
         indexing_tasks = [
             run_partial_updates_of_concepts_for_document_passages_as(
@@ -780,7 +766,9 @@ async def index_by_s3(
             for s3_key, document_concepts in document_concepts_batch
         ]
 
-        logger.info(f"gathering indexing tasks for batch {document_concepts_batch_num}")
+        logger.info(
+            f"gathering indexing tasks for batch {document_labelled_passages_batch_num}"
+        )
         await asyncio.gather(*indexing_tasks)
 
 
