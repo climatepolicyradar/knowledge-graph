@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
-from cpr_sdk.models.search import Passage
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
@@ -17,6 +16,7 @@ from flows.index import (
     ClassifierSpec,
     Config,
     convert_labelled_passages_to_concepts,
+    convert_labelled_passages_to_document_concepts,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_passage_for_text_block,
@@ -25,6 +25,7 @@ from flows.index import (
     group_concepts_on_text_block,
     index_by_s3,
     index_labelled_passages_from_s3_to_vespa,
+    iterate_batch,
     labelled_passages_generator,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
@@ -190,7 +191,7 @@ def test_get_document_passages_from_vespa(
     assert all(
         [
             (
-                type(passage) is Passage
+                type(passage) is VespaPassage
                 and type(passage_id) is str
                 and bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
             )
@@ -581,31 +582,33 @@ def test_convert_labelled_passges_to_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
-    concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
-    assert all(
-        [
-            (isinstance(text_block_id, str) and isinstance(concept, VespaConcept))
-            for text_block_id, concept in concepts
-        ]
-    )
+    with disable_run_logger():
+        concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+        assert all(
+            [
+                (isinstance(text_block_id, str) and isinstance(concept, VespaConcept))
+                for text_block_id, concept in concepts
+            ]
+        )
 
 
 def test_convert_labelled_passges_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test that we can correctly raise a ValueError should a Span have no concept id."""
-    example_labelled_passages[0].spans.append(
-        Span(
-            text="Test text.",
-            start_index=0,
-            end_index=8,
-            concept_id=None,
-            labellers=[],
+    with disable_run_logger():
+        example_labelled_passages[0].spans.append(
+            Span(
+                text="Test text.",
+                start_index=0,
+                end_index=8,
+                concept_id=None,
+                labellers=[],
+            )
         )
-    )
-    assert example_labelled_passages[0].spans[-1].concept_id is None
-    with pytest.raises(ValueError, match="Concept ID is None."):
-        convert_labelled_passages_to_concepts(example_labelled_passages)
+        assert example_labelled_passages[0].spans[-1].concept_id is None
+        with pytest.raises(ValueError, match="concept ID is missing"):
+            convert_labelled_passages_to_concepts(example_labelled_passages)
 
 
 def test_get_parent_concepts_from_concept() -> None:
@@ -654,6 +657,25 @@ def test_group_concepts_on_text_block(
     assert set(grouped_concepts.keys()) == {"text_block_1", "text_block_2"}
     assert len(grouped_concepts["text_block_1"]) == text_block_one_concept_count
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
+
+
+def test_convert_labelled_passages_to_document_concepts(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test conversion of labelled passages to document concepts."""
+    with disable_run_logger():
+
+        def mock_generator():
+            yield "s3://bucket/path1.json", example_labelled_passages[:2]
+            yield "s3://bucket/path2.json", example_labelled_passages[2:]
+
+        result = convert_labelled_passages_to_document_concepts(mock_generator())
+
+        assert len(result) == 2
+        assert isinstance(result[0][0], str)
+        assert isinstance(result[0][1], list)
+        assert all(isinstance(concept, tuple) for concept in result[0][1])
+        assert all(isinstance(concept[1], VespaConcept) for concept in result[0][1])
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier(
@@ -820,3 +842,16 @@ def test_s3_obj_generator_valid_cases(
         ]
         s3_files_keys = [file[0].replace(".json", "") for file in s3_files]
         assert sorted(s3_files_keys) == sorted(expected_keys)
+
+
+@pytest.mark.parametrize(
+    "data, expected_lengths",
+    [
+        (list(range(50)), [50]),
+        (list(range(850)), [400, 400, 50]),
+        ([], [0]),
+    ],
+)
+def test_iterate_batch(data, expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+        assert len(batch) == expected
