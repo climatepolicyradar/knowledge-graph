@@ -77,8 +77,8 @@ label id string:
     poetry run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
 
 # find instances of the concept in a set of passages for a specific wikibase ID
-predict id:
-    poetry run python scripts/predict.py --wikibase-id {{id}}
+predict id +OPTS="":
+    poetry run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:
@@ -91,8 +91,6 @@ push-to-argilla id usernames workspace:
 # run the full pipeline for a specific wikibase ID
 create-labelling-task id usernames workspace:
     just get-concept --wikibase-id {{id}}
-    just train --wikibase-id {{id}}
-    just predict --wikibase-id {{id}}
     just sample --wikibase-id {{id}}
     just push-to-argilla --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
 
