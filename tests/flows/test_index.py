@@ -603,9 +603,11 @@ def test_convert_labelled_passges_to_concepts(
 
 def test_convert_labelled_passges_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test that we can correctly raise a ValueError should a Span have no concept id."""
+    """Test that we correctly log errors when a Span has no concept ID or timestamps."""
     with disable_run_logger():
+        # Add a span without concept_id
         example_labelled_passages[0].spans.append(
             Span(
                 text="Test text.",
@@ -615,9 +617,34 @@ def test_convert_labelled_passges_to_concepts_raises_error(
                 labellers=[],
             )
         )
-        assert example_labelled_passages[0].spans[-1].concept_id is None
-        with pytest.raises(ValueError, match="concept ID is missing"):
-            convert_labelled_passages_to_concepts(example_labelled_passages)
+        # Add a span without timestamps
+        example_labelled_passages[0].spans.append(
+            Span(
+                text="Test text.",
+                start_index=0,
+                end_index=8,
+                concept_id="Q123",
+                labellers=[],
+                timestamps=[],  # Empty timestamps
+            )
+        )
+
+        concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+
+        # Check that appropriate error messages were logged
+        error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert any("span concept ID is missing" in msg for msg in error_messages)
+        assert any("span timestamps are missing" in msg for msg in error_messages)
+
+        # Verify that the problematic spans were skipped but valid ones were processed
+        assert len(concepts) == len(
+            [
+                span
+                for passage in example_labelled_passages
+                for span in passage.spans
+                if span.concept_id is not None and span.timestamps
+            ]
+        )
 
 
 def test_get_parent_concepts_from_concept() -> None:

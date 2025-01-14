@@ -347,9 +347,20 @@ def convert_labelled_passages_to_concepts(
 
         logger.info(f"converting {len(labelled_passage.spans)} spans to concepts")
 
-        for span in labelled_passage.spans:
+        for span_idx, span in enumerate(labelled_passage.spans):
             if span.concept_id is None:
-                raise ValueError("concept ID is missing")
+                # Include the Span index since Span's don't have IDs
+                logger.error(
+                    f"span concept ID is missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
+                )
+                continue
+
+            if not span.timestamps:
+                logger.error(
+                    f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
+                )
+                continue
+
             concepts.append(
                 (
                     text_block_id,
@@ -361,8 +372,8 @@ def convert_labelled_passages_to_concepts(
                         model=get_model_from_span(span),
                         end=span.end_index,
                         start=span.start_index,
-                        # these timestamps _should_ all be the same, but just in case,
-                        # take the latest
+                        # these timestamps _should_ all be the same,
+                        # but just in case, take the latest
                         timestamp=max(span.timestamps),
                     ),
                 )
