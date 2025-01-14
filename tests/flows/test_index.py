@@ -695,7 +695,8 @@ def test_group_concepts_on_text_block(
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
 
 
-def test_convert_labelled_passages_to_document_concepts(
+@pytest.mark.asyncio
+async def test_convert_labelled_passages_to_document_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test conversion of labelled passages to document concepts."""
@@ -705,7 +706,7 @@ def test_convert_labelled_passages_to_document_concepts(
             yield "s3://bucket/path1.json", example_labelled_passages[:2]
             yield "s3://bucket/path2.json", example_labelled_passages[2:]
 
-        result = convert_labelled_passages_to_document_concepts(mock_generator())
+        result = await convert_labelled_passages_to_document_concepts(mock_generator())
 
         assert len(result) == 2
         assert isinstance(result[0][0], str)
@@ -950,11 +951,16 @@ def test_s3_obj_generator_valid_cases(
 @pytest.mark.parametrize(
     "data, expected_lengths",
     [
+        # Lists
         (list(range(50)), [50]),
         (list(range(850)), [400, 400, 50]),
         ([], [0]),
+        # Generators
+        ((x for x in range(50)), [50]),
+        ((x for x in range(850)), [400, 400, 50]),
+        ((x for x in []), [0]),
     ],
 )
 def test_iterate_batch(data, expected_lengths):
-    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data, 400)), expected_lengths):
         assert len(batch) == expected

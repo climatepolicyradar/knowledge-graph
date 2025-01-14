@@ -31,6 +31,8 @@ from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
+DEFAULT_BATCH_SIZE = 25
+
 
 @dataclass()
 class Config:
@@ -331,9 +333,6 @@ def convert_labelled_passages_to_concepts(
     concepts = []
 
     for labelled_passage in labelled_passages:
-        logger.info(
-            f"converting labelled passage (ID: `{labelled_passage.id}`) to Vespa concept"
-        )
         # The concept used to label the passage holds some information on the parent
         # concepts and thus this is being used as a temporary solution for providing
         # the relationship between concepts. This has the downside that it ties a
@@ -344,8 +343,6 @@ def convert_labelled_passages_to_concepts(
             concept=concept
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
-
-        logger.info(f"converting {len(labelled_passage.spans)} spans to concepts")
 
         for span_idx, span in enumerate(labelled_passage.spans):
             if span.concept_id is None:
@@ -537,7 +534,6 @@ async def partial_update_text_block(
     )
 
     if data_id and passage_id and passage_for_text_block:
-        logger.info(f"Updating concepts for passage: {passage_id}")
         vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
             schema="document_passage",
             namespace="doc_search",
@@ -548,13 +544,12 @@ async def partial_update_text_block(
                 )
             },
         )
-        logger.info(f"Updated concepts for passage: {passage_id}")
     else:
         logger.error(f"No passages found for text block: {text_block_id}")
 
 
-def convert_labelled_passages_to_document_concepts(
-    document_labelled_passages: Generator[
+async def convert_labelled_passages_to_document_concepts(
+    document_labelled_passages: list[
         tuple[
             # Object: Key
             str,
@@ -562,8 +557,6 @@ def convert_labelled_passages_to_document_concepts(
             # passages as JSONL.
             list[LabelledPassage],
         ],
-        None,
-        None,
     ],
 ) -> list[
     tuple[
@@ -705,7 +698,7 @@ async def index_by_s3(
     vespa_search_adapter: Optional[VespaSearchAdapter] = None,
     s3_prefixes: Optional[list[str]] = None,
     s3_paths: Optional[list[str]] = None,
-    batch_size: int = 400,
+    batch_size: int = DEFAULT_BATCH_SIZE,
     as_subflow=True,
 ) -> None:
     """
@@ -743,17 +736,20 @@ async def index_by_s3(
     document_labelled_passages = labelled_passages_generator(generator_func=s3_objects)
 
     logger.info("converting labelled passages to Vespa concepts")
-    document_concepts = convert_labelled_passages_to_document_concepts(
-        document_labelled_passages
+
+    document_labelled_passages_batches = iterate_batch(
+        document_labelled_passages, batch_size=batch_size
     )
 
-    logger.info(
-        f"starting indexing tasks with {len(document_concepts)} document concepts"
-    )
-    batches = iterate_batch(document_concepts, batch_size=batch_size)
+    for (
+        document_labelled_passages_batch_num,
+        document_labelled_passages_batch,
+    ) in enumerate(document_labelled_passages_batches, start=1):
+        document_concepts_batch = await convert_labelled_passages_to_document_concepts(
+            document_labelled_passages_batch
+        )
 
-    for batch_num, batch in enumerate(batches, start=1):
-        logger.info(f"processing batch {batch_num}")
+        logger.info(f"processing batch {document_labelled_passages_batch_num}")
 
         indexing_tasks = [
             run_partial_updates_of_concepts_for_document_passages_as(
@@ -762,10 +758,12 @@ async def index_by_s3(
                 as_subflow,
                 aws_env=aws_env,
             )
-            for s3_key, document_concepts in batch
+            for s3_key, document_concepts in document_concepts_batch
         ]
 
-        logger.info(f"gathering indexing tasks for batch {batch_num}")
+        logger.info(
+            f"gathering indexing tasks for batch {document_labelled_passages_batch_num}"
+        )
         await asyncio.gather(*indexing_tasks)
 
 
@@ -873,16 +871,28 @@ def maybe_load_document_concepts(
 
 
 def iterate_batch(
-    data: list[Any],
-    batch_size: int = 400,
+    data: Union[list[Any], Generator[Any, None, None]],
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> Generator[
     list[Any],
     None,
     None,
 ]:
-    """Generate batches from a list with a specified size."""
-    for i in range(0, len(data), batch_size):
-        yield data[i : i + batch_size]
+    """Generate batches from a list or generator with a specified size."""
+    if isinstance(data, list):
+        # For lists, we can use list slicing
+        for i in range(0, len(data), batch_size):
+            yield data[i : i + batch_size]
+    else:
+        # For generators, accumulate items until we reach batch size
+        batch = []
+        for item in data:
+            batch.append(item)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:  # Don't forget to yield the last partial batch
+            yield batch
 
 
 @flow
@@ -890,7 +900,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
-    batch_size: int = 400,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
