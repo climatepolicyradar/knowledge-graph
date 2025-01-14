@@ -80,12 +80,14 @@ class LabelledPassage(BaseModel):
 
         return cls(text=text, spans=spans, metadata=metadata)
 
-    def get_highlighted_text(self, highlight_format="cyan") -> str:
+    def get_highlighted_text(
+        self, start_pattern: str = "[cyan]", end_pattern: str = "[/cyan]"
+    ) -> str:
         """
         Returns the text with highlighted spans, usable in a rich console output
 
-        :param str highlight_format: Rich formatting style to use for highlights,
-        default "cyan"
+        :param str start_pattern: The pattern to add to the text at the start of a span
+        :param str end_pattern: The pattern to add to the text at the end of a span
         :return str: The text with highlighted spans
         """
         # Decode HTML entities
@@ -102,7 +104,7 @@ class LabelledPassage(BaseModel):
             # Add text before the span
             output += decoded_text[last_end : span.start_index]
             # Add highlighted span
-            output += f"[{highlight_format}]{decoded_text[span.start_index : span.end_index]}[/{highlight_format}]"
+            output += f"{start_pattern}{decoded_text[span.start_index : span.end_index]}{end_pattern}"
             last_end = span.end_index
 
         # Add any remaining text after the last span
