@@ -3,7 +3,7 @@
 import csv
 from pathlib import Path
 
-from scripts.config import external_keywords_dir
+from scripts.config import csv_keywords_dir
 from src.concept import Concept
 
 
@@ -42,7 +42,7 @@ def load_concept_keywords_from_csv(concept: Concept) -> list[str]:
     :raises FileNotFoundError: if the CSV file for the concept does not exist
     """
 
-    csv_path = external_keywords_dir / f"{concept.wikibase_id}.csv"
+    csv_path = csv_keywords_dir / f"{concept.wikibase_id}.csv"
 
     if not csv_path.exists():
         raise FileNotFoundError(f"File not found: {csv_path}")

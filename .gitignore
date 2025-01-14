@@ -165,7 +165,7 @@ data/**/*
 !data/config/*
 !**/.gitkeep
 !**/README.md
-!data/processed/external_keywords/*
+!data/processed/csv_keywords/*
 google-credentials.json
 wandb/*
 artifacts/*
