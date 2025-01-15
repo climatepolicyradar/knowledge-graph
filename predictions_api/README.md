@@ -41,10 +41,10 @@ pip install -r requirements.txt
 pulumi up --stack labs
 
 # Export the values you'll need for the next steps
-export ECR_REPOSITORY_URL=$(pulumi stack output ecr_repository_url --stack labs)
-export AWS_REGION=$(pulumi stack output aws_region --stack labs)
-export ECS_CLUSTER_NAME=$(pulumi stack output ecs_cluster_name --stack labs)
-export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs)
+export ECR_REPOSITORY_URL=$(pulumi stack output ecr_repository_url --stack labs);
+export AWS_REGION=$(pulumi stack output aws_region --stack labs);
+export ECS_CLUSTER_NAME=$(pulumi stack output ecs_cluster_name --stack labs);
+export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs);
 ```
 
 3. Build and push the Docker image to ECR using the values from step 1:
@@ -53,7 +53,7 @@ export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs)
 # Login to ECR
 aws ecr get-login-password --region $AWS_REGION --profile labs | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
 
-# Build the Docker image (run from workspace root)
+# Build the Docker image (from root of the repo)
 docker build -t predictions-api -f predictions_api/Dockerfile .
 
 # Tag the image for ECR

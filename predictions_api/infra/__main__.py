@@ -20,6 +20,7 @@ but might not be suitable for a public-facing service.
 """
 
 import pulumi
+import pulumi_aws.cloudwatch as cloudwatch
 import pulumi_aws.ec2 as ec2
 import pulumi_aws.ecr as ecr
 import pulumi_aws.ecs as ecs
@@ -29,6 +30,11 @@ from scripts.config import aws_region
 
 config = pulumi.Config()
 app_name = "predictions-api"
+
+# Create CloudWatch log group
+log_group = cloudwatch.LogGroup(
+    f"{app_name}-log-group", name=f"/ecs/{app_name}", retention_in_days=30
+)
 
 vpc = ec2.Vpc(
     f"{app_name}-vpc",
@@ -169,10 +175,20 @@ task_definition = ecs.TaskDefinition(
                         "protocol": "tcp",
                     }
                 ],
+                "healthCheck": {
+                    "command": [
+                        "CMD-SHELL",
+                        "curl -f http://localhost:8000/health-check || exit 1",
+                    ],
+                    "interval": 30,
+                    "timeout": 5,
+                    "retries": 3,
+                    "startPeriod": 60,
+                },
                 "logConfiguration": {
                     "logDriver": "awslogs",
                     "options": {
-                        "awslogs-group": f"/ecs/{app_name}",
+                        "awslogs-group": log_group.name,
                         "awslogs-region": aws_region,
                         "awslogs-stream-prefix": "ecs",
                     },
@@ -188,6 +204,7 @@ service = ecs.Service(
     desired_count=1,
     launch_type="FARGATE",
     task_definition=task_definition.arn,
+    health_check_grace_period_seconds=60,
     network_configuration=ecs.ServiceNetworkConfigurationArgs(
         assign_public_ip=True,
         subnets=[public_subnet.id],

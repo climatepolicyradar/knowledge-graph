@@ -27,6 +27,11 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uvicorn for running the application
 RUN pip install uvicorn
 
@@ -43,4 +48,4 @@ ENV PYTHONPATH=/app
 EXPOSE 8000
 
 # Run the application directly with uvicorn
-CMD ["uvicorn", "predictions_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["uvicorn", "predictions_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
