@@ -5,6 +5,7 @@ from pathlib import Path
 import boto3
 from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from mypy_boto3_s3.client import S3Client
@@ -169,6 +170,12 @@ def get_available_concepts_with_classifiers() -> list[dict]:
     return sorted(concepts, key=lambda x: x["id"])
 
 
+@app.get("/health-check", response_class=JSONResponse)
+async def health_check():
+    """Health check endpoint for ECS."""
+    return JSONResponse(content={"status": "ok"})
+
+
 @app.get("/")
 async def get_index_page(request: Request):
     """Display homepage with list of available concepts."""
@@ -264,9 +271,3 @@ async def get_predictions_json(wikibase_id: WikibaseID, classifier_id: str):
             status_code=404,
             detail=f"Predictions not found for concept {wikibase_id} and classifier {classifier_id}",
         )
-
-
-@app.get("/health-check")
-async def health_check():
-    """Health check endpoint for ECS."""
-    return {"status": "ok"}

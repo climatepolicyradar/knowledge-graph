@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.10-slim as builder
+FROM --platform=linux/amd64 python:3.10-slim as builder
 
 WORKDIR /app
 
@@ -23,13 +23,14 @@ COPY tests ./tests
 RUN poetry install --with predictions_api
 
 # Runtime stage
-FROM python:3.10-slim
+FROM --platform=linux/amd64 python:3.10-slim
 
 WORKDIR /app
 
-# Install curl for health checks
+# Install curl for health checks and git for version control
 RUN apt-get update && apt-get install -y \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uvicorn for running the application

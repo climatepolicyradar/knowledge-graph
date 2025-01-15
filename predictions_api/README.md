@@ -41,36 +41,36 @@ pip install -r requirements.txt
 pulumi up --stack labs
 
 # Export the values you'll need for the next steps
-export ECR_REPOSITORY_URL=$(pulumi stack output ecr_repository_url --stack labs);
-export AWS_REGION=$(pulumi stack output aws_region --stack labs);
-export ECS_CLUSTER_NAME=$(pulumi stack output ecs_cluster_name --stack labs);
-export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs);
+export ECR_REPOSITORY_URL="$(pulumi stack output ecr_repository_url --stack labs)"
+export AWS_REGION="$(pulumi stack output aws_region --stack labs)"
+export ECS_CLUSTER_NAME="$(pulumi stack output ecs_cluster_name --stack labs)"
+export ECS_SERVICE_NAME="$(pulumi stack output ecs_service_name --stack labs)"
 ```
 
 3. Build and push the Docker image to ECR using the values from step 1:
 
 ```bash
 # Login to ECR
-aws ecr get-login-password --region $AWS_REGION --profile labs | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
+aws ecr get-login-password --region "$AWS_REGION" --profile labs | docker login --username AWS --password-stdin "$ECR_REPOSITORY_URL"
 
 # Build the Docker image (from root of the repo)
 docker build -t predictions-api -f predictions_api/Dockerfile .
 
 # Tag the image for ECR
-docker tag predictions-api:latest $ECR_REPOSITORY_URL:latest
+docker tag "predictions-api:latest" "${ECR_REPOSITORY_URL}:latest"
 
 # Push to ECR
-docker push $ECR_REPOSITORY_URL:latest
+docker push "${ECR_REPOSITORY_URL}:latest"
 ```
 
 4. Force a new deployment of the ECS service (if updating an existing deployment):
 
 ```bash
 aws ecs update-service \
-  --cluster $ECS_CLUSTER_NAME \
-  --service $ECS_SERVICE_NAME \
+  --cluster "$ECS_CLUSTER_NAME" \
+  --service "$ECS_SERVICE_NAME" \
   --force-new-deployment \
-  --region $AWS_REGION \
+  --region "$AWS_REGION" \
   --profile labs
 ```
 
@@ -79,27 +79,27 @@ aws ecs update-service \
 ```bash
 # Get the task ARN
 TASK_ARN=$(aws ecs list-tasks \
-  --cluster $ECS_CLUSTER_NAME \
-  --service-name $ECS_SERVICE_NAME \
+  --cluster "$ECS_CLUSTER_NAME" \
+  --service-name "$ECS_SERVICE_NAME" \
   --profile labs \
-  --region $AWS_REGION \
+  --region "$AWS_REGION" \
   --query 'taskArns[0]' \
   --output text)
 
 # Get the ENI ID
 ENI_ID=$(aws ecs describe-tasks \
-  --cluster $ECS_CLUSTER_NAME \
-  --tasks $TASK_ARN \
+  --cluster "$ECS_CLUSTER_NAME" \
+  --tasks "$TASK_ARN" \
   --profile labs \
-  --region $AWS_REGION \
+  --region "$AWS_REGION" \
   --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
   --output text)
 
 # Get the public DNS name
 PUBLIC_DNS=$(aws ec2 describe-network-interfaces \
-  --network-interface-ids $ENI_ID \
+  --network-interface-ids "$ENI_ID" \
   --profile labs \
-  --region $AWS_REGION \
+  --region "$AWS_REGION" \
   --query 'NetworkInterfaces[0].Association.PublicDnsName' \
   --output text)
 
@@ -111,16 +111,49 @@ You can run `pulumi destroy --stack labs` to tear down the service when needed. 
 ```bash
 # Delete all images in the repository
 aws ecr batch-delete-image \
-  --repository-name $ECR_REPOSITORY_URL \
+  --repository-name "${ECR_REPOSITORY_URL##*/}" \
   --image-ids "$(aws ecr list-images \
-    --repository-name $ECR_REPOSITORY_URL \
+    --repository-name "${ECR_REPOSITORY_URL##*/}" \
     --query 'imageIds[*]' \
     --output json)" \
   --profile labs \
-  --region $AWS_REGION
+  --region "$AWS_REGION"
 
 # Then destroy the infrastructure
 pulumi destroy --stack labs
+```
+
+### Getting the running container URL
+
+```bash
+# Get the task ARN
+TASK_ARN=$(aws ecs list-tasks \
+  --cluster "$ECS_CLUSTER_NAME" \
+  --service-name "$ECS_SERVICE_NAME" \
+  --profile labs \
+  --region "$AWS_REGION" \
+  --query 'taskArns[0]' \
+  --output text)
+
+# Get the container instance ID
+CONTAINER_INSTANCE_ID=$(aws ecs describe-tasks \
+  --cluster "$ECS_CLUSTER_NAME" \
+  --tasks "$TASK_ARN" \
+  --profile labs \
+  --region "$AWS_REGION" \
+  --query 'tasks[0].containerInstanceArn' \
+  --output text)
+
+# Get the public IP address
+PUBLIC_IP=$(aws ecs describe-container-instances \
+  --cluster "$ECS_CLUSTER_NAME" \
+  --container-instances "$CONTAINER_INSTANCE_ID" \
+  --profile labs \
+  --region "$AWS_REGION" \
+  --query 'containerInstances[0].ec2InstanceId' \
+  --output text)
+
+echo "Container is available at: http://$PUBLIC_IP:8000"
 ```
 
 ## Creating data for the API to consume and present
@@ -128,3 +161,4 @@ pulumi destroy --stack labs
 To create data for the API, you can run the `just predict Q123` with the relevant wikibase ID. This will create a set of predictions and classifiers in the `data/processed` directory.
 
 To save the outputs to s3 for the deployed version of the API, you can run the same command with the `--save-to-s3` flag.
+
