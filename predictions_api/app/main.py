@@ -21,7 +21,7 @@ logger = logging.getLogger("uvicorn")
 def sync_s3_to_local() -> None:
     """Sync the prediction-visualisation S3 bucket to the local file system"""
     bucket_name = "prediction-visualisation"
-    session = boto3.Session(profile_name="labs")
+    session = boto3.Session()
     s3_client: S3Client = session.client("s3", region_name=aws_region)
 
     processed_data_dir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +77,7 @@ templates = Jinja2Templates(directory=base_dir / "templates")
 static_dir = base_dir / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 predictions_dir = processed_data_dir / "predictions"
+predictions_dir.mkdir(parents=True, exist_ok=True)
 
 
 def load_predictions(

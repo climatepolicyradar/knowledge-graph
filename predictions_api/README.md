@@ -53,8 +53,8 @@ export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs)
 # Login to ECR
 aws ecr get-login-password --region $AWS_REGION --profile labs | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
 
-# Build the Docker image
-docker build -t predictions-api .
+# Build the Docker image (run from workspace root)
+docker build -t predictions-api -f predictions_api/Dockerfile .
 
 # Tag the image for ECR
 docker tag predictions-api:latest $ECR_REPOSITORY_URL:latest
@@ -74,7 +74,54 @@ aws ecs update-service \
   --profile labs
 ```
 
-You can run `pulumi destroy --stack labs` to tear down the service when needed.
+5. Get the service URL (this may take a minute after deployment):
+
+```bash
+# Get the task ARN
+TASK_ARN=$(aws ecs list-tasks \
+  --cluster $ECS_CLUSTER_NAME \
+  --service-name $ECS_SERVICE_NAME \
+  --profile labs \
+  --region $AWS_REGION \
+  --query 'taskArns[0]' \
+  --output text)
+
+# Get the ENI ID
+ENI_ID=$(aws ecs describe-tasks \
+  --cluster $ECS_CLUSTER_NAME \
+  --tasks $TASK_ARN \
+  --profile labs \
+  --region $AWS_REGION \
+  --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
+  --output text)
+
+# Get the public DNS name
+PUBLIC_DNS=$(aws ec2 describe-network-interfaces \
+  --network-interface-ids $ENI_ID \
+  --profile labs \
+  --region $AWS_REGION \
+  --query 'NetworkInterfaces[0].Association.PublicDnsName' \
+  --output text)
+
+echo "Service is available at: http://$PUBLIC_DNS:8000"
+```
+
+You can run `pulumi destroy --stack labs` to tear down the service when needed. Note that if the ECR repository contains images, you'll need to delete them first:
+
+```bash
+# Delete all images in the repository
+aws ecr batch-delete-image \
+  --repository-name $ECR_REPOSITORY_URL \
+  --image-ids "$(aws ecr list-images \
+    --repository-name $ECR_REPOSITORY_URL \
+    --query 'imageIds[*]' \
+    --output json)" \
+  --profile labs \
+  --region $AWS_REGION
+
+# Then destroy the infrastructure
+pulumi destroy --stack labs
+```
 
 ## Creating data for the API to consume and present
 
