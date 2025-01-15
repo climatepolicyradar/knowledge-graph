@@ -193,7 +193,8 @@ service = ecs.Service(
     ),
 )
 
-pulumi.export(
-    "task_public_ip",
-    service.id.apply(lambda _: "Access the API at http://<task_public_ip>:8000"),
-)
+pulumi.export("ecr_repository_url", repository.repository_url)
+pulumi.export("ecs_cluster_name", cluster.name)
+pulumi.export("ecs_service_name", service.name)
+pulumi.export("task_definition_family", task_definition.family)
+pulumi.export("aws_region", aws_region)

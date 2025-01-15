@@ -1,0 +1,8 @@
+name: predictions-api
+description: A service for visualising predictions for candidate classifiers
+runtime:
+  name: python
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python
