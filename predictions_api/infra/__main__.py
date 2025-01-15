@@ -61,7 +61,9 @@ route_table_association = ec2.RouteTableAssociation(
     route_table_id=route_table.id,
 )
 
-repository = ecr.Repository(f"{app_name}-repo", image_tag_mutability="MUTABLE")
+repository = ecr.Repository(
+    f"{app_name}-repo", image_tag_mutability="MUTABLE", force_delete=True
+)
 
 cluster = ecs.Cluster(f"{app_name}-cluster")
 

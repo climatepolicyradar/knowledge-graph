@@ -18,7 +18,17 @@ The API service will start in a container and should be available at `http://loc
 
 The API is deployed to AWS ECS Fargate. Here's the complete deployment process:
 
-1. First, deploy the infrastructure with Pulumi to create the necessary resources:
+1. First, ensure you're using the correct AWS account:
+
+```bash
+# Configure Pulumi to use the labs AWS profile
+pulumi config set aws:profile labs
+
+# Verify you're using the correct AWS account
+aws sts get-caller-identity --profile=labs
+```
+
+2. Deploy the infrastructure with Pulumi to create the necessary resources:
 
 ```bash
 # Navigate to the infrastructure directory
@@ -31,17 +41,17 @@ pip install -r requirements.txt
 pulumi up --stack labs
 
 # Export the values you'll need for the next steps
-export ECR_REPOSITORY_URL=$(pulumi stack output ecr_repository_url --stack labs);
-export AWS_REGION=$(pulumi stack output aws_region --stack labs);
-export ECS_CLUSTER_NAME=$(pulumi stack output ecs_cluster_name --stack labs);
-export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs);
+export ECR_REPOSITORY_URL=$(pulumi stack output ecr_repository_url --stack labs)
+export AWS_REGION=$(pulumi stack output aws_region --stack labs)
+export ECS_CLUSTER_NAME=$(pulumi stack output ecs_cluster_name --stack labs)
+export ECS_SERVICE_NAME=$(pulumi stack output ecs_service_name --stack labs)
 ```
 
-2. Build and push the Docker image to ECR using the values from step 1:
+3. Build and push the Docker image to ECR using the values from step 1:
 
 ```bash
 # Login to ECR
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
+aws ecr get-login-password --region $AWS_REGION --profile labs | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
 
 # Build the Docker image
 docker build -t predictions-api .
@@ -53,14 +63,15 @@ docker tag predictions-api:latest $ECR_REPOSITORY_URL:latest
 docker push $ECR_REPOSITORY_URL:latest
 ```
 
-3. Force a new deployment of the ECS service (if updating an existing deployment):
+4. Force a new deployment of the ECS service (if updating an existing deployment):
 
 ```bash
 aws ecs update-service \
   --cluster $ECS_CLUSTER_NAME \
   --service $ECS_SERVICE_NAME \
   --force-new-deployment \
-  --region $AWS_REGION
+  --region $AWS_REGION \
+  --profile labs
 ```
 
 You can run `pulumi destroy --stack labs` to tear down the service when needed.
