@@ -1,3 +1,4 @@
+from collections import defaultdict
 import json
 import os
 from datetime import datetime, timezone
@@ -385,13 +386,15 @@ class WikibaseSession:
         create_claim_response = self.session.post(url=self.api_url, data=data).json()
         return create_claim_response
 
-    def get_definition_references(self, wikibase_id: WikibaseID) -> list[str]:
+    def get_statement_to_references(self, wikibase_id: WikibaseID) -> dict[str, list[str]]:
         """
         Retreives all the references attached to the definition of the concept
         """
-        references = []
-        for ref in self.get_statements(wikibase_id)["P7"][0]["references"]:
-            for snak in ref["snaks"]["P4"]:
-                references.append(snak["datavalue"]["value"])
+        statement_id_to_references = defaultdict(list)
+
+        for statement, refs in self.get_statements(wikibase_id).items():
+            for ref in refs[0].get("references", []):
+                for snak in ref["snaks"]["P4"]:
+                    statement_id_to_references[statement].append(snak["datavalue"]["value"])
         
-        return references
+        return statement_id_to_references
