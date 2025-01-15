@@ -31,6 +31,8 @@ from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
+DEFAULT_BATCH_SIZE = 25
+
 
 @dataclass()
 class Config:
@@ -696,7 +698,7 @@ async def index_by_s3(
     vespa_search_adapter: Optional[VespaSearchAdapter] = None,
     s3_prefixes: Optional[list[str]] = None,
     s3_paths: Optional[list[str]] = None,
-    batch_size: int = 400,
+    batch_size: int = DEFAULT_BATCH_SIZE,
     as_subflow=True,
 ) -> None:
     """
@@ -870,7 +872,7 @@ def maybe_load_document_concepts(
 
 def iterate_batch(
     data: Union[list[Any], Generator[Any, None, None]],
-    batch_size: int = 400,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> Generator[
     list[Any],
     None,
@@ -898,7 +900,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
     config: Optional[Config] = None,
-    batch_size: int = 400,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.

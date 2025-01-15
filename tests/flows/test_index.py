@@ -962,5 +962,5 @@ def test_s3_obj_generator_valid_cases(
     ],
 )
 def test_iterate_batch(data, expected_lengths):
-    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data, 400)), expected_lengths):
         assert len(batch) == expected
