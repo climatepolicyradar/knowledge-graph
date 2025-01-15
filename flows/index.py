@@ -331,9 +331,6 @@ def convert_labelled_passages_to_concepts(
     concepts = []
 
     for labelled_passage in labelled_passages:
-        logger.debug(
-            f"converting labelled passage (ID: `{labelled_passage.id}`) to Vespa concept"
-        )
         # The concept used to label the passage holds some information on the parent
         # concepts and thus this is being used as a temporary solution for providing
         # the relationship between concepts. This has the downside that it ties a
@@ -344,8 +341,6 @@ def convert_labelled_passages_to_concepts(
             concept=concept
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
-
-        logger.debug(f"converting {len(labelled_passage.spans)} spans to concepts")
 
         for span_idx, span in enumerate(labelled_passage.spans):
             if span.concept_id is None:
@@ -537,7 +532,6 @@ async def partial_update_text_block(
     )
 
     if data_id and passage_id and passage_for_text_block:
-        logger.info(f"Updating concepts for passage: {passage_id}")
         vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
             schema="document_passage",
             namespace="doc_search",
@@ -548,7 +542,6 @@ async def partial_update_text_block(
                 )
             },
         )
-        logger.info(f"Updated concepts for passage: {passage_id}")
     else:
         logger.error(f"No passages found for text block: {text_block_id}")
 
