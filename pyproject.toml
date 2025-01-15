@@ -18,13 +18,9 @@ rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
 neomodel = "^5.3.3"
-typer = "0.9.4"
 rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 more-itertools = "^10.3.0"
-argilla = "1.29.1"
-prefect = "2.16.8"
-griffe = "0.48.0"
 cpr-sdk = "^1.9.3"
 wandb = "^0.18.3"
 boto3 = "^1.35.31"
@@ -33,6 +29,20 @@ pyyaml = "^6.0.2"
 nltk = "^3.9.1"
 datasets = "^2.18.0"
 boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
+
+[tool.poetry.group.deploy]
+optional = false
+
+[tool.poetry.group.deploy.dependencies]
+prefect = "2.16.8"
+griffe = "0.48.0"
+
+[tool.poetry.group.data]
+optional = false
+
+[tool.poetry.group.data.dependencies]
+argilla = "1.29.1"
+typer = "0.9.4"
 
 [tool.poetry.group.predictions_api]
 optional = true
