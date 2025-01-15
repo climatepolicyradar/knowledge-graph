@@ -335,7 +335,7 @@ class WikibaseSession:
 
         return subconcepts
 
-    def get_statements(self, wikibase_id: WikibaseID) -> list[dict]:
+    def get_statements(self, wikibase_id: WikibaseID) -> dict:
         """
         Get all statements for a Wikibase item
 
@@ -384,3 +384,14 @@ class WikibaseSession:
 
         create_claim_response = self.session.post(url=self.api_url, data=data).json()
         return create_claim_response
+
+    def get_definition_references(self, wikibase_id: WikibaseID) -> list[str]:
+        """
+        Retreives all the references attached to the definition of the concept
+        """
+        references = []
+        for ref in self.get_statements(wikibase_id)["P7"][0]["references"]:
+            for snak in ref["snaks"]["P4"]:
+                references.append(snak["datavalue"]["value"])
+        
+        return references
