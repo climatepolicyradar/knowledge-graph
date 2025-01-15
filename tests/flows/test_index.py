@@ -209,6 +209,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     local_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts: list[VespaConcept],
     vespa_app,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
     with disable_run_logger():
@@ -231,11 +232,42 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
             concept not in initial_concepts for concept in example_vespa_concepts
         )
 
+        document_concepts = [(c.id, c) for c in example_vespa_concepts]
+
+        # Add a clear failure
+        fake_id = "99999999"
+        document_concepts.append(
+            (
+                fake_id,
+                Concept(
+                    id=fake_id,
+                    name="wood industry",
+                    parent_concepts=[
+                        {"name": "forestry sector", "id": "Q788"},
+                        {"name": "lumber", "id": "Q789"},
+                    ],
+                    parent_concept_ids_flat="Q788,Q789",
+                    model='KeywordClassifier("wood industry")',
+                    end=100,
+                    start=0,
+                    timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                    preferred_label="x",
+                ),
+            )
+        )
+
         # Confirm that we can add the example concepts to the document passages
         await run_partial_updates_of_concepts_for_document_passages.fn(
             document_import_id=document_import_id,
-            document_concepts=[(c.id, c) for c in example_vespa_concepts],
+            document_concepts=document_concepts,
             vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            f"No passages found for text block: {fake_id}" in r.message
+            for r in error_logs
         )
 
         updated_passages = get_document_passages_from_vespa(
@@ -305,6 +337,42 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+async def test_run_partial_updates_of_concepts_for_document_passages_task_failure(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    example_vespa_concepts: list[VespaConcept],
+    vespa_app,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that we can continue on errors."""
+
+    def mock_update_data(schema, namespace, data_id, fields):
+        raise Exception("Forced update failure")
+
+    with disable_run_logger(), patch.object(
+        local_vespa_search_adapter.client, "update_data", side_effect=mock_update_data
+    ):
+        document_import_id = "CCLW.executive.10014.4470"
+
+        document_concepts = [(c.id, c) for c in example_vespa_concepts]
+
+        # Run the update
+        await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_import_id=document_import_id,
+            document_concepts=document_concepts,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            "failed to do partial update for concept `1273`: Forced update failure"
+            == str(r.message)
+            for r in error_logs
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
 @pytest.mark.flaky_on_ci
 async def test_index_by_s3_with_s3_prefixes(
     mock_bucket,
@@ -341,6 +409,47 @@ async def test_index_by_s3_with_s3_prefixes(
     assert initial_concepts_count + len(labelled_passage_fixture_files) == (
         final_concepts_count
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_index_by_s3_task_failure(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that index_by_s3 handles task failures gracefully."""
+
+    async def mock_run_partial_updates_of_concepts_for_document_passages_as(
+        *args, **kwargs
+    ):
+        raise Exception("Forced update failure")
+
+    with disable_run_logger(), patch(
+        "flows.index.run_partial_updates_of_concepts_for_document_passages_as",
+        side_effect=mock_run_partial_updates_of_concepts_for_document_passages_as,
+    ):
+        await index_by_s3(
+            aws_env=AwsEnv.sandbox,
+            vespa_search_adapter=local_vespa_search_adapter,
+            s3_prefixes=[
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+            ],
+            s3_paths=None,
+            as_subflow=False,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            "failed to process document for S3 key" in r.message
+            and "Forced update failure" in r.message
+            for r in error_logs
+        ), "Expected error log for failed document update not found"
 
 
 @pytest.mark.asyncio

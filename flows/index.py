@@ -517,7 +517,18 @@ async def run_partial_updates_of_concepts_for_document_passages(
             ]
 
             logger.info(f"gathering partial updates tasks for batch {batch_num}")
-            await asyncio.gather(*partial_update_tasks)
+            results = await asyncio.gather(
+                *partial_update_tasks, return_exceptions=True
+            )
+
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    # Get concept
+                    concept = batch[i][0]
+
+                    logger.error(
+                        f"failed to do partial update for concept `{concept}`: {str(result)}",
+                    )
 
 
 async def partial_update_text_block(
@@ -764,7 +775,16 @@ async def index_by_s3(
         logger.info(
             f"gathering indexing tasks for batch {document_labelled_passages_batch_num}"
         )
-        await asyncio.gather(*indexing_tasks)
+        results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                # Get the s3_key for the failed task
+                s3_key = document_concepts_batch[i][0]
+
+                logger.error(
+                    f"failed to process document for S3 key `{s3_key}`: {str(result)}",
+                )
 
 
 def run_partial_updates_of_concepts_for_document_passages_as(
