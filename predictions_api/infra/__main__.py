@@ -20,6 +20,7 @@ but might not be suitable for a public-facing service.
 """
 
 import pulumi
+import pulumi_aws as aws
 import pulumi_aws.cloudwatch as cloudwatch
 import pulumi_aws.ec2 as ec2
 import pulumi_aws.ecr as ecr
@@ -154,6 +155,10 @@ task_security_group = ec2.SecurityGroup(
     ],
 )
 
+current = aws.get_caller_identity()
+aws_region = aws.get_region().name
+account_id = current.account_id
+
 task_definition = ecs.TaskDefinition(
     f"{app_name}-task-definition",
     family=f"{app_name}-task",
@@ -193,6 +198,20 @@ task_definition = ecs.TaskDefinition(
                         "awslogs-stream-prefix": "ecs",
                     },
                 },
+                "secrets": [
+                    {
+                        "name": "WIKIBASE_URL",
+                        "valueFrom": f"arn:aws:secretsmanager:{aws_region}:{account_id}:secret:wikibase_url-D41HiA",
+                    },
+                    {
+                        "name": "WIKIBASE_USERNAME",
+                        "valueFrom": f"arn:aws:secretsmanager:{aws_region}:{account_id}:secret:wikibase_username-OcSuoi",
+                    },
+                    {
+                        "name": "WIKIBASE_PASSWORD",
+                        "valueFrom": f"arn:aws:secretsmanager:{aws_region}:{account_id}:secret:wikibase_password-eZj5WE",
+                    },
+                ],
             }
         ]
     ),
