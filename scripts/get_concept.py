@@ -46,7 +46,7 @@ def main(
         console.log(
             f"🔗 Fetched {len(csv_keywords)} keywords for {wikibase_id} from CSV. Adding as aliases."
         )
-        concept.alternative_labels.extend(csv_keywords)
+        concept.alternative_labels = csv_keywords
 
     except FileNotFoundError:
         console.log(
