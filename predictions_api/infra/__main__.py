@@ -32,6 +32,9 @@ from scripts.config import aws_region
 config = pulumi.Config()
 app_name = "predictions-api"
 
+current = aws.get_caller_identity()
+account_id = current.account_id
+
 # Create CloudWatch log group
 log_group = cloudwatch.LogGroup(
     f"{app_name}-log-group", name=f"/ecs/{app_name}", retention_in_days=30
@@ -97,6 +100,23 @@ task_execution_policy = iam.RolePolicyAttachment(
     policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
 )
 
+secrets_policy = iam.RolePolicy(
+    f"{app_name}-secrets-policy",
+    role=task_execution_role.id,
+    policy=iam.get_policy_document(
+        statements=[
+            {
+                "actions": ["secretsmanager:GetSecretValue"],
+                "resources": [
+                    f"arn:aws:secretsmanager:{aws_region}:{account_id}:secret:wikibase_url*",
+                    f"arn:aws:secretsmanager:{aws_region}:{account_id}:secret:wikibase_username*",
+                    f"arn:aws:secretsmanager:{aws_region}:{account_id}:secret:wikibase_password*",
+                ],
+            }
+        ]
+    ).json,
+)
+
 task_role = iam.Role(
     f"{app_name}-task-role",
     assume_role_policy=iam.get_policy_document(
@@ -154,10 +174,6 @@ task_security_group = ec2.SecurityGroup(
         )
     ],
 )
-
-current = aws.get_caller_identity()
-aws_region = aws.get_region().name
-account_id = current.account_id
 
 task_definition = ecs.TaskDefinition(
     f"{app_name}-task-definition",
