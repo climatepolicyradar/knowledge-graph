@@ -34,6 +34,7 @@ from flows.index import (
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
+    split_large_concepts_updates,
 )
 from scripts.cloud import AwsEnv
 from src.concept import Concept
@@ -889,6 +890,405 @@ def test_dump_load_document_concepts_roundtrip(
     for (orig_id, orig_concept), (loaded_id, loaded_concept) in zip(original, loaded):
         assert loaded_id == orig_id
         assert loaded_concept == orig_concept
+
+
+@pytest.mark.parametrize(
+    "document_concepts, batch_size, expected",
+    [
+        # Test case 1: No splitting needed
+        (
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 10,
+                )
+            ],
+            400,
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 10,
+                )
+            ],
+        ),
+        # Test case 2: Single batch needs splitting
+        (
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 5,
+                )
+            ],
+            4,
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 4,
+                ),
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 1,
+                ),
+            ],
+        ),
+        # Test case 3: Multiple batches, some need splitting
+        (
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 300,
+                ),
+                (
+                    "block2",
+                    [
+                        VespaConcept(
+                            id="2",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 500,
+                ),
+                (
+                    "block3",
+                    [
+                        VespaConcept(
+                            id="3",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 100,
+                ),
+            ],
+            400,
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 300,
+                ),
+                (
+                    "block2",
+                    [
+                        VespaConcept(
+                            id="2",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                ),
+                (
+                    "block2",
+                    [
+                        VespaConcept(
+                            id="2",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 100,
+                ),
+                (
+                    "block3",
+                    [
+                        VespaConcept(
+                            id="3",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 100,
+                ),
+            ],
+        ),
+        # Test case 4: Empty input
+        ([], 400, []),
+        # Test case 5: Single concept that doesn't need splitting
+        (
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ],
+                )
+            ],
+            400,
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ],
+                )
+            ],
+        ),
+        # Test case 6: Exact batch size
+        (
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                )
+            ],
+            400,
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                )
+            ],
+        ),
+        # Test case 7: Multiple batches with exact sizes
+        (
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                ),
+                (
+                    "block2",
+                    [
+                        VespaConcept(
+                            id="2",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                ),
+            ],
+            400,
+            [
+                (
+                    "block1",
+                    [
+                        VespaConcept(
+                            id="1",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                ),
+                (
+                    "block2",
+                    [
+                        VespaConcept(
+                            id="2",
+                            name="test",
+                            parent_concepts=[],
+                            parent_concept_ids_flat="",
+                            model="model",
+                            start=0,
+                            end=1,
+                            timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                        )
+                    ]
+                    * 400,
+                ),
+            ],
+        ),
+    ],
+)
+def test_split_large_concepts_updates(
+    document_concepts,
+    batch_size,
+    expected,
+):
+    """Test that large concept updates are split correctly."""
+    # Create test input in the format the function expects
+    input_data = [(block_id, concepts) for block_id, concepts in document_concepts]
+
+    result = split_large_concepts_updates(input_data, batch_size)
+
+    # Verify the output
+    assert len(result) == len(expected)
+
+    for (result_block_id, result_concepts), (
+        expected_block_id,
+        expected_concepts,
+    ) in zip(result, expected):
+        assert result_block_id == expected_block_id
+        assert len(result_concepts) == len(expected_concepts)
+        assert all(
+            actual == expected
+            for actual, expected in zip(result_concepts, expected_concepts)
+        )
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier(
