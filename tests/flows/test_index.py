@@ -603,9 +603,11 @@ def test_convert_labelled_passges_to_concepts(
 
 def test_convert_labelled_passges_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test that we can correctly raise a ValueError should a Span have no concept id."""
+    """Test that we correctly log errors when a Span has no concept ID or timestamps."""
     with disable_run_logger():
+        # Add a span without concept_id
         example_labelled_passages[0].spans.append(
             Span(
                 text="Test text.",
@@ -615,9 +617,34 @@ def test_convert_labelled_passges_to_concepts_raises_error(
                 labellers=[],
             )
         )
-        assert example_labelled_passages[0].spans[-1].concept_id is None
-        with pytest.raises(ValueError, match="concept ID is missing"):
-            convert_labelled_passages_to_concepts(example_labelled_passages)
+        # Add a span without timestamps
+        example_labelled_passages[0].spans.append(
+            Span(
+                text="Test text.",
+                start_index=0,
+                end_index=8,
+                concept_id="Q123",
+                labellers=[],
+                timestamps=[],  # Empty timestamps
+            )
+        )
+
+        concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+
+        # Check that appropriate error messages were logged
+        error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert any("span concept ID is missing" in msg for msg in error_messages)
+        assert any("span timestamps are missing" in msg for msg in error_messages)
+
+        # Verify that the problematic spans were skipped but valid ones were processed
+        assert len(concepts) == len(
+            [
+                span
+                for passage in example_labelled_passages
+                for span in passage.spans
+                if span.concept_id is not None and span.timestamps
+            ]
+        )
 
 
 def test_get_parent_concepts_from_concept() -> None:
@@ -668,7 +695,8 @@ def test_group_concepts_on_text_block(
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
 
 
-def test_convert_labelled_passages_to_document_concepts(
+@pytest.mark.asyncio
+async def test_convert_labelled_passages_to_document_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test conversion of labelled passages to document concepts."""
@@ -678,7 +706,7 @@ def test_convert_labelled_passages_to_document_concepts(
             yield "s3://bucket/path1.json", example_labelled_passages[:2]
             yield "s3://bucket/path2.json", example_labelled_passages[2:]
 
-        result = convert_labelled_passages_to_document_concepts(mock_generator())
+        result = await convert_labelled_passages_to_document_concepts(mock_generator())
 
         assert len(result) == 2
         assert isinstance(result[0][0], str)
@@ -923,11 +951,16 @@ def test_s3_obj_generator_valid_cases(
 @pytest.mark.parametrize(
     "data, expected_lengths",
     [
+        # Lists
         (list(range(50)), [50]),
         (list(range(850)), [400, 400, 50]),
         ([], [0]),
+        # Generators
+        ((x for x in range(50)), [50]),
+        ((x for x in range(850)), [400, 400, 50]),
+        ((x for x in []), [0]),
     ],
 )
 def test_iterate_batch(data, expected_lengths):
-    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data, 400)), expected_lengths):
         assert len(batch) == expected
