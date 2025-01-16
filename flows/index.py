@@ -6,6 +6,7 @@ import os
 import tempfile
 from collections.abc import Awaitable
 from dataclasses import dataclass
+from functools import reduce
 from pathlib import Path
 from typing import Any, Generator, Optional, Union
 
@@ -32,6 +33,20 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 DEFAULT_BATCH_SIZE = 25
+# There's a limit to the size (512kb [1]) to flow run parameters. That
+# means that we need to limit the number of concepts in a partial
+# update.
+#
+# We've calculated this value [2] based on representative data. It may
+# not be perfect, since, the actual values vary, and thus increase or
+# decrease the serialised size. It may need to be tweaked.
+#
+# [1] https://docs.prefect.io/v3/develop/write-flows
+# [2]
+# >>> params = {"document_concepts": [["227", "{\"id\":\"Q368\",\"name\":\"marine risk\",\"parent_concepts\":[{\"id\":\"Q949\",\"name\":\"\"}],\"parent_concept_ids_flat\":\"Q949,\",\"model\":\"KeywordClassifier(\\\"marine risk\\\")\",\"end\":123,\"start\":106,\"timestamp\":\"2025-01-09T10:29:25.598270\"}"]]*1500, "document_import_id": "CCLW.executive.10272.4889"}
+# >>> round(len(bytes(json.dumps(params).encode("utf-8")))/1024)
+# 397
+MAX_CONCEPTS_IN_PARTIAL_UPDATE = 1500
 
 
 @dataclass()
@@ -344,6 +359,7 @@ def convert_labelled_passages_to_concepts(
         )
         text_block_id = get_text_block_id_from_labelled_passage(labelled_passage)
 
+        # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
         for span_idx, span in enumerate(labelled_passage.spans):
             if span.concept_id is None:
                 # Include the Span index since Span's don't have IDs
@@ -571,6 +587,7 @@ async def convert_labelled_passages_to_document_concepts(
     ],
 ) -> list[
     tuple[
+        # Object: Key
         str,
         list[
             tuple[
@@ -756,11 +773,19 @@ async def index_by_s3(
         document_labelled_passages_batch_num,
         document_labelled_passages_batch,
     ) in enumerate(document_labelled_passages_batches, start=1):
-        document_concepts_batch = await convert_labelled_passages_to_document_concepts(
+        logger.info(
+            f"processing batch document labelled passages #{document_labelled_passages_batch_num}"
+        )
+
+        document_concepts = await convert_labelled_passages_to_document_concepts(
             document_labelled_passages_batch
         )
 
-        logger.info(f"processing batch {document_labelled_passages_batch_num}")
+        # It's possible that if there were too many concepts, we need to split it,
+        # and thus we may end up outside of the "original" batch size.
+        document_concepts_maybe_split = split_large_concepts_updates(
+            document_concepts, MAX_CONCEPTS_IN_PARTIAL_UPDATE
+        )
 
         indexing_tasks = [
             run_partial_updates_of_concepts_for_document_passages_as(
@@ -769,7 +794,7 @@ async def index_by_s3(
                 as_subflow,
                 aws_env=aws_env,
             )
-            for s3_key, document_concepts in document_concepts_batch
+            for s3_key, document_concepts in document_concepts_maybe_split
         ]
 
         logger.info(
@@ -780,11 +805,53 @@ async def index_by_s3(
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 # Get the s3_key for the failed task
-                s3_key = document_concepts_batch[i][0]
+                s3_key = document_concepts[i][0]
 
                 logger.error(
                     f"failed to process document for S3 key `{s3_key}`: {str(result)}",
                 )
+
+
+def split_large_concepts_updates(
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            VespaConcept,
+        ]
+    ],
+    max_concepts_in_partial_update: int,
+) -> list[
+    tuple[
+        # Text block (aka span) ID
+        str,
+        VespaConcept,
+    ]
+]:
+    """
+    Split up a list of concepts into multiple lists of concepts.
+
+    This is done to ensure that they fit into the max parameter size
+    for Prefect flow runs.
+    """
+
+    def split(current, new):
+        obj_key, concepts = new  # unpack
+
+        if len(concepts) > max_concepts_in_partial_update:
+            concepts_batches = iterate_batch(
+                concepts, batch_size=max_concepts_in_partial_update
+            )
+            concepts_split = [
+                (obj_key, concepts)
+                for concepts in concepts_batches  # repack
+            ]
+
+            return current + concepts_split
+
+        return current + [new]
+
+    return reduce(split, document_concepts, [])
 
 
 def run_partial_updates_of_concepts_for_document_passages_as(
