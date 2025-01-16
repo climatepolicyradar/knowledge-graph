@@ -108,21 +108,6 @@ echo "Service is available at: http://$PUBLIC_DNS:8000"
 
 You can run `pulumi destroy --stack labs` to tear down the service when needed. Note that if the ECR repository contains images, you'll need to delete them first:
 
-```bash
-# Delete all images in the repository
-aws ecr batch-delete-image \
-  --repository-name "${ECR_REPOSITORY_URL##*/}" \
-  --image-ids "$(aws ecr list-images \
-    --repository-name "${ECR_REPOSITORY_URL##*/}" \
-    --query 'imageIds[*]' \
-    --output json)" \
-  --profile labs \
-  --region "$AWS_REGION"
-
-# Then destroy the infrastructure
-pulumi destroy --stack labs
-```
-
 ### Getting the running container URL
 
 ```bash
@@ -162,3 +147,4 @@ To create data for the API, you can run the `just predict Q123` with the relevan
 
 To save the outputs to s3 for the deployed version of the API, you can run the same command with the `--save-to-s3` flag.
 
+You'll need to run the command to force a new deployment of the API service after this (see step 4 above).
