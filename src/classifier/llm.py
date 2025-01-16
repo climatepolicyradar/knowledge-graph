@@ -122,10 +122,8 @@ class LLMClassifier(Classifier):
             input_xml_lines.append(
                 f'<passage id="{identifier}">{passage.text}</passage>'
             )
-            output_text = (
-                passage.get_highlighted_text()
-                .replace("[cyan]", "<concept>")
-                .replace("[/cyan]", "</concept>")
+            output_text = passage.get_highlighted_text(
+                start_pattern="<concept>", end_pattern="</concept>"
             )
             output_xml_lines.append(
                 f'<passage id="{identifier}">{output_text}</passage>'

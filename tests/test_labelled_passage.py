@@ -118,7 +118,9 @@ def test_whether_highlighted_text_is_correctly_generated_with_alternative_format
             )
         ],
     )
-    highlighted = passage.get_highlighted_text(highlight_format="red")
+    highlighted = passage.get_highlighted_text(
+        start_pattern="[red]", end_pattern="[/red]"
+    )
     assert highlighted == "[red]This[/red] is a test passage."
 
 
@@ -136,3 +138,19 @@ def test_whether_highlighted_text_correctly_handles_encoded_html():
     )
     highlighted = passage.get_highlighted_text()
     assert highlighted == "[cyan]This[/cyan] & that"
+
+
+def test_whether_highlighted_text_correctly_handles_html_tags():
+    passage = LabelledPassage(
+        text="This is a <span>test</span> passage.",
+        spans=[
+            Span(
+                text="This is a <span>test</span> passage.",
+                start_index=15,
+                end_index=22,
+                labellers=["user1"],
+            )
+        ],
+    )
+    highlighted = passage.get_highlighted_text()
+    assert highlighted == "This is a test [cyan]passage[/cyan]."
