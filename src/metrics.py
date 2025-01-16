@@ -98,6 +98,11 @@ def count_span_level_metrics(
     for ground_truth_passage, predicted_passage in zip(
         ground_truth_passages, predicted_passages
     ):
+        # If both passages have no spans, count as true negative
+        if not ground_truth_passage.spans and not predicted_passage.spans:
+            cm.true_negatives += 1
+            continue
+
         for ground_truth_span in ground_truth_passage.spans:
             found = False
             for predicted_span in predicted_passage.spans:
@@ -118,16 +123,6 @@ def count_span_level_metrics(
             if not found:
                 cm.false_positives += 1
                 break
-
-        ground_truth_negative_passages = set(
-            passage.id for passage in ground_truth_passages if len(passage.spans) == 0
-        )
-        predicted_negative_passages = set(
-            passage.id for passage in predicted_passages if len(passage.spans) == 0
-        )
-        cm.true_negatives += len(
-            ground_truth_negative_passages & predicted_negative_passages
-        )
 
     return cm
 
