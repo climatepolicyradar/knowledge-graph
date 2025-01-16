@@ -54,14 +54,6 @@ def dataframe_to_html_table(df: pd.DataFrame, classes: str = "") -> str:
     return html
 
 
-def format_text_with_spans(labelled_passage: LabelledPassage) -> str:
-    """Format text with highlighted spans using HTML."""
-    pre_tag = '<span class="bg-yellow-200 dark:bg-yellow-800">'
-    post_tag = "</span>"
-    highlighted_text = labelled_passage.get_highlighted_text()
-    return highlighted_text.replace("[cyan]", pre_tag).replace("[/cyan]", post_tag)
-
-
 @app.command()
 def main(
     wikibase_ids: Annotated[
@@ -178,7 +170,7 @@ def main(
                     Outlier groups for {concept}
                 </h2>
                 <p class="text-slate-600 dark:text-slate-300 mb-4">
-                    Overall performance: {df.loc[df['Group'] == 'all', 'Precision'].values[0]:.2f}
+                    Overall performance: {df.loc[df["Group"] == "all", "Precision"].values[0]:.2f}
                 </p>
         """
 
@@ -241,9 +233,16 @@ def main(
                 for i, passage in enumerate(passages):
                     html_content += f"""
                         <div class="mb-6 bg-slate-50 dark:bg-gray-700 p-4 rounded-lg">
-                            <p class="font-medium text-slate-700 dark:text-slate-200 mb-2">{i+1}. Ground truth:</p>
+                            <p class="font-medium text-slate-700 dark:text-slate-200 mb-2">{
+                        i + 1
+                    }. Ground truth:</p>
                             <p class="text-slate-600 dark:text-slate-300 mb-4 font-mono">
-                                {format_text_with_spans(passage)}
+                                {
+                        passage.get_highlighted_text(
+                            start_pattern='<span class="bg-yellow-200 dark:bg-yellow-800">',
+                            end_pattern="</span>",
+                        )
+                    }
                             </p>
                             
                             <p class="font-medium text-slate-700 dark:text-slate-200 mb-2">Prediction:</p>
@@ -252,9 +251,13 @@ def main(
                     prediction = LabelledPassage(
                         text=passage.text, spans=classifier.predict(passage.text)
                     )
+                    highlighted = prediction.get_highlighted_text(
+                        start_pattern='<span class="bg-yellow-200 dark:bg-yellow-800">',
+                        end_pattern="</span>",
+                    )
                     html_content += f"""
                             <p class="text-slate-600 dark:text-slate-300 font-mono">
-                                {format_text_with_spans(prediction)}
+                                {highlighted}
                             </p>
                         </div>
                     """

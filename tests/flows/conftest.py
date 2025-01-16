@@ -430,6 +430,17 @@ def example_labelled_passages(labelled_passage_fixture_files) -> list[LabelledPa
 
 
 @pytest.fixture
+def example_labelled_passages_1_doc(
+    labelled_passage_fixture_files,
+) -> tuple[str, list[LabelledPassage]]:
+    """Returns a list of example labelled passages."""
+    file_name = labelled_passage_fixture_files[0]
+    data = json.loads(load_fixture(file_name))
+    labelled_passages = [LabelledPassage.model_validate(i) for i in data]
+    return file_name, labelled_passages
+
+
+@pytest.fixture
 def mock_wandb(mock_s3_client):
     with (
         patch("wandb.init") as mock_init,

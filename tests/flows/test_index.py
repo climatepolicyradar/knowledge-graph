@@ -17,6 +17,7 @@ from flows.index import (
     Config,
     convert_labelled_passages_to_concepts,
     convert_labelled_passages_to_document_concepts,
+    dump_document_concepts,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_passage_for_text_block,
@@ -27,12 +28,14 @@ from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
     iterate_batch,
     labelled_passages_generator,
+    load_document_concepts,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
 )
+from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -206,6 +209,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     local_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts: list[VespaConcept],
     vespa_app,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
     with disable_run_logger():
@@ -228,11 +232,42 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
             concept not in initial_concepts for concept in example_vespa_concepts
         )
 
+        document_concepts = [(c.id, c) for c in example_vespa_concepts]
+
+        # Add a clear failure
+        fake_id = "99999999"
+        document_concepts.append(
+            (
+                fake_id,
+                Concept(
+                    id=fake_id,
+                    name="wood industry",
+                    parent_concepts=[
+                        {"name": "forestry sector", "id": "Q788"},
+                        {"name": "lumber", "id": "Q789"},
+                    ],
+                    parent_concept_ids_flat="Q788,Q789",
+                    model='KeywordClassifier("wood industry")',
+                    end=100,
+                    start=0,
+                    timestamp=datetime(2025, 1, 15, 16, 17, 21, 362785),
+                    preferred_label="x",
+                ),
+            )
+        )
+
         # Confirm that we can add the example concepts to the document passages
         await run_partial_updates_of_concepts_for_document_passages.fn(
             document_import_id=document_import_id,
-            document_concepts=[(c.id, c) for c in example_vespa_concepts],
+            document_concepts=document_concepts,
             vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            f"No passages found for text block: {fake_id}" in r.message
+            for r in error_logs
         )
 
         updated_passages = get_document_passages_from_vespa(
@@ -302,6 +337,42 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+async def test_run_partial_updates_of_concepts_for_document_passages_task_failure(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    example_vespa_concepts: list[VespaConcept],
+    vespa_app,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that we can continue on errors."""
+
+    def mock_update_data(schema, namespace, data_id, fields):
+        raise Exception("Forced update failure")
+
+    with disable_run_logger(), patch.object(
+        local_vespa_search_adapter.client, "update_data", side_effect=mock_update_data
+    ):
+        document_import_id = "CCLW.executive.10014.4470"
+
+        document_concepts = [(c.id, c) for c in example_vespa_concepts]
+
+        # Run the update
+        await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_import_id=document_import_id,
+            document_concepts=document_concepts,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            "failed to do partial update for concept `1273`: Forced update failure"
+            == str(r.message)
+            for r in error_logs
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
 @pytest.mark.flaky_on_ci
 async def test_index_by_s3_with_s3_prefixes(
     mock_bucket,
@@ -320,9 +391,11 @@ async def test_index_by_s3_with_s3_prefixes(
     )
 
     await index_by_s3(
+        aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
+        as_subflow=False,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -336,6 +409,47 @@ async def test_index_by_s3_with_s3_prefixes(
     assert initial_concepts_count + len(labelled_passage_fixture_files) == (
         final_concepts_count
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_index_by_s3_task_failure(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that index_by_s3 handles task failures gracefully."""
+
+    async def mock_run_partial_updates_of_concepts_for_document_passages_as(
+        *args, **kwargs
+    ):
+        raise Exception("Forced update failure")
+
+    with disable_run_logger(), patch(
+        "flows.index.run_partial_updates_of_concepts_for_document_passages_as",
+        side_effect=mock_run_partial_updates_of_concepts_for_document_passages_as,
+    ):
+        await index_by_s3(
+            aws_env=AwsEnv.sandbox,
+            vespa_search_adapter=local_vespa_search_adapter,
+            s3_prefixes=[
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+            ],
+            s3_paths=None,
+            as_subflow=False,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            "failed to process document for S3 key" in r.message
+            and "Forced update failure" in r.message
+            for r in error_logs
+        ), "Expected error log for failed document update not found"
 
 
 @pytest.mark.asyncio
@@ -363,9 +477,11 @@ async def test_index_by_s3_with_s3_paths(
     ]
 
     await index_by_s3(
+        aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
         s3_paths=s3_paths,
+        as_subflow=False,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -443,6 +559,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
         config = Config(
             cache_bucket=mock_bucket,
             vespa_search_adapter=local_vespa_search_adapter,
+            as_subflow=False,
         )
 
         await index_labelled_passages_from_s3_to_vespa(
@@ -466,6 +583,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.skip(reason="cannot test due to run_deployment usage")
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_default_config(
     mock_bucket,
     mock_bucket_labelled_passages,
@@ -594,9 +712,11 @@ def test_convert_labelled_passges_to_concepts(
 
 def test_convert_labelled_passges_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test that we can correctly raise a ValueError should a Span have no concept id."""
+    """Test that we correctly log errors when a Span has no concept ID or timestamps."""
     with disable_run_logger():
+        # Add a span without concept_id
         example_labelled_passages[0].spans.append(
             Span(
                 text="Test text.",
@@ -606,9 +726,34 @@ def test_convert_labelled_passges_to_concepts_raises_error(
                 labellers=[],
             )
         )
-        assert example_labelled_passages[0].spans[-1].concept_id is None
-        with pytest.raises(ValueError, match="concept ID is missing"):
-            convert_labelled_passages_to_concepts(example_labelled_passages)
+        # Add a span without timestamps
+        example_labelled_passages[0].spans.append(
+            Span(
+                text="Test text.",
+                start_index=0,
+                end_index=8,
+                concept_id="Q123",
+                labellers=[],
+                timestamps=[],  # Empty timestamps
+            )
+        )
+
+        concepts = convert_labelled_passages_to_concepts(example_labelled_passages)
+
+        # Check that appropriate error messages were logged
+        error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
+        assert any("span concept ID is missing" in msg for msg in error_messages)
+        assert any("span timestamps are missing" in msg for msg in error_messages)
+
+        # Verify that the problematic spans were skipped but valid ones were processed
+        assert len(concepts) == len(
+            [
+                span
+                for passage in example_labelled_passages
+                for span in passage.spans
+                if span.concept_id is not None and span.timestamps
+            ]
+        )
 
 
 def test_get_parent_concepts_from_concept() -> None:
@@ -659,7 +804,8 @@ def test_group_concepts_on_text_block(
     assert len(grouped_concepts["text_block_2"]) == text_block_two_concept_count
 
 
-def test_convert_labelled_passages_to_document_concepts(
+@pytest.mark.asyncio
+async def test_convert_labelled_passages_to_document_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
     """Test conversion of labelled passages to document concepts."""
@@ -669,13 +815,80 @@ def test_convert_labelled_passages_to_document_concepts(
             yield "s3://bucket/path1.json", example_labelled_passages[:2]
             yield "s3://bucket/path2.json", example_labelled_passages[2:]
 
-        result = convert_labelled_passages_to_document_concepts(mock_generator())
+        result = await convert_labelled_passages_to_document_concepts(mock_generator())
 
         assert len(result) == 2
         assert isinstance(result[0][0], str)
         assert isinstance(result[0][1], list)
         assert all(isinstance(concept, tuple) for concept in result[0][1])
         assert all(isinstance(concept[1], VespaConcept) for concept in result[0][1])
+
+
+def test_dump_document_concepts(example_vespa_concepts: list[VespaConcept]):
+    """Test dumping document concepts to JSON strings."""
+    # Create test input with text block IDs and VespaConcepts
+    document_concepts = [
+        ("block_1", example_vespa_concepts[0]),
+        ("block_2", example_vespa_concepts[1]),
+    ]
+
+    # Dump to JSON strings
+    dumped = dump_document_concepts(document_concepts)
+
+    # Verify structure and types
+    assert len(dumped) == len(document_concepts)
+    for (orig_id, orig_concept), (dumped_id, dumped_json) in zip(
+        document_concepts, dumped
+    ):
+        assert dumped_id == orig_id
+        assert isinstance(dumped_json, str)
+        # Verify the JSON string can be loaded back into an equivalent object
+        loaded_concept = VespaConcept.model_validate_json(dumped_json)
+        assert loaded_concept == orig_concept
+
+
+def test_load_document_concepts(example_vespa_concepts: list[VespaConcept]):
+    """Test loading document concepts from JSON strings."""
+    # Create test input with text block IDs and JSON strings
+    document_concepts = [
+        ("block_1", example_vespa_concepts[0].model_dump_json()),
+        ("block_2", example_vespa_concepts[1].model_dump_json()),
+    ]
+
+    # Load from JSON strings
+    loaded = load_document_concepts(document_concepts)
+
+    # Verify structure and types
+    assert len(loaded) == len(document_concepts)
+    for (orig_id, orig_json), (loaded_id, loaded_concept) in zip(
+        document_concepts, loaded
+    ):
+        assert loaded_id == orig_id
+        assert isinstance(loaded_concept, VespaConcept)
+        # Verify the loaded object matches the original
+        original_concept = VespaConcept.model_validate_json(orig_json)
+        assert loaded_concept == original_concept
+
+
+def test_dump_load_document_concepts_roundtrip(
+    example_vespa_concepts: list[VespaConcept],
+):
+    """Test that dumping and loading document concepts preserves data."""
+    # Create test input
+    original = [
+        ("block_1", example_vespa_concepts[0]),
+        ("block_2", example_vespa_concepts[1]),
+    ]
+
+    # Round trip through dump and load
+    dumped = dump_document_concepts(original)
+    loaded = load_document_concepts(dumped)
+
+    # Verify nothing was lost
+    assert len(loaded) == len(original)
+    for (orig_id, orig_concept), (loaded_id, loaded_concept) in zip(original, loaded):
+        assert loaded_id == orig_id
+        assert loaded_concept == orig_concept
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier(
@@ -847,11 +1060,16 @@ def test_s3_obj_generator_valid_cases(
 @pytest.mark.parametrize(
     "data, expected_lengths",
     [
+        # Lists
         (list(range(50)), [50]),
         (list(range(850)), [400, 400, 50]),
         ([], [0]),
+        # Generators
+        ((x for x in range(50)), [50]),
+        ((x for x in range(850)), [400, 400, 50]),
+        ((x for x in []), [0]),
     ],
 )
 def test_iterate_batch(data, expected_lengths):
-    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data, 400)), expected_lengths):
         assert len(batch) == expected

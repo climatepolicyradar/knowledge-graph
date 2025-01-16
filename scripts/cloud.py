@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from enum import Enum
 from typing import Optional
 
@@ -85,6 +86,10 @@ def validate_transition(from_aws_env: AwsEnv, to_aws_env: AwsEnv) -> None:
 
 def generate_deployment_name(flow_name: str, aws_env: AwsEnv):
     return f"{PROJECT_NAME}-{flow_name}-{aws_env}"
+
+
+def function_to_flow_name(fn: Callable) -> str:
+    return fn.__name__.replace("_", "-")
 
 
 def get_session(aws_env: AwsEnv) -> boto3.session.Session:
