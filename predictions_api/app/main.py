@@ -170,6 +170,10 @@ def get_available_concepts_with_classifiers() -> list[dict]:
     return sorted(concepts, key=lambda x: x["id"])
 
 
+# get the list of concepts on application startup and store in memory
+concepts = get_available_concepts_with_classifiers()
+
+
 @app.get("/health-check", response_class=JSONResponse)
 async def health_check():
     """Health check endpoint for ECS."""
@@ -179,7 +183,6 @@ async def health_check():
 @app.get("/")
 async def get_index_page(request: Request):
     """Display homepage with list of available concepts."""
-    concepts = get_available_concepts_with_classifiers()
     return templates.TemplateResponse(
         "index.html",
         {

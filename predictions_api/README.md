@@ -12,7 +12,7 @@ This service provides an API for visualising predictions for candidate classifie
 just run-predictions-api
 ```
 
-The API service will start in a container and should be available at `http://localhost:8000`.
+The API service will start in a container and should be available at `http://localhost`.
 
 ## Deployment
 
@@ -103,7 +103,7 @@ PUBLIC_DNS=$(aws ec2 describe-network-interfaces \
   --query 'NetworkInterfaces[0].Association.PublicDnsName' \
   --output text)
 
-echo "Service is available at: http://$PUBLIC_DNS:8000"
+echo "Service is available at: http://$PUBLIC_DNS"
 ```
 
 You can run `pulumi destroy --stack labs` to tear down the service when needed. Note that if the ECR repository contains images, you'll need to delete them first:
@@ -138,7 +138,7 @@ PUBLIC_IP=$(aws ecs describe-container-instances \
   --query 'containerInstances[0].ec2InstanceId' \
   --output text)
 
-echo "Container is available at: http://$PUBLIC_IP:8000"
+echo "Container is available at: http://$PUBLIC_IP"
 ```
 
 ## Creating data for the API to consume and present

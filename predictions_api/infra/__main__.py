@@ -12,7 +12,7 @@ Infrastructure Overview:
 - Two IAM roles for
     - accessing the predictions-visualisation S3 bucket
     - running the ECS task
-- A security group which allows inbound traffic to the ECS task on port 8000
+- A security group which allows inbound traffic to the ECS task on port 80
 
 NB this design prioritizes simplicity and cost over resilience. This feels like a
 reasonable compromise for an internal tool where constant availability is not critical,
@@ -160,8 +160,8 @@ task_security_group = ec2.SecurityGroup(
     ingress=[
         ec2.SecurityGroupIngressArgs(
             protocol="tcp",
-            from_port=8000,
-            to_port=8000,
+            from_port=80,
+            to_port=80,
             cidr_blocks=["0.0.0.0/0"],
         )
     ],
@@ -178,8 +178,8 @@ task_security_group = ec2.SecurityGroup(
 task_definition = ecs.TaskDefinition(
     f"{app_name}-task-definition",
     family=f"{app_name}-task",
-    cpu="256",
-    memory="512",
+    cpu="512",
+    memory="1024",
     network_mode="awsvpc",
     requires_compatibilities=["FARGATE"],
     execution_role_arn=task_execution_role.arn,
@@ -192,14 +192,14 @@ task_definition = ecs.TaskDefinition(
                 "essential": True,
                 "portMappings": [
                     {
-                        "containerPort": 8000,
+                        "containerPort": 80,
                         "protocol": "tcp",
                     }
                 ],
                 "healthCheck": {
                     "command": [
                         "CMD-SHELL",
-                        "curl -f http://localhost:8000/health-check || exit 1",
+                        "curl -f http://localhost/health-check || exit 1",
                     ],
                     "interval": 30,
                     "timeout": 5,

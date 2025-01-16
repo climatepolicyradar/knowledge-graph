@@ -46,7 +46,7 @@ COPY --from=builder /app/scripts ./scripts
 ENV PYTHONPATH=/app
 
 # Expose port
-EXPOSE 8000
+EXPOSE 80
 
 # Run the application directly with uvicorn
-CMD ["uvicorn", "predictions_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "predictions_api.app.main:app", "--host", "0.0.0.0", "--port", "80"]

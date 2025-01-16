@@ -56,7 +56,7 @@ services:
       context: .
       dockerfile: predictions_api/Dockerfile
     ports:
-      - 8000:8000
+      - 80:80
     volumes:
       # need to include aws credentials so that we can sync the data from S3
       - ~/.aws:/root/.aws
