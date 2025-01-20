@@ -29,6 +29,7 @@ from flows.index import (
     iterate_batch,
     labelled_passages_generator,
     load_document_concepts,
+    partial_update_text_block,
     run_partial_updates_of_concepts_for_document_passages,
     s3_obj_generator,
     s3_obj_generator_from_s3_paths,
@@ -496,6 +497,87 @@ async def test_index_by_s3_with_s3_paths(
     assert initial_concepts_count + len(labelled_passage_fixture_files) == (
         final_concepts_count
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_partial_update_text_block(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    example_vespa_concepts: list[VespaConcept],
+):
+    with disable_run_logger():
+        document_import_id = "CCLW.executive.10014.4470"
+
+        concept_a, concept_b = example_vespa_concepts
+
+        # Confirm that the example concepts are not in the document passages
+        initial_passages = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        initial_concepts = [
+            concept
+            for _, passage in initial_passages
+            if passage.concepts
+            for concept in passage.concepts
+        ]
+
+        assert len(initial_passages) > 0, "fixture data wasn't loaded in"
+        assert all(
+            concept not in initial_concepts for concept in example_vespa_concepts
+        )
+
+        text_block_id = "1401"
+
+        assert concept_a not in initial_concepts
+
+        result_a = await partial_update_text_block(
+            text_block_id,
+            initial_passages,
+            local_vespa_search_adapter,
+            [concept_a],
+        )
+
+        assert result_a is None
+
+        passages_a = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        concepts_a = [
+            concept
+            for _, passage in passages_a
+            if passage.concepts
+            for concept in passage.concepts
+        ]
+
+        assert concept_a in concepts_a
+
+        assert concept_b not in concepts_a
+
+        result_b = await partial_update_text_block(
+            text_block_id,
+            initial_passages,
+            local_vespa_search_adapter,
+            [concept_b],
+        )
+
+        assert result_b is None
+
+        passages_b = get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        concepts_b = [
+            concept
+            for _, passage in passages_b
+            if passage.concepts
+            for concept in passage.concepts
+        ]
+
+        assert concept_a in concepts_a
+        assert concept_b in concepts_b
 
 
 @pytest.mark.parametrize("text_block_id", ["1457", "p_2_b_120"])
