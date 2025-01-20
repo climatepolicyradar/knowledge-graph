@@ -583,10 +583,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 namespace="doc_search",
                 data_id=document_import_id,
                 fields={
-                    "concept_counts": {
-                        concept_id: count
-                        for concept_id, count in concept_counts.items()
-                    }
+                    "concept_counts": concept_counts,
                 },
             )
 
