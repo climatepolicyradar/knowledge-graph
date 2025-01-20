@@ -577,20 +577,22 @@ async def run_partial_updates_of_concepts_for_document_passages(
         concept_counts = get_concepts_counts(loaded_document_concepts)
 
         # Run partial updates of the family documents to add the concept counts
-        vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
-            schema="family_document",
-            namespace="doc_search",
-            data_id=document_import_id,
-            fields={
-                "concept_counts": {
-                    concept_id: count for concept_id, count in concept_counts.items()
-                }
-            },
-        )
-        logger.info(
-            "Updated concept metadata for family_document.",
-            extra={"props": {"family_document": document_import_id}},
-        )
+        if not concept_counts:
+            vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+                schema="family_document",
+                namespace="doc_search",
+                data_id=document_import_id,
+                fields={
+                    "concept_counts": {
+                        concept_id: count
+                        for concept_id, count in concept_counts.items()
+                    }
+                },
+            )
+
+            logger.info(
+                f"updated concept metadata for family_document: {document_import_id}",
+            )
 
 
 async def partial_update_text_block(
