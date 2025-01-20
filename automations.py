@@ -76,6 +76,7 @@ def create_target_automation(
     b_deployment: Deployment,
     description: str,
     parameters: dict,
+    enabled: bool,
 ) -> automations.Automation:
     """
     Create a copy of the `Automation` that triggers another `Deployment`.
@@ -96,7 +97,8 @@ def create_target_automation(
         a_deployment: The `Deployment` of `Flow` A that needs to complete
         b_deployment: The `Deployment` to trigger after A completes
         parameters: Parameters to pass to `Deployment` B when it's triggered
-        description: A helpful description of what the `Automation` does.
+        enabled: Whether the automation should run or not
+        description: A helpful description of what the `Automation` does
 
     Returns:
         A Prefect Automation object configured to trigger B after A completes
@@ -104,7 +106,7 @@ def create_target_automation(
     return automations.Automation(
         name=f"trigger-{b_deployment.name}",
         description=description,
-        enabled=True,
+        enabled=enabled,
         # This is based on crafting the trigger in the web UI.
         trigger=automations.EventTrigger(
             match={
@@ -161,6 +163,7 @@ async def a_triggers_b(
     b_flow_name: str,
     b_deployment_name: str,
     b_parameters: dict,
+    enabled: bool,
     description: str,
     ignore: list[AwsEnv],
     aws_env: AwsEnv,
@@ -210,6 +213,7 @@ async def a_triggers_b(
         b_deployment=b_deployment,
         description=description,
         parameters=b_parameters,
+        enabled=enabled,
     )
 
     automations = await read_automations_by_name(
@@ -260,6 +264,7 @@ async def main() -> None:
         b_deployment_name=f"{PROJECT_NAME}-{classifier_inference.name}-{aws_env}",
         b_parameters={"use_new_and_updated": True},
         description="Start concept store inference with classifiers.",
+        enabled=True,
         aws_env=aws_env,
         ignore=[AwsEnv.labs],
     )
@@ -272,6 +277,7 @@ async def main() -> None:
             index_labelled_passages_from_s3_to_vespa.name, aws_env
         ),
         b_parameters={},
+        enabled=False,
         description="Start concept store indexing with classifiers.",
         aws_env=aws_env,
         ignore=[],
