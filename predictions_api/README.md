@@ -140,13 +140,9 @@ NB this won't delete the S3 bucket where predictions/models are stored, so you'l
 
 ## Updating the service
 
-If you make code changes which you want to deploy to the service, you'll need to follow the steps in [Deploying the service](#deployment) to build and push a new Docker image to ECR, and then force a new deployment of the ECS service.
+If you make code changes which you want to deploy to the service, you'll need to follow the steps in [Deploying the service](#deploying-the-service) to build and push a new Docker image to ECR, and then force a new deployment of the ECS service.
 
-## Updating the data
-
-If you want to update the data which is used by the service, you'll need to run the `just predict` command with the relevant wikibase ID. This will create a set of predictions and classifiers in the `data/processed` directory, sufficient for a local development version of the API.
-
-## Creating data for the API
+## Adding new data
 
 To create data for the API, you can run the `just predict Q123` with the relevant wikibase ID. This will create a set of predictions and classifiers in the `data/processed` directory, sufficient for a local development version of the API.
 
