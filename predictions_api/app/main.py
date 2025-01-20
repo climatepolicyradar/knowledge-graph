@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,11 +20,35 @@ from src.wikibase import WikibaseSession
 logger = logging.getLogger("uvicorn")
 
 
-def concepts_on_startup() -> None:
+def load_concepts_with_classifiers() -> None:
     """Get the list of concepts on application startup and store in memory"""
     global concepts
-    concepts = get_available_concepts_with_classifiers()
-    logger.info(f"Concepts: {concepts}")
+    concepts = []
+    wikibase = WikibaseSession()
+
+    for concept_dir in predictions_dir.iterdir():
+        if not concept_dir.is_dir():
+            continue
+
+        wikibase_id = WikibaseID(concept_dir.name)
+        try:
+            concept = wikibase.get_concept(wikibase_id)
+            classifiers = get_available_classifiers(wikibase_id)
+            concepts.append(
+                {
+                    "id": wikibase_id,
+                    "label": concept.preferred_label,
+                    "str": str(concept),
+                    "description": concept.description,
+                    "url": concept.wikibase_url,
+                    "classifiers": classifiers,
+                }
+            )
+            logger.info(
+                f'Found concept "{concept}" with {len(classifiers)} classifiers'
+            )
+        except Exception:
+            continue
 
 
 def sync_s3_to_local() -> None:
@@ -71,21 +96,32 @@ def sync_s3_to_local() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
-    try:
-        sync_s3_to_local()
-        concepts_on_startup()
-    except Exception as e:
-        logger.warning(f"S3 sync failed - {str(e)}")
+    # if the SKIP_S3_SYNC environment variable is unset, we pull classifiers and
+    # their predictions from s3
+    if not bool(os.getenv("SKIP_S3_SYNC", False)):
+        try:
+            sync_s3_to_local()
+        except Exception as e:
+            logger.warning(f"S3 sync failed - {str(e)}")
+
+    # whether loading from s3 or not, load the list of concepts into memory on startup
+    load_concepts_with_classifiers()
+
     yield
 
 
+# create the FastAPI app
 app = FastAPI(title="Predictions API", lifespan=lifespan)
+
+# set up Jinja2 templates
 base_dir = Path(__file__).parent
 templates = Jinja2Templates(directory=base_dir / "templates")
 
 # Mount the static directory
 static_dir = base_dir / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# set up the predictions directory
 predictions_dir = processed_data_dir / "predictions"
 predictions_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,9 +136,7 @@ def load_predictions(
     return predictions
 
 
-def get_available_classifiers(
-    wikibase_id: WikibaseID,
-) -> dict[str, str]:
+def get_available_classifiers(wikibase_id: WikibaseID) -> dict[str, str]:
     """Get list of available classifiers for a concept."""
     logger.info(f"Getting available classifiers for {wikibase_id}")
     concept_classifier_dir = classifier_dir / wikibase_id
@@ -134,9 +168,7 @@ def get_available_translated_statuses(predictions: list[LabelledPassage]) -> lis
     """Extract unique translated statuses from predictions."""
     translated_statuses: set[str] = set()
     for prediction in predictions:
-        translated = prediction.metadata.get("translated")
-        if translated and isinstance(translated, str) and translated.strip():
-            translated_statuses.add(translated)
+        translated_statuses.add(prediction.metadata.get("translated", False))
     return sorted(list(translated_statuses))
 
 
@@ -148,38 +180,6 @@ def get_available_corpora(predictions: list[LabelledPassage]) -> list[str]:
         if corpus and isinstance(corpus, str) and corpus.strip():
             corpora.add(corpus)
     return sorted(list(corpora))
-
-
-def get_available_concepts_with_classifiers() -> list[dict]:
-    """Get list of available concepts with a list of classifiers and some metadata."""
-    concepts = []
-    wikibase = WikibaseSession()
-
-    for concept_dir in predictions_dir.iterdir():
-        if not concept_dir.is_dir():
-            continue
-
-        wikibase_id = WikibaseID(concept_dir.name)
-        try:
-            concept = wikibase.get_concept(wikibase_id)
-            classifiers = get_available_classifiers(wikibase_id)
-            concepts.append(
-                {
-                    "id": wikibase_id,
-                    "label": concept.preferred_label,
-                    "str": str(concept),
-                    "description": concept.description,
-                    "url": concept.wikibase_url,
-                    "classifiers": classifiers,
-                }
-            )
-            logger.info(
-                f'Found concept "{concept}" with {len(classifiers)} classifiers'
-            )
-        except Exception:
-            continue
-
-    return sorted(concepts, key=lambda x: x["id"])
 
 
 @app.get("/health-check", response_class=JSONResponse)

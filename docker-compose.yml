@@ -55,6 +55,9 @@ services:
     build:
       context: .
       dockerfile: predictions_api/Dockerfile
+    # Uncomment this to run the API without syncing from s3
+    # environment:
+    #   - SKIP_S3_SYNC=false
     ports:
       - 80:80
     volumes:
