@@ -19,6 +19,13 @@ from src.wikibase import WikibaseSession
 logger = logging.getLogger("uvicorn")
 
 
+def concepts_on_startup() -> None:
+    """Get the list of concepts on application startup and store in memory"""
+    global concepts
+    concepts = get_available_concepts_with_classifiers()
+    logger.info(f"Concepts: {concepts}")
+
+
 def sync_s3_to_local() -> None:
     """Sync the prediction-visualisation S3 bucket to the local file system"""
     bucket_name = "prediction-visualisation"
@@ -55,6 +62,7 @@ def sync_s3_to_local() -> None:
             local_path = processed_data_dir / key
             local_path.parent.mkdir(parents=True, exist_ok=True)
             s3_client.download_file(bucket_name, key, str(local_path))
+            logger.info(f"Synced {key} to {local_path}")
             files_synced += 1
 
     logger.info(f"Successfully synced {files_synced} files from s3://{bucket_name}")
@@ -65,6 +73,7 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     try:
         sync_s3_to_local()
+        concepts_on_startup()
     except Exception as e:
         logger.warning(f"S3 sync failed - {str(e)}")
     yield
@@ -164,14 +173,13 @@ def get_available_concepts_with_classifiers() -> list[dict]:
                     "classifiers": classifiers,
                 }
             )
+            logger.info(
+                f'Found concept "{concept}" with {len(classifiers)} classifiers'
+            )
         except Exception:
             continue
 
     return sorted(concepts, key=lambda x: x["id"])
-
-
-# get the list of concepts on application startup and store in memory
-concepts = get_available_concepts_with_classifiers()
 
 
 @app.get("/health-check", response_class=JSONResponse)

@@ -4,6 +4,22 @@ This service provides an API for visualising predictions for candidate classifie
 
 ## Local Development
 
+### Via Uvicorn
+
+Make sure you have the local development environment set up:
+
+```bash
+just install --with predictions_api
+```
+
+Then run the API with:
+
+```bash
+poetry run uvicorn predictions_api.app.main:app --host 0.0.0.0 --port 80 --reload 
+```
+
+### With Docker
+
 1. Make sure you have Docker and Docker Compose installed.
 
 2. Build and run the service:
@@ -12,7 +28,7 @@ This service provides an API for visualising predictions for candidate classifie
 just run-predictions-api
 ```
 
-The API service will start in a container and should be available at `http://localhost`.
+The API service will start in a container and should be available at `http://localhost`, syncing the data from s3.
 
 ## Deployment
 
@@ -108,42 +124,9 @@ echo "Service is available at: http://$PUBLIC_DNS"
 
 You can run `pulumi destroy --stack labs` to tear down the service when needed. Note that if the ECR repository contains images, you'll need to delete them first:
 
-### Getting the running container URL
-
-```bash
-# Get the task ARN
-TASK_ARN=$(aws ecs list-tasks \
-  --cluster "$ECS_CLUSTER_NAME" \
-  --service-name "$ECS_SERVICE_NAME" \
-  --profile labs \
-  --region "$AWS_REGION" \
-  --query 'taskArns[0]' \
-  --output text)
-
-# Get the container instance ID
-CONTAINER_INSTANCE_ID=$(aws ecs describe-tasks \
-  --cluster "$ECS_CLUSTER_NAME" \
-  --tasks "$TASK_ARN" \
-  --profile labs \
-  --region "$AWS_REGION" \
-  --query 'tasks[0].containerInstanceArn' \
-  --output text)
-
-# Get the public IP address
-PUBLIC_IP=$(aws ecs describe-container-instances \
-  --cluster "$ECS_CLUSTER_NAME" \
-  --container-instances "$CONTAINER_INSTANCE_ID" \
-  --profile labs \
-  --region "$AWS_REGION" \
-  --query 'containerInstances[0].ec2InstanceId' \
-  --output text)
-
-echo "Container is available at: http://$PUBLIC_IP"
-```
-
 ## Creating data for the API to consume and present
 
-To create data for the API, you can run the `just predict Q123` with the relevant wikibase ID. This will create a set of predictions and classifiers in the `data/processed` directory.
+To create data for the API, you can run the `just predict Q123` with the relevant wikibase ID. This will create a set of predictions and classifiers in the `data/processed` directory, sufficient for a local development version of the API.
 
 To save the outputs to s3 for the deployed version of the API, you can run the same command with the `--save-to-s3` flag.
 
