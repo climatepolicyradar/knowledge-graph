@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import tempfile
+from collections import defaultdict
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from functools import reduce
@@ -442,24 +443,30 @@ def group_concepts_on_text_block(
     return concepts_grouped
 
 
-def get_concept_counts(
-    document_concepts: list[tuple[str, VespaConcept]],
-) -> dict[str, int]:
+def get_concepts_counts(
+    document_concepts: list[
+        tuple[
+            # Text block (aka span) ID
+            str,
+            VespaConcept,
+        ]
+    ],
+) -> dict[
+    # Concept
+    str,
+    # Count
+    int,
+]:
     """
-    Get the concept counts for a document.
+    Get the concepts' counts for a document.
 
     The concept counts are used to update the family document with the counts of the
     concepts related to the document.
     """
-    concept_counts = {}
+    concept_counts = defaultdict(int)
     for _, concept in document_concepts:
-        if not isinstance(concept, VespaConcept):
-            continue
-        if concept.id in concept_counts:
-            concept_counts[concept.id] += 1
-        else:
-            concept_counts[concept.id] = 1
-    return concept_counts
+        concept_counts[concept.id] += 1
+    return dict(concept_counts)
 
 
 @flow
@@ -567,7 +574,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
                     )
 
         # Convert document_concepts to concept counts
-        concept_counts = get_concept_counts(loaded_document_concepts)
+        concept_counts = get_concepts_counts(loaded_document_concepts)
 
         # Run partial updates of the family documents to add the concept counts
         vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
