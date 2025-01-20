@@ -71,8 +71,8 @@ label id string:
     poetry run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
 
 # find instances of the concept in a set of passages for a specific wikibase ID
-predict id:
-    poetry run python scripts/predict.py --wikibase-id {{id}}
+predict id +OPTS="":
+    poetry run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:

@@ -101,10 +101,11 @@ def main(
         KeywordClassifier(concept),
         RulesBasedClassifier(concept),
         StemmedKeywordClassifier(concept),
-        EmbeddingClassifier(concept, threshold=0.5),
+        EmbeddingClassifier(concept, threshold=0.6),
+        EmbeddingClassifier(concept, threshold=0.625),
         EmbeddingClassifier(concept, threshold=0.65),
-        EmbeddingClassifier(concept, threshold=0.8),
-        EmbeddingClassifier(concept, threshold=0.95),
+        EmbeddingClassifier(concept, threshold=0.675),
+        EmbeddingClassifier(concept, threshold=0.7),
     ]
 
     for classifier in classifiers:

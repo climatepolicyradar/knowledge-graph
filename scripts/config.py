@@ -1,22 +1,18 @@
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 
-def get_git_root() -> Optional[Path]:
+def get_git_root() -> Path:
+    """Get the root directory of the git repository."""
     try:
         git_root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
         ).strip()
         return Path(git_root)
-    except subprocess.CalledProcessError:
-        # This exception is raised if the command returns a non-zero exit status
-        # (i.e., we're not in a git repository)
-        return None
-    except FileNotFoundError:
-        # This exception is raised if the 'git' command is not found
-        print("Git command not found. Make sure Git is installed and in your PATH.")
-        return None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # If we're not in a git repo or git isn't installed,
+        # make a reasonable guess at the root directory
+        return Path(__file__).parent.parent
 
 
 # directories

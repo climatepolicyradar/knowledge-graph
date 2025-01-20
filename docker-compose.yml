@@ -51,6 +51,21 @@ services:
     volumes:
       - argilla_data:/var/lib/argilla
 
+  predictions_api:
+    build:
+      context: .
+      dockerfile: predictions_api/Dockerfile
+    # Uncomment this to run the API without syncing from s3
+    # environment:
+    #   - SKIP_S3_SYNC=false
+    ports:
+      - 80:80
+    volumes:
+      # need to include aws credentials so that we can sync the data from S3
+      - ~/.aws:/root/.aws
+    env_file:
+      - .env
+
 volumes:
   elasticsearch_data:
   argilla_data:
