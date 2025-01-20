@@ -552,7 +552,7 @@ async def partial_update_text_block(
     document_passages: list[tuple[str, VespaPassage]],
     vespa_search_adapter: VespaSearchAdapter,
     concepts: list[VespaConcept],
-):
+) -> None:
     """Partial update a singular text block and its concepts."""
     logger = get_run_logger()
 
