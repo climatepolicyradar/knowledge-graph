@@ -9,16 +9,13 @@ from mypy_boto3_s3.client import S3Client
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import aws_region, processed_data_dir
+from scripts.config import aws_region, concept_dir, processed_data_dir
 from scripts.utils import get_local_classifier_path
 from src.classifier import Classifier
-from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.rules_based import RulesBasedClassifier
-from src.classifier.stemmed_keyword import StemmedKeywordClassifier
+from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
-from src.wikibase import WikibaseSession
 
 console = Console()
 
@@ -45,6 +42,10 @@ def main(
     batch_size: int = typer.Option(
         25,
         help="Number of passages to process in each batch",
+    ),
+    all_data: bool = typer.Option(
+        False,
+        help="Predict on the entire dataset, rather than just the sampled dataset",
     ),
 ):
     """
@@ -77,10 +78,15 @@ def main(
         s3_client = None
         bucket_name = None
 
-    dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
+    if all_data:
+        console.log("💿 Using the entire dataset")
+        dataset_path = processed_data_dir / "combined_dataset.feather"
+    else:
+        console.log("💿 Using the balanced dataset")
+        dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
 
     try:
-        with console.status("🚚 Loading combined dataset"):
+        with console.status("🚚 Loading dataset"):
             df = pd.read_feather(dataset_path)
         console.log(f"✅ Loaded {len(df)} passages from {dataset_path}")
     except FileNotFoundError as e:
@@ -89,22 +95,26 @@ def main(
             "  just build-dataset"
         ) from e
 
-    with console.status("🔍 Fetching concept and subconcepts from Wikibase"):
-        wikibase = WikibaseSession()
-        concept = wikibase.get_concept(
-            wikibase_id, include_labels_from_subconcepts=True
-        )
+    # with console.status("🔍 Fetching concept and subconcepts from Wikibase"):
+    #     wikibase = WikibaseSession()
+    #     concept = wikibase.get_concept(
+    #         wikibase_id, include_labels_from_subconcepts=True
+    #     )
 
-    console.log(f"✅ Fetched {concept} from Wikibase")
+    # console.log(f"✅ Fetched {concept} from Wikibase")
+
+    with console.status("💿 Fetching concept from local disk"):
+        concept = Concept.load(concept_dir / f"{wikibase_id}.json")
+    console.log(f"✅ Fetched {concept} from local disk")
 
     classifiers: list[Classifier] = [
         KeywordClassifier(concept),
-        RulesBasedClassifier(concept),
-        StemmedKeywordClassifier(concept),
-        EmbeddingClassifier(concept, threshold=0.5),
-        EmbeddingClassifier(concept, threshold=0.65),
-        EmbeddingClassifier(concept, threshold=0.8),
-        EmbeddingClassifier(concept, threshold=0.95),
+        # RulesBasedClassifier(concept),
+        # StemmedKeywordClassifier(concept),
+        # EmbeddingClassifier(concept, threshold=0.5),
+        # EmbeddingClassifier(concept, threshold=0.65),
+        # EmbeddingClassifier(concept, threshold=0.8),
+        # EmbeddingClassifier(concept, threshold=0.95),
     ]
 
     for classifier in classifiers:
