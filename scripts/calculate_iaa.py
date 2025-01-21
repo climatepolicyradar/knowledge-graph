@@ -1,7 +1,11 @@
 """Calculate inter-annotator agreement for a labelled dataset."""
 
+import itertools
+from collections import defaultdict
+
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from scripts.config import concept_dir
 from src.concept import Concept
@@ -26,8 +30,18 @@ def calculate_iaa(
     wikibase_id: str = typer.Argument(
         ..., help="The Wikibase ID to calculate IAA for", callback=validate_wikibase_id
     ),
+    thresholds: list[float] = typer.Option(
+        [0, 0.5, 0.9, 0.99], help="The span-level thresholds to calculate IAA for"
+    ),
 ):
-    """Calculate inter-annotator agreement for a labelled dataset."""
+    """
+    Calculate inter-annotator agreement for a labelled dataset.
+
+    This script calculates the inter-annotator agreement for a labelled dataset
+    using the Cohen's Kappa and F1 Score metrics. The script will produce metrics for
+    all labeller pairs, at both the passage-level and span-level (with different
+    overlap thresholds).
+    """
 
     try:
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
@@ -38,50 +52,84 @@ def calculate_iaa(
         )
         raise typer.Exit(1)
 
+    # Get all unique labeller names
     labeller_names = set()
     for passage in concept.labelled_passages:
         for span in passage.spans:
             labeller_names.update(span.labellers)
-    assert (
-        len(labeller_names) == 2
-    ), f"There should be two labellers, found {labeller_names}"
-    labeller_1_name, labeller_2_name = labeller_names
 
-    labeller_1_passages: list[LabelledPassage] = []
-    labeller_2_passages: list[LabelledPassage] = []
+    # Make sure that there are at least 2 labellers
+    if len(labeller_names) < 2:
+        console.print(
+            f"Found {len(labeller_names)} labeller(s). "
+            "At least 2 labellers are required for IAA calculation.",
+            style="red",
+        )
+        raise typer.Exit(1)
 
+    labeller_passages = defaultdict(list)
     for passage in concept.labelled_passages:
-        labeller_1_passage = LabelledPassage(
-            text=passage.text,
-            spans=[],
-        )
-        labeller_2_passage = LabelledPassage(
-            text=passage.text,
-            spans=[],
-        )
-        for span in passage.spans:
-            if labeller_1_name in span.labellers:
-                labeller_1_passage.spans.append(span)
-            elif labeller_2_name in span.labellers:
-                labeller_2_passage.spans.append(span)
-        labeller_1_passages.append(labeller_1_passage)
-        labeller_2_passages.append(labeller_2_passage)
+        for labeller in labeller_names:
+            labeller_passage = LabelledPassage(
+                text=passage.text,
+                spans=[],
+            )
 
-    confusion_matrix = count_passage_level_metrics(
-        labeller_1_passages, labeller_2_passages
-    )
-    console.print("Passage-level metrics:")
-    console.print(confusion_matrix)
-    console.print(f"Kappa score: {confusion_matrix.cohens_kappa()}", end="\n\n")
+            for span in passage.spans:
+                if labeller in span.labellers:
+                    labeller_passage.spans.append(span)
+            labeller_passages[labeller].append(labeller_passage)
 
-    console.print("Span-level metrics:")
-    for threshold in [0, 0.5, 0.9]:
-        confusion_matrix = count_span_level_metrics(
-            labeller_1_passages, labeller_2_passages, threshold=threshold
+    # Calculate a list of all pairwise labeller combinations
+    labeller_pairs = list(itertools.combinations(labeller_names, 2))
+
+    # Create a table for each level of agreement
+    tables = {}
+
+    tables["passage"] = Table(title="Passage-level Agreement", title_justify="left")
+    tables["passage"].add_column("Labeller Pair")
+    tables["passage"].add_column("Cohen's Kappa")
+    tables["passage"].add_column("F1 Score")
+
+    for threshold in thresholds:
+        tables[threshold] = Table(
+            title=f"Span-level Agreement (threshold={threshold})", title_justify="left"
         )
-        console.print(f"Threshold: {threshold}")
-        console.print(confusion_matrix)
-        console.print(f"Kappa score: {confusion_matrix.cohens_kappa()}", end="\n\n")
+        tables[threshold].add_column("Labeller Pair")
+        tables[threshold].add_column("Cohen's Kappa")
+        tables[threshold].add_column("F1 Score")
+
+    # Calculate the metrics for each labeller pair
+    for labeller_1, labeller_2 in labeller_pairs:
+        pair_name = f"{labeller_1} & {labeller_2}"
+
+        # Passage-level
+        confusion_matrix = count_passage_level_metrics(
+            labeller_passages[labeller_1], labeller_passages[labeller_2]
+        )
+        tables["passage"].add_row(
+            pair_name,
+            f"{confusion_matrix.cohens_kappa():.3f}",
+            f"{confusion_matrix.f1_score():.3f}",
+        )
+
+        # Span-level at specifiedthresholds
+        for threshold in thresholds:
+            confusion_matrix = count_span_level_metrics(
+                labeller_passages[labeller_1],
+                labeller_passages[labeller_2],
+                threshold=threshold,
+            )
+            tables[threshold].add_row(
+                pair_name,
+                f"{confusion_matrix.cohens_kappa():.3f}",
+                f"{confusion_matrix.f1_score():.3f}",
+            )
+
+    # Display the results
+    for table in tables.values():
+        console.print(table)
+        console.print("\n")
 
 
 if __name__ == "__main__":
