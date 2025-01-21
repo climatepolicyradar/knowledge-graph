@@ -98,7 +98,12 @@ pulumi-aws = "^6.66.2"
 
 
 [tool.pytest.ini_options]
-env = ["AWS_ENV=sandbox"]
+env = [
+  "AWS_ENV=sandbox",
+  "WIKIBASE_USERNAME=test_username",
+  "WIKIBASE_PASSWORD=test_password",
+  "WIKIBASE_URL=https://test.test.test"
+]
 markers = ["vespa", "flaky_on_ci"]
 
 [build-system]
