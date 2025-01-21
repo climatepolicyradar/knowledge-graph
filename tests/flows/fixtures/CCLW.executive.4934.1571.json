@@ -1,6 +1,6 @@
 [
     {
-        "id": "0",
+        "id": "197",
         "text": "Some random text on climate change.",
         "spans": [
             {
@@ -9,7 +9,7 @@
                 "end_index": 11,
                 "concept_id": "Q10014",
                 "labellers": [
-                    "Q10014-RuleBasedClassifier"
+                    "KeywordClassifier(\"professional services sector\")"
                 ],
                 "timestamps": [
                     "2021-09-29T14:00:00.000Z"
@@ -170,7 +170,7 @@
         }
     },
     {
-        "id": "1",
+        "id": "267",
         "text": "The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
         "spans": [
             {
@@ -179,7 +179,7 @@
                 "end_index": 14,
                 "concept_id": "Q10014",
                 "labellers": [
-                    "Q10014-RuleBasedClassifier"
+                    "KeywordClassifier(\"professional services sector\")"
                 ],
                 "timestamps": [
                     "2021-09-29T14:00:00.000Z"
