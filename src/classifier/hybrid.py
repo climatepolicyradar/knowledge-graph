@@ -29,12 +29,13 @@ class MagicSpecialCustomHybridClassifier(Classifier):
             for concept in vibey_concepts
         ]
 
-    def predict(self, text: str) -> list[Span]:
+    def predict(self, text: str, threshold: float = 0.675) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
         keyword_predictions = self.keyword_classifier.predict(text)
         if keyword_predictions:
             embedding_predictions = [
-                classifier.predict(text) for classifier in self.embedding_classifiers
+                classifier.predict(text, threshold)
+                for classifier in self.embedding_classifiers
             ]
             if any(embedding_predictions):
                 return keyword_predictions
