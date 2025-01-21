@@ -14,27 +14,29 @@ class MagicSpecialCustomHybridClassifier(Classifier):
     aspect of the concept
     """
 
-    def __init__(self, concept: Concept, threshold: float = 0.65):
+    def __init__(
+        self,
+        concept: Concept,
+        vibey_concepts: list[Concept],
+        threshold: float = 0.675,
+    ):
         super().__init__(concept)
 
         self.keyword_classifier = RulesBasedClassifier(concept=concept)
 
-        justice = Concept(
-            preferred_label="Justice",
-            description="a concept which has justice-y vibes",
-            definition="also injustice, and, like, when things aren't nice for workers",
-        )
-        self.embedding_classifier = EmbeddingClassifier(
-            concept=justice,
-            threshold=threshold,
-        )
+        self.embedding_classifiers = [
+            EmbeddingClassifier(concept=concept, threshold=threshold)
+            for concept in vibey_concepts
+        ]
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
         keyword_predictions = self.keyword_classifier.predict(text)
         if keyword_predictions:
-            embedding_prediction = self.embedding_classifier.predict(text)
-            if embedding_prediction:
+            embedding_predictions = [
+                classifier.predict(text) for classifier in self.embedding_classifiers
+            ]
+            if any(embedding_predictions):
                 return keyword_predictions
 
         return []
