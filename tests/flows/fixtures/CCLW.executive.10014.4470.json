@@ -1,6 +1,6 @@
 [
     {
-        "id": "0",
+        "id": "1570",
         "text": "National Council for Sustainable Development of the Kyrgyz Republic",
         "spans": [
             {
@@ -9,7 +9,7 @@
                 "end_index": 10,
                 "concept_id": "Q10014",
                 "labellers": [
-                    "Q10014-RuleBasedClassifier"
+                    "KeywordClassifier(\"professional services sector\")"
                 ],
                 "timestamps": [
                     "2021-09-29T14:00:00.000Z"
@@ -49,16 +49,65 @@
         }
     },
     {
-        "id": "1",
+        "id": "1273",
         "text": "The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
         "spans": [
             {
                 "text": "National Council for Sustainable Development of the Kyrgyz Republic",
                 "start_index": 4,
                 "end_index": 14,
-                "concept_id": "Q10014",
+                "concept_id": "Q10015",
                 "labellers": [
-                    "Q10014-RuleBasedClassifier"
+                    "KeywordClassifier(\"professional services sector\")"
+                ],
+                "timestamps": [
+                    "2021-09-29T14:00:00.000Z"
+                ]
+            }
+        ],
+        "metadata": {
+            "concept": {
+                "preferred_label": "environmental hazards",
+                "alternative_labels": [
+                    "natural hazards",
+                    "environmental risk",
+                    "pollution",
+                    "climate hazards",
+                    "ecological risks",
+                    "environmental damage",
+                    "toxicity",
+                    "hazardous waste",
+                    "environmental contamination",
+                    "industrial pollution"
+                ],
+                "negative_labels": [],
+                "description": "Factors or events that pose potential harm to the environment and living organisms.",
+                "wikibase_id": "Q720855",
+                "subconcept_of": [
+                    "Q42689"
+                ],
+                "has_subconcept": [],
+                "related_concepts": [
+                    "Q5019",
+                    "Q198504",
+                    "Q11394"
+                ],
+                "definition": null,
+                "labelled_passages": []
+            }
+        }
+    },
+    {
+        "id": "1052",
+        "text": "The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
+        "spans": [
+            {
+                "text": "National Council for Sustainable Development of the Kyrgyz Republic",
+                "start_index": 4,
+                "end_index": 14,
+                "concept_id": "Q10015",
+                "labellers": [
+                    "KeywordClassifier(\"professional services sector\")"
                 ],
                 "timestamps": [
                     "2021-09-29T14:00:00.000Z"

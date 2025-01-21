@@ -131,14 +131,17 @@ def vespa_app(
 
 def delete_all_documents(app):
     print("Deleting all documents...")
+    print("Search weights...")
     response = app.delete_all_docs(
         content_cluster_name="family-document-passage", schema="search_weights"
     )
     print(f"Delete response: {response}")
+    print("Family documents...")
     response = app.delete_all_docs(
         content_cluster_name="family-document-passage", schema="family_document"
     )
     print(f"Delete response: {response}")
+    print("Document passages...")
     response = app.delete_all_docs(
         content_cluster_name="family-document-passage", schema="document_passage"
     )
@@ -431,10 +434,10 @@ def example_vespa_concepts() -> list[VespaConcept]:
             id="1273",
             name="manufacturing sector",
             parent_concepts=[
-                {"name": "manufacturing", "id": "Q2"},
-                {"name": "processing industry", "id": "Q3"},
+                {"name": "manufacturing", "id": "Q200"},
+                {"name": "processing industry", "id": "Q300"},
             ],
-            parent_concept_ids_flat="Q2,Q3",
+            parent_concept_ids_flat="Q200,Q300",
             model="KeywordClassifier('manufacturing sector')",
             end=100,
             start=0,
