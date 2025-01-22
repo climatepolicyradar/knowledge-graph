@@ -8,6 +8,7 @@ from urllib.parse import parse_qs
 import httpx
 import pandas as pd
 import pytest
+from prefect.logging import disable_run_logger
 from prefect.testing.utilities import prefect_test_harness
 
 from scripts.config import get_git_root
@@ -19,7 +20,8 @@ from src.wikibase import WikibaseSession
 @pytest.fixture(autouse=True, scope="session")
 def prefect_test_fixture():
     with prefect_test_harness():
-        yield
+        with disable_run_logger():
+            yield
 
 
 @pytest.fixture(scope="function")
