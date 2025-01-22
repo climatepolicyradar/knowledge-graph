@@ -63,3 +63,10 @@ class BaseTargetClassifier(Classifier, ABC):
                 )
 
         return results
+
+    def fit(self) -> "BaseTargetClassifier":
+        """Targets classifiers cannot be trained directly."""
+        raise NotImplementedError(
+            "Targets classifiers in the knowledge graph are based on the pre-trained "
+            f"{self.model_name} model. As such, they cannot be trained directly."
+        )
