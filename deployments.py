@@ -21,6 +21,7 @@ from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
 )
+from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -87,4 +88,11 @@ create_deployment(
 create_deployment(
     flow=index_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in S3 into Vespa",
+)
+
+# wikibase
+
+create_deployment(
+    flow=wikibase_to_s3,
+    description="Upload concepts from Wikibase to S3",
 )
