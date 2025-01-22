@@ -8,7 +8,7 @@ from src.concept import Concept
 from src.span import Span
 
 
-class Q1653(Classifier):
+class NetZeroTargetClassifier(Classifier):
     """Net-zero target (Q1653) classifier"""
 
     def __init__(self, concept: Concept, threshold: float = 0.5):
