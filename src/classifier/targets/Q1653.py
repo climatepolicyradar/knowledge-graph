@@ -8,11 +8,13 @@ from src.concept import Concept
 from src.span import Span
 
 
-class Q1651(Classifier):
-    """Target (Q1651) classifier"""
+class Q1653(Classifier):
+    """Net-zero target (Q1653) classifier"""
 
     def __init__(self, concept: Concept, threshold: float = 0.5):
-        assert concept.wikibase_id == "Q1651", 'Concept must be "target (Q1651)"'
+        assert (
+            concept.wikibase_id == "Q1653"
+        ), 'Concept must be "net-zero target (Q1653)"'
 
         super().__init__(concept)
 
@@ -29,11 +31,11 @@ class Q1651(Classifier):
         self.threshold = threshold
 
     def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
-        """Predict whether the supplied text contains a target."""
+        """Predict whether the supplied text contains a net-zero target."""
         threshold = threshold or self.threshold
         prediction = self.classifier(text, padding=True, truncation=True)
 
-        if not prediction or prediction[0]["score"] < threshold:
+        if prediction[0]["label"] != "NZT" or prediction[0]["score"] < threshold:
             return []
 
         return [
