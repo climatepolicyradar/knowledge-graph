@@ -36,8 +36,8 @@ class EmissionsReductionTargetClassifier(Classifier):
         prediction = self.classifier(text, padding=True, truncation=True)
 
         if (
-            not prediction or
-            prediction[0]["label"] not in ["Reduction", "NZT"]
+            not prediction
+            or prediction[0]["label"] not in ["Reduction", "NZT"]
             or prediction[0]["score"] < threshold
         ):
             return []
