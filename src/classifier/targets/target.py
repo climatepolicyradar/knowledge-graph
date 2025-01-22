@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 
@@ -19,7 +19,7 @@ class TargetClassifier(Classifier):
         self.model_name = "ClimatePolicyRadar/national-climate-targets"
         self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.classifier = pipeline(
+        self.classifier: Callable = pipeline(
             "text-classification",
             model=self.model,
             tokenizer=self.tokenizer,
