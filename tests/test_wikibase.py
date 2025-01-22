@@ -1,24 +1,24 @@
-import os
-
 import pytest
 
 from src.concept import Concept
 from src.identifiers import WikibaseID
 
 
-def test_wikibase____init__(MockedWikibaseSession):
+def test_wikibase____init__(MockedWikibaseSession, monkeypatch, mock_wikibase_url):
     # Login behaviour with env variables
     MockedWikibaseSession()
 
     # And without env variables
-    username = os.environ.pop("WIKIBASE_USERNAME")
-    password = os.environ.pop("WIKIBASE_PASSWORD")
-    url = os.environ.pop("WIKIBASE_URL")
+    monkeypatch.delenv("WIKIBASE_USERNAME")
+    monkeypatch.delenv("WIKIBASE_PASSWORD")
+    monkeypatch.delenv("WIKIBASE_URL")
 
     with pytest.raises(ValueError, match="must be set"):
         MockedWikibaseSession()
 
-    MockedWikibaseSession(username=username, password=password, url=url)
+    MockedWikibaseSession(
+        username="username", password="password", url=mock_wikibase_url
+    )
 
 
 def test_wikibase__get_all_properties(MockedWikibaseSession):

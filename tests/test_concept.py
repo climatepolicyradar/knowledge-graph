@@ -1,5 +1,3 @@
-import os
-
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -21,22 +19,21 @@ def test_whether_preferred_label_is_removed_from_alternative_labels():
     assert set(concept.alternative_labels) == {"A", "B"}
 
 
-def test_whether_wikibase_url_is_correctly_generated():
-    os.environ["WIKIBASE_URL"] = "https://example.com"
+def test_whether_wikibase_url_is_correctly_generated(monkeypatch):
+    monkeypatch.setenv("WIKIBASE_URL", "https://example.com")
     concept = Concept(preferred_label="Test", wikibase_id=WikibaseID("Q123"))
     assert concept.wikibase_url == "https://example.com/wiki/Item:Q123"
 
 
-def test_whether_wikibase_url_raises_error_with_missing_wikibase_url():
-    if "WIKIBASE_URL" in os.environ:
-        del os.environ["WIKIBASE_URL"]
+def test_whether_wikibase_url_raises_error_with_missing_wikibase_url(monkeypatch):
+    monkeypatch.delenv("WIKIBASE_URL", raising=False)
     concept = Concept(preferred_label="Test", wikibase_id=WikibaseID("Q123"))
     with pytest.raises(ValueError, match="WIKIBASE_URL environment variable not set"):
         _ = concept.wikibase_url
 
 
-def test_whether_wikibase_url_raises_error_with_missing_wikibase_id():
-    os.environ["WIKIBASE_URL"] = "https://example.com"
+def test_whether_wikibase_url_raises_error_with_missing_wikibase_id(monkeypatch):
+    monkeypatch.setenv("WIKIBASE_URL", "https://example.com")
     concept = Concept(preferred_label="Test")
     with pytest.raises(ValueError, match="No wikibase_id found for concept"):
         _ = concept.wikibase_url
