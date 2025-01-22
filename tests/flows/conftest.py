@@ -25,8 +25,10 @@ from requests.exceptions import ConnectionError
 from vespa.application import Vespa
 
 from flows.index import get_vespa_search_adapter_from_aws_secrets
-from flows.inference import Config
+from flows.inference import Config as InferenceConfig
+from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
+from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
@@ -35,12 +37,23 @@ FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 @pytest.fixture()
 def test_config():
-    yield Config(
+    yield InferenceConfig(
         cache_bucket="test_bucket",
         wandb_model_registry="test_org/test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
         aws_env=AwsEnv("sandbox"),
+    )
+
+
+@pytest.fixture()
+def test_wikibase_to_s3_config():
+    yield WikibaseToS3Config(
+        cdn_bucket_name="test_bucket",
+        aws_env=AwsEnv("sandbox"),
+        wikibase_password=SecretStr("test_password"),
+        wikibase_username="test_username",
+        wikibase_url="https://test.test.test",
     )
 
 
@@ -162,6 +175,17 @@ def mock_bucket(
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
     yield test_config.cache_bucket
+
+
+@pytest.fixture
+def mock_cdn_bucket(
+    mock_aws_creds, mock_s3_client, test_wikibase_to_s3_config
+) -> Generator[str, Any, Any]:
+    mock_s3_client.create_bucket(
+        Bucket=test_wikibase_to_s3_config.cdn_bucket_name,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield test_wikibase_to_s3_config.cdn_bucket_name
 
 
 @pytest.fixture
@@ -455,3 +479,35 @@ def mock_wandb(mock_s3_client):
         mock_run = StubbedRun()
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
+
+
+@pytest.fixture
+def mock_concepts() -> Generator[list[Concept], None, None]:
+    yield [
+        Concept(
+            wikibase_id=WikibaseID("Q10"),
+            preferred_label="marine toxins",
+        ),
+        Concept(
+            wikibase_id=WikibaseID("Q20"),
+            preferred_label="biome shift",
+        ),
+        Concept(
+            wikibase_id=WikibaseID("Q30"),
+            preferred_label="short-lived climate pollutant",
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_cdn_concepts(
+    mock_s3_client, mock_cdn_bucket: str, mock_concepts: list[Concept]
+):
+    for concept in mock_concepts:
+        body = BytesIO(concept.model_dump_json().encode("utf-8"))
+        key = f"concepts/{concept.wikibase_id}.json"
+        mock_s3_client.put_object(
+            Bucket=mock_cdn_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+    yield mock_concepts
