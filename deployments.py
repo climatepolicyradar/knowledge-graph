@@ -24,12 +24,17 @@ from flows.inference import (
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
+DEFAULT_FLOW_VARIABLES = {
+    "cpu": MEGABYTES_PER_GIGABYTE * 4,
+    "memory": MEGABYTES_PER_GIGABYTE * 16,
+    "ephemeralStorage": {"sizeInGiB": 50},
+}
 
 
 def create_deployment(
     flow: Flow,
     description: str,
-    flow_variables: dict[str, Any],
+    flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
@@ -65,21 +70,11 @@ def create_deployment(
 create_deployment(
     flow=classifier_inference,
     description="Run concept classifier inference on document passages",
-    flow_variables={
-        "cpu": MEGABYTES_PER_GIGABYTE * 4,
-        "memory": MEGABYTES_PER_GIGABYTE * 16,
-        "ephemeralStorage": {"sizeInGiB": 50},
-    },
 )
 
 create_deployment(
     flow=run_classifier_inference_on_batch_of_documents,
     description="Run concept classifier inference on a batch of documents",
-    flow_variables={
-        "cpu": MEGABYTES_PER_GIGABYTE * 4,
-        "memory": MEGABYTES_PER_GIGABYTE * 16,
-        "ephemeralStorage": {"sizeInGiB": 50},
-    },
 )
 
 # Index
@@ -87,19 +82,9 @@ create_deployment(
 create_deployment(
     flow=run_partial_updates_of_concepts_for_document_passages,
     description="Co-ordinate updating inference results for concepts in Vespa",
-    flow_variables={
-        "cpu": MEGABYTES_PER_GIGABYTE * 4,
-        "memory": MEGABYTES_PER_GIGABYTE * 16,
-        "ephemeralStorage": {"sizeInGiB": 50},
-    },
 )
 
 create_deployment(
     flow=index_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in S3 into Vespa",
-    flow_variables={
-        "cpu": MEGABYTES_PER_GIGABYTE * 4,
-        "memory": MEGABYTES_PER_GIGABYTE * 16,
-        "ephemeralStorage": {"sizeInGiB": 50},
-    },
 )
