@@ -36,6 +36,7 @@ class EmissionsReductionTargetClassifier(Classifier):
         prediction = self.classifier(text, padding=True, truncation=True)
 
         if (
+            not prediction or
             prediction[0]["label"] not in ["Reduction", "NZT"]
             or prediction[0]["score"] < threshold
         ):
@@ -44,8 +45,8 @@ class EmissionsReductionTargetClassifier(Classifier):
         return [
             Span(
                 text=text,
-                start=0,
-                end=len(text),
+                start_index=0,
+                end_index=len(text),
                 concept_id=self.concept.wikibase_id,
                 labellers=[str(self)],
                 timestamps=[datetime.now()],

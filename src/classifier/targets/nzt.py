@@ -35,14 +35,14 @@ class NetZeroTargetClassifier(Classifier):
         threshold = threshold or self.threshold
         prediction = self.classifier(text, padding=True, truncation=True)
 
-        if prediction[0]["label"] != "NZT" or prediction[0]["score"] < threshold:
+        if not prediction or prediction[0]["label"] != "NZT" or prediction[0]["score"] < threshold:
             return []
 
         return [
             Span(
                 text=text,
-                start=0,
-                end=len(text),
+                start_index=0,
+                end_index=len(text),
                 concept_id=self.concept.wikibase_id,
                 labellers=[str(self)],
                 timestamps=[datetime.now()],

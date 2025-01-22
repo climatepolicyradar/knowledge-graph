@@ -39,8 +39,8 @@ class TargetClassifier(Classifier):
         return [
             Span(
                 text=text,
-                start=0,
-                end=len(text),
+                start_index=0,
+                end_index=len(text),
                 concept_id=self.concept.wikibase_id,
                 labellers=[str(self)],
                 timestamps=[datetime.now()],
