@@ -34,23 +34,6 @@ nltk = "^3.9.1"
 datasets = "^2.18.0"
 boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
 
-[tool.poetry.group.predictions_api]
-optional = true
-
-[tool.poetry.group.predictions_api.dependencies]
-fastapi = "^0.115.6"
-jinja2 = "^3.1.4"
-
-[tool.poetry.group.llm]
-optional = true
-
-[tool.poetry.group.llm.dependencies]
-anthropic = "^0.39.0"
-
-[tool.poetry.group.embeddings]
-optional = true
-
-[tool.poetry.group.embeddings.dependencies]
 # Torch CPU versions: https://download.pytorch.org/whl/torch/
 torch = [
   # Mac x86_64
@@ -63,6 +46,18 @@ torch = [
 ]
 sentence-transformers = "^3.1.1"
 
+[tool.poetry.group.predictions_api]
+optional = true
+
+[tool.poetry.group.predictions_api.dependencies]
+fastapi = "^0.115.6"
+jinja2 = "^3.1.4"
+
+[tool.poetry.group.llm]
+optional = true
+
+[tool.poetry.group.llm.dependencies]
+anthropic = "^0.39.0"
 
 [[tool.poetry.source]]
 name = "pytorch"

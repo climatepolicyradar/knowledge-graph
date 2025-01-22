@@ -1,8 +1,10 @@
 import importlib
 
 from src.classifier.classifier import Classifier
+from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
+from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.classifier.targets import (
     EmissionsReductionTargetClassifier,
     NetZeroTargetClassifier,
@@ -10,31 +12,15 @@ from src.classifier.targets import (
 )
 from src.concept import Concept
 
-
-def __getattr__(name):
-    """Only import particular classifiers when they are actually requested"""
-    if name == "EmbeddingClassifier":
-        # This adds a special case for embeddings because they rely on very large external
-        # libraries. Importing these libraries is very slow and having them installed
-        # requires much more disc space, so we gave them a distinct group in the
-        # pyproject.toml file (see: f53a404).
-        module = importlib.import_module(".embedding", __package__)
-        return getattr(module, name)
-    if name == "StemmedKeywordClassifier":
-        # For similar reasons, only import the stemmed keyword classifier and download
-        # the nltk data when we actually request it.
-        module = importlib.import_module(".stemmed_keyword", __package__)
-        return getattr(module, name)
-    else:
-        return globals()[name]
-
-
 __all__ = [
     "Classifier",
     "KeywordClassifier",
     "RulesBasedClassifier",
-    "EmbeddingClassifier",  # type: ignore
-    "StemmedKeywordClassifier",  # type: ignore
+    "EmbeddingClassifier",
+    "StemmedKeywordClassifier",
+    "EmissionsReductionTargetClassifier",
+    "NetZeroTargetClassifier",
+    "TargetClassifier",
 ]
 
 

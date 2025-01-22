@@ -12,10 +12,6 @@ install:
     poetry run pre-commit install
     poetry run ipython kernel install --user
 
-# install, but also include libraries for embeddings
-install-for-embeddings: install
-    poetry install --with embeddings
-
 # test the project
 test +OPTS="":
     poetry run pytest {{OPTS}}
