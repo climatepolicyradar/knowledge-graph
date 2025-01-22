@@ -33,24 +33,7 @@ class BaseTargetClassifier(Classifier, ABC):
 
     def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """Predict whether the supplied text contains a target."""
-        threshold = threshold or self.threshold
-        prediction = self.classifier(text, padding=True, truncation=True)
-
-        if not prediction or not self._check_prediction_conditions(
-            prediction[0], threshold
-        ):
-            return []
-
-        return [
-            Span(
-                text=text,
-                start_index=0,
-                end_index=len(text),
-                concept_id=self.concept.wikibase_id,
-                labellers=[str(self)],
-                timestamps=[datetime.now()],
-            )
-        ]
+        return self.predict_batch([text], threshold)[0]
 
     def predict_batch(
         self, texts: list[str], threshold: Optional[float] = None
