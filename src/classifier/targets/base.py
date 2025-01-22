@@ -51,3 +51,32 @@ class BaseTargetClassifier(Classifier, ABC):
                 timestamps=[datetime.now()],
             )
         ]
+
+    def predict_batch(
+        self, texts: list[str], threshold: Optional[float] = None
+    ) -> list[list[Span]]:
+        """Predict whether the supplied texts contain targets."""
+        threshold = threshold or self.threshold
+        predictions = self.classifier(texts, padding=True, truncation=True)
+
+        results = []
+        for text, prediction in zip(texts, predictions):
+            if not prediction or not self._check_prediction_conditions(
+                prediction, threshold
+            ):
+                results.append([])
+            else:
+                results.append(
+                    [
+                        Span(
+                            text=text,
+                            start_index=0,
+                            end_index=len(text),
+                            concept_id=self.concept.wikibase_id,
+                            labellers=[str(self)],
+                            timestamps=[datetime.now()],
+                        )
+                    ]
+                )
+
+        return results
