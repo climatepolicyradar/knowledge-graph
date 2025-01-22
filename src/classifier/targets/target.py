@@ -1,12 +1,15 @@
 from src.classifier.targets.base import BaseTargetClassifier
 from src.concept import Concept
+from src.identifiers import WikibaseID
 
 
 class TargetClassifier(BaseTargetClassifier):
     """Target (Q1651) classifier"""
 
     def __init__(self, concept: Concept, threshold: float = 0.5):
-        assert concept.wikibase_id == "Q1651", 'Concept must be "target (Q1651)"'
+        self._check_whether_supplied_concept_is_correct_for_this_classifier(
+            expected_wikibase_id=WikibaseID("Q1651"), supplied_concept=concept
+        )
         super().__init__(concept, threshold)
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:

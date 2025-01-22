@@ -6,6 +6,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipe
 
 from src.classifier import Classifier
 from src.concept import Concept
+from src.identifiers import WikibaseID
 from src.span import Span
 
 
@@ -26,6 +27,16 @@ class BaseTargetClassifier(Classifier, ABC):
         )
 
         self.threshold = threshold
+
+    def _check_whether_supplied_concept_is_correct_for_this_classifier(
+        self, expected_wikibase_id: WikibaseID, supplied_concept: Concept
+    ) -> None:
+        """Check if the supplied concept is the correct target type."""
+        if supplied_concept.wikibase_id != expected_wikibase_id:
+            raise ValueError(
+                f"The concept supplied to a {self.__class__.__name__} must be "
+                f'"{expected_wikibase_id}", not "{supplied_concept.wikibase_id}"'
+            )
 
     @abstractmethod
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
