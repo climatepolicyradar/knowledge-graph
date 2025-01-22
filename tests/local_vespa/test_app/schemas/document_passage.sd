@@ -110,7 +110,6 @@ schema document_passage {
     import field family_document_ref.corpus_import_id as corpus_import_id {}
     import field family_document_ref.corpus_type_name as corpus_type_name {}
     import field family_document_ref.metadata as metadata {}
-    import field search_weights_ref.passage_weight as passage_weight {}
 
     fieldset default {
         fields: text_block
@@ -150,17 +149,23 @@ schema document_passage {
         }
     }
     
-    rank-profile exact_not_stemmed inherits default {
+    rank-profile default_passage inherits default {
+        inputs {
+            query(passage_weight) double: 1.0
+        }
+    }
+
+    rank-profile exact_not_stemmed inherits default_passage {
         function text_score() {
             expression: fieldMatch(text_block_not_stemmed)
         }
         first-phase {
-            expression: attribute(passage_weight) * text_score()
+            expression: query(passage_weight) * text_score()
         }
-        summary-features: attribute(passage_weight) text_score()
+        summary-features: query(passage_weight) text_score()
     }
 
-    rank-profile hybrid inherits default {
+    rank-profile hybrid inherits default_passage {
         inputs {
             query(query_embedding) tensor<float>(x[768])
             query(passage_bm25_weight) double: 1.0
@@ -170,12 +175,12 @@ schema document_passage {
             expression: query(passage_bm25_weight) * bm25(text_block) + query(passage_closeness_weight) * closeness(text_embedding)
         }
         first-phase {
-            expression: attribute(passage_weight) * text_score()
+            expression: query(passage_weight) * text_score()
         }
-        summary-features: text_score() bm25(text_block) closeness(text_embedding) attribute(passage_weight)
+        summary-features: text_score() bm25(text_block) closeness(text_embedding) query(passage_weight)
     }
     
-    rank-profile hybrid_nativerank inherits default {
+    rank-profile hybrid_nativerank inherits default_passage {
         inputs {
             query(query_embedding) tensor<float>(x[768])
             query(passage_nativerank_weight) double: 1.0
@@ -185,9 +190,9 @@ schema document_passage {
             expression: query(passage_nativerank_weight) * nativeRank(text_block) + query(passage_closeness_weight) * closeness(text_embedding)
         }
         first-phase {
-            expression: attribute(passage_weight) * text_score()
+            expression: query(passage_weight) * text_score()
         }
-        summary-features: text_score() nativeRank(text_block) closeness(text_embedding) attribute(passage_weight)
+        summary-features: text_score() nativeRank(text_block) closeness(text_embedding) query(passage_weight)
     }
 
     rank-profile hybrid_no_closeness inherits hybrid {

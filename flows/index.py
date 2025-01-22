@@ -16,7 +16,7 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
-from prefect.deployments import run_deployment
+from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
@@ -552,7 +552,7 @@ async def partial_update_text_block(
     document_passages: list[tuple[str, VespaPassage]],
     vespa_search_adapter: VespaSearchAdapter,
     concepts: list[VespaConcept],
-):
+) -> None:
     """Partial update a singular text block and its concepts."""
     logger = get_run_logger()
 
@@ -815,17 +815,29 @@ async def index_by_s3(
 def split_large_concepts_updates(
     document_concepts: list[
         tuple[
-            # Text block (aka span) ID
+            # Object: Key
             str,
-            VespaConcept,
+            list[
+                tuple[
+                    # Text block (aka span) ID
+                    str,
+                    VespaConcept,
+                ]
+            ],
         ]
     ],
     max_concepts_in_partial_update: int,
 ) -> list[
     tuple[
-        # Text block (aka span) ID
+        # Object: Key
         str,
-        VespaConcept,
+        list[
+            tuple[
+                # Text block (aka span) ID
+                str,
+                VespaConcept,
+            ]
+        ],
     ]
 ]:
     """

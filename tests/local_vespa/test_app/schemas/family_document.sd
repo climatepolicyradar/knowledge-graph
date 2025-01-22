@@ -171,14 +171,18 @@ schema family_document {
         }
     }
 
-    import field search_weights_ref.name_weight as name_weight {}
-    import field search_weights_ref.description_weight as description_weight {}
-
     fieldset default {
         fields: family_name_index, family_description_index
     }
 
-    rank-profile exact_not_stemmed inherits default {
+    rank-profile default_family inherits default {
+        inputs {
+            query(name_weight) double: 2.5
+            query(description_weight) double: 2.0
+        }
+    }
+
+    rank-profile exact_not_stemmed inherits default_family {
         function name_score() {
             expression: fieldMatch(family_name_not_stemmed)
         }
@@ -186,12 +190,12 @@ schema family_document {
             expression: fieldMatch(family_description_not_stemmed)
         }
         first-phase {
-            expression: attribute(name_weight) * name_score() + attribute(description_weight) * description_score()
+            expression: query(name_weight) * name_score() + query(description_weight) * description_score()
         }
-        summary-features: name_score() description_score() attribute(name_weight) attribute(description_weight)
+        summary-features: name_score() description_score() query(name_weight) query(description_weight)
     }
 
-    rank-profile hybrid inherits default {
+    rank-profile hybrid inherits default_family {
         inputs {
             query(query_embedding) tensor<float>(x[768])
             query(description_bm25_weight) double: 1.0
@@ -204,12 +208,12 @@ schema family_document {
             expression: query(description_bm25_weight) * bm25(family_description_index) + query(description_closeness_weight) * closeness(family_description_embedding)
         }
         first-phase {
-            expression: (attribute(name_weight) * name_score()) + (attribute(description_weight) * description_score())
+            expression: (query(name_weight) * name_score()) + (query(description_weight) * description_score())
         }
         summary-features: name_score() description_score() bm25(family_name_index) bm25(family_description_index) closeness(family_description_embedding)
     }
     
-    rank-profile hybrid_nativerank inherits default {
+    rank-profile hybrid_nativerank inherits default_family {
         inputs {
             query(query_embedding) tensor<float>(x[768])
             query(description_nativerank_weight) double: 1.0
@@ -222,7 +226,7 @@ schema family_document {
             expression: query(description_nativerank_weight) * nativeRank(family_description_index) + query(description_closeness_weight) * closeness(family_description_embedding)
         }
         first-phase {
-            expression: (attribute(name_weight) * name_score()) + (attribute(description_weight) * description_score())
+            expression: (query(name_weight) * name_score()) + (query(description_weight) * description_score())
         }
         summary-features: name_score() description_score() nativeRank(family_name_index) nativeRank(family_description_index) closeness(family_description_embedding)
     }

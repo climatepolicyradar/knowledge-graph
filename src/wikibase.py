@@ -277,7 +277,7 @@ class WikibaseSession:
                 params={
                     "action": "query",
                     "format": "json",
-                    "list": "allpages",
+                    "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
                     "apnamespace": 120,
                     "aplimit": limit or "max",
                     "apfilterredir": "nonredirects",  # Only fetch non-redirect pages

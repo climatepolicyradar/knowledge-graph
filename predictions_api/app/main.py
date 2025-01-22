@@ -1,10 +1,12 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import boto3
 from fastapi import FastAPI, HTTPException
 from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from mypy_boto3_s3.client import S3Client
@@ -18,10 +20,41 @@ from src.wikibase import WikibaseSession
 logger = logging.getLogger("uvicorn")
 
 
+def load_concepts_with_classifiers() -> None:
+    """Get the list of concepts on application startup and store in memory"""
+    global concepts
+    concepts = []
+    wikibase = WikibaseSession()
+
+    for concept_dir in predictions_dir.iterdir():
+        if not concept_dir.is_dir():
+            continue
+
+        wikibase_id = WikibaseID(concept_dir.name)
+        try:
+            concept = wikibase.get_concept(wikibase_id)
+            classifiers = get_available_classifiers(wikibase_id)
+            concepts.append(
+                {
+                    "id": wikibase_id,
+                    "label": concept.preferred_label,
+                    "str": str(concept),
+                    "description": concept.description,
+                    "url": concept.wikibase_url,
+                    "classifiers": classifiers,
+                }
+            )
+            logger.info(
+                f'Found concept "{concept}" with {len(classifiers)} classifiers'
+            )
+        except Exception:
+            continue
+
+
 def sync_s3_to_local() -> None:
     """Sync the prediction-visualisation S3 bucket to the local file system"""
     bucket_name = "prediction-visualisation"
-    session = boto3.Session(profile_name="labs")
+    session = boto3.Session()
     s3_client: S3Client = session.client("s3", region_name=aws_region)
 
     processed_data_dir.mkdir(parents=True, exist_ok=True)
@@ -54,6 +87,7 @@ def sync_s3_to_local() -> None:
             local_path = processed_data_dir / key
             local_path.parent.mkdir(parents=True, exist_ok=True)
             s3_client.download_file(bucket_name, key, str(local_path))
+            logger.info(f"Synced {key} to {local_path}")
             files_synced += 1
 
     logger.info(f"Successfully synced {files_synced} files from s3://{bucket_name}")
@@ -62,21 +96,34 @@ def sync_s3_to_local() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
-    try:
-        sync_s3_to_local()
-    except Exception as e:
-        logger.warning(f"S3 sync failed - {str(e)}")
+    # if the SKIP_S3_SYNC environment variable is unset, we pull classifiers and
+    # their predictions from s3
+    if not bool(os.getenv("SKIP_S3_SYNC", False)):
+        try:
+            sync_s3_to_local()
+        except Exception as e:
+            logger.warning(f"S3 sync failed - {str(e)}")
+
+    # whether loading from s3 or not, load the list of concepts into memory on startup
+    load_concepts_with_classifiers()
+
     yield
 
 
+# create the FastAPI app
 app = FastAPI(title="Predictions API", lifespan=lifespan)
+
+# set up Jinja2 templates
 base_dir = Path(__file__).parent
 templates = Jinja2Templates(directory=base_dir / "templates")
 
 # Mount the static directory
 static_dir = base_dir / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# set up the predictions directory
 predictions_dir = processed_data_dir / "predictions"
+predictions_dir.mkdir(parents=True, exist_ok=True)
 
 
 def load_predictions(
@@ -89,9 +136,7 @@ def load_predictions(
     return predictions
 
 
-def get_available_classifiers(
-    wikibase_id: WikibaseID,
-) -> dict[str, str]:
+def get_available_classifiers(wikibase_id: WikibaseID) -> dict[str, str]:
     """Get list of available classifiers for a concept."""
     logger.info(f"Getting available classifiers for {wikibase_id}")
     concept_classifier_dir = classifier_dir / wikibase_id
@@ -123,9 +168,7 @@ def get_available_translated_statuses(predictions: list[LabelledPassage]) -> lis
     """Extract unique translated statuses from predictions."""
     translated_statuses: set[str] = set()
     for prediction in predictions:
-        translated = prediction.metadata.get("translated")
-        if translated and isinstance(translated, str) and translated.strip():
-            translated_statuses.add(translated)
+        translated_statuses.add(prediction.metadata.get("translated", False))
     return sorted(list(translated_statuses))
 
 
@@ -139,39 +182,15 @@ def get_available_corpora(predictions: list[LabelledPassage]) -> list[str]:
     return sorted(list(corpora))
 
 
-def get_available_concepts_with_classifiers() -> list[dict]:
-    """Get list of available concepts with a list of classifiers and some metadata."""
-    concepts = []
-    wikibase = WikibaseSession()
-
-    for concept_dir in predictions_dir.iterdir():
-        if not concept_dir.is_dir():
-            continue
-
-        wikibase_id = WikibaseID(concept_dir.name)
-        try:
-            concept = wikibase.get_concept(wikibase_id)
-            classifiers = get_available_classifiers(wikibase_id)
-            concepts.append(
-                {
-                    "id": wikibase_id,
-                    "label": concept.preferred_label,
-                    "str": str(concept),
-                    "description": concept.description,
-                    "url": concept.wikibase_url,
-                    "classifiers": classifiers,
-                }
-            )
-        except Exception:
-            continue
-
-    return sorted(concepts, key=lambda x: x["id"])
+@app.get("/health-check", response_class=JSONResponse)
+async def health_check():
+    """Health check endpoint for ECS."""
+    return JSONResponse(content={"status": "ok"})
 
 
 @app.get("/")
 async def get_index_page(request: Request):
     """Display homepage with list of available concepts."""
-    concepts = get_available_concepts_with_classifiers()
     return templates.TemplateResponse(
         "index.html",
         {
