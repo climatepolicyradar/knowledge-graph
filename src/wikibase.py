@@ -21,10 +21,6 @@ class WikibaseSession:
     """A session for interacting with Wikibase"""
 
     session = httpx.Client()
-    username = os.getenv("WIKIBASE_USERNAME")
-    password = os.getenv("WIKIBASE_PASSWORD")
-    base_url = os.getenv("WIKIBASE_URL")
-    api_url = f"{base_url}/w/api.php"
 
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID")
     subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID")
@@ -32,11 +28,23 @@ class WikibaseSession:
     negative_labels_property_id = os.getenv("WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID")
     definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID")
 
-    def __init__(self):
+    def __init__(
+        self,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        url: Optional[str] = None,
+    ):
         """Log in to Wikibase and get a CSRF token"""
-        if not self.username or not self.password:
+        self.username = username or os.getenv("WIKIBASE_USERNAME")
+        self.password = password or os.getenv("WIKIBASE_PASSWORD")
+        self.base_url = url or os.getenv("WIKIBASE_URL")
+        self.api_url = f"{self.base_url}/w/api.php"
+
+        if not self.username or not self.password or not self.base_url:
             raise ValueError(
-                "WIKIBASE_USERNAME and WIKIBASE_PASSWORD environment variables must be set"
+                "username, password and url must be set, either as arguments or "
+                "the environment variables: WIKIBASE_USERNAME, WIKIBASE_PASSWORD, "
+                "and WIKIBASE_URL"
             )
         self._login()
 
