@@ -1,10 +1,10 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 from src.concept import Concept
-from src.identifiers import deterministic_hash, generate_identifier
+from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
 from src.span import Span
 from src.version import Version
 
@@ -15,9 +15,27 @@ class Classifier(ABC):
     concept: Concept
     version: Optional[Version]
 
-    def __init__(self, concept: Concept, version: Optional[Version] = None):
+    def __init__(
+        self,
+        concept: Concept,
+        version: Optional[Version] = None,
+        allowed_concept_ids: Optional[Sequence[WikibaseID]] = None,
+    ):
         self.concept = concept
         self.version = version
+
+        if allowed_concept_ids:
+            self._validate_concept_id(allowed_concept_ids)
+
+    def _validate_concept_id(self, expected_ids: Sequence[WikibaseID]) -> None:
+        """Check whether the supplied concept matches one of the expected IDs."""
+        if self.concept.wikibase_id not in expected_ids:
+            raise ValueError(
+                f"The concept supplied to a {self.__class__.__name__} must be "
+                f"{'one of ' if len(expected_ids) > 1 else ''}"
+                f"{','.join(str(id) for id in expected_ids)} "
+                f"not {self.concept.wikibase_id}"
+            )
 
     def fit(self) -> "Classifier":
         """
