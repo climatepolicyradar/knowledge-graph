@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import dotenv
 import httpx
+from httpx import HTTPError
 from pydantic import ValidationError
 
 from src.concept import Concept
@@ -264,33 +265,55 @@ class WikibaseSession:
 
         return concept
 
-    def get_concept_ids(
-        self,
-        limit: Optional[int] = None,
-    ) -> list[WikibaseID]:
+    def get_concept_ids(self) -> list[WikibaseID]:
         """
         Get concept ids from Wikibase.
 
         :param Optional[int] limit: The maximum number of concepts to fetch
         :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
         """
-        # NOTE: Because this call has a max `aplimit` of 5000, this implementation will
-        # work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
-        # need to start paginating over the results
-        response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "query",
-                "format": "json",
-                "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
-                "apnamespace": 120,
-                "aplimit": limit or "max",
-                "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
-            },
-        ).json()
-        wikibase_ids = [
-            page["title"].replace("Item:", "") for page in response["query"]["allpages"]
-        ]
+        PAGE_REQUEST_SIZE = 500
+        # An extra precaution against infinite loops, suitable up to 1M concepts (500*2000)
+        MAX_PAGE_REQUESTS = 2000
+
+        params = {
+            "action": "query",
+            "format": "json",
+            "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
+            "apnamespace": 120,
+            "aplimit": PAGE_REQUEST_SIZE,
+            "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
+        }
+
+        wikibase_ids = []
+        for i in range(MAX_PAGE_REQUESTS):
+            # Get and process a page into wikibase_ids
+            response = self.session.get(
+                url=self.api_url,
+                params=params,
+            ).json()
+            wikibase_ids.extend(
+                [
+                    page["title"].replace("Item:", "")
+                    for page in response["query"]["allpages"]
+                ]
+            )
+
+            #  Handle errors / warnings
+            if "error" in response:
+                raise HTTPError(response["error"])
+            if "warnings" in response:
+                logger.warning(response["warnings"])
+
+            # Handle pagination if there are more pages
+            if continue_params := response.get("continue"):
+                params.update(continue_params)
+                logger.info(
+                    f"Retrieved {len(wikibase_ids)} ids after page iteration {i}"
+                )
+            else:
+                break
+
         return wikibase_ids
 
     def get_concepts(
@@ -306,10 +329,10 @@ class WikibaseSession:
         :return list[Concept]: The concepts, optionally with the given Wikibase IDs
         """
         if not wikibase_ids:
-            wikibase_ids = self.get_concept_ids(limit=limit)
+            wikibase_ids = self.get_concept_ids()
 
         concepts = []
-        for wikibase_id in wikibase_ids:
+        for wikibase_id in wikibase_ids[:limit]:
             try:
                 concept = self.get_concept(wikibase_id)
                 concepts.append(concept)
