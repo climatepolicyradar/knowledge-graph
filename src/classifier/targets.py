@@ -13,13 +13,16 @@ from src.span import Span
 class BaseTargetClassifier(Classifier, ABC):
     """Base class for target classifiers."""
 
-    def __init__(
-        self,
-        concept: Concept,
-        threshold: float = 0.5,
-        allowed_concept_ids: list[WikibaseID] = [],
-    ):
-        super().__init__(concept, allowed_concept_ids=allowed_concept_ids)
+    allowed_concept_ids = [
+        WikibaseID("Q1651"),
+        WikibaseID("Q1652"),
+        WikibaseID("Q1653"),
+    ]
+
+    def __init__(self, concept: Concept, threshold: float = 0.5):
+        super().__init__(
+            concept, threshold=threshold, allowed_concept_ids=self.allowed_concept_ids
+        )
 
         self.model_name = "ClimatePolicyRadar/national-climate-targets"
 
@@ -79,12 +82,7 @@ class BaseTargetClassifier(Classifier, ABC):
 class TargetClassifier(BaseTargetClassifier):
     """Target (Q1651) classifier"""
 
-    def __init__(self, concept: Concept, threshold: float = 0.5):
-        super().__init__(
-            concept=concept,
-            threshold=threshold,
-            allowed_concept_ids=[WikibaseID("Q1651")],
-        )
+    allowed_concept_ids = [WikibaseID("Q1651")]
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
         """Check whether the prediction meets the conditions for a generic target."""
@@ -94,12 +92,7 @@ class TargetClassifier(BaseTargetClassifier):
 class EmissionsReductionTargetClassifier(BaseTargetClassifier):
     """Emissions reduction target (Q1652) classifier"""
 
-    def __init__(self, concept: Concept, threshold: float = 0.5):
-        super().__init__(
-            concept=concept,
-            threshold=threshold,
-            allowed_concept_ids=[WikibaseID("Q1652")],
-        )
+    allowed_concept_ids = [WikibaseID("Q1652")]
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
         """Check whether the prediction meets the conditions for a reduction target."""
@@ -112,12 +105,7 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
 class NetZeroTargetClassifier(BaseTargetClassifier):
     """Net-zero target (Q1653) classifier"""
 
-    def __init__(self, concept: Concept, threshold: float = 0.5):
-        super().__init__(
-            concept=concept,
-            threshold=threshold,
-            allowed_concept_ids=[WikibaseID("Q1653")],
-        )
+    allowed_concept_ids = [WikibaseID("Q1653")]
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
         """Check whether the prediction meets the conditions for a net-zero target."""
