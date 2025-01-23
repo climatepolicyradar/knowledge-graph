@@ -76,17 +76,6 @@ class Config:
         return self.wikibase_password.get_secret_value()
 
 
-def get_concepts_from_wikibase(config: Config) -> list[Concept]:
-    """Get concepts from Wikibase"""
-    wikibase = WikibaseSession(
-        username=config.get_wikibase_username(),
-        password=config.get_wikibase_password_secret_value(),
-        url=config.get_wikibase_url(),
-    )
-    concepts = wikibase.get_concepts()
-    return concepts
-
-
 def upload_to_s3(config: Config, concept: Concept) -> None:
     """Upload an individual concept to S3"""
     filename = f"{concept.wikibase_id}.json"
@@ -119,23 +108,29 @@ def wikibase_to_s3(config: Optional[Config] = None):
         config = Config.create()
     logger.info(f"running with config: {config}")
 
-    concepts = get_concepts_from_wikibase(config)
-    logger.info(f"Found {len(concepts)} concepts in Wikibase, uploading to s3")
-    for i, concept in enumerate(concepts):
+    wikibase = WikibaseSession(
+        username=config.get_wikibase_username(),
+        password=config.get_wikibase_password_secret_value(),
+        url=config.get_wikibase_url(),
+    )
+    wikibase_ids = wikibase.get_concept_ids()
+    logger.info(f"Found {len(wikibase_ids)} concept ids in Wikibase")
+
+    for i, wikibase_id in enumerate(wikibase_ids):
         if i % config.logging_interval == 0:
-            logger.info(f"Uploading concept #{i}: {concept.wikibase_id}")
+            logger.info(f"Uploading concept #{i}: {wikibase_id}")
         try:
+            concept = wikibase.get_concept(wikibase_id)
             upload_to_s3(config, concept)
         except Exception as e:
-            logger.error(f"Failed to upload concept #{i}: {concept.wikibase_id}")
-            raise e
+            logger.error(f"Failed to upload concept #{i}: {wikibase_id}, error: {e}")
 
     # Identify leftovers from prior runs
     s3_concepts = list_s3_concepts(config)
-    wikibase_concepts = [concept.wikibase_id for concept in concepts]
-    extras_in_s3 = [c for c in s3_concepts if c not in wikibase_concepts]
+    extras_in_s3 = [c for c in s3_concepts if c not in wikibase_ids]
+    missing_from_s3 = [c for c in wikibase_ids if c not in s3_concepts]
 
     logger.info(
-        f"{len(concepts)} concepts in S3, {len(wikibase_concepts)} in Wikibase."
-        f"Extras: {extras_in_s3}"
+        f"{len(s3_concepts)} concepts in S3, {len(wikibase_ids)} in Wikibase."
+        f"Extras: {extras_in_s3}, Missing from S3: {missing_from_s3}"
     )
