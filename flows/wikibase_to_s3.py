@@ -8,6 +8,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from pydantic import SecretStr
 
+from flows.utils import file_name_from_path
 from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.wikibase import WikibaseSession
@@ -98,9 +99,7 @@ def list_s3_concepts(config: Config) -> list[str]:
         Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
     )
     concept_paths = [o["Key"] for o in response["Contents"]]
-    s3_concepts = [
-        os.path.splitext(os.path.basename(path))[0] for path in concept_paths
-    ]
+    s3_concepts = [file_name_from_path(path) for path in concept_paths]
     return s3_concepts
 
 
