@@ -32,6 +32,12 @@ def test_wikibase__get_concept(MockedWikibaseSession):
     assert concept.wikibase_id == "Q10"
 
 
+def test_wikibase__get_concept_ids(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+    ids = wikibase.get_concept_ids()
+    assert set(ids) == {"Q10", "Q1000", "Q1002", "Q100", "Q1001"}
+
+
 def test_wikibase__get_concepts(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
     result = wikibase.get_concepts()
