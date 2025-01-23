@@ -35,14 +35,36 @@ def test_wikibase__get_concept(MockedWikibaseSession):
 def test_wikibase__get_concept_ids(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
     ids = wikibase.get_concept_ids()
-    assert set(ids) == {"Q10", "Q1000", "Q1002", "Q100", "Q1001"}
+    assert set(ids) == {
+        "Q1000",
+        "Q1003",
+        "Q1007",
+        "Q1001",
+        "Q100",
+        "Q1002",
+        "Q1004",
+        "Q10",
+        "Q1006",
+        "Q1005",
+    }
 
 
 def test_wikibase__get_concepts(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
     result = wikibase.get_concepts()
     ids = set([r.wikibase_id for r in result])
-    assert ids == {"Q10", "Q1000", "Q1002", "Q100", "Q1001"}
+    assert ids == {
+        "Q1000",
+        "Q1003",
+        "Q1007",
+        "Q1001",
+        "Q100",
+        "Q1002",
+        "Q1004",
+        "Q10",
+        "Q1006",
+        "Q1005",
+    }
 
 
 def test_wikibase__get_subconcepts(MockedWikibaseSession):

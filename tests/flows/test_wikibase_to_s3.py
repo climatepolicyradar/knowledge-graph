@@ -67,6 +67,11 @@ def test_wikibase_to_s3(
             "Q1000",
             "Q1001",
             "Q1002",
+            "Q1003",
+            "Q1004",
+            "Q1005",
+            "Q1006",
+            "Q1007",
         ]
     )
     assert "Extras: ['Q20', 'Q30']" in caplog.text
