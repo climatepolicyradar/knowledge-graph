@@ -264,6 +264,35 @@ class WikibaseSession:
 
         return concept
 
+    def get_concept_ids(
+        self,
+        limit: Optional[int] = None,
+    ) -> list[WikibaseID]:
+        """
+        Get concept ids from Wikibase.
+
+        :param Optional[int] limit: The maximum number of concepts to fetch
+        :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
+        """
+        # NOTE: Because this call has a max `aplimit` of 5000, this implementation will
+        # work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
+        # need to start paginating over the results
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "format": "json",
+                "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
+                "apnamespace": 120,
+                "aplimit": limit or "max",
+                "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
+            },
+        ).json()
+        wikibase_ids = [
+            page["title"].replace("Item:", "") for page in response["query"]["allpages"]
+        ]
+        return wikibase_ids
+
     def get_concepts(
         self,
         limit: Optional[int] = None,
@@ -277,24 +306,7 @@ class WikibaseSession:
         :return list[Concept]: The concepts, optionally with the given Wikibase IDs
         """
         if not wikibase_ids:
-            # NOTE: Because this call has a max `aplimit` of 5000, this implementation will
-            # work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
-            # need to start paginating over the results
-            response = self.session.get(
-                url=self.api_url,
-                params={
-                    "action": "query",
-                    "format": "json",
-                    "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
-                    "apnamespace": 120,
-                    "aplimit": limit or "max",
-                    "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
-                },
-            ).json()
-            wikibase_ids = [
-                page["title"].replace("Item:", "")
-                for page in response["query"]["allpages"]
-            ]
+            wikibase_ids = self.get_concept_ids(limit=limit)
 
         concepts = []
         for wikibase_id in wikibase_ids:
