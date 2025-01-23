@@ -1,5 +1,3 @@
-import importlib
-
 from src.classifier.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier

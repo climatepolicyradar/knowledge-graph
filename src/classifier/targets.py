@@ -81,3 +81,49 @@ class BaseTargetClassifier(Classifier, ABC):
             "Targets classifiers in the knowledge graph are based on the pre-trained "
             f"{self.model_name} model. As such, they cannot be trained directly."
         )
+
+
+class TargetClassifier(BaseTargetClassifier):
+    """Target (Q1651) classifier"""
+
+    def __init__(self, concept: Concept, threshold: float = 0.5):
+        self._check_whether_supplied_concept_is_correct_for_this_classifier(
+            expected_wikibase_id=WikibaseID("Q1651"), supplied_concept=concept
+        )
+        super().__init__(concept, threshold)
+
+    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+        """Check if the prediction meets the conditions for a generic target."""
+        return prediction["score"] >= threshold
+
+
+class EmissionsReductionTargetClassifier(BaseTargetClassifier):
+    """Emissions reduction target (Q1652) classifier"""
+
+    def __init__(self, concept: Concept, threshold: float = 0.5):
+        self._check_whether_supplied_concept_is_correct_for_this_classifier(
+            expected_wikibase_id=WikibaseID("Q1652"), supplied_concept=concept
+        )
+        super().__init__(concept, threshold)
+
+    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+        """Check if the prediction meets the conditions for an emissions reduction target."""
+        return (
+            prediction["label"] in ["Reduction", "NZT"]
+            and prediction["score"] >= threshold
+        )
+
+
+class NetZeroTargetClassifier(BaseTargetClassifier):
+    """Net-zero target (Q1653) classifier"""
+
+    def __init__(self, concept: Concept, threshold: float = 0.5):
+        self._check_whether_supplied_concept_is_correct_for_this_classifier(
+            expected_wikibase_id=WikibaseID("Q1653"), supplied_concept=concept
+        )
+
+        super().__init__(concept, threshold)
+
+    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+        """Check if the prediction meets the conditions for a net-zero target."""
+        return prediction["label"] == "NZT" and prediction["score"] >= threshold
