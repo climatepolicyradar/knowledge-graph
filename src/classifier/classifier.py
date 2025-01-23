@@ -37,7 +37,7 @@ class Classifier(ABC):
                 else str(expected_ids[0])
             )
             raise ValueError(
-                f"The concept supplied to a {self.__class__.__name__} must be "
+                f"The concept supplied to a {self.name} must be "
                 f"{expected}, not {self.concept.wikibase_id}"
             )
 
@@ -88,7 +88,7 @@ class Classifier(ABC):
         """
         return deterministic_hash(
             [
-                self.__class__.__name__,
+                self.name,
                 self.concept.__hash__(),
                 self.version if self.version else None,
             ]

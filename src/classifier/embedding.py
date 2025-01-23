@@ -44,7 +44,7 @@ class EmbeddingClassifier(Classifier):
         """Return a hash of the classifier."""
         return deterministic_hash(
             [
-                self.__class__.__name__,
+                self.name,
                 self.concept.__hash__(),
                 str(self.embedding_model),
                 self.threshold,
