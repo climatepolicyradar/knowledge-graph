@@ -97,8 +97,11 @@ def list_s3_concepts(config: Config) -> list[str]:
     response = s3.list_objects_v2(
         Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
     )
-    concepts = [o["Key"] for o in response["Contents"]]
-    return concepts
+    concept_paths = [o["Key"] for o in response["Contents"]]
+    s3_concepts = [
+        os.path.splitext(os.path.basename(path))[0] for path in concept_paths
+    ]
+    return s3_concepts
 
 
 @flow
