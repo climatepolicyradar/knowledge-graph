@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable
 
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 
@@ -8,6 +8,10 @@ from src.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.span import Span
+
+# optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
+# https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4
+DEFAULT_THRESHOLD = 0.524
 
 
 class BaseTargetClassifier(Classifier, ABC):
@@ -18,13 +22,16 @@ class BaseTargetClassifier(Classifier, ABC):
         WikibaseID("Q1652"),
         WikibaseID("Q1653"),
     ]
+    model_name = "ClimatePolicyRadar/national-climate-targets"
 
-    def __init__(self, concept: Concept, threshold: float = 0.5):
+    def __init__(
+        self,
+        concept: Concept,
+    ):
         super().__init__(
-            concept, threshold=threshold, allowed_concept_ids=self.allowed_concept_ids
+            concept,
+            allowed_concept_ids=self.allowed_concept_ids,
         )
-
-        self.model_name = "ClimatePolicyRadar/national-climate-targets"
 
         self.pipeline: Callable = pipeline(
             "text-classification",
@@ -32,21 +39,22 @@ class BaseTargetClassifier(Classifier, ABC):
             tokenizer=AutoTokenizer.from_pretrained(self.model_name),
             function_to_apply="sigmoid",
         )
-        self.threshold = threshold
 
     @abstractmethod
-    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+    def _check_prediction_conditions(
+        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+    ) -> bool:
         """Check whether the prediction meets the conditions for this target type."""
 
-    def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
+    def predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
         """Predict whether the supplied text contains a target."""
-        return self.predict_batch([text], threshold)[0]
+        return self.predict_batch([text], threshold=threshold)[0]
 
     def predict_batch(
-        self, texts: list[str], threshold: Optional[float] = None
+        self, texts: list[str], threshold: float = DEFAULT_THRESHOLD
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain targets."""
-        threshold = threshold or self.threshold
+
         predictions = self.pipeline(texts, padding=True, truncation=True)
 
         results = []
@@ -84,7 +92,9 @@ class TargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1651")]
 
-    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+    def _check_prediction_conditions(
+        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+    ) -> bool:
         """Check whether the prediction meets the conditions for a generic target."""
         return prediction["score"] >= threshold
 
@@ -94,7 +104,9 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1652")]
 
-    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+    def _check_prediction_conditions(
+        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+    ) -> bool:
         """Check whether the prediction meets the conditions for a reduction target."""
         return (
             prediction["label"] in ["Reduction", "NZT"]
@@ -107,6 +119,8 @@ class NetZeroTargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1653")]
 
-    def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
+    def _check_prediction_conditions(
+        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+    ) -> bool:
         """Check whether the prediction meets the conditions for a net-zero target."""
         return prediction["label"] == "NZT" and prediction["score"] >= threshold
