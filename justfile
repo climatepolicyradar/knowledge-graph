@@ -7,8 +7,8 @@ default:
     @just --list
 
 # install dependencies and set up the project
-install:
-    poetry install --with dev
+install +OPTS="":
+    poetry install --with dev {{OPTS}}
     poetry run pre-commit install
     poetry run ipython kernel install --user
 

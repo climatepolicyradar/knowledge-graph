@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Callable
 
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
-
 from src.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -32,6 +30,18 @@ class BaseTargetClassifier(Classifier, ABC):
             concept,
             allowed_concept_ids=self.allowed_concept_ids,
         )
+
+        try:
+            from transformers import (
+                AutoModelForSequenceClassification,
+                AutoTokenizer,
+                pipeline,
+            )
+        except ImportError:
+            raise ImportError(
+                f"The `transformers` library is required to run {self.name}s. "
+                "Install it with 'poetry install --with transformers'"
+            )
 
         self.pipeline: Callable = pipeline(
             "text-classification",
