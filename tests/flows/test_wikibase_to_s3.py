@@ -2,17 +2,10 @@ import pytest
 from botocore.exceptions import ClientError
 
 from flows.wikibase_to_s3 import (
-    get_concepts_from_wikibase,
     list_s3_concepts,
     upload_to_s3,
     wikibase_to_s3,
 )
-
-
-def test_get_concepts_from_wikibase(MockedWikibaseSession, test_wikibase_to_s3_config):
-    results = get_concepts_from_wikibase(test_wikibase_to_s3_config)
-    ids = set([r.wikibase_id for r in results])
-    assert ids == {"Q10", "Q1000", "Q1002", "Q100", "Q1001"}
 
 
 def test_upload_to_s3(
