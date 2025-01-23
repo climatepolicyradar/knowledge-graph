@@ -31,7 +31,7 @@ class BaseTargetClassifier(Classifier, ABC):
     def _check_whether_supplied_concept_is_correct_for_this_classifier(
         self, expected_wikibase_id: WikibaseID, supplied_concept: Concept
     ) -> None:
-        """Check if the supplied concept is the correct target type."""
+        """Check whether the supplied concept is the correct target type."""
         if supplied_concept.wikibase_id != expected_wikibase_id:
             raise ValueError(
                 f"The concept supplied to a {self.__class__.__name__} must be "
@@ -40,7 +40,7 @@ class BaseTargetClassifier(Classifier, ABC):
 
     @abstractmethod
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
-        """Check if the prediction meets the specific conditions for this target type."""
+        """Check whether the prediction meets the conditions for this target type."""
 
     def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """Predict whether the supplied text contains a target."""
@@ -93,7 +93,7 @@ class TargetClassifier(BaseTargetClassifier):
         super().__init__(concept, threshold)
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
-        """Check if the prediction meets the conditions for a generic target."""
+        """Check whether the prediction meets the conditions for a generic target."""
         return prediction["score"] >= threshold
 
 
@@ -107,7 +107,7 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
         super().__init__(concept, threshold)
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
-        """Check if the prediction meets the conditions for an emissions reduction target."""
+        """Check whether the prediction meets the conditions for a reduction target."""
         return (
             prediction["label"] in ["Reduction", "NZT"]
             and prediction["score"] >= threshold
@@ -125,5 +125,5 @@ class NetZeroTargetClassifier(BaseTargetClassifier):
         super().__init__(concept, threshold)
 
     def _check_prediction_conditions(self, prediction: dict, threshold: float) -> bool:
-        """Check if the prediction meets the conditions for a net-zero target."""
+        """Check whether the prediction meets the conditions for a net-zero target."""
         return prediction["label"] == "NZT" and prediction["score"] >= threshold
