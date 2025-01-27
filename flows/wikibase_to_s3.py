@@ -30,7 +30,7 @@ class Config:
     wikibase_password: Optional[SecretStr] = None
     wikibase_username: Optional[str] = None
     wikibase_url: Optional[str] = None
-    logging_interval: int = 50
+    logging_interval: int = 200
 
     @classmethod
     def create(cls) -> "Config":
