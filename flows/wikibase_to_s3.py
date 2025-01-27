@@ -95,10 +95,15 @@ def upload_to_s3(config: Config, concept: Concept) -> None:
 def list_s3_concepts(config: Config) -> list[str]:
     """List all concepts in S3"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
-    response = s3.list_objects_v2(
+
+    concept_paths = []
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(
         Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
-    )
-    concept_paths = [o["Key"] for o in response["Contents"]]
+    ):
+        if "Contents" in page:
+            concept_paths.extend([o["Key"] for o in page["Contents"]])
+
     s3_concepts = [file_name_from_path(path) for path in concept_paths]
     return s3_concepts
 
