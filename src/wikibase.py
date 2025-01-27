@@ -269,7 +269,6 @@ class WikibaseSession:
         """
         Get concept ids from Wikibase.
 
-        :param Optional[int] limit: The maximum number of concepts to fetch
         :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
         """
         PAGE_REQUEST_SIZE = 500
@@ -299,7 +298,8 @@ class WikibaseSession:
                 ]
             )
 
-            #  Handle errors / warnings
+            #  Handle errors / warnings, see:
+            # https://www.mediawiki.org/wiki/API:Continue#Example_3:_Python_code_for_iterating_through_all_results
             if "error" in response:
                 raise HTTPError(response["error"])
             if "warnings" in response:
