@@ -11,7 +11,7 @@ The tool checks for issues with concepts in the concept store and their relation
 The site is hosted on AWS S3 and is available at:
 
 ```
-https://concept-librarian.s3-website.eu-west-2.amazonaws.com/
+http://concept-librarian.s3-website.eu-west-2.amazonaws.com/
 ```
 
 ## Usage
