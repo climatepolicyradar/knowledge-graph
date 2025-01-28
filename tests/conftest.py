@@ -8,6 +8,7 @@ from urllib.parse import parse_qs
 import httpx
 import pandas as pd
 import pytest
+from prefect.logging import disable_run_logger
 from prefect.testing.utilities import prefect_test_harness
 
 from scripts.config import get_git_root
@@ -19,7 +20,8 @@ from src.wikibase import WikibaseSession
 @pytest.fixture(autouse=True, scope="session")
 def prefect_test_fixture():
     with prefect_test_harness():
-        yield
+        with disable_run_logger():
+            yield
 
 
 @pytest.fixture(scope="function")
@@ -126,7 +128,7 @@ def mock_wikibase_entities_json():
 
 
 @pytest.fixture
-def mock_wikibase_items_json():
+def mock_wikibase_items_first_page_json():
     return {
         "batchcomplete": "",
         "continue": {"apcontinue": "Q1003", "continue": "-||"},
@@ -137,6 +139,22 @@ def mock_wikibase_items_json():
                 {"pageid": 1022, "ns": 120, "title": "Item:Q1000"},
                 {"pageid": 1023, "ns": 120, "title": "Item:Q1001"},
                 {"pageid": 1024, "ns": 120, "title": "Item:Q1002"},
+            ]
+        },
+    }
+
+
+@pytest.fixture
+def mock_wikibase_items_last_page_json():
+    return {
+        "batchcomplete": "",
+        "query": {
+            "allpages": [
+                {"pageid": 1031, "ns": 120, "title": "Item:Q1003"},
+                {"pageid": 1026, "ns": 120, "title": "Item:Q1004"},
+                {"pageid": 1028, "ns": 120, "title": "Item:Q1005"},
+                {"pageid": 1029, "ns": 120, "title": "Item:Q1006"},
+                {"pageid": 1030, "ns": 120, "title": "Item:Q1007"},
             ]
         },
     }
@@ -185,7 +203,8 @@ def MockedWikibaseSession(
     mock_wikibase_url,
     mock_wikibase_token_json,
     mock_wikibase_properties_json,
-    mock_wikibase_items_json,
+    mock_wikibase_items_first_page_json,
+    mock_wikibase_items_last_page_json,
     mock_wikibase_revisions_json,
     mock_wikibase_entities_json,
 ):
@@ -217,7 +236,16 @@ def MockedWikibaseSession(
                         return httpx.Response(200, json=mock_wikibase_properties_json)
                     # get_concepts
                     if apnamespace == "120":
-                        return httpx.Response(200, json=mock_wikibase_items_json)
+                        # Requests get continue details from the response,
+                        # so the first request won't have continue params
+                        if "continue" not in request.url.params:
+                            return httpx.Response(
+                                200, json=mock_wikibase_items_first_page_json
+                            )
+                        else:
+                            return httpx.Response(
+                                200, json=mock_wikibase_items_last_page_json
+                            )
             #  _login
             case "login":
                 return httpx.Response(200)

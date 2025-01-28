@@ -6,6 +6,7 @@ from typing import Dict, Optional
 
 import dotenv
 import httpx
+from httpx import HTTPError
 from pydantic import ValidationError
 
 from src.concept import Concept
@@ -21,10 +22,6 @@ class WikibaseSession:
     """A session for interacting with Wikibase"""
 
     session = httpx.Client()
-    username = os.getenv("WIKIBASE_USERNAME")
-    password = os.getenv("WIKIBASE_PASSWORD")
-    base_url = os.getenv("WIKIBASE_URL")
-    api_url = f"{base_url}/w/api.php"
 
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID")
     subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID")
@@ -32,11 +29,23 @@ class WikibaseSession:
     negative_labels_property_id = os.getenv("WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID")
     definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID")
 
-    def __init__(self):
+    def __init__(
+        self,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        url: Optional[str] = None,
+    ):
         """Log in to Wikibase and get a CSRF token"""
-        if not self.username or not self.password:
+        self.username = username or os.getenv("WIKIBASE_USERNAME")
+        self.password = password or os.getenv("WIKIBASE_PASSWORD")
+        self.base_url = url or os.getenv("WIKIBASE_URL")
+        self.api_url = f"{self.base_url}/w/api.php"
+
+        if not self.username or not self.password or not self.base_url:
             raise ValueError(
-                "WIKIBASE_USERNAME and WIKIBASE_PASSWORD environment variables must be set"
+                "username, password and url must be set, either as arguments or "
+                "the environment variables: WIKIBASE_USERNAME, WIKIBASE_PASSWORD, "
+                "and WIKIBASE_URL"
             )
         self._login()
 
@@ -256,6 +265,57 @@ class WikibaseSession:
 
         return concept
 
+    def get_concept_ids(self) -> list[WikibaseID]:
+        """
+        Get concept ids from Wikibase.
+
+        :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
+        """
+        PAGE_REQUEST_SIZE = 500
+        # An extra precaution against infinite loops, suitable up to 1M concepts (500*2000)
+        MAX_PAGE_REQUESTS = 2000
+
+        params = {
+            "action": "query",
+            "format": "json",
+            "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
+            "apnamespace": 120,
+            "aplimit": PAGE_REQUEST_SIZE,
+            "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
+        }
+
+        wikibase_ids = []
+        for i in range(MAX_PAGE_REQUESTS):
+            # Get and process a page into wikibase_ids
+            response = self.session.get(
+                url=self.api_url,
+                params=params,
+            ).json()
+            wikibase_ids.extend(
+                [
+                    page["title"].replace("Item:", "")
+                    for page in response["query"]["allpages"]
+                ]
+            )
+
+            #  Handle errors / warnings, see:
+            # https://www.mediawiki.org/wiki/API:Continue#Example_3:_Python_code_for_iterating_through_all_results
+            if "error" in response:
+                raise HTTPError(response["error"])
+            if "warnings" in response:
+                logger.warning(response["warnings"])
+
+            # Handle pagination if there are more pages
+            if continue_params := response.get("continue"):
+                params.update(continue_params)
+                logger.info(
+                    f"Retrieved {len(wikibase_ids)} ids after page iteration {i}"
+                )
+            else:
+                break
+
+        return wikibase_ids
+
     def get_concepts(
         self,
         limit: Optional[int] = None,
@@ -269,27 +329,10 @@ class WikibaseSession:
         :return list[Concept]: The concepts, optionally with the given Wikibase IDs
         """
         if not wikibase_ids:
-            # NOTE: Because this call has a max `aplimit` of 5000, this implementation will
-            # work up to a limit of 5000 item pages in the concept store. Beyond that, we'll
-            # need to start paginating over the results
-            response = self.session.get(
-                url=self.api_url,
-                params={
-                    "action": "query",
-                    "format": "json",
-                    "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
-                    "apnamespace": 120,
-                    "aplimit": limit or "max",
-                    "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
-                },
-            ).json()
-            wikibase_ids = [
-                page["title"].replace("Item:", "")
-                for page in response["query"]["allpages"]
-            ]
+            wikibase_ids = self.get_concept_ids()
 
         concepts = []
-        for wikibase_id in wikibase_ids:
+        for wikibase_id in wikibase_ids[:limit]:
             try:
                 concept = self.get_concept(wikibase_id)
                 concepts.append(concept)

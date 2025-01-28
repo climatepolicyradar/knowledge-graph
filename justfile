@@ -17,8 +17,8 @@ test +OPTS="":
     poetry run pytest {{OPTS}}
 
 # test the project, excluding tests that rely on a local vespa instance
-test-without-vespa:
-    poetry run pytest -m 'not vespa'
+test-without-vespa +OPTS="":
+    poetry run pytest {{OPTS}} -m 'not vespa'
 
 # update the snapshots for the tests
 test-snapshot-update:
