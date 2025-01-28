@@ -1,7 +1,6 @@
-import pytest
-
 from unittest.mock import MagicMock
 
+import pytest
 from dotenv import find_dotenv, load_dotenv
 
 from src.classifier.targets import (
