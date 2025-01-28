@@ -1,15 +1,14 @@
-from src.wikibase import WikibaseSession
+from unittest.mock import MagicMock
+
+from dotenv import find_dotenv, load_dotenv
+
 from src.classifier.targets import (
     EmissionsReductionTargetClassifier,
     NetZeroTargetClassifier,
     TargetClassifier,
 )
 from src.concept import Concept
-
-from unittest.mock import MagicMock
 from src.identifiers import WikibaseID
-
-from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
