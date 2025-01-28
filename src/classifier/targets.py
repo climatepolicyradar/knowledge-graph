@@ -65,7 +65,9 @@ class BaseTargetClassifier(Classifier, ABC):
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain targets."""
 
-        predictions = self.pipeline(texts, padding=True, truncation=True)
+        predictions: list[list[dict]] = self.pipeline(
+            texts, padding=True, truncation=True, return_all_scores=True
+        )
 
         results = []
         for text, prediction in zip(texts, predictions):
