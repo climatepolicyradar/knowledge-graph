@@ -141,3 +141,15 @@ def wikibase_to_s3(config: Optional[Config] = None):
         f"{len(s3_concepts)} concepts in S3, {len(wikibase_ids)} in Wikibase."
         f"Extras: {extras_in_s3}, Missing from S3: {missing_from_s3}"
     )
+
+    # Fail for discrepencies to trigger alerts
+    if extras_in_s3:
+        raise ValueError(
+            f"{len(extras_in_s3)} concepts where found in S3 but where "
+            f"not part of the copy from wikibase: {extras_in_s3}"
+        )
+    if missing_from_s3:
+        raise ValueError(
+            f"{len(missing_from_s3)} concepts where found in wikibase but "
+            f"didnt make it to S3: {missing_from_s3}"
+        )
