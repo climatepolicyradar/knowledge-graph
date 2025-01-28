@@ -105,7 +105,7 @@ env = [
   "WIKIBASE_PASSWORD=test_password",
   "WIKIBASE_URL=https://test.test.test"
 ]
-markers = ["vespa", "flaky_on_ci"]
+markers = ["vespa", "flaky_on_ci". "transformers"]
 
 [build-system]
 requires = ["poetry-core"]

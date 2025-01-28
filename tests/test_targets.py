@@ -1,3 +1,5 @@
+import pytest
+
 from unittest.mock import MagicMock
 
 from dotenv import find_dotenv, load_dotenv
@@ -13,6 +15,7 @@ from src.identifiers import WikibaseID
 load_dotenv(find_dotenv())
 
 
+@pytest.mark.transformers
 def test_target_classifier():
     concept = MagicMock(
         spec=Concept, wikibase_id=WikibaseID("Q1651"), preferred_label="Target"
@@ -37,6 +40,7 @@ def test_target_classifier():
     assert len([r for r in results if r]) == 2
 
 
+@pytest.mark.transformers
 def test_net_zero_target_classifier():
     concept = MagicMock(
         spec=Concept,
@@ -68,6 +72,7 @@ def test_net_zero_target_classifier():
     assert len([r for r in results if r]) == 2
 
 
+@pytest.mark.transformers
 def test_emissions_reduction_target_classifier():
     concept = MagicMock(
         spec=Concept, wikibase_id=WikibaseID("Q1652"), preferred_label="Target"
