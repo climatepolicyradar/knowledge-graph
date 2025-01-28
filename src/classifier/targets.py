@@ -118,7 +118,7 @@ class TargetClassifier(BaseTargetClassifier):
         self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
     ) -> bool:
         """Check whether the prediction meets the conditions for a generic target."""
-        return any(label for label in prediction if label["score"] >= threshold)
+        return any(label["score"] >= threshold for label in prediction)
 
 
 class EmissionsReductionTargetClassifier(BaseTargetClassifier):
@@ -131,9 +131,8 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
     ) -> bool:
         """Check whether the prediction meets the conditions for a reduction target."""
         return any(
-            label
+            label["score"] >= threshold and label["label"] in {"NZT", "Reduction"}
             for label in prediction
-            if label["score"] >= threshold and label["label"] in {"NZT", "Reduction"}
         )
 
 
@@ -147,7 +146,6 @@ class NetZeroTargetClassifier(BaseTargetClassifier):
     ) -> bool:
         """Check whether the prediction meets the conditions for a net-zero target."""
         return any(
-            label
+            label["score"] >= threshold and label["label"] in {"NZT"}
             for label in prediction
-            if label["score"] >= threshold and label["label"] in {"NZT"}
         )
