@@ -66,7 +66,6 @@ def main():
     console.log(f"HTML report generated: '{output_path.relative_to(root_dir)}'")
 
     # Generate and save individual concept pages
-
     for concept in concepts:
         issues_for_concept = [
             issue

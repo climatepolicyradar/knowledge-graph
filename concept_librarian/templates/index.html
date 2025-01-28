@@ -25,9 +25,8 @@
       .tab-button.active {
         @apply ring-2 ring-offset-2 ring-blue-500;
       }
-      a,
-      .concept-link {
-        @apply text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline;
+      a {
+        @apply text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4;
       }
       button a {
         @apply no-underline;
@@ -174,7 +173,7 @@
             >
               <div class="flex-1">
                 <p class="text-slate-700 dark:text-slate-200 text-lg">
-                  {{ issue.message | safe }}
+                  {{ issue.message }}
                 </p>
               </div>
               {% if issue.fix_concept %}

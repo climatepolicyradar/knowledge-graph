@@ -24,17 +24,12 @@ def stringify_concept(
         raise ValueError("wikibase_id cannot be None")
 
     single_concept_list = [c for c in all_concepts if c.wikibase_id == wikibase_id]
-
+    style = "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4"
     if single_concept_list:
         concept = single_concept_list[0]
-        return f"""<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.preferred_label} ({concept.wikibase_id})</a>"""
+        return f"<a href='{concept.wikibase_url}' target='_blank' class='{style}'>{concept.preferred_label} ({concept.wikibase_id})</a>"
     else:
-        return f"<a href='https://www.wikidata.org/wiki/{wikibase_id}' target='_blank' class='concept-link'>{wikibase_id}</a>"
-
-
-def create_fix_button(concept: Concept) -> str:
-    """Create a fix button that links to the concept's page"""
-    return f'<a href="{concept.wikibase_url}" target="_blank" class="fix-button">Fix this</a>'
+        return f"<a href='https://climatepolicyradar.wikibase.cloud/wiki/Item:{wikibase_id}' target='_blank' class='{style}'>{wikibase_id}</a>"
 
 
 def validate_related_relationship_symmetry(
