@@ -21,6 +21,7 @@ class BaseTargetClassifier(Classifier, ABC):
         WikibaseID("Q1653"),
     ]
     model_name = "ClimatePolicyRadar/national-climate-targets"
+    commit_hash = "c920e288551f415e0085f89475d9acbb9969cfb8"
 
     def __init__(
         self,
@@ -45,8 +46,14 @@ class BaseTargetClassifier(Classifier, ABC):
 
         self.pipeline: Callable = pipeline(
             "text-classification",
-            model=AutoModelForSequenceClassification.from_pretrained(self.model_name),
-            tokenizer=AutoTokenizer.from_pretrained(self.model_name),
+            model=AutoModelForSequenceClassification.from_pretrained(
+                self.model_name,
+                revision=self.commit_hash,
+            ),
+            tokenizer=AutoTokenizer.from_pretrained(
+                self.model_name,
+                revision=self.commit_hash,
+            ),
             function_to_apply="sigmoid",
         )
 
