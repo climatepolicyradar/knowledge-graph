@@ -1,16 +1,10 @@
-import time
-from collections import Counter, defaultdict
-from pathlib import Path
+from collections import defaultdict
 from string import punctuation
 from typing import Optional
 
-from prefect import flow, task
 from pydantic import BaseModel, ValidationError
 
-from scripts.cloud import AwsEnv, get_s3_client
 from src.concept import Concept, WikibaseID
-from src.exceptions import ConceptNotFoundError
-from src.wikibase import WikibaseSession
 
 
 class ConceptStoreIssue(BaseModel):
@@ -33,9 +27,9 @@ def stringify_concept(
 
     if single_concept_list:
         concept = single_concept_list[0]
-        return f"""{concept.preferred_label} (<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.wikibase_id}</a>)"""
+        return f"""<a href="{concept.wikibase_url}" target="_blank" class="concept-link">{concept.preferred_label} ({concept.wikibase_id})</a>"""
     else:
-        return f"{wikibase_id} (empty)"
+        return f"<a href='https://www.wikidata.org/wiki/{wikibase_id}' target='_blank' class='concept-link'>{wikibase_id}</a>"
 
 
 def create_fix_button(concept: Concept) -> str:
@@ -43,56 +37,6 @@ def create_fix_button(concept: Concept) -> str:
     return f'<a href="{concept.wikibase_url}" target="_blank" class="fix-button">Fix this</a>'
 
 
-wikibase = WikibaseSession()
-
-
-def upload_report_to_s3_static_site(report_path: Path):
-    """Uploads the report to a static site hosted in labs"""
-
-    s3_client = get_s3_client(AwsEnv.labs, region_name="eu-west-1")
-    s3_client.upload_file(
-        str(report_path),
-        "concept-librarian",
-        "index.html",
-    )
-
-
-@flow(log_prints=True)
-def validate_concept_store() -> list[ConceptStoreIssue]:
-    print("Fetching all concepts from wikibase")
-    concepts: list[Concept] = wikibase.get_concepts()
-    print(f"Found {len(concepts)} concepts")
-
-    issues = []
-    issues.extend(validate_related_relationship_symmetry(concepts))
-    issues.extend(validate_hierarchical_relationship_symmetry(concepts))
-    issues.extend(validate_alternative_label_uniqueness(concepts))
-    issues.extend(ensure_positive_and_negative_labels_dont_overlap(concepts))
-    issues.extend(check_description_and_definition_length(concepts))
-    issues.extend(check_for_duplicate_preferred_labels(concepts))
-    issues.extend(check_alternative_labels_for_pipes(concepts))
-    issues.extend(validate_circular_hierarchical_relationships(concepts))
-    issues.extend(check_for_unconnected_concepts(concepts))
-    issues.extend(validate_concept_label_casing(concepts))
-
-    librarian_output_dir = (
-        Path(__file__).parent.parent / "data/processed/concept_librarian"
-    )
-    if not librarian_output_dir.exists():
-        librarian_output_dir.mkdir(parents=True)
-
-    timestr = time.strftime("%Y%m%d-%H%M%S")
-    html_content = create_html_report(issues)
-    output_path = librarian_output_dir / f"librarian_report_{timestr}.html"
-    output_path.write_text(html_content)
-    print(f"HTML report generated: {output_path.resolve()}")
-
-    upload_report_to_s3_static_site(output_path)
-
-    return issues
-
-
-@task(log_prints=True)
 def validate_related_relationship_symmetry(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -103,7 +47,6 @@ def validate_related_relationship_symmetry(
         for concept in concepts
         for related_id in concept.related_concepts
     ]
-    print(f"Found {len(related_relationships)} related concepts relationships")
     for concept_id, related_id in related_relationships:
         if (related_id, concept_id) not in related_relationships:
             issues.append(
@@ -116,11 +59,11 @@ def validate_related_relationship_symmetry(
     return issues
 
 
-@task(log_prints=True)
 def validate_hierarchical_relationship_symmetry(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
     """Make sure hierarchical subconcept relationships are symmetrical"""
+    wikibase_id_to_concept = {concept.wikibase_id: concept for concept in concepts}
     issues = []
     has_subconcept_relationships = [
         (concept.wikibase_id, subconcept_id)
@@ -132,13 +75,11 @@ def validate_hierarchical_relationship_symmetry(
         for concept in concepts
         for parent_concept_id in concept.subconcept_of
     ]
-    print(f"Found {len(has_subconcept_relationships)} subconcept relationships")
-    print(f"Found {len(subconcept_of_relationships)} subconcept_of relationships")
     for concept_id, subconcept_id in has_subconcept_relationships:
         if (subconcept_id, concept_id) not in subconcept_of_relationships:
             try:
-                subconcept = wikibase.get_concept(subconcept_id)
-            except (ValidationError, ConceptNotFoundError):
+                subconcept = wikibase_id_to_concept[subconcept_id]
+            except (ValidationError, KeyError):
                 subconcept = Concept(
                     wikibase_id=subconcept_id, preferred_label="unknown"
                 )
@@ -153,8 +94,8 @@ def validate_hierarchical_relationship_symmetry(
     for concept_id, parent_concept_id in subconcept_of_relationships:
         if (parent_concept_id, concept_id) not in has_subconcept_relationships:
             try:
-                parent_concept = wikibase.get_concept(parent_concept_id)
-            except (ValidationError, ConceptNotFoundError):
+                parent_concept = wikibase_id_to_concept[parent_concept_id]
+            except (ValidationError, KeyError):
                 parent_concept = Concept(
                     wikibase_id=parent_concept_id, preferred_label="unknown"
                 )
@@ -172,7 +113,6 @@ def validate_hierarchical_relationship_symmetry(
     return issues
 
 
-@task(log_prints=True)
 def validate_circular_hierarchical_relationships(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -228,7 +168,6 @@ def validate_circular_hierarchical_relationships(
     return issues
 
 
-@task(log_prints=True)
 def check_for_unconnected_concepts(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -253,7 +192,6 @@ def check_for_unconnected_concepts(
     return issues
 
 
-@task(log_prints=True)
 def validate_alternative_label_uniqueness(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -280,7 +218,6 @@ def validate_alternative_label_uniqueness(
     return issues
 
 
-@task(log_prints=True)
 def check_alternative_labels_for_pipes(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -306,7 +243,6 @@ def check_alternative_labels_for_pipes(
     return issues
 
 
-@task(log_prints=True)
 def ensure_positive_and_negative_labels_dont_overlap(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -328,7 +264,6 @@ def ensure_positive_and_negative_labels_dont_overlap(
     return issues
 
 
-@task(log_prints=True)
 def check_description_and_definition_length(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -363,7 +298,6 @@ def check_description_and_definition_length(
     return issues
 
 
-@task(log_prints=True)
 def check_for_duplicate_preferred_labels(
     concepts: list[Concept],
 ) -> list[ConceptStoreIssue]:
@@ -401,7 +335,6 @@ def check_for_duplicate_preferred_labels(
     return issues
 
 
-@task(log_prints=True)
 def validate_concept_label_casing(
     concepts: list[Concept],
 ):
@@ -420,143 +353,3 @@ def validate_concept_label_casing(
                 )
             )
     return issues
-
-
-@task(log_prints=True)
-def create_html_report(issues: list[ConceptStoreIssue]) -> str:
-    """Create an HTML report of all issues found with tabs and shuffle functionality"""
-
-    issues_by_type = defaultdict(list)
-    for issue in issues:
-        issues_by_type[issue.issue_type].append(issue)
-
-    # Count totals
-    total_issues = len(issues)
-    type_counts = Counter(issue.issue_type for issue in issues)
-
-    # Create HTML
-    html = [
-        """<meta charset="UTF-8">""",
-        "<html>",
-        "<head>",
-        "<style>",
-        "body { font-family: Arial, sans-serif; margin: 2em; }",
-        ".tab { display: none; }",
-        ".tab.active { display: block; }",
-        ".tab-button { padding: 10px 20px; margin-right: 5px; cursor: pointer; }",
-        ".tab-button.active { background: #007bff; color: white; }",
-        ".issue { margin: 1em 0; padding: 0.5em; background: #f5f5f5; display: flex; justify-content: space-between; align-items: flex-start; }",
-        ".issue-content { flex: 1; }",
-        ".metadata { font-family: monospace; margin-left: 1em; }",
-        ".shuffle-button { margin: 1em 0; padding: 10px 20px; background: #28a745; color: white; border: none; cursor: pointer; }",
-        ".concept-link { color: black; text-decoration: underline dotted; }",
-        "a[target='_blank']::after {content: '↗'; display: inline-block; font-size: 0.8em;}",
-        ".fix-button { padding: 5px 10px; background: white; color: #000000; border: none; cursor: pointer; margin-left: 1em; white-space: nowrap; }",
-        "#ten-things-button { background: #B55ABE; color: white; }",
-        "#ten-things { display: none; }",
-        "#ten-things.active { display: block; }",
-        "</style>",
-        "<script>",
-        "function openTab(evt, tabName) {",
-        "  const tabs = document.getElementsByClassName('tab');",
-        "  for (let tab of tabs) { tab.classList.remove('active'); }",
-        "  const buttons = document.getElementsByClassName('tab-button');",
-        "  for (let button of buttons) { button.classList.remove('active'); }",
-        "  document.getElementById('ten-things').classList.remove('active');",
-        "  document.getElementById(tabName).classList.add('active');",
-        "  evt.currentTarget.classList.add('active');",
-        "}",
-        "function showTenThings() {",
-        "  const tabs = document.getElementsByClassName('tab');",
-        "  for (let tab of tabs) { tab.classList.remove('active'); }",
-        "  const buttons = document.getElementsByClassName('tab-button');",
-        "  for (let button of buttons) { button.classList.remove('active'); }",
-        "  const allIssues = Array.from(document.getElementsByClassName('issue'));",
-        "  const randomIssues = allIssues.sort(() => 0.5 - Math.random()).slice(0, 10);",
-        "  const tenThingsDiv = document.getElementById('ten-things');",
-        "  tenThingsDiv.innerHTML = '<h2>Ten Things to Work On</h2>';",
-        "  randomIssues.forEach(issue => {",
-        "    const clone = issue.cloneNode(true);",
-        "    tenThingsDiv.appendChild(clone);",
-        "  });",
-        "  tenThingsDiv.classList.add('active');",
-        "}",
-        "function shuffleIssues(tabName) {",
-        "  const tab = document.getElementById(tabName);",
-        "  const issues = tab.getElementsByClassName('issue');",
-        "  const issuesArr = Array.from(issues);",
-        "  const parent = issues[0].parentNode;",
-        "  for (let i = issuesArr.length - 1; i > 0; i--) {",
-        "    const j = Math.floor(Math.random() * (i + 1));",
-        "    [issuesArr[i], issuesArr[j]] = [issuesArr[j], issuesArr[i]];",
-        "  }",
-        "  issuesArr.forEach(issue => parent.appendChild(issue));",
-        "}",
-        "</script>",
-        "</head>",
-        "<body>",
-        "<h1>Concept Store Librarian Report 📘</h1>",
-        f"<p>Total issues found: {total_issues}</p>",
-        "<div class='tab-buttons'>",
-        "<button class='tab-button' id='ten-things-button' onclick='showTenThings()'>LUCKY DIP</button>",
-    ]
-
-    # Add tab buttons
-    for issue_type in issues_by_type.keys():
-        html.append(
-            f"<button class='tab-button' onclick=\"openTab(event, '{issue_type}')\">{issue_type} ({type_counts[issue_type]})</button>"
-        )
-
-    html.append("</div>")
-    html.append("<div id='ten-things'></div>")
-
-    # Add tab content
-    for issue_type, issue_list in issues_by_type.items():
-        html.extend(
-            [
-                f"<div id='{issue_type}' class='tab'>",
-                f"<h2>{issue_type}</h2>",
-                f"<button class='shuffle-button' onclick=\"shuffleIssues('{issue_type}')\">Shuffle Issues</button>",
-                "<div class='issues-container'>",
-            ]
-        )
-
-        for issue in issue_list:
-            fix_button = (
-                create_fix_button(issue.fix_concept)
-                if issue.fix_concept is not None
-                else ""
-            )
-
-            html.extend(
-                [
-                    "<div class='issue'>",
-                    "<div class='issue-content'>",
-                    f"<p>{issue.message}</p>",
-                    "<pre class='metadata'>",
-                    f"{issue.metadata}",
-                    "</pre>",
-                    "</div>",
-                    f"<div>{fix_button}</div>",
-                    "</div>",
-                ]
-            )
-
-        html.extend(["</div>", "</div>"])
-
-    # Add script to show first tab by default
-    html.extend(
-        [
-            "<script>",
-            "document.getElementsByClassName('tab-button')[0].click();",
-            "</script>",
-            "</body>",
-            "</html>",
-        ]
-    )
-
-    return "\n".join(html)
-
-
-if __name__ == "__main__":
-    issues = validate_concept_store()
