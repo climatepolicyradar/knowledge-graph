@@ -71,24 +71,24 @@ class BaseTargetClassifier(Classifier, ABC):
 
         results = []
         for text, prediction in zip(texts, predictions):
-            if not prediction or not self._check_prediction_conditions(
-                prediction, threshold
-            ):
-                results.append([])
-            else:
-                results.append(
-                    [
-                        Span(
-                            text=text,
-                            start_index=0,
-                            end_index=len(text),
-                            concept_id=self.concept.wikibase_id,
-                            labellers=[str(self)],
-                            timestamps=[datetime.now()],
-                        )
-                    ]
-                )
+            text_results = []
+            for labels in prediction:
+                if self._check_prediction_conditions(labels, threshold):
+                    span = Span(
+                        text=text,
+                        start_index=0,
+                        end_index=len(text),
+                        concept_id=self.concept.wikibase_id,
+                        labellers=[str(self)],
+                        timestamps=[datetime.now()],
+                    )
 
+                    if span not in text_results:
+                        # this is needed so that for "target" we're not duplicating spans,
+                        # but so that we're capturing everything for Reduction and NZT
+                        text_results.append(span)
+
+            results.append(text_results)
         return results
 
     def fit(self) -> "BaseTargetClassifier":
