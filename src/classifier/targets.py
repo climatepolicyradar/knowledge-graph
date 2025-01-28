@@ -52,9 +52,24 @@ class BaseTargetClassifier(Classifier, ABC):
 
     @abstractmethod
     def _check_prediction_conditions(
-        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
     ) -> bool:
-        """Check whether the prediction meets the conditions for this target type."""
+        """
+        Check whether the prediction meets the conditions for this target type.
+
+        This is necessary, because we're not only using a multilabel model for prediction here,
+        but the 3 output labels are also in a hierarchical relationship with in the concept
+        store. This means, that each of the "target", "net-zero" and "emission reduction" classifiers
+        have custom logic implemented here to transform the model predictions into a binary on the concept.
+
+        Args:
+            prediction: The prediction returned by the model -- a list of dictionaries for each of
+                the 3 labels, containing the keys "label" and "score"
+            threshold: The threshold above which a prediction is considered positive.
+
+        Returns:
+            bool: Whether the prediction meets the conditions for this target type.
+        """
 
     def predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
         """Predict whether the supplied text contains a target."""
@@ -72,21 +87,16 @@ class BaseTargetClassifier(Classifier, ABC):
         results = []
         for text, prediction in zip(texts, predictions):
             text_results = []
-            for labels in prediction:
-                if self._check_prediction_conditions(labels, threshold):
-                    span = Span(
-                        text=text,
-                        start_index=0,
-                        end_index=len(text),
-                        concept_id=self.concept.wikibase_id,
-                        labellers=[str(self)],
-                        timestamps=[datetime.now()],
-                    )
-
-                    if span not in text_results:
-                        # this is needed so that for "target" we're not duplicating spans,
-                        # but so that we're capturing everything for Reduction and NZT
-                        text_results.append(span)
+            if self._check_prediction_conditions(prediction, threshold):
+                span = Span(
+                    text=text,
+                    start_index=0,
+                    end_index=len(text),
+                    concept_id=self.concept.wikibase_id,
+                    labellers=[str(self)],
+                    timestamps=[datetime.now()],
+                )
+                text_results.append(span)
 
             results.append(text_results)
         return results
@@ -105,10 +115,10 @@ class TargetClassifier(BaseTargetClassifier):
     allowed_concept_ids = [WikibaseID("Q1651")]
 
     def _check_prediction_conditions(
-        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
     ) -> bool:
         """Check whether the prediction meets the conditions for a generic target."""
-        return prediction["score"] >= threshold
+        return any(label for label in prediction if label["score"] >= threshold)
 
 
 class EmissionsReductionTargetClassifier(BaseTargetClassifier):
@@ -117,12 +127,13 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
     allowed_concept_ids = [WikibaseID("Q1652")]
 
     def _check_prediction_conditions(
-        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
     ) -> bool:
         """Check whether the prediction meets the conditions for a reduction target."""
-        return (
-            prediction["label"] in ["Reduction", "NZT"]
-            and prediction["score"] >= threshold
+        return any(
+            label
+            for label in prediction
+            if label["score"] >= threshold and label["label"] in {"NZT", "Reduction"}
         )
 
 
@@ -132,7 +143,11 @@ class NetZeroTargetClassifier(BaseTargetClassifier):
     allowed_concept_ids = [WikibaseID("Q1653")]
 
     def _check_prediction_conditions(
-        self, prediction: dict, threshold: float = DEFAULT_THRESHOLD
+        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
     ) -> bool:
         """Check whether the prediction meets the conditions for a net-zero target."""
-        return prediction["label"] == "NZT" and prediction["score"] >= threshold
+        return any(
+            label
+            for label in prediction
+            if label["score"] >= threshold and label["label"] in {"NZT"}
+        )
