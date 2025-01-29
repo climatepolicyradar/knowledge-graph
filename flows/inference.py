@@ -20,6 +20,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
+from flows.utils import SlackNotify
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -454,7 +455,12 @@ async def run_classifier_inference_on_batch_of_documents(
     await asyncio.gather(*tasks)
 
 
-@flow(log_prints=True, task_runner=ConcurrentTaskRunner())
+@flow(
+    log_prints=True,
+    task_runner=ConcurrentTaskRunner(),
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def classifier_inference(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
     document_ids: Optional[list[str]] = None,
