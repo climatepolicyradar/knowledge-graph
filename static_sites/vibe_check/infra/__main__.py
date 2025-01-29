@@ -5,11 +5,14 @@ This module represents the infrastructure for a lightweight internal service tha
 provides a static website.
 
 Infrastructure Overview:
-- An S3 bucket, configured for static website hosting
-- A CloudFront distribution, giving us HTTPS and tidy URL rewriting
-- A bucket policy which allows CloudFront to access the content in s3
+- An S3 bucket configured for storing static website content
+- A CloudFront distribution, providing:
+  - HTTPS termination
+  - Global content delivery and caching
+  - Directory index handling via CloudFront Functions
+- A bucket policy restricting access to CloudFront via Origin Access Identity
 
-Given the likely volume of traffic for an internal too like this, the cost of this
+Given the likely volume of traffic for an internal tool like this, the cost of this
 setup should be negligible (probably pennies per month).
 """
 
@@ -21,7 +24,7 @@ import pulumi_aws as aws
 config = pulumi.Config()
 app_name = "cpr-knowledge-graph-vibe-check"
 
-# create an S3 bucket for us to dump static site assets into
+# create an S3 bucket configured for website hosting
 bucket = aws.s3.Bucket(
     f"{app_name}",
     bucket=f"{app_name}",
@@ -33,6 +36,31 @@ bucket = aws.s3.Bucket(
 
 # create an Origin Access Identity (OAI) for cloudfront to access the bucket
 cloudfront_oai = aws.cloudfront.OriginAccessIdentity(f"{app_name}-oai")
+
+# Create a CloudFront function to handle directory indexes. For example, if a user
+# requests /Q123, the function will redirect to /Q123/index.html
+directory_index_function = aws.cloudfront.Function(
+    f"{app_name}-directory-index",
+    name=f"{app_name}-directory-index",
+    runtime="cloudfront-js-1.0",
+    code="""
+function handler(event) {
+    var request = event.request;
+    var uri = request.uri;
+    
+    // If URI is empty or ends with a slash, append index.html
+    if (uri === "" || uri === "/" || uri.endsWith("/")) {
+        request.uri = uri + "index.html";
+    }
+    // If URI doesn't contain a file extension, append /index.html
+    else if (!uri.includes(".")) {
+        request.uri = uri + "/index.html";
+    }
+    
+    return request;
+}
+""",
+)
 
 # update the bucket policy to allow access from our cloudfront OAI
 bucket_policy = aws.s3.BucketPolicy(
@@ -56,6 +84,9 @@ bucket_policy = aws.s3.BucketPolicy(
     ),
 )
 
+# Get AWS's managed cache policy for CachingOptimized
+managed_cache_policy = aws.cloudfront.get_cache_policy(name="Managed-CachingOptimized")
+
 # create the cloudfront distribution
 distribution = aws.cloudfront.Distribution(
     f"{app_name}-distribution",
@@ -68,17 +99,17 @@ distribution = aws.cloudfront.Distribution(
         target_origin_id=bucket.bucket,
         # force https for all requests
         viewer_protocol_policy="redirect-to-https",
-        # don't forward query strings or cookies as they're not needed
-        forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
-            query_string=False,
-            cookies=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs(
-                forward="none",
-            ),
-        ),
+        cache_policy_id=managed_cache_policy.id,
+        compress=True,
+        # Add function to handle directory indexes
+        function_associations=[
+            aws.cloudfront.DistributionDefaultCacheBehaviorFunctionAssociationArgs(
+                event_type="viewer-request",
+                function_arn=directory_index_function.arn,
+            )
+        ],
     ),
-    # define where cloudfront should fetch the content from.
-    # we're using an OAI to securely access s3, keeping the bucket itself private and
-    # only publicly accessible via cloudfront
+    # define where cloudfront should fetch the content from using the S3 bucket
     origins=[
         aws.cloudfront.DistributionOriginArgs(
             domain_name=bucket.bucket_regional_domain_name,
@@ -88,36 +119,16 @@ distribution = aws.cloudfront.Distribution(
             ),
         ),
     ],
-    # configure how cloudfront should handle requests that don't match any of the
-    # configured cache behaviors
-    custom_error_responses=[
-        aws.cloudfront.DistributionCustomErrorResponseArgs(
-            error_code=404,
-            response_code=200,
-            response_page_path="/index.html",
-            # setting this to 0 will ensure that we don't cache the 404 -> index.html redirects
-            error_caching_min_ttl=0,
-        ),
-    ],
     # configure which edge locations cloudfront will use to serve content
-    # we're using PriceClass_100 (which is the cheapest, only serving in North America
-    # and Europe). This should be sufficient as since our origin is in eu-west-1 and
-    # users are primarily in Europe.
     price_class="PriceClass_100",
-    # Despite setting PriceClass_100, we're not restricting access by geography - people
-    # can access the site from anywhere.
     restrictions=aws.cloudfront.DistributionRestrictionsArgs(
         geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
             restriction_type="none",
         ),
     ),
-    # use the default CloudFront SSL certificate for HTTPS. This gives us a domain like
-    # blah.cloudfront.net.
     viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
         cloudfront_default_certificate=True,
     ),
-    # set index.html as the default root object so that requests to / will show the
-    # content from  /index.html
     default_root_object="index.html",
     is_ipv6_enabled=True,
     http_version="http2",
