@@ -7,9 +7,10 @@ See: https://docs-2.prefect.io/latest/concepts/deployments/
 
 import importlib.metadata
 import os
-from typing import Any
+from typing import Any, Optional
 
 from prefect.blocks.system import JSON
+from prefect.client.schemas.schedules import CronSchedule
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
@@ -32,10 +33,24 @@ DEFAULT_FLOW_VARIABLES = {
 }
 
 
+def get_schedule_for_env(
+    aws_env: AwsEnv, env_schedules: Optional[dict[AwsEnv, str]]
+) -> Optional[CronSchedule]:
+    """Creates a cron schedule from a env schedule mapping"""
+    if not env_schedules:
+        return None
+
+    if env_schedules.get(aws_env):
+        return CronSchedule(cron=env_schedules.get(aws_env), timezone="Europe/London")
+    else:
+        return None
+
+
 def create_deployment(
     flow: Flow,
     description: str,
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
+    env_schedules: Optional[dict[AwsEnv, str]] = None,
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
@@ -47,6 +62,8 @@ def create_deployment(
 
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
     job_variables = {**default_variables, **flow_variables}
+
+    schedule = get_schedule_for_env(aws_env, env_schedules)
 
     _ = flow.deploy(
         generate_deployment_name(flow_name, aws_env),
@@ -61,6 +78,7 @@ def create_deployment(
         job_variables=job_variables,
         tags=[f"repo:{docker_repository}", f"awsenv:{aws_env}"],
         description=description,
+        schedule=schedule,
         build=False,
         push=False,
     )
@@ -95,4 +113,10 @@ create_deployment(
 create_deployment(
     flow=wikibase_to_s3,
     description="Upload concepts from Wikibase to S3",
+    env_schedules={
+        AwsEnv.production: "0 9 * * TUE,THU",
+        AwsEnv.staging: "0 15 2 * *",
+        AwsEnv.sandbox: "0 15 1 * *",
+        # AwsEnv.labs: "0 15 3 * *",
+    },
 )
