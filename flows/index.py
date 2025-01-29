@@ -22,7 +22,7 @@ from prefect import flow
 from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
 from pydantic import BaseModel
-from vespa.io import VespaQueryResponse
+from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import SlackNotify
@@ -43,6 +43,7 @@ from src.span import Span
 DEFAULT_BATCH_SIZE = 50
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
+CONCEPT_COUNT_SEPARATOR: str = ":"
 
 
 # Needed to get document passages from Vespa
@@ -53,6 +54,14 @@ DocumentImportId: TypeAlias = str
 DocumentObjectUri: TypeAlias = str
 # Passed to a self-sufficient flow run
 DocumentImporter: TypeAlias = tuple[DocumentImportId, DocumentObjectUri]
+
+
+class S3Accessor(BaseModel):
+    """Representing S3 paths and prefixes for accessing documents."""
+
+    paths: list[str] | None = None
+    prefixes: list[str] | None = None
+
 
 # AKA LabelledPassage
 TextBlockId: TypeAlias = str
@@ -133,7 +142,7 @@ class ConceptModel(BaseModel):
         Returns:
             str: String representation in the format 'WIKIBASE_ID:MODEL_NAME'
         """
-        return f"{self.wikibase_id}:{self.concept_name}"
+        return f"{self.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{self.concept_name}"
 
     def __hash__(self) -> int:
         """
@@ -274,8 +283,7 @@ def s3_obj_generator_from_s3_prefixes(
                 yield id, key
         except Exception as e:
             logger.error(
-                "failed to yield from S3 prefix",
-                extra={"error": str(e)},
+                f"failed to yield from S3 prefix. Error: {str(e)}",
             )
             continue
 
@@ -303,8 +311,7 @@ def s3_obj_generator_from_s3_paths(
             yield id, uri
         except Exception as e:
             logger.error(
-                "failed to yield from S3 path",
-                extra={"error": str(e)},
+                f"failed to yield from S3 path. Error: {str(e)}",
             )
             continue
 
@@ -654,7 +661,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
             )
 
-            # Convert Counter with ConceptModel keys to dict with string keys
             serialised_concepts_counts = json.dumps(
                 {str(k): v for k, v in concepts_counts.items()}
             )
@@ -725,7 +731,7 @@ async def partial_update_text_block(
         concepts,
     )
 
-    response = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
         schema="document_passage",
         namespace="doc_search",
         data_id=data_id,
@@ -739,8 +745,9 @@ async def partial_update_text_block(
 def s3_paths_or_s3_prefixes(
     classifier_specs: list[ClassifierSpec] | None,
     document_ids: list[str] | None,
-    config: Config,
-) -> tuple[list[str] | None, list[str] | None]:
+    cache_bucket: str,
+    prefix: str,
+) -> S3Accessor:
     """
     Return the paths or prefix for the documents and classifiers.
 
@@ -759,10 +766,10 @@ def s3_paths_or_s3_prefixes(
             # Run on all documents, regardless of classifier
             logger.info("run on all documents, regardless of classifier")
             s3_prefix: str = "s3://" + os.path.join(  # type: ignore
-                config.cache_bucket,  # type: ignore
-                config.document_source_prefix,
+                cache_bucket,
+                prefix,
             )
-            return None, [s3_prefix]
+            return S3Accessor(paths=None, prefixes=[s3_prefix])
 
         case (list(), None):
             # Run on all documents, for the specified classifier
@@ -770,14 +777,14 @@ def s3_paths_or_s3_prefixes(
             s3_prefixes = [
                 "s3://"
                 + os.path.join(  # type: ignore
-                    config.cache_bucket,  # type: ignore
-                    config.document_source_prefix,
+                    cache_bucket,
+                    prefix,
                     classifier_spec.name,
                     classifier_spec.alias,
                 )
                 for classifier_spec in classifier_specs
             ]
-            return None, s3_prefixes
+            return S3Accessor(paths=None, prefixes=s3_prefixes)
 
         case (list(), list()):
             # Run on specified documents, for the specified classifier
@@ -785,8 +792,8 @@ def s3_paths_or_s3_prefixes(
             document_paths = [
                 "s3://"
                 + os.path.join(  # type: ignore
-                    config.cache_bucket,  # type: ignore
-                    config.document_source_prefix,
+                    cache_bucket,
+                    prefix,
                     classifier_spec.name,
                     classifier_spec.alias,
                     f"{doc_id}.json",
@@ -794,7 +801,7 @@ def s3_paths_or_s3_prefixes(
                 for classifier_spec in classifier_specs
                 for doc_id in document_ids
             ]
-            return document_paths, None
+            return S3Accessor(paths=document_paths, prefixes=None)
 
         case (None, list()):
             raise ValueError(
@@ -846,7 +853,7 @@ async def index_by_s3(
     s3_prefixes: list[str] | None = None,
     s3_paths: list[str] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    as_subflow=True,
+    as_subflow: bool = True,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -1010,19 +1017,20 @@ async def index_labelled_passages_from_s3_to_vespa(
 
     logger.info(f"running with classifier specs.: {classifier_specs}")
 
-    s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
+    s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs,
         document_ids,
-        config,
+        config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        config.document_source_prefix,
     )
 
-    logger.info(f"s3_prefix: {s3_prefixes}, s3_paths: {s3_paths}")
+    logger.info(f"s3_prefixes: {s3_accessor.prefixes}, s3_paths: {s3_accessor.paths}")
 
     await index_by_s3(
         aws_env=config.aws_env,
         vespa_search_adapter=config.vespa_search_adapter,  # type: ignore
-        s3_prefixes=s3_prefixes,
-        s3_paths=s3_paths,
+        s3_prefixes=s3_accessor.prefixes,
+        s3_paths=s3_accessor.paths,
         batch_size=batch_size,
         as_subflow=config.as_subflow,
         cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]

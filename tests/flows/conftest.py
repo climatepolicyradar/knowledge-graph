@@ -532,3 +532,23 @@ def mock_flow_run():
     mock_flow_run.state.timestamp = "2025-01-28T12:00:00+00:00"
 
     yield mock_flow_run
+
+
+@pytest.fixture
+def mock_concepts_counts_document_uri() -> str:
+    return "concepts_counts/Q761/v4/CCLW.party.1779.0.json"
+
+
+@pytest.fixture
+def mock_bucket_concepts_counts(
+    mock_concepts_counts_document_uri,
+    mock_s3_client,
+    mock_bucket,
+) -> None:
+    """Puts the concept counts fixture files in the mock bucket."""
+    data = load_fixture(mock_concepts_counts_document_uri)
+    body = BytesIO(data.encode("utf-8"))
+    key = mock_concepts_counts_document_uri
+    mock_s3_client.put_object(
+        Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+    )

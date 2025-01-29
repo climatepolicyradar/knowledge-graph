@@ -14,6 +14,10 @@ from prefect.client.schemas.schedules import CronSchedule
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
+from flows.count_family_document_concepts import (
+    count_family_document_concepts,
+    load_update_document_concepts_counts,
+)
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
     run_partial_updates_of_concepts_for_document_passages,
@@ -108,7 +112,19 @@ create_deployment(
     description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 
-# wikibase
+# Concepts counting
+
+create_deployment(
+    flow=count_family_document_concepts,
+    description="Update family documents in Vespa to include concepts' counts from S3",
+)
+
+create_deployment(
+    flow=load_update_document_concepts_counts,
+    description="Update 1 family document in Vespa to include concepts' counts from S3",
+)
+
+# Wikibase
 
 create_deployment(
     flow=wikibase_to_s3,

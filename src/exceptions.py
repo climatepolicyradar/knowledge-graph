@@ -48,10 +48,9 @@ class QueryError(Exception):
 class PartialUpdateError(Exception):
     """Exception raised when partial updates of concepts fail."""
 
-    def __init__(self, document_passage_id: str, status_code: int):
+    def __init__(self, id: str, status_code: int):
         super().__init__(
-            f"Failed to update document passage `{document_passage_id}`. "
-            f"Received status code: {status_code}"
+            f"Failed to update `{id}`. " f"Received status code: {status_code}"
         )
-        self.document_passage_id = document_passage_id
+        self.id = id
         self.status_code = status_code
