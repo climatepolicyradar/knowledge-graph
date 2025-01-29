@@ -8,7 +8,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from pydantic import SecretStr
 
-from flows.utils import file_name_from_path
+from flows.utils import SlackNotify, file_name_from_path
 from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.wikibase import WikibaseSession
@@ -108,7 +108,10 @@ def list_s3_concepts(config: Config) -> list[str]:
     return s3_concepts
 
 
-@flow
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 def wikibase_to_s3(config: Optional[Config] = None):
     logger = get_run_logger()
     if not config:

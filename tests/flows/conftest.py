@@ -501,20 +501,6 @@ def mock_concepts() -> Generator[list[Concept], None, None]:
 
 
 @pytest.fixture
-def mock_cdn_concepts(
-    mock_s3_client, mock_cdn_bucket: str, mock_concepts: list[Concept]
-):
-    for concept in mock_concepts:
-        body = BytesIO(concept.model_dump_json().encode("utf-8"))
-        key = f"concepts/{concept.wikibase_id}.json"
-        mock_s3_client.put_object(
-            Bucket=mock_cdn_bucket, Key=key, Body=body, ContentType="application/json"
-        )
-
-    yield mock_concepts
-
-
-@pytest.fixture
 def mock_prefect_slack_webhook():
     """Patch the SlackWebhook class to return a mock object."""
     with patch("flows.utils.SlackWebhook") as mock_SlackWebhook:
