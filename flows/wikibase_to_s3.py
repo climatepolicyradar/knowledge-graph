@@ -111,7 +111,6 @@ def list_s3_concepts(config: Config) -> list[str]:
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
-    on_completion=[SlackNotify.message],
 )
 def wikibase_to_s3(config: Optional[Config] = None):
     logger = get_run_logger()
