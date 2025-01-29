@@ -34,6 +34,24 @@ nltk = "^3.9.1"
 datasets = "^2.18.0"
 boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
 
+[tool.poetry.group.transformers]
+optional = true
+
+[tool.poetry.group.transformers.dependencies]
+# Torch CPU versions: https://download.pytorch.org/whl/torch/
+torch = [
+  # Mac x86_64
+  # Pinned to 2.2.2 because pytorch stopped supported intel-macs after 2.2.2: https://github.com/pytorch/pytorch/issues/114602
+  { markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'", url = "https://download.pytorch.org/whl/cpu/torch-2.2.2-cp310-none-macosx_10_9_x86_64.whl" },
+  # Mac arm64
+  { markers = "sys_platform == 'darwin' and platform_machine == 'arm64'", url = "https://download.pytorch.org/whl/cpu/torch-2.4.1-cp310-none-macosx_11_0_arm64.whl" },
+  # Linux
+  { markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'", version = "2.4.1", source = "pytorch" }
+]
+sentence-transformers = "^3.1.1"
+transformers = "^4.48.1"
+
+
 [tool.poetry.group.predictions_api]
 optional = true
 
@@ -46,23 +64,6 @@ optional = true
 
 [tool.poetry.group.llm.dependencies]
 anthropic = "^0.39.0"
-
-[tool.poetry.group.embeddings]
-optional = true
-
-[tool.poetry.group.embeddings.dependencies]
-# Torch CPU versions: https://download.pytorch.org/whl/torch/
-torch = [
-  # Mac x86_64
-  # Pinned to 2.2.2 because pytorch stopped supported intel-macs after 2.2.2: https://github.com/pytorch/pytorch/issues/114602
-  { markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'", url = "https://download.pytorch.org/whl/cpu/torch-2.2.2-cp310-none-macosx_10_9_x86_64.whl" },
-  # Mac arm64
-  { markers = "sys_platform == 'darwin' and platform_machine == 'arm64'", url = "https://download.pytorch.org/whl/cpu/torch-2.4.1-cp310-none-macosx_11_0_arm64.whl" },
-  # Linux
-  { markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'", version = "2.4.1", source = "pytorch" }
-]
-sentence-transformers = "^3.1.1"
-
 
 [[tool.poetry.source]]
 name = "pytorch"
@@ -104,7 +105,7 @@ env = [
   "WIKIBASE_PASSWORD=test_password",
   "WIKIBASE_URL=https://test.test.test"
 ]
-markers = ["vespa", "flaky_on_ci"]
+markers = ["vespa", "flaky_on_ci", "transformers"]
 
 [build-system]
 requires = ["poetry-core"]

@@ -9,7 +9,7 @@ from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
-from src.identifiers import generate_identifier
+from src.identifiers import WikibaseID, generate_identifier
 from src.span import Span
 from tests.common_strategies import concept_label_strategy, concept_strategy
 
@@ -341,3 +341,95 @@ def test_whether_a_classifier_with_a_small_change_to_the_internal_concept_produc
     assert classifier.id != new_classifier.id
     assert hash(classifier) != hash(new_classifier)
     assert classifier != new_classifier
+
+
+def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts_any_concept():
+    class UnrestrictedClassifier(Classifier):
+        def predict(self, text: str) -> list[Span]:
+            return []
+
+    concept1 = Concept(wikibase_id="Q123", preferred_label="test")
+    concept2 = Concept(wikibase_id="Q456", preferred_label="test")
+
+    assert UnrestrictedClassifier(concept1)
+    assert UnrestrictedClassifier(concept2)
+
+
+def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correctly():
+    class SingleIDClassifier(Classifier):
+        allowed_concept_ids = [WikibaseID("Q123")]
+
+        def predict(self, text: str) -> list[Span]:
+            return []
+
+    valid_concept = Concept(wikibase_id="Q123", preferred_label="test")
+    invalid_concept = Concept(wikibase_id="Q456", preferred_label="test")
+
+    assert SingleIDClassifier(valid_concept)
+
+    with pytest.raises(ValueError) as exc_info:
+        SingleIDClassifier(invalid_concept)
+    assert "must be Q123" in str(exc_info.value)
+    assert "not Q456" in str(exc_info.value)
+
+
+def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correctly():
+    class MultiIDClassifier(Classifier):
+        allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
+
+        def predict(self, text: str) -> list[Span]:
+            return []
+
+    valid_concept = Concept(wikibase_id="Q123", preferred_label="test")
+    invalid_concept = Concept(wikibase_id="Q789", preferred_label="test")
+
+    assert MultiIDClassifier(valid_concept)
+
+    with pytest.raises(ValueError) as exc_info:
+        MultiIDClassifier(invalid_concept)
+    assert "must be one of Q123,Q456" in str(exc_info.value)
+    assert "not Q789" in str(exc_info.value)
+
+
+def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance():
+    class ParentClassifier(Classifier):
+        allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
+
+        def predict(self, text: str) -> list[Span]:
+            return []
+
+    class ChildClassifier(ParentClassifier):
+        allowed_concept_ids = [WikibaseID("Q123")]  # More restrictive than parent
+
+    valid_concept = Concept(wikibase_id="Q123", preferred_label="test")
+    parent_only_concept = Concept(wikibase_id="Q456", preferred_label="test")
+
+    # Parent should accept both concepts
+    assert ParentClassifier(valid_concept)
+    assert ParentClassifier(parent_only_concept)
+
+    # Child should only accept its own allowed ID
+    assert ChildClassifier(valid_concept)
+    with pytest.raises(ValueError) as exc_info:
+        ChildClassifier(parent_only_concept)
+    assert "must be Q123" in str(exc_info.value)
+    assert "not Q456" in str(exc_info.value)
+
+
+def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
+    """
+    Test whether supplying an empty list of allowed_concept_ids is prohibitive.
+
+    The expected behaviour is that the classifier should accept any concept,
+    regardless of its wikibase_id.
+    """
+
+    class EmptyIDClassifier(Classifier):
+        allowed_concept_ids = []
+
+        def predict(self, text: str) -> list[Span]:
+            return []
+
+    concept = Concept(wikibase_id="Q123", preferred_label="test")
+
+    assert EmptyIDClassifier(concept)
