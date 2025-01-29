@@ -1,76 +1,55 @@
 # Vibe check
 
-A web-based tool for visualizing and exploring predictions from our candidate classifiers. It helps concept developers understand how our classifiers perform on real-world documents.
+A web-based tool to help concept developers understand how classifiers might perform on real-world documents, before going through the formal classifier evaluation process.
 
-The tool takes predictions from our classifier pipeline and generates a static website which:
+The site displays predictions for each candidate classifier by highlighting the predicted text spans from each model. It also allows users to search the predicted passages and filter by region, translation status, and corpus type.
 
-- Lists all concepts with available classifiers
-- Shows detailed predictions for each classifier, with highlighted text spans
-- Provides filtering by region, translation status, and corpus type
-- Includes search functionality for finding specific passages
-- Supports both light and dark modes for comfortable viewing
+The generated site has the following structure:
 
-## Usage
+```
+dist/
+├── index.html                # List of all concepts
+├── static/                   # Static assets (CSS, JS, images)
+└── {concept_id}/             # Directory for each concept
+    ├── index.html            # Concept details and available classifiers
+    ├── {classifier_id}.html  # Predictions for a specific classifier
+    └── {classifier_id}.json  # Raw predictions in JSONL format
+```
 
-### Prereqstatic_sitesites
+## Generating the site with new data
 
-Before generating the site, ensure you have:
+Before generating the site, ensure you have run the prediction pipeline:
 
-1. Run predictions for at least one concept (they should be in `data/processed/predictions/`)
-2. The corresponding classifier models (in `data/processed/classifiers/`)
-
-### Generating the Site
+```bash
+just predict Q123  # Replacing Q123 with your concept ID
+```
 
 To generate a new set of HTML files with the latest predictions, run:
 
 ```bash
-poetry run python -m vibe_check
+just generate-static-site vibe_check
 ```
 
-The HTML files will be saved to the `static_sites/vibe_check/dist` directory.
+The HTML files will be saved locally to the `static_sites/vibe_check/dist` directory.
 
 To preview the site locally, you can start a local server:
 
 ```bash
-just serve vibe_check
+just serve-static-site vibe_check
 ```
 
 The site will be available at `http://localhost:8080`.
 
-### Adding New Data
-
-To generate predictions for a new concept:
-
-1. Run the prediction pipeline:
-
-```bash
-just predict Q123  # Replace Q123 with your concept ID
-```
-
-2. Generate a fresh copy of the site:
-
-```bash
-poetry run python -m vibe_check
-```
-
 ## Deployment
 
-The site is deployed using AWS CloudFront and S3, giving us HTTPS support and clean URLs. Here's how to deploy:
+The site is deployed using AWS CloudFront and S3.
 
-### 1. Ensure you're using the correct AWS account
+### Deploy the infrastructure
 
-```bash
-# Configure Pulumi to use the labs AWS profile
-pulumi config set aws:profile labs
-
-# Verify you're using the correct AWS account
-aws sts get-caller-identity --profile=labs
-```
-
-### 2. Deploy the infrastructure
+This step is only required if you're making changes to the infrastructure itself - skip it if you're just updating the site content, and move straight on to [Pushing new data to s3](#pushing-new-data-to-s3).
 
 ```bash
-# Navigate to the infrastructure directory
+# First, navigate to the infrastructure directory
 cd static_sites/vibe_check/infra
 
 # Install dependencies
@@ -78,16 +57,28 @@ pip install -r requirements.txt
 
 # Deploy and get the outputs
 pulumi up --stack labs
-
-# The command will output your CloudFront URL and bucket name
 ```
 
-### 3. Deploy the site content
+The deployment creates:
+
+- An S3 bucket (`cpr-knowledge-graph-vibe-check`) configured for static website hosting
+- A CloudFront distribution providing:
+  - HTTPS support with automatic HTTP to HTTPS redirection
+  - Clean URLs (no index.html suffixes needed) via CloudFront Functions
+  - Global CDN distribution (using Price Class 100 edge locations)
+  - HTTP/2 and IPv6 support
+  - Optimized caching using AWS's managed CachingOptimized policy
+  - Limited to GET, HEAD, and OPTIONS methods for security
+- Appropriate security policies and access controls via Origin Access Identity (OAI)
+
+The infrastructure is defined using Pulumi in `infra/__main__.py`.
+
+### Pushing new data to s3
 
 Once the infrastructure is ready, you can deploy the static site files:
 
 ```bash
-# export the bucket name
+# get the bucket name from the pulumi stack outputs
 export BUCKET_NAME=$(pulumi stack output bucket_name --stack labs)
 
 # Sync the dist directory to S3, removing any old files
@@ -97,63 +88,10 @@ aws s3 sync dist "s3://$BUCKET_NAME" --profile=labs --delete
 pulumi stack output cloudfront_url --stack labs
 ```
 
-### Infrastructure Details
+### Tearing down the infrastructure
 
-The deployment creates:
-
-- An S3 bucket configured for static website hosting
-- A CloudFront distribution providing:
-  - HTTPS support
-  - Clean URLs (no .html suffixes needed)
-  - Global CDN distribution
-  - Automatic HTTP to HTTPS redirection
-- Appropriate security policies and access controls
-
-The infrastructure is defined in `infra/__main__.py` using Pulumi.
-
-### Updating the Site
-
-When you have new predictions to publish:
-
-1. Generate new predictions:
+To tear everything down, make your way to the `infra` directory and run:
 
 ```bash
-just predict Q123  # Replace Q123 with your concept ID
-```
-
-2. Rebuild the site:
-
-```bash
-poetry run python -m static_sites.vibe_check
-```
-
-3. Deploy the updates:
-
-```bash
-# export the bucket name
-export BUCKET_NAME=$(pulumi stack output bucket_name --stack labs)
-
-aws s3 sync dist "s3://$BUCKET_NAME" --profile=labs --delete
-```
-
-### Tearing Down
-
-To remove the infrastructure:
-
-```bash
-cd static_sites/vibe_check/infra
 pulumi destroy --stack labs
-```
-
-## Site Structure
-
-The generated site follows this structure:
-
-```
-dist/
-├── index.html                # List of all concepts
-├── static/                   # Static assets (CSS, JS, images)
-└── {concept_id}/             # Directory for each concept
-    ├── index.html            # Concept details and available classifiers
-    └── {classifier_id}.html  # Predictions for a specific classifier
 ```
