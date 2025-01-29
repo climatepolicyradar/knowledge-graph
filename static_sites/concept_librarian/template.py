@@ -1,11 +1,13 @@
 from collections import Counter, defaultdict
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from concept_librarian.checks import ConceptStoreIssue
-from scripts.config import root_dir
+from static_sites.concept_librarian.checks import ConceptStoreIssue
 
-env = Environment(loader=FileSystemLoader(root_dir / "concept_librarian" / "templates"))
+# Get the directory where this file lives and load the templates
+current_dir = Path(__file__).parent.resolve()
+env = Environment(loader=FileSystemLoader(current_dir / "templates"))
 
 
 def create_index_page(issues: list[ConceptStoreIssue]) -> str:

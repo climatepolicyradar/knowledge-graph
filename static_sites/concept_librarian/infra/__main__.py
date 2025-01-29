@@ -1,8 +1,8 @@
 """
-Infrastructure for the vibe check static site
+Infrastructure for the concept librarian static site
 
 This module represents the infrastructure for a lightweight internal service that
-deploys a static website.
+provides a static website for monitoring and maintaining concept quality.
 
 Infrastructure Overview:
 - An S3 bucket, configured for static website hosting
@@ -19,7 +19,7 @@ import pulumi
 import pulumi_aws as aws
 
 config = pulumi.Config()
-app_name = "cpr-knowledge-graph-vibe-check"
+app_name = "cpr-knowledge-graph-concept-librarian"
 
 # Create an S3 bucket for hosting the static site
 bucket = aws.s3.Bucket(
@@ -27,21 +27,21 @@ bucket = aws.s3.Bucket(
     bucket=f"{app_name}",
     website=aws.s3.BucketWebsiteArgs(
         index_document="index.html",
-        error_document="index.html",
+        error_document="404.html",
     ),
 )
 
 # Create an Origin Access Identity for CloudFront
-cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
+oai = aws.cloudfront.OriginAccessIdentity(
     f"{app_name}-oai",
-    comment="OAI for Vibe Check static site",
+    comment="OAI for Concept Librarian static site",
 )
 
 # Create a bucket policy that allows CloudFront to access the bucket
 bucket_policy = aws.s3.BucketPolicy(
     f"{app_name}-policy",
     bucket=bucket.id,
-    policy=pulumi.Output.all(bucket=bucket.id, oai=cloudfront_oai.iam_arn).apply(
+    policy=pulumi.Output.all(bucket=bucket.id, oai=oai.iam_arn).apply(
         lambda args: json.dumps(
             {
                 "Version": "2012-10-17",
@@ -98,9 +98,9 @@ distribution = aws.cloudfront.Distribution(
             domain_name=bucket.bucket_regional_domain_name,
             origin_id=bucket.bucket,
             s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
-                origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
+                origin_access_identity=oai.cloudfront_access_identity_path,
             ),
-        ),
+        )
     ],
     default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         # Only allow GET/HEAD/OPTIONS methods as this is a static site
@@ -127,16 +127,6 @@ distribution = aws.cloudfront.Distribution(
             )
         ],
     ),
-    # Handle 404s by redirecting to index.html for SPA behavior
-    custom_error_responses=[
-        aws.cloudfront.DistributionCustomErrorResponseArgs(
-            error_code=404,
-            response_code=200,
-            response_page_path="/index.html",
-            # Setting this to 0 will ensure that we don't cache the 404 -> index.html redirects
-            error_caching_min_ttl=0,
-        ),
-    ],
     # No geographic restrictions - accessible from anywhere
     restrictions=aws.cloudfront.DistributionRestrictionsArgs(
         geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(

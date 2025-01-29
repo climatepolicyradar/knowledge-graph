@@ -4,7 +4,10 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from concept_librarian.checks import (
+from scripts.config import root_dir
+from src.concept import Concept
+from src.wikibase import WikibaseSession
+from static_sites.concept_librarian.checks import (
     ConceptStoreIssue,
     check_alternative_labels_for_pipes,
     check_description_and_definition_length,
@@ -17,10 +20,10 @@ from concept_librarian.checks import (
     validate_hierarchical_relationship_symmetry,
     validate_related_relationship_symmetry,
 )
-from concept_librarian.template import create_concept_page, create_index_page
-from scripts.config import root_dir
-from src.concept import Concept
-from src.wikibase import WikibaseSession
+from static_sites.concept_librarian.template import (
+    create_concept_page,
+    create_index_page,
+)
 
 app = typer.Typer()
 console = Console()
