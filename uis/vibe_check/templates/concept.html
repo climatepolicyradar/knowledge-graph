@@ -4,11 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ concept_str }}</title>
-    <link
-      rel="icon"
-      type="image/png"
-      href="{{ url_for('static', path='favicon.png') }}"
-    />
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -47,7 +43,7 @@
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
           {% for classifier_id, classifier_name in classifiers.items() %}
           <div
-            onclick="window.location='/{{ wikibase_id }}/{{ classifier_id }}'"
+            onclick="window.location='{{ classifier_id }}.html'"
             class="p-6 hover:bg-slate-50 dark:hover:bg-gray-700 transition duration-150 cursor-pointer"
           >
             <div class="flex items-center justify-between">
@@ -75,7 +71,7 @@
       <!-- Back to index link -->
       <div class="mt-6">
         <a
-          href="/"
+          href="../index.html"
           class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
         >
           ← Back to all concepts
