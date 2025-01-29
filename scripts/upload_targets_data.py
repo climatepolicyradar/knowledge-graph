@@ -5,11 +5,7 @@ import pandas as pd
 import json
 import typer
 
-from argilla import (
-    SpanQuestion,
-    TextField,
-    ResponseSchema,
-)
+from argilla import SpanQuestion, TextField, ResponseSchema, ValueSchema
 from datetime import datetime
 from rich.console import Console
 from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
@@ -165,15 +161,19 @@ def main():
                     ResponseSchema(
                         values=[
                             {
-                                "entities": SpanValueSchema(
-                                    label=concept.preferred_label,
-                                    start=span.start_index,
-                                    end=span.end_index,
+                                "entities": ValueSchema(
+                                    value=[
+                                        SpanValueSchema(
+                                            label=concept.wikibase_id,
+                                            start=span.start_index,
+                                            end=span.end_index,
+                                        )
+                                    ]
                                 )
                             }
-                            for span in passage.spans
                         ]  # type: ignore
                     )
+                    for span in passage.spans
                 ],
             )
             records.append(record)
