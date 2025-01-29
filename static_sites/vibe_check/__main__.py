@@ -1,4 +1,3 @@
-import logging
 import shutil
 from pathlib import Path
 
@@ -6,22 +5,26 @@ import typer
 from jinja2 import Environment, FileSystemLoader
 from rich.console import Console
 
-from scripts.config import classifier_dir, data_dir, processed_data_dir
+from scripts.config import classifier_dir, processed_data_dir
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession
 
 app = typer.Typer()
-console = Console()
-logger = logging.getLogger(__name__)
+
+console = Console(stderr=True)
 
 # Set up Jinja2 templates
 base_dir = Path(__file__).parent
-templates = Environment(loader=FileSystemLoader(base_dir / "app" / "templates"))
+templates = Environment(loader=FileSystemLoader(base_dir / "templates"))
 
-# Set up the predictions directory
+# Set up the input and output directories
 predictions_dir = processed_data_dir / "predictions"
+dist_dir = base_dir / "dist"
+if dist_dir.exists():
+    shutil.rmtree(dist_dir)
+dist_dir.mkdir(parents=True)
 
 
 def load_predictions(
@@ -29,9 +32,23 @@ def load_predictions(
 ) -> list[LabelledPassage]:
     """Read a JSONL file and return a list of predictions."""
     file_path = predictions_dir / wikibase_id / f"{classifier_id}.jsonl"
-    with open(file_path, encoding="utf-8") as f:
-        predictions = [LabelledPassage.model_validate_json(line) for line in f]
-    return predictions
+    if not file_path.exists():
+        console.log(
+            f"Warning: No predictions file found for {wikibase_id}/{classifier_id}",
+            style="yellow",
+        )
+        return []
+
+    try:
+        with open(file_path, encoding="utf-8") as f:
+            predictions = [LabelledPassage.model_validate_json(line) for line in f]
+        return predictions
+    except Exception as e:
+        console.log(
+            f"Error loading predictions for {wikibase_id}/{classifier_id}: {str(e)}",
+            style="yellow",
+        )
+        return []
 
 
 def get_available_classifiers(wikibase_id: WikibaseID) -> dict[str, str]:
@@ -63,7 +80,16 @@ def get_available_translated_statuses(predictions: list[LabelledPassage]) -> lis
     """Extract unique translated statuses from predictions."""
     translated_statuses: set[str] = set()
     for prediction in predictions:
-        translated_statuses.add(prediction.metadata.get("translated", False))
+        # Convert boolean or string value to consistent string format
+        is_translated = prediction.metadata.get("translated", False)
+        if isinstance(is_translated, str):
+            # Handle string values like "True" or "False"
+            translated_statuses.add(
+                "True" if is_translated.lower() == "true" else "False"
+            )
+        else:
+            # Handle boolean values
+            translated_statuses.add(str(bool(is_translated)))
     return sorted(list(translated_statuses))
 
 
@@ -79,15 +105,9 @@ def get_available_corpora(predictions: list[LabelledPassage]) -> list[str]:
 
 @app.command()
 def main():
-    # Set up output directory
-    output_dir = data_dir / "build" / "vibe_check"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True)
-
     # Copy static assets
-    static_src = base_dir / "app" / "static"
-    static_dest = output_dir / "static"
+    static_src = base_dir / "static"
+    static_dest = dist_dir / "static"
     if static_src.exists():
         shutil.copytree(static_src, static_dest)
 
@@ -112,21 +132,24 @@ def main():
                     "description": concept.description,
                     "url": concept.wikibase_url,
                     "classifiers": classifiers,
+                    "n_classifiers": len(classifiers),
                 }
             )
             console.log(
                 f'Found concept "{concept}" with {len(classifiers)} classifiers'
             )
+
         except Exception as e:
             console.log(
-                f"[yellow]Skipping concept {wikibase_id} due to error: {str(e)}"
+                f"Skipping concept {wikibase_id} due to error: {str(e)}",
+                style="yellow",
             )
             continue
 
     # Generate index page
     index_template = templates.get_template("index.html")
     index_html = index_template.render(concepts=concepts, total_count=len(concepts))
-    (output_dir / "index.html").write_text(index_html)
+    (dist_dir / "index.html").write_text(index_html)
     console.log(f"Generated index page with {len(concepts)} concepts")
 
     # Generate concept pages
@@ -140,7 +163,7 @@ def main():
             classifiers=concept_data["classifiers"],
         )
 
-        concept_dir = output_dir / str(wikibase_id)
+        concept_dir = dist_dir / str(wikibase_id)
         concept_dir.mkdir(exist_ok=True)
         (concept_dir / "index.html").write_text(concept_html)
         console.log(f"Generated concept page for {wikibase_id}")
@@ -153,24 +176,37 @@ def main():
                 predictions_html = predictions_template.render(
                     predictions=predictions,
                     wikibase_id=wikibase_id,
+                    wikibase_url=concept_data["url"],
                     classifier_id=classifier_id,
+                    classifier_name=concept_data["classifiers"][classifier_id],
                     concept_str=concept_data["str"],
                     regions=get_available_regions(predictions),
                     translated_statuses=get_available_translated_statuses(predictions),
-                    available_corpora=get_available_corpora(predictions),
+                    corpora=get_available_corpora(predictions),
                     classifiers=concept_data["classifiers"],
                 )
 
+                # Write the HTML version
                 (concept_dir / f"{classifier_id}.html").write_text(predictions_html)
+
+                # Write the JSONL version
+                json_content = "\n".join([p.model_dump_json() for p in predictions])
+                (concept_dir / f"{classifier_id}.json").write_text(json_content)
+
                 console.log(
-                    f"Generated predictions page for {wikibase_id}/{classifier_id}"
+                    f"Generated predictions page for {wikibase_id}/{classifier_id} (HTML and JSONL)"
                 )
             except Exception as e:
                 console.log(
-                    f"[yellow]Failed to generate predictions for {wikibase_id}/{classifier_id}: {str(e)}"
+                    f"Failed to generate predictions for {wikibase_id}/{classifier_id}: {str(e)}",
+                    style="yellow",
                 )
 
-    console.log(f"[green]Successfully generated static site in {output_dir}")
+    console.log(f"Successfully generated static site in {dist_dir}", style="green")
+    console.log(
+        "You can now run the site locally using `just serve-static-site vibe_check`",
+        style="green",
+    )
 
 
 if __name__ == "__main__":

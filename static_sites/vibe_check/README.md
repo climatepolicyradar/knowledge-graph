@@ -12,7 +12,7 @@ The tool takes predictions from our classifier pipeline and generates a static w
 
 ## Usage
 
-### Prerequisites
+### Prereqstatic_sitesites
 
 Before generating the site, ensure you have:
 
@@ -27,15 +27,15 @@ To generate a new set of HTML files with the latest predictions, run:
 poetry run python -m vibe_check
 ```
 
-The HTML files will be saved to the `data/build/vibe_check` directory.
+The HTML files will be saved to the `static_sites/vibe_check/dist` directory.
 
-To preview the site locally, you can use Python's built-in HTTP server:
+To preview the site locally, you can start a local server:
 
 ```bash
-python -m http.server --directory data/build/vibe_check
+just serve vibe_check
 ```
 
-The site will be available at `http://localhost:8000`.
+The site will be available at `http://localhost:8080`.
 
 ### Adding New Data
 
@@ -71,7 +71,7 @@ aws sts get-caller-identity --profile=labs
 
 ```bash
 # Navigate to the infrastructure directory
-cd uis/vibe_check/infra
+cd static_sites/vibe_check/infra
 
 # Install dependencies
 pip install -r requirements.txt
@@ -90,8 +90,8 @@ Once the infrastructure is ready, you can deploy the static site files:
 # export the bucket name
 export BUCKET_NAME=$(pulumi stack output bucket_name --stack labs)
 
-# Sync the build directory to S3, removing any old files
-aws s3 sync data/build/vibe_check "s3://$BUCKET_NAME" --profile=labs --delete
+# Sync the dist directory to S3, removing any old files
+aws s3 sync dist "s3://$BUCKET_NAME" --profile=labs --delete
 
 # The site will be available at the CloudFront URL (which you can get with)
 pulumi stack output cloudfront_url --stack labs
@@ -124,7 +124,7 @@ just predict Q123  # Replace Q123 with your concept ID
 2. Rebuild the site:
 
 ```bash
-poetry run python -m vibe_check
+poetry run python -m static_sites.vibe_check
 ```
 
 3. Deploy the updates:
@@ -133,7 +133,7 @@ poetry run python -m vibe_check
 # export the bucket name
 export BUCKET_NAME=$(pulumi stack output bucket_name --stack labs)
 
-aws s3 sync data/build/vibe_check "s3://$BUCKET_NAME" --profile=labs --delete
+aws s3 sync dist "s3://$BUCKET_NAME" --profile=labs --delete
 ```
 
 ### Tearing Down
@@ -141,7 +141,7 @@ aws s3 sync data/build/vibe_check "s3://$BUCKET_NAME" --profile=labs --delete
 To remove the infrastructure:
 
 ```bash
-cd uis/vibe_check/infra
+cd static_sites/vibe_check/infra
 pulumi destroy --stack labs
 ```
 
@@ -150,7 +150,7 @@ pulumi destroy --stack labs
 The generated site follows this structure:
 
 ```
-data/build/vibe_check/
+dist/
 ├── index.html                # List of all concepts
 ├── static/                   # Static assets (CSS, JS, images)
 └── {concept_id}/             # Directory for each concept

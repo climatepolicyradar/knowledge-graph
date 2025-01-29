@@ -1,4 +1,5 @@
 import shutil
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -17,12 +18,15 @@ from concept_librarian.checks import (
     validate_related_relationship_symmetry,
 )
 from concept_librarian.template import create_concept_page, create_index_page
-from scripts.config import data_dir, root_dir
+from scripts.config import root_dir
 from src.concept import Concept
 from src.wikibase import WikibaseSession
 
 app = typer.Typer()
 console = Console()
+
+# Get the directory where this file lives
+current_dir = Path(__file__).parent.resolve()
 
 
 @app.command()
@@ -54,7 +58,7 @@ def main():
     console.log(f"Found {len(issues)} issues in {len(problematic_concepts)} concepts")
 
     # Delete and recreate the output directory
-    output_dir = data_dir / "build" / "concept_librarian"
+    output_dir = current_dir / "dist"
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True)

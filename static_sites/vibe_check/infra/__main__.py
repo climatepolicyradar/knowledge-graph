@@ -32,10 +32,7 @@ bucket = aws.s3.Bucket(
 )
 
 # create an Origin Access Identity (OAI) for cloudfront to access the bucket
-cloudfront_oai = aws.cloudfront.OriginAccessIdentity(
-    f"{app_name}-oai",
-    comment=f"OAI for {app_name} website",
-)
+cloudfront_oai = aws.cloudfront.OriginAccessIdentity(f"{app_name}-oai")
 
 # update the bucket policy to allow access from our cloudfront OAI
 bucket_policy = aws.s3.BucketPolicy(
@@ -107,16 +104,15 @@ distribution = aws.cloudfront.Distribution(
     # and Europe). This should be sufficient as since our origin is in eu-west-1 and
     # users are primarily in Europe.
     price_class="PriceClass_100",
-    # Despite using price class 100, we're not restricting access by country as we want to
-    # allow users from all over the world to access the service.
+    # Despite setting PriceClass_100, we're not restricting access by geography - people
+    # can access the site from anywhere.
     restrictions=aws.cloudfront.DistributionRestrictionsArgs(
         geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
             restriction_type="none",
         ),
     ),
-    # Use the default CloudFront SSL certificate for HTTPS
-    # This gives us a domain like blah.cloudfront.net
-    # For a custom domain, we would need to provide our own certificate
+    # use the default CloudFront SSL certificate for HTTPS. This gives us a domain like
+    # blah.cloudfront.net.
     viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
         cloudfront_default_certificate=True,
     ),
