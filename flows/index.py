@@ -738,7 +738,8 @@ async def partial_update_text_block(
 def s3_paths_or_s3_prefixes(
     classifier_specs: list[ClassifierSpec] | None,
     document_ids: list[str] | None,
-    config: Config,
+    cache_bucket: str,
+    prefix: str,
 ) -> tuple[list[str] | None, list[str] | None]:
     """
     Return the paths or prefix for the documents and classifiers.
@@ -758,8 +759,8 @@ def s3_paths_or_s3_prefixes(
             # Run on all documents, regardless of classifier
             logger.info("run on all documents, regardless of classifier")
             s3_prefix: str = "s3://" + os.path.join(  # type: ignore
-                config.cache_bucket,  # type: ignore
-                config.document_source_prefix,
+                cache_bucket,
+                prefix,
             )
             return None, [s3_prefix]
 
@@ -769,8 +770,8 @@ def s3_paths_or_s3_prefixes(
             s3_prefixes = [
                 "s3://"
                 + os.path.join(  # type: ignore
-                    config.cache_bucket,  # type: ignore
-                    config.document_source_prefix,
+                    cache_bucket,
+                    prefix,
                     classifier_spec.name,
                     classifier_spec.alias,
                 )
@@ -784,8 +785,8 @@ def s3_paths_or_s3_prefixes(
             document_paths = [
                 "s3://"
                 + os.path.join(  # type: ignore
-                    config.cache_bucket,  # type: ignore
-                    config.document_source_prefix,
+                    cache_bucket,
+                    prefix,
                     classifier_spec.name,
                     classifier_spec.alias,
                     f"{doc_id}.json",
@@ -1009,7 +1010,8 @@ async def index_labelled_passages_from_s3_to_vespa(
     s3_paths, s3_prefixes = s3_paths_or_s3_prefixes(
         classifier_specs,
         document_ids,
-        config,
+        config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        config.document_source_prefix,
     )
 
     logger.info(f"s3_prefix: {s3_prefixes}, s3_paths: {s3_paths}")
