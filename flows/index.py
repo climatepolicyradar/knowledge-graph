@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from vespa.io import VespaQueryResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from flows.utils import SlackNotify
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -974,7 +975,10 @@ def iterate_batch(
             yield batch
 
 
-@flow
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
     document_ids: list[str] | None = None,
