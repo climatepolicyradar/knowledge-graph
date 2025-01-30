@@ -8,7 +8,7 @@ WORKDIR /opt/prefect/knowledge-graph
 # Set up environment
 COPY ./poetry.lock ./pyproject.toml ./
 RUN poetry config virtualenvs.create false
-RUN poetry install --no-root --no-interaction --only main
+RUN poetry install --no-root --no-interaction --only main --with transformers
 
 # Set up package
 COPY ./flows ./flows/
