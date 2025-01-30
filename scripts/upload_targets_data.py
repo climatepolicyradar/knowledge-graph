@@ -1,21 +1,21 @@
-import argilla as rg
+import json
 import os
+from datetime import datetime
+
 import huggingface_hub as hf
 import pandas as pd
-import json
 import typer
-
-from argilla import SpanQuestion, TextField, ResponseSchema, ValueSchema
-from datetime import datetime
+from datasets import DatasetDict, load_dataset
+from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
-from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
-from datasets import load_dataset, DatasetDict
-from dotenv import load_dotenv, find_dotenv
 
+import argilla as rg
+from argilla import ResponseSchema, SpanQuestion, TextField, ValueSchema
+from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
 from src.argilla import concept_to_dataset_name
 from src.identifiers import WikibaseID, generate_identifier
-from src.span import Span
 from src.labelled_passage import LabelledPassage
+from src.span import Span
 from src.wikibase import WikibaseSession
 
 load_dotenv(find_dotenv())
@@ -118,7 +118,7 @@ def main():
     for username in usernames:
         try:
             password = generate_identifier(username)
-            user = rg.User.create(
+            _ = rg.User.create(
                 username=username,
                 password=password,
                 role="annotator",  # type: ignore
@@ -126,7 +126,7 @@ def main():
             console.log(f'✅ Created user "{username}" with password "{password}"')
         except KeyError:
             console.log(f'✅ User "{username}" already exists')
-            user = rg.User.from_name(username)
+            _ = rg.User.from_name(username)
 
     for concept in concepts:
         target_labelled_passages = [

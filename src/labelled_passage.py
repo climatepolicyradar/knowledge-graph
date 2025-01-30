@@ -40,7 +40,9 @@ class LabelledPassage(BaseModel):
         return self
 
     @classmethod
-    def from_argilla_record(cls, record: FeedbackRecord, unescape_html: bool) -> "LabelledPassage":  # type: ignore
+    def from_argilla_record(
+        cls, record: FeedbackRecord, unescape_html: bool
+    ) -> "LabelledPassage":  # type: ignore
         """
         Create a LabelledPassage object from an Argilla record
 
