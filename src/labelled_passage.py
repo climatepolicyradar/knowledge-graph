@@ -34,7 +34,9 @@ class LabelledPassage(BaseModel):
         """Check whether the spans are within the text"""
         for span in self.spans:
             if span.end_index > len(self.text):
-                raise ValueError("end_index must be less than the length of the text")
+                raise ValueError(
+                    "end_index must be less than or equal to the length of the text"
+                )
         return self
 
     @classmethod
