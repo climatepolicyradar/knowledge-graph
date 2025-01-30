@@ -66,11 +66,12 @@ def labelled_passage_from_row(
 ) -> LabelledPassage:
     """Turns the row from the HF targets dataset into LabelledPassage objects"""
     hf_spans = relevant_spans(json.loads(row["annotation"]), concept_id)
+    text = row["text"]
 
     spans = [
         span_from_hf_span(
             hf_span=hf_span,
-            text=row["text"],
+            text=text,
             concept_id=concept_id,
             labellers=[row["annotation_agent"]],
             timestamps=[row["event_timestamp"]],
@@ -78,9 +79,7 @@ def labelled_passage_from_row(
         for hf_span in hf_spans
     ]
 
-    return LabelledPassage(
-        text=row["text"], spans=spans, metadata=json.loads(row["metadata"])
-    )
+    return LabelledPassage(text=text, spans=spans, metadata=json.loads(row["metadata"]))
 
 
 @app.command()
