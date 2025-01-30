@@ -5,7 +5,7 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Generator
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import boto3
 import pytest
@@ -20,6 +20,7 @@ from cpr_sdk.parser_models import (
 )
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
+from prefect import Flow, State
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
@@ -131,14 +132,17 @@ def vespa_app(
 
 def delete_all_documents(app):
     print("Deleting all documents...")
+    print("Search weights...")
     response = app.delete_all_docs(
         content_cluster_name="family-document-passage", schema="search_weights"
     )
     print(f"Delete response: {response}")
+    print("Family documents...")
     response = app.delete_all_docs(
         content_cluster_name="family-document-passage", schema="family_document"
     )
     print(f"Delete response: {response}")
+    print("Document passages...")
     response = app.delete_all_docs(
         content_cluster_name="family-document-passage", schema="document_passage"
     )
@@ -431,10 +435,10 @@ def example_vespa_concepts() -> list[VespaConcept]:
             id="1273",
             name="manufacturing sector",
             parent_concepts=[
-                {"name": "manufacturing", "id": "Q2"},
-                {"name": "processing industry", "id": "Q3"},
+                {"name": "manufacturing", "id": "Q200"},
+                {"name": "processing industry", "id": "Q300"},
             ],
-            parent_concept_ids_flat="Q2,Q3",
+            parent_concept_ids_flat="Q200,Q300",
             model="KeywordClassifier('manufacturing sector')",
             end=100,
             start=0,
@@ -500,14 +504,31 @@ def mock_concepts() -> Generator[list[Concept], None, None]:
 
 
 @pytest.fixture
-def mock_cdn_concepts(
-    mock_s3_client, mock_cdn_bucket: str, mock_concepts: list[Concept]
-):
-    for concept in mock_concepts:
-        body = BytesIO(concept.model_dump_json().encode("utf-8"))
-        key = f"concepts/{concept.wikibase_id}.json"
-        mock_s3_client.put_object(
-            Bucket=mock_cdn_bucket, Key=key, Body=body, ContentType="application/json"
-        )
+def mock_prefect_slack_webhook():
+    """Patch the SlackWebhook class to return a mock object."""
+    with patch("flows.utils.SlackWebhook") as mock_SlackWebhook:
+        mock_prefect_slack_block = MagicMock()
+        mock_SlackWebhook.load.return_value = mock_prefect_slack_block
+        yield mock_SlackWebhook, mock_prefect_slack_block
 
-    yield mock_concepts
+
+@pytest.fixture
+def mock_flow():
+    """Mock Prefect flow object."""
+    mock_flow = MagicMock(spec=Flow)
+    mock_flow.name = "TestFlow"
+    yield mock_flow
+
+
+@pytest.fixture
+def mock_flow_run():
+    """Mock Prefect flow run object."""
+    mock_flow_run = MagicMock()
+    mock_flow_run.name = "TestFlowRun"
+    mock_flow_run.id = "test-flow-run-id"
+    mock_flow_run.state = MagicMock(spec=State)
+    mock_flow_run.state.name = "Completed"
+    mock_flow_run.state.message = "message"
+    mock_flow_run.state.timestamp = "2025-01-28T12:00:00+00:00"
+
+    yield mock_flow_run

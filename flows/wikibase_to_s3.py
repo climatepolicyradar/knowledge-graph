@@ -8,7 +8,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from pydantic import SecretStr
 
-from flows.utils import file_name_from_path
+from flows.utils import SlackNotify, file_name_from_path
 from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.wikibase import WikibaseSession
@@ -108,7 +108,11 @@ def list_s3_concepts(config: Config) -> list[str]:
     return s3_concepts
 
 
-@flow
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+    on_completion=[SlackNotify.message],
+)
 def wikibase_to_s3(config: Optional[Config] = None):
     logger = get_run_logger()
     if not config:
@@ -141,3 +145,15 @@ def wikibase_to_s3(config: Optional[Config] = None):
         f"{len(s3_concepts)} concepts in S3, {len(wikibase_ids)} in Wikibase."
         f"Extras: {extras_in_s3}, Missing from S3: {missing_from_s3}"
     )
+
+    # Fail for discrepencies to trigger alerts
+    if extras_in_s3:
+        raise ValueError(
+            f"{len(extras_in_s3)} concepts where found in S3 but where "
+            f"not part of the copy from wikibase: {extras_in_s3}"
+        )
+    if missing_from_s3:
+        raise ValueError(
+            f"{len(missing_from_s3)} concepts where found in wikibase but "
+            f"didnt make it to S3: {missing_from_s3}"
+        )

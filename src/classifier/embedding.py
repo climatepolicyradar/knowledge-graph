@@ -1,8 +1,6 @@
 from datetime import datetime
 from typing import Optional
 
-from sentence_transformers import SentenceTransformer
-
 from src.classifier.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import deterministic_hash
@@ -22,13 +20,21 @@ class EmbeddingClassifier(Classifier):
     def __init__(
         self,
         concept: Concept,
-        embedding_model: SentenceTransformer = SentenceTransformer(
-            "BAAI/bge-small-en-v1.5"
-        ),
+        embedding_model_name: str = "BAAI/bge-small-en-v1.5",
         threshold: float = 0.65,
     ):
         super().__init__(concept)
-        self.embedding_model = embedding_model
+
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            self.embedding_model = SentenceTransformer(embedding_model_name)
+        except ImportError:
+            raise ImportError(
+                f"The `sentence-transformers` library is required to run {self.name}s. "
+                "Install it with 'poetry install --with transformers'"
+            )
+
         self.threshold = threshold
 
         self.concept_text = self.concept.to_markdown()
@@ -44,7 +50,7 @@ class EmbeddingClassifier(Classifier):
         """Return a hash of the classifier."""
         return deterministic_hash(
             [
-                self.__class__.__name__,
+                self.name,
                 self.concept.__hash__(),
                 str(self.embedding_model),
                 self.threshold,
