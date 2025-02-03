@@ -141,3 +141,11 @@ infer-labs +OPTS="":
 # Checks for latest versions of classifiers in wandb and updates spec files
 update-inference-classifiers +OPTS="":
     poetry run update_inference_classifiers {{OPTS}}
+
+# Run a static site locally
+serve-static-site tool:
+    poetry run python -m http.server -d static_sites/{{tool}}/dist 8080
+
+# Generate a static site
+generate-static-site tool:
+    poetry run python -m static_sites.{{tool}}

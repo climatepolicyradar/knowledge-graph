@@ -401,13 +401,13 @@ test = ["distro (>=1.9.0,<1.10.0)", "flake8 (>=6.1,<7.0)", "flake8-pyi (>=24.1.0
 
 [[package]]
 name = "attrs"
-version = "24.3.0"
+version = "25.1.0"
 description = "Classes Without Boilerplate"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "attrs-24.3.0-py3-none-any.whl", hash = "sha256:ac96cd038792094f438ad1f6ff80837353805ac950cd2aa0e0625ef19850c308"},
-    {file = "attrs-24.3.0.tar.gz", hash = "sha256:8f5c07333d543103541ba7be0e2ce16eeee8130cb0b3f9238ab904ce1e85baff"},
+    {file = "attrs-25.1.0-py3-none-any.whl", hash = "sha256:c75a69e28a550a7e93789579c22aa26b0f5b83b75dc4e08fe092980051e1090a"},
+    {file = "attrs-25.1.0.tar.gz", hash = "sha256:1c97078a80c814273a76b2a298a932eb681c87415c11dee0a6921de7f1b02c3e"},
 ]
 
 [package.extras]
@@ -539,17 +539,17 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.36.4"
+version = "1.36.9"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3-1.36.4-py3-none-any.whl", hash = "sha256:9f8f699e75ec63fcc98c4dd7290997c7c06c68d3ac8161ad4735fe71f5fe945c"},
-    {file = "boto3-1.36.4.tar.gz", hash = "sha256:eeceeb74ef8b65634d358c27aa074917f4449dc828f79301f1075232618eb502"},
+    {file = "boto3-1.36.9-py3-none-any.whl", hash = "sha256:440d0b70990efb732f63b40fa16c663c86fee80347eb4bf3bcc08b593e8ac77f"},
+    {file = "boto3-1.36.9.tar.gz", hash = "sha256:035ed3868ff3b9afe05a49d0bde35582315bc438e60b5e76727a00b107567bfb"},
 ]
 
 [package.dependencies]
-botocore = ">=1.36.4,<1.37.0"
+botocore = ">=1.36.9,<1.37.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.11.0,<0.12.0"
 
@@ -558,13 +558,13 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "boto3-stubs"
-version = "1.36.4"
-description = "Type annotations for boto3 1.36.4 generated with mypy-boto3-builder 8.8.0"
+version = "1.36.9"
+description = "Type annotations for boto3 1.36.9 generated with mypy-boto3-builder 8.8.0"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3_stubs-1.36.4-py3-none-any.whl", hash = "sha256:3d4e9a8a4d7163bcdb6514b92e901706ce4f522dc8aeab8b4e157fa9e0138e49"},
-    {file = "boto3_stubs-1.36.4.tar.gz", hash = "sha256:36db2481d1a0291a2c05c30756fd83514c8d461f8dbc2915cb0c7cf06dc9ed70"},
+    {file = "boto3_stubs-1.36.9-py3-none-any.whl", hash = "sha256:7000d47322db96f53cb2c5cf8cfe1ac38bb3e3cdce8ba468afed0c36929f78b5"},
+    {file = "boto3_stubs-1.36.9.tar.gz", hash = "sha256:8f3d85a92f42e8df44f34ec01c7c1622fef9dcd3e85d47ef95a3bcf14129e992"},
 ]
 
 [package.dependencies]
@@ -621,7 +621,7 @@ bedrock-data-automation-runtime = ["mypy-boto3-bedrock-data-automation-runtime (
 bedrock-runtime = ["mypy-boto3-bedrock-runtime (>=1.36.0,<1.37.0)"]
 billing = ["mypy-boto3-billing (>=1.36.0,<1.37.0)"]
 billingconductor = ["mypy-boto3-billingconductor (>=1.36.0,<1.37.0)"]
-boto3 = ["boto3 (==1.36.4)"]
+boto3 = ["boto3 (==1.36.9)"]
 braket = ["mypy-boto3-braket (>=1.36.0,<1.37.0)"]
 budgets = ["mypy-boto3-budgets (>=1.36.0,<1.37.0)"]
 ce = ["mypy-boto3-ce (>=1.36.0,<1.37.0)"]
@@ -984,13 +984,13 @@ xray = ["mypy-boto3-xray (>=1.36.0,<1.37.0)"]
 
 [[package]]
 name = "botocore"
-version = "1.36.4"
+version = "1.36.9"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore-1.36.4-py3-none-any.whl", hash = "sha256:3f183aa7bb0c1ba02171143a05f28a4438abdf89dd6b8c0a7727040375a90520"},
-    {file = "botocore-1.36.4.tar.gz", hash = "sha256:ef54f5e3316040b6ff775941e6ed052c3230dda0079d17d9f9e3c757375f2027"},
+    {file = "botocore-1.36.9-py3-none-any.whl", hash = "sha256:e31d206c7708300c541d0799df73b576bbe7d8bed011687d96323ed48763ffd2"},
+    {file = "botocore-1.36.9.tar.gz", hash = "sha256:cb3baefdb8326fdfae0750015e5868330e18d3a088a31da658df2cc8cba7ac73"},
 ]
 
 [package.dependencies]
@@ -1003,13 +1003,13 @@ crt = ["awscrt (==0.23.4)"]
 
 [[package]]
 name = "botocore-stubs"
-version = "1.36.4"
+version = "1.36.9"
 description = "Type annotations and code completion for botocore"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore_stubs-1.36.4-py3-none-any.whl", hash = "sha256:bbbd1b061b68bdc6d474ad9dfbf7f56386f416b297862347ae735f2272a78e4b"},
-    {file = "botocore_stubs-1.36.4.tar.gz", hash = "sha256:cc1677029f32d98c9e080885e2098424fd6afd41d6d3380f96d42c29e73e30b5"},
+    {file = "botocore_stubs-1.36.9-py3-none-any.whl", hash = "sha256:76fc0651fc4e7d9a83de944d109f4d779a064265c5f243699718e1d06104efd9"},
+    {file = "botocore_stubs-1.36.9.tar.gz", hash = "sha256:786857fc9f4e11f16b62e0383b8d60a3a03a9ac10fe23d57d1fa726e77626535"},
 ]
 
 [package.dependencies]
@@ -1424,6 +1424,7 @@ files = [
     {file = "cryptography-44.0.0-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:761817a3377ef15ac23cd7834715081791d4ec77f9297ee694ca1ee9c2c7e5eb"},
     {file = "cryptography-44.0.0-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:3c672a53c0fb4725a29c303be906d3c1fa99c32f58abe008a82705f9ee96f40b"},
     {file = "cryptography-44.0.0-cp37-abi3-manylinux_2_34_aarch64.whl", hash = "sha256:4ac4c9f37eba52cb6fbeaf5b59c152ea976726b865bd4cf87883a7e7006cc543"},
+    {file = "cryptography-44.0.0-cp37-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:60eb32934076fa07e4316b7b2742fa52cbb190b42c2df2863dbc4230a0a9b385"},
     {file = "cryptography-44.0.0-cp37-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:ed3534eb1090483c96178fcb0f8893719d96d5274dfde98aa6add34614e97c8e"},
     {file = "cryptography-44.0.0-cp37-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:f3f6fdfa89ee2d9d496e2c087cebef9d4fcbb0ad63c40e821b39f74bf48d9c5e"},
     {file = "cryptography-44.0.0-cp37-abi3-win32.whl", hash = "sha256:eb33480f1bad5b78233b0ad3e1b0be21e8ef1da745d8d2aecbb20671658b9053"},
@@ -1434,6 +1435,7 @@ files = [
     {file = "cryptography-44.0.0-cp39-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:c5eb858beed7835e5ad1faba59e865109f3e52b3783b9ac21e7e47dc5554e289"},
     {file = "cryptography-44.0.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:f53c2c87e0fb4b0c00fa9571082a057e37690a8f12233306161c8f4b819960b7"},
     {file = "cryptography-44.0.0-cp39-abi3-manylinux_2_34_aarch64.whl", hash = "sha256:9e6fc8a08e116fb7c7dd1f040074c9d7b51d74a8ea40d4df2fc7aa08b76b9e6c"},
+    {file = "cryptography-44.0.0-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:9abcc2e083cbe8dde89124a47e5e53ec38751f0d7dfd36801008f316a127d7ba"},
     {file = "cryptography-44.0.0-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:d2436114e46b36d00f8b72ff57e598978b37399d2786fd39793c36c6d5cb1c64"},
     {file = "cryptography-44.0.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:a01956ddfa0a6790d594f5b34fc1bfa6098aca434696a03cfdbe469b8ed79285"},
     {file = "cryptography-44.0.0-cp39-abi3-win32.whl", hash = "sha256:eca27345e1214d1b9f9490d200f9db5a874479be914199194e746c893788d417"},
@@ -1574,20 +1576,20 @@ files = [
 
 [[package]]
 name = "deprecated"
-version = "1.2.15"
+version = "1.2.18"
 description = "Python @deprecated decorator to deprecate old python classes, functions or methods."
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
 files = [
-    {file = "Deprecated-1.2.15-py2.py3-none-any.whl", hash = "sha256:353bc4a8ac4bfc96800ddab349d89c25dec1079f65fd53acdcc1e0b975b21320"},
-    {file = "deprecated-1.2.15.tar.gz", hash = "sha256:683e561a90de76239796e6b6feac66b99030d2dd3fcf61ef996330f14bbb9b0d"},
+    {file = "Deprecated-1.2.18-py2.py3-none-any.whl", hash = "sha256:bd5011788200372a32418f888e326a09ff80d0214bd961147cfed01b5c018eec"},
+    {file = "deprecated-1.2.18.tar.gz", hash = "sha256:422b6f6d859da6f2ef57857761bfb392480502a64c3028ca9bbe86085d72115d"},
 ]
 
 [package.dependencies]
 wrapt = ">=1.10,<2"
 
 [package.extras]
-dev = ["PyTest", "PyTest-Cov", "bump2version (<1)", "jinja2 (>=3.0.3,<3.1.0)", "setuptools", "sphinx (<2)", "tox"]
+dev = ["PyTest", "PyTest-Cov", "bump2version (<1)", "setuptools", "tox"]
 
 [[package]]
 name = "deprecation"
@@ -1824,26 +1826,6 @@ files = [
 
 [package.extras]
 tests = ["asttokens (>=2.1.0)", "coverage", "coverage-enable-subprocess", "ipython", "littleutils", "pytest", "rich"]
-
-[[package]]
-name = "fastapi"
-version = "0.115.7"
-description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "fastapi-0.115.7-py3-none-any.whl", hash = "sha256:eb6a8c8bf7f26009e8147111ff15b5177a0e19bb4a45bc3486ab14804539d21e"},
-    {file = "fastapi-0.115.7.tar.gz", hash = "sha256:0f106da6c01d88a6786b3248fb4d7a940d071f6f488488898ad5d354b25ed015"},
-]
-
-[package.dependencies]
-pydantic = ">=1.7.4,<1.8 || >1.8,<1.8.1 || >1.8.1,<2.0.0 || >2.0.0,<2.0.1 || >2.0.1,<2.1.0 || >2.1.0,<3.0.0"
-starlette = ">=0.40.0,<0.46.0"
-typing-extensions = ">=4.8.0"
-
-[package.extras]
-all = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.5)", "httpx (>=0.23.0)", "itsdangerous (>=1.1.0)", "jinja2 (>=3.1.5)", "orjson (>=3.2.1)", "pydantic-extra-types (>=2.0.0)", "pydantic-settings (>=2.0.0)", "python-multipart (>=0.0.18)", "pyyaml (>=5.3.1)", "ujson (>=4.0.1,!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0)", "uvicorn[standard] (>=0.12.0)"]
-standard = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.5)", "httpx (>=0.23.0)", "jinja2 (>=3.1.5)", "python-multipart (>=0.0.18)", "uvicorn[standard] (>=0.12.0)"]
 
 [[package]]
 name = "fastcore"
@@ -2391,13 +2373,13 @@ socks = ["socksio (==1.*)"]
 
 [[package]]
 name = "huggingface-hub"
-version = "0.27.1"
+version = "0.28.0"
 description = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
 optional = false
 python-versions = ">=3.8.0"
 files = [
-    {file = "huggingface_hub-0.27.1-py3-none-any.whl", hash = "sha256:1c5155ca7d60b60c2e2fc38cbb3ffb7f7c3adf48f824015b219af9061771daec"},
-    {file = "huggingface_hub-0.27.1.tar.gz", hash = "sha256:c004463ca870283909d715d20f066ebd6968c2207dae9393fdffb3c1d4d8f98b"},
+    {file = "huggingface_hub-0.28.0-py3-none-any.whl", hash = "sha256:71cff4e500efe68061d94b7f6d3114e183715088be7a90bf4dd84af83b5f5cdb"},
+    {file = "huggingface_hub-0.28.0.tar.gz", hash = "sha256:c2b18c02a47d4384763caddb4d0ab2a8fc6c16e0800d6de4d55d0a896244aba3"},
 ]
 
 [package.dependencies]
@@ -2410,13 +2392,13 @@ tqdm = ">=4.42.1"
 typing-extensions = ">=3.7.4.3"
 
 [package.extras]
-all = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.5.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
+all = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.9.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
 cli = ["InquirerPy (==0.3.4)"]
-dev = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.5.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
+dev = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "libcst (==1.4.0)", "mypy (==1.5.1)", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "ruff (>=0.9.0)", "soundfile", "types-PyYAML", "types-requests", "types-simplejson", "types-toml", "types-tqdm", "types-urllib3", "typing-extensions (>=4.8.0)", "urllib3 (<2.0)"]
 fastai = ["fastai (>=2.4)", "fastcore (>=1.3.27)", "toml"]
 hf-transfer = ["hf-transfer (>=0.1.4)"]
 inference = ["aiohttp"]
-quality = ["libcst (==1.4.0)", "mypy (==1.5.1)", "ruff (>=0.5.0)"]
+quality = ["libcst (==1.4.0)", "mypy (==1.5.1)", "ruff (>=0.9.0)"]
 tensorflow = ["graphviz", "pydot", "tensorflow"]
 tensorflow-testing = ["keras (<3.0)", "tensorflow"]
 testing = ["InquirerPy (==0.3.4)", "Jinja2", "Pillow", "aiohttp", "fastapi", "gradio (>=4.0.0)", "jedi", "numpy", "pytest (>=8.1.1,<8.2.2)", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock", "pytest-rerunfailures", "pytest-vcr", "pytest-xdist", "soundfile", "urllib3 (<2.0)"]
@@ -2436,13 +2418,13 @@ files = [
 
 [[package]]
 name = "hypothesis"
-version = "6.124.2"
+version = "6.124.7"
 description = "A library for property-based testing"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "hypothesis-6.124.2-py3-none-any.whl", hash = "sha256:fef7709a404929a9cd3e785f60a6e026089aab986e288b1fdced13091574d474"},
-    {file = "hypothesis-6.124.2.tar.gz", hash = "sha256:c98823fc1323f23399e5f2251982fd1f38259f84cf627aaaea1b3f0a0d4d2b03"},
+    {file = "hypothesis-6.124.7-py3-none-any.whl", hash = "sha256:a6e1f66de84de3152d57f595a187a123ce3ecdea9dc8ef51ff8dcaa069137085"},
+    {file = "hypothesis-6.124.7.tar.gz", hash = "sha256:8ed6c6ae47e7d26d869c1dc3dee04e8fc50c95240715bb9915ded88d6d920f0e"},
 ]
 
 [package.dependencies]
@@ -3703,13 +3685,13 @@ dill = ">=0.3.8"
 
 [[package]]
 name = "mypy-boto3-s3"
-version = "1.36.0"
-description = "Type annotations for boto3 S3 1.36.0 service generated with mypy-boto3-builder 8.8.0"
+version = "1.36.9"
+description = "Type annotations for boto3 S3 1.36.9 service generated with mypy-boto3-builder 8.8.0"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "mypy_boto3_s3-1.36.0-py3-none-any.whl", hash = "sha256:a65ccb6be7b7ebf907887268d44975e435b1fc1164fc0a25de310e2b832f7e91"},
-    {file = "mypy_boto3_s3-1.36.0.tar.gz", hash = "sha256:80a881847b0e1fbc5edcad8b2870c110e31e7ef128db42402b70c159b7e93d5a"},
+    {file = "mypy_boto3_s3-1.36.9-py3-none-any.whl", hash = "sha256:506edd56892452dff5b673e3c79a11b6f8935076ce4a9daaac4cda708a176201"},
+    {file = "mypy_boto3_s3-1.36.9.tar.gz", hash = "sha256:368c963969eda65bb3a9df61e87510dd8b3247cce59f559c2ec6c43d5796bef5"},
 ]
 
 [package.dependencies]
@@ -3988,14 +3970,14 @@ files = [
 
 [[package]]
 name = "nvidia-nvjitlink-cu12"
-version = "12.6.85"
+version = "12.8.61"
 description = "Nvidia JIT LTO Library"
 optional = false
 python-versions = ">=3"
 files = [
-    {file = "nvidia_nvjitlink_cu12-12.6.85-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:eedc36df9e88b682efe4309aa16b5b4e78c2407eac59e8c10a6a47535164369a"},
-    {file = "nvidia_nvjitlink_cu12-12.6.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cf4eaa7d4b6b543ffd69d6abfb11efdeb2db48270d94dfd3a452c24150829e41"},
-    {file = "nvidia_nvjitlink_cu12-12.6.85-py3-none-win_amd64.whl", hash = "sha256:e61120e52ed675747825cdd16febc6a0730537451d867ee58bee3853b1b13d1c"},
+    {file = "nvidia_nvjitlink_cu12-12.8.61-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:45fd79f2ae20bd67e8bc411055939049873bfd8fac70ff13bd4865e0b9bdab17"},
+    {file = "nvidia_nvjitlink_cu12-12.8.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9b80ecab31085dda3ce3b41d043be0ec739216c3fc633b8abe212d5a30026df0"},
+    {file = "nvidia_nvjitlink_cu12-12.8.61-py3-none-win_amd64.whl", hash = "sha256:1166a964d25fdc0eae497574d38824305195a5283324a21ccb0ce0c802cbf41c"},
 ]
 
 [[package]]
@@ -4729,22 +4711,22 @@ files = [
 
 [[package]]
 name = "protobuf"
-version = "4.25.5"
+version = "4.25.6"
 description = ""
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "protobuf-4.25.5-cp310-abi3-win32.whl", hash = "sha256:5e61fd921603f58d2f5acb2806a929b4675f8874ff5f330b7d6f7e2e784bbcd8"},
-    {file = "protobuf-4.25.5-cp310-abi3-win_amd64.whl", hash = "sha256:4be0571adcbe712b282a330c6e89eae24281344429ae95c6d85e79e84780f5ea"},
-    {file = "protobuf-4.25.5-cp37-abi3-macosx_10_9_universal2.whl", hash = "sha256:b2fde3d805354df675ea4c7c6338c1aecd254dfc9925e88c6d31a2bcb97eb173"},
-    {file = "protobuf-4.25.5-cp37-abi3-manylinux2014_aarch64.whl", hash = "sha256:919ad92d9b0310070f8356c24b855c98df2b8bd207ebc1c0c6fcc9ab1e007f3d"},
-    {file = "protobuf-4.25.5-cp37-abi3-manylinux2014_x86_64.whl", hash = "sha256:fe14e16c22be926d3abfcb500e60cab068baf10b542b8c858fa27e098123e331"},
-    {file = "protobuf-4.25.5-cp38-cp38-win32.whl", hash = "sha256:98d8d8aa50de6a2747efd9cceba361c9034050ecce3e09136f90de37ddba66e1"},
-    {file = "protobuf-4.25.5-cp38-cp38-win_amd64.whl", hash = "sha256:b0234dd5a03049e4ddd94b93400b67803c823cfc405689688f59b34e0742381a"},
-    {file = "protobuf-4.25.5-cp39-cp39-win32.whl", hash = "sha256:abe32aad8561aa7cc94fc7ba4fdef646e576983edb94a73381b03c53728a626f"},
-    {file = "protobuf-4.25.5-cp39-cp39-win_amd64.whl", hash = "sha256:7a183f592dc80aa7c8da7ad9e55091c4ffc9497b3054452d629bb85fa27c2a45"},
-    {file = "protobuf-4.25.5-py3-none-any.whl", hash = "sha256:0aebecb809cae990f8129ada5ca273d9d670b76d9bfc9b1809f0a9c02b7dbf41"},
-    {file = "protobuf-4.25.5.tar.gz", hash = "sha256:7f8249476b4a9473645db7f8ab42b02fe1488cbe5fb72fddd445e0665afd8584"},
+    {file = "protobuf-4.25.6-cp310-abi3-win32.whl", hash = "sha256:61df6b5786e2b49fc0055f636c1e8f0aff263808bb724b95b164685ac1bcc13a"},
+    {file = "protobuf-4.25.6-cp310-abi3-win_amd64.whl", hash = "sha256:b8f837bfb77513fe0e2f263250f423217a173b6d85135be4d81e96a4653bcd3c"},
+    {file = "protobuf-4.25.6-cp37-abi3-macosx_10_9_universal2.whl", hash = "sha256:6d4381f2417606d7e01750e2729fe6fbcda3f9883aa0c32b51d23012bded6c91"},
+    {file = "protobuf-4.25.6-cp37-abi3-manylinux2014_aarch64.whl", hash = "sha256:5dd800da412ba7f6f26d2c08868a5023ce624e1fdb28bccca2dc957191e81fb5"},
+    {file = "protobuf-4.25.6-cp37-abi3-manylinux2014_x86_64.whl", hash = "sha256:4434ff8bb5576f9e0c78f47c41cdf3a152c0b44de475784cd3fd170aef16205a"},
+    {file = "protobuf-4.25.6-cp38-cp38-win32.whl", hash = "sha256:8bad0f9e8f83c1fbfcc34e573352b17dfce7d0519512df8519994168dc015d7d"},
+    {file = "protobuf-4.25.6-cp38-cp38-win_amd64.whl", hash = "sha256:b6905b68cde3b8243a198268bb46fbec42b3455c88b6b02fb2529d2c306d18fc"},
+    {file = "protobuf-4.25.6-cp39-cp39-win32.whl", hash = "sha256:3f3b0b39db04b509859361ac9bca65a265fe9342e6b9406eda58029f5b1d10b2"},
+    {file = "protobuf-4.25.6-cp39-cp39-win_amd64.whl", hash = "sha256:6ef2045f89d4ad8d95fd43cd84621487832a61d15b49500e4c1350e8a0ef96be"},
+    {file = "protobuf-4.25.6-py3-none-any.whl", hash = "sha256:07972021c8e30b870cfc0863409d033af940213e0e7f64e27fe017b929d2c9f7"},
+    {file = "protobuf-4.25.6.tar.gz", hash = "sha256:f8cfbae7c5afd0d0eaccbe73267339bff605a2315860bb1ba08eb66670a9a91f"},
 ]
 
 [[package]]
@@ -4945,13 +4927,13 @@ files = [
 
 [[package]]
 name = "pydantic"
-version = "2.10.5"
+version = "2.10.6"
 description = "Data validation using Python type hints"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pydantic-2.10.5-py3-none-any.whl", hash = "sha256:4dd4e322dbe55472cb7ca7e73f4b63574eecccf2835ffa2af9021ce113c83c53"},
-    {file = "pydantic-2.10.5.tar.gz", hash = "sha256:278b38dbbaec562011d659ee05f63346951b3a248a6f3642e1bc68894ea2b4ff"},
+    {file = "pydantic-2.10.6-py3-none-any.whl", hash = "sha256:427d664bf0b8a2b34ff5dd0f5a18df00591adcee7198fbd71981054cef37b584"},
+    {file = "pydantic-2.10.6.tar.gz", hash = "sha256:ca5daa827cce33de7a42be142548b0096bf05a7e7b365aebfa5f8eeec7128236"},
 ]
 
 [package.dependencies]
@@ -5092,13 +5074,13 @@ windows-terminal = ["colorama (>=0.4.6)"]
 
 [[package]]
 name = "pymdown-extensions"
-version = "10.14.1"
+version = "10.14.2"
 description = "Extension pack for Python Markdown."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "pymdown_extensions-10.14.1-py3-none-any.whl", hash = "sha256:637951cbfbe9874ba28134fb3ce4b8bcadd6aca89ac4998ec29dcbafd554ae08"},
-    {file = "pymdown_extensions-10.14.1.tar.gz", hash = "sha256:b65801996a0cd4f42a3110810c306c45b7313c09b0610a6f773730f2a9e3c96b"},
+    {file = "pymdown_extensions-10.14.2-py3-none-any.whl", hash = "sha256:f45bc5892410e54fd738ab8ccd736098b7ff0cb27fdb4bf24d0a0c6584bc90e1"},
+    {file = "pymdown_extensions-10.14.2.tar.gz", hash = "sha256:7a77b8116dc04193f2c01143760a43387bd9dc4aa05efacb7d838885a7791253"},
 ]
 
 [package.dependencies]
@@ -5658,13 +5640,13 @@ files = [
 
 [[package]]
 name = "referencing"
-version = "0.36.1"
+version = "0.36.2"
 description = "JSON Referencing + Python"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "referencing-0.36.1-py3-none-any.whl", hash = "sha256:363d9c65f080d0d70bc41c721dce3c7f3e77fc09f269cd5c8813da18069a6794"},
-    {file = "referencing-0.36.1.tar.gz", hash = "sha256:ca2e6492769e3602957e9b831b94211599d2aade9477f5d44110d2530cf9aade"},
+    {file = "referencing-0.36.2-py3-none-any.whl", hash = "sha256:e8699adbbf8b5c7de96d8ffa0eb5c158b3beafce084968e2ea8bb08c6794dcd0"},
+    {file = "referencing-0.36.2.tar.gz", hash = "sha256:df2e89862cd09deabbdba16944cc3f10feb6b3e6f18e902f7cc25609a34775aa"},
 ]
 
 [package.dependencies]
@@ -6037,7 +6019,6 @@ files = [
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:f66efbc1caa63c088dead1c4170d148eabc9b80d95fb75b6c92ac0aad2437d76"},
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-musllinux_1_1_i686.whl", hash = "sha256:22353049ba4181685023b25b5b51a574bce33e7f51c759371a7422dcae5402a6"},
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:932205970b9f9991b34f55136be327501903f7c66830e9760a8ffb15b07f05cd"},
-    {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:a52d48f4e7bf9005e8f0a89209bf9a73f7190ddf0489eee5eb51377385f59f2a"},
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-win32.whl", hash = "sha256:3eac5a91891ceb88138c113f9db04f3cebdae277f5d44eaa3651a4f573e6a5da"},
     {file = "ruamel.yaml.clib-0.2.12-cp310-cp310-win_amd64.whl", hash = "sha256:ab007f2f5a87bd08ab1499bdf96f3d5c6ad4dcfa364884cb4549aa0154b13a28"},
     {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:4a6679521a58256a90b0d89e03992c15144c5f3858f40d7c18886023d7943db6"},
@@ -6046,7 +6027,6 @@ files = [
     {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:811ea1594b8a0fb466172c384267a4e5e367298af6b228931f273b111f17ef52"},
     {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:cf12567a7b565cbf65d438dec6cfbe2917d3c1bdddfce84a9930b7d35ea59642"},
     {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:7dd5adc8b930b12c8fc5b99e2d535a09889941aa0d0bd06f4749e9a9397c71d2"},
-    {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:1492a6051dab8d912fc2adeef0e8c72216b24d57bd896ea607cb90bb0c4981d3"},
     {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-win32.whl", hash = "sha256:bd0a08f0bab19093c54e18a14a10b4322e1eacc5217056f3c063bd2f59853ce4"},
     {file = "ruamel.yaml.clib-0.2.12-cp311-cp311-win_amd64.whl", hash = "sha256:a274fb2cb086c7a3dea4322ec27f4cb5cc4b6298adb583ab0e211a4682f241eb"},
     {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:20b0f8dc160ba83b6dcc0e256846e1a02d044e13f7ea74a3d1d56ede4e48c632"},
@@ -6055,7 +6035,6 @@ files = [
     {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:749c16fcc4a2b09f28843cda5a193e0283e47454b63ec4b81eaa2242f50e4ccd"},
     {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-musllinux_1_1_i686.whl", hash = "sha256:bf165fef1f223beae7333275156ab2022cffe255dcc51c27f066b4370da81e31"},
     {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:32621c177bbf782ca5a18ba4d7af0f1082a3f6e517ac2a18b3974d4edf349680"},
-    {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:b82a7c94a498853aa0b272fd5bc67f29008da798d4f93a2f9f289feb8426a58d"},
     {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-win32.whl", hash = "sha256:e8c4ebfcfd57177b572e2040777b8abc537cdef58a2120e830124946aa9b42c5"},
     {file = "ruamel.yaml.clib-0.2.12-cp312-cp312-win_amd64.whl", hash = "sha256:0467c5965282c62203273b838ae77c0d29d7638c8a4e3a1c8bdd3602c10904e4"},
     {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:4c8c5d82f50bb53986a5e02d1b3092b03622c02c2eb78e29bec33fd9593bae1a"},
@@ -6064,7 +6043,6 @@ files = [
     {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:96777d473c05ee3e5e3c3e999f5d23c6f4ec5b0c38c098b3a5229085f74236c6"},
     {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-musllinux_1_1_i686.whl", hash = "sha256:3bc2a80e6420ca8b7d3590791e2dfc709c88ab9152c00eeb511c9875ce5778bf"},
     {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:e188d2699864c11c36cdfdada94d781fd5d6b0071cd9c427bceb08ad3d7c70e1"},
-    {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:4f6f3eac23941b32afccc23081e1f50612bdbe4e982012ef4f5797986828cd01"},
     {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-win32.whl", hash = "sha256:6442cb36270b3afb1b4951f060eccca1ce49f3d087ca1ca4563a6eb479cb3de6"},
     {file = "ruamel.yaml.clib-0.2.12-cp313-cp313-win_amd64.whl", hash = "sha256:e5b8daf27af0b90da7bb903a876477a9e6d7270be6146906b276605997c7e9a3"},
     {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:fc4b630cd3fa2cf7fce38afa91d7cfe844a9f75d7f0f36393fa98815e911d987"},
@@ -6073,7 +6051,6 @@ files = [
     {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:e2f1c3765db32be59d18ab3953f43ab62a761327aafc1594a2a1fbe038b8b8a7"},
     {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-musllinux_1_1_i686.whl", hash = "sha256:d85252669dc32f98ebcd5d36768f5d4faeaeaa2d655ac0473be490ecdae3c285"},
     {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:e143ada795c341b56de9418c58d028989093ee611aa27ffb9b7f609c00d813ed"},
-    {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:2c59aa6170b990d8d2719323e628aaf36f3bfbc1c26279c0eeeb24d05d2d11c7"},
     {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-win32.whl", hash = "sha256:beffaed67936fbbeffd10966a4eb53c402fafd3d6833770516bf7314bc6ffa12"},
     {file = "ruamel.yaml.clib-0.2.12-cp39-cp39-win_amd64.whl", hash = "sha256:040ae85536960525ea62868b642bdb0c2cc6021c9f9d507810c0c604e66f5a7b"},
     {file = "ruamel.yaml.clib-0.2.12.tar.gz", hash = "sha256:6c8fbb13ec503f99a91901ab46e0b07ae7941cd527393187039aec586fdfd36f"},
@@ -6081,13 +6058,13 @@ files = [
 
 [[package]]
 name = "s3transfer"
-version = "0.11.1"
+version = "0.11.2"
 description = "An Amazon S3 Transfer Manager"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "s3transfer-0.11.1-py3-none-any.whl", hash = "sha256:8fa0aa48177be1f3425176dfe1ab85dcd3d962df603c3dbfc585e6bf857ef0ff"},
-    {file = "s3transfer-0.11.1.tar.gz", hash = "sha256:3f25c900a367c8b7f7d8f9c34edc87e300bde424f779dc9f0a8ae4f9df9264f6"},
+    {file = "s3transfer-0.11.2-py3-none-any.whl", hash = "sha256:be6ecb39fadd986ef1701097771f87e4d2f821f27f6071c872143884d2950fbc"},
+    {file = "s3transfer-0.11.2.tar.gz", hash = "sha256:3b39185cb72f5acc77db1a58b6e25b977f28d20496b6e58d6813d75f464d632f"},
 ]
 
 [package.dependencies]
@@ -6272,13 +6249,13 @@ files = [
 
 [[package]]
 name = "sentence-transformers"
-version = "3.4.0"
+version = "3.4.1"
 description = "State-of-the-Art Text Embeddings"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "sentence_transformers-3.4.0-py3-none-any.whl", hash = "sha256:f7d4ad81260149172a98108a3481d8e82c11d31f40d41885f43d481149237743"},
-    {file = "sentence_transformers-3.4.0.tar.gz", hash = "sha256:334288062d4b888cdd7b75913fead46b1e42bfe836f8343d23478d17f799e650"},
+    {file = "sentence_transformers-3.4.1-py3-none-any.whl", hash = "sha256:e026dc6d56801fd83f74ad29a30263f401b4b522165c19386d8bc10dcca805da"},
+    {file = "sentence_transformers-3.4.1.tar.gz", hash = "sha256:68daa57504ff548340e54ff117bd86c1d2f784b21e0fb2689cf3272b8937b24b"},
 ]
 
 [package.dependencies]
@@ -6651,23 +6628,6 @@ pure-eval = "*"
 
 [package.extras]
 tests = ["cython", "littleutils", "pygments", "pytest", "typeguard"]
-
-[[package]]
-name = "starlette"
-version = "0.45.2"
-description = "The little ASGI library that shines."
-optional = false
-python-versions = ">=3.9"
-files = [
-    {file = "starlette-0.45.2-py3-none-any.whl", hash = "sha256:4daec3356fb0cb1e723a5235e5beaf375d2259af27532958e2d79df549dad9da"},
-    {file = "starlette-0.45.2.tar.gz", hash = "sha256:bba1831d15ae5212b22feab2f218bab6ed3cd0fc2dc1d4442443bb1ee52260e0"},
-]
-
-[package.dependencies]
-anyio = ">=3.6.2,<5"
-
-[package.extras]
-full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
 name = "sympy"
@@ -7090,24 +7050,24 @@ test = ["black (>=22.3.0,<23.0.0)", "coverage (>=6.2,<7.0)", "isort (>=5.0.6,<6.
 
 [[package]]
 name = "types-awscrt"
-version = "0.23.6"
+version = "0.23.8"
 description = "Type annotations and code completion for awscrt"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "types_awscrt-0.23.6-py3-none-any.whl", hash = "sha256:fbf9c221af5607b24bf17f8431217ce8b9a27917139edbc984891eb63fd5a593"},
-    {file = "types_awscrt-0.23.6.tar.gz", hash = "sha256:405bce8c281f9e7c6c92a229225cc0bf10d30729a6a601123213389bd524b8b1"},
+    {file = "types_awscrt-0.23.8-py3-none-any.whl", hash = "sha256:d66b3817565769f5311b7e171a3c48d3dbf8a8f9c22f02686c2f003b6559a2a5"},
+    {file = "types_awscrt-0.23.8.tar.gz", hash = "sha256:2141391a8f4d36cf098406c19d9060b34f13a558c22d4aadac250a0c57d12710"},
 ]
 
 [[package]]
 name = "types-s3transfer"
-version = "0.11.1"
+version = "0.11.2"
 description = "Type annotations and code completion for s3transfer"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "types_s3transfer-0.11.1-py3-none-any.whl", hash = "sha256:ddb20d103361c2d7cf95e9e73468cdd12f049f503b1512e6fdfe5a66fa086d2d"},
-    {file = "types_s3transfer-0.11.1.tar.gz", hash = "sha256:6ab89d4d76bcbf6d494582949963b4672347e8daa397d9790f3684b4fcf873c4"},
+    {file = "types_s3transfer-0.11.2-py3-none-any.whl", hash = "sha256:09c31cff8c79a433fcf703b840b66d1f694a6c70c410ef52015dd4fe07ee0ae2"},
+    {file = "types_s3transfer-0.11.2.tar.gz", hash = "sha256:3ccb8b90b14434af2fb0d6c08500596d93f3a83fb804a2bb843d9bf4f7c2ca60"},
 ]
 
 [[package]]
@@ -7934,4 +7894,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "e9f6236005e5f19a7e550d02147dfa77b1dc74c45bcabce5741e7caea7d426f8"
+content-hash = "db91a383e39650db0fa7517ea676ccb5a0631b895664b8deabd882fe706b62f5"

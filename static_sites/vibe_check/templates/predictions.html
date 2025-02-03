@@ -4,11 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ wikibase_id }} - {{ classifier_name }}</title>
-    <link
-      rel="icon"
-      type="image/png"
-      href="{{ url_for('static', path='favicon.png') }}"
-    />
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -59,7 +55,7 @@
               </div>
             </div>
             <a
-              href="/{{ wikibase_id }}/{{ classifier_id }}/json"
+              href="{{ classifier_id }}.json"
               title="Download JSON"
               class="flex items-center gap-2 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 border border-slate-200 dark:border-slate-600 rounded-md hover:border-slate-400 dark:hover:border-slate-500 transition-colors"
             >
@@ -157,7 +153,7 @@
                 class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-slate-200 dark:border-slate-600 rounded-md focus:border-slate-400 hover:border-slate-400 dark:text-slate-200"
               >
                 <option value="">All Regions</option>
-                {% for region in available_regions %}
+                {% for region in regions %}
                 <option value="{{ region }}">{{ region }}</option>
                 {% endfor %}
               </select>
@@ -174,8 +170,10 @@
                 class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-slate-200 dark:border-slate-600 rounded-md focus:border-slate-400 hover:border-slate-400 dark:text-slate-200"
               >
                 <option value="">All Statuses</option>
-                {% for status in available_translated_statuses %}
-                <option value="{{ status }}">{{ status }}</option>
+                {% for status in translated_statuses %}
+                <option value="{{ status }}">
+                  {{ "Translated" if status == "True" else "Not Translated" }}
+                </option>
                 {% endfor %}
               </select>
             </div>
@@ -191,7 +189,7 @@
                 class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-slate-200 dark:border-slate-600 rounded-md focus:border-slate-400 hover:border-slate-400 dark:text-slate-200"
               >
                 <option value="">All Corpora</option>
-                {% for corpus in available_corpora %}
+                {% for corpus in corpora %}
                 <option value="{{ corpus }}">{{ corpus }}</option>
                 {% endfor %}
               </select>
@@ -227,15 +225,15 @@
         <div
           class="passage-card bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition duration-300"
           data-region="{{ prediction.metadata.world_bank_region }}"
-          data-translated="{{ prediction.metadata.translated }}"
+          data-translated="{{ 'True' if prediction.metadata.translated in [True, 'True', 'true'] else 'False' }}"
           data-length="{{ prediction.text|length }}"
           data-dataset-name="{{ prediction.metadata['document_metadata.corpus_type_name'] }}"
         >
           <div class="text-sm text-slate-500 dark:text-slate-400 mb-2">
             {{ prediction.metadata.document_id }} |
             <span
-              >{% if prediction.metadata.translated == "True" %}Translated{%
-              else %}Not Translated{% endif %}</span
+              >{% if prediction.metadata.translated in [True, 'True', 'true']
+              %}Translated{% else %}Not Translated{% endif %}</span
             >
             {% if prediction.metadata.world_bank_region %} |
             <span>Region: {{ prediction.metadata.world_bank_region }}</span>
@@ -260,6 +258,6 @@
       </div>
     </div>
 
-    <script src="{{ url_for('static', path='js/predictions.js') }}"></script>
+    <script src="/static/js/predictions.js"></script>
   </body>
 </html>

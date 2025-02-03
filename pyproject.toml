@@ -53,13 +53,6 @@ sentence-transformers = "^3.1.1"
 transformers = "^4.48.1"
 
 
-[tool.poetry.group.predictions_api]
-optional = true
-
-[tool.poetry.group.predictions_api.dependencies]
-fastapi = "^0.115.6"
-jinja2 = "^3.1.4"
-
 [tool.poetry.group.llm]
 optional = true
 
@@ -97,6 +90,8 @@ pytest-env = "^1.1.5"
 pytest-asyncio = "^0.24.0"
 pulumi = "^3.145.0"
 pulumi-aws = "^6.66.2"
+jinja2 = "^3.1.4"
+typer = "^0.9.4"
 
 
 [tool.pytest.ini_options]
