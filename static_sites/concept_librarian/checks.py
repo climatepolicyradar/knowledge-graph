@@ -1,7 +1,7 @@
 from collections import defaultdict
 from string import punctuation
 
-from git import Optional
+from typing import Optional
 from pydantic import BaseModel
 
 from src.concept import Concept, WikibaseID
