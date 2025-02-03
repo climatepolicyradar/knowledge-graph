@@ -70,7 +70,7 @@ class Span(BaseModel):
             )
         if self.end_index > len(self.text):
             raise ValueError(
-                f"The end index must be less than the length of the text. Got {self}"
+                f"The end index must be less than or equal to the length of the text. Got {self}"
             )
         return self
 

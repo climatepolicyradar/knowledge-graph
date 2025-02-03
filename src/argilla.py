@@ -83,14 +83,19 @@ def labelled_passages_to_feedback_dataset(
     return dataset
 
 
-def dataset_to_labelled_passages(dataset: FeedbackDataset) -> list[LabelledPassage]:
+def dataset_to_labelled_passages(
+    dataset: FeedbackDataset, unescape_html: bool
+) -> list[LabelledPassage]:
     """
     Convert an Argilla FeedbackDataset into a list of LabelledPassages.
 
     :param FeedbackDataset dataset: The Argilla FeedbackDataset to convert
     :return list[LabelledPassage]: A list of LabelledPassage objects
     """
-    return [LabelledPassage.from_argilla_record(record) for record in dataset.records]
+    return [
+        LabelledPassage.from_argilla_record(record, unescape_html=unescape_html)
+        for record in dataset.records
+    ]
 
 
 def is_between_timestamps(
@@ -146,6 +151,7 @@ def get_labelled_passages_from_argilla(
     concept: Concept,
     min_timestamp: Optional[datetime] = None,
     max_timestamp: Optional[datetime] = None,
+    unescape_html: bool = True,
 ) -> list[LabelledPassage]:
     """
     Get the labelled passages from Argilla for a given concept.
@@ -190,7 +196,9 @@ def get_labelled_passages_from_argilla(
             f'No dataset matching the concept ID "{concept.wikibase_id}" was found in Argilla'
         )
 
-    labelled_passages = dataset_to_labelled_passages(dataset)
+    labelled_passages = dataset_to_labelled_passages(
+        dataset, unescape_html=unescape_html
+    )
     if min_timestamp or max_timestamp:
         labelled_passages = filter_labelled_passages_by_timestamp(
             labelled_passages, min_timestamp, max_timestamp
