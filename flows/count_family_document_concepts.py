@@ -14,7 +14,6 @@ from vespa.io import VespaResponse
 from flows.index import (
     CONCEPT_COUNT_SEPARATOR,
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    HTTP_OK,
     DocumentImportId,
     DocumentObjectUri,
     S3Accessor,
@@ -95,8 +94,8 @@ async def partial_update_family_document_concepts_counts(
         fields={"concept_counts": serialised_concepts_counts},
     )
 
-    if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(document_import_id, status_code)
+    if not response.is_successful():
+        raise PartialUpdateError(document_import_id, response.get_status_code())
 
     return None
 
