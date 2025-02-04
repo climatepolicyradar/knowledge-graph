@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Callable
@@ -6,8 +7,6 @@ from src.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.span import Span
-
-import warnings
 
 # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
 # https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4
