@@ -57,7 +57,7 @@
       <h2
         class="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4"
       >
-        Issues ({{ concept_issues | length }})
+        Issues with this concept ({{ concept_issues | length }})
       </h2>
       <div class="space-y-4">
         {% for issue in concept_issues %}
@@ -85,7 +85,7 @@
       <h2
         class="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4"
       >
-        Subconcepts ({{ subconcept_issues | length }})
+        Issues with subconcepts ({{ subconcept_issues | length }})
       </h2>
       <div class="space-y-4">
         {% for issue in subconcept_issues %}

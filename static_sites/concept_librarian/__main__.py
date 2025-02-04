@@ -1,4 +1,5 @@
 import shutil
+from collections import defaultdict
 from pathlib import Path
 from typing import Set
 
@@ -71,6 +72,37 @@ def main():
 
     console.log(f"Fetched {len(concepts)} concepts")
 
+    # Get recursive subconcepts for each concept
+    wikibase_id_to_subconcepts = defaultdict(set)
+    # Create lookup dict for faster access
+    wikibase_id_to_concept = {c.wikibase_id: c for c in concepts}
+
+    for concept in track(
+        concepts,
+        description="Getting recursive subconcepts",
+        transient=True,
+    ):
+        result = set()
+        wikibase_ids_to_process = set(concept.has_subconcept)
+        processed_wikibase_ids = set()
+
+        while wikibase_ids_to_process:
+            current_wikibase_id = wikibase_ids_to_process.pop()
+            if current_wikibase_id in processed_wikibase_ids:
+                continue
+
+            processed_wikibase_ids.add(current_wikibase_id)
+            if current_wikibase_id in wikibase_id_to_concept:
+                current_concept = wikibase_id_to_concept[current_wikibase_id]
+                result.add(current_concept)
+                # Add this concept's subconcepts to be processed
+                wikibase_ids_to_process.update(current_concept.has_subconcept)
+
+        wikibase_id_to_subconcepts[concept.wikibase_id] = result
+    console.log(
+        f"Built a list of subconcepts for {len(wikibase_id_to_subconcepts)} concepts"
+    )
+
     issues: list[ConceptStoreIssue] = []
     for check in [
         validate_related_relationship_symmetry,
@@ -106,7 +138,10 @@ def main():
     for concept in track(
         concepts, description="Generating concept pages", transient=True
     ):
-        html_content = create_concept_page(concept, issues)
+        subconcepts = wikibase_id_to_subconcepts[concept.wikibase_id]
+        html_content = create_concept_page(
+            concept=concept, subconcepts=subconcepts, all_issues=issues
+        )
         output_path = output_dir / f"{concept.wikibase_id}.html"
         output_path.write_text(html_content)
     console.log(f"Generated {len(concepts)} concept pages")

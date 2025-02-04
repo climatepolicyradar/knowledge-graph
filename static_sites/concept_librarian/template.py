@@ -64,10 +64,13 @@ def create_index_page(issues: list[ConceptStoreIssue]) -> str:
     )
 
 
-def create_concept_page(concept: Concept, all_issues: list[ConceptStoreIssue]) -> str:
+def create_concept_page(
+    concept: Concept,
+    subconcepts: list[Concept],
+    all_issues: list[ConceptStoreIssue],
+) -> str:
     """Create an HTML page for a specific concept's issues"""
     concept_issues = get_issues_for_concept(all_issues, concept.wikibase_id)
-    subconcepts = wikibase.get_subconcepts(concept.wikibase_id, recursive=True)
     subconcept_issues = [
         issue
         for subconcept in subconcepts
