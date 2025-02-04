@@ -82,35 +82,43 @@ async def test_load_parse_concepts_counts_invalid_concept_key(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("doc_id", "expected_concept_counts"),
+    [
+        ("CCLW.executive.10014.4470", {"Q761:manufacturing sector": 4}),
+        ("CCLW.executive.4934.1571", {"Q761:manufacturing sector": 5}),
+    ],
+)
 async def test_load_update_document_concepts_counts(
     local_vespa_search_adapter: VespaSearchAdapter,
     document_passages_test_data_file_path: str,
     vespa_app,
     mock_bucket,
     mock_bucket_concepts_counts,
+    doc_id,
+    expected_concept_counts,
 ) -> None:
     # Get specific id
     BATCH_SIZE = 1
-    for doc_fixture_id in ["CCLW.executive.10014.4470", "CCLW.executive.4934.1571"]:
-        vespa_doc_id = f"id:doc_search:family_document::{doc_fixture_id}"
-        key = f"concepts_counts/Q761/v4/{doc_fixture_id}.json"
-        document_object_uris = [f"s3://{mock_bucket}/{key}"]
+    vespa_doc_id = f"id:doc_search:family_document::{doc_id}"
+    s3_key = f"concepts_counts/Q761/v4/{doc_id}.json"
+    document_object_uris = [f"s3://{mock_bucket}/{s3_key}"]
 
-        counts_before = local_vespa_search_adapter.get_by_id(
-            vespa_doc_id
-        ).concept_counts
-        if counts_before is not None:
-            pytest.fail(f"Fixture should not start with concept counts: {vespa_doc_id}")
+    counts_before = local_vespa_search_adapter.get_by_id(vespa_doc_id).concept_counts
 
-        task = load_update_document_concepts_counts(
-            document_import_id=doc_fixture_id,
-            document_object_uris=document_object_uris,
-            batch_size=1,
-            vespa_search_adapter=local_vespa_search_adapter,
-        )
-        loaded_counts = await asyncio.gather(task, return_exceptions=True)
-        assert len(loaded_counts) == BATCH_SIZE
+    task = load_update_document_concepts_counts(
+        document_import_id=doc_id,
+        document_object_uris=document_object_uris,
+        batch_size=BATCH_SIZE,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+    loaded_counts = await asyncio.gather(task, return_exceptions=True)
+    assert len(loaded_counts) == BATCH_SIZE
 
-        counts_after = local_vespa_search_adapter.get_by_id(vespa_doc_id).concept_counts
-        assert counts_after == loaded_counts[0]
-        assert counts_after != counts_before
+    counts_after = local_vespa_search_adapter.get_by_id(vespa_doc_id).concept_counts
+    assert (
+        counts_after != counts_before
+    ), f"concepts didnt change, before: {counts_before}, after: {counts_after}"
+    assert (
+        counts_after == loaded_counts[0] == expected_concept_counts
+    ), f"expected: {expected_concept_counts}, actual: {counts_after}"
