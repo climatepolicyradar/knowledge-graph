@@ -7,6 +7,8 @@ from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.span import Span
 
+import warnings
+
 # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
 # https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4
 DEFAULT_THRESHOLD = 0.524
@@ -55,6 +57,7 @@ class BaseTargetClassifier(Classifier, ABC):
                 revision=self.commit_hash,
             ),
             function_to_apply="sigmoid",
+            device="cpu",
         )
 
     @abstractmethod
@@ -110,10 +113,11 @@ class BaseTargetClassifier(Classifier, ABC):
 
     def fit(self) -> "BaseTargetClassifier":
         """Targets classifiers cannot be trained directly."""
-        raise NotImplementedError(
+        warnings.warn(
             "Targets classifiers in the knowledge graph are based on the pre-trained "
             f"{self.model_name} model. As such, they cannot be trained directly."
         )
+        return self
 
 
 class TargetClassifier(BaseTargetClassifier):
