@@ -85,8 +85,22 @@ async def test_load_parse_concepts_counts_invalid_concept_key(
 @pytest.mark.parametrize(
     ("doc_id", "expected_concept_counts"),
     [
-        ("CCLW.executive.10014.4470", {"Q761:manufacturing sector": 4}),
-        ("CCLW.executive.4934.1571", {"Q761:manufacturing sector": 5}),
+        (
+            "CCLW.executive.10014.4470",
+            {
+                "Q761:manufacturing sector": 4,
+                "Q404:terrestrial risk": 26,
+                "Q368:marine risk": 29,
+            },
+        ),
+        (
+            "CCLW.executive.4934.1571",
+            {
+                "Q761:manufacturing sector": 5,
+                "Q404:terrestrial risk": 9,
+                "Q368:marine risk": 7,
+            },
+        ),
     ],
 )
 async def test_load_update_document_concepts_counts(
@@ -101,8 +115,11 @@ async def test_load_update_document_concepts_counts(
     # Get specific id
     BATCH_SIZE = 1
     vespa_doc_id = f"id:doc_search:family_document::{doc_id}"
-    s3_key = f"concepts_counts/Q761/v4/{doc_id}.json"
-    document_object_uris = [f"s3://{mock_bucket}/{s3_key}"]
+    document_object_uris = [
+        f"s3://{mock_bucket}/concepts_counts/Q761/v4/{doc_id}.json",
+        f"s3://{mock_bucket}/concepts_counts/Q404/v4/{doc_id}.json",
+        f"s3://{mock_bucket}/concepts_counts/Q368/v6/{doc_id}.json",
+    ]
 
     counts_before = local_vespa_search_adapter.get_by_id(vespa_doc_id).concept_counts
 
