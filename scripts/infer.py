@@ -1,17 +1,21 @@
-import asyncio
 from typing import Optional
 
 import typer
+from async_typer import AsyncTyper
 from prefect.deployments import run_deployment  # type: ignore
 from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
-from typer import Typer
 from typing_extensions import Annotated
 
 from flows.inference import classifier_inference
-from scripts.cloud import AwsEnv, ClassifierSpec, generate_deployment_name
+from scripts.cloud import (
+    AwsEnv,
+    ClassifierSpec,
+    generate_deployment_name,
+    parse_aws_env,
+)
 
-app = Typer()
+app = AsyncTyper()
 console = Console()
 
 
@@ -40,7 +44,7 @@ def convert_classifier_specs(
     return classifier_specs
 
 
-@app.command(
+@app.async_command(
     help="""Run classifier inference on documents.
 
         This triggers the deployed inference flow to run against documents in a
@@ -52,6 +56,7 @@ async def main(
         AwsEnv,
         typer.Option(
             help="The AWS environment to use to find and store documents",
+            parser=parse_aws_env,
         ),
     ],
     classifiers: Annotated[
@@ -103,11 +108,11 @@ async def main(
         )
     except Exception as e:
         console.log(f"[red]Error running deployment: {e}[/red]")
-        raise typer.Exit(1)
+        raise e
 
     flow_url = f"{PREFECT_UI_URL.value()}/runs/flow-run/{flow_run.id}"  # type: ignore
     console.log(f"See progress at: [green]{flow_url}[/green]")
 
 
 if __name__ == "__main__":
-    asyncio.run(app())
+    app()
