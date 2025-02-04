@@ -773,14 +773,15 @@ def test_s3_paths_or_s3_prefixes_no_classifier(
     """Test s3_paths_or_s3_prefixes returns base prefix when no classifier spec provided."""
     config = Config(cache_bucket=mock_bucket)
 
-    paths, prefixes = s3_paths_or_s3_prefixes(
+    s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs=None,
         document_ids=None,
-        config=config,
+        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        prefix=config.document_source_prefix,
     )
 
-    assert prefixes == [f"s3://{mock_bucket}/labelled_passages"]
-    assert paths is None
+    assert s3_accessor.prefixes == [f"s3://{mock_bucket}/labelled_passages"]
+    assert s3_accessor.paths is None
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
@@ -803,7 +804,8 @@ def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
         s3_paths_or_s3_prefixes(
             classifier_specs=None,
             document_ids=labelled_passage_fixture_ids,
-            config=config,
+            cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            prefix=config.document_source_prefix,
         )
 
 
@@ -815,17 +817,18 @@ def test_s3_paths_or_s3_prefixes_with_classifier_no_docs(
     classifier_spec_q788 = ClassifierSpec(name="Q788", alias="latest")
     classifier_spec_q699 = ClassifierSpec(name="Q699", alias="latest")
 
-    paths, prefixes = s3_paths_or_s3_prefixes(
+    s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs=[classifier_spec_q788, classifier_spec_q699],
         document_ids=None,
-        config=config,
+        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        prefix=config.document_source_prefix,
     )
 
-    assert prefixes == [
+    assert s3_accessor.prefixes == [
         f"s3://{mock_bucket}/labelled_passages/Q788/latest",
         f"s3://{mock_bucket}/labelled_passages/Q699/latest",
     ]
-    assert paths is None
+    assert s3_accessor.paths is None
 
 
 def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
@@ -844,14 +847,17 @@ def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
         for labelled_passage_fixture_file in labelled_passage_fixture_files
     ]
 
-    paths, prefixes = s3_paths_or_s3_prefixes(
+    s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs=[classifier_spec],
         document_ids=labelled_passage_fixture_ids,
-        config=config,
+        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        prefix=config.document_source_prefix,
     )
 
-    assert prefixes is None
-    assert sorted(paths) == sorted(expected_paths)
+    assert s3_accessor.prefixes is None
+    assert sorted(s3_accessor.paths) == sorted(  # pyright: ignore[reportArgumentType]
+        expected_paths
+    )
 
 
 @pytest.mark.parametrize(

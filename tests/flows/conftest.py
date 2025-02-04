@@ -532,3 +532,27 @@ def mock_flow_run():
     mock_flow_run.state.timestamp = "2025-01-28T12:00:00+00:00"
 
     yield mock_flow_run
+
+
+@pytest.fixture
+def mock_concepts_counts_document_keys() -> list[str]:
+    """Paths for all concepts_counts fixtures."""
+    keys = []
+    for path in FIXTURE_DIR.rglob("concepts_counts/**/*.json"):
+        keys.append(str(path.relative_to(FIXTURE_DIR)))
+    return keys
+
+
+@pytest.fixture
+def mock_bucket_concepts_counts(
+    mock_concepts_counts_document_keys,
+    mock_s3_client,
+    mock_bucket,
+) -> None:
+    """Puts the concept counts fixture files in the mock bucket."""
+    for key in mock_concepts_counts_document_keys:
+        data = load_fixture(key)
+        body = BytesIO(data.encode("utf-8"))
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
