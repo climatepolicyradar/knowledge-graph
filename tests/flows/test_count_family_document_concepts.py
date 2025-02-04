@@ -12,9 +12,10 @@ from src.identifiers import WikibaseID
 async def test_load_parse_concepts_counts(
     mock_bucket,
     mock_bucket_concepts_counts,
-    mock_concepts_counts_document_uri,
+    mock_concepts_counts_document_keys,
 ) -> None:
     """Test that we can load and parse concept counts from S3."""
+    mock_concepts_counts_document_uri = mock_concepts_counts_document_keys[0]
     document_object_uri = f"s3://{mock_bucket}/{ mock_concepts_counts_document_uri }"
 
     counter = await load_parse_concepts_counts(document_object_uri)
