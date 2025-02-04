@@ -76,22 +76,18 @@ class Config:
 
 async def partial_update_family_document_concepts_counts(
     document_import_id: DocumentImportId,
-    concepts_counts: Counter[Concept],
+    concepts_counts_with_names: dict[str, int],
     vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
     """Update document concept counts in Vespa via partial updates."""
-    serialised_concepts_counts = json.dumps(
-        {
-            f"{concept.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{concept.preferred_label}": count
-            for concept, count in concepts_counts.items()
-        }
-    )
 
     response: VespaResponse = vespa_search_adapter.client.update_data(
         schema="family_document",
         namespace="doc_search",
         data_id=document_import_id,
-        fields={"concept_counts": serialised_concepts_counts},
+        fields={
+            "concept_counts": concepts_counts_with_names
+        },  # Note the schema is misnamed in vespa
     )
 
     if not response.is_successful():
@@ -144,7 +140,7 @@ async def load_update_document_concepts_counts(
     document_object_uris: list[DocumentObjectUri],
     batch_size: int,
     vespa_search_adapter: VespaSearchAdapter | None = None,
-) -> Counter[Concept]:
+) -> dict[str, int]:
     """Load and aggregate concept counts from document URIs."""
 
     logger = get_run_logger()
@@ -194,14 +190,19 @@ async def load_update_document_concepts_counts(
 
     cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
 
+    concepts_counts_with_names = {
+        f"{concept.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{concept.preferred_label}": count
+        for concept, count in concepts_counts.items()
+    }
+
     with cm:
         await partial_update_family_document_concepts_counts(
             document_import_id,
-            concepts_counts,
+            concepts_counts_with_names,
             vespa_search_adapter,
         )
 
-    return concepts_counts
+    return concepts_counts_with_names
 
 
 def load_update_document_concepts_counts_as(
@@ -211,7 +212,7 @@ def load_update_document_concepts_counts_as(
     vespa_search_adapter: VespaSearchAdapter | None,
     aws_env: AwsEnv,
     as_subflow: bool,
-) -> Awaitable[Counter[Concept]]:
+) -> Awaitable[dict[str, int]]:
     """Run load document concepts either as a subflow or directly."""
     if as_subflow:
         flow_name = function_to_flow_name(load_update_document_concepts_counts)
