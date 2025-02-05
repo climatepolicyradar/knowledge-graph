@@ -6,7 +6,6 @@ from typing import Generator, Optional
 import argilla as rg
 from argilla import SpanQuestion, TextField
 from argilla.feedback import FeedbackDataset, FeedbackRecord
-from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import Concept
 
@@ -43,10 +42,6 @@ def concept_to_dataset_name(concept: Concept) -> str:
     if not concept.wikibase_id:
         raise ValueError("Concept has no Wikibase ID")
     return concept.wikibase_id
-
-
-def dataset_name_to_wikibase_id(name: str) -> WikibaseID:
-    return WikibaseID(name)
 
 
 def labelled_passages_to_feedback_dataset(
