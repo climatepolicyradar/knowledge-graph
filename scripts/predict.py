@@ -12,7 +12,7 @@ from rich.progress import track
 from scripts.config import aws_region, concept_dir, processed_data_dir
 from scripts.utils import get_local_classifier_path
 from src.classifier import Classifier
-from src.classifier.keyword import KeywordClassifier
+from src.classifier.keyword_no_acronyms import KeywordWithoutAcronymsClassifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -108,7 +108,7 @@ def main(
     console.log(f"✅ Fetched {concept} from local disk")
 
     classifiers: list[Classifier] = [
-        KeywordClassifier(concept),
+        KeywordWithoutAcronymsClassifier(concept),
         # RulesBasedClassifier(concept),
         # StemmedKeywordClassifier(concept),
         # EmbeddingClassifier(concept, threshold=0.5),
