@@ -41,11 +41,13 @@ def init_argilla_client(func):
 
 
 def concept_to_dataset_name(concept: Concept) -> str:
-    return f"{concept.preferred_label}-{concept.wikibase_id}".replace(" ", "-")
+    if not concept.wikibase_id:
+        raise ValueError("Concept has no Wikibase ID")
+    return concept.wikibase_id
 
 
 def dataset_name_to_wikibase_id(name: str) -> WikibaseID:
-    return WikibaseID(name.split("-")[-1])
+    return WikibaseID(name)
 
 
 def labelled_passages_to_feedback_dataset(
