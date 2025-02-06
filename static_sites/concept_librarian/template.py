@@ -76,8 +76,9 @@ def create_concept_page(
         for subconcept in subconcepts
         for issue in get_issues_for_concept(all_issues, subconcept.wikibase_id)
     ]
+
     return env.get_template("concept.html").render(
+        concept=concept,
         concept_issues=concept_issues,
         subconcept_issues=subconcept_issues,
-        concept=concept,
     )

@@ -81,7 +81,7 @@
         </div>
         {% endfor %}
       </div>
-      {% elif subconcept_issues %}
+      {% endif %} {% if subconcept_issues %}
       <h2
         class="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4"
       >
@@ -109,7 +109,7 @@
         </div>
         {% endfor %}
       </div>
-      {% else %}
+      {% endif %} {% if not concept_issues and not subconcept_issues %}
       <div
         class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center"
       >
