@@ -427,3 +427,77 @@ class WikibaseSession:
 
         create_claim_response = self.session.post(url=self.api_url, data=data).json()
         return create_claim_response
+
+    def get_alternative_labels(
+        self, wikibase_id: WikibaseID, language: str = "en"
+    ) -> list[str]:
+        """
+        Get all alternative labels for a Wikibase item in a specific language
+
+        :param WikibaseID wikibase_id: The Wikibase ID of the item
+        :param str language: The language code for the alternative labels
+        :return list[str]: A list of alternative label strings
+        """
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetentities",
+                "format": "json",
+                "ids": wikibase_id,
+                "props": "aliases",
+            },
+        ).json()
+
+        if (
+            "entities" in response
+            and wikibase_id in response["entities"]
+            and "aliases" in response["entities"][wikibase_id]
+            and language in response["entities"][wikibase_id]["aliases"]
+        ):
+            return [
+                alias["value"]
+                for alias in response["entities"][wikibase_id]["aliases"][language]
+            ]
+        return []
+
+    def add_alternative_labels(
+        self,
+        wikibase_id: WikibaseID,
+        alternative_labels: list[str],
+        language: str = "en",
+    ):
+        """Add a list of alternative labels to a Wikibase item, preserving existing ones"""
+        # Get existing aliases
+        existing_alternative_labels = self.get_alternative_labels(wikibase_id, language)
+
+        # Combine existing and new aliases, removing duplicates
+        all_alternative_labels = list(
+            set(existing_alternative_labels + alternative_labels)
+        )
+
+        # Update with combined aliases
+        response = self.session.post(
+            url=self.api_url,
+            data={
+                "action": "wbeditentity",
+                "format": "json",
+                "id": wikibase_id,
+                "token": self.csrf_token,
+                "data": json.dumps(
+                    {
+                        "aliases": {
+                            language: [
+                                {"language": language, "value": alias}
+                                for alias in all_alternative_labels
+                            ]
+                        }
+                    }
+                ),
+            },
+        )
+        response_data = response.json()
+        if "error" in response_data:
+            raise Exception(
+                f"Error adding alternative labels: {response_data['error']}"
+            )
+        return response_data
