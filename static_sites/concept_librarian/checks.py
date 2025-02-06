@@ -1,6 +1,6 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 from string import punctuation
-from typing import Optional
+from typing import MutableSequence, Optional
 
 from pydantic import BaseModel
 
@@ -338,3 +338,101 @@ def validate_concept_label_casing(
                 )
             )
     return issues
+
+
+def validate_concept_with_spurious_parent(
+    concepts: list[Concept],
+) -> list[Concept]:
+    """
+    Finds concepts that are too deep in the hierarchy with many children.
+
+    This can suggest, that the concept has a spurious "subconcept of" relationship.
+    This has happened previously when "Adaptation" got added below "Public Sector"
+    """
+    issues: list[Concept] = []
+    concepts_by_id = {concept.wikibase_id: concept for concept in concepts}
+
+    return issues
+
+
+def _longest_concept_depth(
+    concept: Concept, concept_map: dict[WikibaseID, Concept]
+) -> int:
+    """
+    Calculate the depth of a concept in the hierarchy
+
+    Since multiple parents might exist, the depth is calculated as the maximum depth of
+    any of the parents, i.e. taking the longest possible path to a root.
+    """
+    parent_concepts = [concept_map.get(parent) for parent in concept.subconcept_of]
+    parent_concepts = [parent for parent in parent_concepts if parent is not None]
+    if not parent_concepts:
+        return 0
+
+    return 1 + max(
+        _longest_concept_depth(parent, concept_map) for parent in parent_concepts
+    )
+
+
+def _build_number_of_children_map(
+    concept_map: dict[WikibaseID, Concept]
+) -> dict[WikibaseID, int]:  # type: ignore
+    """
+    Build a map of concept ID to number of children
+
+    Traverses the hierarchy, counting the number of children each concept has.
+    It starts with those nodes, that have no children (these will return 0). Then continues
+    by processing those nodes, that only have processed children, etc.
+    """
+    queue: MutableSequence[Concept] = deque()
+
+    for concept in concept_map.values():
+        if not concept.has_subconcept:
+            queue.append(concept)
+
+    children_map = defaultdict(int)
+
+    while queue:
+        current = queue.popleft()
+        children_map[current.wikibase_id] = _aggregate_number_of_descendants(
+            current, children_map
+        )
+
+        for parent_id in current.subconcept_of:
+            parent = concept_map.get(
+                parent_id, None
+            )  # this happens due to other concept store errors
+            if (
+                parent is not None
+                and parent not in children_map
+                and all(
+                    sibling in children_map
+                    for sibling in parent.has_subconcept
+                    if sibling in concept_map
+                )
+            ):
+                queue.append(parent)
+
+    skipped_values = list(set(concept_map.keys()) - set(children_map.keys()))
+    print("Missing values:", skipped_values)
+
+    # need to fix this so that they're processed in the right order. Maybe we can use the depth here?
+    # queue.extend([concept_map[c] for c in skipped_values])
+
+    # while queue:
+    #     current = queue.popleft()
+    #     children_map[current.wikibase_id] = _aggregate_number_of_descendants(
+    #         current, children_map
+    #     )
+
+    return children_map
+
+
+def _aggregate_number_of_descendants(
+    concept: Concept, children_map: dict[WikibaseID, int]
+) -> int:
+    """Aggregate the number of descendants for all concepts"""
+    number_of_descendants = 0
+    for child in concept.has_subconcept:
+        number_of_descendants += children_map[child] + 1
+    return number_of_descendants
