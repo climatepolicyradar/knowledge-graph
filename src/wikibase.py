@@ -448,16 +448,14 @@ class WikibaseSession:
             },
         ).json()
 
-        if (
-            "entities" in response
-            and wikibase_id in response["entities"]
-            and "aliases" in response["entities"][wikibase_id]
-            and language in response["entities"][wikibase_id]["aliases"]
-        ):
-            return [
-                alias["value"]
-                for alias in response["entities"][wikibase_id]["aliases"][language]
-            ]
+        aliases = (
+            response.get("entities", {})
+            .get(wikibase_id, {})
+            .get("aliases", {})
+            .get(language, [])
+        )
+        if aliases:
+            return [alias["value"] for alias in aliases]
         return []
 
     def add_alternative_labels(
@@ -467,15 +465,12 @@ class WikibaseSession:
         language: str = "en",
     ):
         """Add a list of alternative labels to a Wikibase item, preserving existing ones"""
-        # Get existing aliases
         existing_alternative_labels = self.get_alternative_labels(wikibase_id, language)
 
-        # Combine existing and new aliases, removing duplicates
         all_alternative_labels = list(
             set(existing_alternative_labels + alternative_labels)
         )
 
-        # Update with combined aliases
         response = self.session.post(
             url=self.api_url,
             data={
