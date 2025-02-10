@@ -1,5 +1,4 @@
 import logging
-
 from collections import defaultdict, deque
 from string import punctuation
 from typing import MutableSequence, Optional
@@ -7,7 +6,6 @@ from typing import MutableSequence, Optional
 from pydantic import BaseModel
 
 from src.concept import Concept, WikibaseID
-
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -400,7 +398,7 @@ def _longest_concept_depth(
 
 
 def _build_number_of_descendants_map(
-    concept_map: dict[WikibaseID, Concept]
+    concept_map: dict[WikibaseID, Concept],
 ) -> dict[WikibaseID, int]:  # type: ignore
     """
     Build a map of concept ID to number of all descendants (at any level)
