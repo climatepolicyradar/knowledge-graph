@@ -437,7 +437,7 @@ def _build_number_of_descendants_map(
                 queue.append(parent)
 
     skipped_values = list(set(concept_map.keys()) - set(children_map.keys()))
-    logger.info(f"Missing values: {skipped_values}")
+    logger.warning(f"Missing values: {skipped_values}")
 
     return children_map
 
