@@ -1,3 +1,5 @@
+import logging
+
 from collections import defaultdict, deque
 from string import punctuation
 from typing import MutableSequence, Optional
@@ -5,6 +7,11 @@ from typing import MutableSequence, Optional
 from pydantic import BaseModel
 
 from src.concept import Concept, WikibaseID
+
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class ConceptStoreIssue(BaseModel):
@@ -396,10 +403,10 @@ def _build_number_of_descendants_map(
     concept_map: dict[WikibaseID, Concept]
 ) -> dict[WikibaseID, int]:  # type: ignore
     """
-    Build a map of concept ID to number of children
+    Build a map of concept ID to number of all descendants (at any level)
 
-    Traverses the hierarchy, counting the number of children each concept has.
-    It starts with those nodes, that have no children (these will return 0). Then continues
+    Traverses the hierarchy, counting the number of descendants each concept has.
+    It starts with those nodes, that have no descendants (these will return 0). Then continues
     by processing those nodes, that only have processed children, etc.
     """
     queue: MutableSequence[Concept] = deque()
@@ -432,7 +439,7 @@ def _build_number_of_descendants_map(
                 queue.append(parent)
 
     skipped_values = list(set(concept_map.keys()) - set(children_map.keys()))
-    print("Missing values:", skipped_values)
+    logger.info(f"Missing values: {skipped_values}")
 
     return children_map
 
