@@ -347,10 +347,28 @@ def validate_concept_with_spurious_parent(
     Finds concepts that are too deep in the hierarchy with many children.
 
     This can suggest, that the concept has a spurious "subconcept of" relationship.
-    This has happened previously when "Adaptation" got added below "Public Sector"
+    This has happened previously when "Adaptation" got added below "Public Sector".
     """
     issues: list[Concept] = []
-    concepts_by_id = {concept.wikibase_id: concept for concept in concepts}
+    concepts_by_id = {
+        concept.wikibase_id: concept
+        for concept in concepts
+        if concept.wikibase_id is not None
+    }  # check is needed to mollify type checks
+
+    number_of_descendants_map = _build_number_of_descendants_map(concepts_by_id)
+    longest_depths = {
+        c.wikibase_id: _longest_concept_depth(c, concepts_by_id) for c in concepts
+    }
+
+    for concept in concepts:
+        id = concept.wikibase_id
+        assert id is not None, "Concepts should have a Wikibase ID"
+        depth = longest_depths[id]
+        n_descendants = number_of_descendants_map[id]
+
+        if depth != 0 and 200 / depth < n_descendants:
+            issues.append(concept)
 
     return issues
 
@@ -374,7 +392,7 @@ def _longest_concept_depth(
     )
 
 
-def _build_number_of_children_map(
+def _build_number_of_descendants_map(
     concept_map: dict[WikibaseID, Concept]
 ) -> dict[WikibaseID, int]:  # type: ignore
     """
@@ -415,15 +433,6 @@ def _build_number_of_children_map(
 
     skipped_values = list(set(concept_map.keys()) - set(children_map.keys()))
     print("Missing values:", skipped_values)
-
-    # need to fix this so that they're processed in the right order. Maybe we can use the depth here?
-    # queue.extend([concept_map[c] for c in skipped_values])
-
-    # while queue:
-    #     current = queue.popleft()
-    #     children_map[current.wikibase_id] = _aggregate_number_of_descendants(
-    #         current, children_map
-    #     )
 
     return children_map
 
