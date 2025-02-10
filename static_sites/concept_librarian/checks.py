@@ -347,11 +347,11 @@ def validate_concept_label_casing(
     return issues
 
 
-def validate_concept_with_spurious_parent(
+def validate_concept_depth_and_descendant_balance(
     concepts: list[Concept],
 ) -> list[Concept]:
     """
-    Finds concepts that are too deep in the hierarchy with many children.
+    Finds concepts that are too deep in the hierarchy with many descendants.
 
     This can suggest, that the concept has a spurious "subconcept of" relationship.
     This has happened previously when "Adaptation" got added below "Public Sector".
