@@ -22,8 +22,19 @@ class ConfusionMatrix:
             + self.true_negatives
         )
 
+    def has_any_positives(self) -> bool:
+        """Check if there are any positive cases (either true or predicted)"""
+        return (
+            self.true_positives > 0
+            or self.false_positives > 0
+            or self.false_negatives > 0
+        )
+
     def precision(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
+        # If there are no positive cases at all (true or predicted), that's perfect precision
+        if not self.has_any_positives():
+            return 1.0
         try:
             return self.true_positives / (self.true_positives + self.false_positives)
         except ZeroDivisionError:
@@ -31,6 +42,9 @@ class ConfusionMatrix:
 
     def recall(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
+        # If there are no positive cases at all (true or predicted), that's perfect recall
+        if not self.has_any_positives():
+            return 1.0
         try:
             return self.true_positives / (self.true_positives + self.false_negatives)
         except ZeroDivisionError:
@@ -50,6 +64,9 @@ class ConfusionMatrix:
 
     def f1_score(self) -> float:
         """https://en.wikipedia.org/wiki/F-score"""
+        # If there are no positive cases at all (true or predicted), that's perfect F1
+        if not self.has_any_positives():
+            return 1.0
         try:
             return (2 * self.true_positives) / (
                 2 * self.true_positives + self.false_positives + self.false_negatives
@@ -132,7 +149,10 @@ def count_passage_level_metrics(
     predicted_passages: list[LabelledPassage],
 ) -> ConfusionMatrix:
     """
-    Count the passage-level metrics for a given set of human and model labelled passages
+    Count the passage-level metrics for a given set of human and model labelled passages.
+
+    A passage is considered a true negative if both ground truth and prediction have
+    exactly matching text and no spans.
 
     :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
     :param list[LabelledPassage] predicted_passages: A set of predicted spans
@@ -141,30 +161,39 @@ def count_passage_level_metrics(
     """
     cm = ConfusionMatrix()
 
-    ground_truth_positive_passages = set(
-        passage.id for passage in ground_truth_passages if len(passage.spans) > 0
-    )
-    predicted_positive_passages = set(
-        passage.id for passage in predicted_passages if len(passage.spans) > 0
-    )
-    ground_truth_negative_passages = set(
-        passage.id for passage in ground_truth_passages if len(passage.spans) == 0
-    )
-    predicted_negative_passages = set(
-        passage.id for passage in predicted_passages if len(passage.spans) == 0
-    )
+    # First check if this is an all-negative case
+    has_any_ground_truth_spans = any(len(p.spans) > 0 for p in ground_truth_passages)
+    has_any_predicted_spans = any(len(p.spans) > 0 for p in predicted_passages)
 
-    cm.true_positives = len(
-        ground_truth_positive_passages & predicted_positive_passages
-    )
-    cm.false_positives = len(
-        predicted_positive_passages - ground_truth_positive_passages
-    )
-    cm.true_negatives = len(
-        ground_truth_negative_passages & predicted_negative_passages
-    )
-    cm.false_negatives = len(
-        ground_truth_positive_passages - predicted_positive_passages
-    )
+    # If neither has any spans, this is a perfect match - all true negatives
+    if not has_any_ground_truth_spans and not has_any_predicted_spans:
+        cm.true_negatives = len(ground_truth_passages)
+        return cm
+
+    # If ground truth has no spans but predictions do, all false positives
+    if not has_any_ground_truth_spans and has_any_predicted_spans:
+        cm.false_positives = sum(1 for p in predicted_passages if len(p.spans) > 0)
+        cm.true_negatives = len(predicted_passages) - cm.false_positives
+        return cm
+
+    # If ground truth has spans but predictions don't, all false negatives
+    if has_any_ground_truth_spans and not has_any_predicted_spans:
+        cm.false_negatives = sum(1 for p in ground_truth_passages if len(p.spans) > 0)
+        cm.true_negatives = len(ground_truth_passages) - cm.false_negatives
+        return cm
+
+    # Otherwise, do the normal passage-by-passage comparison
+    for gt_passage, pred_passage in zip(ground_truth_passages, predicted_passages):
+        gt_has_spans = len(gt_passage.spans) > 0
+        pred_has_spans = len(pred_passage.spans) > 0
+
+        if gt_has_spans and pred_has_spans:
+            cm.true_positives += 1
+        elif not gt_has_spans and not pred_has_spans:
+            cm.true_negatives += 1
+        elif gt_has_spans and not pred_has_spans:
+            cm.false_negatives += 1
+        else:  # not gt_has_spans and pred_has_spans
+            cm.false_positives += 1
 
     return cm
