@@ -2,9 +2,9 @@
 <html lang="en">
 <body>
     <ul>
-    {% for dataset_name in dataset_names %}
+    {% for issue in issues %}
       <li id="{{ issue_type }}">
-          {{ dataset_name }}
+        found a really long span in {{ issue.passage_text }}
       </li>
     {% endfor %}
     </ul>

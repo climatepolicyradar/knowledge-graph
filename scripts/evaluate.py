@@ -100,14 +100,16 @@ def add_artifact_to_run_lineage_local(
         run.use_artifact(artifact_id)
 
 
-def create_gold_standard_labelled_passages(concept: Concept) -> list[LabelledPassage]:
+def create_gold_standard_labelled_passages(
+    labelled_passages: list[LabelledPassage],
+) -> list[LabelledPassage]:
     """
-      Create gold standard labelled passages.
+    Create gold standard labelled passages.
 
     This is done from a concept by merging overlapping spans.
     """
     gold_standard_labelled_passages: list[LabelledPassage] = []
-    for labelled_passage in concept.labelled_passages:
+    for labelled_passage in labelled_passages:
         merged_spans = []
         for group in group_overlapping_spans(
             spans=labelled_passage.spans, jaccard_threshold=0
@@ -433,7 +435,9 @@ def main(
         run.config["preferred_label"] = concept.preferred_label  # type: ignore
 
     console.log("🥇 Creating a list of gold-standard labelled passages")
-    gold_standard_labelled_passages = create_gold_standard_labelled_passages(concept)
+    gold_standard_labelled_passages = create_gold_standard_labelled_passages(
+        concept.labelled_passages
+    )
     n_annotations = count_annotations(gold_standard_labelled_passages)
     console.log(
         f"🚚 Loaded {len(gold_standard_labelled_passages)} labelled passages "

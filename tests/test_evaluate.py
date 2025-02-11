@@ -236,14 +236,14 @@ def test_load_classifier_remote(mock_classifier):
 
 def test_calculate_performance_metrics(concept, snapshot: SnapshotAssertion):
     # Create gold standard passages
-    gold_standard = create_gold_standard_labelled_passages(concept)
+    gold_standard = create_gold_standard_labelled_passages(concept.labelled_passages)
     # Use the same passages as both gold and model predictions for testing
     result = calculate_performance_metrics(gold_standard, gold_standard)
     assert result == snapshot
 
 
 def test_create_gold_standard_labelled_passages(concept, snapshot: SnapshotAssertion):
-    result = create_gold_standard_labelled_passages(concept)
+    result = create_gold_standard_labelled_passages(concept.labelled_passages)
     assert result == snapshot
 
 

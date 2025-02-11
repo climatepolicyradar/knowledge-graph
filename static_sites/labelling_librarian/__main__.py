@@ -6,7 +6,9 @@ from typing import Set
 
 import typer
 from rich.console import Console
+from rich.progress import track
 
+from static_sites.labelling_librarian.checks import find_long_spans
 from static_sites.labelling_librarian.template import (
     create_index_page,
 )
@@ -28,10 +30,14 @@ def main():
         api_key=os.getenv("ARGILLA_API_KEY"),
     )
     with console.status("Fetching datasets from argilla"):
-        dataset_names = [
-            dataset.name for dataset in rg.list_datasets(workspace="knowledge-graph")
-        ]
-    console.log(f"Fetched {len(dataset_names)} dataset names")
+        datasets: list[rg.FeedbackDataset] = rg.list_datasets(workspace="knowledge-graph")  # type: ignore
+    console.log(f"Fetched {len(datasets)} datasets")
+
+    issues = []
+    for dataset in track(datasets[:3], "Checking datasets for issues..."):
+        issues.extend(find_long_spans(dataset))
+
+    console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")
 
     # Delete and recreate the output directory
     output_dir = current_dir / "dist"
@@ -40,7 +46,7 @@ def main():
     output_dir.mkdir(parents=True)
 
     # Generate and save the index page
-    html_content = create_index_page(dataset_names)
+    html_content = create_index_page(issues)
     output_path = output_dir / "index.html"
     output_path.write_text(html_content)
     console.log("Generated index page")
