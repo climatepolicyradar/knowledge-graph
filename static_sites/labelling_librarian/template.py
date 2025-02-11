@@ -2,12 +2,12 @@ from pathlib import Path
 from typing import Counter
 
 from jinja2 import Environment, FileSystemLoader
+
 from static_sites.labelling_librarian.checks import (
-    PassageLevelIssue,
     DatasetLevelIssue,
     LabellingIssue,
+    PassageLevelIssue,
 )
-
 
 # Get the directory where this file lives and load the templates
 current_dir = Path(__file__).parent.resolve()

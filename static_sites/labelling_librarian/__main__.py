@@ -1,22 +1,21 @@
 import os
 import shutil
-import argilla as rg
 from pathlib import Path
-from typing import Set
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import track
 
+import argilla as rg
 from static_sites.labelling_librarian.checks import (
-    check_whether_dataset_contains_find_long_spans,
     all_dataset_level_checks,
+    check_whether_dataset_contains_find_long_spans,
 )
 from static_sites.labelling_librarian.template import (
-    create_index_page,
     create_dataset_page,
+    create_index_page,
 )
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -34,7 +33,9 @@ def main():
         api_key=os.getenv("ARGILLA_API_KEY"),
     )
     with console.status("Fetching datasets from argilla"):
-        datasets: list[rg.FeedbackDataset] = rg.list_datasets(workspace="knowledge-graph")  # type: ignore
+        datasets: list[rg.FeedbackDataset] = rg.list_datasets(
+            workspace="knowledge-graph"
+        )  # type: ignore
     console.log(f"Fetched {len(datasets)} datasets")
 
     issues = []

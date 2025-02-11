@@ -1,25 +1,29 @@
-from typing import Optional
 from pydantic import BaseModel
-from argilla.client.feedback.schemas.responses import ResponseStatus
 
 import argilla as rg
-
+from argilla.client.feedback.schemas.responses import ResponseStatus
 from scripts.evaluate import create_gold_standard_labelled_passages
 from src.argilla import dataset_to_labelled_passages
 from src.labelled_passage import LabelledPassage
 
 
 class LabellingIssue(BaseModel):
+    """Base class for all labelling issues"""
+
     dataset_name: str
     message: str
     type: str
 
 
 class PassageLevelIssue(LabellingIssue):
+    """Issue at the passage level"""
+
     passage_text: str
 
 
 class DatasetLevelIssue(LabellingIssue):
+    """Issue at the dataset level"""
+
     pass
 
 
@@ -48,7 +52,7 @@ def check_if_dataset_contains_few_positives(
         return [
             DatasetLevelIssue(
                 dataset_name=dataset.name,  # type: ignore
-                message=f"<strong>{dataset.name}</strong> contains too few "
+                message=f"<strong>{dataset.name}</strong> contains too few "  # type: ignore
                 f"({n_positives}, {positive_ratio * 100}%) positive responses!",
                 type="few_positives",
             )
