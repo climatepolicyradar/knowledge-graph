@@ -22,6 +22,7 @@ from flows.index import (
     s3_obj_generator,
     s3_paths_or_s3_prefixes,
 )
+from flows.utils import SlackNotify
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -273,9 +274,8 @@ def group_documents_uris(
 
 
 @flow(
-    # TODO: Enable once confident
-    # on_failure=[SlackNotify.message],
-    # on_crashed=[SlackNotify.message],
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
 )
 async def count_family_document_concepts(
     classifier_specs: list[ClassifierSpec] | None = None,
