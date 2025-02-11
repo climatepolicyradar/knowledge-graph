@@ -9,11 +9,12 @@ from rich.console import Console
 from rich.progress import track
 
 from static_sites.labelling_librarian.checks import (
-    find_long_spans,
-    dataset_discard_ratio,
+    check_whether_dataset_contains_find_long_spans,
+    all_dataset_level_checks,
 )
 from static_sites.labelling_librarian.template import (
     create_index_page,
+    create_dataset_page,
 )
 from dotenv import load_dotenv
 
@@ -37,9 +38,12 @@ def main():
     console.log(f"Fetched {len(datasets)} datasets")
 
     issues = []
-    checks = [find_long_spans, dataset_discard_ratio]
-    for check in checks:
-        for dataset in track(datasets[:5], "Checking datasets for issues..."):
+
+    for check in [
+        check_whether_dataset_contains_find_long_spans,
+        all_dataset_level_checks,
+    ]:
+        for dataset in track(datasets[:2], "Checking datasets for issues..."):
             issues.extend(check(dataset))
 
     console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")
@@ -55,6 +59,20 @@ def main():
     output_path = output_dir / "index.html"
     output_path.write_text(html_content)
     console.log("Generated index page")
+
+    # Generate and save individual dataset pages
+    for dataset in track(
+        datasets, description="Generating dataset pages", transient=True
+    ):
+        relevant_issues = [
+            issue for issue in issues if issue.dataset_name == dataset.name
+        ]
+        html_content = create_dataset_page(
+            dataset_name=dataset.name, issues=relevant_issues
+        )
+        output_path = output_dir / f"{dataset.name}.html"
+        output_path.write_text(html_content)
+    console.log(f"Generated {len(datasets)} dataset pages")
 
 
 if __name__ == "__main__":
