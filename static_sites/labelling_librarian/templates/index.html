@@ -1,12 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-<body>
-    <ul>
-    {% for issue in issues %}
-      <li id="{{ issue_type }}">
-        found a really long span in {{ issue.passage_text }}
-      </li>
-    {% endfor %}
-    </ul>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "media",
+      };
+    </script>
+  </head>
+  <body>
+      <ul>
+      {% for issue in issues %}
+        <li id="{{ issue_type }}">
+        {{ issue.message }}
+        </li>
+      {% endfor %}
+      </ul>
+  </body>
 </html>

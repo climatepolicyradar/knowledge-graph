@@ -34,8 +34,10 @@ def main():
     console.log(f"Fetched {len(datasets)} datasets")
 
     issues = []
-    for dataset in track(datasets[:3], "Checking datasets for issues..."):
-        issues.extend(find_long_spans(dataset))
+    checks = [find_long_spans]
+    for check in checks:
+        for dataset in track(datasets[:3], "Checking datasets for issues..."):
+            issues.extend(check(dataset))
 
     console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")
 
