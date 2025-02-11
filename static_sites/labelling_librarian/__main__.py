@@ -8,7 +8,10 @@ import typer
 from rich.console import Console
 from rich.progress import track
 
-from static_sites.labelling_librarian.checks import find_long_spans
+from static_sites.labelling_librarian.checks import (
+    find_long_spans,
+    dataset_discard_ratio,
+)
 from static_sites.labelling_librarian.template import (
     create_index_page,
 )
@@ -34,9 +37,9 @@ def main():
     console.log(f"Fetched {len(datasets)} datasets")
 
     issues = []
-    checks = [find_long_spans]
+    checks = [find_long_spans, dataset_discard_ratio]
     for check in checks:
-        for dataset in track(datasets[:3], "Checking datasets for issues..."):
+        for dataset in track(datasets[:5], "Checking datasets for issues..."):
             issues.extend(check(dataset))
 
     console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")

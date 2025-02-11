@@ -14,13 +14,65 @@
   <body class="bg-gray-100">
     <div class="container mx-auto p-4">
       <h1 class="text-2xl font-bold mb-4">Issues List</h1>
-      <ul class="space-y-4">
+      <div class="mb-4">
+        <label for="datasetFilter" class="block mb-2">Dataset name</label>
+        <select id="datasetFilter" class="p-2 border rounded">
+          <option value="">All</option>
+          {% set datasets = issues | map(attribute='dataset_name') | unique %}
+          {% for dataset in datasets %}
+            <option value="{{ dataset }}">{{ dataset }}</option>
+          {% endfor %}
+        </select>
+        <label for="checkTypeFilter" class="block mb-2">Check name</label>
+        <select id="checkTypeFilter" class="p-2 border rounded">
+          <option value="">All</option>
+          {% set check_types = issues | map(attribute='type') | unique %}
+          {% for check in check_types %}
+            <option value="{{ check }}">{{ check }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <ul id="issuesList" class="space-y-4">
         {% for issue in issues %}
-          <li id="{{ issue_type }}" class="bg-white p-4 rounded shadow">
+          <li
+            id="{{ issue.type }}"
+            class="bg-white p-4 rounded shadow"
+            data-dataset="{{ issue.dataset }}"
+            data-check-type="{{ issue.type }}"
+          >
             {{ issue.message | safe }}
           </li>
         {% endfor %}
       </ul>
     </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const datasetFilter = document.getElementById('datasetFilter');
+        const checkTypeFilter = document.getElementById('checkTypeFilter');
+        const issuesList = document.getElementById('issuesList');
+
+        function filterIssues() {
+          const datasetValue = datasetFilter.value.toLowerCase();
+          const checkTypeValue = checkTypeFilter.value.toLowerCase();
+
+          Array.from(issuesList.children).forEach(issue => {
+            const dataset = issue.getAttribute('data-dataset').toLowerCase();
+            const checkType = issue.getAttribute('data-check-type').toLowerCase();
+
+            if (
+              (dataset.includes(datasetValue) || !datasetValue) &&
+              (checkType.includes(checkTypeValue) || !checkTypeValue)
+            ) {
+              issue.style.display = '';
+            } else {
+              issue.style.display = 'none';
+            }
+          });
+        }
+
+        datasetFilter.addEventListener('input', filterIssues);
+        checkTypeFilter.addEventListener('input', filterIssues);
+      });
+    </script>
   </body>
 </html>
