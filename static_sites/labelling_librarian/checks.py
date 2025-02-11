@@ -32,7 +32,28 @@ def all_dataset_level_checks(dataset: rg.FeedbackDataset) -> list[DatasetLevelIs
         return issues
 
     issues.extend(check_whether_dataset_has_a_high_discard_ratio(dataset))
+    issues.extend(check_if_dataset_contains_few_positives(dataset))
     return issues
+
+
+def check_if_dataset_contains_few_positives(
+    dataset: rg.FeedbackDataset,
+) -> list[DatasetLevelIssue]:
+    """Checks whether the dataset has too few positive responses"""
+    labelled_passages = dataset_to_labelled_passages(dataset, unescape_html=False)
+    n_positives = len([p for p in labelled_passages if p.spans])
+    positive_ratio = n_positives / len(labelled_passages)
+
+    if positive_ratio < 0.2:
+        return [
+            DatasetLevelIssue(
+                dataset_name=dataset.name,  # type: ignore
+                message=f"<strong>{dataset.name}</strong> contains too few "
+                f"({n_positives}, {positive_ratio * 100}%) positive responses!",
+                type="few_positives",
+            )
+        ]
+    return []
 
 
 def dataset_contains_submitted_records(dataset: rg.FeedbackDataset) -> bool:

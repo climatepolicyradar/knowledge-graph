@@ -16,9 +16,38 @@ env = Environment(loader=FileSystemLoader(current_dir / "templates"))
 
 def create_index_page(issues: list[LabellingIssue]) -> str:
     """Create an HTML report of all issues found using the Jinja template"""
-    dataset_issues = dict(Counter(issue.dataset_name for issue in issues))
+    passage_issues = dict(
+        Counter(
+            issue.dataset_name
+            for issue in issues
+            if isinstance(issue, PassageLevelIssue)
+        )
+    )
 
-    return env.get_template("index.html").render(dataset_issues=dataset_issues)
+    dataset_issues = dict(
+        Counter(
+            issue.dataset_name
+            for issue in issues
+            if isinstance(issue, DatasetLevelIssue)
+        )
+    )
+
+    issue_counts = {
+        dataset_name: {
+            "passage": passage_issues.get(dataset_name, 0),
+            "dataset": dataset_issues.get(dataset_name, 0),
+        }
+        for dataset_name in {issues.dataset_name for issues in issues}
+    }
+
+    issue_counts = dict(
+        sorted(
+            issue_counts.items(),
+            key=lambda item: item[1]["passage"] / 130 + item[1]["dataset"],
+            reverse=True,
+        )
+    )
+    return env.get_template("index.html").render(issue_counts=issue_counts)
 
 
 def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:

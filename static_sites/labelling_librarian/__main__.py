@@ -43,7 +43,7 @@ def main():
         check_whether_dataset_contains_find_long_spans,
         all_dataset_level_checks,
     ]:
-        for dataset in track(datasets[:2], "Checking datasets for issues..."):
+        for dataset in track(datasets[:10], "Checking datasets for issues..."):
             issues.extend(check(dataset))
 
     console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")
