@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    <ul>
+    {% for dataset_name in dataset_names %}
+      <li id="{{ issue_type }}">
+          {{ dataset_name }}
+      </li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
