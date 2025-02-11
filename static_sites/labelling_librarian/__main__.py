@@ -64,13 +64,14 @@ def main():
     for dataset in track(
         datasets, description="Generating dataset pages", transient=True
     ):
+        dataset_name = dataset.name  # type: ignore
         relevant_issues = [
-            issue for issue in issues if issue.dataset_name == dataset.name
+            issue for issue in issues if issue.dataset_name == dataset_name
         ]
         html_content = create_dataset_page(
-            dataset_name=dataset.name, issues=relevant_issues
+            dataset_name=dataset_name, issues=relevant_issues
         )
-        output_path = output_dir / f"{dataset.name}.html"
+        output_path = output_dir / f"{dataset_name}.html"
         output_path.write_text(html_content)
     console.log(f"Generated {len(datasets)} dataset pages")
 
