@@ -27,14 +27,14 @@ def find_long_spans(dataset: rg.FeedbackDataset) -> list[LabellingIssue]:
                 )
                 highlighted_text = (
                     individual_span_labelled_passage.get_highlighted_text(
-                        start_pattern='<span class="bg-red">', end_pattern="</span>"
+                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
                     )
                 )
                 issues.append(
                     LabellingIssue(
                         passage_text=passage.text,
                         message=(
-                            f"Found a really long span in {dataset.name}:\n"
+                            f"<strong>{dataset.name}</strong>:\n"
                             f"{highlighted_text}\n"
                         ),
                     )
