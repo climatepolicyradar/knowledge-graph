@@ -49,11 +49,13 @@ def check_if_dataset_contains_few_positives(
     positive_ratio = n_positives / len(labelled_passages)
 
     if positive_ratio < 0.2:
+        positive_percentage = positive_ratio * 100
+
         return [
             DatasetLevelIssue(
                 dataset_name=dataset.name,  # type: ignore
-                message=f"<strong>{dataset.name}</strong> contains too few "  # type: ignore
-                f"({n_positives}, {positive_ratio * 100}%) positive responses!",
+                message=f"<strong>{dataset.name}</strong> contains too few positive responses!"  # type: ignore
+                f"\n{n_positives} positives, which is {positive_percentage:.1f}% of the total ",
                 type="few_positives",
             )
         ]
