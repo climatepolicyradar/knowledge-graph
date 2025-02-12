@@ -41,8 +41,8 @@ class MultiConceptIssue(ConceptStoreIssue):
 class EmptyConcept(Concept):
     """A concept which comes from Wikibase but is missing key data"""
 
-    wikibase_id: WikibaseID
-    preferred_label: Optional[str] = None
+    wikibase_id: WikibaseID  # type: ignore
+    preferred_label: Optional[str] = None  # type: ignore
 
 
 def format_concept_link(concept: Concept) -> str:

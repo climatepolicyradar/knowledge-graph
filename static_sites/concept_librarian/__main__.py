@@ -22,10 +22,10 @@ from static_sites.concept_librarian.checks import (
     ensure_positive_and_negative_labels_dont_overlap,
     validate_alternative_label_uniqueness,
     validate_circular_hierarchical_relationships,
+    validate_concept_depth_and_descendant_balance,
     validate_concept_label_casing,
     validate_hierarchical_relationship_symmetry,
     validate_related_relationship_symmetry,
-    validate_concept_depth_and_descendant_balance,
 )
 from static_sites.concept_librarian.template import (
     create_concept_page,
