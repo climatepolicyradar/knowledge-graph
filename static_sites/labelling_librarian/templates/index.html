@@ -14,33 +14,72 @@
       .hidden {
         display: none;
       }
+      .selected {
+        background-color: #3b82f6; /* blue-500 */
+        color: white;
+      }
+      .unselected {
+        background-color: #e5e7eb; /* gray-200 */
+        color: black;
+      }
     </style>
     <script>
-      function filterDatasets(issueType) {
+      function filterDatasets() {
+        const selectedTypes = Array.from(document.querySelectorAll('.issue-button.selected'))
+          .map(button => button.getAttribute('data-issue-type'));
         const datasets = document.querySelectorAll('.dataset-card');
         datasets.forEach(dataset => {
           const issueTypes = dataset.getAttribute('data-issue-types').split(',');
-          if (issueTypes.includes(issueType) || issueType === 'all') {
+          if (selectedTypes.some(type => issueTypes.includes(type))) {
             dataset.classList.remove('hidden');
           } else {
             dataset.classList.add('hidden');
           }
         });
       }
+
+      function toggleButton(button) {
+        button.classList.toggle('selected');
+        button.classList.toggle('unselected');
+        filterDatasets();
+      }
+
+      function selectAll() {
+        const buttons = document.querySelectorAll('.issue-button');
+        buttons.forEach(button => {
+          button.classList.add('selected');
+          button.classList.remove('unselected');
+        });
+        filterDatasets();
+      }
+
+      function deselectAll() {
+        const buttons = document.querySelectorAll('.issue-button');
+        buttons.forEach(button => {
+          button.classList.remove('selected');
+          button.classList.add('unselected');
+        });
+        filterDatasets();
+      }
     </script>
   </head>
   <body class="bg-gray-100">
     <div class="max-w-7xl mx-auto p-6">
       <h1 class="text-2xl font-bold mb-4">Datasets and Issues</h1>
-      <div class="flex flex-wrap gap-2 mb-4">
-        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="filterDatasets('all')">
-          All
-        </button>
-        {% for issue_type, count in total_issue_counts.items() %}
-        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="filterDatasets('{{ issue_type }}')">
-          {{ issue_type }} ({{ count }})
-        </button>
-        {% endfor %}
+      <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6">
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="selectAll()">
+            All
+          </button>
+          <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="deselectAll()">
+            None
+          </button>
+          {% for issue_type, count in total_issue_counts.items() %}
+          <button class="issue-button px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this)">
+            {{ issue_type }} ({{ count }})
+          </button>
+          {% endfor %}
+        </div>
       </div>
       <div class="space-y-4">
         {% for dataset_name, metadata in dataset_info.items() %}
