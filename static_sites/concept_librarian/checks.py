@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+class EmptyConcept(BaseModel):
+    """A concept which comes from Wikibase but is missing key data"""
+
+    wikibase_id: WikibaseID
+    preferred_label: Optional[str] = None
+
+
 class ConceptStoreIssue(BaseModel):
     """Issue raised by concept store checks"""
 
@@ -29,7 +36,7 @@ class RelationshipIssue(ConceptStoreIssue):
     """Issue raised by concept store checks"""
 
     from_concept: Concept
-    to_concept: Concept
+    to_concept: Concept | EmptyConcept
 
 
 class MultiConceptIssue(ConceptStoreIssue):
@@ -38,20 +45,16 @@ class MultiConceptIssue(ConceptStoreIssue):
     concepts: list[Concept]
 
 
-class EmptyConcept(Concept):
-    """A concept which comes from Wikibase but is missing key data"""
-
-    wikibase_id: WikibaseID  # type: ignore
-    preferred_label: Optional[str] = None  # type: ignore
-
-
-def format_concept_link(concept: Concept) -> str:
+def format_concept_link(concept: Concept | EmptyConcept) -> str:
     """Format a concept as an HTML link"""
     style = "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4"
     display_text = (
         concept.wikibase_id if isinstance(concept, EmptyConcept) else str(concept)
     )
-    return f"<a href='{concept.wikibase_url}' target='_blank' class='{style}'>{display_text}</a>"
+    wikibase_url = concept.wikibase_url if isinstance(concept, Concept) else ""
+    return (
+        f"<a href='{wikibase_url}' target='_blank' class='{style}'>{display_text}</a>"
+    )
 
 
 def validate_related_relationship_symmetry(
