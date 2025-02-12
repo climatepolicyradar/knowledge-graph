@@ -4,6 +4,32 @@
 
 This folder has the config for a local wikibase instance that is used for testing.
 
+You can spin the stack up with:
+
+```bash
+just up-local-wikibase
+```
+
+And bring it down again when you are done:
+
+```bash
+just down-local-wikibase
+```
+
+When up, you can access the various frontends at:
+
+### Main Page
+
+http://localhost/wiki/Main_Page
+
+### Sparql Query UI
+
+http://wdqs-frontend.localhost/
+
+### Quickstatements
+
+http://quickstatements.localhost/
+
 ## Reference
 
 This was setup based on an adaption of the advice found [here](https://github.com/wmde/wikibase-release-pipeline/blob/main/deploy/README.md), and through adapting the [linked dockerfile](https://github.com/wmde/wikibase-release-pipeline/blob/main/deploy/docker-compose.yml). These adaptations where done to make it easier to use from a purely test perspective.
