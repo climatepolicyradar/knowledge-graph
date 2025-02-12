@@ -25,6 +25,7 @@ from static_sites.concept_librarian.checks import (
     validate_concept_label_casing,
     validate_hierarchical_relationship_symmetry,
     validate_related_relationship_symmetry,
+    validate_concept_depth_and_descendant_balance,
 )
 from static_sites.concept_librarian.template import (
     create_concept_page,
@@ -83,6 +84,7 @@ def main():
         validate_circular_hierarchical_relationships,
         check_for_unconnected_concepts,
         validate_concept_label_casing,
+        validate_concept_depth_and_descendant_balance,
     ]:
         issues.extend(check(concepts))
         console.log(f'Ran "{check.__name__}"')
