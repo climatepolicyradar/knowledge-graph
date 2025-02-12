@@ -18,9 +18,18 @@
         background-color: #3b82f6; /* blue-500 */
         color: white;
       }
+
+      .selected:hover {
+        background-color: #2563eb; /* blue-600 */
+      }
+
       .unselected {
         background-color: #e5e7eb; /* gray-200 */
         color: black;
+      }
+
+      .unselected:hover {
+        background-color: #d1d5db; /* gray-300 */
       }
     </style>
     <script>
@@ -68,14 +77,14 @@
       <h1 class="text-2xl font-bold mb-4">Datasets and Issues</h1>
       <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6">
         <div class="flex flex-wrap gap-2 mb-4">
-          <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="selectAll()">
+          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll()">
             All
           </button>
-          <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="deselectAll()">
+          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll()">
             None
           </button>
           {% for issue_type, count in total_issue_counts.items() %}
-          <button class="issue-button px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this)">
+          <button class="issue-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this)">
             {{ issue_type }} ({{ count }})
           </button>
           {% endfor %}

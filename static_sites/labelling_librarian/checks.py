@@ -80,7 +80,7 @@ def check_whether_dataset_is_empty(
             DatasetLevelIssue(
                 dataset_name=dataset.name,  # type: ignore
                 message=f"<strong>{dataset.name}</strong> contains no submitted responses!",  # type: ignore
-                type="empty_datsaset",
+                type="empty_dataset",
             )
         ]
 
