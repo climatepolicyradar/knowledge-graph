@@ -32,22 +32,34 @@ def create_index_page(issues: list[LabellingIssue]) -> str:
         )
     )
 
-    issue_counts = {
+    dataset_info = {
         dataset_name: {
-            "passage": passage_issues.get(dataset_name, 0),
-            "dataset": dataset_issues.get(dataset_name, 0),
+            "passage_issue_count": passage_issues.get(dataset_name, 0),
+            "dataset_issue_count": dataset_issues.get(dataset_name, 0),
+            "issue_types": list(
+                set(
+                    issue.type for issue in issues if issue.dataset_name == dataset_name
+                )
+            ),
         }
         for dataset_name in {issues.dataset_name for issues in issues}
     }
 
-    issue_counts = dict(
+    # Sorting, bringing those with the most issues to the top. Considering there are ~130 passages per dataset
+    # discounting the passage-level issues as such.
+    dataset_info = dict(
         sorted(
-            issue_counts.items(),
-            key=lambda item: item[1]["passage"] / 130 + item[1]["dataset"],
+            dataset_info.items(),
+            key=lambda item: item[1]["passage_issue_count"] / 130
+            + item[1]["dataset_issue_count"],
             reverse=True,
         )
     )
-    return env.get_template("index.html").render(issue_counts=issue_counts)
+
+    total_issue_counts = dict(Counter(issue.type for issue in issues))
+    return env.get_template("index.html").render(
+        dataset_info=dataset_info, total_issue_counts=total_issue_counts
+    )
 
 
 def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:

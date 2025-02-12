@@ -54,8 +54,8 @@ def check_if_dataset_contains_few_positives(
         return [
             DatasetLevelIssue(
                 dataset_name=dataset.name,  # type: ignore
-                message=f"<strong>{dataset.name}</strong> contains too few positive responses!"  # type: ignore
-                f"\n{n_positives} positives, which is {positive_percentage:.1f}% of the total ",
+                message=f"<strong>{dataset.name}</strong> contains too few positive responses:"  # type: ignore
+                f'<span class="text-red-500">{n_positives} positives {positive_percentage:.1f}% of the total</span>',
                 type="few_positives",
             )
         ]
@@ -107,7 +107,7 @@ def check_whether_dataset_has_a_high_discard_ratio(
                 dataset_name=dataset_name,
                 message=(
                     f"<strong>{dataset_name}</strong> discard ratio is too high:"
-                    f' <span class="bg-red-500">{discarded}/{total} ({ratio:.2f})</span>'
+                    f' <span class="text-red-500">{discarded} discarded, {100 * ratio:.1f}% of the total</span>'
                 ),
                 type="high_discard_ratio",
             )

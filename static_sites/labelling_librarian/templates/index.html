@@ -10,17 +10,45 @@
       };
     </script>
     <title>Issues List</title>
+    <style>
+      .hidden {
+        display: none;
+      }
+    </style>
+    <script>
+      function filterDatasets(issueType) {
+        const datasets = document.querySelectorAll('.dataset-card');
+        datasets.forEach(dataset => {
+          const issueTypes = dataset.getAttribute('data-issue-types').split(',');
+          if (issueTypes.includes(issueType) || issueType === 'all') {
+            dataset.classList.remove('hidden');
+          } else {
+            dataset.classList.add('hidden');
+          }
+        });
+      }
+    </script>
   </head>
   <body class="bg-gray-100">
     <div class="max-w-7xl mx-auto p-6">
       <h1 class="text-2xl font-bold mb-4">Datasets and Issues</h1>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="filterDatasets('all')">
+          All
+        </button>
+        {% for issue_type, count in total_issue_counts.items() %}
+        <button class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors" onclick="filterDatasets('{{ issue_type }}')">
+          {{ issue_type }} ({{ count }})
+        </button>
+        {% endfor %}
+      </div>
       <div class="space-y-4">
-        {% for dataset_name, issue_count in issue_counts.items() %}
-        <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+        {% for dataset_name, metadata in dataset_info.items() %}
+        <div class="dataset-card bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-types="{{ ','.join(metadata.issue_types) }}">
           <a href="/{{ dataset_name }}.html" class="text-xl font-semibold text-blue-600 dark:text-blue-400 hover:underline">
             {{ dataset_name }}
           </a>
-          <p class="text-slate-700 dark:text-slate-200">Dataset issues: {{ issue_count.dataset }}, passage issues: {{ issue_count.passage }}</p>
+          <p class="text-slate-700 dark:text-slate-200">Dataset issues: {{ metadata.dataset_issue_count }}, passage issues: {{ metadata.passage_issue_count }}</p>
         </div>
         {% endfor %}
       </div>
