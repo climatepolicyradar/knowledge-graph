@@ -5,9 +5,7 @@ from typing import Generator, Optional
 
 import argilla as rg
 from argilla import SpanQuestion, TextField
-from argilla.client.sdk.commons.errors import NotFoundApiError
 from argilla.feedback import FeedbackDataset, FeedbackRecord
-from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import Concept
 
@@ -41,11 +39,9 @@ def init_argilla_client(func):
 
 
 def concept_to_dataset_name(concept: Concept) -> str:
-    return f"{concept.preferred_label}-{concept.wikibase_id}".replace(" ", "-")
-
-
-def dataset_name_to_wikibase_id(name: str) -> WikibaseID:
-    return WikibaseID(name.split("-")[-1])
+    if not concept.wikibase_id:
+        raise ValueError("Concept has no Wikibase ID")
+    return concept.wikibase_id
 
 
 def labelled_passages_to_feedback_dataset(
@@ -83,19 +79,14 @@ def labelled_passages_to_feedback_dataset(
     return dataset
 
 
-def dataset_to_labelled_passages(
-    dataset: FeedbackDataset, unescape_html: bool
-) -> list[LabelledPassage]:
+def dataset_to_labelled_passages(dataset: FeedbackDataset) -> list[LabelledPassage]:
     """
     Convert an Argilla FeedbackDataset into a list of LabelledPassages.
 
     :param FeedbackDataset dataset: The Argilla FeedbackDataset to convert
     :return list[LabelledPassage]: A list of LabelledPassage objects
     """
-    return [
-        LabelledPassage.from_argilla_record(record, unescape_html=unescape_html)
-        for record in dataset.records
-    ]
+    return [LabelledPassage.from_argilla_record(record) for record in dataset.records]
 
 
 def is_between_timestamps(
@@ -149,9 +140,9 @@ def filter_labelled_passages_by_timestamp(
 @init_argilla_client
 def get_labelled_passages_from_argilla(
     concept: Concept,
+    workspace: str = "knowledge-graph",
     min_timestamp: Optional[datetime] = None,
     max_timestamp: Optional[datetime] = None,
-    unescape_html: bool = True,
 ) -> list[LabelledPassage]:
     """
     Get the labelled passages from Argilla for a given concept.
@@ -164,41 +155,12 @@ def get_labelled_passages_from_argilla(
     :return list[LabelledPassage]: A list of LabelledPassage objects
     """
     # First, see whether the dataset exists with the name we expect
-    dataset_name = concept_to_dataset_name(concept)
-    try:
-        dataset = rg.load(name=dataset_name)  # type: ignore
-    except NotFoundApiError:
-        dataset = None
 
-    # If it doesn't exist with the exact name, we can still try to find it by the
-    # wikibase_id. This might happen if the concept has been renamed.
-    if not dataset:
-        datasets = rg.list_datasets()  # type: ignore
-        if len(datasets) == 0:
-            raise ValueError(
-                "No datasets were found in Argilla, "
-                "you may need to be granted access to the workspace(s)"
-            )
-        matching_datasets = []
-        for _dataset in datasets:
-            try:
-                wikibase_id = dataset_name_to_wikibase_id(_dataset.name)
-                if wikibase_id == concept.wikibase_id:
-                    matching_datasets.append(_dataset)
-            except ValueError:
-                continue
-
-        if matching_datasets:
-            dataset = matching_datasets[0]
-
-    if not dataset:
-        raise ValueError(
-            f'No dataset matching the concept ID "{concept.wikibase_id}" was found in Argilla'
-        )
-
-    labelled_passages = dataset_to_labelled_passages(
-        dataset, unescape_html=unescape_html
+    dataset = rg.FeedbackDataset.from_argilla(
+        name=concept_to_dataset_name(concept), workspace=workspace
     )
+
+    labelled_passages = dataset_to_labelled_passages(dataset)
     if min_timestamp or max_timestamp:
         labelled_passages = filter_labelled_passages_by_timestamp(
             labelled_passages, min_timestamp, max_timestamp

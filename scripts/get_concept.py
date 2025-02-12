@@ -26,12 +26,13 @@ def main(
     console.log("✅ Connected to Wikibase")
 
     concept = wikibase.get_concept(wikibase_id)
-    console.log(f'🔍 Fetched metadata for "{concept.preferred_label}" from wikibase')
+    console.log(f'🔍 Fetched metadata for "{concept}" from wikibase')
 
     try:
-        labelled_passages = get_labelled_passages_from_argilla(concept)
+        with console.status("Fetching labelled passages from Argilla..."):
+            labelled_passages = get_labelled_passages_from_argilla(concept)
         console.log(
-            f"🏷️ Fetched {len(labelled_passages)} labelled passages for {wikibase_id} from Argilla"
+            f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )
         concept.labelled_passages = labelled_passages
     except ValueError:

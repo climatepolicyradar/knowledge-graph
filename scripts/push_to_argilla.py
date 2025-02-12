@@ -41,6 +41,7 @@ def main(
         typer.Option(
             "--workspace",
             help="The name of the workspace to create in Argilla",
+            default="knowledge-graph",
         ),
     ],
 ):
