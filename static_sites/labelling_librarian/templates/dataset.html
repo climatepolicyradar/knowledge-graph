@@ -75,19 +75,6 @@
         <h1 class="text-2xl md:text-3xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
           Dataset Issues
         </h1>
-        <div class="flex flex-wrap gap-2 mb-4">
-          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll('dataset')">
-            All
-          </button>
-          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll('dataset')">
-            None
-          </button>
-          {% for issue_type, count in dataset_issue_counts.items() %}
-          <button class="dataset-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this, 'dataset')">
-            {{ issue_type }} ({{ count }})
-          </button>
-          {% endfor %}
-        </div>
         <div class="space-y-4">
           {% for issue in dataset_issues %}
           <div class="issue-card dataset-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">

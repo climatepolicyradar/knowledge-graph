@@ -1,4 +1,5 @@
 from typing import Callable
+
 from pydantic import BaseModel
 
 import argilla as rg
@@ -7,7 +8,6 @@ from scripts.evaluate import create_gold_standard_labelled_passages
 from src.argilla import dataset_to_labelled_passages
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-
 
 DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
 

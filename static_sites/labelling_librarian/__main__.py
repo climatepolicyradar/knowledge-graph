@@ -10,8 +10,8 @@ from rich.progress import track
 import argilla as rg
 from static_sites.labelling_librarian.checks import (
     all_dataset_level_checks,
-    check_whether_spans_are_long,
     check_whether_span_border_is_in_word,
+    check_whether_spans_are_long,
     check_whether_spans_have_high_non_alphabetical_ratio,
 )
 from static_sites.labelling_librarian.template import (
