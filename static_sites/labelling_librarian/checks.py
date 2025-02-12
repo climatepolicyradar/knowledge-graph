@@ -135,76 +135,6 @@ def check_whether_dataset_has_a_high_discard_ratio(
     return []
 
 
-def check_whether_dataset_contains_find_long_spans(
-    dataset: rg.FeedbackDataset, threshold_length: int = 50
-) -> list[PassageLevelIssue]:
-    """Finds and flags long spans in the dataset"""
-    dataset_name = dataset.name  # type: ignore
-
-    issues = []
-
-    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
-
-    for passage in merged_passages:
-        for span in passage.spans:
-            if span.end_index - span.start_index > threshold_length:
-                individual_span_labelled_passage = LabelledPassage(
-                    text=passage.text, spans=[span]
-                )
-                highlighted_text = (
-                    individual_span_labelled_passage.get_highlighted_text(
-                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
-                    )
-                )
-                issues.append(
-                    PassageLevelIssue(
-                        dataset_name=dataset_name,
-                        passage_text=passage.text,
-                        message=highlighted_text,
-                        type="long_span",
-                    )
-                )
-
-    return issues
-
-
-def check_whether_spans_have_high_non_alphabetical_ratio(
-    dataset: rg.FeedbackDataset,
-) -> list[PassageLevelIssue]:
-    """Finds and flags spans that have a high non-alphabetical ratio"""
-    issues: list[PassageLevelIssue] = []
-    dataset_name = dataset.name  # type: ignore
-
-    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
-
-    for passage in merged_passages:
-        for span in passage.spans:
-            labelled_text: str = span.labelled_text  # type: ignore
-            non_alphabetical_ratio = sum(not c.isalpha() for c in labelled_text) / len(
-                labelled_text
-            )
-
-            if non_alphabetical_ratio > 0.5:
-                individual_span_labelled_passage = LabelledPassage(
-                    text=passage.text, spans=[span]
-                )
-                highlighted_text = (
-                    individual_span_labelled_passage.get_highlighted_text(
-                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
-                    )
-                )
-                issues.append(
-                    PassageLevelIssue(
-                        dataset_name=dataset_name,
-                        passage_text=passage.text,
-                        message=highlighted_text,
-                        type="high_non_alphabetical_ratio",
-                    )
-                )
-
-    return issues
-
-
 def _check_span_wrapper(
     dataset: rg.FeedbackDataset, span_issue: Callable[[Span], bool], issue_type: str
 ) -> list[PassageLevelIssue]:
@@ -241,32 +171,43 @@ def check_whether_span_border_is_in_word(
     dataset: rg.FeedbackDataset,
 ) -> list[PassageLevelIssue]:
     """Checks whether the span's start or end is in the middle of a word"""
-    issues: list[PassageLevelIssue] = []
-    dataset_name = dataset.name  # type: ignore
+    return _check_span_wrapper(dataset, _span_border_in_word, "span_border_in_word")
 
-    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
 
-    for passage in merged_passages:
-        for span in passage.spans:
-            previous_character = passage.text[max(span.start_index - 1, 0)]
-            next_character = passage.text[min(span.end_index, len(passage.text) - 1)]
+def _span_border_in_word(span: Span) -> bool:
+    previous_character = span.text[max(span.start_index - 1, 0)]
+    next_character = span.text[min(span.end_index, len(span.text) - 1)]
+    if previous_character.isalnum() or next_character.isalnum():
+        return True
+    return False
 
-            if previous_character.isalnum() or next_character.isalnum():
-                individual_span_labelled_passage = LabelledPassage(
-                    text=passage.text, spans=[span]
-                )
-                highlighted_text = (
-                    individual_span_labelled_passage.get_highlighted_text(
-                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
-                    )
-                )
-                issues.append(
-                    PassageLevelIssue(
-                        dataset_name=dataset_name,
-                        passage_text=passage.text,
-                        message=highlighted_text,
-                        type="span_border_in_word",
-                    )
-                )
 
-    return issues
+def check_whether_spans_have_high_non_alphabetical_ratio(
+    dataset: rg.FeedbackDataset,
+) -> list[PassageLevelIssue]:
+    """Finds and flags spans that have a high non-alphabetical ratio"""
+    return _check_span_wrapper(
+        dataset, _span_has_high_non_alphabetical_ratio, "high_non_alphabetical_ratio"
+    )
+
+
+def _span_has_high_non_alphabetical_ratio(span: Span) -> bool:
+    labelled_text: str = span.labelled_text  # type: ignore
+    non_alphabetical_ratio = sum(not c.isalpha() for c in labelled_text) / len(
+        labelled_text
+    )
+
+    if non_alphabetical_ratio > 0.5:
+        return True
+    return False
+
+
+def check_whether_spans_are_long(
+    dataset: rg.FeedbackDataset,
+) -> list[PassageLevelIssue]:
+    """Finds and flags spans that are too long"""
+    return _check_span_wrapper(dataset, _span_is_long, "long_span")
+
+
+def _span_is_long(span: Span) -> bool:
+    return span.end_index - span.start_index > 50

@@ -10,7 +10,7 @@ from rich.progress import track
 import argilla as rg
 from static_sites.labelling_librarian.checks import (
     all_dataset_level_checks,
-    check_whether_dataset_contains_find_long_spans,
+    check_whether_spans_are_long,
     check_whether_span_border_is_in_word,
     check_whether_spans_have_high_non_alphabetical_ratio,
 )
@@ -43,7 +43,7 @@ def main():
     issues = []
 
     for check in [
-        check_whether_dataset_contains_find_long_spans,
+        check_whether_spans_are_long,
         all_dataset_level_checks,
         check_whether_span_border_is_in_word,
         check_whether_spans_have_high_non_alphabetical_ratio,
