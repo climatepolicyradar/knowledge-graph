@@ -11,6 +11,8 @@ import argilla as rg
 from static_sites.labelling_librarian.checks import (
     all_dataset_level_checks,
     check_whether_dataset_contains_find_long_spans,
+    check_whether_span_border_is_in_word,
+    check_whether_spans_have_high_non_alphabetical_ratio,
 )
 from static_sites.labelling_librarian.template import (
     create_dataset_page,
@@ -43,8 +45,10 @@ def main():
     for check in [
         check_whether_dataset_contains_find_long_spans,
         all_dataset_level_checks,
+        check_whether_span_border_is_in_word,
+        check_whether_spans_have_high_non_alphabetical_ratio,
     ]:
-        for dataset in track(datasets[:5], "Checking datasets for issues..."):
+        for dataset in track(datasets[:10], "Checking datasets for issues..."):
             issues.extend(check(dataset))
 
     console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")

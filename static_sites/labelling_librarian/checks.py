@@ -1,3 +1,4 @@
+from typing import Callable
 from pydantic import BaseModel
 
 import argilla as rg
@@ -5,9 +6,10 @@ from argilla.client.feedback.schemas.responses import ResponseStatus
 from scripts.evaluate import create_gold_standard_labelled_passages
 from src.argilla import dataset_to_labelled_passages
 from src.labelled_passage import LabelledPassage
+from src.span import Span
 
 
-DATASET_CACHE: dict[str, list[LabelledPassage]] = []
+DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
 
 
 def dataset_to_labelled_passages_with_cache(
@@ -177,7 +179,7 @@ def check_whether_spans_have_high_non_alphabetical_ratio(
 
     for passage in merged_passages:
         for span in passage.spans:
-            labelled_text = span.labelled_text()
+            labelled_text: str = span.labelled_text  # type: ignore
             non_alphabetical_ratio = sum(not c.isalpha() for c in labelled_text) / len(
                 labelled_text
             )
@@ -203,6 +205,38 @@ def check_whether_spans_have_high_non_alphabetical_ratio(
     return issues
 
 
+def _check_span_wrapper(
+    dataset: rg.FeedbackDataset, span_issue: Callable[[Span], bool], issue_type: str
+) -> list[PassageLevelIssue]:
+    """Wrapper function for any checks that are run on the passage level, and create issues for each span that fails the criteria"""
+    issues: list[PassageLevelIssue] = []
+    dataset_name = dataset.name  # type: ignore
+
+    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
+
+    for passage in merged_passages:
+        for span in passage.spans:
+            if span_issue(span):
+                individual_span_labelled_passage = LabelledPassage(
+                    text=passage.text, spans=[span]
+                )
+                highlighted_text = (
+                    individual_span_labelled_passage.get_highlighted_text(
+                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
+                    )
+                )
+                issues.append(
+                    PassageLevelIssue(
+                        dataset_name=dataset_name,
+                        passage_text=passage.text,
+                        message=highlighted_text,
+                        type=issue_type,
+                    )
+                )
+
+    return issues
+
+
 def check_whether_span_border_is_in_word(
     dataset: rg.FeedbackDataset,
 ) -> list[PassageLevelIssue]:
@@ -214,8 +248,8 @@ def check_whether_span_border_is_in_word(
 
     for passage in merged_passages:
         for span in passage.spans:
-            previous_character = passage.text[span.start_index - 1]
-            next_character = passage.text[span.end_index]
+            previous_character = passage.text[max(span.start_index - 1, 0)]
+            next_character = passage.text[min(span.end_index, len(passage.text) - 1)]
 
             if previous_character.isalnum() or next_character.isalnum():
                 individual_span_labelled_passage = LabelledPassage(
