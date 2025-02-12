@@ -74,8 +74,11 @@ def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:
         elif isinstance(issue, PassageLevelIssue):
             passage_issues.append(issue)
 
+    passage_issue_counts = dict(Counter(issue.type for issue in passage_issues))
+
     return env.get_template("dataset.html").render(
         dataset_name=dataset_name,
         dataset_issues=dataset_issues,
         passage_issues=passage_issues,
+        passage_issue_counts=passage_issue_counts,
     )

@@ -76,11 +76,26 @@
           Dataset Issues
         </h1>
         <div class="space-y-4">
-          {% for issue in dataset_issues %}
-          <div class="issue-card dataset-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
-            <p class="text-slate-700 dark:text-slate-200">{{ issue.description }}</p>
-          </div>
-          {% endfor %}
+          {% if dataset_issues %}
+            {% for issue in dataset_issues %}
+            <div class="issue-card dataset-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
+              <p class="text-slate-700 dark:text-slate-200">{{ issue.description }}</p>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div
+              class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center"
+            >
+              <h3
+                class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2"
+              >
+                🎉 No issues found!
+              </h3>
+              <p class="text-slate-600 dark:text-slate-400">
+                This dataset looks good - no problems were detected.
+              </p>
+            </div>
+          {% endif %}
         </div>
       </div>
 
@@ -89,24 +104,41 @@
           Passage Issues
         </h1>
         <div class="flex flex-wrap gap-2 mb-4">
-          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll('passage')">
-            All
-          </button>
-          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll('passage')">
-            None
-          </button>
-          {% for issue_type, count in passage_issue_counts.items() %}
-          <button class="passage-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this, 'passage')">
-            {{ issue_type }} ({{ count }})
-          </button>
-          {% endfor %}
+          {% if passage_issues %}
+            <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll('passage')">
+              All
+            </button>
+            <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll('passage')">
+              None
+            </button>
+            {% for issue_type, count in passage_issue_counts.items() %}
+            <button class="passage-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this, 'passage')">
+              {{ issue_type }} ({{ count }})
+            </button>
+            {% endfor %}
+          {% endif %}
         </div>
         <div class="space-y-4">
-          {% for issue in passage_issues %}
-          <div class="issue-card passage-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
-            <p class="text-slate-700 dark:text-slate-200">{{ issue.description }}</p>
-          </div>
-          {% endfor %}
+          {% if passage_issues %}
+            {% for issue in passage_issues %}
+            <div class="issue-card passage-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
+              <p class="text-slate-700 dark:text-slate-200">{{ issue.message }}</p>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div
+              class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center"
+            >
+              <h3
+                class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2"
+              >
+                🎉 No issues found!
+              </h3>
+              <p class="text-slate-600 dark:text-slate-400">
+                These passages look good - no problems were detected.
+              </p>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
