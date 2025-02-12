@@ -175,8 +175,11 @@ def check_whether_span_border_is_in_word(
 
 
 def _span_border_in_word(span: Span) -> bool:
-    previous_character = span.text[max(span.start_index - 1, 0)]
-    next_character = span.text[min(span.end_index, len(span.text) - 1)]
+    previous_character = span.text[span.start_index] if span.start_index > 0 else " "
+    next_character = (
+        span.text[span.end_index] if span.end_index < len(span.text) else " "
+    )
+
     if previous_character.isalnum() or next_character.isalnum():
         return True
     return False
