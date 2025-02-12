@@ -74,8 +74,8 @@ def check_if_dataset_contains_few_positives(
         return [
             DatasetLevelIssue(
                 dataset_name=dataset.name,  # type: ignore
-                message=f"<strong>{dataset.name}</strong> contains too few positive responses:"  # type: ignore
-                f'<span class="text-red-500">{n_positives} positives {positive_percentage:.1f}% of the total</span>',
+                message=f"<strong>{dataset.name}</strong> contains too few positive responses: "  # type: ignore
+                f'<span class="text-red-500">{n_positives} positives, only {positive_percentage:.1f}% of the total</span>',
                 type="few_positives",
             )
         ]
@@ -159,7 +159,7 @@ def _check_span_wrapper(
                     PassageLevelIssue(
                         dataset_name=dataset_name,
                         passage_text=passage.text,
-                        message=highlighted_text,
+                        message=f"<strong>{issue_type}</strong>: {highlighted_text}",
                         type=issue_type,
                     )
                 )
