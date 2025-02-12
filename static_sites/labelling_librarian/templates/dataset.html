@@ -10,113 +10,118 @@
       };
     </script>
     <style>
+      .hidden {
+        display: none;
+      }
+      .selected {
+        background-color: #3b82f6; /* blue-500 */
+        color: white;
+      }
+      .unselected {
+        background-color: #e5e7eb; /* gray-200 */
+        color: black;
+      }
       a {
         @apply text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4;
       }
     </style>
+    <script>
+      function filterIssues(section) {
+        const selectedTypes = Array.from(document.querySelectorAll(`.${section}-button.selected`))
+          .map(button => button.getAttribute('data-issue-type'));
+        const issues = document.querySelectorAll(`.${section}-issue`);
+        issues.forEach(issue => {
+          const issueType = issue.getAttribute('data-issue-type');
+          if (selectedTypes.includes(issueType)) {
+            issue.classList.remove('hidden');
+          } else {
+            issue.classList.add('hidden');
+          }
+        });
+      }
+
+      function toggleButton(button, section) {
+        button.classList.toggle('selected');
+        button.classList.toggle('unselected');
+        filterIssues(section);
+      }
+
+      function selectAll(section) {
+        const buttons = document.querySelectorAll(`.${section}-button`);
+        buttons.forEach(button => {
+          button.classList.add('selected');
+          button.classList.remove('unselected');
+        });
+        filterIssues(section);
+      }
+
+      function deselectAll(section) {
+        const buttons = document.querySelectorAll(`.${section}-button`);
+        buttons.forEach(button => {
+          button.classList.remove('selected');
+          button.classList.add('unselected');
+        });
+        filterIssues(section);
+      }
+    </script>
   </head>
-  <body
-    class="bg-slate-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 md:p-6"
-  >
+  <body class="bg-slate-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 md:p-6">
     <div class="max-w-7xl mx-auto">
-      <a
-        href="index.html"
-        class="inline-block mb-6 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
-      >
+      <a href="index.html" class="inline-block mb-6 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline">
         ← Back to all issues
       </a>
 
-      <div
-        class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6"
-      >
-        <div
-          class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
-        >
-          <h1
-            class="text-xl md:text-2xl font-semibold text-slate-800 dark:text-slate-100"
-          >
-            {{ dataset_name }}
-          </h1>
+      <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6">
+        <h1 class="text-2xl md:text-3xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
+          Dataset Issues
+        </h1>
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll('dataset')">
+            All
+          </button>
+          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll('dataset')">
+            None
+          </button>
+          {% for issue_type, count in dataset_issue_counts.items() %}
+          <button class="dataset-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this, 'dataset')">
+            {{ issue_type }} ({{ count }})
+          </button>
+          {% endfor %}
         </div>
-      </div>
-
-      <h2
-        class="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4"
-      >
-        Dataset-level Issues ({{ dataset_issues | length }})
-      </h2>
-
-      {% if dataset_issues %}
-      <div class="space-y-4">
-        {% for issue in dataset_issues %}
-        <div
-          class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6"
-        >
-          <div
-            class="flex flex-col md:flex-row justify-between items-start gap-4"
-          >
-            <div class="flex-1">
-              <p class="text-slate-700 dark:text-slate-200 text-lg">
-                {{ issue.message }}
-              </p>
-            </div>
+        <div class="space-y-4">
+          {% for issue in dataset_issues %}
+          <div class="issue-card dataset-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
+            <p class="text-slate-700 dark:text-slate-200">{{ issue.description }}</p>
           </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
-      {% else %}
-      <div
-        class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center"
-      >
-        <h3
-          class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2"
-        >
-          🎉 No dataset-level issues found!
-        </h3>
-        <p class="text-slate-600 dark:text-slate-400">
-          This dataset looks good - no dataset-level problems were detected.
-        </p>
-      </div>
-      {% endif %}
 
-      <h2
-        class="text-lg md:text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4 mt-6"
-      >
-        Passage-level Issues ({{ passage_issues | length }})
-      </h2>
-
-      {% if passage_issues %}
-      <div class="space-y-4">
-        {% for issue in passage_issues %}
-        <div
-          class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6"
-        >
-          <div
-            class="flex flex-col md:flex-row justify-between items-start gap-4"
-          >
-            <div class="flex-1">
-              <p class="text-slate-700 dark:text-slate-200 text-lg">
-                {{ issue.message }}
-              </p>
-            </div>
+      <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6">
+        <h1 class="text-2xl md:text-3xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
+          Passage Issues
+        </h1>
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll('passage')">
+            All
+          </button>
+          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll('passage')">
+            None
+          </button>
+          {% for issue_type, count in passage_issue_counts.items() %}
+          <button class="passage-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this, 'passage')">
+            {{ issue_type }} ({{ count }})
+          </button>
+          {% endfor %}
+        </div>
+        <div class="space-y-4">
+          {% for issue in passage_issues %}
+          <div class="issue-card passage-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
+            <p class="text-slate-700 dark:text-slate-200">{{ issue.description }}</p>
           </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
-      {% else %}
-      <div
-        class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center"
-      >
-        <h3
-          class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2"
-        >
-          🎉 No passage-level issues found!
-        </h3>
-        <p class="text-slate-600 dark:text-slate-400">
-          This dataset looks good - no passage-level problems were detected.
-        </p>
-      </div>
-      {% endif %}
     </div>
   </body>
 </html>
