@@ -30,6 +30,25 @@ http://wdqs-frontend.localhost/
 
 http://quickstatements.localhost/
 
+### Programmatic Access
+
+```python
+
+from src.wikibase import WikibaseSession
+
+wikibase = WikibaseSession(
+    username="admin",
+    password="test123456",
+    url="http://localhost",
+    )
+
+properties = wikibase.get_all_properties()
+
+print(properties)
+
+```
+
+
 ## Reference
 
 This was setup based on an adaption of the advice found [here](https://github.com/wmde/wikibase-release-pipeline/blob/main/deploy/README.md), and through adapting the [linked dockerfile](https://github.com/wmde/wikibase-release-pipeline/blob/main/deploy/docker-compose.yml). These adaptations where done to make it easier to use from a purely test perspective.
