@@ -372,6 +372,10 @@ def validate_concept_depth_and_descendant_balance(
         depth = longest_depths[id]
         n_descendants = number_of_descendants_map[id]
 
+        # This threshold is somewhat arbitrary: I've come up with it be looking at the upper
+        # limit of this ratio for well-behaving concepts, which seemed to be bounded by
+        # n_descendants = 200 / depth, meaning that we're expecting e.g. max 200 descendants
+        # for a concept at level 1, and 40 for one at level 5.
         if depth != 0 and 200 / depth < n_descendants:
             issues.append(
                 ConceptIssue(
