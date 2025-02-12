@@ -7,6 +7,7 @@ from src.concept import Concept, WikibaseID
 from static_sites.concept_librarian.checks import (
     ConceptIssue,
     ConceptStoreIssue,
+    EmptyConcept,
     MultiConceptIssue,
     RelationshipIssue,
 )
@@ -61,9 +62,11 @@ def create_index_page(issues: list[ConceptStoreIssue]) -> str:
     )
 
 
-def create_concept_page(concept: Concept, all_issues: list[ConceptStoreIssue]) -> str:
+def create_concept_page(
+    concept: Concept | EmptyConcept, all_issues: list[ConceptStoreIssue]
+) -> str:
     """Create an HTML page for a specific concept's issues"""
-    concept_issues = get_issues_for_concept(all_issues, concept.wikibase_id)
+    concept_issues = get_issues_for_concept(all_issues, concept.wikibase_id)  # type: ignore
     return env.get_template("concept.html").render(
         issues=concept_issues,
         concept=concept,
