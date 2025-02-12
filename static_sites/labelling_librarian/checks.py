@@ -7,6 +7,24 @@ from src.argilla import dataset_to_labelled_passages
 from src.labelled_passage import LabelledPassage
 
 
+DATASET_CACHE: dict[str, list[LabelledPassage]] = []
+
+
+def dataset_to_labelled_passages_with_cache(
+    dataset: rg.FeedbackDataset,
+) -> list[LabelledPassage]:
+    """Turns the dataset into LabelledPassages using a cache"""
+    dataset_name = dataset.name  # type: ignore
+    if dataset_name in DATASET_CACHE:
+        return DATASET_CACHE[dataset_name]
+
+    labelled_passages = dataset_to_labelled_passages(dataset, unescape_html=False)
+    merged_passages = create_gold_standard_labelled_passages(labelled_passages)
+
+    DATASET_CACHE[dataset_name] = merged_passages
+    return merged_passages
+
+
 class LabellingIssue(BaseModel):
     """Base class for all labelling issues"""
 
@@ -44,7 +62,7 @@ def check_if_dataset_contains_few_positives(
     dataset: rg.FeedbackDataset,
 ) -> list[DatasetLevelIssue]:
     """Checks whether the dataset has too few positive responses"""
-    labelled_passages = dataset_to_labelled_passages(dataset, unescape_html=False)
+    labelled_passages = dataset_to_labelled_passages_with_cache(dataset)
     n_positives = len([p for p in labelled_passages if p.spans])
     positive_ratio = n_positives / len(labelled_passages)
 
@@ -123,8 +141,7 @@ def check_whether_dataset_contains_find_long_spans(
 
     issues = []
 
-    labelled_passages = dataset_to_labelled_passages(dataset, unescape_html=False)
-    merged_passages = create_gold_standard_labelled_passages(labelled_passages)
+    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
 
     for passage in merged_passages:
         for span in passage.spans:
@@ -141,11 +158,80 @@ def check_whether_dataset_contains_find_long_spans(
                     PassageLevelIssue(
                         dataset_name=dataset_name,
                         passage_text=passage.text,
-                        message=(
-                            f"<strong>{dataset_name}</strong>:\n"
-                            f"{highlighted_text}\n"
-                        ),
+                        message=highlighted_text,
                         type="long_span",
+                    )
+                )
+
+    return issues
+
+
+def check_whether_spans_have_high_non_alphabetical_ratio(
+    dataset: rg.FeedbackDataset,
+) -> list[PassageLevelIssue]:
+    """Finds and flags spans that have a high non-alphabetical ratio"""
+    issues: list[PassageLevelIssue] = []
+    dataset_name = dataset.name  # type: ignore
+
+    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
+
+    for passage in merged_passages:
+        for span in passage.spans:
+            labelled_text = span.labelled_text()
+            non_alphabetical_ratio = sum(not c.isalpha() for c in labelled_text) / len(
+                labelled_text
+            )
+
+            if non_alphabetical_ratio > 0.5:
+                individual_span_labelled_passage = LabelledPassage(
+                    text=passage.text, spans=[span]
+                )
+                highlighted_text = (
+                    individual_span_labelled_passage.get_highlighted_text(
+                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
+                    )
+                )
+                issues.append(
+                    PassageLevelIssue(
+                        dataset_name=dataset_name,
+                        passage_text=passage.text,
+                        message=highlighted_text,
+                        type="high_non_alphabetical_ratio",
+                    )
+                )
+
+    return issues
+
+
+def check_whether_span_border_is_in_word(
+    dataset: rg.FeedbackDataset,
+) -> list[PassageLevelIssue]:
+    """Checks whether the span's start or end is in the middle of a word"""
+    issues: list[PassageLevelIssue] = []
+    dataset_name = dataset.name  # type: ignore
+
+    merged_passages = dataset_to_labelled_passages_with_cache(dataset)
+
+    for passage in merged_passages:
+        for span in passage.spans:
+            previous_character = passage.text[span.start_index - 1]
+            next_character = passage.text[span.end_index]
+
+            if previous_character.isalnum() or next_character.isalnum():
+                individual_span_labelled_passage = LabelledPassage(
+                    text=passage.text, spans=[span]
+                )
+                highlighted_text = (
+                    individual_span_labelled_passage.get_highlighted_text(
+                        start_pattern='<span class="bg-red-500">', end_pattern="</span>"
+                    )
+                )
+                issues.append(
+                    PassageLevelIssue(
+                        dataset_name=dataset_name,
+                        passage_text=passage.text,
+                        message=highlighted_text,
+                        type="span_border_in_word",
                     )
                 )
 
