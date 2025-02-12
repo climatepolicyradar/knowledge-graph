@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict, deque
 from string import punctuation
-from typing import MutableSequence, Optional
+from typing import MutableSequence, Optional, Union
 
 from pydantic import BaseModel
 
@@ -36,7 +36,7 @@ class RelationshipIssue(ConceptStoreIssue):
     """Issue raised by concept store checks"""
 
     from_concept: Concept
-    to_concept: Concept | EmptyConcept
+    to_concept: Union[EmptyConcept, Concept]
 
 
 class MultiConceptIssue(ConceptStoreIssue):
@@ -78,7 +78,8 @@ def validate_related_relationship_symmetry(
             issues.append(
                 RelationshipIssue(
                     issue_type="asymmetric_related_relationship",
-                    message=f"{format_concept_link(from_concept)} is related to {format_concept_link(to_concept)}, but {format_concept_link(to_concept)} is not related to {format_concept_link(from_concept)}",
+                    message=f"{format_concept_link(from_concept)} is related to {format_concept_link(to_concept)}, "
+                    f"but {format_concept_link(to_concept)} is not related to {format_concept_link(from_concept)}",
                     from_concept=from_concept,
                     to_concept=to_concept,
                 )

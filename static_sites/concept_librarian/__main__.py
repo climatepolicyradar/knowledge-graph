@@ -56,7 +56,7 @@ def get_affected_concept_ids(issues: list[ConceptStoreIssue]) -> Set[WikibaseID]
 @app.command()
 def main():
     wikibase = WikibaseSession()
-    concepts: list[Concept] = []
+    concepts: list[Concept | EmptyConcept] = []
     concept_ids = wikibase.get_concept_ids()
     for wikibase_id in track(
         concept_ids,
