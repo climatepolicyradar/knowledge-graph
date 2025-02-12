@@ -48,6 +48,13 @@
       }
 
       function toggleButton(button) {
+        const buttons = document.querySelectorAll('.issue-button');
+        const allSelected = Array.from(buttons).every(btn => btn.classList.contains('selected'));
+        
+        // if all buttons are selected, deselect all first (this is for users who want to filter when all are selected)
+        if (allSelected) {
+          deselectAll();
+        }
         button.classList.toggle('selected');
         button.classList.toggle('unselected');
         filterDatasets();

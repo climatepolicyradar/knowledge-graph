@@ -41,6 +41,13 @@
       }
 
       function toggleButton(button, section) {
+        const buttons = document.querySelectorAll('.issue-button');
+        const allSelected = Array.from(buttons).every(btn => btn.classList.contains('selected'));
+        
+        // if all buttons are selected, deselect all first (this is for users who want to filter when all are selected)
+        if (allSelected) {
+          deselectAll();
+        }
         button.classList.toggle('selected');
         button.classList.toggle('unselected');
         filterIssues(section);
@@ -83,12 +90,8 @@
             </div>
             {% endfor %}
           {% else %}
-            <div
-              class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center"
-            >
-              <h3
-                class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2"
-              >
+            <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 text-center">
+              <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">
                 🎉 No issues found!
               </h3>
               <p class="text-slate-600 dark:text-slate-400">
