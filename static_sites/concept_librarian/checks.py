@@ -347,14 +347,14 @@ def validate_concept_label_casing(
 
 def validate_concept_depth_and_descendant_balance(
     concepts: list[Concept],
-) -> list[Concept]:
+) -> list[ConceptIssue]:
     """
     Finds concepts that are too deep in the hierarchy with many descendants.
 
     This can suggest, that the concept has a spurious "subconcept of" relationship.
     This has happened previously when "Adaptation" got added below "Public Sector".
     """
-    issues: list[Concept] = []
+    issues: list[ConceptIssue] = []
     concepts_by_id = {
         concept.wikibase_id: concept
         for concept in concepts
@@ -373,7 +373,13 @@ def validate_concept_depth_and_descendant_balance(
         n_descendants = number_of_descendants_map[id]
 
         if depth != 0 and 200 / depth < n_descendants:
-            issues.append(concept)
+            issues.append(
+                ConceptIssue(
+                    concept=concept,
+                    issue_type="concept_depth_and_descendant_balance",
+                    message=f"{format_concept_link(concept)} is too deep in the hierarchy with {n_descendants} descendants",
+                )
+            )
 
     return issues
 
