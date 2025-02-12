@@ -20,7 +20,7 @@ async def test_load_parse_concepts_counts(
     mock_concepts_counts_document_keys,
 ) -> None:
     """Test that we can load and parse concept counts from S3."""
-    mock_concepts_counts_document_uri = mock_concepts_counts_document_keys[0]
+    mock_concepts_counts_document_uri = sorted(mock_concepts_counts_document_keys)[0]
     document_object_uri = f"s3://{mock_bucket}/{ mock_concepts_counts_document_uri }"
 
     counter = await load_parse_concepts_counts(document_object_uri)
@@ -28,14 +28,14 @@ async def test_load_parse_concepts_counts(
     # Verify the counter contains expected data
     assert len(counter) == 1
 
-    # Get the single concept-count pair
+    # Get the concept-count pair
     concept, count = next(iter(counter.items()))
 
     # Verify concept details
     assert isinstance(concept, Concept)
-    assert concept.wikibase_id == WikibaseID("Q761")
-    assert concept.preferred_label == "manufacturing sector"
-    assert count == 1
+    assert concept.wikibase_id == WikibaseID("Q368")
+    assert concept.preferred_label == "marine risk"
+    assert count == 7
 
 
 @pytest.mark.asyncio

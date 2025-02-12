@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Callable
@@ -55,6 +56,7 @@ class BaseTargetClassifier(Classifier, ABC):
                 revision=self.commit_hash,
             ),
             function_to_apply="sigmoid",
+            device="cpu",
         )
 
     @abstractmethod
@@ -110,10 +112,11 @@ class BaseTargetClassifier(Classifier, ABC):
 
     def fit(self) -> "BaseTargetClassifier":
         """Targets classifiers cannot be trained directly."""
-        raise NotImplementedError(
+        warnings.warn(
             "Targets classifiers in the knowledge graph are based on the pre-trained "
             f"{self.model_name} model. As such, they cannot be trained directly."
         )
+        return self
 
 
 class TargetClassifier(BaseTargetClassifier):
