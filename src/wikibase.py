@@ -23,11 +23,15 @@ class WikibaseSession:
 
     session = httpx.Client()
 
-    has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID")
-    subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID")
-    related_concept_property_id = os.getenv("WIKIBASE_RELATED_CONCEPT_PROPERTY_ID")
-    negative_labels_property_id = os.getenv("WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID")
-    definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID")
+    has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID", "P1")
+    subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID", "P2")
+    related_concept_property_id = os.getenv(
+        "WIKIBASE_RELATED_CONCEPT_PROPERTY_ID", "P3"
+    )
+    negative_labels_property_id = os.getenv(
+        "WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID", "P9"
+    )
+    definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID", "P7")
 
     def __init__(
         self,
