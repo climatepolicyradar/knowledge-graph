@@ -182,28 +182,31 @@ def mock_classifier():
         yield mock
 
 
-def test_load_classifier_local(mock_classifier):
-    with patch("scripts.evaluate.classifier_dir", Path("classifiers")):
+def test_load_classifier_local(mock_classifier, tmp_path):
+    with patch("scripts.evaluate.classifier_dir", tmp_path):
         wikibase_id = WikibaseID("Q123")
-        expected_path = Path("classifiers") / wikibase_id
+        classifier_path = tmp_path / wikibase_id
+        classifier_path.mkdir(parents=True)
+        pickle_path = classifier_path / "model.pickle"
+        pickle_path.touch()  # Create an empty file
 
         # Call function
         load_classifier_local(wikibase_id)
 
         # Verify Classifier.load was called with correct path
-        mock_classifier.load.assert_called_once_with(expected_path)
+        mock_classifier.load.assert_called_once_with(pickle_path)
 
 
-def test_load_classifier_local_not_found(mock_classifier):
-    with patch("scripts.evaluate.classifier_dir", Path("classifiers")):
+def test_load_classifier_local_not_found(mock_classifier, tmp_path):
+    with patch("scripts.evaluate.classifier_dir", tmp_path):
         wikibase_id = WikibaseID("Q999")
-        mock_classifier.load.side_effect = FileNotFoundError()
+        # Don't create any files - this should trigger the FileNotFoundError path
 
         with pytest.raises(typer.BadParameter) as exc_info:
             load_classifier_local(wikibase_id)
 
-    assert "Classifier for Q999 not found" in str(exc_info.value)
-    assert "just train Q999" in str(exc_info.value)
+        assert "Classifier for Q999 not found" in str(exc_info.value)
+        assert "just train Q999" in str(exc_info.value)
 
 
 def test_load_classifier_remote(mock_classifier):
