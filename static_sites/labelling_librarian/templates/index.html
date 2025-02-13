@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "media",
+      };
+    </script>
+    <title>Issues List</title>
+    <style>
+      .hidden {
+        display: none;
+      }
+      .selected {
+        background-color: #3b82f6; /* blue-500 */
+        color: white;
+      }
+
+      .selected:hover {
+        background-color: #2563eb; /* blue-600 */
+      }
+
+      .unselected {
+        background-color: #e5e7eb; /* gray-200 */
+        color: black;
+      }
+
+      .unselected:hover {
+        background-color: #d1d5db; /* gray-300 */
+      }
+    </style>
+    <script>
+      function filterDatasets() {
+        const selectedTypes = Array.from(document.querySelectorAll('.issue-button.selected'))
+          .map(button => button.getAttribute('data-issue-type'));
+        const datasets = document.querySelectorAll('.dataset-card');
+        datasets.forEach(dataset => {
+          const issueTypes = dataset.getAttribute('data-issue-types').split(',');
+          if (selectedTypes.some(type => issueTypes.includes(type))) {
+            dataset.classList.remove('hidden');
+          } else {
+            dataset.classList.add('hidden');
+          }
+        });
+      }
+
+      function toggleButton(button) {
+        const buttons = document.querySelectorAll('.issue-button');
+        const allSelected = Array.from(buttons).every(btn => btn.classList.contains('selected'));
+        
+        // if all buttons are selected, deselect all first (this is for users who want to filter when all are selected)
+        if (allSelected) {
+          deselectAll();
+        }
+        button.classList.toggle('selected');
+        button.classList.toggle('unselected');
+        filterDatasets();
+      }
+
+      function selectAll() {
+        const buttons = document.querySelectorAll('.issue-button');
+        buttons.forEach(button => {
+          button.classList.add('selected');
+          button.classList.remove('unselected');
+        });
+        filterDatasets();
+      }
+
+      function deselectAll() {
+        const buttons = document.querySelectorAll('.issue-button');
+        buttons.forEach(button => {
+          button.classList.remove('selected');
+          button.classList.add('unselected');
+        });
+        filterDatasets();
+      }
+    </script>
+  </head>
+  <body class="bg-gray-100">
+    <div class="max-w-7xl mx-auto p-6">
+      <h1 class="text-2xl font-bold mb-4">Datasets and Issues</h1>
+      <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6">
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll()">
+            All
+          </button>
+          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll()">
+            None
+          </button>
+          {% for issue_type, count in total_issue_counts.items() %}
+          <button class="issue-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this)">
+            {{ issue_type }} ({{ count }})
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="space-y-4">
+        {% for dataset_name, metadata in dataset_info.items() %}
+        <div class="dataset-card bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-types="{{ ','.join(metadata.issue_types) }}">
+          <a href="/{{ dataset_name }}.html" class="text-xl font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+            {{ dataset_name }}
+          </a>
+          <p class="text-slate-700 dark:text-slate-200">Dataset issues: {{ metadata.dataset_issue_count }}, passage issues: {{ metadata.passage_issue_count }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </body>
+</html>
