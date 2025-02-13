@@ -66,7 +66,7 @@ def create_index_page(issues: list[ConceptStoreIssue]) -> str:
 
 
 def create_concept_page(
-    concept: Concept| EmptyConcept,
+    concept: Concept | EmptyConcept,
     subconcepts: list[Concept],
     all_issues: list[ConceptStoreIssue],
 ) -> str:
