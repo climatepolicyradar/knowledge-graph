@@ -8,6 +8,7 @@ from src.wikibase import WikibaseSession
 from static_sites.concept_librarian.checks import (
     ConceptIssue,
     ConceptStoreIssue,
+    EmptyConcept,
     MultiConceptIssue,
     RelationshipIssue,
 )
@@ -65,7 +66,7 @@ def create_index_page(issues: list[ConceptStoreIssue]) -> str:
 
 
 def create_concept_page(
-    concept: Concept,
+    concept: Concept| EmptyConcept,
     subconcepts: list[Concept],
     all_issues: list[ConceptStoreIssue],
 ) -> str:
@@ -76,7 +77,6 @@ def create_concept_page(
         for subconcept in subconcepts
         for issue in get_issues_for_concept(all_issues, subconcept.wikibase_id)
     ]
-
     return env.get_template("concept.html").render(
         concept=concept,
         concept_issues=concept_issues,

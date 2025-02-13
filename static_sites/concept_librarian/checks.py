@@ -1,10 +1,22 @@
-from collections import defaultdict
+import logging
+from collections import defaultdict, deque
 from string import punctuation
-from typing import Optional
+from typing import MutableSequence, Optional, Union
 
 from pydantic import BaseModel
 
 from src.concept import Concept, WikibaseID
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+class EmptyConcept(BaseModel):
+    """A concept which comes from Wikibase but is missing key data"""
+
+    wikibase_id: WikibaseID
+    preferred_label: Optional[str] = None
 
 
 class ConceptStoreIssue(BaseModel):
@@ -24,7 +36,7 @@ class RelationshipIssue(ConceptStoreIssue):
     """Issue raised by concept store checks"""
 
     from_concept: Concept
-    to_concept: Concept
+    to_concept: Union[EmptyConcept, Concept]
 
 
 class MultiConceptIssue(ConceptStoreIssue):
@@ -33,20 +45,18 @@ class MultiConceptIssue(ConceptStoreIssue):
     concepts: list[Concept]
 
 
-class EmptyConcept(Concept):
-    """A concept which comes from Wikibase but is missing key data"""
+def format_concept_link(concept: Concept | EmptyConcept) -> str:
+    """
+    Format a concept as an HTML link
 
-    wikibase_id: WikibaseID
-    preferred_label: Optional[str] = None
-
-
-def format_concept_link(concept: Concept) -> str:
-    """Format a concept as an HTML link"""
-    style = "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4"
-    display_text = (
-        concept.wikibase_id if isinstance(concept, EmptyConcept) else str(concept)
-    )
-    return f"<a href='{concept.wikibase_url}' target='_blank' class='{style}'>{display_text}</a>"
+    If the concept is an EmptyConcept, it will be formatted as a plain string.
+    """
+    if isinstance(concept, EmptyConcept):
+        return concept.wikibase_id
+    else:
+        style = "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4"
+        display_text = str(concept)
+        return f"<a href='{concept.wikibase_url}' target='_blank' class='{style}'>{display_text}</a>"
 
 
 def validate_related_relationship_symmetry(
@@ -70,7 +80,8 @@ def validate_related_relationship_symmetry(
             issues.append(
                 RelationshipIssue(
                     issue_type="asymmetric_related_relationship",
-                    message=f"{format_concept_link(from_concept)} is related to {format_concept_link(to_concept)}, but {format_concept_link(to_concept)} is not related to {format_concept_link(from_concept)}",
+                    message=f"{format_concept_link(from_concept)} is related to {format_concept_link(to_concept)}, "
+                    f"but {format_concept_link(to_concept)} is not related to {format_concept_link(from_concept)}",
                     from_concept=from_concept,
                     to_concept=to_concept,
                 )
@@ -338,3 +349,120 @@ def validate_concept_label_casing(
                 )
             )
     return issues
+
+
+def validate_concept_depth_and_descendant_balance(
+    concepts: list[Concept],
+) -> list[ConceptIssue]:
+    """
+    Finds concepts that are too deep in the hierarchy with many descendants.
+
+    This can suggest, that the concept has a spurious "subconcept of" relationship.
+    This has happened previously when "Adaptation" got added below "Public Sector".
+    """
+    issues: list[ConceptIssue] = []
+    concepts_by_id = {
+        concept.wikibase_id: concept
+        for concept in concepts
+        if concept.wikibase_id is not None
+    }  # check is needed to mollify type checks
+
+    number_of_descendants_map = _build_number_of_descendants_map(concepts_by_id)
+    longest_depths = {
+        c.wikibase_id: _longest_concept_depth(c, concepts_by_id) for c in concepts
+    }
+
+    for concept in concepts:
+        id = concept.wikibase_id
+        assert id is not None, "Concepts should have a Wikibase ID"
+        depth = longest_depths[id]
+        n_descendants = number_of_descendants_map[id]
+
+        # This threshold is somewhat arbitrary: I've come up with it be looking at the upper
+        # limit of this ratio for well-behaving concepts, which seemed to be bounded by
+        # n_descendants = 200 / depth, meaning that we're expecting e.g. max 200 descendants
+        # for a concept at level 1, and 40 for one at level 5.
+        if depth != 0 and 200 / depth < n_descendants:
+            issues.append(
+                ConceptIssue(
+                    concept=concept,
+                    issue_type="concept_depth_and_descendant_balance",
+                    message=f"{format_concept_link(concept)} is too deep in the hierarchy with {n_descendants} descendants",
+                )
+            )
+
+    return issues
+
+
+def _longest_concept_depth(
+    concept: Concept, concept_map: dict[WikibaseID, Concept]
+) -> int:
+    """
+    Calculate the depth of a concept in the hierarchy
+
+    Since multiple parents might exist, the depth is calculated as the maximum depth of
+    any of the parents, i.e. taking the longest possible path to a root.
+    """
+    parent_concepts = [concept_map.get(parent) for parent in concept.subconcept_of]
+    parent_concepts = [parent for parent in parent_concepts if parent is not None]
+    if not parent_concepts:
+        return 0
+
+    return 1 + max(
+        _longest_concept_depth(parent, concept_map) for parent in parent_concepts
+    )
+
+
+def _build_number_of_descendants_map(
+    concept_map: dict[WikibaseID, Concept],
+) -> dict[WikibaseID, int]:  # type: ignore
+    """
+    Build a map of concept ID to number of all descendants (at any level)
+
+    Traverses the hierarchy, counting the number of descendants each concept has.
+    It starts with those nodes, that have no descendants (these will return 0). Then continues
+    by processing those nodes, that only have processed children, etc.
+    """
+    queue: MutableSequence[Concept] = deque()
+
+    for concept in concept_map.values():
+        if not concept.has_subconcept:
+            queue.append(concept)
+
+    children_map = defaultdict(int)
+
+    while queue:
+        current = queue.popleft()
+        children_map[current.wikibase_id] = _aggregate_number_of_descendants(
+            current, children_map
+        )
+
+        for parent_id in current.subconcept_of:
+            parent = concept_map.get(
+                parent_id, None
+            )  # this happens due to other concept store errors
+            if (
+                parent is not None
+                and parent not in children_map
+                and all(
+                    sibling in children_map
+                    for sibling in parent.has_subconcept
+                    if sibling in concept_map
+                )
+            ):
+                queue.append(parent)
+
+    skipped_values = list(set(concept_map.keys()) - set(children_map.keys()))
+    logger.warning(f"Missing values: {skipped_values}")
+
+    return children_map
+
+
+def _aggregate_number_of_descendants(
+    concept: Concept, children_map: dict[WikibaseID, int]
+) -> int:
+    """Aggregate the number of descendants for all concepts"""
+    number_of_descendants = 0
+    for child in concept.has_subconcept:
+        number_of_descendants += children_map[child] + 1
+    return number_of_descendants
