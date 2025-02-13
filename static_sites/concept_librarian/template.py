@@ -4,9 +4,11 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from src.concept import Concept, WikibaseID
+from src.wikibase import WikibaseSession
 from static_sites.concept_librarian.checks import (
     ConceptIssue,
     ConceptStoreIssue,
+    EmptyConcept,
     MultiConceptIssue,
     RelationshipIssue,
 )
@@ -19,6 +21,8 @@ env = Environment(loader=FileSystemLoader(current_dir / "templates"))
 env.tests["concept_issue"] = lambda x: isinstance(x, ConceptIssue)
 env.tests["relationship_issue"] = lambda x: isinstance(x, RelationshipIssue)
 env.tests["multi_concept_issue"] = lambda x: isinstance(x, MultiConceptIssue)
+
+wikibase = WikibaseSession()
 
 
 def get_issues_for_concept(
@@ -61,10 +65,20 @@ def create_index_page(issues: list[ConceptStoreIssue]) -> str:
     )
 
 
-def create_concept_page(concept: Concept, all_issues: list[ConceptStoreIssue]) -> str:
+def create_concept_page(
+    concept: Concept | EmptyConcept,
+    subconcepts: list[Concept],
+    all_issues: list[ConceptStoreIssue],
+) -> str:
     """Create an HTML page for a specific concept's issues"""
     concept_issues = get_issues_for_concept(all_issues, concept.wikibase_id)
+    subconcept_issues = [
+        issue
+        for subconcept in subconcepts
+        for issue in get_issues_for_concept(all_issues, subconcept.wikibase_id)
+    ]
     return env.get_template("concept.html").render(
-        issues=concept_issues,
         concept=concept,
+        concept_issues=concept_issues,
+        subconcept_issues=subconcept_issues,
     )
