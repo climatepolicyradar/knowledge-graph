@@ -86,7 +86,7 @@
           {% if dataset_issues %}
             {% for issue in dataset_issues %}
             <div class="issue-card dataset-issue bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-type="{{ issue.type }}">
-              <p class="text-slate-700 dark:text-slate-200">{{ issue.description }}</p>
+              <p class="text-slate-700 dark:text-slate-200">{{ issue.message }}</p>
             </div>
             {% endfor %}
           {% else %}
