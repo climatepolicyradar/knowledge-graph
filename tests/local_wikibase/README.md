@@ -40,14 +40,13 @@ wikibase = WikibaseSession(
     username="admin",
     password="test123456",
     url="http://localhost",
-    )
+)
 
 properties = wikibase.get_all_properties()
 
 print(properties)
 
 ```
-
 
 ## Reference
 
