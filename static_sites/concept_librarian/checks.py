@@ -46,15 +46,17 @@ class MultiConceptIssue(ConceptStoreIssue):
 
 
 def format_concept_link(concept: Concept | EmptyConcept) -> str:
-    """Format a concept as an HTML link"""
-    style = "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4"
-    display_text = (
-        concept.wikibase_id if isinstance(concept, EmptyConcept) else str(concept)
-    )
-    wikibase_url = concept.wikibase_url if isinstance(concept, Concept) else ""
-    return (
-        f"<a href='{wikibase_url}' target='_blank' class='{style}'>{display_text}</a>"
-    )
+    """
+    Format a concept as an HTML link
+
+    If the concept is an EmptyConcept, it will be formatted as a plain string.
+    """
+    if isinstance(concept, EmptyConcept):
+        return concept.wikibase_id
+    else:
+        style = "text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4"
+        display_text = str(concept)
+        return f"<a href='{concept.wikibase_url}' target='_blank' class='{style}'>{display_text}</a>"
 
 
 def validate_related_relationship_symmetry(
