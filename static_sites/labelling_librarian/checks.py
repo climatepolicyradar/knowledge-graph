@@ -20,7 +20,7 @@ def dataset_to_labelled_passages_with_cache(
     if dataset_name in DATASET_CACHE:
         return DATASET_CACHE[dataset_name]
 
-    labelled_passages = dataset_to_labelled_passages(dataset, unescape_html=False)
+    labelled_passages = dataset_to_labelled_passages(dataset)
     merged_passages = create_gold_standard_labelled_passages(labelled_passages)
 
     DATASET_CACHE[dataset_name] = merged_passages
