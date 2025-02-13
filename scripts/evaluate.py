@@ -50,9 +50,20 @@ def load_concept(wikibase_id: WikibaseID) -> Concept:
 
 def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
     """Load a classifier from local storage by its Wikibase ID."""
+    classifier_path = classifier_dir / wikibase_id
+    if not classifier_path.exists() or not list(classifier_path.glob("*.pickle")):
+        raise typer.BadParameter(
+            f"Classifier for {wikibase_id} not found. \n"
+            "If you haven't already, you should run:\n"
+            f"  just train {wikibase_id}\n"
+        )
+
     try:
-        return Classifier.load(classifier_dir / wikibase_id)
-    except FileNotFoundError as e:
+        most_recent_classifier_path = max(
+            classifier_path.glob("*.pickle"), key=os.path.getctime
+        )
+        return Classifier.load(most_recent_classifier_path)
+    except (FileNotFoundError, ValueError) as e:
         raise typer.BadParameter(
             f"Classifier for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
