@@ -56,6 +56,16 @@ def get_all_subconcepts(
     visited: set,
     wikibase_id_to_concept: dict[WikibaseID, Concept],
 ) -> set[WikibaseID]:
+    """
+    Recursively retrieve all subconcept IDs for a given concept
+
+    :param WikibaseID concept_id: The ID of the concept to get the subconcepts of
+    :param set visited: A set of concept IDs that have already been visited (the
+        function is recursive, so we use this to avoid infinite loops)
+    :param dict[WikibaseID, Concept] wikibase_id_to_concept: A dictionary of concept
+        IDs to concepts
+    :return set[WikibaseID]: A set of all subconcept IDs, including nested subconcepts
+    """
     if concept_id in visited:
         return set()
 
