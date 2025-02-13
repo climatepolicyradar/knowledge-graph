@@ -127,7 +127,7 @@ def main():
 
     problematic_concepts = get_affected_concept_ids(issues)
     console.log(
-        f"❗ Found {len(issues)} issues in {len(problematic_concepts)} concepts"
+        f"❗ Found {len(issues)} issues in {len(problematic_concepts)} problematic concepts"
     )
 
     # Delete and recreate the output directory
