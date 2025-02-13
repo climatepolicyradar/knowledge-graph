@@ -177,3 +177,5 @@ scratch/
 
 
 *.DS_Store
+tests/local_wikibase/config/*
+!tests/local_wikibase/config/.gitkeep
