@@ -24,14 +24,19 @@ rg.init(
 
 # we're interested in evaluating any/all of the concepts for which we have labelled data
 # in argilla. datasets are named according to the corresponding concept's wikibase id.
-datasets = [dataset for dataset in rg.list_datasets(workspace="knowledge-graph")]
-wikibase_ids = [dataset.name for dataset in datasets]
+with console.status("Listing datasets in Argilla"):
+    datasets = [dataset for dataset in rg.list_datasets(workspace="knowledge-graph")]
+    wikibase_ids = [dataset.name for dataset in datasets]
 
 # get the concepts from wikibase
 wikibase = WikibaseSession()
-with console.status("🔍 Getting concepts from Wikibase..."):
-    concepts = wikibase.get_concepts(wikibase_ids=wikibase_ids)
-wikibase_id_to_concept = {concept.wikibase_id: concept for concept in concepts}
+wikibase_id_to_concept = {}
+for wikibase_id in track(
+    wikibase_ids, description="Getting concepts from Wikibase", transient=True
+):
+    wikibase_id_to_concept[wikibase_id] = wikibase.get_concept(
+        wikibase_id=wikibase_id, include_labels_from_subconcepts=True
+    )
 
 # attach labelled passages to concepts
 for dataset in track(
@@ -41,14 +46,9 @@ for dataset in track(
     wikibase_id_to_concept[wikibase_id].labelled_passages = [
         LabelledPassage.from_argilla_record(record) for record in dataset.records
     ]
+    wikibase_id_to_concept[wikibase_id].save(concept_dir / f"{wikibase_id}.json")
 concepts = list(wikibase_id_to_concept.values())
 console.print(f"🔍 Got {len(concepts)} concepts from Wikibase")
-
-# persist the concepts to disk
-for concept in concepts:
-    concept.save(concept_dir / f"{concept.wikibase_id}.json")
-console.print("💾 Persisted concepts to disk")
-
 
 metrics = []
 for concept in concepts:
@@ -57,7 +57,9 @@ for concept in concepts:
     console.log(f'📚 Loaded concept "{concept}" from {concept_dir}')
 
     console.log("🥇 Creating a list of gold-standard labelled passages")
-    gold_standard_labelled_passages = create_gold_standard_labelled_passages(concept)
+    gold_standard_labelled_passages = create_gold_standard_labelled_passages(
+        concept.labelled_passages
+    )
     n_annotations = sum([len(entry.spans) for entry in gold_standard_labelled_passages])
     console.log(
         f"🚚 Loaded {len(gold_standard_labelled_passages)} labelled passages "
@@ -92,7 +94,8 @@ for concept in concepts:
 
     metrics.append(
         {
-            "concept": concept.wikibase_id,
+            "wikibase_id": concept.wikibase_id,
+            "preferred_label": concept.preferred_label,
             "classifier": classifier.name,
             "precision": confusion_matrix.precision(),
             "recall": confusion_matrix.recall(),
@@ -103,6 +106,8 @@ for concept in concepts:
 
 # format all of the metrics as a table
 df = pd.DataFrame(metrics)
+df.to_csv(metrics_dir / "metrics.csv", index=False)
+
 table = Table(box=box.SIMPLE, show_header=True)
 for column in df.columns:
     table.add_column(column)
@@ -111,6 +116,5 @@ for _, row in df.iterrows():
         f"{value:.2f}" if isinstance(value, float) else str(value) for value in row
     ]
     table.add_row(*formatted_row)
-
 
 console.print(table)
