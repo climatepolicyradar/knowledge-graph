@@ -18,6 +18,7 @@ from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
 )
+from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
     run_partial_updates_of_concepts_for_document_passages,
@@ -134,5 +135,15 @@ create_deployment(
         AwsEnv.staging: "0 15 2 * *",
         AwsEnv.sandbox: "0 15 1 * *",
         # AwsEnv.labs: "0 15 3 * *",
+    },
+)
+
+# Deploy static sites
+
+create_deployment(
+    flow=deploy_static_sites,
+    description="Deploy our static sites to S3",
+    env_schedules={
+        AwsEnv.labs: "0 0 * * *",  # Every day at midnight
     },
 )
