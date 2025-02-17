@@ -19,8 +19,8 @@ import pandas as pd
 import typer
 from typing_extensions import Annotated
 
-from scripts.config import classifier_dir, concept_dir, metrics_dir
-from src.classifier import Classifier
+from scripts.config import concept_dir, metrics_dir
+from scripts.evaluate import load_classifier_local
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 
@@ -101,29 +101,64 @@ def main(
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
         performance_data_path = metrics_dir / f"{wikibase_id}.json"
         df = pd.read_json(performance_data_path)
-        passage_level_precision = df.loc[
-            (df["Group"] == "all") & (df["Agreement at"] == "Passage level"),
-            "Precision",
-        ].values[0]
-        span_level_precision = df.loc[
-            (df["Group"] == "all") & (df["Agreement at"] == "Span level (0)"),
-            "Precision",
-        ].values[0]
 
-        span_level_precision_std = df.loc[
-            (df["Agreement at"] == "Span level (0)"), "Precision"
-        ].values.std()
+        # Get passage-level metrics for all data
+        passage_metrics = df.loc[
+            (df["Group"] == "all") & (df["Agreement at"] == "Passage level")
+        ].iloc[0]
+
+        # Calculate mean F1 across groups with enough passages
+        groups_with_passages = [
+            group
+            for group in df["Group"].unique()
+            if group != "all"
+            and len(
+                [
+                    p
+                    for p in concept.labelled_passages
+                    if any(
+                        group.startswith(k) and str(v) in group
+                        for k, v in p.metadata.items()
+                    )
+                ]
+            )
+            >= 5
+        ]
+
+        if groups_with_passages:
+            f1_scores = df.loc[
+                (df["Agreement at"] == "Passage level")
+                & (df["Group"].isin(groups_with_passages)),
+                "F1 score",
+            ].values
+
+            f1_mean = f1_scores.mean()
+            f1_std = f1_scores.std()
+
+            # Only flag if there are groups performing significantly worse than the mean
+            # AND they have enough passages
+            has_poor_performing_groups = any(
+                f1 < (f1_mean - f1_std)
+                for group, f1 in zip(
+                    df.loc[df["Agreement at"] == "Passage level", "Group"],
+                    df.loc[df["Agreement at"] == "Passage level", "F1 score"],
+                )
+                if group in groups_with_passages
+            )
+        else:
+            # If no groups have enough passages, we can't make a fair assessment
+            has_poor_performing_groups = False
 
         data.append(
             {
                 "Wikibase ID": wikibase_id,
                 "Preferred label": concept.preferred_label,
-                "Passage-level precision": f"{passage_level_precision:.2f}",
-                "Span-level precision": f"{span_level_precision:.2f}",
-                "Span-level precision standard deviation": f"{span_level_precision_std:.2f}",
-                "Equity strata consistency": "✅"
-                if span_level_precision_std < 0.1
-                else "❌",
+                "Passage-level precision": f"{passage_metrics['Precision']:.2f}",
+                "Passage-level recall": f"{passage_metrics['Recall']:.2f}",
+                "Passage-level F1": f"{passage_metrics['F1 score']:.2f}",
+                "Equity strata consistency": "❌"
+                if has_poor_performing_groups
+                else "✅",
             }
         )
 
@@ -139,38 +174,56 @@ def main(
     # For each inconsistent concept, find and display outlier groups
     for wikibase_id in inconsistent_concepts:
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
-        classifier = Classifier.load(classifier_dir / wikibase_id)
+        classifier = load_classifier_local(wikibase_id)
         performance_data_path = metrics_dir / f"{wikibase_id}.json"
         df = pd.read_json(performance_data_path)
-        df = df[df["Agreement at"] == "Span level (0)"]
+        df = df[df["Agreement at"] == "Passage level"]
 
-        span_level_precision_values = df["Precision"].values
+        # Get passage-level metrics for all data
+        passage_metrics = df.loc[df["Group"] == "all"].iloc[0]
 
-        # Find the groups which are outliers
+        # Calculate mean F1 across groups with enough passages
+        groups_with_passages = [
+            group
+            for group in df["Group"].unique()
+            if group != "all"
+            and len(
+                [
+                    p
+                    for p in concept.labelled_passages
+                    if any(
+                        group.startswith(k) and str(v) in group
+                        for k, v in p.metadata.items()
+                    )
+                ]
+            )
+            >= 5
+        ]
+
+        # Calculate mean and std using all groups with enough passages
+        f1_scores = df.loc[
+            (df["Agreement at"] == "Passage level")
+            & (df["Group"].isin(groups_with_passages)),
+            "F1 score",
+        ].values
+        f1_mean = f1_scores.mean()
+        f1_std = f1_scores.std()
+
+        # Find only the groups which are performing significantly worse than the mean
         outlier_groups = df.loc[
-            (
-                df["Precision"]
-                > (
-                    span_level_precision_values.mean()
-                    + span_level_precision_values.std()
-                )
-            )
-            | (
-                df["Precision"]
-                < (
-                    span_level_precision_values.mean()
-                    - span_level_precision_values.std()
-                )
-            )
+            (df["F1 score"] < (f1_mean - f1_std))
+            & (df["Group"].isin(groups_with_passages))
         ]
 
         html_content += f"""
             <div class="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
-                    Outlier groups for {concept}
+                    Poorly performing groups for {concept}
                 </h2>
                 <p class="text-slate-600 dark:text-slate-300 mb-4">
-                    Overall performance: {df.loc[df["Group"] == "all", "Precision"].values[0]:.2f}
+                    Overall performance: Precision={passage_metrics["Precision"]:.2f}, 
+                    Recall={passage_metrics["Recall"]:.2f}, 
+                    F1={passage_metrics["F1 score"]:.2f}
                 </p>
         """
 
@@ -195,7 +248,9 @@ def main(
                     "Group": group,
                     "Value": value,
                     "Number of passages": str(n_passages),
-                    "Performance": f"{row['Precision']:.2f}",
+                    "Precision": f"{row['Precision']:.2f}",
+                    "Recall": f"{row['Recall']:.2f}",
+                    "F1": f"{row['F1 score']:.2f}",
                 }
             )
 

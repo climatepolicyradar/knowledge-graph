@@ -22,8 +22,18 @@ class ConfusionMatrix:
             + self.true_negatives
         )
 
+    def is_all_true_negatives(self) -> bool:
+        """Check if there are only true negatives (no positive cases or errors)"""
+        return (
+            self.true_positives == 0
+            and self.false_positives == 0
+            and self.false_negatives == 0
+        )
+
     def precision(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
+        if self.is_all_true_negatives():
+            return 1.0
         try:
             return self.true_positives / (self.true_positives + self.false_positives)
         except ZeroDivisionError:
@@ -31,6 +41,8 @@ class ConfusionMatrix:
 
     def recall(self) -> float:
         """https://en.wikipedia.org/wiki/Precision_and_recall"""
+        if self.is_all_true_negatives():
+            return 1.0
         try:
             return self.true_positives / (self.true_positives + self.false_negatives)
         except ZeroDivisionError:
@@ -38,6 +50,9 @@ class ConfusionMatrix:
 
     def accuracy(self) -> float:
         """https://en.wikipedia.org/wiki/Accuracy_and_precision"""
+        # Note: We don't need to check is_all_true_negatives() here because accuracy
+        # naturally handles that case correctly - if all samples are true negatives,
+        # the calculation will still give us 1.0
         try:
             return (self.true_positives + self.true_negatives) / (
                 self.true_positives
@@ -50,6 +65,8 @@ class ConfusionMatrix:
 
     def f1_score(self) -> float:
         """https://en.wikipedia.org/wiki/F-score"""
+        if self.is_all_true_negatives():
+            return 1.0
         try:
             return (2 * self.true_positives) / (
                 2 * self.true_positives + self.false_positives + self.false_negatives
@@ -77,94 +94,118 @@ class ConfusionMatrix:
         except ZeroDivisionError:
             return 0
 
+    @classmethod
+    def at_span_level(
+        cls,
+        ground_truth_passages: list[LabelledPassage],
+        predicted_passages: list[LabelledPassage],
+        threshold: float,
+    ) -> "ConfusionMatrix":
+        """
+        Create a ConfusionMatrix from span-level metrics for a given set of human and model labelled passages
 
-def count_span_level_metrics(
-    ground_truth_passages: list[LabelledPassage],
-    predicted_passages: list[LabelledPassage],
-    threshold: float,
-) -> ConfusionMatrix:
-    """
-    Count the span-level metrics for a given set of human and model labelled passages
+        :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
+        :param list[LabelledPassage] predicted_passages: A set of predicted spans
+        :param float threshold: The Jaccard similarity threshold to consider overlapping
+        spans as a match
+        :return ConfusionMatrix: The resulting confusion matrix for calculating span-level
+        metrics
+        """
+        cm = cls()
 
-    :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
-    :param list[LabelledPassage] predicted_passages: A set of predicted spans
-    :param float threshold: The Jaccard similarity threshold to consider overlapping
-    spans as a match
-    :return ConfusionMatrix: The resulting confusion matrix for calculating span-level
-    metrics
-    """
-    cm = ConfusionMatrix()
+        for ground_truth_passage, predicted_passage in zip(
+            ground_truth_passages, predicted_passages
+        ):
+            # If both passages have no spans, count as true negative
+            if not ground_truth_passage.spans and not predicted_passage.spans:
+                cm.true_negatives += 1
+                continue
 
-    for ground_truth_passage, predicted_passage in zip(
-        ground_truth_passages, predicted_passages
-    ):
-        # If both passages have no spans, count as true negative
-        if not ground_truth_passage.spans and not predicted_passage.spans:
-            cm.true_negatives += 1
-            continue
-
-        for ground_truth_span in ground_truth_passage.spans:
-            found = False
-            for predicted_span in predicted_passage.spans:
-                if jaccard_similarity(ground_truth_span, predicted_span) > threshold:
-                    found = True
-                    cm.true_positives += 1
-                    break
-            if not found:
-                cm.false_negatives += 1
-                break
-
-        for predicted_span in predicted_passage.spans:
-            found = False
             for ground_truth_span in ground_truth_passage.spans:
-                if jaccard_similarity(predicted_span, ground_truth_span) > threshold:
-                    found = True
+                found = False
+                for predicted_span in predicted_passage.spans:
+                    if (
+                        jaccard_similarity(ground_truth_span, predicted_span)
+                        > threshold
+                    ):
+                        found = True
+                        cm.true_positives += 1
+                        break
+                if not found:
+                    cm.false_negatives += 1
                     break
-            if not found:
+
+            for predicted_span in predicted_passage.spans:
+                found = False
+                for ground_truth_span in ground_truth_passage.spans:
+                    if (
+                        jaccard_similarity(predicted_span, ground_truth_span)
+                        > threshold
+                    ):
+                        found = True
+                        break
+                if not found:
+                    cm.false_positives += 1
+                    break
+
+        return cm
+
+    @classmethod
+    def at_passage_level(
+        cls,
+        ground_truth_passages: list[LabelledPassage],
+        predicted_passages: list[LabelledPassage],
+    ) -> "ConfusionMatrix":
+        """
+        Create a ConfusionMatrix from passage-level metrics for a given set of human and model labelled passages.
+
+        A passage is considered a true negative if both ground truth and prediction have
+        exactly matching text and no spans.
+
+        :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
+        :param list[LabelledPassage] predicted_passages: A set of predicted spans
+        :return ConfusionMatrix: The resulting confusion matrix for calculating
+        passage-level metrics
+        """
+        cm = cls()
+
+        # First check if this is an all-negative case
+        has_any_ground_truth_spans = any(
+            len(p.spans) > 0 for p in ground_truth_passages
+        )
+        has_any_predicted_spans = any(len(p.spans) > 0 for p in predicted_passages)
+
+        # If neither has any spans, this is a perfect match - all true negatives
+        if not has_any_ground_truth_spans and not has_any_predicted_spans:
+            cm.true_negatives = len(ground_truth_passages)
+            return cm
+
+        # If ground truth has no spans but predictions do, all false positives
+        if not has_any_ground_truth_spans and has_any_predicted_spans:
+            cm.false_positives = sum(1 for p in predicted_passages if len(p.spans) > 0)
+            cm.true_negatives = len(predicted_passages) - cm.false_positives
+            return cm
+
+        # If ground truth has spans but predictions don't, all false negatives
+        if has_any_ground_truth_spans and not has_any_predicted_spans:
+            cm.false_negatives = sum(
+                1 for p in ground_truth_passages if len(p.spans) > 0
+            )
+            cm.true_negatives = len(ground_truth_passages) - cm.false_negatives
+            return cm
+
+        # Otherwise, do the normal passage-by-passage comparison
+        for gt_passage, pred_passage in zip(ground_truth_passages, predicted_passages):
+            gt_has_spans = len(gt_passage.spans) > 0
+            pred_has_spans = len(pred_passage.spans) > 0
+
+            if gt_has_spans and pred_has_spans:
+                cm.true_positives += 1
+            elif not gt_has_spans and not pred_has_spans:
+                cm.true_negatives += 1
+            elif gt_has_spans and not pred_has_spans:
+                cm.false_negatives += 1
+            else:  # not gt_has_spans and pred_has_spans
                 cm.false_positives += 1
-                break
 
-    return cm
-
-
-def count_passage_level_metrics(
-    ground_truth_passages: list[LabelledPassage],
-    predicted_passages: list[LabelledPassage],
-) -> ConfusionMatrix:
-    """
-    Count the passage-level metrics for a given set of human and model labelled passages
-
-    :param list[LabelledPassage] ground_truth_passages: A set of gold-standard spans
-    :param list[LabelledPassage] predicted_passages: A set of predicted spans
-    :return ConfusionMatrix: The resulting confusion matrix for calculating
-    passage-level metrics
-    """
-    cm = ConfusionMatrix()
-
-    ground_truth_positive_passages = set(
-        passage.id for passage in ground_truth_passages if len(passage.spans) > 0
-    )
-    predicted_positive_passages = set(
-        passage.id for passage in predicted_passages if len(passage.spans) > 0
-    )
-    ground_truth_negative_passages = set(
-        passage.id for passage in ground_truth_passages if len(passage.spans) == 0
-    )
-    predicted_negative_passages = set(
-        passage.id for passage in predicted_passages if len(passage.spans) == 0
-    )
-
-    cm.true_positives = len(
-        ground_truth_positive_passages & predicted_positive_passages
-    )
-    cm.false_positives = len(
-        predicted_positive_passages - ground_truth_positive_passages
-    )
-    cm.true_negatives = len(
-        ground_truth_negative_passages & predicted_negative_passages
-    )
-    cm.false_negatives = len(
-        ground_truth_positive_passages - predicted_positive_passages
-    )
-
-    return cm
+        return cm

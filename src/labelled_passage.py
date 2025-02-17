@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from argilla import FeedbackRecord, User  # type: ignore
 from src.identifiers import generate_identifier
-from src.span import Span, merge_overlapping_spans
+from src.span import Span, group_overlapping_spans, merge_overlapping_spans
 
 
 class LabelledPassage(BaseModel):
@@ -127,3 +127,32 @@ class LabelledPassage(BaseModel):
         return list(
             set([labeller for span in self.spans for labeller in span.labellers])
         )
+
+
+def create_gold_standard_labelled_passages(
+    labelled_passages: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """
+    Create gold standard set of labelled passages
+
+    A gold standard set of labelled passages is created by combining the overlapping
+    spans of the input labelled passages from multiple annotators.
+    """
+    gold_standard_labelled_passages: list[LabelledPassage] = []
+    for labelled_passage in labelled_passages:
+        merged_spans = []
+        for group in group_overlapping_spans(
+            spans=labelled_passage.spans, jaccard_threshold=0
+        ):
+            merged_span = Span.union(spans=group)
+            merged_span.labellers = ["gold standard"]
+            merged_spans.append(merged_span)
+
+        gold_standard_labelled_passages.append(
+            labelled_passage.model_copy(
+                update={"spans": merged_spans},
+                deep=True,
+            )
+        )
+
+    return gold_standard_labelled_passages
