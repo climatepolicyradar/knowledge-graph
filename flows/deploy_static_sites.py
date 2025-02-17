@@ -3,10 +3,12 @@ Flow to deploy our little static sites.
 
 See the /static_sites directory for the source code for each site.
 
-This flow uses our high-level just commands to generate the static sites and sync
-them to the corresponding s3 buckets from which they're served.
+This flow runs the static site generator module directly, and then uses the AWS CLI
+to sync the generated files to the corresponding S3 bucket from which the site is
+served.
 """
 
+import importlib
 import os
 import subprocess
 
@@ -28,8 +30,9 @@ def setup_environment():
 
 @task
 def generate_static_site(app_name: str):
-    """Generate the static site using the existing command."""
-    subprocess.run(["just", "generate-static-site", app_name], check=True)
+    """Generate the static site by running the generator module directly."""
+    module = importlib.import_module(f"static_sites.{app_name}.__main__")
+    module.main()
 
 
 @task
