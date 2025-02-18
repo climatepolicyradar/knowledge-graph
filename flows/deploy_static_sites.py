@@ -19,13 +19,17 @@ from prefect import flow, task
 @task
 def setup_environment():
     """Set up required environment variables from SSM parameters."""
-    wikibase_password = get_aws_ssm_param("/Wikibase/Cloud/ServiceAccount/Password")
-    wikibase_username = get_aws_ssm_param("/Wikibase/Cloud/ServiceAccount/Username")
-    wikibase_url = get_aws_ssm_param("/Wikibase/Cloud/URL")
 
-    os.environ["WIKIBASE_PASSWORD"] = wikibase_password
-    os.environ["WIKIBASE_USERNAME"] = wikibase_username
-    os.environ["WIKIBASE_URL"] = wikibase_url
+    os.environ["ARGILLA_API_URL"] = get_aws_ssm_param("/Argilla/APIURL")
+    os.environ["ARGILLA_API_KEY"] = get_aws_ssm_param("/Argilla/APIKey")
+
+    os.environ["WIKIBASE_PASSWORD"] = get_aws_ssm_param(
+        "/Wikibase/Cloud/ServiceAccount/Password"
+    )
+    os.environ["WIKIBASE_USERNAME"] = get_aws_ssm_param(
+        "/Wikibase/Cloud/ServiceAccount/Username"
+    )
+    os.environ["WIKIBASE_URL"] = get_aws_ssm_param("/Wikibase/Cloud/URL")
 
 
 @task
@@ -59,7 +63,7 @@ def deploy_static_sites():
 
     names = {
         "concept_librarian": "cpr-knowledge-graph-concept-librarian",
-        # add more here as we create more static sites, eg the labelling librarian
+        "labelling_librarian": "cpr-knowledge-graph-labelling-librarian",
     }
     for app_name, bucket_name in names.items():
         generate_static_site(app_name)
