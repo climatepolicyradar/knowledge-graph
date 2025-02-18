@@ -1,17 +1,33 @@
+from functools import lru_cache
 from pathlib import Path
 from typing import Counter
 
+from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from src.identifiers import WikibaseID
+from src.wikibase import WikibaseSession
 from static_sites.labelling_librarian.checks import (
     DatasetLevelIssue,
     LabellingIssue,
     PassageLevelIssue,
 )
 
+load_dotenv()
+
+session = WikibaseSession()
+
+
 # Get the directory where this file lives and load the templates
 current_dir = Path(__file__).parent.resolve()
 env = Environment(loader=FileSystemLoader(current_dir / "templates"))
+
+
+@lru_cache(maxsize=1024)
+def get_dataset_to_preferred_label_map(dataset_name: str) -> str:
+    """Retrieves the name of the dataset to present in the UI"""
+    concept = session.get_concept(WikibaseID(dataset_name))
+    return concept.preferred_label
 
 
 def create_index_page(issues: list[LabellingIssue]) -> str:
@@ -41,6 +57,7 @@ def create_index_page(issues: list[LabellingIssue]) -> str:
                     issue.type for issue in issues if issue.dataset_name == dataset_name
                 )
             ),
+            "preferred_label": get_dataset_to_preferred_label_map(dataset_name),
         }
         for dataset_name in {issues.dataset_name for issues in issues}
     }
@@ -78,6 +95,7 @@ def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:
 
     return env.get_template("dataset.html").render(
         dataset_name=dataset_name,
+        preferred_label=get_dataset_to_preferred_label_map(dataset_name),
         dataset_issues=dataset_issues,
         passage_issues=passage_issues,
         passage_issue_counts=passage_issue_counts,
