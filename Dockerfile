@@ -14,4 +14,5 @@ RUN poetry install --no-root --no-interaction --with transformers --without llm,
 COPY ./flows ./flows/
 COPY ./src ./src/
 COPY ./scripts ./scripts
+COPY ./static_sites ./static_sites/
 RUN poetry install --no-interaction --only-root

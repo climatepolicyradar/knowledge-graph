@@ -9,6 +9,7 @@ packages = [
   { include = "src", from = "." },
   { include = "tests", from = "." },
   { include = "scripts", from = "." },
+  { include = "static_sites", from = "." },
 ]
 
 [tool.poetry.dependencies]
