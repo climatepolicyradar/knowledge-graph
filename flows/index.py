@@ -897,6 +897,7 @@ async def index_by_s3(
         ) in enumerate(documents_batches, start=1):
             logger.info(f"processing batch documents #{documents_batch_num}")
 
+            # TODO: Ensure here we are passing in more than one document
             indexing_tasks = [
                 run_partial_updates_of_concepts_for_document_passages_as(
                     document_importer=document_importer,
@@ -938,27 +939,27 @@ def run_partial_updates_of_concepts_for_document_passages_as(
 ) -> Awaitable[Counter[ConceptModel]]:
     """Run partial updates for document passages, either as a subflow or directly."""
     if as_subflow:
-        flow_name = function_to_flow_name(
-            run_partial_updates_of_concepts_for_document_passages
-        )
-        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-
-        return run_deployment(
-            name=f"{flow_name}/{deployment_name}",
-            parameters={
-                "document_importer": document_importer,
-                "cache_bucket": cache_bucket,
-                "concepts_counts_prefix": concepts_counts_prefix,
-            },
-            timeout=1200,
-            as_subflow=True,
-        )
-    else:
         return run_partial_updates_of_concepts_for_document_passages(  # pyright: ignore[reportCallIssue]
             document_importer=document_importer,
             cache_bucket=cache_bucket,
             concepts_counts_prefix=concepts_counts_prefix,
         )
+
+    flow_name = function_to_flow_name(
+        run_partial_updates_of_concepts_for_document_passages
+    )
+    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+
+    return run_deployment(
+        name=f"{flow_name}/{deployment_name}",
+        parameters={
+            "document_importer": document_importer,
+            "cache_bucket": cache_bucket,
+            "concepts_counts_prefix": concepts_counts_prefix,
+        },
+        timeout=1200,
+        as_subflow=True,
+    )
 
 
 def iterate_batch(
