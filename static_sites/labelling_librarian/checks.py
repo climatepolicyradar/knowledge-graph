@@ -13,7 +13,7 @@ DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
 
 
 def dataset_to_labelled_passages_with_cache(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[LabelledPassage]:
     """Turns the dataset into LabelledPassages using a cache"""
     dataset_name = dataset.name  # type: ignore
@@ -47,7 +47,7 @@ class DatasetLevelIssue(LabellingIssue):
     pass
 
 
-def all_dataset_level_checks(dataset: rg.FeedbackDataset) -> list[DatasetLevelIssue]:
+def all_dataset_level_checks(dataset: rg.Dataset) -> list[DatasetLevelIssue]:
     """Orchestrate all dataset checks"""
     issues = check_whether_dataset_is_empty(dataset)
 
@@ -61,7 +61,7 @@ def all_dataset_level_checks(dataset: rg.FeedbackDataset) -> list[DatasetLevelIs
 
 
 def check_if_dataset_contains_few_positives(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[DatasetLevelIssue]:
     """Checks whether the dataset has too few positive responses"""
     labelled_passages = dataset_to_labelled_passages_with_cache(dataset)
@@ -82,7 +82,7 @@ def check_if_dataset_contains_few_positives(
     return []
 
 
-def dataset_contains_submitted_records(dataset: rg.FeedbackDataset) -> bool:
+def dataset_contains_submitted_records(dataset: rg.Dataset) -> bool:
     for record in dataset.records:
         for response in record.responses:
             if response.status == ResponseStatus.submitted:
@@ -91,7 +91,7 @@ def dataset_contains_submitted_records(dataset: rg.FeedbackDataset) -> bool:
 
 
 def check_whether_dataset_is_empty(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[DatasetLevelIssue]:
     if dataset_contains_submitted_records(dataset):
         return []
@@ -106,7 +106,7 @@ def check_whether_dataset_is_empty(
 
 
 def check_whether_dataset_has_a_high_discard_ratio(
-    dataset: rg.FeedbackDataset, threshold: float = 0.05
+    dataset: rg.Dataset, threshold: float = 0.05
 ) -> list[DatasetLevelIssue]:
     """Returns the proportion of discarded items in the dataset"""
     dataset_name = dataset.name  # type: ignore
@@ -136,7 +136,7 @@ def check_whether_dataset_has_a_high_discard_ratio(
 
 
 def _check_span_wrapper(
-    dataset: rg.FeedbackDataset, span_issue: Callable[[Span], bool], issue_type: str
+    dataset: rg.Dataset, span_issue: Callable[[Span], bool], issue_type: str
 ) -> list[PassageLevelIssue]:
     """Wrapper function for any checks that are run on the passage level, and create issues for each span that fails the criteria"""
     issues: list[PassageLevelIssue] = []
@@ -168,7 +168,7 @@ def _check_span_wrapper(
 
 
 def check_whether_span_border_is_in_word(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[PassageLevelIssue]:
     """Checks whether the span's start or end is in the middle of a word"""
     return _check_span_wrapper(dataset, _span_border_in_word, "span_border_in_word")
@@ -188,7 +188,7 @@ def _span_border_in_word(span: Span) -> bool:
 
 
 def check_whether_spans_have_high_non_alphabetical_ratio(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[PassageLevelIssue]:
     """Finds and flags spans that have a high non-alphabetical ratio"""
     return _check_span_wrapper(
@@ -208,7 +208,7 @@ def _span_has_high_non_alphabetical_ratio(span: Span) -> bool:
 
 
 def check_whether_spans_are_long(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[PassageLevelIssue]:
     """Finds and flags spans that are too long"""
     return _check_span_wrapper(dataset, _span_is_long, "long_span")
