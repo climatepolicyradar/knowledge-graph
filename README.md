@@ -16,11 +16,11 @@ You can see the full list of `just` commands by running:
 just --list
 ```
 
-## Basics
+## The basics
 
 ### Concepts
 
-The knowledge graph is built from a collection of concepts. Concepts can have a preferred label, description, and alternative labels.
+Concepts are the core building blocks of our knowledge graph. They represent key ideas, terms, or topics which are important to understanding the climate policy domain. Each concept has a preferred label, optional alternative labels (synonyms, acronyms, related terms), a description, and can be linked to other concepts through hierarchical or associative relationships.
 
 ```python
 from src.concept import Concept
@@ -32,13 +32,13 @@ extreme_weather_concept = Concept(
 )
 ```
 
-Most of CPR's concepts are defined in our [concept store](https://climatepolicyradar.wikibase.cloud), but you can always define your own in code.
+Most of CPR's concepts are defined in our [concept store](https://climatepolicyradar.wikibase.cloud/wiki/Item:Q374) (and are thus associated with a `wikibase_id`), but you can always define your own concepts in code.
 
-### Classifiers
+### Classifiers and spans
 
 Classifiers are used to identify concepts in text. We use a variety of classifier architectures throughout our knowledge graph, from basic keyword matching to more sophisticated BERT-sized models, to optimised calls to third-party LLMs.
 
-Classifiers are single-class, ie there is a 1:1 mapping between a `Concept` and a `Classifier`. Calling the `predict` method on a classifier with some input text will return a list of `Spans` in which the concept is mentioned.
+Each classifier is single-class, meaning there's a 1:1 mapping between a `Concept` and a `Classifier`. When you call the `predict` method on a classifier with some input text, it returns a list of `Span` objects which indicate where the concept is mentioned.
 
 ```python
 from src.classifier import KeywordClassifier
@@ -64,7 +64,7 @@ predicted_spans = extreme_weather_classifier.predict("This is a passage of text 
 
 ### Labelled passages
 
-Labelled passages store a passage of text, together with the spans of text that match a particular concept. They can contain multiple spans for multiple concepts.
+Our `LabelledPassage` objects combine a passage of text with the spans that mention a particular concept. They can contain multiple spans, referring to multiple concepts, each labelled through a different method.
 
 ```python
 from src.labelled_passage import LabelledPassage
@@ -87,10 +87,10 @@ labelled_passage = LabelledPassage(
 
 Labelled passages are a versatile data structure that we use in many ways. They store the predictions from our classifiers, but passages labelled by human experts can also be used to train new models, or be used as a source of truth for comparing and evaluating the performance of candidate models.
 
-## How does that all of that add up to a knowledge graph?
+## So what is the knowledge graph?
 
 We've built our knowledge graph by running a set of classifiers over our giant corpus of climate-relevant text.
 
-In the short-term, identifying where each concept is mentioned in our documents makes it easier for interested users to jump straight to the relevant sections of our documents.
+In the short-term, identifying where each concept is mentioned in our documents makes it easier for interested users of CPR's tools to jump straight to the relevant sections of our documents.
 
 In the longer term, we expect the graph to be a useful artefact in its own right. By analysing the structured web of relationships between climate policy concepts and the documents that mention them, we should be able to identify emerging topics and high-leverage areas for policy intervention.
