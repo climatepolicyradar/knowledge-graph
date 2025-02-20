@@ -12,7 +12,7 @@ from rich.console import Console
 import argilla as rg
 from argilla import ResponseSchema, SpanQuestion, TextField, ValueSchema
 from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
-from src.argilla import concept_to_dataset_name
+from src.argilla_legacy import concept_to_dataset_name
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span

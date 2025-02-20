@@ -4,7 +4,10 @@ from typing import Optional
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.argilla import filter_labelled_passages_by_timestamp, is_between_timestamps
+from src.argilla_legacy import (
+    filter_labelled_passages_by_timestamp,
+    is_between_timestamps,
+)
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 from tests.common_strategies import (

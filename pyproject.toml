@@ -36,6 +36,7 @@ boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
 prefect-slack = "0.2.1"
 async-typer = "^0.1.8"
 argilla-v1 = "^1.29.1"
+schedule = "^1.2.2"
 
 [tool.poetry.group.transformers]
 optional = true

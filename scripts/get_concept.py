@@ -4,7 +4,7 @@ import typer
 from rich.console import Console
 
 from scripts.config import concept_dir
-from src.argilla import get_labelled_passages_from_argilla
+from src.argilla_legacy import get_labelled_passages_from_argilla
 from src.identifiers import WikibaseID
 from src.wikibase import WikibaseSession
 

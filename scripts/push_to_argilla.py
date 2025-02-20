@@ -7,7 +7,10 @@ from tqdm.auto import tqdm  # type: ignore
 
 import argilla as rg
 from scripts.config import concept_dir, processed_data_dir
-from src.argilla import concept_to_dataset_name, labelled_passages_to_feedback_dataset
+from src.argilla_legacy import (
+    concept_to_dataset_name,
+    labelled_passages_to_feedback_dataset,
+)
 from src.concept import Concept
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage
