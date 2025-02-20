@@ -30,12 +30,12 @@ current_dir = Path(__file__).parent.resolve()
 
 @app.command()
 def main():
-    rg.init(
+    client = rg.Argilla(
         api_url=os.getenv("ARGILLA_API_URL"),
         api_key=os.getenv("ARGILLA_API_KEY"),
     )
     with console.status("Fetching datasets from argilla"):
-        datasets: list[rg.FeedbackDataset] = rg.list_datasets(
+        datasets: list[rg.Dataset] = client.datasets(
             workspace="knowledge-graph"
         )  # type: ignore
     console.log(f"Fetched {len(datasets)} datasets")
