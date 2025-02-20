@@ -86,7 +86,9 @@ def dataset_to_labelled_passages(dataset: FeedbackDataset) -> list[LabelledPassa
     :param FeedbackDataset dataset: The Argilla FeedbackDataset to convert
     :return list[LabelledPassage]: A list of LabelledPassage objects
     """
-    return [LabelledPassage.from_argilla_record(record) for record in dataset.records]
+    return [
+        LabelledPassage.from_argilla_record_legacy(record) for record in dataset.records
+    ]
 
 
 def is_between_timestamps(

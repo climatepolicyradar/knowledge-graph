@@ -4,7 +4,9 @@ import re
 
 from pydantic import BaseModel, Field, model_validator
 
-from argilla import FeedbackRecord, User  # type: ignore
+from argilla.v1 import FeedbackRecord
+from argilla.v1 import User as LegacyUser
+from argilla import Record, User, Argilla
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
 
@@ -40,7 +42,7 @@ class LabelledPassage(BaseModel):
         return self
 
     @classmethod
-    def from_argilla_record(cls, record: FeedbackRecord) -> "LabelledPassage":  # type: ignore
+    def from_argilla_record_legacy(cls, record: FeedbackRecord) -> "LabelledPassage":  # type: ignore
         """
         Create a LabelledPassage object from an Argilla record
 
@@ -48,7 +50,7 @@ class LabelledPassage(BaseModel):
         object from
         :return LabelledPassage: The created LabelledPassage object
         """
-        text = record.fields.get("text", "")
+        text: str = record.fields.get("text", "")  # type: ignore
 
         metadata = record.metadata or {}  # type: ignore
         spans = []
@@ -63,9 +65,54 @@ class LabelledPassage(BaseModel):
             )
         ]
         for response in most_recent_annotation_from_each_user:
-            user_name = User.from_id(response.user_id).username
+            user_name = LegacyUser.from_id(response.user_id).username
             try:
                 for entity in response.values["entities"].value:
+                    spans.extend(
+                        [
+                            Span(
+                                text=text,
+                                start_index=entity.start,
+                                end_index=entity.end,
+                                concept_id=entity.label,
+                                labellers=[user_name],
+                                timestamps=[response.updated_at],
+                            )
+                        ]
+                    )
+            except KeyError:
+                pass
+
+        return cls(text=text, spans=spans, metadata=metadata)
+
+    @classmethod
+    def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":  # type: ignore
+        """
+        Create a LabelledPassage object from an Argilla record
+
+        :param FeedbackRecord record: The Argilla record to create the LabelledPassage
+        object from
+        :return LabelledPassage: The created LabelledPassage object
+        """
+        text: str = record.fields.get("text", "")  # type: ignore
+
+        metadata = record.metadata or {}  # type: ignore
+        spans = []
+
+        # we've observed that users can submit multiple annotations for the same text!
+        # we should only consider the most recent annotation from each.
+        # NOTE we don't seem to have this field anymore
+        # most_recent_annotation_from_each_user = [
+        #     max(group, key=lambda record: record.updated_at)
+        #     for _, group in itertools.groupby(  # type: ignore
+        #         sorted(record.responses, key=lambda response: response.user_id),  # type: ignore
+        #         key=lambda response: response.user_id,
+        #     )
+        # ]
+        for response in record.responses:
+            user_name = client.users(response.user_id).username
+            try:
+                for entity in response["entities"][0]["value"]:
                     spans.extend(
                         [
                             Span(
