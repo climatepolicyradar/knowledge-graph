@@ -268,6 +268,38 @@ standardwebhooks = ">=1.0.0"
 tqdm = ">=4.60.0"
 
 [[package]]
+name = "argilla-v1"
+version = "1.29.1"
+description = "Open-source tool for exploring, labeling, and monitoring data for NLP projects."
+optional = false
+python-versions = "<3.13,>=3.8"
+files = [
+    {file = "argilla_v1-1.29.1-py3-none-any.whl", hash = "sha256:f27e9f4189b5a0335f84f6d28b6969941c6166b358f18b9120c483f5a75ba768"},
+    {file = "argilla_v1-1.29.1.tar.gz", hash = "sha256:b91bda814a09dec5f638f24d10ab0a51cba274b878fada3357a27629c3cd5023"},
+]
+
+[package.dependencies]
+backoff = "*"
+deprecated = ">=1.2.0,<1.3.0"
+httpx = ">=0.15,<=0.26"
+monotonic = "*"
+numpy = "<1.27.0"
+packaging = ">=20.0"
+pandas = ">=1.0.0"
+pydantic = ">=1.10.7"
+rich = "!=13.1.0"
+tqdm = ">=4.27.0"
+typer = ">=0.6.0,<0.10.0"
+wrapt = ">=1.14,<1.15"
+
+[package.extras]
+integrations = ["PyYAML (>=5.4.1,<6.1.0)", "datasets (>1.17.0,!=2.3.2)", "evaluate", "faiss-cpu", "flair (>=0.12.2)", "flyingsquid", "huggingface-hub (>=0.5.0,<0.24)", "ipynbname", "openai (>=0.27.10,<1.0.0)", "peft", "pgmpy", "plotly (>=4.1.0)", "sentence-transformers", "sentence-transformers (>=2.0.0,<3.0.0)", "seqeval", "setfit (>=1.0.0)", "snorkel (>=0.9.7)", "spacy (>=3.5.0,<3.7.0)", "spacy-huggingface-hub (>=0.0.10)", "spacy-transformers (>=1.2.5)", "span-marker", "textdescriptives (>=2.7.0,<3.0.0)", "transformers[torch] (>=4.30.0)", "trl (>=0.5.0)"]
+listeners = ["schedule (>=1.1.0,<1.2.0)"]
+server = ["argilla-server (>=1.29.0,<1.30.0)"]
+server-postgresql = ["argilla-server[postgresql] (>=1.29.0,<1.30.0)"]
+tests = ["factory-boy (>=3.2.1,<3.3.0)", "pytest", "pytest-asyncio", "pytest-cov", "pytest-env", "pytest-mock"]
+
+[[package]]
 name = "arpeggio"
 version = "2.0.2"
 description = "Packrat parser interpreter"
@@ -517,6 +549,17 @@ files = [
 
 [package.extras]
 dev = ["freezegun (>=1.0,<2.0)", "pytest (>=6.0)", "pytest-cov"]
+
+[[package]]
+name = "backoff"
+version = "2.2.1"
+description = "Function decoration for backoff and retry"
+optional = false
+python-versions = ">=3.7,<4.0"
+files = [
+    {file = "backoff-2.2.1-py3-none-any.whl", hash = "sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8"},
+    {file = "backoff-2.2.1.tar.gz", hash = "sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba"},
+]
 
 [[package]]
 name = "backports-strenum"
@@ -3363,6 +3406,17 @@ python-versions = ">=3.8"
 files = [
     {file = "mkdocs_material_extensions-1.3.1-py3-none-any.whl", hash = "sha256:adff8b62700b25cb77b53358dad940f3ef973dd6db797907c49e3c2ef3ab4e31"},
     {file = "mkdocs_material_extensions-1.3.1.tar.gz", hash = "sha256:10c9511cea88f568257f960358a467d12b970e1f7b2c0e5fb2bb48cab1928443"},
+]
+
+[[package]]
+name = "monotonic"
+version = "1.6"
+description = "An implementation of time.monotonic() for Python 2 & < 3.3"
+optional = false
+python-versions = "*"
+files = [
+    {file = "monotonic-1.6-py2.py3-none-any.whl", hash = "sha256:68687e19a14f11f26d140dd5c86f3dba4bf5df58003000ed467e0e2a69bca96c"},
+    {file = "monotonic-1.6.tar.gz", hash = "sha256:3a55207bcfed53ddd5c5bae174524062935efed17792e9de2ad0205ce9ad63f7"},
 ]
 
 [[package]]
@@ -7907,4 +7961,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "328136467a23bf3b3eea876414d05aa6fd0301d049d8a467d68ee31fab287209"
+content-hash = "ccaae889c093db3f21987891029c79aa55fe9319160635f0a722f8e40b66885c"

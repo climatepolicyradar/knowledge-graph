@@ -3,9 +3,9 @@ from datetime import datetime
 from itertools import cycle
 from typing import Generator, Optional
 
-import argilla as rg
-from argilla import SpanQuestion, TextField
-from argilla.feedback import FeedbackDataset, FeedbackRecord
+import argilla.v1 as rg_v1
+from argilla.v1 import SpanQuestion, TextField
+from argilla.v1 import FeedbackDataset, FeedbackRecord
 from src.labelled_passage import LabelledPassage
 from src.wikibase import Concept
 
@@ -28,7 +28,7 @@ def init_argilla_client(func):
                 + ", ".join(missing)
             )
 
-        rg.init(  # type: ignore
+        rg_v1.init(  # type: ignore
             api_key=os.getenv("ARGILLA_API_KEY"),
             api_url=os.getenv("ARGILLA_API_URL"),
             workspace=os.getenv("ARGILLA_WORKSPACE"),
@@ -74,7 +74,7 @@ def labelled_passages_to_feedback_dataset(
         FeedbackRecord(fields={"text": passage.text}, metadata=passage.metadata)
         for passage in labelled_passages
     ]
-    dataset.add_records(records)
+    dataset.add_records(records)  # type: ignore
 
     return dataset
 
@@ -156,11 +156,11 @@ def get_labelled_passages_from_argilla(
     """
     # First, see whether the dataset exists with the name we expect
 
-    dataset = rg.FeedbackDataset.from_argilla(
+    dataset = FeedbackDataset.from_argilla(
         name=concept_to_dataset_name(concept), workspace=workspace
     )
 
-    labelled_passages = dataset_to_labelled_passages(dataset)
+    labelled_passages = dataset_to_labelled_passages(dataset)  # type: ignore
     if min_timestamp or max_timestamp:
         labelled_passages = filter_labelled_passages_by_timestamp(
             labelled_passages, min_timestamp, max_timestamp
