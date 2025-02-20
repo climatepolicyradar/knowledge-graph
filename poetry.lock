@@ -452,6 +452,25 @@ files = [
 botocore = "*"
 
 [[package]]
+name = "awscli"
+version = "1.37.24"
+description = "Universal Command Line Environment for AWS."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "awscli-1.37.24-py3-none-any.whl", hash = "sha256:74cf7669497a9be566e2a5e9195f7d62bed1851ef649326c2e0abb9ae5a057de"},
+    {file = "awscli-1.37.24.tar.gz", hash = "sha256:98328a7df9ee6e2b8ef588ea4e5202c8735f07401a6669449858714139be13d3"},
+]
+
+[package.dependencies]
+botocore = "1.36.24"
+colorama = ">=0.2.5,<0.4.7"
+docutils = ">=0.10,<0.17"
+PyYAML = ">=3.10,<6.1"
+rsa = ">=3.1.2,<4.8"
+s3transfer = ">=0.11.0,<0.12.0"
+
+[[package]]
 name = "azure-ai-formrecognizer"
 version = "3.3.3"
 description = "Microsoft Azure Form Recognizer Client Library for Python"
@@ -558,17 +577,17 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.36.23"
+version = "1.36.24"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3-1.36.23-py3-none-any.whl", hash = "sha256:d59642672b1f35f55f47b317693241ce53333816f47c9e72fcc8fd0e9adc6a87"},
-    {file = "boto3-1.36.23.tar.gz", hash = "sha256:006800604c34382873521b20890b758eea7109d699696ece932131259d0a4658"},
+    {file = "boto3-1.36.24-py3-none-any.whl", hash = "sha256:c9055fe6a33f79c43053c06db432092cfcf88f4b4181950f5ca8f2f0cb6abb87"},
+    {file = "boto3-1.36.24.tar.gz", hash = "sha256:777ec08a6fe0ad77fa0607b431542c51d2d2e4145fecd512bee9f383ee4184f2"},
 ]
 
 [package.dependencies]
-botocore = ">=1.36.23,<1.37.0"
+botocore = ">=1.36.24,<1.37.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.11.0,<0.12.0"
 
@@ -577,13 +596,13 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "boto3-stubs"
-version = "1.36.23"
-description = "Type annotations for boto3 1.36.23 generated with mypy-boto3-builder 8.9.1"
+version = "1.36.24"
+description = "Type annotations for boto3 1.36.24 generated with mypy-boto3-builder 8.9.2"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3_stubs-1.36.23-py3-none-any.whl", hash = "sha256:ee2738fd742742dbe9db2745c66ac1f853ed497b4f2f9c1625d81b0a27b6d1b2"},
-    {file = "boto3_stubs-1.36.23.tar.gz", hash = "sha256:e09016f06daf7794d11815891b962f588c513c5f5ee6c0ab2c045c375f798c9a"},
+    {file = "boto3_stubs-1.36.24-py3-none-any.whl", hash = "sha256:4c589bd740d479127020501c75fbfcd6cb4d279811c3b4893c17471d644062b5"},
+    {file = "boto3_stubs-1.36.24.tar.gz", hash = "sha256:2d480a15096433e8e4a1293e209168e24f30e63975fba04906546a9932395758"},
 ]
 
 [package.dependencies]
@@ -640,7 +659,7 @@ bedrock-data-automation-runtime = ["mypy-boto3-bedrock-data-automation-runtime (
 bedrock-runtime = ["mypy-boto3-bedrock-runtime (>=1.36.0,<1.37.0)"]
 billing = ["mypy-boto3-billing (>=1.36.0,<1.37.0)"]
 billingconductor = ["mypy-boto3-billingconductor (>=1.36.0,<1.37.0)"]
-boto3 = ["boto3 (==1.36.23)"]
+boto3 = ["boto3 (==1.36.24)"]
 braket = ["mypy-boto3-braket (>=1.36.0,<1.37.0)"]
 budgets = ["mypy-boto3-budgets (>=1.36.0,<1.37.0)"]
 ce = ["mypy-boto3-ce (>=1.36.0,<1.37.0)"]
@@ -1003,13 +1022,13 @@ xray = ["mypy-boto3-xray (>=1.36.0,<1.37.0)"]
 
 [[package]]
 name = "botocore"
-version = "1.36.23"
+version = "1.36.24"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore-1.36.23-py3-none-any.whl", hash = "sha256:886730e79495a2e153842725ebdf85185c8277cdf255b3b5879cd097ddc7fcc3"},
-    {file = "botocore-1.36.23.tar.gz", hash = "sha256:9feaa2d876f487e718a5fd80a35fa401042b518c0c75117d3e1ea39a567439e7"},
+    {file = "botocore-1.36.24-py3-none-any.whl", hash = "sha256:b8b2ad60e6545aaef3a40163793c39555fcfd67fb081a38695018026c4f4db25"},
+    {file = "botocore-1.36.24.tar.gz", hash = "sha256:7d35ba92ccbed7aa7e1563b12bb339bde612d5f845c89bfdd79a6db8c26b9f2e"},
 ]
 
 [package.dependencies]
@@ -1022,13 +1041,13 @@ crt = ["awscrt (==0.23.8)"]
 
 [[package]]
 name = "botocore-stubs"
-version = "1.36.23"
+version = "1.36.24"
 description = "Type annotations and code completion for botocore"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore_stubs-1.36.23-py3-none-any.whl", hash = "sha256:b150699f4f98e39e3e90e0d6787f5e8f919876f9ddbd24e3663b8311222588ec"},
-    {file = "botocore_stubs-1.36.23.tar.gz", hash = "sha256:2283cf6e926a323d2a2ba0322228960db7f40061dfee197858118359d8402816"},
+    {file = "botocore_stubs-1.36.24-py3-none-any.whl", hash = "sha256:b22ecb2417aaa06c949289566455dd6821ba13f90ef40818e1331d18650075ac"},
+    {file = "botocore_stubs-1.36.24.tar.gz", hash = "sha256:017ca6f721c8836679e9e1d83d2903b0950d8caf12860bc6c57d9fcde15b96fe"},
 ]
 
 [package.dependencies]
@@ -1719,6 +1738,17 @@ files = [
 six = ">=1.4.0"
 
 [[package]]
+name = "docutils"
+version = "0.16"
+description = "Docutils -- Python Documentation Utilities"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+files = [
+    {file = "docutils-0.16-py2.py3-none-any.whl", hash = "sha256:0c5b78adfbf7762415433f5515cd5c9e762339e23369dbe8000d84a4bf4ab3af"},
+    {file = "docutils-0.16.tar.gz", hash = "sha256:c2de3a60e9e7d07be26b7f2b00ca0309c207e06c100f9cc2a94931fc75a478fc"},
+]
+
+[[package]]
 name = "dulwich"
 version = "0.21.7"
 description = "Python Git Library"
@@ -2394,13 +2424,13 @@ socks = ["socksio (==1.*)"]
 
 [[package]]
 name = "huggingface-hub"
-version = "0.29.0"
+version = "0.29.1"
 description = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
 optional = false
 python-versions = ">=3.8.0"
 files = [
-    {file = "huggingface_hub-0.29.0-py3-none-any.whl", hash = "sha256:c02daa0b6bafbdacb1320fdfd1dc7151d0940825c88c4ef89837fdb1f6ea0afe"},
-    {file = "huggingface_hub-0.29.0.tar.gz", hash = "sha256:64034c852be270cac16c5743fe1f659b14515a9de6342d6f42cbb2ede191fc80"},
+    {file = "huggingface_hub-0.29.1-py3-none-any.whl", hash = "sha256:352f69caf16566c7b6de84b54a822f6238e17ddd8ae3da4f8f2272aea5b198d5"},
+    {file = "huggingface_hub-0.29.1.tar.gz", hash = "sha256:9524eae42077b8ff4fc459ceb7a514eca1c1232b775276b009709fe2a084f250"},
 ]
 
 [package.dependencies]
@@ -3359,13 +3389,13 @@ pyyaml = ">=5.1"
 
 [[package]]
 name = "mkdocs-material"
-version = "9.6.4"
+version = "9.6.5"
 description = "Documentation that simply works"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "mkdocs_material-9.6.4-py3-none-any.whl", hash = "sha256:414e8376551def6d644b8e6f77226022868532a792eb2c9accf52199009f568f"},
-    {file = "mkdocs_material-9.6.4.tar.gz", hash = "sha256:4d1d35e1c1d3e15294cb7fa5d02e0abaee70d408f75027dc7be6e30fb32e6867"},
+    {file = "mkdocs_material-9.6.5-py3-none-any.whl", hash = "sha256:aad3e6fb860c20870f75fb2a69ef901f1be727891e41adb60b753efcae19453b"},
+    {file = "mkdocs_material-9.6.5.tar.gz", hash = "sha256:b714679a8c91b0ffe2188e11ed58c44d2523e9c2ae26a29cc652fa7478faa21f"},
 ]
 
 [package.dependencies]
@@ -4807,13 +4837,13 @@ six = ">=1.12,<2.0"
 
 [[package]]
 name = "pulumi-aws"
-version = "6.68.0"
+version = "6.69.0"
 description = "A Pulumi package for creating and managing Amazon Web Services (AWS) cloud resources."
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "pulumi_aws-6.68.0-py3-none-any.whl", hash = "sha256:997ec76158e2d4b5c483ae0c60551496c39d7f29ad23def380eeb41c8600cb61"},
-    {file = "pulumi_aws-6.68.0.tar.gz", hash = "sha256:3a5fff0392ee653f0a542ed108565ccedf6678d47b8e18ea87919de2a13dba9f"},
+    {file = "pulumi_aws-6.69.0-py3-none-any.whl", hash = "sha256:a9d9d2e7b78405de3cf1e2bddce4c2b7de20734b3223bbab1452fa1faa487dab"},
+    {file = "pulumi_aws-6.69.0.tar.gz", hash = "sha256:91d59aecc3ea17c2bf10b52fe3ba034c7e9da961d9e3c5410f295426f5f8183a"},
 ]
 
 [package.dependencies]
@@ -5991,13 +6021,13 @@ files = [
 
 [[package]]
 name = "rsa"
-version = "4.9"
+version = "4.7.2"
 description = "Pure-Python RSA implementation"
 optional = false
-python-versions = ">=3.6,<4"
+python-versions = ">=3.5, <4"
 files = [
-    {file = "rsa-4.9-py3-none-any.whl", hash = "sha256:90260d9058e514786967344d0ef75fa8727eed8a7d2e43ce9f4bcf1b536174f7"},
-    {file = "rsa-4.9.tar.gz", hash = "sha256:e38464a49c6c85d7f1351b0126661487a7e0a14a50f1675ec50eb34d4f20ef21"},
+    {file = "rsa-4.7.2-py3-none-any.whl", hash = "sha256:78f9a9bf4e7be0c5ded4583326e7461e3a3c5aae24073648b4bdfa797d78c9d2"},
+    {file = "rsa-4.7.2.tar.gz", hash = "sha256:9d689e6ca1b3038bc82bf8d23e944b6b6037bc02301a574935b2dd946e0353b9"},
 ]
 
 [package.dependencies]
@@ -7916,4 +7946,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "eee8ea332cbb79300791616529d96249b0f48b3e4ec5c7184c23254a2c2748a6"
+content-hash = "6dbf712facab383c463c53efdd49719438d93f3da95056721859e8053b59cb1e"
