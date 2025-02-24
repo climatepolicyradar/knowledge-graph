@@ -303,6 +303,10 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
         )
 
 
+# TODO: Add test for running on batch of docs
+
+
+# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 # @pytest.mark.flaky_on_ci  # Disabled for now, to see if it's still flaky
@@ -327,7 +331,6 @@ async def test_index_by_s3_with_s3_prefixes(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
-        as_subflow=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )
@@ -344,6 +347,7 @@ async def test_index_by_s3_with_s3_prefixes(
     assert final_concepts_count == 3933
 
 
+# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 # @pytest.mark.flaky_on_ci  # Disabled for now, to see if it's still flaky
@@ -373,7 +377,6 @@ async def test_index_by_s3_with_s3_paths(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
         s3_paths=s3_paths,
-        as_subflow=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )
@@ -390,6 +393,7 @@ async def test_index_by_s3_with_s3_paths(
     assert final_concepts_count == 3933
 
 
+# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_index_by_s3_task_failure(
@@ -419,7 +423,6 @@ async def test_index_by_s3_task_failure(
                 os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
             ],
             s3_paths=None,
-            as_subflow=False,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
         )
@@ -545,6 +548,7 @@ def test_get_passage_for_text_block(
         assert passage == relevant_passage[1]
 
 
+# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_config(
