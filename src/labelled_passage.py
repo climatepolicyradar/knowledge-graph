@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from argilla.v1 import FeedbackRecord
 from argilla.v1 import User as LegacyUser
-from argilla import Record, User, Argilla
+from argilla import Record, User, Argilla, Response
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
 
@@ -109,19 +109,28 @@ class LabelledPassage(BaseModel):
         #         key=lambda response: response.user_id,
         #     )
         # ]
-        for response in record.responses:
-            user_name = client.users(response.user_id).username
+
+        # https://docs.argilla.io/latest/reference/argilla/records/responses/?h=#usage-examples
+        # this suggests we call the attribute with the name of the question here
+        # I believe all of our questions are named "entities", so this is safe, but not aligned to
+        # what they imagined.
+        for response in record.responses["entities"]:
+            user = client.users(id=response.user_id)
+            assert user is not None, f"User with id {response.user_id} not found"
+            user_name = user.username
             try:
-                for entity in response["entities"][0]["value"]:
+                for entity in response.value:
                     spans.extend(
                         [
                             Span(
                                 text=text,
-                                start_index=entity.start,
-                                end_index=entity.end,
-                                concept_id=entity.label,
+                                start_index=entity["start"],
+                                end_index=entity["end"],
+                                concept_id=entity["label"],
                                 labellers=[user_name],
-                                timestamps=[response.updated_at],
+                                timestamps=[
+                                    record.updated_at
+                                ],  # so it's the record that bears this attribute now rather than the response...
                             )
                         ]
                     )

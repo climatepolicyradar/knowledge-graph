@@ -12,7 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
-
+# TODO we'll need something more robust than creating this global variable here
 client = rg.Argilla(
     api_key=os.getenv("ARGILLA_API_KEY"),
     api_url=os.getenv("ARGILLA_API_URL"),
