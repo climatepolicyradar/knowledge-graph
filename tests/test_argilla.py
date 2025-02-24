@@ -86,6 +86,7 @@ def test_whether_a_mixed_set_of_timestamps_are_filtered_correctly(
             now,  # should be included
             now + timedelta(days=2),  # should be excluded
         ],
+        concept_id=None,
     )
 
     passages = [LabelledPassage(text=text, spans=[span])]
@@ -117,6 +118,7 @@ def test_whether_invalid_timestamps_are_filtered(text: str):
         end_index=min(len(text), 10),
         labellers=["Alice", "Bob"],
         timestamps=[now, now],
+        concept_id=None,
     )
 
     passages = [LabelledPassage(text=text, spans=[span])]
