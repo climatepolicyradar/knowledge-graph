@@ -849,10 +849,8 @@ async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
     batch_size: int,
     documents_batch_num: int,
-    aws_env: AwsEnv,
     cache_bucket: str,
     concepts_counts_prefix: str,
-    as_subflow: bool = True,
 ) -> None:
     """Run partial updates for concepts in a batch of documents."""
 
@@ -862,10 +860,8 @@ async def run_partial_updates_of_concepts_for_batch(
         f"Updating concepts for batch of documents, {batch_size} indexing tasks for batch {documents_batch_num}."
     )
     indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages_as(
+        run_partial_updates_of_concepts_for_document_passages(  # pyright: ignore[reportCallIssue]
             document_importer=document_importer,
-            as_subflow=as_subflow,
-            aws_env=aws_env,
             cache_bucket=cache_bucket,
             concepts_counts_prefix=concepts_counts_prefix,
         )
@@ -899,7 +895,6 @@ async def index_by_s3(
     s3_prefixes: list[str] | None = None,
     s3_paths: list[str] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
-    as_subflow: bool = True,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -932,7 +927,7 @@ async def index_by_s3(
     cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
 
     with cm:
-        logger.info("getting S3 object generator")
+        logger.info("Getting S3 object generator")
         documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
         documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
 
@@ -946,10 +941,8 @@ async def index_by_s3(
                     "documents_batch": documents_batch,
                     "batch_size": batch_size,
                     "documents_batch_num": documents_batch_num,
-                    "aws_env": aws_env,
                     "cache_bucket": cache_bucket,
                     "concepts_counts_prefix": concepts_counts_prefix,
-                    "as_subflow": as_subflow,
                 },
             )
             for (
@@ -958,9 +951,18 @@ async def index_by_s3(
             ) in enumerate(documents_batches, start=1)
         ]
 
-        logger.info("gathering indexing tasks")
-        _ = await asyncio.gather(*indexing_tasks, return_exceptions=True)
-        logger.info("gathered indexing tasks")
+        logger.info("Gathering indexing tasks")
+        results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+        logger.info("Gathered indexing tasks")
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Failed to process batch of documents: {str(result)}",
+                )
+                continue
+
+            logger.info("Processed batch documents.")
 
 
 def run_partial_updates_of_concepts_for_document_passages_as(
@@ -972,27 +974,27 @@ def run_partial_updates_of_concepts_for_document_passages_as(
 ) -> Awaitable[Counter[ConceptModel]]:
     """Run partial updates for document passages, either as a subflow or directly."""
     if as_subflow:
+        flow_name = function_to_flow_name(
+            run_partial_updates_of_concepts_for_document_passages
+        )
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+
+        return run_deployment(
+            name=f"{flow_name}/{deployment_name}",
+            parameters={
+                "document_importer": document_importer,
+                "cache_bucket": cache_bucket,
+                "concepts_counts_prefix": concepts_counts_prefix,
+            },
+            timeout=1200,
+            as_subflow=True,
+        )
+    else:
         return run_partial_updates_of_concepts_for_document_passages(  # pyright: ignore[reportCallIssue]
             document_importer=document_importer,
             cache_bucket=cache_bucket,
             concepts_counts_prefix=concepts_counts_prefix,
         )
-
-    flow_name = function_to_flow_name(
-        run_partial_updates_of_concepts_for_document_passages
-    )
-    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-
-    return run_deployment(
-        name=f"{flow_name}/{deployment_name}",
-        parameters={
-            "document_importer": document_importer,
-            "cache_bucket": cache_bucket,
-            "concepts_counts_prefix": concepts_counts_prefix,
-        },
-        timeout=1200,
-        as_subflow=True,
-    )
 
 
 def iterate_batch(
@@ -1066,7 +1068,6 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_prefixes=s3_accessor.prefixes,
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
-        as_subflow=config.as_subflow,
         cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         concepts_counts_prefix=config.concepts_counts_prefix,
     )
