@@ -9,6 +9,7 @@ packages = [
   { include = "src", from = "." },
   { include = "tests", from = "." },
   { include = "scripts", from = "." },
+  { include = "static_sites", from = "." },
 ]
 
 [tool.poetry.dependencies]
@@ -37,6 +38,7 @@ prefect-slack = "0.2.1"
 async-typer = "^0.1.8"
 argilla-v1 = "^1.29.1"
 schedule = "^1.2.2"
+awscli = "^1.37.24"
 
 [tool.poetry.group.transformers]
 optional = true

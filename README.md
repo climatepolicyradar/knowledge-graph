@@ -2,82 +2,95 @@
 
 This repo comprises the infrastructure, tools, and scripts for managing Climate Policy Radar's concept store and knowledge graph.
 
-Confused about those terms? See the [concept store vs knowledge graph](./docs/docs/developers/concept-store-vs-knowledge-graph.md) documentation for more information.
-
 ## Getting started
 
-### As a developer
-
-This repo is orchestrated with a [justfile](./justfile) (see [just](https://github.com/casey/just)) that wraps together a number of useful commands. Make sure you have `just` installed before you get started.
-
-Next, you'll need to install the project specific dependencies:
+This repo is orchestrated with a [justfile](./justfile) (see [just](https://github.com/casey/just)). To install the dependencies, run:
 
 ```bash
 just install
 ```
 
-Then you can run the tests:
-
-```bash
-just test
-```
-
-Or fetch everything we know about a concept from the concept store and argilla:
-
-```bash
-just get-concept Q123
-```
-
-You can then train a model, after logging in (with `aws sso login --profile labs`):
-
-```bash
-just train Q992
-```
-
-Or to also track in W&B and upload to S3:
-
-```bash
-just train Q992 --track --upload --aws-env labs
-```
-
-Afterwards, evaluate the trained model:
-
-```bash
-just evaluate Q992
-```
-
-Or to also track in W&B:
-
-```bash
-just evaluate Q992 --track
-```
-
-You can promote a model version from one AWS account/environment, to another. You can optionally promote that model to be the primary version that's used in that account.
-
-```bash
-poetry run promote Q992 --classifier RulesBasedClassifier --version v13 --from-aws-env labs --to-aws-env staging --primary
-```
-
-_or_
-
-```bash
-just promote Q992 --classifier RulesBasedClassifier --version v7 --within-aws-env staging --no-primary
-```
-
-You can also demote (aka disable) a promoted model version in an AWS account/environment, for a concept.
-
-```bash
-just demote Q787 labs
-```
-
-You can see the full list of commands by running:
+You can see the full list of `just` commands by running:
 
 ```bash
 just --list
 ```
 
-See the [docs](./docs) for more information on how to work with the knowledge graph.
+## The basics
 
-### As an editor
+### Concepts
 
-You can also explore and edit the graph directly through UI like the concept store. We've documented the process of getting started with the concept store and a style guide for how to structure the data in the [concept store documentation in notion](https://www.notion.so/climatepolicyradar/Concept-store-documentation-54b91a8359664cb3a9bbe3989efb7ca0?pvs=4).
+Concepts are the core building blocks of our knowledge graph. They represent key ideas, terms, or topics which are important to understanding the climate policy domain. Each concept has a preferred label, optional alternative labels (synonyms, acronyms, related terms), a description, and can be linked to other concepts through hierarchical or associative relationships.
+
+```python
+from src.concept import Concept
+
+extreme_weather_concept = Concept(
+    preferred_label="extreme weather",
+    description="it's like weather, but too much!!",
+    alternative_labels=["extreme weather events", "rapid-onset events", "weather anomalies"],
+)
+```
+
+Most of CPR's concepts are defined in our [concept store](https://climatepolicyradar.wikibase.cloud/wiki/Item:Q374) (and are thus associated with a `wikibase_id`), but you can always define your own concepts in code.
+
+### Classifiers and spans
+
+Classifiers are used to identify concepts in text. We use a variety of classifier architectures throughout our knowledge graph, from basic keyword matching to more sophisticated BERT-sized models, to optimised calls to third-party LLMs.
+
+Each classifier is single-class, meaning there's a 1:1 mapping between a `Concept` and a `Classifier`. When you call the `predict` method on a classifier with some input text, it returns a list of `Span` objects which indicate where the concept is mentioned.
+
+```python
+from src.classifier import KeywordClassifier
+
+extreme_weather_classifier = KeywordClassifier(concept=extreme_weather_concept)
+
+predicted_spans = extreme_weather_classifier.predict("This is a passage of text about extreme weather")
+```
+
+```python
+[
+    Span(
+        text='This is a passage of text about extreme weather',
+        start_index=32,
+        end_index=47,
+        concept_id=None,
+        labellers=['KeywordClassifier("extreme weather")'],
+        id='sg5u338r',
+        labelled_text='extreme weather'
+    )
+]
+```
+
+### Labelled passages
+
+Our `LabelledPassage` objects combine a passage of text with the spans that mention a particular concept. They can contain multiple spans, referring to multiple concepts, each labelled through a different method.
+
+```python
+from src.labelled_passage import LabelledPassage
+
+labelled_passage = LabelledPassage(
+    text="This is a passage of text about extreme weather",
+    spans=[
+        Span(
+            text='This is a passage of text about extreme weather',
+            start_index=32,
+            end_index=47,
+            concept_id=None,
+            labellers=['KeywordClassifier("extreme weather")'],
+            id='sg5u338r',
+            labelled_text='extreme weather'
+        )
+    ],
+)
+```
+
+Labelled passages are a versatile data structure that we use in many ways. They store the predictions from our classifiers, but passages labelled by human experts can also be used to train new models, or be used as a source of truth for comparing and evaluating the performance of candidate models.
+
+## So what is the knowledge graph?
+
+We've built our knowledge graph by running a set of classifiers over our giant corpus of climate-relevant text.
+
+In the short-term, identifying where each concept is mentioned in our documents makes it easier for interested users of CPR's tools to jump straight to the relevant sections of our documents.
+
+In the longer term, we expect the graph to be a useful artefact in its own right. By analysing the structured web of relationships between climate policy concepts and the documents that mention them, we should be able to identify emerging topics and high-leverage areas for policy intervention.
