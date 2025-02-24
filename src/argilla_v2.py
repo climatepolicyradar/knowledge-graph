@@ -182,45 +182,44 @@ def distribute_labelling_projects(
             yield dataset, next(labeller_cycle)
 
 
-# TODO
-# def combine_datasets(*datasets: Dataset) -> Dataset:  # type: ignore
-#     """
-#     Combine an arbitrary number of argilla datasets into one.
+def combine_datasets(*datasets: Dataset) -> Dataset:
+    """
+    Combine an arbitrary number of argilla datasets into one.
 
-#     :param FeedbackDataset *datasets: Unspecified number of datasets to combine, at
-#     least one.
-#     :return FeedbackDataset: The combined dataset
-#     """
-#     if not datasets:
-#         raise ValueError("At least one dataset must be provided")
+    :param FeedbackDataset *datasets: Unspecified number of datasets to combine, at
+    least one.
+    :return FeedbackDataset: The combined dataset
+    """
+    if not datasets:
+        raise ValueError("At least one dataset must be provided")
 
-#     combined_dataset = Dataset(  # type: ignore
-#         fields=datasets[0].fields,  # type: ignore
-#         questions=datasets[0].questions,  # type: ignore
-#         metadata_properties=datasets[0].metadata_properties,  # type: ignore
-#         vectors_settings=datasets[0].vectors_settings,  # type: ignore
-#         guidelines=datasets[0].guidelines,  # type: ignore
-#         allow_extra_metadata=datasets[0].allow_extra_metadata,  # type: ignore
-#     )
+    _assert_datasets_of_the_same_type(*datasets)
 
-#     records_dict: dict[str, FeedbackRecord] = {}  # type: ignore
-#     for dataset in datasets:
-#         for record in dataset.records:  # type: ignore
-#             # Use the 'text' field as the key (assuming it's unique)
-#             key = record.fields.get("text", "")
+    settings = datasets[0].settings
 
-#             if key in records_dict:
-#                 # If the record already exists, merge the responses
-#                 existing_record = records_dict[key]
-#                 existing_record.responses.extend(record.responses)  # type: ignore
-#             else:
-#                 # If it's a new record, add it to the dictionary
-#                 records_dict[key] = record  # type: ignore
+    combined_dataset = Dataset(
+        name=f"combined-{'-'.join([dataset.name for dataset in datasets])}",
+        settings=settings,
+    ).create()
 
-#     # Convert the dictionary values back to a list of records
-#     combined_records = list(records_dict.values())
+    for dataset in datasets:
+        combined_dataset.records.log(list(dataset.records))
 
-#     # Add the combined records to the new dataset
-#     combined_dataset.add_records(combined_records)  # type: ignore
+    return combined_dataset
 
-#     return combined_dataset
+
+def _assert_datasets_of_the_same_type(*datasets: Dataset):
+    """
+    Assert that all datasets are of the same type.
+
+    :param FeedbackDataset *datasets: The datasets to check
+    :raises ValueError: If the datasets are not of the same type
+    """
+    fields = datasets[0].fields
+    questions = datasets[0].questions
+
+    for dataset in datasets[1:]:
+        if dataset.fields != fields:
+            raise ValueError("All datasets must have the same fields")
+        if dataset.questions != questions:
+            raise ValueError("All datasets must have the same questions")
