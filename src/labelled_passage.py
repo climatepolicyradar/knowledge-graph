@@ -2,11 +2,11 @@ import html
 import itertools
 import re
 
-from pydantic import BaseModel, Field, model_validator
-
+from argilla import Argilla, Record, Response
 from argilla.v1 import FeedbackRecord
 from argilla.v1 import User as LegacyUser
-from argilla import Record, User, Argilla, Response
+from pydantic import BaseModel, Field, model_validator
+
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
 

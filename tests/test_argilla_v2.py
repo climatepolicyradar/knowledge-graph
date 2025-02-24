@@ -1,23 +1,23 @@
-import pytest
 import uuid
+from unittest.mock import patch
 
-from unittest.mock import MagicMock, patch
-
-from src.argilla_v2 import combine_datasets, _assert_datasets_of_the_same_type
-
+import pytest
 from argilla import (
     Dataset,
+    Record,
     Settings,
+    SpanQuestion,
     TextField,
     TextQuestion,
-    SpanQuestion,
-    Record,
 )
-from argilla.records._dataset_records import DatasetRecordsIterator
+
+from src.argilla_v2 import _assert_datasets_of_the_same_type, combine_datasets
 
 
 def test_combine_datasets():
     """
+    Tests the combine dataset function
+
     NOTE: this creates a dataset in the Argilla default workspace. This was mostly for understanding, and illustrating
     the functionality in v2, but do not run unless you delete the resulting dataset afterwards named:
     "combined-dataset1-dataset2"
@@ -26,14 +26,18 @@ def test_combine_datasets():
         name="dataset1",
         settings=Settings(
             fields=[TextField(name="field1")],  # type: ignore
-            questions=[SpanQuestion(name="question1", field="field1", labels=["yes", "no"])],  # type: ignore
+            questions=[
+                SpanQuestion(name="question1", field="field1", labels=["yes", "no"])
+            ],  # type: ignore
         ),
     )
     dataset2 = Dataset(
         name="dataset2",
         settings=Settings(
             fields=[TextField(name="field1")],  # type: ignore
-            questions=[SpanQuestion(name="question1", field="field1", labels=["yes", "no"])],  # type: ignore
+            questions=[
+                SpanQuestion(name="question1", field="field1", labels=["yes", "no"])
+            ],  # type: ignore
         ),
     )
 
@@ -87,14 +91,19 @@ def test__assert_datasets_of_the_same_type_errors():
         name="dataset1",
         settings=Settings(
             fields=[TextField(name="field1")],  # type: ignore
-            questions=[SpanQuestion(name="question1", field="field1", labels=["yes", "no"]), TextQuestion(name="question2")],  # type: ignore
+            questions=[
+                SpanQuestion(name="question1", field="field1", labels=["yes", "no"]),
+                TextQuestion(name="question2"),
+            ],  # type: ignore
         ),
     )
     dataset2 = Dataset(
         name="dataset2",
         settings=Settings(
             fields=[TextField(name="field1")],  # type: ignore
-            questions=[SpanQuestion(name="question1", field="field1", labels=["yes", "no"])],  # type: ignore
+            questions=[
+                SpanQuestion(name="question1", field="field1", labels=["yes", "no"])
+            ],  # type: ignore
         ),
     )
 
@@ -107,14 +116,18 @@ def test__assert_datasets_of_the_same_type():
         name="dataset1",
         settings=Settings(
             fields=[TextField(name="field1")],  # type: ignore
-            questions=[SpanQuestion(name="question1", field="field1", labels=["yes", "no"])],  # type: ignore
+            questions=[
+                SpanQuestion(name="question1", field="field1", labels=["yes", "no"])
+            ],  # type: ignore
         ),
     )
     dataset2 = Dataset(
         name="dataset2",
         settings=Settings(
             fields=[TextField(name="field1")],  # type: ignore
-            questions=[SpanQuestion(name="question1", field="field1", labels=["yes", "no"])],  # type: ignore
+            questions=[
+                SpanQuestion(name="question1", field="field1", labels=["yes", "no"])
+            ],  # type: ignore
         ),
     )
 

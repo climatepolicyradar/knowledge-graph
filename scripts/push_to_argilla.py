@@ -1,14 +1,13 @@
 import os
 from typing import Annotated
 
+import argilla as rg
 import typer
 from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 
-import argilla as rg
 from scripts.config import concept_dir, processed_data_dir
 from src.argilla_v2 import (
-    concept_to_dataset_name,
     labelled_passages_to_feedback_dataset,
 )
 from src.concept import Concept

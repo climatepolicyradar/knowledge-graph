@@ -4,8 +4,8 @@ from itertools import cycle
 from typing import Generator, Optional
 
 import argilla.v1 as rg_v1
-from argilla.v1 import SpanQuestion, TextField
-from argilla.v1 import FeedbackDataset, FeedbackRecord
+from argilla.v1 import FeedbackDataset, FeedbackRecord, SpanQuestion, TextField
+
 from src.labelled_passage import LabelledPassage
 from src.wikibase import Concept
 

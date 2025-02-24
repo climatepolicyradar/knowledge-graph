@@ -2,12 +2,12 @@ import os
 import shutil
 from pathlib import Path
 
+import argilla as rg
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import track
 
-import argilla as rg
 from static_sites.labelling_librarian.checks import (
     all_dataset_level_checks,
     check_whether_span_border_is_in_word,

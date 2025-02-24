@@ -2,16 +2,16 @@ import json
 import os
 from datetime import datetime
 
+import argilla as rg
 import huggingface_hub as hf
 import pandas as pd
 import typer
+from argilla import ResponseSchema, SpanQuestion, TextField, ValueSchema
+from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
 from datasets import DatasetDict, load_dataset
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 
-import argilla as rg
-from argilla import ResponseSchema, SpanQuestion, TextField, ValueSchema
-from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
 from src.argilla_legacy import concept_to_dataset_name
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage

@@ -4,11 +4,11 @@ from itertools import cycle
 from typing import Generator, Optional
 
 import argilla as rg
-from argilla import SpanQuestion, TextField, Dataset, Record, Settings, Workspace
+from argilla import Dataset, Record, Settings, SpanQuestion, TextField, Workspace
+from dotenv import find_dotenv, load_dotenv
+
 from src.labelled_passage import LabelledPassage
 from src.wikibase import Concept
-
-from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
