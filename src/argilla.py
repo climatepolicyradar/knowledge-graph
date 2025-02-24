@@ -15,7 +15,6 @@ def init_argilla_client(func):
         must_be_set = [
             "ARGILLA_API_KEY",
             "ARGILLA_API_URL",
-            "ARGILLA_WORKSPACE",
         ]
         missing = [
             variable_name
@@ -31,7 +30,6 @@ def init_argilla_client(func):
         rg.init(  # type: ignore
             api_key=os.getenv("ARGILLA_API_KEY"),
             api_url=os.getenv("ARGILLA_API_URL"),
-            workspace=os.getenv("ARGILLA_WORKSPACE"),
         )
         return func(*args, **kwargs)
 
