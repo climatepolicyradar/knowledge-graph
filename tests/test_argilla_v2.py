@@ -14,7 +14,6 @@ from argilla import (
     Record,
 )
 from argilla.records._dataset_records import DatasetRecordsIterator
-from argilla._api import RecordsAPI
 
 
 def test_combine_datasets():
