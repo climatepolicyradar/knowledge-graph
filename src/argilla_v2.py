@@ -63,9 +63,7 @@ def labelled_passages_to_feedback_dataset(
     return dataset
 
 
-def dataset_to_labelled_passages(
-    dataset: Dataset, client: rg.Argilla
-) -> list[LabelledPassage]:
+def dataset_to_labelled_passages(dataset: Dataset) -> list[LabelledPassage]:
     """
     Convert an Argilla Dataset into a list of LabelledPassages.
 
@@ -149,7 +147,7 @@ def get_labelled_passages_from_argilla(
         concept_to_dataset_name(concept), workspace=workspace
     )
 
-    labelled_passages = dataset_to_labelled_passages(dataset, client)  # type: ignore
+    labelled_passages = dataset_to_labelled_passages(dataset)  # type: ignore
     if min_timestamp or max_timestamp:
         labelled_passages = filter_labelled_passages_by_timestamp(
             labelled_passages, min_timestamp, max_timestamp
