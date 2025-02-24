@@ -851,7 +851,7 @@ async def run_partial_updates_of_concepts_for_batch(
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
-) -> None:
+) -> list[str]:
     """Run partial updates for concepts in a batch of documents."""
 
     logger = get_run_logger()
@@ -873,17 +873,17 @@ async def run_partial_updates_of_concepts_for_batch(
         f"Gathered {batch_size} indexing tasks for batch {documents_batch_num}."
     )
 
+    errors = []
     for i, result in enumerate(results):
         # Get the S3 key for the task
         document_import_id: DocumentImportId = documents_batch[i][0]
 
         if isinstance(result, Exception):
-            logger.error(
-                f"Failed to process document `{document_import_id}`: {str(result)}",
+            errors.append(
+                f"Failed to process document `{document_import_id}`: {str(result)}"
             )
-            continue
 
-        logger.info(f"Processed batch documents #{documents_batch_num}")
+    return errors
 
 
 @flow
@@ -952,17 +952,11 @@ async def index_by_s3(
         ]
 
         logger.info("Gathering indexing tasks")
-        results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+        errors = await asyncio.gather(*indexing_tasks, return_exceptions=True)
         logger.info("Gathered indexing tasks")
 
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(
-                    f"Failed to process batch of documents: {str(result)}",
-                )
-                continue
-
-            logger.info("Processed batch documents.")
+        if errors:
+            logger.error(f"Errors occurred during indexing: {errors}")
 
 
 def run_partial_updates_of_concepts_for_document_passages_as(
