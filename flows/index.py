@@ -40,7 +40,7 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-DEFAULT_BATCH_SIZE = 50
+DEFAULT_BATCH_SIZE = 500
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
