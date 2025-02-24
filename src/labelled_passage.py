@@ -113,20 +113,22 @@ class LabelledPassage(BaseModel):
         # https://docs.argilla.io/latest/reference/argilla/records/responses/?h=#usage-examples
         # this suggests we call the attribute with the name of the question here
         # I believe all of our questions are named "entities", so this is safe, but not aligned to
-        # what they imagined.
-        for response in record.responses["entities"]:
+        # what they imagined. Also, their typing is utterly unhelpful, so filling that in myself below.
+        responses: list[Response] = record.responses["entities"]
+        for response in responses:
             user = client.users(id=response.user_id)
             assert user is not None, f"User with id {response.user_id} not found"
             user_name = user.username
             try:
-                for entity in response.value:
+                # a "value" is a dict with the keys "start", "end", and "label"
+                for value in response.value:
                     spans.extend(
                         [
                             Span(
                                 text=text,
-                                start_index=entity["start"],
-                                end_index=entity["end"],
-                                concept_id=entity["label"],
+                                start_index=value["start"],
+                                end_index=value["end"],
+                                concept_id=value["label"],
                                 labellers=[user_name],
                                 timestamps=[
                                     record.updated_at
