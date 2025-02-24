@@ -1,7 +1,9 @@
 import os
 from typing import Annotated
+import uuid
 
 import argilla as rg
+from argilla._exceptions._api import ConflictError, UnprocessableEntityError
 import typer
 from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
@@ -77,10 +79,10 @@ def main(
     # coordinating manually, and we'll come back round to efficient assignment in code in
     # a future iteration if needed.
     try:
-        workspace = rg.Workspace(name=workspace_name)
+        workspace = rg.Workspace(name=workspace_name, id=uuid.uuid4())
         workspace.create()
         console.log(f'✅ Created workspace "{workspace.name}"')
-    except ValueError:
+    except (ValueError, ConflictError):
         workspace = rg.Workspace(name=workspace_name)
         console.log(f'✅ Loaded workspace "{workspace.name}"')
 
@@ -95,7 +97,7 @@ def main(
             )
             user.create()
             console.log(f'✅ Created user "{username}" with password "{password}"')
-        except KeyError:
+        except (KeyError, ConflictError):
             console.log(f'✅ User "{username}" already exists')
             user = rg.User(username)
 
@@ -104,7 +106,7 @@ def main(
             console.log(
                 f'✅ Added user "{user.username}" to workspace "{workspace.name}"'
             )
-        except ValueError:
+        except (ValueError, UnprocessableEntityError):
             console.log(
                 f'✅ User "{user.username}" already in workspace "{workspace.name}"'
             )

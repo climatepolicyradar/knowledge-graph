@@ -86,11 +86,11 @@ class LabelledPassage(BaseModel):
         return cls(text=text, spans=spans, metadata=metadata)
 
     @classmethod
-    def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":  # type: ignore
+    def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":
         """
         Create a LabelledPassage object from an Argilla record
 
-        :param FeedbackRecord record: The Argilla record to create the LabelledPassage
+        :param Record record: The Argilla record to create the LabelledPassage
         object from
         :return LabelledPassage: The created LabelledPassage object
         """
