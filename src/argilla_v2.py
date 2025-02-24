@@ -4,7 +4,7 @@ from itertools import cycle
 from typing import Generator, Optional
 
 import argilla as rg
-from argilla import SpanQuestion, TextField, Dataset, Record, Settings
+from argilla import SpanQuestion, TextField, Dataset, Record, Settings, Workspace
 from src.labelled_passage import LabelledPassage
 from src.wikibase import Concept
 
@@ -26,7 +26,7 @@ def concept_to_dataset_name(concept: Concept) -> str:
 
 
 def labelled_passages_to_feedback_dataset(
-    labelled_passages: list[LabelledPassage], concept: Concept
+    labelled_passages: list[LabelledPassage], concept: Concept, workspace: Workspace
 ) -> Dataset:
     """
     Convert a list of LabelledPassages into an Argilla kDataset.
@@ -52,7 +52,11 @@ def labelled_passages_to_feedback_dataset(
                 )
             ],
         ),
+        workspace=workspace,
+        client=client,
     )
+
+    dataset.create()
 
     records = [
         Record(fields={"text": passage.text}, metadata=passage.metadata)
