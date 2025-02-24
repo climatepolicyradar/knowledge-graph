@@ -17,6 +17,11 @@ from argilla.records._dataset_records import DatasetRecordsIterator
 
 
 def test_combine_datasets():
+    """
+    NOTE: this creates a dataset in the Argilla default workspace. This was mostly for understanding, and illustrating
+    the functionality in v2, but do not run unless you delete the resulting dataset afterwards named:
+    "combined-dataset1-dataset2"
+    """
     dataset1 = Dataset(
         name="dataset1",
         settings=Settings(
