@@ -6,8 +6,15 @@ import argilla as rg
 import huggingface_hub as hf
 import pandas as pd
 import typer
-from argilla import ResponseSchema, SpanQuestion, TextField, ValueSchema
-from argilla.feedback import FeedbackDataset, FeedbackRecord, SpanValueSchema
+from argilla.v1 import (
+    ResponseSchema,
+    SpanQuestion,
+    TextField,
+    ValueSchema,
+    FeedbackDataset,
+    FeedbackRecord,
+    SpanValueSchema,
+)
 from datasets import DatasetDict, load_dataset
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
