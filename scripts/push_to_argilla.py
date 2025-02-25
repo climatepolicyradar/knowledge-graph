@@ -1,10 +1,10 @@
 import os
-from typing import Annotated
 import uuid
+from typing import Annotated
 
 import argilla as rg
-from argilla._exceptions._api import ConflictError, UnprocessableEntityError
 import typer
+from argilla._exceptions._api import ConflictError, UnprocessableEntityError
 from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 

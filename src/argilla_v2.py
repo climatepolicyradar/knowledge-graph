@@ -1,20 +1,19 @@
 import os
+import uuid
 from datetime import datetime
 from itertools import cycle
 from typing import Generator, Optional
-import uuid
 
 import argilla as rg
 from argilla import (
     Dataset,
+    FloatMetadataProperty,
     Record,
     Settings,
     SpanQuestion,
+    TermsMetadataProperty,
     TextField,
     Workspace,
-    TermsMetadataProperty,
-    FloatMetadataProperty,
-    IntegerMetadataProperty,
 )
 from dotenv import find_dotenv, load_dotenv
 
