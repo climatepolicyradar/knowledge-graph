@@ -81,15 +81,17 @@ def main(
     try:
         workspace = rg.Workspace(name=workspace_name, id=uuid.uuid4())
         workspace.create()
-        console.log(f'✅ Created workspace "{workspace.name}"')
+        console.log(f'✅ Created workspace "{workspace.name}", with id: {workspace.id}')
     except (ValueError, ConflictError):
-        workspace = rg.Workspace(name=workspace_name)
-        console.log(f'✅ Loaded workspace "{workspace.name}"')
+        workspace = client.workspaces(name=workspace_name)
+        assert isinstance(workspace, rg.Workspace)
+        console.log(f'✅ Loaded workspace "{workspace.name}", with id: {workspace.id}')
 
     for username in usernames:
         try:
             password = generate_identifier(username)
             user = rg.User(
+                id=uuid.uuid4(),
                 username=username,
                 password=password,
                 role="annotator",  # type: ignore
@@ -99,7 +101,8 @@ def main(
             console.log(f'✅ Created user "{username}" with password "{password}"')
         except (KeyError, ConflictError):
             console.log(f'✅ User "{username}" already exists')
-            user = rg.User(username)
+            user = client.users(username)
+            assert isinstance(user, rg.User)
 
         try:
             workspace.add_user(user)

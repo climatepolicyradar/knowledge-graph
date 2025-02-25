@@ -2,9 +2,20 @@ import os
 from datetime import datetime
 from itertools import cycle
 from typing import Generator, Optional
+import uuid
 
 import argilla as rg
-from argilla import Dataset, Record, Settings, SpanQuestion, TextField, Workspace
+from argilla import (
+    Dataset,
+    Record,
+    Settings,
+    SpanQuestion,
+    TextField,
+    Workspace,
+    TermsMetadataProperty,
+    FloatMetadataProperty,
+    IntegerMetadataProperty,
+)
 from dotenv import find_dotenv, load_dotenv
 
 from src.labelled_passage import LabelledPassage
@@ -51,20 +62,87 @@ def labelled_passages_to_feedback_dataset(
                     allow_overlapping=False,
                 )
             ],
+            # Argilla has the following regex for metadata field names: {"pattern":"^(?=.*[a-z0-9])[a-z0-9_-]+$"}
+            # changing the dots to hyphens.
+            # Also, it doesn't allow capital characters, so lowercasing everything
+            metadata=[
+                TermsMetadataProperty("text_block-text_block_id"),
+                TermsMetadataProperty("text_block-language"),
+                TermsMetadataProperty("text_block-type"),
+                FloatMetadataProperty("text_block-type_confidence"),
+                FloatMetadataProperty("text_block-page_number"),
+                TermsMetadataProperty("text_block-coords"),
+                TermsMetadataProperty("document_id"),
+                TermsMetadataProperty("document_name"),
+                TermsMetadataProperty("document_source_url"),
+                TermsMetadataProperty("document_content_type"),
+                TermsMetadataProperty("document_md5_sum"),
+                TermsMetadataProperty("languages"),
+                TermsMetadataProperty("translated"),
+                TermsMetadataProperty("has_valid_text"),
+                TermsMetadataProperty("pipeline_metadata"),
+                TermsMetadataProperty("document_metadata-name"),
+                TermsMetadataProperty("document_metadata-document_title"),
+                TermsMetadataProperty("document_metadata-description"),
+                TermsMetadataProperty("document_metadata-import_id"),
+                TermsMetadataProperty("document_metadata-slug"),
+                TermsMetadataProperty("document_metadata-family_import_id"),
+                TermsMetadataProperty("document_metadata-family_slug"),
+                TermsMetadataProperty("document_metadata-publication_ts"),
+                TermsMetadataProperty("document_metadata-date"),
+                TermsMetadataProperty("document_metadata-source_url"),
+                TermsMetadataProperty("document_metadata-download_url"),
+                TermsMetadataProperty("document_metadata-corpus_import_id"),
+                TermsMetadataProperty("document_metadata-corpus_type_name"),
+                TermsMetadataProperty("document_metadata-collection_title"),
+                TermsMetadataProperty("document_metadata-collection_summary"),
+                TermsMetadataProperty("document_metadata-type"),
+                TermsMetadataProperty("document_metadata-source"),
+                TermsMetadataProperty("document_metadata-category"),
+                TermsMetadataProperty("document_metadata-geography"),
+                TermsMetadataProperty("document_metadata-geographies"),
+                TermsMetadataProperty("document_metadata-languages"),
+                TermsMetadataProperty("document_metadata-metadata"),
+                TermsMetadataProperty("document_description"),
+                TermsMetadataProperty("document_cdn_object"),
+                TermsMetadataProperty("document_slug"),
+                TermsMetadataProperty("pdf_data-md5sum"),
+                TermsMetadataProperty("pdf_data_page_metadata-dimensions"),
+                TermsMetadataProperty("pdf_data_page_metadata-page_number"),
+                TermsMetadataProperty("_html_data-detected_title"),
+                TermsMetadataProperty("_html_data-detected_date"),
+                TermsMetadataProperty("_html_data-has_valid_text"),
+                TermsMetadataProperty("pipeline_metadata-parser_metadata"),
+                TermsMetadataProperty("text_block-index"),
+                TermsMetadataProperty("world_bank_region"),
+                # TermsMetadataProperty("keywordclassifier"),
+            ],
         ),
         workspace=workspace,
         client=client,
     )
 
+    dataset.id = uuid.uuid4()
     dataset.create()
 
     records = [
-        Record(fields={"text": passage.text}, metadata=passage.metadata)
+        Record(
+            fields={"text": passage.text},
+            metadata=_reformat_metadata_keys(passage.metadata),
+        )
         for passage in labelled_passages
     ]
+
     dataset.records.log(records)
 
     return dataset
+
+
+def _reformat_metadata_keys(metadata: dict) -> dict:
+    """Changes dots to hyphens in the key name"""
+    # Dropping this, as it can't be serialised into the metadata field by Argilla...
+    metadata.pop("KeywordClassifier", None)
+    return {key.replace(".", "-").lower(): value for key, value in metadata.items()}
 
 
 def dataset_to_labelled_passages(dataset: Dataset) -> list[LabelledPassage]:
