@@ -855,25 +855,17 @@ async def run_partial_updates_of_concepts_for_batch(
     """Run partial updates for concepts in a batch of documents."""
 
     logger = get_run_logger()
+    for i, document_importer in enumerate(documents_batch):
+        logger.info(
+            f"Updating concepts for batch of documents, {batch_size} indexing tasks for batch {documents_batch_num}."
+        )
 
-    logger.info(
-        f"Updating concepts for batch of documents, {batch_size} indexing tasks for batch {documents_batch_num}."
-    )
-    indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages(
+        result = await run_partial_updates_of_concepts_for_document_passages(
             document_importer=document_importer,
             cache_bucket=cache_bucket,
             concepts_counts_prefix=concepts_counts_prefix,
         )
-        for document_importer in documents_batch
-    ]
 
-    results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
-    logger.info(
-        f"Gathered {batch_size} indexing tasks for batch {documents_batch_num}."
-    )
-    for i, result in enumerate(results):
-        # Get the S3 key for the task
         document_import_id: DocumentImportId = documents_batch[i][0]
 
         if isinstance(result, Exception):
