@@ -21,6 +21,7 @@ from flows.count_family_document_concepts import (
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
+    run_partial_updates_of_concepts_for_batch,
     run_partial_updates_of_concepts_for_document_passages,
 )
 from flows.inference import (
@@ -111,6 +112,11 @@ create_deployment(
 create_deployment(
     flow=index_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in S3 into Vespa",
+)
+
+create_deployment(
+    flow=run_partial_updates_of_concepts_for_batch,
+    description="Run partial updates of labelled passages stored in S3 into Vespa for a batch of documents",
 )
 
 # Concepts counting
