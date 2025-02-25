@@ -93,7 +93,7 @@ class Config:
     # )
     vespa_search_adapter: VespaSearchAdapter | None = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-    as_subflow: bool = True
+    as_subflow: bool = False
 
     @classmethod
     async def create(cls) -> "Config":
