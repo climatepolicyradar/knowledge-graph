@@ -765,7 +765,7 @@ def s3_paths_or_s3_prefixes(
         case (None, None):
             # Run on all documents, regardless of classifier
             logger.info("run on all documents, regardless of classifier")
-            s3_prefix: str = "s3://" + os.path.join(  # type: ignore
+            s3_prefix: str = "s3://" + os.path.join(
                 cache_bucket,
                 prefix,
             )
@@ -776,7 +776,7 @@ def s3_paths_or_s3_prefixes(
             logger.info("run on all documents, for the specified classifier")
             s3_prefixes = [
                 "s3://"
-                + os.path.join(  # type: ignore
+                + os.path.join(
                     cache_bucket,
                     prefix,
                     classifier_spec.name,
@@ -791,7 +791,7 @@ def s3_paths_or_s3_prefixes(
             logger.info("run on specified documents, for the specified classifier")
             document_paths = [
                 "s3://"
-                + os.path.join(  # type: ignore
+                + os.path.join(
                     cache_bucket,
                     prefix,
                     classifier_spec.name,
@@ -1042,6 +1042,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         config = await Config.create()
     else:
         logger.info("config provided")
+    assert config.cache_bucket
 
     logger.info(f"running with config: {config}")
 
@@ -1049,12 +1050,12 @@ async def index_labelled_passages_from_s3_to_vespa(
         logger.info("no classifier specs. passed in, loading from file")
         classifier_specs = parse_spec_file(config.aws_env)
 
-    logger.info(f"running with classifier specs.: {classifier_specs}")
+    logger.info(f"running with classifier specs: {classifier_specs}")
 
     s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs,
         document_ids,
-        config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        config.cache_bucket,
         config.document_source_prefix,
     )
 
@@ -1062,11 +1063,11 @@ async def index_labelled_passages_from_s3_to_vespa(
 
     await index_by_s3(
         aws_env=config.aws_env,
-        vespa_search_adapter=config.vespa_search_adapter,  # type: ignore
+        vespa_search_adapter=config.vespa_search_adapter,
         s3_prefixes=s3_accessor.prefixes,
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
         as_subflow=config.as_subflow,
-        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
     )
