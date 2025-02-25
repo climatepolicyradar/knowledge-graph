@@ -1,13 +1,17 @@
 import os
+import uuid
 from typing import Annotated
 
+import argilla as rg
 import typer
+from argilla._exceptions._api import ConflictError, UnprocessableEntityError
 from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 
-import argilla as rg
 from scripts.config import concept_dir, processed_data_dir
-from src.argilla import concept_to_dataset_name, labelled_passages_to_feedback_dataset
+from src.argilla_v2 import (
+    labelled_passages_to_feedback_dataset,
+)
 from src.concept import Concept
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage
@@ -39,9 +43,8 @@ def main(
     workspace_name: Annotated[
         str,
         typer.Option(
-            "--workspace",
+            ...,
             help="The name of the workspace to create in Argilla",
-            default="knowledge-graph",
         ),
     ],
 ):
@@ -66,7 +69,7 @@ def main(
         ) from e
 
     with console.status("Connecting to Argilla..."):
-        rg.init(
+        client = rg.Argilla(
             api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL")
         )
     console.log("✅ Connected to Argilla")
@@ -76,31 +79,37 @@ def main(
     # coordinating manually, and we'll come back round to efficient assignment in code in
     # a future iteration if needed.
     try:
-        workspace = rg.Workspace.create(name=workspace_name)
-        console.log(f'✅ Created workspace "{workspace.name}"')
-    except ValueError:
-        workspace = rg.Workspace.from_name(name=workspace_name)
-        console.log(f'✅ Loaded workspace "{workspace.name}"')
+        workspace = rg.Workspace(name=workspace_name, id=uuid.uuid4())
+        workspace.create()
+        console.log(f'✅ Created workspace "{workspace.name}", with id: {workspace.id}')
+    except (ValueError, ConflictError):
+        workspace = client.workspaces(name=workspace_name)
+        assert isinstance(workspace, rg.Workspace)
+        console.log(f'✅ Loaded workspace "{workspace.name}", with id: {workspace.id}')
 
     for username in usernames:
         try:
             password = generate_identifier(username)
-            user = rg.User.create(
+            user = rg.User(
+                id=uuid.uuid4(),
                 username=username,
                 password=password,
                 role="annotator",  # type: ignore
+                client=client,
             )
+            user.create()
             console.log(f'✅ Created user "{username}" with password "{password}"')
-        except KeyError:
+        except (KeyError, ConflictError):
             console.log(f'✅ User "{username}" already exists')
-            user = rg.User.from_name(username)
+            user = client.users(username)
+            assert isinstance(user, rg.User)
 
         try:
-            workspace.add_user(user.id)
+            workspace.add_user(user)
             console.log(
                 f'✅ Added user "{user.username}" to workspace "{workspace.name}"'
             )
-        except ValueError:
+        except (ValueError, UnprocessableEntityError):
             console.log(
                 f'✅ User "{user.username}" already in workspace "{workspace.name}"'
             )
@@ -113,14 +122,14 @@ def main(
             "If you haven't already, you should run:\n"
             f"  just get-concept {wikibase_id}\n"
         ) from e
-    dataset_name = concept_to_dataset_name(concept)
+
     console.log(f"✅ Loaded metadata for {concept}")
 
-    dataset = labelled_passages_to_feedback_dataset(labelled_passages, concept)
-    dataset_in_argilla = dataset.push_to_argilla(
-        name=dataset_name, workspace=workspace_name, show_progress=False
+    dataset = labelled_passages_to_feedback_dataset(
+        labelled_passages, concept, workspace
     )
-    console.log(f'✅ Created dataset for "{concept}" at {dataset_in_argilla.url}')
+
+    console.log(f'✅ Created dataset for "{concept}" at {dataset.name}')
 
 
 if __name__ == "__main__":

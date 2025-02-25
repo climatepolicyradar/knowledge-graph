@@ -88,7 +88,7 @@ def main(
     # Run inference with all classifiers
     raw_text_passages = balanced_dataset["text_block.text"].tolist()
 
-    model_classes = [KeywordClassifier, EmbeddingClassifier]
+    model_classes = [KeywordClassifier]
     models: list[Classifier] = [model_class(concept) for model_class in model_classes]
 
     for model in models:

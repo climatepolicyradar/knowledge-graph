@@ -2,12 +2,12 @@ import os
 import shutil
 from pathlib import Path
 
+import argilla as rg
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import track
 
-import argilla as rg
 from static_sites.labelling_librarian.checks import (
     all_dataset_level_checks,
     check_whether_span_border_is_in_word,
@@ -30,14 +30,14 @@ current_dir = Path(__file__).parent.resolve()
 
 @app.command()
 def main():
-    rg.init(
+    client = rg.Argilla(
         api_url=os.getenv("ARGILLA_API_URL"),
         api_key=os.getenv("ARGILLA_API_KEY"),
     )
+    workspace = client.workspaces("knowledge-graph")
+    assert workspace is not None
     with console.status("Fetching datasets from argilla"):
-        datasets: list[rg.FeedbackDataset] = rg.list_datasets(
-            workspace="knowledge-graph"
-        )  # type: ignore
+        datasets: list[rg.Dataset] = workspace.datasets
     console.log(f"Fetched {len(datasets)} datasets")
 
     issues = []

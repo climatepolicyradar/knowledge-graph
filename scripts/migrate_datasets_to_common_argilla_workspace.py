@@ -1,9 +1,9 @@
 import os
 import pickle
 
+import argilla as rg
 from rich.console import Console
 
-import argilla as rg
 from scripts.config import data_dir
 from src.identifiers import WikibaseID
 
