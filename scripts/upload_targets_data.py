@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 
-import argilla as rg
+import argilla.v1 as rg_v1
 import huggingface_hub as hf
 import pandas as pd
 import typer
@@ -109,15 +109,17 @@ def main():
     console.log(f"✅ Loaded {len(df)} labelled passages from HF")
 
     # wrangling and uploading to Argilla
-    rg.init(api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL"))
+    rg_v1.init(
+        api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL")
+    )
 
     workspace_name = "knowledge-graph"  # after discussing with Harrison, this is where everything should go
 
     try:
-        workspace = rg.Workspace.create(name=workspace_name)
+        workspace = rg_v1.Workspace.create(name=workspace_name)
         console.log(f'✅ Created workspace "{workspace.name}"')
     except ValueError:
-        workspace = rg.Workspace.from_name(name=workspace_name)
+        workspace = rg_v1.Workspace.from_name(name=workspace_name)
         console.log(f'✅ Loaded workspace "{workspace.name}"')
 
     usernames = set(df["annotation_agent"].tolist())
@@ -125,7 +127,7 @@ def main():
     for username in usernames:
         try:
             password = generate_identifier(username)
-            _ = rg.User.create(
+            _ = rg_v1.User.create(
                 username=username,
                 password=password,
                 role="annotator",  # type: ignore
@@ -133,7 +135,7 @@ def main():
             console.log(f'✅ Created user "{username}" with password "{password}"')
         except KeyError:
             console.log(f'✅ User "{username}" already exists')
-            _ = rg.User.from_name(username)
+            _ = rg_v1.User.from_name(username)
 
     for concept in concepts:
         target_labelled_passages = [
