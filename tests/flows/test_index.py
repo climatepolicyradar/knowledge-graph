@@ -428,7 +428,6 @@ async def test_index_by_s3_task_failure(
 
         # Verify error was logged for the failed update
         error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
-
         assert any(
             "failed to process document" in r.message
             and "Forced update failure" in r.message
@@ -548,7 +547,6 @@ def test_get_passage_for_text_block(
         assert passage == relevant_passage[1]
 
 
-# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_config(
@@ -574,7 +572,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     config = Config(
         cache_bucket=mock_bucket,
         vespa_search_adapter=local_vespa_search_adapter,
-        as_subflow=False,
+        as_subflow=True,
     )
 
     await index_labelled_passages_from_s3_to_vespa(
