@@ -327,7 +327,7 @@ async def test_index_by_s3_with_s3_prefixes(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
-        as_subflow=False,
+        as_subflow=True,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )
@@ -373,7 +373,7 @@ async def test_index_by_s3_with_s3_paths(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
         s3_paths=s3_paths,
-        as_subflow=False,
+        as_subflow=True,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )
@@ -403,14 +403,14 @@ async def test_index_by_s3_task_failure(
 ) -> None:
     """Test that index_by_s3 handles task failures gracefully."""
 
-    async def mock_run_partial_updates_of_concepts_for_document_passages_as(
+    async def mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment(
         *args, **kwargs
     ):
         raise Exception("Forced update failure")
 
     with patch(
-        "flows.index.run_partial_updates_of_concepts_for_document_passages_as",
-        side_effect=mock_run_partial_updates_of_concepts_for_document_passages_as,
+        "flows.index.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+        side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
     ):
         await index_by_s3(
             aws_env=AwsEnv.sandbox,
@@ -419,7 +419,7 @@ async def test_index_by_s3_task_failure(
                 os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
             ],
             s3_paths=None,
-            as_subflow=False,
+            as_subflow=True,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
         )
@@ -570,7 +570,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     config = Config(
         cache_bucket=mock_bucket,
         vespa_search_adapter=local_vespa_search_adapter,
-        as_subflow=False,
+        as_subflow=True,
     )
 
     await index_labelled_passages_from_s3_to_vespa(
