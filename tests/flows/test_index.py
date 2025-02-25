@@ -303,9 +303,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
         )
 
 
-# TODO: Add test for running on batch of docs
-
-
 # FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
@@ -409,14 +406,14 @@ async def test_index_by_s3_task_failure(
 ) -> None:
     """Test that index_by_s3 handles task failures gracefully."""
 
-    async def mock_run_partial_updates_of_concepts_for_document_passages_as(
+    async def mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment(
         *args, **kwargs
     ):
         raise Exception("Forced update failure")
 
     with patch(
-        "flows.index.run_partial_updates_of_concepts_for_document_passages_as",
-        side_effect=mock_run_partial_updates_of_concepts_for_document_passages_as,
+        "flows.index.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+        side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
     ):
         await index_by_s3(
             aws_env=AwsEnv.sandbox,
@@ -432,6 +429,7 @@ async def test_index_by_s3_task_failure(
 
         # Verify error was logged for the failed update
         error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+
         assert any(
             "failed to process document" in r.message
             and "Forced update failure" in r.message

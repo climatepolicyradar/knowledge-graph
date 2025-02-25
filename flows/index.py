@@ -19,7 +19,7 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
@@ -868,12 +868,21 @@ async def run_partial_updates_of_concepts_for_batch(
         for document_importer in documents_batch
     ]
 
-    _ = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+    results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
     logger.info(
         f"Gathered {batch_size} indexing tasks for batch {documents_batch_num}."
     )
-    # TODO: What do we want to do with the results?
-    #   Coroutine[Any, Any, Counter[ConceptModel]]
+    for i, result in enumerate(results):
+        # Get the S3 key for the task
+        document_import_id: DocumentImportId = documents_batch[i][0]
+
+        if isinstance(result, Exception):
+            logger.error(
+                f"failed to process document `{document_import_id}`: {str(result)}",
+            )
+            continue
+
+        logger.info(f"processed batch documents #{documents_batch_num}")
 
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
@@ -898,7 +907,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
     deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-    return run_deployment(
+    return await run_deployment(
         name=f"{flow_name}/{deployment_name}",
         parameters={
             "documents_batch": documents_batch,
@@ -976,9 +985,15 @@ async def index_by_s3(
         ]
 
         logger.info("Gathering indexing tasks")
-        _ = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+        results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
         logger.info("Gathered indexing tasks")
-        # TODO: Currently not returning a repsonse, do we want to?
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"failed to process document batch: {str(result)}",
+                )
+                continue
 
 
 def run_partial_updates_of_concepts_for_document_passages_as(
