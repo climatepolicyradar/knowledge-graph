@@ -392,7 +392,6 @@ async def test_index_by_s3_with_s3_paths(
     assert final_concepts_count == 3933
 
 
-# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_index_by_s3_task_failure(
@@ -422,9 +421,9 @@ async def test_index_by_s3_task_failure(
                 os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
             ],
             s3_paths=None,
+            as_subflow=True,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
-            as_subflow=True,
         )
 
         # Verify error was logged for the failed update

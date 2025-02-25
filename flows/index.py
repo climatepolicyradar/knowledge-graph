@@ -19,7 +19,7 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
-from prefect.deployments import run_deployment
+from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
