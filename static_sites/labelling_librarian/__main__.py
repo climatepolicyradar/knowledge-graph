@@ -48,7 +48,7 @@ def main():
         check_whether_span_border_is_in_word,
         check_whether_spans_have_high_non_alphabetical_ratio,
     ]:
-        for dataset in track(datasets[:4], "Checking datasets for issues..."):
+        for dataset in track(datasets, "Checking datasets for issues..."):
             issues.extend(check(dataset))
 
     console.log(f"Found {len(issues)} issues in {len(datasets)} datasets")
