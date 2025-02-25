@@ -303,7 +303,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
         )
 
 
-# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 # @pytest.mark.flaky_on_ci  # Disabled for now, to see if it's still flaky
@@ -345,7 +344,6 @@ async def test_index_by_s3_with_s3_prefixes(
     assert final_concepts_count == 3933
 
 
-# FIXME: Tests failed
 @pytest.mark.asyncio
 @pytest.mark.vespa
 # @pytest.mark.flaky_on_ci  # Disabled for now, to see if it's still flaky

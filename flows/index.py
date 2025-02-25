@@ -6,7 +6,7 @@ import os
 import re
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable, Generator
+from collections.abc import Generator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -894,7 +894,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     aws_env: AwsEnv,
     as_subflow: bool,
 ) -> None:
-    """Run partial updates for document passages, either as a subflow or directly."""
+    """Run partial updates for a batch of documents as a sub-flow or deployment."""
     if as_subflow:
         return await run_partial_updates_of_concepts_for_batch(
             documents_batch=documents_batch,
@@ -915,7 +915,6 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
             "documents_batch_num": documents_batch_num,
             "cache_bucket": cache_bucket,
             "concepts_counts_prefix": concepts_counts_prefix,
-            "as_subflow": as_subflow,
         },
         timeout=1200,
         as_subflow=True,
@@ -994,39 +993,6 @@ async def index_by_s3(
                     f"failed to process document batch: {str(result)}",
                 )
                 continue
-
-
-# TODO: Remove in later PR
-def run_partial_updates_of_concepts_for_document_passages_as(
-    document_importer: DocumentImporter,
-    as_subflow: bool,
-    aws_env: AwsEnv,
-    cache_bucket: str,
-    concepts_counts_prefix: str,
-) -> Awaitable[Counter[ConceptModel]]:
-    """Run partial updates for document passages, either as a subflow or directly."""
-    if as_subflow:
-        flow_name = function_to_flow_name(
-            run_partial_updates_of_concepts_for_document_passages
-        )
-        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-
-        return run_deployment(
-            name=f"{flow_name}/{deployment_name}",
-            parameters={
-                "document_importer": document_importer,
-                "cache_bucket": cache_bucket,
-                "concepts_counts_prefix": concepts_counts_prefix,
-            },
-            timeout=1200,
-            as_subflow=True,
-        )
-    else:
-        return run_partial_updates_of_concepts_for_document_passages(  # pyright: ignore[reportCallIssue]
-            document_importer=document_importer,
-            cache_bucket=cache_bucket,
-            concepts_counts_prefix=concepts_counts_prefix,
-        )
 
 
 def iterate_batch(
