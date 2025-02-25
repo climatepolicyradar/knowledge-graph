@@ -860,7 +860,7 @@ async def run_partial_updates_of_concepts_for_batch(
         f"Updating concepts for batch of documents, {batch_size} indexing tasks for batch {documents_batch_num}."
     )
     indexing_tasks = [
-        run_partial_updates_of_concepts_for_document_passages(  # pyright: ignore[reportCallIssue]
+        run_partial_updates_of_concepts_for_document_passages(
             document_importer=document_importer,
             cache_bucket=cache_bucket,
             concepts_counts_prefix=concepts_counts_prefix,
@@ -895,9 +895,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
             concepts_counts_prefix=concepts_counts_prefix,
         )
 
-    flow_name = function_to_flow_name(
-        run_partial_updates_of_concepts_for_document_passages
-    )
+    flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
     deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
     return run_deployment(
@@ -1086,7 +1084,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_prefixes=s3_accessor.prefixes,
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
+        as_subflow=config.as_subflow,
         cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         concepts_counts_prefix=config.concepts_counts_prefix,
-        as_subflow=config.as_subflow,
     )
