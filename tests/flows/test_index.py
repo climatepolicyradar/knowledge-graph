@@ -328,7 +328,7 @@ async def test_index_by_s3_with_s3_prefixes(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
-        as_subflow=False,
+        as_subflow=True,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )

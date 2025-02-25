@@ -996,6 +996,7 @@ async def index_by_s3(
                 continue
 
 
+# TODO: Remove in later PR
 def run_partial_updates_of_concepts_for_document_passages_as(
     document_importer: DocumentImporter,
     as_subflow: bool,
