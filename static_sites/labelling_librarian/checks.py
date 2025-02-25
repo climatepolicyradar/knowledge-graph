@@ -1,14 +1,14 @@
-from functools import lru_cache
 import itertools
 from collections import defaultdict
+from functools import lru_cache
 from typing import Callable
 
+import argilla as rg
+from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
-import argilla as rg
-from argilla import User, ResponseStatus, Response
 from scripts.evaluate import create_gold_standard_labelled_passages
-from src.argilla_v2 import dataset_to_labelled_passages, client
+from src.argilla_v2 import client, dataset_to_labelled_passages
 from src.labelled_passage import LabelledPassage
 from src.metrics import count_span_level_metrics
 from src.span import Span
