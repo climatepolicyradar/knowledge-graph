@@ -855,26 +855,25 @@ async def run_partial_updates_of_concepts_for_batch(
     """Run partial updates for concepts in a batch of documents."""
 
     logger = get_run_logger()
+    logger.info(
+        f"Updating concepts for batch of documents, documents in batch: {len(documents_batch)}."
+    )
     for i, document_importer in enumerate(documents_batch):
-        logger.info(
-            f"Updating concepts for batch of documents, {batch_size} indexing tasks for batch {documents_batch_num}."
-        )
+        try:
+            _ = await run_partial_updates_of_concepts_for_document_passages(
+                document_importer=document_importer,
+                cache_bucket=cache_bucket,
+                concepts_counts_prefix=concepts_counts_prefix,
+            )
 
-        result = await run_partial_updates_of_concepts_for_document_passages(
-            document_importer=document_importer,
-            cache_bucket=cache_bucket,
-            concepts_counts_prefix=concepts_counts_prefix,
-        )
+            logger.info(f"processed batch documents #{documents_batch_num}")
 
-        document_import_id: DocumentImportId = documents_batch[i][0]
-
-        if isinstance(result, Exception):
+        except Exception as e:
+            document_import_id: DocumentImportId = documents_batch[i][0]
             logger.error(
-                f"failed to process document `{document_import_id}`: {str(result)}",
+                f"failed to process document `{document_import_id}`: {e.__str__()}",
             )
             continue
-
-        logger.info(f"processed batch documents #{documents_batch_num}")
 
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
