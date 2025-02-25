@@ -1,12 +1,16 @@
+from functools import lru_cache
+import itertools
+from collections import defaultdict
 from typing import Callable
 
-import argilla as rg
-from argilla import ResponseStatus
 from pydantic import BaseModel
 
+import argilla as rg
+from argilla import User, ResponseStatus, Response
 from scripts.evaluate import create_gold_standard_labelled_passages
-from src.argilla_v2 import dataset_to_labelled_passages
+from src.argilla_v2 import dataset_to_labelled_passages, client
 from src.labelled_passage import LabelledPassage
+from src.metrics import count_span_level_metrics
 from src.span import Span
 
 DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
@@ -57,6 +61,9 @@ def all_dataset_level_checks(dataset: rg.Dataset) -> list[DatasetLevelIssue]:
 
     issues.extend(check_whether_dataset_has_a_high_discard_ratio(dataset))
     issues.extend(check_if_dataset_contains_few_positives(dataset))
+    issues.extend(
+        check_whether_dataset_has_a_low_level_of_interannotator_agreement(dataset)
+    )
     return issues
 
 
@@ -130,6 +137,95 @@ def check_whether_dataset_has_a_high_discard_ratio(
                     f' <span class="text-red-500">{discarded} discarded, {100 * ratio:.1f}% of the total</span>'
                 ),
                 type="high_discard_ratio",
+            )
+        ]
+    return []
+
+
+@lru_cache(maxsize=64)
+def _get_username_from_id(user_id: str) -> str:
+    user = client.users(id=user_id)
+    assert isinstance(user, User)
+    return user.username
+
+
+def check_whether_dataset_has_a_low_level_of_interannotator_agreement(
+    dataset: rg.Dataset, threshold: float = 0.5
+) -> list[DatasetLevelIssue]:
+    """Returns an issue if span-level interannotator agreement is low"""
+
+    # Get all unique labeller names
+    labeller_names = set()
+    for record in dataset.records:
+        responses: list[Response] = record.responses["entities"]
+        for response in responses:
+            user_name = _get_username_from_id(response.user_id)
+            labeller_names.add(user_name)
+
+    # If there's only one labeller, we can't calculate IAA
+    if len(labeller_names) < 2:
+        return []
+
+    # Organize records by labeller
+    passages_by_labeller = defaultdict(list)
+    for record in dataset.records:
+        text = record.fields.get("text", "")
+        responses: list[Response] = record.responses["entities"]
+
+        # Create a passage for each labeller's annotations
+        for labeller in labeller_names:
+            spans = []
+            for response in responses:
+                user_name = _get_username_from_id(response.user_id)
+                if user_name == labeller:
+                    try:
+                        for value in response.value:
+                            spans.append(
+                                Span(
+                                    text=text,
+                                    start_index=value["start"],
+                                    end_index=value["end"],
+                                    concept_id=value["label"],
+                                    labellers=[user_name],
+                                    timestamps=[
+                                        record.updated_at
+                                    ],  # so it's the record that bears this attribute now rather than the response...
+                                )
+                            )
+                    except KeyError:
+                        continue
+
+            labelled_passage = LabelledPassage(text=text, spans=spans)
+            passages_by_labeller[labeller].append(labelled_passage)
+
+    # Calculate pairwise IAA scores
+    labeller_pairs = list(itertools.combinations(labeller_names, 2))
+    iaa_scores = []
+
+    for labeller_1, labeller_2 in labeller_pairs:
+        confusion_matrix = count_span_level_metrics(
+            passages_by_labeller[labeller_1],
+            passages_by_labeller[labeller_2],
+            threshold=0,  # Check for any overlap between annotators at the span level
+        )
+        iaa_scores.append(confusion_matrix.cohens_kappa())
+
+    if any(iaa < threshold for iaa in iaa_scores):
+        return [
+            DatasetLevelIssue(
+                dataset_name=dataset.name,
+                message=(
+                    f"Annotators seem to disagree on the labels in <strong>{dataset.name}</strong>.<br />"
+                    + "".join(
+                        [
+                            f"The IAA between {labeller_1} and {labeller_2} is {iaa:.3f}<br />"
+                            for (labeller_1, labeller_2), iaa in zip(
+                                labeller_pairs, iaa_scores
+                            )
+                        ]
+                    )
+                ),
+                type="low_interannotator_agreement",
             )
         ]
     return []

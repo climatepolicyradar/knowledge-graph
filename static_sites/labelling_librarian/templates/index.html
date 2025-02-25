@@ -31,81 +31,113 @@
       .unselected:hover {
         background-color: #d1d5db; /* gray-300 */
       }
+
+      a {
+        @apply text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline underline-offset-4;
+      }
     </style>
     <script>
       function filterDatasets() {
-        const selectedTypes = Array.from(document.querySelectorAll('.issue-button.selected'))
-          .map(button => button.getAttribute('data-issue-type'));
-        const filterValue = document.getElementById('dataset-filter').value.toLowerCase();
-        const datasets = document.querySelectorAll('.dataset-card');
-        datasets.forEach(dataset => {
-          const issueTypes = dataset.getAttribute('data-issue-types').split(',');
-          const datasetName = dataset.querySelector('a').textContent.toLowerCase();
+        const selectedTypes = Array.from(
+          document.querySelectorAll(".issue-button.selected")
+        ).map((button) => button.getAttribute("data-issue-type"));
+        const filterValue = document
+          .getElementById("dataset-filter")
+          .value.toLowerCase();
+        const datasets = document.querySelectorAll(".dataset-card");
+        datasets.forEach((dataset) => {
+          const issueTypes = dataset
+            .getAttribute("data-issue-types")
+            .split(",");
+          const datasetName = dataset
+            .querySelector("a")
+            .textContent.toLowerCase();
 
-          const matchesIssueType = selectedTypes.length === 0 || selectedTypes.some(type => issueTypes.includes(type));
-          const matchesText = datasetName.includes(filterValue) || filterValue.length === 0;
+          const matchesIssueType =
+            selectedTypes.length === 0 ||
+            selectedTypes.some((type) => issueTypes.includes(type));
+          const matchesText =
+            datasetName.includes(filterValue) || filterValue.length === 0;
 
           if (matchesIssueType && matchesText) {
-            dataset.classList.remove('hidden');
+            dataset.classList.remove("hidden");
           } else {
-            dataset.classList.add('hidden');
+            dataset.classList.add("hidden");
           }
         });
       }
 
       function toggleButton(button) {
-        const buttons = document.querySelectorAll('.issue-button');
-        const allSelected = Array.from(buttons).every(btn => btn.classList.contains('selected'));
+        const buttons = document.querySelectorAll(".issue-button");
+        const allSelected = Array.from(buttons).every((btn) =>
+          btn.classList.contains("selected")
+        );
         // if all buttons are selected, deselect all first (this is for users who want to filter when all are selected)
         if (allSelected) {
           deselectAll();
         }
-        button.classList.toggle('selected');
-        button.classList.toggle('unselected');
+        button.classList.toggle("selected");
+        button.classList.toggle("unselected");
         filterDatasets();
       }
 
       function selectAll() {
-        const buttons = document.querySelectorAll('.issue-button');
-        buttons.forEach(button => {
-          button.classList.add('selected');
-          button.classList.remove('unselected');
+        const buttons = document.querySelectorAll(".issue-button");
+        buttons.forEach((button) => {
+          button.classList.add("selected");
+          button.classList.remove("unselected");
         });
         filterDatasets();
       }
 
       function deselectAll() {
-        const buttons = document.querySelectorAll('.issue-button');
-        buttons.forEach(button => {
-          button.classList.remove('selected');
-          button.classList.add('unselected');
+        const buttons = document.querySelectorAll(".issue-button");
+        buttons.forEach((button) => {
+          button.classList.remove("selected");
+          button.classList.add("unselected");
         });
         filterDatasets();
       }
     </script>
   </head>
-  <body class="bg-gray-100">
-    <div class="max-w-7xl mx-auto p-6">
-      <h1 class="text-2xl font-bold mb-4">Datasets and Issues</h1>
-      <div class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6">
+  <body
+    class="bg-slate-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 md:p-6"
+  >
+    <div class="max-w-7xl mx-auto">
+      <h1 class="text-2xl font-bold mb-4 text-slate-800 dark:text-slate-100">
+        Datasets and Issues
+      </h1>
+      <div
+        class="bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 md:p-6 mb-6"
+      >
         <div class="mb-4">
           <input
             type="text"
             id="dataset-filter"
-            class="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md"
+            class="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-gray-700 text-slate-900 dark:text-slate-100"
             placeholder="Filter datasets..."
             oninput="filterDatasets()"
           />
         </div>
         <div class="flex flex-wrap gap-2">
-          <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors" onclick="selectAll()">
+          <button
+            class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors"
+            onclick="selectAll()"
+          >
             All
           </button>
-          <button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors" onclick="deselectAll()">
+          <button
+            class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors"
+            onclick="deselectAll()"
+          >
             None
           </button>
           {% for issue_type, count in total_issue_counts.items() %}
-          <button class="issue-button px-4 py-2 text-white rounded-md transition-colors selected" data-issue-type="{{ issue_type }}" onclick="toggleButton(this)">
+          <button
+            class="issue-button px-4 py-2 text-white rounded-md transition-colors selected"
+            data-issue-type="{{ issue_type }}"
+            onclick="toggleButton(this)"
+          >
             {{ issue_type }} ({{ count }})
           </button>
           {% endfor %}
@@ -113,11 +145,17 @@
       </div>
       <div class="space-y-4">
         {% for dataset_name, metadata in dataset_info.items() %}
-        <div class="dataset-card bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4" data-issue-types="{{ ','.join(metadata.issue_types) }}">
-          <a href="/{{ dataset_name }}.html" class="text-xl font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+        <div
+          class="dataset-card bg-white dark:bg-gray-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4"
+          data-issue-types="{{ ','.join(metadata.issue_types) }}"
+        >
+          <a href="/{{ dataset_name }}.html" class="text-xl font-semibold">
             {{ dataset_name }} - {{ metadata.preferred_label }}
           </a>
-          <p class="text-slate-700 dark:text-slate-200">Dataset issues: {{ metadata.dataset_issue_count }}, passage issues: {{ metadata.passage_issue_count }}</p>
+          <p class="text-slate-700 dark:text-slate-200">
+            Dataset issues: {{ metadata.dataset_issue_count }}, passage issues:
+            {{ metadata.passage_issue_count }}
+          </p>
         </div>
         {% endfor %}
       </div>

@@ -122,19 +122,17 @@ class LabelledPassage(BaseModel):
             try:
                 # a "value" is a dict with the keys "start", "end", and "label"
                 for value in response.value:
-                    spans.extend(
-                        [
-                            Span(
-                                text=text,
-                                start_index=value["start"],
-                                end_index=value["end"],
-                                concept_id=value["label"],
-                                labellers=[user_name],
-                                timestamps=[
-                                    record.updated_at
-                                ],  # so it's the record that bears this attribute now rather than the response...
-                            )
-                        ]
+                    spans.append(
+                        Span(
+                            text=text,
+                            start_index=value["start"],
+                            end_index=value["end"],
+                            concept_id=value["label"],
+                            labellers=[user_name],
+                            timestamps=[
+                                record.updated_at
+                            ],  # so it's the record that bears this attribute now rather than the response...
+                        )
                     )
             except KeyError:
                 pass
