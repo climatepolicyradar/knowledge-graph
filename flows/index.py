@@ -876,6 +876,7 @@ async def run_partial_updates_of_concepts_for_batch(
             continue
 
 
+@flow
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
     batch_size: int,
@@ -886,6 +887,12 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     as_subflow: bool,
 ) -> None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
+    logger = get_run_logger()
+    logger.info(
+        "Running partial updates of concepts for batch as sub-flow or deployment: "
+        f"batch length {len(documents_batch)}, as_subflow: {as_subflow}"
+    )
+
     if as_subflow:
         return await run_partial_updates_of_concepts_for_batch(
             documents_batch=documents_batch,
