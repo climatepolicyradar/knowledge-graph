@@ -4,6 +4,7 @@ from typing import Optional
 from datasets import Dataset, load_dataset
 
 from src.labelled_passage import LabelledPassage
+from src.span import Span
 
 
 class HuggingfaceSession:
@@ -36,7 +37,9 @@ class HuggingfaceSession:
             f"{self.organisation}/{dataset_name}",
             token=self.token,
         )
-        labelled_passages = dataset.map(self._labelled_passage_from_row, batched=True).to_list()  # type: ignore
+
+        df = dataset["train"].to_pandas()  # type: ignore
+        labelled_passages = list(df.apply(lambda x: self._labelled_passage_from_row(x), axis=1))  # type: ignore
         return labelled_passages
 
     @staticmethod
@@ -44,7 +47,7 @@ class HuggingfaceSession:
         return LabelledPassage(
             id=row["id"],
             text=row["text"],
-            spans=row["spans"],
+            spans=[Span(**s) for s in row["spans"]],
             metadata=row["metadata"],
         )
 
@@ -53,7 +56,9 @@ class HuggingfaceSession:
             {
                 "id": [lp.id for lp in labelled_passages],
                 "text": [lp.text for lp in labelled_passages],
-                "spans": [lp.spans for lp in labelled_passages],
+                "spans": [
+                    [s.model_dump() for s in lp.spans] for lp in labelled_passages
+                ],
                 "metadata": [lp.metadata for lp in labelled_passages],
             }
         )
