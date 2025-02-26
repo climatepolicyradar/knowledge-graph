@@ -42,6 +42,7 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 DEFAULT_BATCH_SIZE = 500
+DEFAULT_INDEXING_TASK_BATCH_SIZE = 50
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
@@ -845,6 +846,37 @@ def s3_obj_generator(
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
 
 
+# TODO: Add test
+def generate_indexing_task_batches(
+    document_batches: Generator[list[DocumentImporter], None, None], batch_size: int
+) -> Generator[list[list[DocumentImporter]], None, None]:
+    """
+    Generate indexing task batches.
+
+    This function generates indexing task batches from a list of document batches.
+    This allows us to run a batch of indexing tasks asynchronously, then gather
+    the results and move onto the next batch.
+
+    This is useful as it allows us to control how many indexing tasks we run in
+    parallel at once. For example we wouldn't want to spin up 1000 sub
+    deployments all trying to write to our database at once. This also allows
+    us to reduce the batch size which can exceed prefects flow limit if too
+    large.
+    """
+
+    indexing_task_batch = []
+
+    for documents_batch in document_batches:
+        indexing_task_batch.append(documents_batch)
+
+        if len(indexing_task_batch) == batch_size:
+            yield indexing_task_batch
+            indexing_task_batch = []
+
+    if indexing_task_batch:
+        yield indexing_task_batch
+
+
 @flow
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
@@ -938,6 +970,7 @@ async def index_by_s3(
     s3_prefixes: list[str] | None = None,
     s3_paths: list[str] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
     as_subflow: bool = True,
 ) -> None:
     """
@@ -974,33 +1007,38 @@ async def index_by_s3(
         logger.info("Getting S3 object generator")
         documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
         documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
+        indexing_task_batches = generate_indexing_task_batches(
+            documents_batches, batch_size=indexing_task_batch_size
+        )
 
-        indexing_tasks = [
-            run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-                documents_batch=documents_batch,
-                batch_size=batch_size,
-                documents_batch_num=documents_batch_num,
-                cache_bucket=cache_bucket,
-                concepts_counts_prefix=concepts_counts_prefix,
-                aws_env=aws_env,
-                as_subflow=as_subflow,
-            )
-            for (
-                documents_batch_num,
-                documents_batch,
-            ) in enumerate(documents_batches, start=1)
-        ]
+        for i, indexing_task_batch in enumerate(indexing_task_batches, start=1):
+            logger.info(f"Processing indexing task batch #{i}")
 
-        logger.info("Gathering indexing tasks")
-        results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
-        logger.info("Gathered indexing tasks")
-
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(
-                    f"failed to process document batch: {str(result)}",
+            indexing_tasks = [
+                run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+                    documents_batch=documents_batch,
+                    batch_size=batch_size,
+                    documents_batch_num=documents_batch_num,
+                    cache_bucket=cache_bucket,
+                    concepts_counts_prefix=concepts_counts_prefix,
+                    aws_env=aws_env,
+                    as_subflow=as_subflow,
                 )
-                continue
+                for documents_batch_num, documents_batch in enumerate(
+                    indexing_task_batch, start=1
+                )
+            ]
+
+            logger.info(f"Gathering indexing tasks for batch #{i}")
+            results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+            logger.info(f"Gathered indexing tasks for batch #{i}")
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(
+                        f"failed to process document batch in indexing task batch #{i}: {str(result)}",
+                    )
+                    continue
 
 
 def iterate_batch(
@@ -1033,6 +1071,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     document_ids: list[str] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
@@ -1075,6 +1114,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_prefixes=s3_accessor.prefixes,
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
+        indexing_task_batch_size=indexing_task_batch_size,
         as_subflow=config.as_subflow,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
