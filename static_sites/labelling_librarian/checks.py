@@ -1,14 +1,14 @@
 import itertools
 from collections import defaultdict
+from functools import lru_cache
 from typing import Callable
 
+import argilla as rg
+from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
-import argilla as rg
-from argilla import User  # type: ignore
-from argilla.client.feedback.schemas.responses import ResponseStatus
 from scripts.evaluate import create_gold_standard_labelled_passages
-from src.argilla import dataset_to_labelled_passages
+from src.argilla_v2 import client, dataset_to_labelled_passages
 from src.labelled_passage import LabelledPassage
 from src.metrics import count_span_level_metrics
 from src.span import Span
@@ -17,7 +17,7 @@ DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
 
 
 def dataset_to_labelled_passages_with_cache(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[LabelledPassage]:
     """Turns the dataset into LabelledPassages using a cache"""
     dataset_name = dataset.name  # type: ignore
@@ -51,7 +51,7 @@ class DatasetLevelIssue(LabellingIssue):
     pass
 
 
-def all_dataset_level_checks(dataset: rg.FeedbackDataset) -> list[DatasetLevelIssue]:
+def all_dataset_level_checks(dataset: rg.Dataset) -> list[DatasetLevelIssue]:
     """Orchestrate all dataset checks"""
     issues = check_whether_dataset_is_empty(dataset)
 
@@ -60,15 +60,15 @@ def all_dataset_level_checks(dataset: rg.FeedbackDataset) -> list[DatasetLevelIs
         return issues
 
     issues.extend(check_whether_dataset_has_a_high_discard_ratio(dataset))
-    issues.extend(check_whether_dataset_contains_few_positives(dataset))
+    issues.extend(check_if_dataset_contains_few_positives(dataset))
     issues.extend(
         check_whether_dataset_has_a_low_level_of_interannotator_agreement(dataset)
     )
     return issues
 
 
-def check_whether_dataset_contains_few_positives(
-    dataset: rg.FeedbackDataset,
+def check_if_dataset_contains_few_positives(
+    dataset: rg.Dataset,
 ) -> list[DatasetLevelIssue]:
     """Checks whether the dataset has too few positive responses"""
     labelled_passages = dataset_to_labelled_passages_with_cache(dataset)
@@ -89,7 +89,7 @@ def check_whether_dataset_contains_few_positives(
     return []
 
 
-def dataset_contains_submitted_records(dataset: rg.FeedbackDataset) -> bool:
+def dataset_contains_submitted_records(dataset: rg.Dataset) -> bool:
     for record in dataset.records:
         for response in record.responses:
             if response.status == ResponseStatus.submitted:
@@ -98,7 +98,7 @@ def dataset_contains_submitted_records(dataset: rg.FeedbackDataset) -> bool:
 
 
 def check_whether_dataset_is_empty(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[DatasetLevelIssue]:
     if dataset_contains_submitted_records(dataset):
         return []
@@ -113,7 +113,7 @@ def check_whether_dataset_is_empty(
 
 
 def check_whether_dataset_has_a_high_discard_ratio(
-    dataset: rg.FeedbackDataset, threshold: float = 0.05
+    dataset: rg.Dataset, threshold: float = 0.05
 ) -> list[DatasetLevelIssue]:
     """Returns the proportion of discarded items in the dataset"""
     dataset_name = dataset.name  # type: ignore
@@ -142,16 +142,24 @@ def check_whether_dataset_has_a_high_discard_ratio(
     return []
 
 
+@lru_cache(maxsize=64)
+def _get_username_from_id(user_id: str) -> str:
+    user = client.users(id=user_id)
+    assert isinstance(user, User)
+    return user.username
+
+
 def check_whether_dataset_has_a_low_level_of_interannotator_agreement(
-    dataset: rg.FeedbackDataset, threshold: float = 0.5
+    dataset: rg.Dataset, threshold: float = 0.5
 ) -> list[DatasetLevelIssue]:
     """Returns an issue if span-level interannotator agreement is low"""
 
     # Get all unique labeller names
     labeller_names = set()
     for record in dataset.records:
-        for response in record.responses:
-            user_name = User.from_id(response.user_id).username
+        responses: list[Response] = record.responses["entities"]
+        for response in responses:
+            user_name = _get_username_from_id(response.user_id)
             labeller_names.add(user_name)
 
     # If there's only one labeller, we can't calculate IAA
@@ -162,22 +170,26 @@ def check_whether_dataset_has_a_low_level_of_interannotator_agreement(
     passages_by_labeller = defaultdict(list)
     for record in dataset.records:
         text = record.fields.get("text", "")
+        responses: list[Response] = record.responses["entities"]
 
         # Create a passage for each labeller's annotations
         for labeller in labeller_names:
             spans = []
-            for response in record.responses:
-                if User.from_id(response.user_id).username == labeller:
+            for response in responses:
+                user_name = _get_username_from_id(response.user_id)
+                if user_name == labeller:
                     try:
-                        for entity in response.values["entities"].value:
+                        for value in response.value:
                             spans.append(
                                 Span(
                                     text=text,
-                                    start_index=entity.start,
-                                    end_index=entity.end,
-                                    concept_id=entity.label,
-                                    labellers=[labeller],
-                                    timestamps=[response.updated_at],
+                                    start_index=value["start"],
+                                    end_index=value["end"],
+                                    concept_id=value["label"],
+                                    labellers=[user_name],
+                                    timestamps=[
+                                        record.updated_at
+                                    ],  # so it's the record that bears this attribute now rather than the response...
                                 )
                             )
                     except KeyError:
@@ -220,7 +232,7 @@ def check_whether_dataset_has_a_low_level_of_interannotator_agreement(
 
 
 def _check_span_wrapper(
-    dataset: rg.FeedbackDataset, span_issue: Callable[[Span], bool], issue_type: str
+    dataset: rg.Dataset, span_issue: Callable[[Span], bool], issue_type: str
 ) -> list[PassageLevelIssue]:
     """Wrapper function for any checks that are run on the passage level, and create issues for each span that fails the criteria"""
     issues: list[PassageLevelIssue] = []
@@ -252,7 +264,7 @@ def _check_span_wrapper(
 
 
 def check_whether_span_border_is_in_word(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[PassageLevelIssue]:
     """Checks whether the span's start or end is in the middle of a word"""
     return _check_span_wrapper(dataset, _span_border_in_word, "span_border_in_word")
@@ -272,7 +284,7 @@ def _span_border_in_word(span: Span) -> bool:
 
 
 def check_whether_spans_have_high_non_alphabetical_ratio(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[PassageLevelIssue]:
     """Finds and flags spans that have a high non-alphabetical ratio"""
     return _check_span_wrapper(
@@ -292,7 +304,7 @@ def _span_has_high_non_alphabetical_ratio(span: Span) -> bool:
 
 
 def check_whether_spans_are_long(
-    dataset: rg.FeedbackDataset,
+    dataset: rg.Dataset,
 ) -> list[PassageLevelIssue]:
     """Finds and flags spans that are too long"""
     return _check_span_wrapper(dataset, _span_is_long, "long_span")

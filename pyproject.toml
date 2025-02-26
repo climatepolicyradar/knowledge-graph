@@ -23,7 +23,7 @@ typer = "0.9.4"
 rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 more-itertools = "^10.3.0"
-argilla = "1.29.1"
+argilla = ">=2.5"
 prefect = "2.16.8"
 griffe = "0.48.0"
 cpr-sdk = "^1.9.3"
@@ -36,6 +36,8 @@ datasets = "^2.18.0"
 boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
 prefect-slack = "0.2.1"
 async-typer = "^0.1.8"
+argilla-v1 = "^1.29.1"
+schedule = "^1.2.2"
 awscli = "^1.37.24"
 
 [tool.poetry.group.transformers]

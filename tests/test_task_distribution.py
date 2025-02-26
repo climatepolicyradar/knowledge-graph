@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.argilla import distribute_labelling_projects
+from src.argilla_legacy import distribute_labelling_projects
 
 
 @st.composite

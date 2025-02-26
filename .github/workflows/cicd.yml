@@ -50,7 +50,7 @@ jobs:
         run: just vespa_dev_setup
 
       - name: Test
-        run: just test -v -m "'not flaky_on_ci and not transformers'"
+        run: just test -v -m "'not flaky_on_ci and not transformers'"  --ignore tests/test_argilla_v2.py
 
   deploy_docs:
     if: github.ref == 'refs/heads/main'

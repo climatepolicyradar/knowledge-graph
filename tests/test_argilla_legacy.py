@@ -4,7 +4,10 @@ from typing import Optional
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.argilla import filter_labelled_passages_by_timestamp, is_between_timestamps
+from src.argilla_legacy import (
+    filter_labelled_passages_by_timestamp,
+    is_between_timestamps,
+)
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 from tests.common_strategies import (
@@ -83,6 +86,7 @@ def test_whether_a_mixed_set_of_timestamps_are_filtered_correctly(
             now,  # should be included
             now + timedelta(days=2),  # should be excluded
         ],
+        concept_id=None,
     )
 
     passages = [LabelledPassage(text=text, spans=[span])]
@@ -114,6 +118,7 @@ def test_whether_invalid_timestamps_are_filtered(text: str):
         end_index=min(len(text), 10),
         labellers=["Alice", "Bob"],
         timestamps=[now, now],
+        concept_id=None,
     )
 
     passages = [LabelledPassage(text=text, spans=[span])]
