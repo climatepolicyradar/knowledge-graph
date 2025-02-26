@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import re
+import sys
 import tempfile
 from collections import Counter
 from collections.abc import Generator
@@ -892,6 +893,16 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
         "Running partial updates of concepts for batch as sub-flow or deployment: "
         f"batch length {len(documents_batch)}, as_subflow: {as_subflow}"
     )
+    size_in_bytes = sys.getsizeof(documents_batch)
+    size_in_kb = size_in_bytes / 1024
+    logger.info(
+        f"The parameter size of the documents_batch is approximately {size_in_kb:.2f} KB"
+    )
+    if size_in_kb > 512:
+        logger.warning(
+            "The parameter size of the documents_batch is greater than 512 KB. "
+            "Consider reducing the batch size."
+        )
 
     if as_subflow:
         return await run_partial_updates_of_concepts_for_batch(
