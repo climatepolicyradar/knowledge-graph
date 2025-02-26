@@ -25,7 +25,7 @@ def setup_environment():
 
 
 @flow
-def deploy_static_sites():
+def data_backup():
     """Flow to deploy all our static sites."""
     setup_environment()
 
@@ -38,4 +38,4 @@ def deploy_static_sites():
 
 
 if __name__ == "__main__":
-    deploy_static_sites()
+    data_backup()
