@@ -877,7 +877,6 @@ async def run_partial_updates_of_concepts_for_batch(
             continue
 
 
-@flow
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
     batch_size: int,
