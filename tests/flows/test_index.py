@@ -4,7 +4,6 @@ import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Generator
 from unittest.mock import patch
 
 import pytest
@@ -20,7 +19,6 @@ from flows.index import (
     Config,
     DocumentImporter,
     convert_labelled_passage_to_concepts,
-    generate_indexing_task_batches,
     get_document_passage_from_all_document_passages,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
@@ -76,27 +74,6 @@ def test_vespa_search_adapter_from_aws_secrets(
     )
     assert vespa_search_adapter.client.cert == str(cert_path)
     assert vespa_search_adapter.client.key == str(key_path)
-
-
-def test_generate_indexing_task_batches() -> None:
-    """Test that we can generate indexing task batches."""
-
-    def document_batch_gen() -> Generator[list[DocumentImporter], None, None]:
-        for i in range(10):
-            yield [
-                DocumentImporter((f"doc_{i}", f"uri_{i}")),
-                DocumentImporter((f"doc_{i+1}", f"uri_{i+1}")),
-            ]
-
-    indexing_task_batches = list(
-        generate_indexing_task_batches(
-            document_batches=document_batch_gen(),
-            batch_size=3,
-        )
-    )
-
-    assert all([len(batch) <= 3 for batch in indexing_task_batches])
-    assert len(indexing_task_batches) == 4
 
 
 def test_s3_obj_generator_from_s3_prefixes(

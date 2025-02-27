@@ -40,7 +40,7 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-DEFAULT_BATCH_SIZE = 500
+DEFAULT_DOCUMENTS_BATCH_SIZE = 500
 DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
@@ -845,36 +845,6 @@ def s3_obj_generator(
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
 
 
-def generate_indexing_task_batches(
-    document_batches: Generator[list[DocumentImporter], None, None], batch_size: int
-) -> Generator[list[list[DocumentImporter]], None, None]:
-    """
-    Generate indexing task batches.
-
-    This function generates indexing task batches from a list of document batches.
-    This allows us to run a batch of indexing tasks asynchronously, then gather
-    the results and move onto the next batch.
-
-    This is useful as it allows us to control how many indexing tasks we run in
-    parallel at once. For example we wouldn't want to spin up 1000 sub
-    deployments all trying to write to our database at once. This also allows
-    us to reduce the batch size which can exceed prefects flow limit if too
-    large.
-    """
-
-    indexing_task_batch = []
-
-    for documents_batch in document_batches:
-        indexing_task_batch.append(documents_batch)
-
-        if len(indexing_task_batch) == batch_size:
-            yield indexing_task_batch
-            indexing_task_batch = []
-
-    if indexing_task_batch:
-        yield indexing_task_batch
-
-
 @flow
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
@@ -952,7 +922,7 @@ async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter | None,
     s3_prefixes: list[str] | None = None,
     s3_paths: list[str] | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
     as_deployment: bool = True,
 ) -> None:
@@ -990,8 +960,8 @@ async def index_by_s3(
         logger.info("Getting S3 object generator")
         documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
         documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
-        indexing_task_batches = generate_indexing_task_batches(
-            documents_batches, batch_size=indexing_task_batch_size
+        indexing_task_batches = iterate_batch(
+            data=documents_batches, batch_size=indexing_task_batch_size
         )
 
         for i, indexing_task_batch in enumerate(indexing_task_batches, start=1):
@@ -1025,7 +995,7 @@ async def index_by_s3(
 
 def iterate_batch(
     data: list[T] | Generator[T, None, None],
-    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
 ) -> Generator[list[T], None, None]:
     """Generate batches from a list or generator with a specified size."""
     if isinstance(data, list):
@@ -1052,7 +1022,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
     document_ids: list[str] | None = None,
     config: Config | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
 ) -> None:
     """
