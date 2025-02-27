@@ -94,7 +94,7 @@ class Config:
     # )
     vespa_search_adapter: VespaSearchAdapter | None = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-    as_deployment: bool = False
+    as_deployment: bool = True
 
     @classmethod
     async def create(cls) -> "Config":
