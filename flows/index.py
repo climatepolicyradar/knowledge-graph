@@ -903,7 +903,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                 "cache_bucket": cache_bucket,
                 "concepts_counts_prefix": concepts_counts_prefix,
             },
-            timeout=1200,
+            timeout=3600,
         )
 
     return await run_partial_updates_of_concepts_for_batch(
