@@ -183,3 +183,13 @@ class LabelledPassage(BaseModel):
         return list(
             set([labeller for span in self.spans for labeller in span.labellers])
         )
+
+    def __eq__(self, other: object) -> bool:
+        """Check whether two labelled passages are equal"""
+        if not isinstance(other, LabelledPassage):
+            return False
+        if self.text != other.text:
+            return False
+        if set(self.spans) != set(other.spans):
+            return False
+        return True

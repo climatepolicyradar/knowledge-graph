@@ -29,6 +29,21 @@ client = rg.Argilla(
 )
 
 
+def get_all_datasets(workspace_name: str) -> list[Dataset]:
+    """
+    Get all datasets in a workspace.
+
+    :param Workspace workspace: The workspace to get the datasets from
+    :return list[Dataset]: A list of datasets
+    """
+    datasets = []
+    workspace = client.workspaces(name=workspace_name)
+    assert isinstance(workspace, Workspace)
+    for dataset in workspace.datasets:
+        datasets.append(dataset)
+    return datasets
+
+
 def concept_to_dataset_name(concept: Concept) -> str:
     if not concept.wikibase_id:
         raise ValueError("Concept has no Wikibase ID")
