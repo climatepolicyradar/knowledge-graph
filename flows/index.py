@@ -42,7 +42,7 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 DEFAULT_BATCH_SIZE = 500
-DEFAULT_INDEXING_TASK_BATCH_SIZE = 50
+DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
@@ -846,7 +846,6 @@ def s3_obj_generator(
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
 
 
-# TODO: Add test
 def generate_indexing_task_batches(
     document_batches: Generator[list[DocumentImporter], None, None], batch_size: int
 ) -> Generator[list[list[DocumentImporter]], None, None]:
