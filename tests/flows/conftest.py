@@ -421,11 +421,8 @@ def example_vespa_concepts() -> list[VespaConcept]:
         VespaConcept(
             id="1457",
             name="wood industry",
-            parent_concepts=[
-                {"name": "forestry sector", "id": "Q788"},
-                {"name": "lumber", "id": "Q789"},
-            ],
-            parent_concept_ids_flat="Q788,Q789",
+            parent_concepts=None,
+            parent_concept_ids_flat=None,
             model='KeywordClassifier("wood industry")',
             end=100,
             start=0,
