@@ -1,17 +1,15 @@
-"""
-Flow to deploy an automated backup of Argilla to Huggingface
-"""
+"""Flow to deploy an automated backup of Argilla to Huggingface"""
 
 import os
 
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 
-from src.huggingface import HuggingfaceSession
 from src.argilla_v2 import (
     dataset_to_labelled_passages,
     get_all_datasets,
 )
+from src.huggingface import HuggingfaceSession
 
 
 @task

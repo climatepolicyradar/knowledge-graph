@@ -1,6 +1,6 @@
 import os
-
 from typing import Optional
+
 from datasets import Dataset, load_dataset
 
 from src.labelled_passage import LabelledPassage
@@ -33,13 +33,16 @@ class HuggingfaceSession:
         self.organisation = "ClimatePolicyRadar"
 
     def pull(self, dataset_name: str) -> list[LabelledPassage]:
+        """Pulls the dataset from the hub"""
         dataset = load_dataset(
             f"{self.organisation}/{dataset_name}",
             token=self.token,
         )
 
         df = dataset["train"].to_pandas()  # type: ignore
-        labelled_passages = list(df.apply(lambda x: self._labelled_passage_from_row(x), axis=1))  # type: ignore
+        labelled_passages = list(
+            df.apply(lambda x: self._labelled_passage_from_row(x), axis=1)  # type: ignore
+        )
         return labelled_passages
 
     @staticmethod
@@ -52,6 +55,7 @@ class HuggingfaceSession:
         )
 
     def push(self, dataset_name: str, labelled_passages: list[LabelledPassage]) -> None:
+        """Pushes the dataset to the hub"""
         dataset = Dataset.from_dict(
             {
                 "id": [lp.id for lp in labelled_passages],
