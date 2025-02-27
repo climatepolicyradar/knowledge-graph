@@ -55,7 +55,7 @@ class Config:
     # )
     vespa_search_adapter: VespaSearchAdapter | None = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-    as_subflow: bool = True
+    as_deployment: bool = True
 
     @classmethod
     async def create(cls) -> "Config":
@@ -212,10 +212,10 @@ def load_update_document_concepts_counts_as(
     batch_size: int,
     vespa_search_adapter: VespaSearchAdapter | None,
     aws_env: AwsEnv,
-    as_subflow: bool,
+    as_deployment: bool,
 ) -> Awaitable[dict[str, int]]:
     """Run load document concepts either as a subflow or directly."""
-    if as_subflow:
+    if as_deployment:
         flow_name = function_to_flow_name(load_update_document_concepts_counts)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
@@ -227,7 +227,6 @@ def load_update_document_concepts_counts_as(
                 "batch_size": batch_size,
             },
             timeout=1200,
-            as_subflow=True,
         )
     else:
         return load_update_document_concepts_counts(
@@ -333,7 +332,7 @@ async def count_family_document_concepts(
                 batch_size,
                 config.vespa_search_adapter,
                 config.aws_env,
-                config.as_subflow,
+                config.as_deployment,
             )
             for document_import_id, document_object_uris in documents_batch
         ]

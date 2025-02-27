@@ -350,7 +350,7 @@ async def test_index_by_s3_with_s3_prefixes(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
         s3_paths=None,
-        as_subflow=True,
+        as_deployment=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )
@@ -396,7 +396,7 @@ async def test_index_by_s3_with_s3_paths(
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
         s3_paths=s3_paths,
-        as_subflow=True,
+        as_deployment=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
     )
@@ -442,7 +442,7 @@ async def test_index_by_s3_task_failure(
                 os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
             ],
             s3_paths=None,
-            as_subflow=True,
+            as_deployment=False,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
         )
@@ -593,7 +593,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     config = Config(
         cache_bucket=mock_bucket,
         vespa_search_adapter=local_vespa_search_adapter,
-        as_subflow=True,
+        as_deployment=False,
     )
 
     await index_labelled_passages_from_s3_to_vespa(

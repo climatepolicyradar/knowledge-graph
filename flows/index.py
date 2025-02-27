@@ -4,7 +4,6 @@ import contextlib
 import json
 import os
 import re
-import sys
 import tempfile
 from collections import Counter
 from collections.abc import Generator
@@ -95,7 +94,7 @@ class Config:
     # )
     vespa_search_adapter: VespaSearchAdapter | None = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-    as_subflow: bool = False
+    as_deployment: bool = False
 
     @classmethod
     async def create(cls) -> "Config":
@@ -879,7 +878,6 @@ def generate_indexing_task_batches(
 @flow
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
-    batch_size: int,
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
@@ -910,53 +908,39 @@ async def run_partial_updates_of_concepts_for_batch(
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
-    batch_size: int,
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
     aws_env: AwsEnv,
-    as_subflow: bool,
+    as_deployment: bool,
 ) -> None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
     logger = get_run_logger()
     logger.info(
         "Running partial updates of concepts for batch as sub-flow or deployment: "
-        f"batch length {len(documents_batch)}, as_subflow: {as_subflow}"
+        f"batch length {len(documents_batch)}, as_deployment: {as_deployment}"
     )
-    size_in_bytes = sys.getsizeof(documents_batch)
-    size_in_kb = size_in_bytes / 1024
-    logger.info(
-        f"The parameter size of the documents_batch is approximately {size_in_kb:.2f} KB"
-    )
-    if size_in_kb > 512:
-        logger.warning(
-            "The parameter size of the documents_batch is greater than 512 KB. "
-            "Consider reducing the batch size."
+
+    if as_deployment:
+        flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+
+        return await run_deployment(
+            name=f"{flow_name}/{deployment_name}",
+            parameters={
+                "documents_batch": documents_batch,
+                "documents_batch_num": documents_batch_num,
+                "cache_bucket": cache_bucket,
+                "concepts_counts_prefix": concepts_counts_prefix,
+            },
+            timeout=1200,
         )
 
-    if as_subflow:
-        return await run_partial_updates_of_concepts_for_batch(
-            documents_batch=documents_batch,
-            batch_size=batch_size,
-            documents_batch_num=documents_batch_num,
-            cache_bucket=cache_bucket,
-            concepts_counts_prefix=concepts_counts_prefix,
-        )
-
-    flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
-    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-
-    return await run_deployment(
-        name=f"{flow_name}/{deployment_name}",
-        parameters={
-            "documents_batch": documents_batch,
-            "batch_size": batch_size,
-            "documents_batch_num": documents_batch_num,
-            "cache_bucket": cache_bucket,
-            "concepts_counts_prefix": concepts_counts_prefix,
-        },
-        timeout=1200,
-        as_subflow=True,
+    return await run_partial_updates_of_concepts_for_batch(
+        documents_batch=documents_batch,
+        documents_batch_num=documents_batch_num,
+        cache_bucket=cache_bucket,
+        concepts_counts_prefix=concepts_counts_prefix,
     )
 
 
@@ -970,7 +954,7 @@ async def index_by_s3(
     s3_paths: list[str] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
-    as_subflow: bool = True,
+    as_deployment: bool = True,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -1016,12 +1000,11 @@ async def index_by_s3(
             indexing_tasks = [
                 run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                     documents_batch=documents_batch,
-                    batch_size=batch_size,
                     documents_batch_num=documents_batch_num,
                     cache_bucket=cache_bucket,
                     concepts_counts_prefix=concepts_counts_prefix,
                     aws_env=aws_env,
-                    as_subflow=as_subflow,
+                    as_deployment=as_deployment,
                 )
                 for documents_batch_num, documents_batch in enumerate(
                     indexing_task_batch, start=1
@@ -1114,7 +1097,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
         indexing_task_batch_size=indexing_task_batch_size,
-        as_subflow=config.as_subflow,
+        as_deployment=config.as_deployment,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
     )
