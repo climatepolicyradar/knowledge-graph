@@ -1417,13 +1417,13 @@ files = [
 
 [[package]]
 name = "cpr-sdk"
-version = "1.16.3"
+version = "1.17.0"
 description = ""
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "cpr_sdk-1.16.3-py3-none-any.whl", hash = "sha256:0839383bae127d0de5b24be2c1c14cc5ba15ed2cbca407b19be64f2efb7ac3de"},
-    {file = "cpr_sdk-1.16.3.tar.gz", hash = "sha256:fa39a694cac5dea172ac4cb14102379bcf5b691e379fa16df79cab88faa097b5"},
+    {file = "cpr_sdk-1.17.0-py3-none-any.whl", hash = "sha256:e50b21357a3337de9876c2a5241ef92bf7d69062d7afc4409fd550a385c2dcee"},
+    {file = "cpr_sdk-1.17.0.tar.gz", hash = "sha256:f760246f39142852934816064821e69c566f15be7af0811284c25fc7f661e5bb"},
 ]
 
 [package.dependencies]
@@ -6200,7 +6200,6 @@ optional = false
 python-versions = ">=3.7"
 files = [
     {file = "schedule-1.2.2-py3-none-any.whl", hash = "sha256:5bef4a2a0183abf44046ae0d164cadcac21b1db011bdd8102e4a0c1e91e06a7d"},
-    {file = "schedule-1.2.2.tar.gz", hash = "sha256:15fe9c75fe5fd9b9627f3f19cc0ef1420508f9f9a46f45cd0769ef75ede5f0b7"},
 ]
 
 [package.extras]
@@ -8037,4 +8036,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "f843d9e36cbe45574fb516813c6d882ff6100072d6dbf13d32d2af2088b4eb93"
+content-hash = "e16d15fbe28cff3f64c48ef6e23dce2d9bcae9951fda140bedda0e846e899f0a"
