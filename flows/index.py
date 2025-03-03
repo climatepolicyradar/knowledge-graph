@@ -4,7 +4,6 @@ import contextlib
 import json
 import os
 import re
-import sys
 import tempfile
 from collections import Counter
 from collections.abc import Generator
@@ -41,7 +40,8 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-DEFAULT_BATCH_SIZE = 500
+DEFAULT_DOCUMENTS_BATCH_SIZE = 500
+DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
@@ -94,7 +94,7 @@ class Config:
     # )
     vespa_search_adapter: VespaSearchAdapter | None = None
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-    as_subflow: bool = False
+    as_deployment: bool = True
 
     @classmethod
     async def create(cls) -> "Config":
@@ -848,7 +848,6 @@ def s3_obj_generator(
 @flow
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
-    batch_size: int,
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
@@ -879,53 +878,39 @@ async def run_partial_updates_of_concepts_for_batch(
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
-    batch_size: int,
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
     aws_env: AwsEnv,
-    as_subflow: bool,
+    as_deployment: bool,
 ) -> None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
     logger = get_run_logger()
     logger.info(
         "Running partial updates of concepts for batch as sub-flow or deployment: "
-        f"batch length {len(documents_batch)}, as_subflow: {as_subflow}"
+        f"batch length {len(documents_batch)}, as_deployment: {as_deployment}"
     )
-    size_in_bytes = sys.getsizeof(documents_batch)
-    size_in_kb = size_in_bytes / 1024
-    logger.info(
-        f"The parameter size of the documents_batch is approximately {size_in_kb:.2f} KB"
-    )
-    if size_in_kb > 512:
-        logger.warning(
-            "The parameter size of the documents_batch is greater than 512 KB. "
-            "Consider reducing the batch size."
+
+    if as_deployment:
+        flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+
+        return await run_deployment(
+            name=f"{flow_name}/{deployment_name}",
+            parameters={
+                "documents_batch": documents_batch,
+                "documents_batch_num": documents_batch_num,
+                "cache_bucket": cache_bucket,
+                "concepts_counts_prefix": concepts_counts_prefix,
+            },
+            timeout=3600,
         )
 
-    if as_subflow:
-        return await run_partial_updates_of_concepts_for_batch(
-            documents_batch=documents_batch,
-            batch_size=batch_size,
-            documents_batch_num=documents_batch_num,
-            cache_bucket=cache_bucket,
-            concepts_counts_prefix=concepts_counts_prefix,
-        )
-
-    flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
-    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-
-    return await run_deployment(
-        name=f"{flow_name}/{deployment_name}",
-        parameters={
-            "documents_batch": documents_batch,
-            "batch_size": batch_size,
-            "documents_batch_num": documents_batch_num,
-            "cache_bucket": cache_bucket,
-            "concepts_counts_prefix": concepts_counts_prefix,
-        },
-        timeout=1200,
-        as_subflow=True,
+    return await run_partial_updates_of_concepts_for_batch(
+        documents_batch=documents_batch,
+        documents_batch_num=documents_batch_num,
+        cache_bucket=cache_bucket,
+        concepts_counts_prefix=concepts_counts_prefix,
     )
 
 
@@ -937,8 +922,9 @@ async def index_by_s3(
     vespa_search_adapter: VespaSearchAdapter | None,
     s3_prefixes: list[str] | None = None,
     s3_paths: list[str] | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    as_subflow: bool = True,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
+    indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
+    as_deployment: bool = True,
 ) -> None:
     """
     Asynchronously index concepts from S3 files into Vespa.
@@ -974,38 +960,42 @@ async def index_by_s3(
         logger.info("Getting S3 object generator")
         documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
         documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
+        indexing_task_batches = iterate_batch(
+            data=documents_batches, batch_size=indexing_task_batch_size
+        )
 
-        indexing_tasks = [
-            run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-                documents_batch=documents_batch,
-                batch_size=batch_size,
-                documents_batch_num=documents_batch_num,
-                cache_bucket=cache_bucket,
-                concepts_counts_prefix=concepts_counts_prefix,
-                aws_env=aws_env,
-                as_subflow=as_subflow,
-            )
-            for (
-                documents_batch_num,
-                documents_batch,
-            ) in enumerate(documents_batches, start=1)
-        ]
+        for i, indexing_task_batch in enumerate(indexing_task_batches, start=1):
+            logger.info(f"Processing indexing task batch #{i}")
 
-        logger.info("Gathering indexing tasks")
-        results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
-        logger.info("Gathered indexing tasks")
-
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(
-                    f"failed to process document batch: {str(result)}",
+            indexing_tasks = [
+                run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+                    documents_batch=documents_batch,
+                    documents_batch_num=documents_batch_num,
+                    cache_bucket=cache_bucket,
+                    concepts_counts_prefix=concepts_counts_prefix,
+                    aws_env=aws_env,
+                    as_deployment=as_deployment,
                 )
-                continue
+                for documents_batch_num, documents_batch in enumerate(
+                    indexing_task_batch, start=1
+                )
+            ]
+
+            logger.info(f"Gathering indexing tasks for batch #{i}")
+            results = await asyncio.gather(*indexing_tasks, return_exceptions=True)
+            logger.info(f"Gathered indexing tasks for batch #{i}")
+
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(
+                        f"failed to process document batch in indexing task batch #{i}: {str(result)}",
+                    )
+                    continue
 
 
 def iterate_batch(
     data: list[T] | Generator[T, None, None],
-    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
 ) -> Generator[list[T], None, None]:
     """Generate batches from a list or generator with a specified size."""
     if isinstance(data, list):
@@ -1032,7 +1022,8 @@ async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
     document_ids: list[str] | None = None,
     config: Config | None = None,
-    batch_size: int = DEFAULT_BATCH_SIZE,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
+    indexing_task_batch_size: int = DEFAULT_INDEXING_TASK_BATCH_SIZE,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
@@ -1075,7 +1066,8 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_prefixes=s3_accessor.prefixes,
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
-        as_subflow=config.as_subflow,
+        indexing_task_batch_size=indexing_task_batch_size,
+        as_deployment=config.as_deployment,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
     )
