@@ -110,8 +110,8 @@ class WikibaseSession:
         wikibase_id: WikibaseID,
         timestamp: Optional[datetime] = None,
         include_labels_from_subconcepts: bool = False,
-        include_recursive_parent_concepts: bool = False,
-        include_recursive_subconcepts: bool = False,
+        include_recursive_subconcept_of: bool = False,
+        include_recursive_has_subconcept: bool = False,
     ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
@@ -121,8 +121,10 @@ class WikibaseSession:
             If not provided, the latest version of the concept will be fetched.
         :param bool include_labels_from_subconcepts: Whether to include the labels
             from subconcepts in the concept
-        :param bool include_recursive_parent_concepts: Whether to include the concept's
+        :param bool include_recursive_subconcept_of: Whether to include the concept's
             complete ancestry of all parent concepts, recursively up the hierarchy
+        :param bool include_recursive_has_subconcept: Whether to include the concept's
+            complete subconcepts, recursively down the hierarchy
         :return Concept: The concept with the given Wikibase ID
         """
         # Resolve any redirects first
@@ -159,7 +161,7 @@ class WikibaseSession:
         redirects = (
             page_id_response.get("entities", {})
             .get(wikibase_id, {})
-            .get("redirects", [])
+            .get("redirects", {})
         )
         if redirects:
             logger.warning(
@@ -260,13 +262,13 @@ class WikibaseSession:
                         elif property_id == self.definition_property_id:
                             concept.definition = value
 
-        if include_recursive_parent_concepts:
+        if include_recursive_subconcept_of:
             concept.recursive_subconcept_of = (
                 self.get_recursive_subconcept_of_relationships(wikibase_id)
             )
 
-        if include_recursive_subconcepts:
-            concept.recursive_subconcept_of = (
+        if include_recursive_has_subconcept:
+            concept.recursive_has_subconcept = (
                 self.get_recursive_has_subconcept_relationships(wikibase_id)
             )
 
