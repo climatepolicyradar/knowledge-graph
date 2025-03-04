@@ -299,14 +299,27 @@ class WikibaseSession:
         self,
         wikibase_id: WikibaseID,
         property_id: str,
+        max_depth: int = 50,
+        current_depth: int = 0,
     ) -> list[WikibaseID]:
         """
         Helper method to fetch recursive relationships by following a property.
 
         :param WikibaseID wikibase_id: The Wikibase ID to start from
         :param str property_id: The property ID to traverse
+        :param int max_depth: The maximum number of hops to traverse across the
+            hierarchy, defaults to 50. If the max depth is reached, the function
+            will return a list of the unique ids it has traversed so far.
+        :param int current_depth: Internal parameter to track recursion depth
         :return list[WikibaseID]: List of related concept IDs
         """
+        if current_depth >= max_depth:
+            logger.warning(
+                f"Hit maximum recursion depth ({max_depth}) while fetching relationships "
+                f"for {wikibase_id}. Returning partial results."
+            )
+            return []
+
         valid_property_ids = [
             self.subconcept_of_property_id,
             self.has_subconcept_property_id,
@@ -343,7 +356,10 @@ class WikibaseSession:
                             hierarchically_related_concepts.append(resolved_id)
                             hierarchically_related_concepts.extend(
                                 self._get_recursive_relationships(
-                                    resolved_id, property_id
+                                    resolved_id,
+                                    property_id,
+                                    max_depth=max_depth,
+                                    current_depth=current_depth + 1,
                                 )
                             )
 
