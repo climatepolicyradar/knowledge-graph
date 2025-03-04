@@ -298,7 +298,7 @@ class WikibaseSession:
         ).json()
 
         entity = response["entities"][wikibase_id]
-        recursive_parent_concepts = [wikibase_id]
+        recursive_parent_concepts = []
         if "claims" in entity:
             for claim in entity["claims"].values():
                 for statement in claim:
