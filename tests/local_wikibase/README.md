@@ -42,7 +42,7 @@ wikibase = WikibaseSession(
     url="http://localhost",
 )
 
-concept_ids = wikibase.get_concept_ids()
+concept_ids = wikibase.get_all_concept_ids()
 
 print(concept_ids)
 

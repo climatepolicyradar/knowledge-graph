@@ -58,9 +58,13 @@ class Concept(BaseModel):
     related_concepts: list[WikibaseID] = Field(
         default_factory=list, description="List of related concept IDs"
     )
-    recursive_parent_concepts: Optional[list[WikibaseID]] = Field(
+    recursive_subconcept_of: Optional[list[WikibaseID]] = Field(
         default=None,
         description="List of all parent concept IDs, recursively up the hierarchy",
+    )
+    recursive_has_subconcept: Optional[list[WikibaseID]] = Field(
+        default=None,
+        description="List of all subconcept IDs, recursively down the hierarchy",
     )
     labelled_passages: list[LabelledPassage] = Field(
         default_factory=list,

@@ -254,7 +254,10 @@ def main(
     wikibase = WikibaseSession()
 
     # Fetch all of its subconcepts recursively
-    subconcepts = wikibase.get_subconcepts(wikibase_id, recursive=True)
+    recursive_subconcept_ids = wikibase.get_recursive_subconcept_of_relationships(
+        wikibase_id
+    )
+    subconcepts = wikibase.get_concepts(wikibase_ids=recursive_subconcept_ids)
 
     # fetch all of the labels and negative_labels for all of the subconcepts
     # and the concept itself
