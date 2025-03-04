@@ -21,10 +21,6 @@ def test_wikibase____init__(MockedWikibaseSession, monkeypatch, mock_wikibase_ur
     )
 
 
-def test_wikibase__get_all_properties(MockedWikibaseSession):
-    MockedWikibaseSession().get_all_properties()
-
-
 def test_wikibase__get_concept(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
     concept = wikibase.get_concept(wikibase_id=WikibaseID("Q10"))
@@ -32,9 +28,9 @@ def test_wikibase__get_concept(MockedWikibaseSession):
     assert concept.wikibase_id == "Q10"
 
 
-def test_wikibase__get_concept_ids(MockedWikibaseSession):
+def test_wikibase__get_all_concept_ids(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
-    ids = wikibase.get_concept_ids()
+    ids = wikibase.get_all_concept_ids()
     assert set(ids) == {
         "Q1000",
         "Q1003",
@@ -65,11 +61,6 @@ def test_wikibase__get_concepts(MockedWikibaseSession):
         "Q1006",
         "Q1005",
     }
-
-
-def test_wikibase__get_subconcepts(MockedWikibaseSession):
-    wikibase = MockedWikibaseSession()
-    wikibase.get_subconcepts(wikibase_id="Q10")
 
 
 @pytest.mark.skip(reason="Not implemented")

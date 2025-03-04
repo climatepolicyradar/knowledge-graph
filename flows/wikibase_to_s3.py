@@ -123,7 +123,7 @@ def wikibase_to_s3(config: Optional[Config] = None):
         password=config.get_wikibase_password_secret_value(),
         url=config.get_wikibase_url(),
     )
-    wikibase_ids = wikibase.get_concept_ids()
+    wikibase_ids = wikibase.get_all_concept_ids()
     logger.info(f"Found {len(wikibase_ids)} concept ids in Wikibase")
 
     for i, wikibase_id in enumerate(wikibase_ids):

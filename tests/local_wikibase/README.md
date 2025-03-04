@@ -20,15 +20,15 @@ When up, you can access the various frontends at:
 
 ### Main Page
 
-http://localhost/wiki/Main_Page
+<http://localhost/wiki/Main_Page>
 
 ### Sparql Query UI
 
-http://wdqs-frontend.localhost/
+<http://wdqs-frontend.localhost/>
 
 ### Quickstatements
 
-http://quickstatements.localhost/
+<http://quickstatements.localhost/>
 
 ### Programmatic Access
 
@@ -42,9 +42,9 @@ wikibase = WikibaseSession(
     url="http://localhost",
 )
 
-properties = wikibase.get_all_properties()
+concept_ids = wikibase.get_all_concept_ids()
 
-print(properties)
+print(concept_ids)
 
 ```
 

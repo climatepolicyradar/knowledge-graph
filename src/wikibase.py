@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from logging import getLogger
-from typing import Dict, Optional
+from typing import Optional
 
 import dotenv
 import httpx
@@ -53,6 +53,10 @@ class WikibaseSession:
             )
         self._login()
 
+        # Get all redirects, so that any fetched references to concepts can be updated
+        # to use the correct wikibase ID
+        self.redirects = self._get_all_redirects()
+
     def __repr__(self) -> str:
         """Return a string representation of the Wikibase session"""
         return f"<WikibaseSession: {self.username} at {self.api_url}>"
@@ -92,35 +96,22 @@ class WikibaseSession:
         self.csrf_token = csrf_token
         logger.debug("Session headers updated")
 
-    def get_all_properties(self) -> list[Dict[str, str]]:
+    def _resolve_redirect(self, wikibase_id: WikibaseID) -> WikibaseID:
         """
-        Get all property IDs from the Wikibase instance
+        Check if a Wikibase ID is a redirect and return its target ID if it is.
 
-        :return list[Dict[str, str]]: A list of all property IDs (and their
-        corresponding page_ids) in the Wikibase instance
+        :param WikibaseID wikibase_id: The Wikibase ID to check
+        :return WikibaseID: The resolved Wikibase ID (either the same ID or its redirect target)
         """
-        all_properties_response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "query",
-                "format": "json",
-                "list": "allpages",
-                "apnamespace": "122",
-                "aplimit": "max",
-            },
-        ).json()
-        all_properties = [
-            {"p_id": page["title"].replace("Property:", ""), "page_id": page["pageid"]}
-            for page in all_properties_response["query"]["allpages"]
-        ]
-        sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
-        return sorted_properties
+        return self.redirects.get(wikibase_id, wikibase_id)
 
     def get_concept(
         self,
         wikibase_id: WikibaseID,
         timestamp: Optional[datetime] = None,
         include_labels_from_subconcepts: bool = False,
+        include_recursive_parent_concepts: bool = False,
+        include_recursive_subconcepts: bool = False,
     ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
@@ -130,8 +121,12 @@ class WikibaseSession:
             If not provided, the latest version of the concept will be fetched.
         :param bool include_labels_from_subconcepts: Whether to include the labels
             from subconcepts in the concept
+        :param bool include_recursive_parent_concepts: Whether to include the concept's
+            complete ancestry of all parent concepts, recursively up the hierarchy
         :return Concept: The concept with the given Wikibase ID
         """
+        # Resolve any redirects first
+        wikibase_id = self._resolve_redirect(wikibase_id)
 
         if timestamp:
             if timestamp.tzinfo is None:
@@ -160,6 +155,18 @@ class WikibaseSession:
         )
         if not page_id:
             raise ConceptNotFoundError(wikibase_id)
+
+        redirects = (
+            page_id_response.get("entities", {})
+            .get(wikibase_id, {})
+            .get("redirects", [])
+        )
+        if redirects:
+            logger.warning(
+                f"Made a request to {self.base_url} for {wikibase_id} but was "
+                f"redirected to {redirects.get('to')}"
+            )
+            wikibase_id = redirects.get("to")
 
         # Use the pageid to get the latest revision before the supplied timestamp
         # https://www.mediawiki.org/wiki/API:Revisions
@@ -238,23 +245,42 @@ class WikibaseSession:
                         value = statement["mainsnak"]["datavalue"]["value"]
                         if property_id == self.subconcept_of_property_id:
                             concept.subconcept_of = concept.subconcept_of + [
-                                value["id"]
+                                self._resolve_redirect(value["id"])
                             ]
                         elif property_id == self.has_subconcept_property_id:
                             concept.has_subconcept = concept.has_subconcept + [
-                                value["id"]
+                                self._resolve_redirect(value["id"])
                             ]
                         elif property_id == self.related_concept_property_id:
                             concept.related_concepts = concept.related_concepts + [
-                                value["id"]
+                                self._resolve_redirect(value["id"])
                             ]
                         elif property_id == self.negative_labels_property_id:
                             concept.negative_labels = concept.negative_labels + [value]
                         elif property_id == self.definition_property_id:
                             concept.definition = value
 
+        if include_recursive_parent_concepts:
+            concept.recursive_subconcept_of = (
+                self.get_recursive_subconcept_of_relationships(wikibase_id)
+            )
+
+        if include_recursive_subconcepts:
+            concept.recursive_subconcept_of = (
+                self.get_recursive_has_subconcept_relationships(wikibase_id)
+            )
+
         if include_labels_from_subconcepts:
-            subconcepts = self.get_subconcepts(wikibase_id, recursive=True)
+            # don't bother fetching the recursive subconcepts if we already have them
+            # from the clause above
+            if concept.recursive_subconcept_of:
+                recursive_subconcept_ids = concept.recursive_subconcept_of
+            else:
+                recursive_subconcept_ids = (
+                    self.get_recursive_has_subconcept_relationships(wikibase_id)
+                )
+
+            subconcepts = self.get_concepts(wikibase_ids=recursive_subconcept_ids)
 
             # fetch all of the labels and negative_labels for all of the subconcepts
             # and the concept itself
@@ -269,56 +295,175 @@ class WikibaseSession:
 
         return concept
 
-    def get_concept_ids(self) -> list[WikibaseID]:
+    def _get_recursive_relationships(
+        self,
+        wikibase_id: WikibaseID,
+        property_id: str,
+        max_depth: int = 50,
+        current_depth: int = 0,
+    ) -> list[WikibaseID]:
         """
-        Get concept ids from Wikibase.
+        Helper method to fetch recursive relationships by following a property.
 
-        :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
+        :param WikibaseID wikibase_id: The Wikibase ID to start from
+        :param str property_id: The property ID to traverse
+        :param int max_depth: The maximum number of hops to traverse across the
+            hierarchy, defaults to 50. If the max depth is reached, the function
+            will return a list of the unique ids it has traversed so far.
+        :param int current_depth: Internal parameter to track recursion depth
+        :return list[WikibaseID]: List of related concept IDs
+        """
+        if current_depth >= max_depth:
+            logger.warning(
+                f"Hit maximum recursion depth ({max_depth}) while fetching relationships "
+                f"for {wikibase_id}. Returning partial results."
+            )
+            return []
+
+        valid_property_ids = [
+            self.subconcept_of_property_id,
+            self.has_subconcept_property_id,
+        ]
+        if property_id not in valid_property_ids:
+            raise ValueError(
+                f"Invalid property ID: {property_id}. "
+                f"Valid property IDs are: {valid_property_ids}"
+            )
+
+        # Resolve any redirects first
+        wikibase_id = self._resolve_redirect(wikibase_id)
+
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetentities",
+                "format": "json",
+                "ids": wikibase_id,
+                "props": "claims",
+            },
+        ).json()
+
+        entity = response["entities"][wikibase_id]
+        hierarchically_related_concepts = []
+        if "claims" in entity:
+            for claim in entity["claims"].values():
+                for statement in claim:
+                    if statement["mainsnak"]["snaktype"] == "value":
+                        if statement["mainsnak"]["property"] == property_id:
+                            resolved_id = self._resolve_redirect(
+                                statement["mainsnak"]["datavalue"]["value"]["id"]
+                            )
+                            hierarchically_related_concepts.append(resolved_id)
+                            hierarchically_related_concepts.extend(
+                                self._get_recursive_relationships(
+                                    resolved_id,
+                                    property_id,
+                                    max_depth=max_depth,
+                                    current_depth=current_depth + 1,
+                                )
+                            )
+
+        return list(set(hierarchically_related_concepts))
+
+    def get_recursive_subconcept_of_relationships(
+        self, wikibase_id: WikibaseID
+    ) -> list[WikibaseID]:
+        """Fetch the complete parentage of a concept, recursively up the hierarchy"""
+        return self._get_recursive_relationships(
+            wikibase_id, self.subconcept_of_property_id
+        )
+
+    def get_recursive_has_subconcept_relationships(
+        self, wikibase_id: WikibaseID
+    ) -> list[WikibaseID]:
+        """Fetch the complete subconcepts of a concept, recursively down the hierarchy"""
+        return self._get_recursive_relationships(
+            wikibase_id, self.has_subconcept_property_id
+        )
+
+    def _get_pages(self, extra_params: dict) -> list[dict]:
+        """
+        Helper method to get pages from Wikibase with pagination.
+
+        :param dict extra_params: The parameters to pass to the API
+        :return list[dict]: List of page data from all batches
         """
         PAGE_REQUEST_SIZE = 500
-        # An extra precaution against infinite loops, suitable up to 1M concepts (500*2000)
-        MAX_PAGE_REQUESTS = 2000
+        MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
 
-        params = {
+        base_params = {
             "action": "query",
             "format": "json",
             "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
             "apnamespace": 120,
             "aplimit": PAGE_REQUEST_SIZE,
-            "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
         }
+        # Update with any additional params supplied by the user
+        base_params.update(extra_params)
 
-        wikibase_ids = []
+        pages = []
         for i in range(MAX_PAGE_REQUESTS):
-            # Get and process a page into wikibase_ids
             response = self.session.get(
                 url=self.api_url,
-                params=params,
+                params=base_params,
             ).json()
-            wikibase_ids.extend(
-                [
-                    page["title"].replace("Item:", "")
-                    for page in response["query"]["allpages"]
-                ]
-            )
 
-            #  Handle errors / warnings, see:
-            # https://www.mediawiki.org/wiki/API:Continue#Example_3:_Python_code_for_iterating_through_all_results
             if "error" in response:
                 raise HTTPError(response["error"])
             if "warnings" in response:
                 logger.warning(response["warnings"])
 
-            # Handle pagination if there are more pages
+            batch_pages = response["query"]["allpages"]
+            pages.extend(batch_pages)
+
             if continue_params := response.get("continue"):
-                params.update(continue_params)
-                logger.info(
-                    f"Retrieved {len(wikibase_ids)} ids after page iteration {i}"
-                )
+                base_params.update(continue_params)
+                logger.info(f"Retrieved {len(pages)} pages after iteration {i}")
             else:
                 break
 
-        return wikibase_ids
+        return pages
+
+    def get_all_concept_ids(self) -> list[WikibaseID]:
+        """
+        Get a complete list of all concept ids in the Wikibase instance.
+
+        :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
+        """
+        pages = self._get_pages(extra_params={"apfilterredir": "nonredirects"})
+        return [page["title"].replace("Item:", "") for page in pages]
+
+    def _get_all_redirects(self, batch_size: int = 50) -> dict[WikibaseID, WikibaseID]:
+        """
+        Get all redirects from Wikibase.
+
+        :return dict[WikibaseID, WikibaseID]: The redirects, e.g
+            {"Q123": "Q456", "Q456": "Q789"}
+        """
+        pages = self._get_pages(extra_params={"apfilterredir": "redirects"})
+        redirects = {}
+
+        # For each redirect, we need to find the wikibase ids of the source and target.
+        # We process the pages in batches of 50
+        for batch in [
+            pages[i : i + batch_size] for i in range(0, len(pages), batch_size)
+        ]:
+            ids_to_fetch = [page["title"].replace("Item:", "") for page in batch]
+            response = self.session.get(
+                url=self.api_url,
+                params={
+                    "action": "wbgetentities",
+                    "format": "json",
+                    "ids": "|".join(ids_to_fetch),
+                    "props": "info",
+                },
+            ).json()
+
+            for wikibase_id, entity in response.get("entities", {}).items():
+                if "redirects" in entity:
+                    redirects[wikibase_id] = entity["redirects"]["to"]
+
+        return redirects
 
     def get_concepts(
         self,
@@ -333,7 +478,7 @@ class WikibaseSession:
         :return list[Concept]: The concepts, optionally with the given Wikibase IDs
         """
         if not wikibase_ids:
-            wikibase_ids = self.get_concept_ids()
+            wikibase_ids = self.get_all_concept_ids()
 
         concepts = []
         for wikibase_id in wikibase_ids[:limit]:
@@ -346,41 +491,6 @@ class WikibaseSession:
                 )
 
         return concepts
-
-    def get_subconcepts(
-        self, wikibase_id: WikibaseID, recursive: bool = True
-    ) -> list[Concept]:
-        """
-        Get all subconcepts of a concept
-
-        :param str wikibase_id: The Wikibase ID of the concept
-        :param bool recursive: Whether to get subconcepts recursively
-        :return list[Concept]: A list of all subconcepts of the concept
-        """
-        response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "wbgetentities",
-                "format": "json",
-                "ids": wikibase_id,
-                "props": "claims",
-            },
-        ).json()
-
-        entity = response["entities"][wikibase_id]
-        subconcepts = []
-        if "claims" in entity:
-            for claim in entity["claims"].values():
-                for statement in claim:
-                    if statement["mainsnak"]["snaktype"] == "value":
-                        property_id = statement["mainsnak"]["property"]
-                        value = statement["mainsnak"]["datavalue"]["value"]
-                        if property_id == self.has_subconcept_property_id:
-                            subconcepts.append(self.get_concept(value["id"]))
-                            if recursive:
-                                subconcepts.extend(self.get_subconcepts(value["id"]))
-
-        return subconcepts
 
     def get_statements(self, wikibase_id: WikibaseID) -> list[dict]:
         """
@@ -432,36 +542,6 @@ class WikibaseSession:
         create_claim_response = self.session.post(url=self.api_url, data=data).json()
         return create_claim_response
 
-    def get_alternative_labels(
-        self, wikibase_id: WikibaseID, language: str = "en"
-    ) -> list[str]:
-        """
-        Get all alternative labels for a Wikibase item in a specific language
-
-        :param WikibaseID wikibase_id: The Wikibase ID of the item
-        :param str language: The language code for the alternative labels
-        :return list[str]: A list of alternative label strings
-        """
-        response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "wbgetentities",
-                "format": "json",
-                "ids": wikibase_id,
-                "props": "aliases",
-            },
-        ).json()
-
-        aliases = (
-            response.get("entities", {})
-            .get(wikibase_id, {})
-            .get("aliases", {})
-            .get(language, [])
-        )
-        if aliases:
-            return [alias["value"] for alias in aliases]
-        return []
-
     def add_alternative_labels(
         self,
         wikibase_id: WikibaseID,
@@ -469,7 +549,7 @@ class WikibaseSession:
         language: str = "en",
     ):
         """Add a list of alternative labels to a Wikibase item, preserving existing ones"""
-        existing_alternative_labels = self.get_alternative_labels(wikibase_id, language)
+        existing_alternative_labels = self.get_concept(wikibase_id).alternative_labels
 
         all_alternative_labels = list(
             set(existing_alternative_labels + alternative_labels)

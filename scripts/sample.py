@@ -9,7 +9,6 @@ from rich.progress import track
 from scripts.config import equity_columns, processed_data_dir
 from src.classifier import EmbeddingClassifier, KeywordClassifier
 from src.classifier.classifier import Classifier
-from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.sampling import create_balanced_sample, split_evenly
@@ -74,16 +73,7 @@ def main(
 
     # Get the concept metadata from wikibase
     wikibase = WikibaseSession()
-    top_level_concept = wikibase.get_concept(wikibase_id)
-    subconcepts = wikibase.get_subconcepts(wikibase_id, recursive=True)
-    concept = Concept(
-        preferred_label=top_level_concept.preferred_label,
-        description=top_level_concept.description,
-        alternative_labels=top_level_concept.all_labels
-        + [label for subconcept in subconcepts for label in subconcept.all_labels],
-        negative_labels=top_level_concept.negative_labels
-        + [label for subconcept in subconcepts for label in subconcept.negative_labels],
-    )
+    concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
     # Run inference with all classifiers
     raw_text_passages = balanced_dataset["text_block.text"].tolist()
