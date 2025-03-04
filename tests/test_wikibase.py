@@ -21,10 +21,6 @@ def test_wikibase____init__(MockedWikibaseSession, monkeypatch, mock_wikibase_ur
     )
 
 
-def test_wikibase__get_all_properties(MockedWikibaseSession):
-    MockedWikibaseSession().get_all_properties()
-
-
 def test_wikibase__get_concept(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
     concept = wikibase.get_concept(wikibase_id=WikibaseID("Q10"))

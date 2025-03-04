@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 from logging import getLogger
-from typing import Dict, Optional
+from typing import Optional
 
 import dotenv
 import httpx
@@ -91,30 +91,6 @@ class WikibaseSession:
 
         self.csrf_token = csrf_token
         logger.debug("Session headers updated")
-
-    def get_all_properties(self) -> list[Dict[str, str]]:
-        """
-        Get all property IDs from the Wikibase instance
-
-        :return list[Dict[str, str]]: A list of all property IDs (and their
-        corresponding page_ids) in the Wikibase instance
-        """
-        all_properties_response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "query",
-                "format": "json",
-                "list": "allpages",
-                "apnamespace": "122",
-                "aplimit": "max",
-            },
-        ).json()
-        all_properties = [
-            {"p_id": page["title"].replace("Property:", ""), "page_id": page["pageid"]}
-            for page in all_properties_response["query"]["allpages"]
-        ]
-        sorted_properties = sorted(all_properties, key=lambda x: int(x["p_id"][1:]))
-        return sorted_properties
 
     def get_concept(
         self,
