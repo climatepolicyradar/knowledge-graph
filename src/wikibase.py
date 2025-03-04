@@ -321,7 +321,7 @@ class WikibaseSession:
         base_params = {
             "action": "query",
             "format": "json",
-            "list": "allpages",
+            "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
             "apnamespace": 120,
             "aplimit": PAGE_REQUEST_SIZE,
         }
@@ -360,7 +360,7 @@ class WikibaseSession:
         pages = self._get_pages(extra_params={"apfilterredir": "nonredirects"})
         return [page["title"].replace("Item:", "") for page in pages]
 
-    def get_all_redirects(self) -> dict[WikibaseID, WikibaseID]:
+    def get_all_redirects(self, batch_size: int = 50) -> dict[WikibaseID, WikibaseID]:
         """
         Get all redirects from Wikibase.
 
@@ -372,7 +372,9 @@ class WikibaseSession:
 
         # For each redirect, we need to find the wikibase ids of the source and target.
         # We process the pages in batches of 50
-        for batch in [pages[i : i + 50] for i in range(0, len(pages), 50)]:
+        for batch in [
+            pages[i : i + batch_size] for i in range(0, len(pages), batch_size)
+        ]:
             ids_to_fetch = [page["title"].replace("Item:", "") for page in batch]
             response = self.session.get(
                 url=self.api_url,
