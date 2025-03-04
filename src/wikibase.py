@@ -287,7 +287,7 @@ class WikibaseSession:
         ).json()
 
         entity = response["entities"][wikibase_id]
-        ancestry = []
+        ancestry = [wikibase_id]
         if "claims" in entity:
             for claim in entity["claims"].values():
                 for statement in claim:
