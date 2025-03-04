@@ -110,7 +110,7 @@ class WikibaseSession:
         wikibase_id: WikibaseID,
         timestamp: Optional[datetime] = None,
         include_labels_from_subconcepts: bool = False,
-        include_ancestry: bool = False,
+        include_recursive_parent_concepts: bool = False,
     ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
@@ -120,7 +120,8 @@ class WikibaseSession:
             If not provided, the latest version of the concept will be fetched.
         :param bool include_labels_from_subconcepts: Whether to include the labels
             from subconcepts in the concept
-        :param bool include_ancestry: Whether to include the concept's complete ancestry
+        :param bool include_recursive_parent_concepts: Whether to include the concept's
+            complete ancestry of all parent concepts, recursively up the hierarchy
         :return Concept: The concept with the given Wikibase ID
         """
         # Resolve any redirects first
@@ -272,13 +273,17 @@ class WikibaseSession:
             concept.alternative_labels = list(all_positive_labels)
             concept.negative_labels = list(all_negative_labels)
 
-        if include_ancestry:
-            concept.ancestry = self.get_ancestry(wikibase_id)
+        if include_recursive_parent_concepts:
+            concept.recursive_parent_concepts = self.get_recursive_parent_concepts(
+                wikibase_id
+            )
 
         return concept
 
-    def get_ancestry(self, wikibase_id: WikibaseID) -> list[WikibaseID]:
-        """Fetch the complete ancestry of a concept"""
+    def get_recursive_parent_concepts(
+        self, wikibase_id: WikibaseID
+    ) -> list[WikibaseID]:
+        """Fetch the complete ancestry of a concept, recursively up the hierarchy"""
         # Resolve any redirects first
         wikibase_id = self._resolve_redirect(wikibase_id)
 
@@ -293,7 +298,7 @@ class WikibaseSession:
         ).json()
 
         entity = response["entities"][wikibase_id]
-        ancestry = [wikibase_id]
+        recursive_parent_concepts = [wikibase_id]
         if "claims" in entity:
             for claim in entity["claims"].values():
                 for statement in claim:
@@ -302,11 +307,15 @@ class WikibaseSession:
                         value = statement["mainsnak"]["datavalue"]["value"]
                         if property_id == self.subconcept_of_property_id:
                             resolved_id = self._resolve_redirect(value["id"])
-                            ancestry.append(resolved_id)
-                            ancestry.extend(self.get_ancestry(resolved_id))
+                            recursive_parent_concepts.append(resolved_id)
+                            recursive_parent_concepts.extend(
+                                self.get_recursive_parent_concepts(resolved_id)
+                            )
 
-        # Duplicates can occur in the ancestry, so they need to be removed
-        return list(set(ancestry))
+        # Duplicates can occur in the concept's list of recursive parents, so they need
+        # to be removed before returning
+        unique_recursive_parent_concepts = list(set(recursive_parent_concepts))
+        return unique_recursive_parent_concepts
 
     def _get_pages(self, extra_params: dict) -> list[dict]:
         """
