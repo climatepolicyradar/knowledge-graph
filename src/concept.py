@@ -38,6 +38,13 @@ class Concept(BaseModel):
             "disambiguate it from other concepts with similar labels"
         ),
     )
+    definition: Optional[str] = Field(
+        default=None,
+        description=(
+            "A more exhaustive definition of the concept, which should be enough for a "
+            "human labeller to identify instances of the concept in a given text. "
+        ),
+    )
     wikibase_id: Optional[WikibaseID] = Field(
         default=None, description="The Wikibase ID for the concept"
     )
@@ -51,8 +58,12 @@ class Concept(BaseModel):
     related_concepts: list[WikibaseID] = Field(
         default_factory=list, description="List of related concept IDs"
     )
-    definition: Optional[str] = Field(
-        default=None, description="The definition of the concept"
+    ancestry: Optional[list[WikibaseID]] = Field(
+        default=None,
+        description=(
+            "A list of all parent concept IDs, recursively, including that of the "
+            "concept itself"
+        ),
     )
     labelled_passages: list[LabelledPassage] = Field(
         default_factory=list,
