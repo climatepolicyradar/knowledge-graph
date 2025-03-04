@@ -131,7 +131,7 @@ def wikibase_to_s3(config: Optional[Config] = None):
             logger.info(f"Uploading concept #{i}: {wikibase_id}")
         try:
             concept = wikibase.get_concept(
-                wikibase_id, include_recursive_parent_concepts=True
+                wikibase_id, include_recursive_subconcept_of=True
             )
             upload_to_s3(config, concept)
         except Exception as e:
