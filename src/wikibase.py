@@ -139,6 +139,18 @@ class WikibaseSession:
         if not page_id:
             raise ConceptNotFoundError(wikibase_id)
 
+        redirects = (
+            page_id_response.get("entities", {})
+            .get(wikibase_id, {})
+            .get("redirects", [])
+        )
+        if redirects:
+            logger.warning(
+                f"Made a request to {self.base_url} for {wikibase_id} but was "
+                f"redirected to {redirects.get('to')}"
+            )
+            wikibase_id = redirects.get("to")
+
         # Use the pageid to get the latest revision before the supplied timestamp
         # https://www.mediawiki.org/wiki/API:Revisions
         revisions_response = self.session.get(
@@ -277,56 +289,87 @@ class WikibaseSession:
         # Duplicates can occur in the ancestry, so they need to be removed
         return list(set(ancestry))
 
+    def _get_pages(self, extra_params: dict) -> list[dict]:
+        """
+        Helper method to get pages from Wikibase with pagination.
+
+        :param dict extra_params: The parameters to pass to the API
+        :return list[dict]: List of page data from all batches
+        """
+        PAGE_REQUEST_SIZE = 500
+        MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
+
+        base_params = {
+            "action": "query",
+            "format": "json",
+            "list": "allpages",
+            "apnamespace": 120,
+            "aplimit": PAGE_REQUEST_SIZE,
+        }
+        # Update with any additional params supplied by the user
+        base_params.update(extra_params)
+
+        pages = []
+        for i in range(MAX_PAGE_REQUESTS):
+            response = self.session.get(
+                url=self.api_url,
+                params=base_params,
+            ).json()
+
+            if "error" in response:
+                raise HTTPError(response["error"])
+            if "warnings" in response:
+                logger.warning(response["warnings"])
+
+            batch_pages = response["query"]["allpages"]
+            pages.extend(batch_pages)
+
+            if continue_params := response.get("continue"):
+                base_params.update(continue_params)
+                logger.info(f"Retrieved {len(pages)} pages after iteration {i}")
+            else:
+                break
+
+        return pages
+
     def get_concept_ids(self) -> list[WikibaseID]:
         """
         Get concept ids from Wikibase.
 
         :return list[WikibaseID]: The concept ids, e.g ["Q123", "Q456"]
         """
-        PAGE_REQUEST_SIZE = 500
-        # An extra precaution against infinite loops, suitable up to 1M concepts (500*2000)
-        MAX_PAGE_REQUESTS = 2000
+        pages = self._get_pages(extra_params={"apfilterredir": "nonredirects"})
+        return [page["title"].replace("Item:", "") for page in pages]
 
-        params = {
-            "action": "query",
-            "format": "json",
-            "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
-            "apnamespace": 120,
-            "aplimit": PAGE_REQUEST_SIZE,
-            "apfilterredir": "nonredirects",  # Only fetch non-redirect pages
-        }
+    def get_all_redirects(self) -> list[dict[WikibaseID, WikibaseID]]:
+        """
+        Get all redirects from Wikibase.
 
-        wikibase_ids = []
-        for i in range(MAX_PAGE_REQUESTS):
-            # Get and process a page into wikibase_ids
+        :return list[dict[WikibaseID, WikibaseID]]: The redirects, e.g
+            [{"Q123": "Q456"}, {"Q456": "Q789"}]
+        """
+        pages = self._get_pages(extra_params={"apfilterredir": "redirects"})
+        redirects = []
+
+        # For each redirect, we need to find the wikibase ids of the source and target.
+        # We process the pages in batches of 50
+        for batch in [pages[i : i + 50] for i in range(0, len(pages), 50)]:
+            ids_to_fetch = [page["title"].replace("Item:", "") for page in batch]
             response = self.session.get(
                 url=self.api_url,
-                params=params,
+                params={
+                    "action": "wbgetentities",
+                    "format": "json",
+                    "ids": "|".join(ids_to_fetch),
+                    "props": "info",
+                },
             ).json()
-            wikibase_ids.extend(
-                [
-                    page["title"].replace("Item:", "")
-                    for page in response["query"]["allpages"]
-                ]
-            )
 
-            #  Handle errors / warnings, see:
-            # https://www.mediawiki.org/wiki/API:Continue#Example_3:_Python_code_for_iterating_through_all_results
-            if "error" in response:
-                raise HTTPError(response["error"])
-            if "warnings" in response:
-                logger.warning(response["warnings"])
+            for wikibase_id, entity in response.get("entities", {}).items():
+                if "redirects" in entity:
+                    redirects.append({wikibase_id: entity["redirects"]["to"]})
 
-            # Handle pagination if there are more pages
-            if continue_params := response.get("continue"):
-                params.update(continue_params)
-                logger.info(
-                    f"Retrieved {len(wikibase_ids)} ids after page iteration {i}"
-                )
-            else:
-                break
-
-        return wikibase_ids
+        return redirects
 
     def get_concepts(
         self,
