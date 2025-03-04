@@ -53,6 +53,10 @@ class WikibaseSession:
             )
         self._login()
 
+        # Get all redirects, so that any fetched references to concepts can be updated
+        # to use the correct wikibase ID
+        self.redirects = self.get_all_redirects()
+
     def __repr__(self) -> str:
         """Return a string representation of the Wikibase session"""
         return f"<WikibaseSession: {self.username} at {self.api_url}>"
@@ -92,6 +96,15 @@ class WikibaseSession:
         self.csrf_token = csrf_token
         logger.debug("Session headers updated")
 
+    def _resolve_redirect(self, wikibase_id: WikibaseID) -> WikibaseID:
+        """
+        Check if a Wikibase ID is a redirect and return its target ID if it is.
+
+        :param WikibaseID wikibase_id: The Wikibase ID to check
+        :return WikibaseID: The resolved Wikibase ID (either the same ID or its redirect target)
+        """
+        return self.redirects.get(wikibase_id, wikibase_id)
+
     def get_concept(
         self,
         wikibase_id: WikibaseID,
@@ -110,6 +123,8 @@ class WikibaseSession:
         :param bool include_ancestry: Whether to include the concept's complete ancestry
         :return Concept: The concept with the given Wikibase ID
         """
+        # Resolve any redirects first
+        wikibase_id = self._resolve_redirect(wikibase_id)
 
         if timestamp:
             if timestamp.tzinfo is None:
@@ -228,15 +243,15 @@ class WikibaseSession:
                         value = statement["mainsnak"]["datavalue"]["value"]
                         if property_id == self.subconcept_of_property_id:
                             concept.subconcept_of = concept.subconcept_of + [
-                                value["id"]
+                                self._resolve_redirect(value["id"])
                             ]
                         elif property_id == self.has_subconcept_property_id:
                             concept.has_subconcept = concept.has_subconcept + [
-                                value["id"]
+                                self._resolve_redirect(value["id"])
                             ]
                         elif property_id == self.related_concept_property_id:
                             concept.related_concepts = concept.related_concepts + [
-                                value["id"]
+                                self._resolve_redirect(value["id"])
                             ]
                         elif property_id == self.negative_labels_property_id:
                             concept.negative_labels = concept.negative_labels + [value]
@@ -264,6 +279,9 @@ class WikibaseSession:
 
     def get_ancestry(self, wikibase_id: WikibaseID) -> list[WikibaseID]:
         """Fetch the complete ancestry of a concept"""
+        # Resolve any redirects first
+        wikibase_id = self._resolve_redirect(wikibase_id)
+
         response = self.session.get(
             url=self.api_url,
             params={
@@ -283,8 +301,9 @@ class WikibaseSession:
                         property_id = statement["mainsnak"]["property"]
                         value = statement["mainsnak"]["datavalue"]["value"]
                         if property_id == self.subconcept_of_property_id:
-                            ancestry.append(value["id"])
-                            ancestry.extend(self.get_ancestry(value["id"]))
+                            resolved_id = self._resolve_redirect(value["id"])
+                            ancestry.append(resolved_id)
+                            ancestry.extend(self.get_ancestry(resolved_id))
 
         # Duplicates can occur in the ancestry, so they need to be removed
         return list(set(ancestry))
@@ -341,15 +360,15 @@ class WikibaseSession:
         pages = self._get_pages(extra_params={"apfilterredir": "nonredirects"})
         return [page["title"].replace("Item:", "") for page in pages]
 
-    def get_all_redirects(self) -> list[dict[WikibaseID, WikibaseID]]:
+    def get_all_redirects(self) -> dict[WikibaseID, WikibaseID]:
         """
         Get all redirects from Wikibase.
 
-        :return list[dict[WikibaseID, WikibaseID]]: The redirects, e.g
-            [{"Q123": "Q456"}, {"Q456": "Q789"}]
+        :return dict[WikibaseID, WikibaseID]: The redirects, e.g
+            {"Q123": "Q456", "Q456": "Q789"}
         """
         pages = self._get_pages(extra_params={"apfilterredir": "redirects"})
-        redirects = []
+        redirects = {}
 
         # For each redirect, we need to find the wikibase ids of the source and target.
         # We process the pages in batches of 50
@@ -367,7 +386,7 @@ class WikibaseSession:
 
             for wikibase_id, entity in response.get("entities", {}).items():
                 if "redirects" in entity:
-                    redirects.append({wikibase_id: entity["redirects"]["to"]})
+                    redirects[wikibase_id] = entity["redirects"]["to"]
 
         return redirects
 
