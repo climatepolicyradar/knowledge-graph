@@ -121,6 +121,7 @@ class WikibaseSession:
         wikibase_id: WikibaseID,
         timestamp: Optional[datetime] = None,
         include_labels_from_subconcepts: bool = False,
+        include_ancestry: bool = False,
     ) -> Concept:
         """
         Get a concept from Wikibase by its Wikibase ID
@@ -130,6 +131,7 @@ class WikibaseSession:
             If not provided, the latest version of the concept will be fetched.
         :param bool include_labels_from_subconcepts: Whether to include the labels
             from subconcepts in the concept
+        :param bool include_ancestry: Whether to include the concept's complete ancestry
         :return Concept: The concept with the given Wikibase ID
         """
 
@@ -267,7 +269,37 @@ class WikibaseSession:
             concept.alternative_labels = list(all_positive_labels)
             concept.negative_labels = list(all_negative_labels)
 
+        if include_ancestry:
+            concept.ancestry = self.get_ancestry(wikibase_id)
+
         return concept
+
+    def get_ancestry(self, wikibase_id: WikibaseID) -> list[WikibaseID]:
+        """Fetch the complete ancestry of a concept"""
+        response = self.session.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetentities",
+                "format": "json",
+                "ids": wikibase_id,
+                "props": "claims",
+            },
+        ).json()
+
+        entity = response["entities"][wikibase_id]
+        ancestry = []
+        if "claims" in entity:
+            for claim in entity["claims"].values():
+                for statement in claim:
+                    if statement["mainsnak"]["snaktype"] == "value":
+                        property_id = statement["mainsnak"]["property"]
+                        value = statement["mainsnak"]["datavalue"]["value"]
+                        if property_id == self.subconcept_of_property_id:
+                            ancestry.append(value["id"])
+                            ancestry.extend(self.get_ancestry(value["id"]))
+
+        # Duplicates can occur in the ancestry, so they need to be removed
+        return list(set(ancestry))
 
     def get_concept_ids(self) -> list[WikibaseID]:
         """
