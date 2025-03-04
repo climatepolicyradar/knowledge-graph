@@ -295,10 +295,28 @@ class WikibaseSession:
 
         return concept
 
-    def get_recursive_subconcept_of_relationships(
-        self, wikibase_id: WikibaseID
+    def _get_recursive_relationships(
+        self,
+        wikibase_id: WikibaseID,
+        property_id: str,
     ) -> list[WikibaseID]:
-        """Fetch the complete parentage of a concept, recursively up the hierarchy"""
+        """
+        Helper method to fetch recursive relationships by following a property.
+
+        :param WikibaseID wikibase_id: The Wikibase ID to start from
+        :param str property_id: The property ID to traverse
+        :return list[WikibaseID]: List of related concept IDs
+        """
+        valid_property_ids = [
+            self.subconcept_of_property_id,
+            self.has_subconcept_property_id,
+        ]
+        if property_id not in valid_property_ids:
+            raise ValueError(
+                f"Invalid property ID: {property_id}. "
+                f"Valid property IDs are: {valid_property_ids}"
+            )
+
         # Resolve any redirects first
         wikibase_id = self._resolve_redirect(wikibase_id)
 
@@ -313,63 +331,39 @@ class WikibaseSession:
         ).json()
 
         entity = response["entities"][wikibase_id]
-        recursive_parent_concepts = []
+        hierarchically_related_concepts = []
         if "claims" in entity:
             for claim in entity["claims"].values():
                 for statement in claim:
                     if statement["mainsnak"]["snaktype"] == "value":
-                        property_id = statement["mainsnak"]["property"]
-                        value = statement["mainsnak"]["datavalue"]["value"]
-                        if property_id == self.subconcept_of_property_id:
-                            resolved_id = self._resolve_redirect(value["id"])
-                            recursive_parent_concepts.append(resolved_id)
-                            recursive_parent_concepts.extend(
-                                self.get_recursive_subconcept_of_relationships(
-                                    resolved_id
+                        if statement["mainsnak"]["property"] == property_id:
+                            resolved_id = self._resolve_redirect(
+                                statement["mainsnak"]["datavalue"]["value"]["id"]
+                            )
+                            hierarchically_related_concepts.append(resolved_id)
+                            hierarchically_related_concepts.extend(
+                                self._get_recursive_relationships(
+                                    resolved_id, property_id
                                 )
                             )
 
-        # Duplicates can occur in the concept's list of recursive parents, so they need
-        # to be removed before returning
-        unique_recursive_parent_concepts = list(set(recursive_parent_concepts))
-        return unique_recursive_parent_concepts
+        return list(set(hierarchically_related_concepts))
+
+    def get_recursive_subconcept_of_relationships(
+        self, wikibase_id: WikibaseID
+    ) -> list[WikibaseID]:
+        """Fetch the complete parentage of a concept, recursively up the hierarchy"""
+        return self._get_recursive_relationships(
+            wikibase_id, self.subconcept_of_property_id
+        )
 
     def get_recursive_has_subconcept_relationships(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
         """Fetch the complete subconcepts of a concept, recursively down the hierarchy"""
-        # Resolve any redirects first
-        wikibase_id = self._resolve_redirect(wikibase_id)
-
-        response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "wbgetentities",
-                "format": "json",
-                "ids": wikibase_id,
-                "props": "claims",
-            },
-        ).json()
-
-        entity = response["entities"][wikibase_id]
-        recursive_subconcepts = []
-        if "claims" in entity:
-            for claim in entity["claims"].values():
-                for statement in claim:
-                    if statement["mainsnak"]["snaktype"] == "value":
-                        property_id = statement["mainsnak"]["property"]
-                        value = statement["mainsnak"]["datavalue"]["value"]
-                        if property_id == self.has_subconcept_property_id:
-                            resolved_id = self._resolve_redirect(value["id"])
-                            recursive_subconcepts.append(resolved_id)
-                            recursive_subconcepts.extend(
-                                self.get_recursive_has_subconcept_relationships(
-                                    resolved_id
-                                )
-                            )
-
-        unique_recursive_subconcepts = list(set(recursive_subconcepts))
-        return unique_recursive_subconcepts
+        return self._get_recursive_relationships(
+            wikibase_id, self.has_subconcept_property_id
+        )
 
     def _get_pages(self, extra_params: dict) -> list[dict]:
         """
