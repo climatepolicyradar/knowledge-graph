@@ -111,20 +111,23 @@ def mock_wikibase_properties_json():
 
 @pytest.fixture
 def mock_wikibase_entities_json():
-    return {
-        "entities": {
-            "Q10": {
-                "pageid": 14,
-                "ns": 120,
-                "title": "Item:Q10",
-                "lastrevid": 3785,
-                "modified": "2024-06-12T10:09:34Z",
-                "type": "item",
-                "id": "Q10",
-            }
-        },
-        "success": 1,
-    }
+    def get_mock_response(wikibase_id: str = "Q10") -> dict:
+        return {
+            "entities": {
+                wikibase_id: {
+                    "pageid": 14,
+                    "ns": 120,
+                    "title": f"Item:{wikibase_id}",
+                    "lastrevid": 3785,
+                    "modified": "2024-06-12T10:09:34Z",
+                    "type": "item",
+                    "id": wikibase_id,
+                }
+            },
+            "success": 1,
+        }
+
+    return get_mock_response
 
 
 @pytest.fixture
@@ -162,28 +165,129 @@ def mock_wikibase_items_last_page_json():
 
 @pytest.fixture
 def mock_wikibase_revisions_json():
-    return {
-        "continue": {"rvcontinue": "20240612100926|3784", "continue": "||"},
-        "query": {
-            "pages": {
-                "14": {
-                    "pageid": 14,
-                    "ns": 120,
-                    "title": "Item:Q10",
-                    "revisions": [
-                        {
-                            "slots": {
-                                "main": {
-                                    "contentmodel": "wikibase-item",
-                                    "contentformat": "application/json",
-                                    "*": '{"type":"item","id":"Q10","labels":{"en":{"language":"en","value":"tropical forests"}},"descriptions":{"en":{"language":"en","value":"generic forest in the tropics"}},"aliases":{"en":[{"language":"en","value":"tropical forests"}]},"claims":{"P2":[{"mainsnak":{"snaktype":"value","property":"P2","hash":"44c11d9ab91c8c3cf203033599eebcb8d1be97ce","datavalue":{"value":{"entity-type":"item","numeric-id":5,"id":"Q5"},"type":"wikibase-entityid"}},"type":"statement","id":"Q10$DB660D9E-8D6C-4ED6-8060-D51161A88382","rank":"normal"}]},"sitelinks":[]}',
+    def generate_concept_data(wikibase_id: str) -> dict:
+        return {
+            "type": "item",
+            "id": wikibase_id,
+            "labels": {
+                "en": {
+                    "language": "en",
+                    "value": f"concept {wikibase_id}",
+                }
+            },
+            "descriptions": {
+                "en": {
+                    "language": "en",
+                    "value": f"description for {wikibase_id}",
+                }
+            },
+            "aliases": {
+                "en": [
+                    {
+                        "language": "en",
+                        "value": f"alias for {wikibase_id}",
+                    }
+                ]
+            },
+            "claims": {
+                "P1": [
+                    {
+                        "mainsnak": {
+                            "snaktype": "value",
+                            "property": "P1",
+                            "datavalue": {
+                                "value": {
+                                    "entity-type": "item",
+                                    "id": "Q20",
+                                },
+                                "type": "wikibase-entityid",
+                            },
+                        }
+                    }
+                ],
+                "P2": [
+                    {
+                        "mainsnak": {
+                            "snaktype": "value",
+                            "property": "P2",
+                            "datavalue": {
+                                "value": {
+                                    "entity-type": "item",
+                                    "id": "Q5",
+                                },
+                                "type": "wikibase-entityid",
+                            },
+                        }
+                    }
+                ],
+                "P7": [
+                    {
+                        "mainsnak": {
+                            "snaktype": "value",
+                            "property": "P7",
+                            "datavalue": {
+                                "value": f"Definition for {wikibase_id}",
+                                "type": "string",
+                            },
+                        }
+                    }
+                ],
+            },
+        }
+
+    def get_mock_response(wikibase_id: str) -> dict:
+        return {
+            "continue": {"rvcontinue": "20240612100926|3784", "continue": "||"},
+            "query": {
+                "pages": {
+                    "14": {
+                        "pageid": 14,
+                        "ns": 120,
+                        "title": f"Item:{wikibase_id}",
+                        "revisions": [
+                            {
+                                "slots": {
+                                    "main": {
+                                        "contentmodel": "wikibase-item",
+                                        "contentformat": "application/json",
+                                        "*": json.dumps(
+                                            generate_concept_data(wikibase_id)
+                                        ),
+                                    }
                                 }
                             }
-                        }
-                    ],
+                        ],
+                    }
                 }
-            }
+            },
+        }
+
+    return get_mock_response
+
+
+@pytest.fixture
+def mock_wikibase_redirects_json():
+    return {
+        "batchcomplete": "",
+        "query": {
+            "allpages": [
+                {"pageid": 1234, "ns": 120, "title": "Item:Q15", "redirect": True}
+            ]
         },
+    }
+
+
+@pytest.fixture
+def mock_wikibase_redirect_target_json():
+    return {
+        "entities": {
+            "Q15": {
+                "pageid": 1234,
+                "ns": 120,
+                "title": "Item:Q15",
+                "redirects": {"from": "Q15", "to": "Q10"},
+            }
+        }
     }
 
 
@@ -207,6 +311,8 @@ def MockedWikibaseSession(
     mock_wikibase_items_last_page_json,
     mock_wikibase_revisions_json,
     mock_wikibase_entities_json,
+    mock_wikibase_redirects_json,
+    mock_wikibase_redirect_target_json,
 ):
     def mock_request_handler(request):
         if not httpx.URL(mock_wikibase_url).host == request.url.host:
@@ -227,13 +333,20 @@ def MockedWikibaseSession(
                     return httpx.Response(200, json=mock_wikibase_token_json)
                 # get_concept
                 if request.url.params.get("prop") == "revisions":
-                    return httpx.Response(200, json=mock_wikibase_revisions_json)
+                    wikibase_id = request.url.params.get("ids")
+                    return httpx.Response(
+                        200, json=mock_wikibase_revisions_json(wikibase_id)
+                    )
 
                 if request.url.params.get("list") == "allpages":
                     apnamespace = request.url.params.get("apnamespace")
+                    apfilterredir = request.url.params.get("apfilterredir")
                     # get_properties
                     if apnamespace == "122":
                         return httpx.Response(200, json=mock_wikibase_properties_json)
+                    # get_redirects
+                    if apfilterredir == "redirects":
+                        return httpx.Response(200, json=mock_wikibase_redirects_json)
                     # get_concepts
                     if apnamespace == "120":
                         # Requests get continue details from the response,
@@ -251,7 +364,13 @@ def MockedWikibaseSession(
                 return httpx.Response(200)
             # get_concept
             case "wbgetentities":
-                return httpx.Response(200, json=mock_wikibase_entities_json)
+                # Handle redirects
+                if request.url.params.get("ids") == "Q15":
+                    return httpx.Response(200, json=mock_wikibase_redirect_target_json)
+                wikibase_id = request.url.params.get("ids")
+                return httpx.Response(
+                    200, json=mock_wikibase_entities_json(wikibase_id)
+                )
             # get_statements
             case "wbgetclaims":
                 return httpx.Response(200, json={"claims": {}})
