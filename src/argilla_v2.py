@@ -23,7 +23,7 @@ from src.wikibase import Concept
 load_dotenv(find_dotenv())
 
 
-class ArgillaService:
+class ArgillaSession:
     def __init__(self, api_key: Optional[str] = None, api_url: Optional[str] = None):
         self.client = rg.Argilla(
             api_key=api_key or os.getenv("ARGILLA_API_KEY"),
