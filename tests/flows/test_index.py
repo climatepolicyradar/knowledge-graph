@@ -707,7 +707,7 @@ def test_get_updated_passage_concepts(
         assert concept.model_dump(mode="json") in updated_passage_concepts
 
 
-def test_convert_labelled_passges_to_concepts(
+def test_convert_labelled_passage_to_concepts(
     example_labelled_passages: list[LabelledPassage],
     MockedWikibaseSession,
 ) -> None:
@@ -720,7 +720,7 @@ def test_convert_labelled_passges_to_concepts(
     assert all([isinstance(concept, VespaConcept) for concept in concepts])
 
 
-def test_convert_labelled_passges_to_concepts_raises_error(
+def test_convert_labelled_passage_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
     caplog: pytest.LogCaptureFixture,
     MockedWikibaseSession,
