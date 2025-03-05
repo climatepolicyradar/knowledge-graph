@@ -18,7 +18,6 @@ from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
 )
-from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
@@ -156,12 +155,12 @@ create_deployment(
 )
 
 
-# Data backup
+# # Data backup
 
-create_deployment(
-    flow=data_backup,
-    description="Deploy all Argilla datasets to Huggingface",
-    env_schedules={
-        AwsEnv.labs: "0 0 * * *",  # Every day at midnight
-    },
-)
+# create_deployment(
+#     flow=data_backup,
+#     description="Deploy all Argilla datasets to Huggingface",
+#     env_schedules={
+#         AwsEnv.labs: "0 0 * * *",  # Every day at midnight
+#     },
+# )
