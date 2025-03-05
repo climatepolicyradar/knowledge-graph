@@ -4,7 +4,7 @@ import typer
 from rich.console import Console
 
 from scripts.config import concept_dir
-from src.argilla_v2 import get_labelled_passages_from_argilla
+from src.argilla_v2 import ArgillaSession
 from src.identifiers import WikibaseID
 from src.wikibase import WikibaseSession
 
@@ -25,12 +25,16 @@ def main(
         wikibase = WikibaseSession()
     console.log("✅ Connected to Wikibase")
 
+    with console.status("Connecting to Argilla..."):
+        argilla = ArgillaSession()
+    console.log("✅ Connected to Argilla")
+
     concept = wikibase.get_concept(wikibase_id)
     console.log(f'🔍 Fetched metadata for "{concept}" from wikibase')
 
     try:
         with console.status("Fetching labelled passages from Argilla..."):
-            labelled_passages = get_labelled_passages_from_argilla(concept)
+            labelled_passages = argilla.get_labelled_passages_from_argilla(concept)
         console.log(
             f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )

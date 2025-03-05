@@ -24,6 +24,8 @@ load_dotenv(find_dotenv())
 
 
 class ArgillaSession:
+    """A session for interacting with Argilla"""
+
     def __init__(self, api_key: Optional[str] = None, api_url: Optional[str] = None):
         self.client = rg.Argilla(
             api_key=api_key or os.getenv("ARGILLA_API_KEY"),
@@ -46,6 +48,7 @@ class ArgillaSession:
 
     @staticmethod
     def concept_to_dataset_name(concept: Concept) -> str:
+        """Extracts the dataset name from a concept"""
         if not concept.wikibase_id:
             raise ValueError("Concept has no Wikibase ID")
         return concept.wikibase_id
@@ -199,6 +202,7 @@ class ArgillaSession:
         min_timestamp: Optional[datetime] = None,
         max_timestamp: Optional[datetime] = None,
     ) -> list[LabelledPassage]:
+        """Uses max- and min-timestampts to filter out the labelled passages"""
         filtered_passages = []
         for passage in labelled_passages:
             passage_copy = passage.model_copy(update={"spans": []})
@@ -244,7 +248,7 @@ class ArgillaSession:
             self.concept_to_dataset_name(concept), workspace=workspace
         )
 
-        labelled_passages = dataset_to_labelled_passages(dataset)  # type: ignore
+        labelled_passages = self.dataset_to_labelled_passages(dataset)  # type: ignore
         if min_timestamp or max_timestamp:
             labelled_passages = self.filter_labelled_passages_by_timestamp(
                 labelled_passages, min_timestamp, max_timestamp

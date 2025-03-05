@@ -9,9 +9,7 @@ from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 
 from scripts.config import concept_dir, processed_data_dir
-from src.argilla_v2 import (
-    labelled_passages_to_feedback_dataset,
-)
+from src.argilla_v2 import ArgillaSession
 from src.concept import Concept
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage
@@ -48,6 +46,9 @@ def main(
         ),
     ],
 ):
+    with console.status("Connecting to Argilla..."):
+        argilla = ArgillaSession()
+    console.log("✅ Connected to Argilla")
     sampled_passages_dir = processed_data_dir / "sampled_passages"
     sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
 
@@ -125,7 +126,7 @@ def main(
 
     console.log(f"✅ Loaded metadata for {concept}")
 
-    dataset = labelled_passages_to_feedback_dataset(
+    dataset = argilla.labelled_passages_to_feedback_dataset(
         labelled_passages, concept, workspace
     )
 
