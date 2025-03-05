@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
-from typing import Any, ContextManager, TypeAlias, TypeVar
+from typing import Any, ContextManager, Optional, TypeAlias, TypeVar
 
 import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -47,8 +47,6 @@ DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
 HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
-
-wikibase = WikibaseSession()
 
 
 # Needed to get document passages from Vespa
@@ -440,30 +438,44 @@ def get_document_passage_from_all_document_passages(
 
 
 @lru_cache(maxsize=1000)
+def _get_parent_concepts_from_concept_impl(
+    concept_id: WikibaseID,
+    wikibase: WikibaseSession,
+) -> list[dict[str, str]]:
+    """Implementation of get_parent_concepts_from_concept that can be cached."""
+    parent_concept_ids = wikibase.get_recursive_subconcept_of_relationships(concept_id)
+    parent_concepts = [
+        {"id": str(parent_concept_id), "name": ""}
+        for parent_concept_id in parent_concept_ids
+    ]
+
+    return parent_concepts
+
+
 def get_parent_concepts_from_concept(
     concept: Concept,
-    wikibase: WikibaseSession = wikibase,
-) -> tuple[list[dict], str]:
+    wikibase: Optional[WikibaseSession] = None,
+) -> list[dict[str, str]]:
     """
     Extract parent concepts from a Concept object.
 
     Uses an LRU cache to avoid making redundant Wikibase API calls during execution.
+    The cache is keyed on both the concept ID and the Wikibase URL to ensure
+    different Wikibase instances don't share cache entries.
     """
-    assert isinstance(concept.wikibase_id, WikibaseID)
-    parent_concept_ids = wikibase.get_recursive_subconcept_of_relationships(
-        concept.wikibase_id
-    )
-    parent_concepts = [
-        {"id": parent_concept_id, "name": ""}
-        for parent_concept_id in parent_concept_ids
-    ]
-    parent_concept_ids_flat = ",".join(parent_concept_ids)
+    if wikibase is None:
+        wikibase = WikibaseSession()
 
-    return parent_concepts, parent_concept_ids_flat
+    assert isinstance(concept.wikibase_id, WikibaseID)
+    return _get_parent_concepts_from_concept_impl(
+        concept.wikibase_id,
+        wikibase,
+    )
 
 
 def convert_labelled_passage_to_concepts(
     labelled_passage: LabelledPassage,
+    wikibase: Optional[WikibaseSession] = None,
 ) -> list[VespaConcept]:
     """
     Convert a labelled passage to a list of VespaConcept objects and their text block ID.
@@ -485,8 +497,12 @@ def convert_labelled_passage_to_concepts(
     # climate risk (Q975). As a result, users will be able to find this passage when
     # filtering their search results for climate risk, even though the classifier wasn't
     # aware of that parent relationship at inference time.
-    parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
-        concept=concept
+    parent_concepts = get_parent_concepts_from_concept(
+        concept=concept,
+        wikibase=wikibase,
+    )
+    parent_concept_ids_flat = ",".join(
+        [parent_concept["id"] for parent_concept in parent_concepts]
     )
 
     # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
