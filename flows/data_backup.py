@@ -5,10 +5,7 @@ import os
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 
-from src.argilla_v2 import (
-    dataset_to_labelled_passages,
-    get_all_datasets,
-)
+from src.argilla_v2 import ArgillaSession
 from src.huggingface import HuggingfaceSession
 
 
@@ -26,12 +23,12 @@ def setup_environment():
 def data_backup():
     """Flow to deploy all our static sites."""
     setup_environment()
-
+    argilla_session = ArgillaSession()
     hf_session = HuggingfaceSession()
 
-    datasets = get_all_datasets("knowledge-graph")
+    datasets = argilla_session.get_all_datasets("knowledge-graph")
     for dataset in datasets:
-        labelled_passages = dataset_to_labelled_passages(dataset)
+        labelled_passages = argilla_session.dataset_to_labelled_passages(dataset)
         hf_session.push(dataset.name, labelled_passages)
 
 

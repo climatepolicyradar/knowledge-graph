@@ -10,8 +10,11 @@ from argilla import (
     TextField,
     TextQuestion,
 )
+from dotenv import find_dotenv, load_dotenv
 
-from src.argilla_v2 import _assert_datasets_of_the_same_type, combine_datasets
+from src.argilla_v2 import ArgillaSession
+
+load_dotenv(find_dotenv())
 
 
 def test_combine_datasets():
@@ -72,7 +75,8 @@ def test_combine_datasets():
         "tests.test_argilla_v2.DatasetRecordsIterator._list",
         lambda self: records[self.__dataset.name],
     ):
-        combine_dataset = combine_datasets(dataset1, dataset2)
+        argilla = ArgillaSession()
+        combine_dataset = argilla.combine_datasets(dataset1, dataset2)
 
         assert combine_dataset.name == "combined-dataset1-dataset2"
         assert combine_dataset.settings.fields == [TextField(name="field1")]
@@ -87,6 +91,7 @@ def test_combine_datasets():
 
 
 def test__assert_datasets_of_the_same_type_errors():
+    argilla = ArgillaSession()
     dataset1 = Dataset(
         name="dataset1",
         settings=Settings(
@@ -108,10 +113,11 @@ def test__assert_datasets_of_the_same_type_errors():
     )
 
     with pytest.raises(ValueError):
-        _assert_datasets_of_the_same_type(dataset1, dataset2)
+        argilla._assert_datasets_of_the_same_type(dataset1, dataset2)
 
 
 def test__assert_datasets_of_the_same_type():
+    argilla = ArgillaSession()
     dataset1 = Dataset(
         name="dataset1",
         settings=Settings(
@@ -131,4 +137,4 @@ def test__assert_datasets_of_the_same_type():
         ),
     )
 
-    assert _assert_datasets_of_the_same_type(dataset1, dataset2) is None
+    assert argilla._assert_datasets_of_the_same_type(dataset1, dataset2) is None
