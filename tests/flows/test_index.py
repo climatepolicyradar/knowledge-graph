@@ -21,7 +21,6 @@ from flows.index import (
     convert_labelled_passage_to_concepts,
     get_document_passage_from_all_document_passages,
     get_document_passages_from_vespa,
-    get_parent_concepts_from_concept,
     get_updated_passage_concepts,
     get_vespa_search_adapter_from_aws_secrets,
     index_by_s3,
@@ -35,7 +34,6 @@ from flows.index import (
     s3_paths_or_s3_prefixes,
 )
 from scripts.cloud import AwsEnv
-from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -602,10 +600,14 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ) -> None:
-    with patch("flows.index.get_prefect_job_variable", return_value=mock_bucket), patch(
-        "flows.index.get_vespa_search_adapter_from_aws_secrets",
-        return_value=local_vespa_search_adapter,
-    ), disable_run_logger():
+    with (
+        patch("flows.index.get_prefect_job_variable", return_value=mock_bucket),
+        patch(
+            "flows.index.get_vespa_search_adapter_from_aws_secrets",
+            return_value=local_vespa_search_adapter,
+        ),
+        disable_run_logger(),
+    ):
         initial_passages_response = local_vespa_search_adapter.client.query(
             yql="select * from document_passage where true"
         )
@@ -707,17 +709,24 @@ def test_get_updated_passage_concepts(
 
 def test_convert_labelled_passges_to_concepts(
     example_labelled_passages: list[LabelledPassage],
+    MockedWikibaseSession,
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
-    concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
+    wikibase = MockedWikibaseSession()
+    concepts = convert_labelled_passage_to_concepts(
+        example_labelled_passages[0],
+        wikibase=wikibase,
+    )
     assert all([isinstance(concept, VespaConcept) for concept in concepts])
 
 
 def test_convert_labelled_passges_to_concepts_raises_error(
     example_labelled_passages: list[LabelledPassage],
     caplog: pytest.LogCaptureFixture,
+    MockedWikibaseSession,
 ) -> None:
     """Test that we correctly log errors when a Span has no concept ID or timestamps."""
+    wikibase = MockedWikibaseSession()
     # Add a span without concept_id
     example_labelled_passages[0].spans.append(
         Span(
@@ -740,7 +749,10 @@ def test_convert_labelled_passges_to_concepts_raises_error(
         )
     )
 
-    concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
+    concepts = convert_labelled_passage_to_concepts(
+        example_labelled_passages[0],
+        wikibase=wikibase,
+    )
 
     # Check that appropriate error messages were logged
     error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
@@ -749,21 +761,6 @@ def test_convert_labelled_passges_to_concepts_raises_error(
 
     # Verify that the problematic spans were skipped but valid one was processed
     assert len(concepts) == 1
-
-
-def test_get_parent_concepts_from_concept() -> None:
-    """Test that we can correctly retrieve the parent concepts from a concept."""
-    assert get_parent_concepts_from_concept(
-        concept=Concept(
-            preferred_label="forestry sector",
-            alternative_labels=[],
-            negative_labels=[],
-            wikibase_id=WikibaseID("Q10014"),
-            subconcept_of=[WikibaseID("Q4470")],
-            has_subconcept=[WikibaseID("Q4471")],
-            labelled_passages=[],
-        )
-    ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
 
 
 def test_s3_paths_or_s3_prefixes_no_classifier(
@@ -793,14 +790,17 @@ def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
 ):
     config = Config(cache_bucket=mock_bucket)
 
-    with pytest.raises(
-        ValueError,
-        match="if document IDs are specified, a classifier "
-        "specifcation must also be specified, since they're "
-        "namespaced by classifiers \\(e\\.g\\. "
-        "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
-        "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
-    ), disable_run_logger():
+    with (
+        pytest.raises(
+            ValueError,
+            match="if document IDs are specified, a classifier "
+            "specifcation must also be specified, since they're "
+            "namespaced by classifiers \\(e\\.g\\. "
+            "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
+            "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
+        ),
+        disable_run_logger(),
+    ):
         s3_paths_or_s3_prefixes(
             classifier_specs=None,
             document_ids=labelled_passage_fixture_ids,

@@ -8,7 +8,6 @@ import tempfile
 from collections import Counter
 from collections.abc import Generator
 from dataclasses import dataclass
-from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Any, ContextManager, Optional, TypeAlias, TypeVar
@@ -437,48 +436,12 @@ def get_document_passage_from_all_document_passages(
     return data_id, hit_id_and_passage[1]
 
 
-@lru_cache(maxsize=1000)
-def _get_parent_concepts_from_concept_impl(
-    concept_id: WikibaseID,
-    wikibase: WikibaseSession,
-) -> list[dict[str, str]]:
-    """Implementation of get_parent_concepts_from_concept that can be cached."""
-    parent_concept_ids = wikibase.get_recursive_subconcept_of_relationships(concept_id)
-    parent_concepts = [
-        {"id": str(parent_concept_id), "name": ""}
-        for parent_concept_id in parent_concept_ids
-    ]
-
-    return parent_concepts
-
-
-def get_parent_concepts_from_concept(
-    concept: Concept,
-    wikibase: Optional[WikibaseSession] = None,
-) -> list[dict[str, str]]:
-    """
-    Extract parent concepts from a Concept object.
-
-    Uses an LRU cache to avoid making redundant Wikibase API calls during execution.
-    The cache is keyed on both the concept ID and the Wikibase URL to ensure
-    different Wikibase instances don't share cache entries.
-    """
-    if wikibase is None:
-        wikibase = WikibaseSession()
-
-    assert isinstance(concept.wikibase_id, WikibaseID)
-    return _get_parent_concepts_from_concept_impl(
-        concept.wikibase_id,
-        wikibase,
-    )
-
-
 def convert_labelled_passage_to_concepts(
     labelled_passage: LabelledPassage,
     wikibase: Optional[WikibaseSession] = None,
 ) -> list[VespaConcept]:
     """
-    Convert a labelled passage to a list of VespaConcept objects and their text block ID.
+    Convert a labelled passage to a list of VespaConcept objects
 
     The labelled passage contains a list of spans relating to concepts
     that we must convert to VespaConcept objects.
@@ -497,13 +460,18 @@ def convert_labelled_passage_to_concepts(
     # climate risk (Q975). As a result, users will be able to find this passage when
     # filtering their search results for climate risk, even though the classifier wasn't
     # aware of that parent relationship at inference time.
-    parent_concepts = get_parent_concepts_from_concept(
-        concept=concept,
-        wikibase=wikibase,
+    if wikibase is None:
+        wikibase = WikibaseSession()
+
+    parent_concept_ids = wikibase.get_recursive_subconcept_of_relationships(
+        concept.wikibase_id
     )
-    parent_concept_ids_flat = ",".join(
-        [parent_concept["id"] for parent_concept in parent_concepts]
-    )
+    parent_concepts = [
+        {"id": parent_concept_id, "name": ""}
+        for parent_concept_id in parent_concept_ids
+    ]
+
+    parent_concept_ids_flat = ",".join(parent_concept_ids)
 
     # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
     for span_idx, span in enumerate(labelled_passage.spans):

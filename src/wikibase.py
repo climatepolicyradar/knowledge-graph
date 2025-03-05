@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from functools import lru_cache
 from logging import getLogger
 from typing import Optional
 
@@ -367,6 +368,7 @@ class WikibaseSession:
 
         return list(set(hierarchically_related_concepts))
 
+    @lru_cache(maxsize=1000)
     def get_recursive_subconcept_of_relationships(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
@@ -375,6 +377,7 @@ class WikibaseSession:
             wikibase_id, self.subconcept_of_property_id
         )
 
+    @lru_cache(maxsize=1000)
     def get_recursive_has_subconcept_relationships(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
