@@ -1,7 +1,6 @@
 import os
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional
 
 import boto3
 from cpr_sdk.ssm import get_aws_ssm_param
@@ -26,10 +25,10 @@ class Config:
     s3_prefix: str = "concepts"
     bucket_region: str = "eu-west-1"
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-    cdn_bucket_name: Optional[str] = None
-    wikibase_password: Optional[SecretStr] = None
-    wikibase_username: Optional[str] = None
-    wikibase_url: Optional[str] = None
+    cdn_bucket_name: str | None = None
+    wikibase_password: SecretStr | None = None
+    wikibase_username: str | None = None
+    wikibase_url: str | None = None
     logging_interval: int = 200
 
     @classmethod
@@ -50,30 +49,30 @@ class Config:
         return config
 
     def get_cdn_bucket_name(self) -> str:
-        """Type safe way of accessing the cdn bucket name"""
+        """Type safe way of accessing the CDN bucket name"""
         if not self.cdn_bucket_name:
-            raise ValueError("cdn_bucket_name not set")
+            raise ValueError("`cdn_bucket_name` not set")
         else:
             return self.cdn_bucket_name
 
     def get_wikibase_username(self) -> str:
         """Type safe way of accessing the wikibase_username"""
         if not self.wikibase_username:
-            raise ValueError("wikibase_username not set")
+            raise ValueError("`wikibase_username` not set")
         else:
             return self.wikibase_username
 
     def get_wikibase_url(self) -> str:
         """Type safe way of accessing the wikibase_url"""
         if not self.wikibase_url:
-            raise ValueError("wikibase_url not set")
+            raise ValueError("`wikibase_url` not set")
         else:
             return self.wikibase_url
 
     def get_wikibase_password_secret_value(self) -> str:
         """Type safe way of getting the wikibase password secret value"""
         if not self.wikibase_password:
-            raise ValueError("wikibase_password not set")
+            raise ValueError("`wikibase_password` not set")
         return self.wikibase_password.get_secret_value()
 
 
@@ -84,7 +83,7 @@ def upload_to_s3(config: Config, concept: Concept) -> None:
     data = concept.model_dump_json().encode()
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
-    s3.put_object(
+    _ = s3.put_object(
         Bucket=config.get_cdn_bucket_name(),
         Key=key,
         Body=BytesIO(data),
@@ -92,11 +91,23 @@ def upload_to_s3(config: Config, concept: Concept) -> None:
     )
 
 
+def delete_from_s3(config: Config, concept_id: str) -> None:
+    """Delete an individual concept from S3"""
+    filename = f"{concept_id}.json"
+    key = os.path.join(config.s3_prefix, filename)
+
+    s3 = boto3.client("s3", region_name=config.bucket_region)
+    _ = s3.delete_object(
+        Bucket=config.get_cdn_bucket_name(),
+        Key=key,
+    )
+
+
 def list_s3_concepts(config: Config) -> list[str]:
     """List all concepts in S3"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
 
-    concept_paths = []
+    concept_paths: list[str] = []
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(
         Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
@@ -112,7 +123,7 @@ def list_s3_concepts(config: Config) -> list[str]:
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-def wikibase_to_s3(config: Optional[Config] = None):
+def wikibase_to_s3(config: Config | None = None):
     logger = get_run_logger()
     if not config:
         config = Config.create()
@@ -124,7 +135,7 @@ def wikibase_to_s3(config: Optional[Config] = None):
         url=config.get_wikibase_url(),
     )
     wikibase_ids = wikibase.get_all_concept_ids()
-    logger.info(f"Found {len(wikibase_ids)} concept ids in Wikibase")
+    logger.info(f"Found {len(wikibase_ids)} concept IDs in Wikibase")
 
     for i, wikibase_id in enumerate(wikibase_ids):
         if i % config.logging_interval == 0:
@@ -147,14 +158,21 @@ def wikibase_to_s3(config: Optional[Config] = None):
         f"Extras: {extras_in_s3}, Missing from S3: {missing_from_s3}"
     )
 
-    # Fail for discrepencies to trigger alerts
     if extras_in_s3:
-        raise ValueError(
-            f"{len(extras_in_s3)} concepts where found in S3 but where "
-            f"not part of the copy from wikibase: {extras_in_s3}"
+        logger.info(
+            f"Deleting {len(extras_in_s3)} extra concepts from S3 that are no longer in Wikibase"
         )
+        for i, concept_id in enumerate(extras_in_s3):
+            if i % config.logging_interval == 0:
+                logger.info(f"Deleting extra concept #{i}: {concept_id}")
+            try:
+                delete_from_s3(config, concept_id)
+            except Exception as e:
+                logger.error(f"Failed to delete concept #{i}: {concept_id}, error: {e}")
+
+    # Fail for discrepancies to trigger alerts
     if missing_from_s3:
         raise ValueError(
-            f"{len(missing_from_s3)} concepts where found in wikibase but "
+            f"{len(missing_from_s3)} concepts where found in Wikibase but "
             f"didnt make it to S3: {missing_from_s3}"
         )
