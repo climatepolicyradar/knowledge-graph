@@ -126,7 +126,7 @@ def main(
 
     console.log(f"✅ Loaded metadata for {concept}")
 
-    dataset = argilla.labelled_passages_to_feedback_dataset(
+    dataset = argilla.labelled_passages_to_dataset(
         labelled_passages, concept, workspace
     )
 

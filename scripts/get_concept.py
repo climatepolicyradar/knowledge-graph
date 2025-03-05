@@ -34,7 +34,7 @@ def main(
 
     try:
         with console.status("Fetching labelled passages from Argilla..."):
-            labelled_passages = argilla.get_labelled_passages_from_argilla(concept)
+            labelled_passages = argilla.pull_labelled_passages(concept)
         console.log(
             f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )

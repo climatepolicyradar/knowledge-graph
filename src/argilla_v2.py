@@ -47,13 +47,13 @@ class ArgillaSession:
         return datasets
 
     @staticmethod
-    def concept_to_dataset_name(concept: Concept) -> str:
+    def _concept_to_dataset_name(concept: Concept) -> str:
         """Extracts the dataset name from a concept"""
         if not concept.wikibase_id:
             raise ValueError("Concept has no Wikibase ID")
         return concept.wikibase_id
 
-    def labelled_passages_to_feedback_dataset(
+    def labelled_passages_to_dataset(
         self,
         labelled_passages: list[LabelledPassage],
         concept: Concept,
@@ -67,7 +67,7 @@ class ArgillaSession:
         :return Dataset: An Argilla Dataset, ready to be pushed
         """
         dataset = Dataset(
-            name=self.concept_to_dataset_name(concept),
+            name=self._concept_to_dataset_name(concept),
             settings=Settings(
                 guidelines="Highlight the entity if it is present in the text",
                 fields=[
@@ -177,7 +177,7 @@ class ArgillaSession:
         ]
 
     @staticmethod
-    def is_between_timestamps(
+    def _is_between_timestamps(
         timestamp: datetime,
         min_timestamp: Optional[datetime],
         max_timestamp: Optional[datetime],
@@ -196,7 +196,7 @@ class ArgillaSession:
             return False
         return True
 
-    def filter_labelled_passages_by_timestamp(
+    def _filter_labelled_passages_by_timestamp(
         self,
         labelled_passages: list[LabelledPassage],
         min_timestamp: Optional[datetime] = None,
@@ -209,7 +209,7 @@ class ArgillaSession:
             for span in passage.spans:
                 span_copy = span.model_copy(update={"labellers": [], "timestamps": []})
                 for labeller, timestamp in zip(span.labellers, span.timestamps):
-                    if self.is_between_timestamps(
+                    if self._is_between_timestamps(
                         timestamp=timestamp,
                         min_timestamp=min_timestamp,
                         max_timestamp=max_timestamp,
@@ -225,7 +225,7 @@ class ArgillaSession:
 
         return filtered_passages
 
-    def get_labelled_passages_from_argilla(
+    def pull_labelled_passages(
         self,
         concept: Concept,
         workspace: str = "knowledge-graph",
@@ -245,18 +245,18 @@ class ArgillaSession:
         # First, see whether the dataset exists with the name we expect
 
         dataset = self.client.datasets(  # type: ignore
-            self.concept_to_dataset_name(concept), workspace=workspace
+            self._concept_to_dataset_name(concept), workspace=workspace
         )
 
         labelled_passages = self.dataset_to_labelled_passages(dataset)  # type: ignore
         if min_timestamp or max_timestamp:
-            labelled_passages = self.filter_labelled_passages_by_timestamp(
+            labelled_passages = self._filter_labelled_passages_by_timestamp(
                 labelled_passages, min_timestamp, max_timestamp
             )
         return labelled_passages
 
     @staticmethod
-    def distribute_labelling_projects(
+    def _distribute_labelling_projects(
         datasets: list, labellers: list[str], min_labellers: int = 2
     ) -> Generator[tuple[Dataset, str], None, None]:
         """
