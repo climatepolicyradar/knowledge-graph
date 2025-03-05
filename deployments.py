@@ -30,6 +30,7 @@ from flows.inference import (
     run_classifier_inference_on_batch_of_documents,
 )
 from flows.wikibase_to_s3 import wikibase_to_s3
+from flows.data_backup import data_backup
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
