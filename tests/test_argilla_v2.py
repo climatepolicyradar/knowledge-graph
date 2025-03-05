@@ -2,7 +2,6 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from dotenv import load_dotenv, find_dotenv
 from argilla import (
     Dataset,
     Record,
@@ -11,9 +10,9 @@ from argilla import (
     TextField,
     TextQuestion,
 )
+from dotenv import find_dotenv, load_dotenv
 
 from src.argilla_v2 import ArgillaSession
-
 
 load_dotenv(find_dotenv())
 
