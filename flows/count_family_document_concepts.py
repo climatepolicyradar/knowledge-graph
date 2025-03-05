@@ -132,9 +132,8 @@ async def load_parse_concepts_counts(
 
 
 @flow(
-    # TODO: Enable once confident
-    # on_failure=[SlackNotify.message],
-    # on_crashed=[SlackNotify.message],
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
 )
 async def load_update_document_concepts_counts(
     document_import_id: DocumentImportId,
