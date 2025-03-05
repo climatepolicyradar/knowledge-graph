@@ -170,6 +170,8 @@ def wikibase_to_s3(config: Config | None = None):
             except Exception as e:
                 logger.error(f"Failed to delete concept #{i}: {concept_id}, error: {e}")
 
+        # TODO: Run deployment for deindexing
+
     # Fail for discrepancies to trigger alerts
     if missing_from_s3:
         raise ValueError(
