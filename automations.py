@@ -12,6 +12,7 @@ from prefect.client.schemas.objects import Deployment
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
+from flows.count_family_document_concepts import count_family_document_concepts
 from flows.index import index_labelled_passages_from_s3_to_vespa
 from flows.inference import classifier_inference
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
@@ -279,6 +280,22 @@ async def main() -> None:
         b_parameters={},
         enabled=False,
         description="Start concept store indexing with classifiers.",
+        aws_env=aws_env,
+        ignore=[],
+    )
+
+    await a_triggers_b(
+        a_flow_name=index_labelled_passages_from_s3_to_vespa.name,
+        a_deployment_name=generate_deployment_name(
+            index_labelled_passages_from_s3_to_vespa.name, aws_env
+        ),
+        b_flow_name=count_family_document_concepts.name,
+        b_deployment_name=generate_deployment_name(
+            count_family_document_concepts.name, aws_env
+        ),
+        b_parameters={},
+        enabled=True,
+        description="Start concepts counting and indexing (loading) into Vespa",
         aws_env=aws_env,
         ignore=[],
     )
