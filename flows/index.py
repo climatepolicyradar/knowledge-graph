@@ -370,12 +370,7 @@ def get_document_passage_from_vespa(
     vespa_search_adapter: VespaSearchAdapter,
     limit_hits: int = 50000,
 ) -> tuple[VespaHitId, VespaPassage]:
-    """
-    Retrieve all the passages for a document in Vespa.
-
-    params:
-    - document_import_id: The document import id for a unique family document.
-    """
+    """Retrieve a passage for a document in Vespa."""
     logger = get_logger()
 
     logger.info(
@@ -458,49 +453,6 @@ def get_model_from_span(span: Span) -> str:
             f"Span has more than one labeller. Expected 1, got {len(span.labellers)}."
         )
     return span.labellers[0]
-
-
-def get_document_passage_from_all_document_passages(
-    text_block_id: TextBlockId,
-    document_passages: list[tuple[VespaHitId, VespaPassage]],
-) -> tuple[VespaDataId, VespaPassage]:
-    """
-    Get the document passage, if it exists.
-
-    Earlier, we get all of the family document's document passages. We do this once, so there's
-    1 big network request to Vespa. We still need to confirm that the document passage exists.
-    """
-    hit_id_and_passage = next(
-        (
-            passage
-            for passage in document_passages
-            if passage[1].text_block_id == text_block_id
-        ),
-        None,
-    )
-
-    if not hit_id_and_passage:
-        raise ValueError(
-            f"could not found document passage `{text_block_id}` for family document"
-        )
-
-    # Extract non-schema namespaced ID (last element after "::").
-    #
-    # Example:
-    #
-    # "CCLW.executive.10014.4470.623" from document passage ID like
-    # "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
-    #
-    # Example:
-    #
-    # >>> vespa_id.split("::")
-    # >>> ['id:doc_search:document_passage', 'CCLW.executive.10014.4470.623']
-    splits = hit_id_and_passage[0].split("::")
-    if len(splits) != 2:
-        raise ValueError(f"received {len(splits)} splits, when expecting 2: {splits}")
-    data_id = splits[1]
-
-    return data_id, hit_id_and_passage[1]
 
 
 def get_parent_concepts_from_concept(
@@ -757,6 +709,20 @@ def get_vespa_search_adapter(
     return cm, vespa_search_adapter
 
 
+def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> str:
+    """
+    Extract non-schema namespaced ID (last element after "::")
+
+    Example:
+    "CCLW.executive.10014.4470.623" from document passage ID like
+    "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
+    """
+    splits = hit_id.split("::")
+    if len(splits) != 2:
+        raise ValueError(f"received {len(splits)} splits, when expecting 2: {splits}")
+    return splits[1]
+
+
 async def partial_update_text_block(
     text_block_id: TextBlockId,
     concepts: list[VespaConcept],
@@ -768,13 +734,11 @@ async def partial_update_text_block(
 
     Returns true on completion, or false if no passages where found.
     """
-    document_passage: tuple[VespaHitId, VespaPassage] = get_document_passage_from_vespa(
+    document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id, document_import_id, vespa_search_adapter
     )
 
-    data_id, document_passage = get_document_passage_from_all_document_passages(
-        text_block_id, [document_passage]
-    )
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
 
     serialised_concepts = get_updated_passage_concepts(
         document_passage,
