@@ -10,7 +10,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, ContextManager, TypeAlias, TypeVar
+from typing import Any, ContextManager, Optional, TypeAlias, TypeVar
 
 import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -39,6 +39,7 @@ from src.exceptions import PartialUpdateError, QueryError
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from src.wikibase import WikibaseSession
 
 DEFAULT_DOCUMENTS_BATCH_SIZE = 500
 DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
@@ -435,32 +436,12 @@ def get_document_passage_from_all_document_passages(
     return data_id, hit_id_and_passage[1]
 
 
-def get_parent_concepts_from_concept(
-    concept: Concept,
-) -> tuple[list[dict], str]:
-    """
-    Extract parent concepts from a Concept object.
-
-    Currently we pull the name from the Classifier used to label the passage, this
-    doesn't hold the concept id. This is a temporary solution that is not desirable as
-    the relationship between concepts can change frequently and thus shouldn't be
-    coupled with inference.
-    """
-    parent_concepts = [
-        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
-    ]
-    parent_concept_ids_flat = (
-        ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
-    )
-
-    return parent_concepts, parent_concept_ids_flat
-
-
 def convert_labelled_passage_to_concepts(
     labelled_passage: LabelledPassage,
+    wikibase: Optional[WikibaseSession] = None,
 ) -> list[VespaConcept]:
     """
-    Convert a labelled passage to a list of VespaConcept objects and their text block ID.
+    Convert a labelled passage to a list of VespaConcept objects
 
     The labelled passage contains a list of spans relating to concepts
     that we must convert to VespaConcept objects.
@@ -469,15 +450,28 @@ def convert_labelled_passage_to_concepts(
 
     concepts: list[VespaConcept] = []
 
-    # The concept used to label the passage holds some information on the parent
-    # concepts and thus this is being used as a temporary solution for providing
-    # the relationship between concepts. This has the downside that it ties a
-    # labelled passage to a particular concept when in fact the Spans that a
-    # labelled passage has can be labelled by multiple concepts.
     concept = Concept.model_validate(labelled_passage.metadata["concept"])
-    parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
-        concept=concept
+
+    # Fetching and storing the recursive parent concepts here allows us to tag each
+    # labelled passage with the specific concept which was responsible for the
+    # match, AND the broader, higher-level concepts which are its parents.
+    # For example, if a concept is labelled by the classifier for the concept of
+    # storm (Q399), it will be tagged with its parents extreme weather (Q374) and
+    # climate risk (Q975). As a result, users will be able to find this passage when
+    # filtering their search results for climate risk, even though the classifier wasn't
+    # aware of that parent relationship at inference time.
+    if wikibase is None:
+        wikibase = WikibaseSession()
+
+    parent_concept_ids = wikibase.get_recursive_subconcept_of_relationships(
+        concept.wikibase_id
     )
+    parent_concepts = [
+        {"id": parent_concept_id, "name": ""}
+        for parent_concept_id in parent_concept_ids
+    ]
+
+    parent_concept_ids_flat = ",".join(parent_concept_ids)
 
     # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
     for span_idx, span in enumerate(labelled_passage.spans):
