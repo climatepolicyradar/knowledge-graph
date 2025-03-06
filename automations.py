@@ -277,7 +277,7 @@ async def main() -> None:
             index_labelled_passages_from_s3_to_vespa.name, aws_env
         ),
         b_parameters={},
-        enabled=False,
+        enabled=True,
         description="Start concept store indexing with classifiers.",
         aws_env=aws_env,
         ignore=[],
