@@ -329,6 +329,7 @@ def load_labelled_passages_by_uri(
 def get_document_passages_from_vespa(
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
+    limit_hits: int = 50000,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
     """
     Retrieve all the passages for a document in Vespa.
@@ -344,7 +345,7 @@ def get_document_passages_from_vespa(
         yql=(
             # trunk-ignore(bandit/B608)
             "select * from document_passage where family_document_ref contains "
-            f'"id:doc_search:family_document::{document_import_id}"'
+            f'"id:doc_search:family_document::{document_import_id}" limit {limit_hits}'
         )
     )
 
