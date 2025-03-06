@@ -20,6 +20,7 @@ from flows.index import (
     DocumentImporter,
     convert_labelled_passage_to_concepts,
     get_document_passage_from_all_document_passages,
+    get_document_passage_from_vespa,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_updated_passage_concepts,
@@ -172,6 +173,34 @@ def test_get_document_passages_from_vespa(
             for passage_id, passage in document_passages
         ]
     )
+
+
+@pytest.mark.vespa
+def test_get_document_passage_from_vespa(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    """Test that we can retrieve a passage for a document in vespa."""
+
+    # Test that we retrieve no passages for a document that doesn't exist
+    document_passages = get_document_passage_from_vespa(
+        text_block_id="00001",  # This text block doesn't exist
+        document_import_id="test.executive.1.1",  # This document doesn't exist
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert document_passages == []
+
+    # Test that we can retrieve all the passages for a document that does exist
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id="1457",
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert isinstance(document_passage, VespaPassage)
+    assert isinstance(document_passage_id, str)
+    assert DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(document_passage_id)
 
 
 @pytest.mark.asyncio
