@@ -314,6 +314,13 @@ def MockedWikibaseSession(
     mock_wikibase_redirects_json,
     mock_wikibase_redirect_target_json,
 ):
+    class MockedWikibaseSessionClass(WikibaseSession):
+        def get_recursive_subconcept_of_relationships(
+            self, wikibase_id: str
+        ) -> list[str]:
+            # Return a fixed list of parent concepts for testing
+            return ["Q123", "Q456", "Q789"]
+
     def mock_request_handler(request):
         if not httpx.URL(mock_wikibase_url).host == request.url.host:
             raise MockedWikibaseException(f"Non-test endpoint used: {request.url}")
@@ -382,9 +389,9 @@ def MockedWikibaseSession(
 
     mock_transport = httpx.MockTransport(mock_request_handler)
     with httpx.Client(transport=mock_transport) as client:
-        WikibaseSession.session = client
+        MockedWikibaseSessionClass.session = client
         try:
-            yield WikibaseSession
+            yield MockedWikibaseSessionClass
         except MockedWikibaseException:
             exc_info = traceback.format_exc()
             pytest.fail(f"Wikibase test failed because of an exception:\n {exc_info}")
