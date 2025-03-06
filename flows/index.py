@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, ContextManager, TypeAlias, TypeVar
 
 import boto3
+import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
@@ -377,32 +378,18 @@ def get_document_passage_from_vespa(
         f"Getting document passage from Vespa: {document_import_id}, text block: {text_block_id}"
     )
 
-    # TODO: Could use the yql builder here.
-    #
-    # import vespa.querybuilder as qb
-    #
-    # condition = (
-    #     qb.QueryField("family_document_ref").contains(
-    #         f"id:doc_search:family_document::{document_import_id}"
-    #     )
-    #     & qb.QueryField("text_block_id").contains(text_block_id)
-    # )
-    #
-    # yql = (
-    #     qb.select("*")
-    #     .from_("document_passage")
-    #     .where(condition)
-    #     .set_limit(limit_hits)
-    # )
+    condition = qb.QueryField("family_document_ref").contains(
+        f"id:doc_search:family_document::{document_import_id}"
+    ) & qb.QueryField("text_block_id").contains(text_block_id)
+
+    yql = (
+        qb.select("*").from_("document_passage").where(condition).set_limit(limit_hits)
+    )
 
     vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
-        yql=(
-            # trunk-ignore(bandit/B608)
-            "select * from document_passage where family_document_ref contains "
-            f'"id:doc_search:family_document::{document_import_id}" '
-            f"and text_block_id contains '{text_block_id}' "
-            f"limit {limit_hits}"
-        )
+        body={
+            "yql": yql.__str__(),
+        }
     )
 
     if (status_code := vespa_query_response.get_status_code()) != HTTP_OK:
