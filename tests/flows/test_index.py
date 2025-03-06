@@ -52,7 +52,7 @@ def test_get_data_id_from_vespa_hit_id() -> None:
     assert (
         DATA_ID_PATTERN.match(
             get_data_id_from_vespa_hit_id(
-                "id:doc_search:document_passage::test.executive.1.1"
+                "id:doc_search:document_passage::CCLW.executive.00000.0000.001"
             )
         )
         is not None
