@@ -369,7 +369,7 @@ def get_document_passage_from_vespa(
     text_block_id: str,
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
-    limit_hits: int = 50000,
+    limit_hits: int = 5000,
 ) -> tuple[VespaHitId, VespaPassage]:
     """Retrieve a passage for a document in Vespa."""
     logger = get_logger()
