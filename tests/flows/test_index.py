@@ -195,13 +195,14 @@ def test_get_document_passage_from_vespa(
     """Test that we can retrieve a passage for a document in vespa."""
 
     # Test that we retrieve no passages for a document that doesn't exist
-    document_passages = get_document_passage_from_vespa(
-        text_block_id="00001",  # This text block doesn't exist
-        document_import_id="test.executive.1.1",  # This document doesn't exist
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    assert document_passages == []
+    with pytest.raises(
+        ValueError, match="Expected 1 document passage for text block `00001`, got 0"
+    ):
+        get_document_passage_from_vespa(
+            text_block_id="00001",  # This text block doesn't exist
+            document_import_id="test.executive.1.1",  # This document doesn't exist
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
 
     # Test that we can retrieve all the passages for a document that does exist
     document_passage_id, document_passage = get_document_passage_from_vespa(
@@ -506,8 +507,8 @@ async def test_partial_update_text_block(
 
     result_a = await partial_update_text_block(
         text_block_id,
-        initial_passages,
         [concept_a],
+        document_import_id,
         local_vespa_search_adapter,
     )
 
@@ -530,8 +531,8 @@ async def test_partial_update_text_block(
 
     result_b = await partial_update_text_block(
         text_block_id,
-        initial_passages,
         [concept_b],
+        document_import_id,
         local_vespa_search_adapter,
     )
 
