@@ -388,8 +388,7 @@ def get_document_passage_from_vespa(
     )
 
     if not vespa_query_response.is_successful():
-        raise QueryError(vespa_query_response.status_code)
-
+        raise QueryError(vespa_query_response.get_status_code())
     if len(vespa_query_response.hits) != 1:
         raise ValueError(
             f"Expected 1 document passage for text block `{text_block_id}`, got {len(vespa_query_response.hits)}"
