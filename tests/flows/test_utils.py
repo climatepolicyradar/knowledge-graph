@@ -1,6 +1,6 @@
 import pytest
 
-from flows.utils import SlackNotify, file_name_from_path
+from flows.utils import SlackNotify, file_name_from_path, remove_translated_suffix
 
 
 @pytest.mark.parametrize(
@@ -33,3 +33,18 @@ def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
         "2025-01-28T12:00:00+00:00. For environment: sandbox. Flow run URL: "
         "None/flow-runs/flow-run/test-flow-run-id. State message: message"
     )
+
+
+@pytest.mark.parametrize(
+    "file_name, expected",
+    [
+        ("CCLW.executive.1.1_en_translated", "CCLW.executive.1.1"),
+        ("CCLW.executive.1.1", "CCLW.executive.1.1"),
+        ("CCLW.executive.10083.rtl_190_translated_en", "CCLW.executive.10083.rtl_190"),
+        ("CCLW.executive.10083.rtl_190_translated_fr", "CCLW.executive.10083.rtl_190"),
+    ],
+)
+def test_remove_translated_suffix(file_name: str, expected: str) -> None:
+    """Test that we can remove the translated suffix from a file name."""
+
+    remove_translated_suffix(file_name) == expected
