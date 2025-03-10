@@ -384,13 +384,11 @@ def get_document_passage_from_vespa(
     yql = qb.select("*").from_("document_passage").where(condition)
 
     vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
-        body={
-            "yql": yql.__str__(),
-        }
+        yql=yql
     )
 
-    if (status_code := vespa_query_response.get_status_code()) != HTTP_OK:
-        raise QueryError(status_code)
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.status_code)
 
     if len(vespa_query_response.hits) != 1:
         raise ValueError(
@@ -693,7 +691,7 @@ def get_vespa_search_adapter(
     return cm, vespa_search_adapter
 
 
-def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> str:
+def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
     """
     Extract non-schema namespaced ID (last element after "::")
 
@@ -710,7 +708,7 @@ def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> str:
 async def partial_update_text_block(
     text_block_id: TextBlockId,
     concepts: list[VespaConcept],
-    document_import_id: str,
+    document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
 ):
     """
