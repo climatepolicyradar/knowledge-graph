@@ -369,7 +369,6 @@ def get_document_passage_from_vespa(
     text_block_id: str,
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
-    limit_hits: int = 5000,
 ) -> tuple[VespaHitId, VespaPassage]:
     """Retrieve a passage for a document in Vespa."""
     logger = get_logger()
@@ -382,9 +381,7 @@ def get_document_passage_from_vespa(
         f"id:doc_search:family_document::{document_import_id}"
     ) & qb.QueryField("text_block_id").contains(text_block_id)
 
-    yql = (
-        qb.select("*").from_("document_passage").where(condition).set_limit(limit_hits)
-    )
+    yql = qb.select("*").from_("document_passage").where(condition)
 
     vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
         body={
