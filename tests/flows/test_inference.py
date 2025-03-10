@@ -90,9 +90,9 @@ def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
 
 def test_load_document(test_config, mock_bucket_documents):
     for doc_file_name in mock_bucket_documents:
-        doc_id = Path(doc_file_name).stem
-        doc = load_document(test_config, document_id=doc_id)
-        assert doc_id == doc.document_id
+        file_stem = Path(doc_file_name).stem
+        doc = load_document(test_config, file_stem=file_stem)
+        assert file_stem == doc.document_id
 
 
 def test_stringify():
