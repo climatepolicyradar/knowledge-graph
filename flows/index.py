@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from flows.utils import SlackNotify
+from flows.utils import SlackNotify, remove_translated_suffix
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -278,7 +278,7 @@ def s3_obj_generator_from_s3_prefixes(
             bucket = Path(s3_prefix).parts[1]
             object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
             for key in object_keys:
-                id: DocumentImportId = Path(key).stem
+                id: DocumentImportId = remove_translated_suffix(Path(key).stem)
                 key: DocumentObjectUri = os.path.join("s3://", bucket, key)
 
                 yield id, key
@@ -307,7 +307,7 @@ def s3_obj_generator_from_s3_paths(
     logger = get_logger()
     for s3_path in s3_paths:
         try:
-            id: DocumentImportId = Path(s3_path).stem
+            id: DocumentImportId = remove_translated_suffix(Path(s3_path).stem)
             uri: DocumentObjectUri = s3_path
             yield id, uri
         except Exception as e:
