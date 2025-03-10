@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, ContextManager, TypeAlias, TypeVar
 
 import boto3
+import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
@@ -364,6 +365,49 @@ def get_document_passages_from_vespa(
     ]
 
 
+def get_document_passage_from_vespa(
+    text_block_id: str,
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+) -> tuple[VespaHitId, VespaPassage]:
+    """Retrieve a passage for a document in Vespa."""
+    logger = get_logger()
+
+    logger.info(
+        f"Getting document passage from Vespa: {document_import_id}, text block: {text_block_id}"
+    )
+
+    condition = qb.QueryField("family_document_ref").contains(
+        f"id:doc_search:family_document::{document_import_id}"
+    ) & qb.QueryField("text_block_id").contains(text_block_id)
+
+    yql = qb.select("*").from_("document_passage").where(condition)
+
+    vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+        yql=yql
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+    if len(vespa_query_response.hits) != 1:
+        raise ValueError(
+            f"Expected 1 document passage for text block `{text_block_id}`, got {len(vespa_query_response.hits)}"
+        )
+
+    logger.info(
+        (
+            f"Vespa search response for document: {document_import_id} "
+            f"with {len(vespa_query_response.hits)} hits"
+        )
+    )
+
+    hit = vespa_query_response.hits[0]
+    passage_id = hit["id"]
+    passage = VespaPassage.model_validate(hit["fields"])
+
+    return passage_id, passage
+
+
 def get_model_from_span(span: Span) -> str:
     """
     Get the model used to label the span.
@@ -390,49 +434,6 @@ def get_model_from_span(span: Span) -> str:
             f"Span has more than one labeller. Expected 1, got {len(span.labellers)}."
         )
     return span.labellers[0]
-
-
-def get_document_passage_from_all_document_passages(
-    text_block_id: TextBlockId,
-    document_passages: list[tuple[VespaHitId, VespaPassage]],
-) -> tuple[VespaDataId, VespaPassage]:
-    """
-    Get the document passage, if it exists.
-
-    Earlier, we get all of the family document's document passages. We do this once, so there's
-    1 big network request to Vespa. We still need to confirm that the document passage exists.
-    """
-    hit_id_and_passage = next(
-        (
-            passage
-            for passage in document_passages
-            if passage[1].text_block_id == text_block_id
-        ),
-        None,
-    )
-
-    if not hit_id_and_passage:
-        raise ValueError(
-            f"could not found document passage `{text_block_id}` for family document"
-        )
-
-    # Extract non-schema namespaced ID (last element after "::").
-    #
-    # Example:
-    #
-    # "CCLW.executive.10014.4470.623" from document passage ID like
-    # "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
-    #
-    # Example:
-    #
-    # >>> vespa_id.split("::")
-    # >>> ['id:doc_search:document_passage', 'CCLW.executive.10014.4470.623']
-    splits = hit_id_and_passage[0].split("::")
-    if len(splits) != 2:
-        raise ValueError(f"received {len(splits)} splits, when expecting 2: {splits}")
-    data_id = splits[1]
-
-    return data_id, hit_id_and_passage[1]
 
 
 def get_parent_concepts_from_concept(
@@ -568,29 +569,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
     document_labelled_passages = load_labelled_passages_by_uri(document_importer[1])
 
     with cm:
-        logger.info(
-            (
-                "getting document passages from Vespa for document "
-                f"import ID {document_importer[0]}"
-            )
-        )
-        document_passages = get_document_passages_from_vespa(
-            document_import_id=document_importer[0],
-            vespa_search_adapter=vespa_search_adapter,
-        )
-
-        if not document_passages:
-            logger.error(
-                (
-                    f"No hits for document import ID {document_importer[0]} in Vespa. "
-                    "Either the document doesn't exist or there are no passages related to "
-                    "the document."
-                ),
-            )
-            raise ValueError(
-                f"No passages found for document in Vespa: {document_importer[0]}"
-            )
-
         logger.info("converting labelled passages to Vespa concepts")
         grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
             labelled_passage.id: convert_labelled_passage_to_concepts(labelled_passage)
@@ -611,8 +589,8 @@ async def run_partial_updates_of_concepts_for_document_passages(
             partial_update_tasks = [
                 partial_update_text_block(
                     text_block_id=text_block_id,
-                    document_passages=document_passages,
                     concepts=concepts,
+                    document_import_id=document_importer[0],
                     vespa_search_adapter=vespa_search_adapter,
                 )
                 for text_block_id, concepts in batch
@@ -712,10 +690,24 @@ def get_vespa_search_adapter(
     return cm, vespa_search_adapter
 
 
+def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
+    """
+    Extract non-schema namespaced ID (last element after "::")
+
+    Example:
+    "CCLW.executive.10014.4470.623" from document passage ID like
+    "id:doc_search:document_passage::CCLW.executive.10014.4470.623".
+    """
+    splits = hit_id.split("::")
+    if len(splits) != 2:
+        raise ValueError(f"received {len(splits)} splits, when expecting 2: {splits}")
+    return splits[1]
+
+
 async def partial_update_text_block(
     text_block_id: TextBlockId,
-    document_passages: list[tuple[VespaHitId, VespaPassage]],
     concepts: list[VespaConcept],
+    document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
 ):
     """
@@ -723,9 +715,11 @@ async def partial_update_text_block(
 
     Returns true on completion, or false if no passages where found.
     """
-    data_id, document_passage = get_document_passage_from_all_document_passages(
-        text_block_id, document_passages
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id, document_import_id, vespa_search_adapter
     )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
 
     serialised_concepts = get_updated_passage_concepts(
         document_passage,

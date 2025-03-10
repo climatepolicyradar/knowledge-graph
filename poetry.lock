@@ -5342,13 +5342,13 @@ files = [
 
 [[package]]
 name = "pyvespa"
-version = "0.50.0"
+version = "0.54.0"
 description = "Python API for vespa.ai"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "pyvespa-0.50.0-py3-none-any.whl", hash = "sha256:17b0ad584657a2cf73ae8700bfb14f2b36078ae88c339c61b987575bef0d2336"},
-    {file = "pyvespa-0.50.0.tar.gz", hash = "sha256:8e2bd835215eb401ef77199ee4122abe75b306a64f5bf2ef01c392804cd67403"},
+    {file = "pyvespa-0.54.0-py3-none-any.whl", hash = "sha256:02cef33303669f645c7985a710c115a9dfe15ab54d33c56dc91d7b5b1bc8a6db"},
+    {file = "pyvespa-0.54.0.tar.gz", hash = "sha256:87c408c62eb3a7dc2f07d9642a00f33e88f2e17be18ef75b55798db2bcd682a4"},
 ]
 
 [package.dependencies]
@@ -5361,17 +5361,17 @@ jinja2 = "*"
 lxml = "*"
 python-dateutil = "*"
 requests = "*"
-requests-toolbelt = "*"
+requests_toolbelt = "*"
 tenacity = ">=8.4.1"
-typing-extensions = "*"
+typing_extensions = "*"
 
 [package.extras]
 build = ["build (==1.0.3)", "ruff", "setuptools (==69.0.3)", "toml (==0.10.2)", "twine (==5.1.1)"]
 dev = ["datasets (>=2.19.1)", "pre-commit", "pyvespa[build]", "pyvespa[unittest]", "vespacli"]
-docs = ["ipykernel", "nbsphinx", "sphinx", "sphinx-rtd-theme (>=0.5.0)"]
+docs = ["ipykernel", "nbsphinx", "sphinx", "sphinx-copybutton", "sphinx-rtd-theme (>=0.5.0)"]
 feed = ["PyYAML", "beautifulsoup4", "html5lib", "markdownify", "mmh3", "requests (<=2.31.0)", "spacy", "tiktoken", "vespacli"]
-notebooks = ["datasets (>=2.19.1)", "ipykernel", "ipywidgets", "ir-datasets", "jupytext", "nbconvert (<=7.12.0)", "notebook", "numpy", "openai", "pandas", "papermill", "plotly", "pytrec-eval", "torch"]
-unittest = ["pytest", "pytest-asyncio", "requests-mock", "vespacli"]
+notebooks = ["datasets (>=2.19.1)", "ipykernel", "ipywidgets", "ir_datasets", "jupytext", "matplotlib", "nbconvert (<=7.12.0)", "notebook", "numpy", "openai", "pandas", "papermill", "plotly", "pytrec_eval", "torch"]
+unittest = ["mypy (>=1.14.1)", "pytest", "pytest-asyncio", "requests-mock", "vespacli"]
 vespacli = ["vespacli"]
 
 [[package]]
@@ -8036,4 +8036,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "e16d15fbe28cff3f64c48ef6e23dce2d9bcae9951fda140bedda0e846e899f0a"
+content-hash = "0ccdef944c4b0db509dd9fade8e9189a7be1f388a6ca8848f26fd1aaddf8bb3c"

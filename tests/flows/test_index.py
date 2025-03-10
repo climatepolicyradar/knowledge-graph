@@ -19,7 +19,8 @@ from flows.index import (
     Config,
     DocumentImporter,
     convert_labelled_passage_to_concepts,
-    get_document_passage_from_all_document_passages,
+    get_data_id_from_vespa_hit_id,
+    get_document_passage_from_vespa,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
     get_updated_passage_concepts,
@@ -44,6 +45,18 @@ DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
     r"id:doc_search:document_passage::[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+"
 )
 DATA_ID_PATTERN = re.compile(r"[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+")
+
+
+def test_get_data_id_from_vespa_hit_id() -> None:
+    """Test that we can extract the data ID from a vespa hit id."""
+    assert (
+        DATA_ID_PATTERN.match(
+            get_data_id_from_vespa_hit_id(
+                "id:doc_search:document_passage::CCLW.executive.00000.0000.001"
+            )
+        )
+        is not None
+    )
 
 
 def test_vespa_search_adapter_from_aws_secrets(
@@ -172,6 +185,35 @@ def test_get_document_passages_from_vespa(
             for passage_id, passage in document_passages
         ]
     )
+
+
+@pytest.mark.vespa
+def test_get_document_passage_from_vespa(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    """Test that we can retrieve a passage for a document in vespa."""
+
+    # Test that we retrieve no passages for a document that doesn't exist
+    with pytest.raises(
+        ValueError, match="Expected 1 document passage for text block `00001`, got 0"
+    ):
+        get_document_passage_from_vespa(
+            text_block_id="00001",  # This text block doesn't exist
+            document_import_id="test.executive.1.1",  # This document doesn't exist
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+    # Test that we can retrieve all the passages for a document that does exist
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id="1457",
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert isinstance(document_passage, VespaPassage)
+    assert isinstance(document_passage_id, str)
+    assert DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(document_passage_id)
 
 
 @pytest.mark.asyncio
@@ -465,8 +507,8 @@ async def test_partial_update_text_block(
 
     result_a = await partial_update_text_block(
         text_block_id,
-        initial_passages,
         [concept_a],
+        document_import_id,
         local_vespa_search_adapter,
     )
 
@@ -489,8 +531,8 @@ async def test_partial_update_text_block(
 
     result_b = await partial_update_text_block(
         text_block_id,
-        initial_passages,
         [concept_b],
+        document_import_id,
         local_vespa_search_adapter,
     )
 
@@ -509,40 +551,6 @@ async def test_partial_update_text_block(
 
     assert concept_a in concepts_a
     assert concept_b in concepts_b
-
-
-@pytest.mark.parametrize("text_block_id", ["1457", "p_2_b_120"])
-def test_get_passage_for_text_block(
-    example_vespa_concepts: list[VespaConcept], text_block_id: str
-) -> None:
-    """Test that we can retrieve the relevant passage for a text block."""
-    relevant_passage = (
-        "id:doc_search:document_passage::CCLW.executive.00000.0000.001",
-        VespaPassage(
-            text_block="test text",
-            text_block_id=text_block_id,
-            text_block_type="test_type",
-        ),
-    )
-    irrelevant_passage = (
-        "id:doc_search:document_passage::CCLW.executive.00000.0000.002",
-        VespaPassage(
-            text_block="test text",
-            text_block_id="wrong_id",
-            text_block_type="test_type",
-        ),
-    )
-
-    for concept in example_vespa_concepts:
-        concept.id = text_block_id
-
-        data_id, passage = get_document_passage_from_all_document_passages(
-            text_block_id=text_block_id,
-            document_passages=[relevant_passage, irrelevant_passage],
-        )
-        data_id_pattern_match = DATA_ID_PATTERN.match(data_id) is not None
-        assert data_id_pattern_match is not None
-        assert passage == relevant_passage[1]
 
 
 @pytest.mark.asyncio
