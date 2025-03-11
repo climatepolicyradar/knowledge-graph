@@ -64,22 +64,3 @@ def remove_translated_suffix(file_name: str) -> str:
     E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
     """
     return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
-
-
-def get_file_stems_for_document_id(document_import_id: str) -> list[str]:
-    """
-    Get all the possible file stems for a document ID.
-
-    This is done by evaluating the potential translated documents.
-    """
-    stems = [document_import_id]
-
-    if "_translated" in document_import_id:
-        # We're not treating translated documents as the import id.
-        return stems
-
-    else:
-        for i in ["en"]:
-            stems.append(f"{document_import_id}_translated_{i}")
-
-    return stems

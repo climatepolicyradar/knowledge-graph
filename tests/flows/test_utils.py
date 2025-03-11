@@ -3,7 +3,6 @@ import pytest
 from flows.utils import (
     SlackNotify,
     file_name_from_path,
-    get_file_stems_for_document_id,
     remove_translated_suffix,
 )
 
@@ -53,28 +52,3 @@ def test_remove_translated_suffix(file_name: str, expected: str) -> None:
     """Test that we can remove the translated suffix from a file name."""
 
     remove_translated_suffix(file_name) == expected
-
-
-@pytest.mark.parametrize(
-    "document_import_id, expected",
-    [
-        (
-            "CCLW.executive.1.1",
-            {"CCLW.executive.1.1", "CCLW.executive.1.1_translated_en"},
-        ),
-        (
-            "CCLW.executive.10083.rtl_190",
-            {
-                "CCLW.executive.10083.rtl_190",
-                "CCLW.executive.10083.rtl_190_translated_en",
-            },
-        ),
-        (
-            "CCLW.executive.10083.rtl_190_translated_en",
-            {"CCLW.executive.10083.rtl_190_translated_en"},
-        ),
-    ],
-)
-def test_get_file_stems_for_document_id(document_import_id, expected):
-    file_stems = get_file_stems_for_document_id(document_import_id)
-    assert set(file_stems) == expected
