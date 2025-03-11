@@ -26,7 +26,11 @@ from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from flows.utils import SlackNotify, remove_translated_suffix
+from flows.utils import (
+    SlackNotify,
+    get_file_stems_for_document_id,
+    remove_translated_suffix,
+)
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -566,6 +570,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
     cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
 
+    # FIXME: Currently if a uri doesn't exist then we would raise an exception here, check that's alright
     logger.info("getting S3 labelled passages generator")
     document_labelled_passages = load_labelled_passages_by_uri(document_importer[1])
 
@@ -788,8 +793,11 @@ def s3_paths_or_s3_prefixes(
         case (list(), list()):
             # Run on specified documents, for the specified classifier
             logger.info("run on specified documents, for the specified classifier")
-            # FIXME: Add translated documents here!
-            #   This is handled in a later stacked PR.
+
+            files_stems = []
+            for document_id in document_ids:
+                files_stems += get_file_stems_for_document_id(document_id)
+
             document_paths = [
                 "s3://"
                 + os.path.join(
@@ -797,10 +805,10 @@ def s3_paths_or_s3_prefixes(
                     prefix,
                     classifier_spec.name,
                     classifier_spec.alias,
-                    f"{doc_id}.json",
+                    f"{file_stem}.json",
                 )
                 for classifier_spec in classifier_specs
-                for doc_id in document_ids
+                for file_stem in files_stems
             ]
             return S3Accessor(paths=document_paths, prefixes=None)
 
