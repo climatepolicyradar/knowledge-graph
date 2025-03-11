@@ -21,7 +21,11 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import SlackNotify, remove_translated_suffix
+from flows.utils import (
+    SlackNotify,
+    get_file_stems_for_document_id,
+    remove_translated_suffix,
+)
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -159,6 +163,7 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
+# TODO: Add test.
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
@@ -182,15 +187,23 @@ def determine_file_stems(
     elif requested_document_ids is None:
         return current_bucket_file_stems
 
+    assert config.cache_bucket
+
+    requested_document_stems = []
+    for doc_id in requested_document_ids:
+        requested_document_stems += get_file_stems_for_document_id(
+            doc_id, config.cache_bucket, config.document_source_prefix
+        )
+
     missing_from_bucket = list(
-        set(requested_document_ids) - set(current_bucket_file_stems)
+        set(requested_document_stems) - set(current_bucket_file_stems)
     )
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested file stems not found in bucket: {missing_from_bucket}"
         )
 
-    return requested_document_ids
+    return requested_document_stems
 
 
 def download_classifier_from_wandb_to_local(

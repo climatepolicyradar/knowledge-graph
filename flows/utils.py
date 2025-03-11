@@ -1,6 +1,8 @@
 import os
 import re
 
+import boto3
+from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
 
@@ -64,3 +66,41 @@ def remove_translated_suffix(file_name: str) -> str:
     E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
     """
     return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
+
+
+# TODO: Add test
+def s3_file_exists(bucket_name: str, file_key: str) -> bool:
+    """Check if a file exists in an S3 bucket."""
+    s3_client = boto3.client("s3")
+
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=file_key)
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "404":
+            return False
+        raise
+
+
+# TODO: Add test
+def get_file_stems_for_document_id(
+    document_id: str, bucket_name: str, prefix: str
+) -> list[str]:
+    """
+    Get the file stems for a document ID.
+
+    This function is used to get the file stems for a document ID. For example we would
+    find any translated documents in a directory for a document id as follows:
+
+    Example:
+    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_en_translated", "CCLW.executive.1.1"]
+    """
+    stems = [document_id]
+    for target_language in ["en"]:
+        stem = f"{document_id}_translated_{target_language}"
+        if s3_file_exists(
+            bucket_name=bucket_name,
+            file_key=f"{prefix}/{stem}.json",
+        ):
+            stems.append(stem)
+    return stems
