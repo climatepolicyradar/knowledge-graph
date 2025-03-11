@@ -55,6 +55,7 @@ def test_wikibase_to_s3_config():
         wikibase_password=SecretStr("test_password"),
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
+        trigger_deindexing=False,
     )
 
 
