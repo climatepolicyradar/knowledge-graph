@@ -54,9 +54,9 @@ DocumentImportId: TypeAlias = str
 # Needed to load the inference results
 # Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
 DocumentObjectUri: TypeAlias = str
+DocumentStem: TypeAlias = str
 # Passed to a self-sufficient flow run
-# TODO: This naming needs to be updated
-DocumentImporter: TypeAlias = tuple[DocumentImportId, DocumentObjectUri]
+DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
 
 
 class S3Accessor(BaseModel):
@@ -280,11 +280,10 @@ def s3_obj_generator_from_s3_prefixes(
             bucket = Path(s3_prefix).parts[1]
             object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
             for key in object_keys:
-                # TODO: This naming needs to be updated
-                id: DocumentImportId = Path(key).stem
+                stem: DocumentStem = Path(key).stem
                 key: DocumentObjectUri = os.path.join("s3://", bucket, key)
 
-                yield id, key
+                yield stem, key
         except Exception as e:
             logger.error(
                 f"failed to yield from S3 prefix. Error: {str(e)}",
@@ -310,10 +309,9 @@ def s3_obj_generator_from_s3_paths(
     logger = get_logger()
     for s3_path in s3_paths:
         try:
-            # TODO: This naming needs to be updated
-            id: DocumentImportId = Path(s3_path).stem
+            stem: DocumentStem = Path(s3_path).stem
             uri: DocumentObjectUri = s3_path
-            yield id, uri
+            yield stem, uri
         except Exception as e:
             logger.error(
                 f"failed to yield from S3 path. Error: {str(e)}",
@@ -593,7 +591,8 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 partial_update_text_block(
                     text_block_id=text_block_id,
                     concepts=concepts,
-                    # TODO: Convert file stem to document import ID here.
+                    # FIXME: Convert file stem to document import ID here.
+                    #   This is handled in a later stacked PR.
                     document_import_id=document_importer[0],
                     vespa_search_adapter=vespa_search_adapter,
                 )
@@ -788,8 +787,8 @@ def s3_paths_or_s3_prefixes(
         case (list(), list()):
             # Run on specified documents, for the specified classifier
             logger.info("run on specified documents, for the specified classifier")
-            # TODO: Add translated documents here!
-            # TODO: Check that we won't fail if they don't exist.
+            # FIXME: Add translated documents here!
+            #   This is handled in a later stacked PR.
             document_paths = [
                 "s3://"
                 + os.path.join(
@@ -869,11 +868,9 @@ async def run_partial_updates_of_concepts_for_batch(
             logger.info(f"processed batch documents #{documents_batch_num}")
 
         except Exception as e:
-            # TODO: This naming needs to be updated
-            document_import_id: DocumentImportId = documents_batch[i][0]
-            # TODO: This naming needs to be updated
+            document_stem: DocumentStem = documents_batch[i][0]
             logger.error(
-                f"failed to process document `{document_import_id}`: {e.__str__()}",
+                f"failed to process document `{document_stem}`: {e.__str__()}",
             )
             continue
 
