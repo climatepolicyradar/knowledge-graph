@@ -158,6 +158,9 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
+# FIME: Function docstring is now not reflective of the function and we need to find
+# all the relevant file stems (for translated docs) from the requested_document_ids.
+# This is fixed in a later pr as this is solely a refactor.
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
@@ -165,11 +168,11 @@ def determine_file_stems(
     current_bucket_file_stems: list[str],
 ) -> list[str]:
     """
-    Confirm chosen file stems or default to all if not specified.
+    Confirm chosen document ids or default to all if not specified.
 
     Compares the requested_document_ids to what actually exists in the bucket.
-    If a file stem has been requested but does not exist this will
-    raise a `ValueError`. If no file stems were requested, this will
+    If a document id has been requested but does not exist this will
+    raise a `ValueError`. If no document ids were requested, this will
     instead return the `current_bucket_file_stems`.
     """
     if use_new_and_updated and requested_document_ids:
@@ -186,7 +189,7 @@ def determine_file_stems(
     )
     if len(missing_from_bucket) > 0:
         raise ValueError(
-            f"Requested file stems not found in bucket: {missing_from_bucket}"
+            f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
     return requested_document_ids
