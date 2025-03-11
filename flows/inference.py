@@ -5,7 +5,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Final, Optional, Set, Tuple, TypeAlias
+from typing import Final, Optional, TypeAlias
 
 import boto3
 import prefect.artifacts as artifacts
@@ -42,7 +42,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
-DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
+DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 
 
 @dataclass()
@@ -303,27 +303,36 @@ def store_labels(
 
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
-) -> Optional[LabelledPassage]:
+) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
-    if not spans:
-        return None
 
-    # Remove the labelled passages from the concept to reduce the size of the metadata.
-    concept_no_labelled_passages = classifier.concept.model_copy(
-        update={"labelled_passages": []}
-    )
+    # If there were no inference results, don't include the concept
+    if not spans:
+        metadata = {}
+    else:
+        # Remove the labelled passages from the concept to reduce the
+        # size of the metadata.
+        concept_no_labelled_passages = classifier.concept.model_copy(
+            update={"labelled_passages": []}
+        )
+
+        concept = concept_no_labelled_passages.model_dump()
+
+        metadata = {"concept": concept}
+
     labelled_passage = LabelledPassage(
         id=block_id,
         text=text,
         spans=spans,
-        metadata={"concept": concept_no_labelled_passages.model_dump()},
+        metadata=metadata,
     )
+
     return labelled_passage
 
 
 def _name_document_run_identifiers_set(
-    documents: Set[DocumentRunIdentifier],
+    documents: set[DocumentRunIdentifier],
     status: str,
 ) -> list[dict[str, str]]:
     """Convert a set of document run identifiers for table rows."""
@@ -332,8 +341,8 @@ def _name_document_run_identifiers_set(
 
 
 async def report_documents_runs(
-    queued: Set[DocumentRunIdentifier],
-    completed: Set[DocumentRunIdentifier],
+    queued: set[DocumentRunIdentifier],
+    completed: set[DocumentRunIdentifier],
     aws_env: AwsEnv,
 ) -> None:
     try:
@@ -355,7 +364,6 @@ async def report_documents_runs(
 
 
 async def run_classifier_inference_on_document(
-    run,
     config: Config,
     document_id: str,
     classifier_name: str,
@@ -374,22 +382,20 @@ async def run_classifier_inference_on_document(
             raise
     print(f"Loaded document with ID {document_id}")
 
-    doc_labels = []
+    doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
         labelled_passages = text_block_inference(
             classifier=classifier, block_id=block_id, text=text
         )
-        if labelled_passages:
-            doc_labels.append(labelled_passages)
+        doc_labels.append(labelled_passages)
 
-    if doc_labels:
-        store_labels(
-            config=config,
-            labels=doc_labels,
-            document_id=document_id,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-        )
+    store_labels(
+        config=config,
+        labels=doc_labels,
+        document_id=document_id,
+        classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
+    )
 
     return (document_id, classifier_name, classifier_alias)
 
@@ -442,7 +448,6 @@ async def run_classifier_inference_on_batch_of_documents(
 
     tasks = [
         run_classifier_inference_on_document(
-            run=run,
             config=config,
             document_id=document_id,
             classifier_name=classifier_name,
