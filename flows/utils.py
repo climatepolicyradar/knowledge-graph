@@ -1,4 +1,6 @@
 import os
+from collections.abc import Generator
+from typing import TypeVar
 
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
@@ -54,3 +56,27 @@ class SlackNotify:
 
         slack = SlackWebhook.load(cls.slack_block_name)
         slack.notify(body=msg)
+
+
+T = TypeVar("T")
+
+
+def iterate_batch(
+    data: list[T] | Generator[T, None, None],
+    batch_size: int,
+) -> Generator[list[T], None, None]:
+    """Generate batches from a list or generator with a specified size."""
+    if isinstance(data, list):
+        # For lists, we can use list slicing
+        for i in range(0, len(data), batch_size):
+            yield data[i : i + batch_size]
+    else:
+        # For generators, accumulate items until we reach batch size
+        batch: list[T] = []
+        for item in data:
+            batch.append(item)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:  # Don't forget to yield the last partial batch
+            yield batch
