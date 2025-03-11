@@ -158,7 +158,7 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
-# FIME: Function docstring is now not reflective of the function and we need to find
+# FIXME: Function docstring is now not reflective of the function and we need to find
 # all the relevant file stems (for translated docs) from the requested_document_ids.
 # This is fixed in a later pr as this is solely a refactor.
 def determine_file_stems(
