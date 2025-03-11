@@ -16,7 +16,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
-from prefect.logging import get_logger
+from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
@@ -426,7 +426,7 @@ async def run_classifier_inference_on_batch_of_documents(
     This reflects the unit of work that should be run in one of many paralellised
     docker containers.
     """
-    logger = get_logger()
+    logger = get_run_logger()
 
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
