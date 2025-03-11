@@ -1,10 +1,11 @@
 import json
 import os
 import subprocess
+from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import boto3
