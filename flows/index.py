@@ -587,13 +587,13 @@ async def run_partial_updates_of_concepts_for_document_passages(
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
+            document_import_id = remove_translated_suffix(document_importer[0])
+
             partial_update_tasks = [
                 partial_update_text_block(
                     text_block_id=text_block_id,
                     concepts=concepts,
-                    # FIXME: Convert file stem to document import ID here.
-                    #   This is handled in a later stacked PR.
-                    document_import_id=document_importer[0],
+                    document_import_id=document_import_id,
                     vespa_search_adapter=vespa_search_adapter,
                 )
                 for text_block_id, concepts in batch
@@ -710,7 +710,6 @@ def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
 async def partial_update_text_block(
     text_block_id: TextBlockId,
     concepts: list[VespaConcept],
-    # TODO: Refactor this to file stem where required.
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
 ):
@@ -719,7 +718,6 @@ async def partial_update_text_block(
 
     Returns true on completion, or false if no passages where found.
     """
-    document_import_id = remove_translated_suffix(document_import_id)
 
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id, document_import_id, vespa_search_adapter
