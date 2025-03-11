@@ -1,6 +1,6 @@
 import pytest
 
-from flows.utils import SlackNotify, file_name_from_path
+from flows.utils import SlackNotify, file_name_from_path, iterate_batch
 
 
 @pytest.mark.parametrize(
@@ -33,3 +33,21 @@ def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
         "2025-01-28T12:00:00+00:00. For environment: sandbox. Flow run URL: "
         "None/flow-runs/flow-run/test-flow-run-id. State message: message"
     )
+
+
+@pytest.mark.parametrize(
+    "data, expected_lengths",
+    [
+        # Lists
+        (list(range(50)), [50]),
+        (list(range(850)), [400, 400, 50]),
+        ([], [0]),
+        # Generators
+        ((x for x in range(50)), [50]),
+        ((x for x in range(850)), [400, 400, 50]),
+        ((x for x in []), [0]),
+    ],
+)
+def test_iterate_batch(data, expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data, 400)), expected_lengths):
+        assert len(batch) == expected
