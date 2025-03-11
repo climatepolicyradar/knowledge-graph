@@ -21,11 +21,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import (
-    SlackNotify,
-    get_file_stems_for_document_id,
-    remove_translated_suffix,
-)
+from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -171,11 +167,11 @@ def determine_file_stems(
     current_bucket_file_stems: list[str],
 ) -> list[str]:
     """
-    Confirm chosen file stems or default to all if not specified.
+    Confirm chosen document ids or default to all if not specified.
 
     Compares the requested_document_ids to what actually exists in the bucket.
-    If a file stem has been requested but does not exist this will
-    raise a `ValueError`. If no file stems were requested, this will
+    If a document id has been requested but does not exist this will
+    raise a `ValueError`. If no document ids were requested, this will
     instead return the `current_bucket_file_stems`.
     """
     if use_new_and_updated and requested_document_ids:
@@ -200,7 +196,7 @@ def determine_file_stems(
     )
     if len(missing_from_bucket) > 0:
         raise ValueError(
-            f"Requested file stems not found in bucket: {missing_from_bucket}"
+            f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
     return requested_document_stems
@@ -412,7 +408,7 @@ async def run_classifier_inference_on_document(
         store_labels(
             config=config,
             labels=doc_labels,
-            file_stem=remove_translated_suffix(file_stem),
+            file_stem=file_stem,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )

@@ -26,7 +26,11 @@ from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from flows.utils import SlackNotify
+from flows.utils import (
+    SlackNotify,
+    get_file_stems_for_document_id,
+    remove_translated_suffix,
+)
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -54,8 +58,9 @@ DocumentImportId: TypeAlias = str
 # Needed to load the inference results
 # Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
 DocumentObjectUri: TypeAlias = str
+DocumentStem: TypeAlias = str
 # Passed to a self-sufficient flow run
-DocumentImporter: TypeAlias = tuple[DocumentImportId, DocumentObjectUri]
+DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
 
 
 class S3Accessor(BaseModel):
@@ -279,10 +284,10 @@ def s3_obj_generator_from_s3_prefixes(
             bucket = Path(s3_prefix).parts[1]
             object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
             for key in object_keys:
-                id: DocumentImportId = Path(key).stem
+                stem: DocumentStem = Path(key).stem
                 key: DocumentObjectUri = os.path.join("s3://", bucket, key)
 
-                yield id, key
+                yield stem, key
         except Exception as e:
             logger.error(
                 f"failed to yield from S3 prefix. Error: {str(e)}",
@@ -308,9 +313,9 @@ def s3_obj_generator_from_s3_paths(
     logger = get_logger()
     for s3_path in s3_paths:
         try:
-            id: DocumentImportId = Path(s3_path).stem
+            stem: DocumentStem = Path(s3_path).stem
             uri: DocumentObjectUri = s3_path
-            yield id, uri
+            yield stem, uri
         except Exception as e:
             logger.error(
                 f"failed to yield from S3 path. Error: {str(e)}",
@@ -586,11 +591,13 @@ async def run_partial_updates_of_concepts_for_document_passages(
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
+            document_import_id = remove_translated_suffix(document_importer[0])
+
             partial_update_tasks = [
                 partial_update_text_block(
                     text_block_id=text_block_id,
                     concepts=concepts,
-                    document_import_id=document_importer[0],
+                    document_import_id=document_import_id,
                     vespa_search_adapter=vespa_search_adapter,
                 )
                 for text_block_id, concepts in batch
@@ -784,6 +791,13 @@ def s3_paths_or_s3_prefixes(
         case (list(), list()):
             # Run on specified documents, for the specified classifier
             logger.info("run on specified documents, for the specified classifier")
+
+            file_stems = []
+            for doc_id in document_ids:
+                file_stems += get_file_stems_for_document_id(
+                    doc_id, cache_bucket, prefix
+                )
+
             document_paths = [
                 "s3://"
                 + os.path.join(
@@ -791,10 +805,10 @@ def s3_paths_or_s3_prefixes(
                     prefix,
                     classifier_spec.name,
                     classifier_spec.alias,
-                    f"{doc_id}.json",
+                    f"{file_stem}.json",
                 )
                 for classifier_spec in classifier_specs
-                for doc_id in document_ids
+                for file_stem in file_stems
             ]
             return S3Accessor(paths=document_paths, prefixes=None)
 
@@ -863,9 +877,9 @@ async def run_partial_updates_of_concepts_for_batch(
             logger.info(f"processed batch documents #{documents_batch_num}")
 
         except Exception as e:
-            document_import_id: DocumentImportId = documents_batch[i][0]
+            document_stem: DocumentStem = documents_batch[i][0]
             logger.error(
-                f"failed to process document `{document_import_id}`: {e.__str__()}",
+                f"failed to process document `{document_stem}`: {e.__str__()}",
             )
             continue
 

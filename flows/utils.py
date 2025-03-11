@@ -93,9 +93,14 @@ def get_file_stems_for_document_id(
     find any translated documents in a directory for a document id as follows:
 
     Example:
-    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_en_translated", "CCLW.executive.1.1"]
+    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"]
     """
     stems = [document_id]
+
+    if "translated" in document_id:
+        # If we have a translated suffix then this is not considered an import id.
+        return stems
+
     for target_language in ["en"]:
         stem = f"{document_id}_translated_{target_language}"
         if s3_file_exists(

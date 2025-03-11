@@ -1,6 +1,10 @@
 import pytest
 
-from flows.utils import SlackNotify, file_name_from_path, remove_translated_suffix
+from flows.utils import (
+    SlackNotify,
+    file_name_from_path,
+    remove_translated_suffix,
+)
 
 
 @pytest.mark.parametrize(
