@@ -121,32 +121,22 @@ def vespa_app(
     print("\nSetting up Vespa connection...")
     app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
 
-    subprocess.run(["just", "vespa_feed_data"], capture_output=True, text=True)
+    subprocess.run(
+        ["just", "vespa_feed_data"],
+        check=True,
+        timeout=60,  # Seconds
+    )
 
     yield app  # This is where the test function will be executed
 
     # Teardown
     print("\nTearing down Vespa connection...")
-    delete_all_documents(app)
 
-
-def delete_all_documents(app):
-    print("Deleting all documents...")
-    print("Search weights...")
-    response = app.delete_all_docs(
-        content_cluster_name="family-document-passage", schema="search_weights"
+    subprocess.run(
+        ["just", "vespa_delete_data"],
+        check=True,
+        timeout=60,  # Seconds
     )
-    print(f"Delete response: {response}")
-    print("Family documents...")
-    response = app.delete_all_docs(
-        content_cluster_name="family-document-passage", schema="family_document"
-    )
-    print(f"Delete response: {response}")
-    print("Document passages...")
-    response = app.delete_all_docs(
-        content_cluster_name="family-document-passage", schema="document_passage"
-    )
-    print(f"Delete response: {response}")
 
 
 @pytest.fixture
@@ -356,7 +346,7 @@ def s3_prefix_mock_bucket_labelled_passages(
 @pytest.fixture
 def s3_prefix_labelled_passages() -> str:
     """Returns the s3 prefix for the concepts."""
-    return "labelled_passages/Q788/latest"
+    return "labelled_passages/Q788/v4"
 
 
 @pytest.fixture()

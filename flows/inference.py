@@ -297,6 +297,13 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
+def serialise_labels(labels: list[LabelledPassage]) -> BytesIO:
+    data = [label.model_dump() for label in labels]
+
+    # Use the datetime encoder from the span module when dumping to JSON
+    return BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
+
+
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
@@ -313,10 +320,7 @@ def store_labels(
     )
     print(f"Storing labels for document {file_stem} at {key}")
 
-    data = [label.model_dump() for label in labels]
-
-    # Use the datetime encoder from the span module when dumping to JSON
-    body = BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
+    body = serialise_labels(labels)
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     s3.put_object(
