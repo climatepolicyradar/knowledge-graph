@@ -21,7 +21,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import SlackNotify, remove_translated_suffix
+from flows.utils import SlackNotify
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -399,7 +399,7 @@ async def run_classifier_inference_on_document(
         store_labels(
             config=config,
             labels=doc_labels,
-            file_stem=remove_translated_suffix(file_stem),
+            file_stem=file_stem,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )

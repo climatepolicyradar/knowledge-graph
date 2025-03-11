@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from flows.utils import SlackNotify
+from flows.utils import SlackNotify, remove_translated_suffix
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -707,6 +707,7 @@ def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
 async def partial_update_text_block(
     text_block_id: TextBlockId,
     concepts: list[VespaConcept],
+    # TODO: Refactor this to file stem where required.
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
 ):
@@ -715,6 +716,8 @@ async def partial_update_text_block(
 
     Returns true on completion, or false if no passages where found.
     """
+    document_import_id = remove_translated_suffix(document_import_id)
+
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id, document_import_id, vespa_search_adapter
     )
