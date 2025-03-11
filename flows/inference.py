@@ -167,12 +167,18 @@ def determine_file_stems(
     current_bucket_file_stems: list[str],
 ) -> list[str]:
     """
-    Confirm chosen document ids or default to all if not specified.
+    Function for identifying the file stems to process.
+
+    File stems refer to the file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
 
     Compares the requested_document_ids to what actually exists in the bucket.
     If a document id has been requested but does not exist this will
     raise a `ValueError`. If no document ids were requested, this will
     instead return the `current_bucket_file_stems`.
+
+    For requested document ids we identify whether there are any translated files that
+    should also be processed by identifying their file stems as well.
     """
     if use_new_and_updated and requested_document_ids:
         raise ValueError(
