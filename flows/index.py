@@ -570,7 +570,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
     cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
 
-    # FIXME: Currently if a uri doesn't exist then we would raise an exception here, check that's alright
     logger.info("getting S3 labelled passages generator")
     document_labelled_passages = load_labelled_passages_by_uri(document_importer[1])
 
@@ -723,7 +722,6 @@ async def partial_update_text_block(
 
     Returns true on completion, or false if no passages where found.
     """
-
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id, document_import_id, vespa_search_adapter
     )
