@@ -1,4 +1,5 @@
 import os
+import re
 
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
@@ -54,3 +55,12 @@ class SlackNotify:
 
         slack = SlackWebhook.load(cls.slack_block_name)
         slack.notify(body=msg)
+
+
+def remove_translated_suffix(file_name: str) -> str:
+    """
+    Remove the suffix from a file name that indicates it has been translated.
+
+    E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
+    """
+    return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)

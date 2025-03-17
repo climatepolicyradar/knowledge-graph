@@ -16,6 +16,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
+from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
@@ -393,6 +394,12 @@ async def run_classifier_inference_on_document(
             raise
     print(f"Loaded document with file stem {file_stem}")
 
+    if document.languages and document.languages != ["en"]:
+        raise ValueError(
+            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"{document.languages}"
+        )
+
     doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
         labelled_passages = text_block_inference(
@@ -430,6 +437,8 @@ async def run_classifier_inference_on_batch_of_documents(
     This reflects the unit of work that should be run in one of many paralellised
     docker containers.
     """
+    logger = get_run_logger()
+
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
         if config_json["wandb_api_key"]
@@ -444,7 +453,7 @@ async def run_classifier_inference_on_batch_of_documents(
         job_type="concept_inference",
     )
 
-    print(
+    logger.info(
         f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
     classifier = await load_classifier(
@@ -453,7 +462,7 @@ async def run_classifier_inference_on_batch_of_documents(
         classifier_name,
         classifier_alias,
     )
-    print(
+    logger.info(
         f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
 
@@ -468,7 +477,11 @@ async def run_classifier_inference_on_batch_of_documents(
         for file_stem in batch
     ]
 
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if isinstance(result, Exception):
+            logger.exception(f"Failed to process document: {result}")
 
 
 @flow(

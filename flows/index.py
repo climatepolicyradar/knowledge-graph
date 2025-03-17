@@ -26,7 +26,10 @@ from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from flows.utils import SlackNotify
+from flows.utils import (
+    SlackNotify,
+    remove_translated_suffix,
+)
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -587,13 +590,17 @@ async def run_partial_updates_of_concepts_for_document_passages(
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
+            # We query vespa for document passages that contain a matching import id.
+            # The document imported contains the file stem which could contain a
+            # translated suffix. We remove this suffix to get the document import id.
+            # E.g. CCLW.executive.1.1_translated_en -> CCLW.executive.1.1
+            document_import_id = remove_translated_suffix(document_importer[0])
+
             partial_update_tasks = [
                 partial_update_text_block(
                     text_block_id=text_block_id,
                     concepts=concepts,
-                    # FIXME: Convert file stem to document import ID here.
-                    #   This is handled in a later stacked PR.
-                    document_import_id=document_importer[0],
+                    document_import_id=document_import_id,
                     vespa_search_adapter=vespa_search_adapter,
                 )
                 for text_block_id, concepts in batch
@@ -787,6 +794,7 @@ def s3_paths_or_s3_prefixes(
         case (list(), list()):
             # Run on specified documents, for the specified classifier
             logger.info("run on specified documents, for the specified classifier")
+
             # FIXME: Add translated documents here!
             #   This is handled in a later stacked PR.
             document_paths = [
