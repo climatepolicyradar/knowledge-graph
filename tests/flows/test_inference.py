@@ -19,6 +19,7 @@ from flows.inference import (
     list_bucket_file_stems,
     load_classifier,
     load_document,
+    run_classifier_inference_on_document,
     store_labels,
     text_block_inference,
 )
@@ -155,7 +156,7 @@ def test_store_labels(test_config, mock_bucket):
 
 
 @pytest.mark.asyncio
-async def test_text_block_inference(
+async def test_text_block_inference_with_results(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
     _, mock_run, _ = mock_wandb
@@ -178,6 +179,25 @@ async def test_text_block_inference(
     # check whether the timestamps are valid
     for span in labels.spans:
         assert isinstance(span.timestamps[0], datetime)
+
+
+@pytest.mark.asyncio
+async def test_text_block_inference_without_results(
+    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
+):
+    _, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+    classifier = await load_classifier(
+        mock_run, test_config, local_classifier_id, "latest"
+    )
+
+    text = "Rockets are cool. We should build more rockets."
+    block_id = "fish_block"
+    labels = text_block_inference(classifier=classifier, block_id=block_id, text=text)
+
+    assert len(labels.spans) == 0
+    assert labels.id == block_id
+    assert labels.metadata == {}
 
 
 @pytest.mark.asyncio
@@ -234,6 +254,56 @@ def test_get_latest_ingest_documents_no_latest(
         match="failed to find",
     ):
         get_latest_ingest_documents(test_config)
+
+
+@pytest.mark.asyncio
+async def test_run_classifier_inference_on_document(
+    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
+):
+    # Setup
+    _, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+    document_id = Path(mock_bucket_documents[0]).stem
+    classifier_name = "Q788"
+    classifier_alias = "latest"
+
+    # Load classifier
+    classifier = await load_classifier(
+        mock_run, test_config, classifier_name, classifier_alias
+    )
+
+    # Run the function
+    result = await run_classifier_inference_on_document(
+        config=test_config,
+        document_id=document_id,
+        classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
+        classifier=classifier,
+    )
+
+    # Check the return value is a tuple with the expected values
+    assert result == (document_id, classifier_name, classifier_alias)
+
+    # Verify that labels were stored in S3
+    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
+    expected_key = (
+        f"labelled_passages/{classifier_name}/{classifier_alias}/{document_id}.json"
+    )
+    assert expected_key in labels
+
+    # Verify the content of the stored labels
+    s3 = boto3.client("s3", region_name=test_config.bucket_region)
+    response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
+    data = json.loads(response["Body"].read().decode("utf-8"))
+
+    # Verify we have at least one label
+    assert len(data) > 0
+
+    # Verify the structure of the labels
+    for label in data:
+        assert "id" in label
+        assert "text" in label
+        assert "spans" in label
 
 
 @pytest.mark.parametrize(
