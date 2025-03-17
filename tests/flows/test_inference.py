@@ -275,7 +275,7 @@ async def test_run_classifier_inference_on_document(
     # Run the function
     result = await run_classifier_inference_on_document(
         config=test_config,
-        document_id=document_id,
+        file_stem=document_id,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
         classifier=classifier,
