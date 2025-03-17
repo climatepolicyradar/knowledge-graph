@@ -162,7 +162,6 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
-# TODO: Add test.
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
