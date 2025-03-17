@@ -44,6 +44,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
+DocumentStem: TypeAlias = str
 
 
 @dataclass()
@@ -105,7 +106,7 @@ def get_bucket_paginator(config: Config, prefix: str):
     )
 
 
-def list_bucket_file_stems(config: Config) -> list[str]:
+def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
 
@@ -167,7 +168,7 @@ def determine_file_stems(
     use_new_and_updated: bool,
     requested_document_ids: Optional[list[str]],
     current_bucket_file_stems: list[str],
-) -> list[str]:
+) -> list[DocumentStem]:
     """
     Confirm chosen document ids or default to all if not specified.
 
@@ -246,7 +247,7 @@ def download_s3_file(config: Config, key: str):
     return content
 
 
-def load_document(config: Config, file_stem: str) -> BaseParserOutput:
+def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = os.path.join(
         config.document_source_prefix,
@@ -285,7 +286,7 @@ def document_passages(
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
-    file_stem: str,
+    file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
 ) -> None:
@@ -368,7 +369,7 @@ async def report_documents_runs(
 async def run_classifier_inference_on_document(
     run,
     config: Config,
-    file_stem: str,
+    file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
     classifier: Classifier,
