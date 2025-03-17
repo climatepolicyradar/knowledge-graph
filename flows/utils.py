@@ -5,8 +5,11 @@ import boto3
 from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+from typing import TypeAlias
 
-from flows.index import DocumentImportId, DocumentStem
+# Example: CCLW.executive.1813.2418
+DocumentImportId: TypeAlias = str
+DocumentStem: TypeAlias = str
 
 
 def file_name_from_path(path: str) -> str:

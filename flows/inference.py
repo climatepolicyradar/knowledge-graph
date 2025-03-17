@@ -21,7 +21,6 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.index import DocumentImportId
 from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
@@ -44,6 +43,8 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
+# Example: CCLW.executive.1813.2418
+DocumentImportId: TypeAlias = str
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 DocumentStem: TypeAlias = str
 
