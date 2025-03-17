@@ -49,7 +49,7 @@ def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
 @pytest.mark.parametrize(
     "file_name, expected",
     [
-        ("CCLW.executive.1.1_en_translated", "CCLW.executive.1.1"),
+        ("CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"),
         ("CCLW.executive.1.1", "CCLW.executive.1.1"),
         ("CCLW.executive.10083.rtl_190_translated_en", "CCLW.executive.10083.rtl_190"),
         ("CCLW.executive.10083.rtl_190_translated_fr", "CCLW.executive.10083.rtl_190"),
