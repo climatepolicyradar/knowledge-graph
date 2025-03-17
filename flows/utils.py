@@ -1,11 +1,11 @@
 import os
 import re
+from typing import TypeAlias
 
 import boto3
 from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
-from typing import TypeAlias
 
 # Example: CCLW.executive.1813.2418
 DocumentImportId: TypeAlias = str
