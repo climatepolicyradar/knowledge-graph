@@ -3,6 +3,7 @@ import re
 
 import boto3
 from botocore.exceptions import ClientError
+from flows.index import DocumentImportId, DocumentStem
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
 
@@ -84,8 +85,8 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
 
 # TODO: Add test
 def get_file_stems_for_document_id(
-    document_id: str, bucket_name: str, prefix: str
-) -> list[str]:
+    document_id: DocumentImportId, bucket_name: str, prefix: str
+) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
 
@@ -96,10 +97,6 @@ def get_file_stems_for_document_id(
     "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"]
     """
     stems = [document_id]
-
-    if "translated" in document_id:
-        # If we have a translated suffix then this is not considered an import id.
-        return stems
 
     for target_language in ["en"]:
         stem = f"{document_id}_translated_{target_language}"

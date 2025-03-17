@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Final, Optional, TypeAlias
 
 import boto3
+from flows.index import DocumentImportId
 import prefect.artifacts as artifacts
 import wandb
 from botocore.client import ClientError
@@ -164,8 +165,8 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
-    requested_document_ids: Optional[list[str]],
-    current_bucket_file_stems: list[str],
+    requested_document_ids: Optional[list[DocumentImportId]],
+    current_bucket_file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
     """
     Function for identifying the file stems to process.
