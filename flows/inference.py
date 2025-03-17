@@ -394,9 +394,10 @@ async def run_classifier_inference_on_document(
             raise
     print(f"Loaded document with file stem {file_stem}")
 
-    if document.languages != ["en"]:
+    if document.languages and document.languages != ["en"]:
         raise ValueError(
-            f"Cannot run inference on document {file_stem} as it is not in English."
+            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"{document.languages}"
         )
 
     doc_labels: list[LabelledPassage] = []
