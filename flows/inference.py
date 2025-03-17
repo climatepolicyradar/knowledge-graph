@@ -43,6 +43,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
+DocumentStem: TypeAlias = str
 
 
 @dataclass()
@@ -104,18 +105,23 @@ def get_bucket_paginator(config: Config, prefix: str):
     )
 
 
-def list_bucket_doc_ids(config: Config) -> list[str]:
-    """Scan configured bucket and return all IDs."""
+def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+    """
+    Scan configured bucket and return all file stems.
+
+    Where a stem refers to a file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
+    """
     page_iterator = get_bucket_paginator(config, config.document_source_prefix)
-    doc_ids = []
+    file_stems = []
 
     for p in page_iterator:
         if "Contents" in p:
             for o in p["Contents"]:
-                doc_id = Path(o["Key"]).stem
-                doc_ids.append(doc_id)
+                file_stem = Path(o["Key"]).stem
+                file_stems.append(file_stem)
 
-    return doc_ids
+    return file_stems
 
 
 def get_latest_ingest_documents(config: Config) -> list[str]:
@@ -153,30 +159,35 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
-def determine_document_ids(
+# FIXME: Function docstring is now not reflective of the function and we need to find
+# all the relevant file stems (for translated docs) from the requested_document_ids.
+# This is fixed in a later pr as this is solely a refactor.
+def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
     requested_document_ids: Optional[list[str]],
-    current_bucket_ids: list[str],
-) -> list[str]:
+    current_bucket_file_stems: list[str],
+) -> list[DocumentStem]:
     """
     Confirm chosen document ids or default to all if not specified.
 
     Compares the requested_document_ids to what actually exists in the bucket.
     If a document id has been requested but does not exist this will
-    raise a `ValueError`. If no document id were requested, this will
-    instead return the `current_bucket_ids`.
+    raise a `ValueError`. If no document ids were requested, this will
+    instead return the `current_bucket_file_stems`.
     """
     if use_new_and_updated and requested_document_ids:
         raise ValueError(
-            "`use_new_and_updated`, and `document_ids` are mutually exclusive"
+            "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
         )
     elif use_new_and_updated:
         requested_document_ids = get_latest_ingest_documents(config)
     elif requested_document_ids is None:
-        return current_bucket_ids
+        return current_bucket_file_stems
 
-    missing_from_bucket = list(set(requested_document_ids) - set(current_bucket_ids))
+    missing_from_bucket = list(
+        set(requested_document_ids) - set(current_bucket_file_stems)
+    )
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested document_ids not found in bucket: {missing_from_bucket}"
@@ -235,11 +246,11 @@ def download_s3_file(config: Config, key: str):
     return content
 
 
-def load_document(config: Config, document_id: str) -> BaseParserOutput:
+def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = os.path.join(
         config.document_source_prefix,
-        f"{document_id}.json",
+        f"{file_stem}.json",
     )
     content = download_s3_file(config=config, key=file_key)
     document = BaseParserOutput.model_validate_json(content)
@@ -274,7 +285,7 @@ def document_passages(
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
-    document_id: str,
+    file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
 ) -> None:
@@ -283,9 +294,9 @@ def store_labels(
         config.document_target_prefix,
         classifier_name,
         classifier_alias,
-        f"{document_id}.json",
+        f"{file_stem}.json",
     )
-    print(f"Storing labels for document {document_id} at {key}")
+    print(f"Storing labels for document {file_stem} at {key}")
 
     data = [label.model_dump() for label in labels]
 
@@ -365,22 +376,22 @@ async def report_documents_runs(
 
 async def run_classifier_inference_on_document(
     config: Config,
-    document_id: str,
+    file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
     classifier: Classifier,
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
-    print(f"Loading document with ID {document_id}")
+    print(f"Loading document with file stem {file_stem}")
     try:
-        document = load_document(config, document_id)
+        document = load_document(config, file_stem)
     except ClientError as e:
         if e.response["Error"]["Code"] == "NoSuchKey":
-            print(f"Document with ID {document_id} not found in cache bucket")
-            return (document_id, classifier_name, classifier_alias)
+            print(f"Document with file stem {file_stem} not found in cache bucket")
+            return (file_stem, classifier_name, classifier_alias)
         else:
             raise
-    print(f"Loaded document with ID {document_id}")
+    print(f"Loaded document with file stem {file_stem}")
 
     doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
@@ -392,12 +403,12 @@ async def run_classifier_inference_on_document(
     store_labels(
         config=config,
         labels=doc_labels,
-        document_id=document_id,
+        file_stem=file_stem,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
     )
 
-    return (document_id, classifier_name, classifier_alias)
+    return (file_stem, classifier_name, classifier_alias)
 
 
 def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
@@ -449,12 +460,12 @@ async def run_classifier_inference_on_batch_of_documents(
     tasks = [
         run_classifier_inference_on_document(
             config=config,
-            document_id=document_id,
+            file_stem=file_stem,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
             classifier=classifier,
         )
-        for document_id in batch
+        for file_stem in batch
     ]
 
     await asyncio.gather(*tasks)
@@ -493,19 +504,19 @@ async def classifier_inference(
 
     print(f"Running with config: {config}")
 
-    current_bucket_ids = list_bucket_doc_ids(config=config)
-    validated_document_ids = determine_document_ids(
+    current_bucket_file_stems = list_bucket_file_stems(config=config)
+    validated_file_stems = determine_file_stems(
         config=config,
         use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
-        current_bucket_ids=current_bucket_ids,
+        current_bucket_file_stems=current_bucket_file_stems,
     )
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
     print(
-        f"Running with {len(validated_document_ids)} documents and "
+        f"Running with {len(validated_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -515,7 +526,7 @@ async def classifier_inference(
     )
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(validated_document_ids, batch_size)
+        batches = iterate_batch(validated_file_stems, batch_size)
 
         tasks = [
             run_deployment(

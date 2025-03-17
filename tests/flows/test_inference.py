@@ -11,12 +11,12 @@ from flows.inference import (
     ClassifierSpec,
     _stringify,
     classifier_inference,
-    determine_document_ids,
+    determine_file_stems,
     document_passages,
     download_classifier_from_wandb_to_local,
     get_latest_ingest_documents,
     iterate_batch,
-    list_bucket_doc_ids,
+    list_bucket_file_stems,
     load_classifier,
     load_document,
     run_classifier_inference_on_document,
@@ -37,9 +37,9 @@ def helper_list_labels_in_bucket(test_config, bucket_name):
     return labels
 
 
-def test_list_bucket_doc_ids(test_config, mock_bucket_documents):
+def test_list_bucket_file_stems(test_config, mock_bucket_documents):
     expected_ids = [Path(d).stem for d in mock_bucket_documents]
-    got_ids = list_bucket_doc_ids(test_config)
+    got_ids = list_bucket_file_stems(test_config)
     assert sorted(expected_ids) == sorted(got_ids)
 
 
@@ -50,23 +50,23 @@ def test_list_bucket_doc_ids(test_config, mock_bucket_documents):
         (None, ["1"], ["1"]),
     ],
 )
-def test_determine_document_ids(test_config, doc_ids, bucket_ids, expected):
-    got = determine_document_ids(
+def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
+    got = determine_file_stems(
         config=test_config,
         use_new_and_updated=False,
         requested_document_ids=doc_ids,
-        current_bucket_ids=bucket_ids,
+        current_bucket_file_stems=bucket_ids,
     )
     assert got == expected
 
 
-def test_determine_document_ids__error(test_config):
+def test_determine_file_stems__error(test_config):
     with pytest.raises(ValueError):
-        determine_document_ids(
+        determine_file_stems(
             config=test_config,
             use_new_and_updated=False,
             requested_document_ids=["1", "2"],
-            current_bucket_ids=["3", "4"],
+            current_bucket_file_stems=["3", "4"],
         )
 
 
@@ -91,9 +91,9 @@ def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
 
 def test_load_document(test_config, mock_bucket_documents):
     for doc_file_name in mock_bucket_documents:
-        doc_id = Path(doc_file_name).stem
-        doc = load_document(test_config, document_id=doc_id)
-        assert doc_id == doc.document_id
+        file_stem = Path(doc_file_name).stem
+        doc = load_document(test_config, file_stem=file_stem)
+        assert file_stem == doc.document_id
 
 
 def test_stringify():
@@ -275,7 +275,7 @@ async def test_run_classifier_inference_on_document(
     # Run the function
     result = await run_classifier_inference_on_document(
         config=test_config,
-        document_id=document_id,
+        file_stem=document_id,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
         classifier=classifier,
