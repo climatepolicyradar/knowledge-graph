@@ -82,7 +82,7 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
         s3_client.head_object(Bucket=bucket_name, Key=file_key)
         return True
     except ClientError as e:
-        if e.response["Error"]["Code"] == "404":
+        if e.response["Error"]["Code"] in ["404", "403"]:
             return False
         raise
 
