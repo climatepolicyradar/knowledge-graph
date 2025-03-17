@@ -21,7 +21,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import SlackNotify
+from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -43,6 +43,8 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
+# Example: CCLW.executive.1813.2418
+DocumentImportId: TypeAlias = str
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 DocumentStem: TypeAlias = str
 
@@ -160,22 +162,25 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
-# FIXME: Function docstring is now not reflective of the function and we need to find
-# all the relevant file stems (for translated docs) from the requested_document_ids.
-# This is fixed in a later pr as this is solely a refactor.
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
-    requested_document_ids: Optional[list[str]],
-    current_bucket_file_stems: list[str],
+    requested_document_ids: Optional[list[DocumentImportId]],
+    current_bucket_file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
     """
-    Confirm chosen document ids or default to all if not specified.
+    Function for identifying the file stems to process.
+
+    File stems refer to the file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
 
     Compares the requested_document_ids to what actually exists in the bucket.
     If a document id has been requested but does not exist this will
     raise a `ValueError`. If no document ids were requested, this will
     instead return the `current_bucket_file_stems`.
+
+    For requested document ids we identify whether there are any translated files that
+    should also be processed by identifying their file stems as well.
     """
     if use_new_and_updated and requested_document_ids:
         raise ValueError(
@@ -186,15 +191,23 @@ def determine_file_stems(
     elif requested_document_ids is None:
         return current_bucket_file_stems
 
+    assert config.cache_bucket
+
+    requested_document_stems = []
+    for doc_id in requested_document_ids:
+        requested_document_stems += get_file_stems_for_document_id(
+            doc_id, config.cache_bucket, config.document_source_prefix
+        )
+
     missing_from_bucket = list(
-        set(requested_document_ids) - set(current_bucket_file_stems)
+        set(requested_document_stems) - set(current_bucket_file_stems)
     )
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
-    return requested_document_ids
+    return requested_document_stems
 
 
 def download_classifier_from_wandb_to_local(
