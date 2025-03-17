@@ -73,7 +73,6 @@ def remove_translated_suffix(file_name: str) -> str:
     return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
 
 
-# TODO: Add test
 def s3_file_exists(bucket_name: str, file_key: str) -> bool:
     """Check if a file exists in an S3 bucket."""
     s3_client = boto3.client("s3")
@@ -87,7 +86,6 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
         raise
 
 
-# TODO: Add test
 def get_file_stems_for_document_id(
     document_id: DocumentImportId, bucket_name: str, prefix: str
 ) -> list[DocumentStem]:
