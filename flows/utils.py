@@ -3,9 +3,10 @@ import re
 
 import boto3
 from botocore.exceptions import ClientError
-from flows.index import DocumentImportId, DocumentStem
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+
+from flows.index import DocumentImportId, DocumentStem
 
 
 def file_name_from_path(path: str) -> str:

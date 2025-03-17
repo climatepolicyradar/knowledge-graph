@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Final, Optional, TypeAlias
 
 import boto3
-from flows.index import DocumentImportId
 import prefect.artifacts as artifacts
 import wandb
 from botocore.client import ClientError
@@ -22,6 +21,7 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
+from flows.index import DocumentImportId
 from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
