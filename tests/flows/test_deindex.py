@@ -902,18 +902,19 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         is None
     )
 
+    concept_counts__document_remove = {
+        # For this test
+        "Q760": 1,
+        "Q761": 1,
+        # That's hard-coded in the fixtures of this document's
+        # passages. This isn't the proper value, but it's
+        # close enough.
+        "concept_1723_1723": 1,
+    }
     assert (
         await count_family_document_concepts.partial_update_family_document_concepts_counts(
             document_import_id=document_import_id_remove,
-            concepts_counts_with_names={
-                # For this test
-                "Q760": 1,
-                "Q761": 1,
-                # That's hard-coded in the fixtures of this document's
-                # passages. This isn't the proper value, but it's
-                # close enough.
-                "concept_1723_1723": 1,
-            },
+            concepts_counts_with_names=concept_counts__document_remove,
             vespa_search_adapter=local_vespa_search_adapter,
         )
         is None
@@ -978,8 +979,8 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
-    assert passage_remove_1_pre == passage_remove_1_post
-    assert passage_remove_2_pre == passage_remove_1_post
+    assert passage_remove_1_pre != passage_remove_1_post
+    assert passage_remove_2_pre != passage_remove_2_post
 
     _hit_id, passage_keep_1_post = get_document_passage_from_vespa(
         text_block_id=labelled_passages_keep[0].id,
@@ -1001,7 +1002,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
-    assert document_remove_1_post.concept_counts is None
+    assert document_remove_1_post.concept_counts == concept_counts__document_remove
 
     _hit_id, document_keep_1_post = get_document_from_vespa(
         document_import_id=document_import_id_keep,
