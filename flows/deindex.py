@@ -451,6 +451,8 @@ def get_updated_passage_concepts(
     It is also, not possible to duplicate a Concept object in the concepts array as we
     are removing all instances where the model is the same.
     """
+    # Get the models to remove
+    concepts_to_remove__models = [concept.model for concept in concepts_to_remove]
 
     # It's an optional sequence at the moment, so massage it
     concepts_in_vespa: list[VespaConcept] = (
@@ -461,7 +463,7 @@ def get_updated_passage_concepts(
     concepts_in_vespa_to_keep = [
         concept
         for concept in concepts_in_vespa
-        if concept.model not in concepts_to_remove
+        if concept.model not in concepts_to_remove__models
     ]
 
     return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
