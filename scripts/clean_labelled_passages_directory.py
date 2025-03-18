@@ -4,10 +4,10 @@
 # The script will:
 # 1. Find all the non-english language documents from the embeddings input prefix.
 # 2. Delete the non-english language documents from the labelled passages prefix;
-#   using the document id that corresponds to the file stem.
+#   using the corresponding file stems.
 #
 # E.g. embeddings_input/CCLW.exec.1.1["languages"] != ["en"]
-#   -> delete labelled_passages/CCLW.exec.1.1.json
+#   -> delete labelled_passages/Q123/v1/CCLW.exec.1.1.json
 
 import json
 from pathlib import Path
