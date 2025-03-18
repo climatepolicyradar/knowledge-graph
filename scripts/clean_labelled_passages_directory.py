@@ -41,12 +41,7 @@ def json_generator(
 ) -> Generator[tuple[Dict[str, Any], str], None, None]:
     """Generator that yields JSON objects from S3 bucket."""
     for key in list_s3_objects(bucket_name, prefix):
-        try:
-            yield load_json_from_s3(bucket_name, key), key
-        except json.JSONDecodeError:
-            print(f"Skipping {key}: Invalid JSON format")
-        except Exception as e:
-            print(f"Skipping {key}: {e}")
+        yield load_json_from_s3(bucket_name, key), key
 
 
 def extract_non_english_language_documents(
@@ -57,8 +52,10 @@ def extract_non_english_language_documents(
     non_english_documents = []
     for json_obj, key in json_generator(bucket_name, prefix):
         languages = json_obj.get("languages", [])
-        if languages and languages != ["en"]:
-            typer.echo(f"Non-English document found: {key}")
+        if languages != ["en"]:
+            typer.echo(
+                f"Non-English document or document with no language found: {key}"
+            )
             non_english_documents.append((json_obj, key))
     return non_english_documents
 
