@@ -93,7 +93,7 @@ def main(
     #  labelled_passages/Q123/v2/cclw.exec.1.1.json
     #
     # So we remove all the files with matching stems.
-    for data, key in json_generator(bucket_name, labelled_passages_prefix):
+    for key in list_s3_objects(bucket_name, labelled_passages_prefix):
         if Path(key).stem in non_english_documents_stems:
             delete_s3_object(bucket_name, key)
 
