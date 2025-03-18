@@ -263,7 +263,6 @@ async def test_run_classifier_inference_on_document(
     # Setup
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    document_id = Path(mock_bucket_documents[0]).stem
     classifier_name = "Q788"
     classifier_alias = "latest"
 
@@ -272,7 +271,21 @@ async def test_run_classifier_inference_on_document(
         mock_run, test_config, classifier_name, classifier_alias
     )
 
-    # Run the function
+    # Run the function on a document with no language
+    document_id = Path(mock_bucket_documents[1]).stem
+    with pytest.raises(ValueError) as exc_info:
+        result = await run_classifier_inference_on_document(
+            config=test_config,
+            file_stem=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+            classifier=classifier,
+        )
+
+    assert "Cannot run inference on" in str(exc_info.value)
+
+    # Run the function on a document with english language
+    document_id = Path(mock_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
         config=test_config,
         file_stem=document_id,
