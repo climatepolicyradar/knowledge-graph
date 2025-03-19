@@ -451,7 +451,6 @@ def get_updated_passage_concepts(
     It is also, not possible to duplicate a Concept object in the concepts array as we
     are removing all instances where the model is the same.
     """
-
     # Get the models to remove
     concepts_to_remove__models = [concept.model for concept in concepts_to_remove]
 
@@ -554,6 +553,8 @@ def calculate_concepts_counts_from_results(
     results: list[BaseException | None],
     batch: list[tuple[TextBlockId, list[VespaConcept]]],
 ) -> Counter[ConceptModel]:
+    logger = get_run_logger()
+
     # This can handle multiple concepts, but, in practice at the
     # moment, this function is operating on a DocumentImporter,
     # which represents a labelled passages object, which is per
@@ -584,7 +585,8 @@ def calculate_concepts_counts_from_results(
 
         if isinstance(result, Exception):
             # Since we failed to remove them from the spans, make sure
-            # they're accounted for as remaining
+            # they're accounted for as remaining.
+            logger.info(f"partial update failed: {str(result)}")
             concepts_counts.update(concepts_models)
 
     return concepts_counts
