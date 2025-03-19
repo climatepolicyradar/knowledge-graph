@@ -10,7 +10,7 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.s3 import S3_PATTERN, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
-import flows.boundary as index
+import flows.boundary as boundary
 import flows.count_family_document_concepts as count_family_document_concepts
 from flows.boundary import (
     DocumentImportId,
@@ -32,6 +32,7 @@ from flows.deindex import (
     update_s3_with_latest_concepts_counts,
     update_s3_with_some_successes,
 )
+from flows.index import update_concepts_on_existing_vespa_concepts
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
 from src.identifiers import WikibaseID
@@ -871,7 +872,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     # Add them to the document passage in the local Vespa instance for
     # the test.
     assert (
-        await index.partial_update_text_block(
+        await boundary.partial_update_text_block(
             text_block_id="1570",
             document_import_id=document_import_id_remove,
             concepts=[
@@ -887,12 +888,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
                 ),
             ],
             vespa_search_adapter=local_vespa_search_adapter,
-            update_function=remove_concepts_from_existing_vespa_concepts,
+            update_function=update_concepts_on_existing_vespa_concepts,
         )
         is None
     )
     assert (
-        await index.partial_update_text_block(
+        await boundary.partial_update_text_block(
             text_block_id="1273",
             document_import_id=document_import_id_remove,
             concepts=[
@@ -908,7 +909,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
                 ),
             ],
             vespa_search_adapter=local_vespa_search_adapter,
-            update_function=remove_concepts_from_existing_vespa_concepts,
+            update_function=update_concepts_on_existing_vespa_concepts,
         )
         is None
     )

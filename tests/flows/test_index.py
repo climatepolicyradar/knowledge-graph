@@ -345,7 +345,7 @@ async def test_index_by_s3_task_failure(
         raise Exception("Forced update failure")
 
     with patch(
-        "flows.index.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+        "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
         side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
     ):
         await index_by_s3(
