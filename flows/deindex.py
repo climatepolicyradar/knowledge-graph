@@ -1,8 +1,6 @@
 import asyncio
-import base64
 import json
 import os
-import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,23 +10,20 @@ import boto3
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
-from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_run_logger
-from pydantic import BaseModel
-from vespa.io import VespaResponse
 
 from flows.boundary import (
+    ConceptModel,
     DocumentImporter,
     DocumentImportId,
     DocumentObjectUri,
     TextBlockId,
     convert_labelled_passage_to_concepts,
-    get_data_id_from_vespa_hit_id,
-    get_document_passage_from_vespa,
     get_vespa_search_adapter,
     load_labelled_passages_by_uri,
+    partial_update_text_block,
     s3_obj_generator,
     s3_object_write_text,
     s3_paths_or_s3_prefixes,
@@ -42,15 +37,12 @@ from scripts.cloud import (
     generate_deployment_name,
     get_prefect_job_variable,
 )
-from src.concept import Concept
-from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 DEFAULT_DOCUMENTS_BATCH_SIZE = 500
 DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
-HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
 
@@ -93,136 +85,6 @@ class Config:
         return config
 
 
-class ConceptModel(BaseModel):
-    """
-    A concept and the model used to identify it.
-
-    This class represents a pairing of a Wikibase concept ID with the name of the model
-    used to identify that concept in text. It is hashable to allow use in sets and as
-    dictionary keys.
-
-    Attributes:
-        wikibase_id: The Wikibase ID of the concept
-        model_name: The name of the model used to identify the concept
-
-    Example:
-        >>> model = ConceptModel(wikibase_id=WikibaseID("Q123"),
-        ...                     model_name='KeywordClassifier("professional services sector")')
-        >>> str(model)
-        'Q123:KeywordClassifier("professional services sector")'
-    """
-
-    wikibase_id: WikibaseID
-    model_name: str
-
-    def __str__(self) -> str:
-        """
-        Convert the ConceptModel to a string in the format 'WIKIBASE_ID:MODEL_NAME'.
-
-        Returns:
-            str: String representation in the format 'WIKIBASE_ID:MODEL_NAME'
-        """
-        return f"{self.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{self.concept_name}"
-
-    def __hash__(self) -> int:
-        """
-        Generate a hash value for the ConceptModel.
-
-        The hash is based on both the wikibase_id and model_name to ensure
-        uniqueness when used in sets or as dictionary keys.
-
-        Returns:
-            int: Hash value of the ConceptModel
-        """
-        return hash((self.wikibase_id, self.model_name))
-
-    def __eq__(self, other: object) -> bool:
-        """
-        Compare this ConceptModel with another for equality.
-
-        Two ConceptModels are equal if they have the same wikibase_id and model_name.
-
-        Args:
-            other: The object to compare with
-
-        Returns:
-            bool: True if the objects are equal, False otherwise
-        """
-        if not isinstance(other, ConceptModel):
-            return NotImplemented
-        return (
-            self.wikibase_id == other.wikibase_id
-            and self.model_name == other.model_name
-        )
-
-    @property
-    def concept_name(self) -> str:
-        """
-        Extract the concept name from the model name.
-
-        Examples:
-            >>> model = ConceptModel(wikibase_id=WikibaseID("Q123"),
-            ...                     model_name='KeywordClassifier("professional services sector")')
-            >>> model.concept_name
-            'professional services sector'
-            >>> model2 = ConceptModel(wikibase_id=WikibaseID("Q456"),
-            ...                      model_name='LLMClassifier("agriculture")')
-            >>> model2.concept_name
-            'agriculture'
-            >>> model3 = ConceptModel(wikibase_id=WikibaseID("Q789"),
-            ...                      model_name='InvalidModelName')
-            >>> model3.concept_name  # doctest: +IGNORE_EXCEPTION_DETAIL
-            Traceback (most recent call last):
-                ...
-            ValueError: Could not extract concept name from model name 'InvalidModelName'
-        """
-        match = re.search(r'"([^"]+)"', self.model_name)
-        if match:
-            return match.group(1)
-
-        raise ValueError(
-            f"Could not extract concept name from model name '{self.model_name}'"
-        )
-
-
-def get_vespa_search_adapter_from_aws_secrets(
-    cert_dir: str,
-    vespa_instance_url_param_name: str = "VESPA_INSTANCE_URL",
-    vespa_public_cert_param_name: str = "VESPA_PUBLIC_CERT_READ",
-    vespa_private_key_param_name: str = "VESPA_PRIVATE_KEY_READ",
-) -> VespaSearchAdapter:
-    """
-    Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager.
-
-    We then save the secrets to local files in the cert_dir directory and instantiate
-    the VespaSearchAdapter.
-    """
-    cert_dir_path = Path(cert_dir)
-    if not cert_dir_path.exists():
-        raise FileNotFoundError(f"Certificate directory does not exist: {cert_dir}")
-
-    vespa_instance_url = get_aws_ssm_param(vespa_instance_url_param_name)
-    vespa_public_cert_encoded = get_aws_ssm_param(vespa_public_cert_param_name)
-    vespa_private_key_encoded = get_aws_ssm_param(vespa_private_key_param_name)
-
-    vespa_public_cert = base64.b64decode(vespa_public_cert_encoded).decode("utf-8")
-    vespa_private_key = base64.b64decode(vespa_private_key_encoded).decode("utf-8")
-
-    cert_path = cert_dir_path / "cert.pem"
-    key_path = cert_dir_path / "key.pem"
-
-    with open(cert_path, "w", encoding="utf-8") as f:
-        _ = f.write(vespa_public_cert)
-
-    with open(key_path, "w", encoding="utf-8") as f:
-        _ = f.write(vespa_private_key)
-
-    return VespaSearchAdapter(
-        instance_url=vespa_instance_url,
-        cert_directory=str(cert_dir_path),
-    )
-
-
 def save_labelled_passages_by_uri(
     document_object_uri: DocumentObjectUri,
     labelled_passages: list[LabelledPassage],
@@ -238,35 +100,7 @@ def save_labelled_passages_by_uri(
     )
 
 
-def get_model_from_span(span: Span) -> str:
-    """
-    Get the model used to label the span.
-
-    Labellers are stored in a list, these can contain many labellers as seen in the
-    example below, referring to human and machine annotators.
-
-    [
-        "alice",
-        "bob",
-        "68edec6f-fe74-413d-9cf1-39b1c3dad2c0",
-        'KeywordClassifier("extreme weather")',
-    ]
-
-    In the context of inference the labellers array should only hold the model used to
-    label the span as seen in the example below.
-
-    [
-        'KeywordClassifier("extreme weather")',
-    ]
-    """
-    if len(span.labellers) != 1:
-        raise ValueError(
-            f"Span has more than one labeller. Expected 1, got {len(span.labellers)}."
-        )
-    return span.labellers[0]
-
-
-def get_updated_passage_concepts(
+def remove_concepts_from_existing_vespa_concepts(
     passage: VespaPassage,
     concepts_to_remove: list[VespaConcept],
 ) -> list[dict[str, Any]]:
@@ -566,58 +400,6 @@ def update_s3_with_some_successes(
     logger.info("updated S3 with updated labelled passages")
 
     logger.info("updated S3 with partial successes")
-
-    return None
-
-
-def get_parent_concepts_from_concept(
-    concept: Concept,
-) -> tuple[list[dict], str]:
-    """
-    Extract parent concepts from a Concept object.
-
-    Currently we pull the name from the Classifier used to label the passage, this
-    doesn't hold the concept id. This is a temporary solution that is not desirable as
-    the relationship between concepts can change frequently and thus shouldn't be
-    coupled with inference.
-    """
-    parent_concepts = [
-        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
-    ]
-    parent_concept_ids_flat = (
-        ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
-    )
-
-    return parent_concepts, parent_concept_ids_flat
-
-
-async def partial_update_text_block(
-    text_block_id: TextBlockId,
-    document_import_id: DocumentImportId,
-    concepts: list[VespaConcept],  # A possibly empty list
-    vespa_search_adapter: VespaSearchAdapter,
-) -> None:
-    """Partial update a singular text block and its concepts, if any."""
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id, document_import_id, vespa_search_adapter
-    )
-
-    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-
-    serialised_concepts = get_updated_passage_concepts(
-        passage=document_passage,
-        concepts_to_remove=concepts,
-    )
-
-    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
-        schema="document_passage",
-        namespace="doc_search",
-        data_id=data_id,
-        fields={"concepts": serialised_concepts},
-    )
-
-    if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(data_id, status_code)
 
     return None
 

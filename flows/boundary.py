@@ -4,6 +4,7 @@ import base64
 import contextlib
 import json
 import os
+import re
 import tempfile
 from collections.abc import Generator
 from io import BytesIO
@@ -21,11 +22,14 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import get_run_logger
 from prefect.logging import get_logger
 from pydantic import BaseModel
-from vespa.io import VespaQueryResponse
+from vespa.io import VespaQueryResponse, VespaResponse
 
+from flows.deindex import remove_concepts_from_existing_vespa_concepts
+from flows.index import CONCEPT_COUNT_SEPARATOR
 from scripts.cloud import ClassifierSpec
 from src.concept import Concept
-from src.exceptions import QueryError
+from src.exceptions import PartialUpdateError, QueryError
+from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -588,3 +592,127 @@ def get_document_passage_from_all_document_passages(
     data_id = get_data_id_from_vespa_hit_id(hit_id_and_passage[0])
 
     return data_id, hit_id_and_passage[1]
+
+
+class ConceptModel(BaseModel):
+    """
+    A concept and the model used to identify it.
+
+    This class represents a pairing of a Wikibase concept ID with the name of the model
+    used to identify that concept in text. It is hashable to allow use in sets and as
+    dictionary keys.
+
+    Attributes:
+        wikibase_id: The Wikibase ID of the concept
+        model_name: The name of the model used to identify the concept
+
+    Example:
+        >>> model = ConceptModel(wikibase_id=WikibaseID("Q123"),
+        ...                     model_name='KeywordClassifier("professional services sector")')
+        >>> str(model)
+        'Q123:KeywordClassifier("professional services sector")'
+    """
+
+    wikibase_id: WikibaseID
+    model_name: str
+
+    def __str__(self) -> str:
+        """
+        Convert the ConceptModel to a string in the format 'WIKIBASE_ID:MODEL_NAME'.
+
+        Returns:
+            str: String representation in the format 'WIKIBASE_ID:MODEL_NAME'
+        """
+        return f"{self.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{self.concept_name}"
+
+    def __hash__(self) -> int:
+        """
+        Generate a hash value for the ConceptModel.
+
+        The hash is based on both the wikibase_id and model_name to ensure
+        uniqueness when used in sets or as dictionary keys.
+
+        Returns:
+            int: Hash value of the ConceptModel
+        """
+        return hash((self.wikibase_id, self.model_name))
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Compare this ConceptModel with another for equality.
+
+        Two ConceptModels are equal if they have the same wikibase_id and model_name.
+
+        Args:
+            other: The object to compare with
+
+        Returns:
+            bool: True if the objects are equal, False otherwise
+        """
+        if not isinstance(other, ConceptModel):
+            return NotImplemented
+        return (
+            self.wikibase_id == other.wikibase_id
+            and self.model_name == other.model_name
+        )
+
+    @property
+    def concept_name(self) -> str:
+        """
+        Extract the concept name from the model name.
+
+        Examples:
+            >>> model = ConceptModel(wikibase_id=WikibaseID("Q123"),
+            ...                     model_name='KeywordClassifier("professional services sector")')
+            >>> model.concept_name
+            'professional services sector'
+            >>> model2 = ConceptModel(wikibase_id=WikibaseID("Q456"),
+            ...                      model_name='LLMClassifier("agriculture")')
+            >>> model2.concept_name
+            'agriculture'
+            >>> model3 = ConceptModel(wikibase_id=WikibaseID("Q789"),
+            ...                      model_name='InvalidModelName')
+            >>> model3.concept_name  # doctest: +IGNORE_EXCEPTION_DETAIL
+            Traceback (most recent call last):
+                ...
+            ValueError: Could not extract concept name from model name 'InvalidModelName'
+        """
+        match = re.search(r'"([^"]+)"', self.model_name)
+        if match:
+            return match.group(1)
+
+        raise ValueError(
+            f"Could not extract concept name from model name '{self.model_name}'"
+        )
+
+
+async def partial_update_text_block(
+    text_block_id: TextBlockId,
+    document_import_id: DocumentImportId,
+    concepts: list[VespaConcept],  # A possibly empty list
+    vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """Partial update a singular text block and its concepts, if any."""
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id, document_import_id, vespa_search_adapter
+    )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+
+    # FIXME: I think this is incorrect as they are different...
+    serialised_concepts = remove_concepts_from_existing_vespa_concepts(
+        passage=document_passage,
+        concepts_to_remove=concepts,
+    )
+
+    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    if (status_code := response.get_status_code()) != HTTP_OK:
+        raise PartialUpdateError(data_id, status_code)
+
+    return None

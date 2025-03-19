@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,19 +13,19 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
-from pydantic import BaseModel
-from vespa.io import VespaQueryResponse, VespaResponse
+from vespa.io import VespaQueryResponse
 
 from flows.boundary import (
+    ConceptModel,
     DocumentImporter,
     DocumentImportId,
     DocumentStem,
     TextBlockId,
     VespaHitId,
     convert_labelled_passage_to_concepts,
-    get_data_id_from_vespa_hit_id,
     get_vespa_search_adapter,
     load_labelled_passages_by_uri,
+    partial_update_text_block,
     s3_obj_generator,
     s3_object_write_text,
     s3_paths_or_s3_prefixes,
@@ -45,12 +44,11 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
-from src.exceptions import PartialUpdateError, QueryError
+from src.exceptions import QueryError
 from src.identifiers import WikibaseID
 
 DEFAULT_DOCUMENTS_BATCH_SIZE = 500
 DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
-HTTP_OK = 200
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 CONCEPT_COUNT_SEPARATOR: str = ":"
 
@@ -91,98 +89,6 @@ class Config:
             )
 
         return config
-
-
-class ConceptModel(BaseModel):
-    """
-    A concept and the model used to identify it.
-
-    This class represents a pairing of a Wikibase concept ID with the name of the model
-    used to identify that concept in text. It is hashable to allow use in sets and as
-    dictionary keys.
-
-    Attributes:
-        wikibase_id: The Wikibase ID of the concept
-        model_name: The name of the model used to identify the concept
-
-    Example:
-        >>> model = ConceptModel(wikibase_id=WikibaseID("Q123"),
-        ...                     model_name='KeywordClassifier("professional services sector")')
-        >>> str(model)
-        'Q123:KeywordClassifier("professional services sector")'
-    """
-
-    wikibase_id: WikibaseID
-    model_name: str
-
-    def __str__(self) -> str:
-        """
-        Convert the ConceptModel to a string in the format 'WIKIBASE_ID:MODEL_NAME'.
-
-        Returns:
-            str: String representation in the format 'WIKIBASE_ID:MODEL_NAME'
-        """
-        return f"{self.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{self.concept_name}"
-
-    def __hash__(self) -> int:
-        """
-        Generate a hash value for the ConceptModel.
-
-        The hash is based on both the wikibase_id and model_name to ensure
-        uniqueness when used in sets or as dictionary keys.
-
-        Returns:
-            int: Hash value of the ConceptModel
-        """
-        return hash((self.wikibase_id, self.model_name))
-
-    def __eq__(self, other: object) -> bool:
-        """
-        Compare this ConceptModel with another for equality.
-
-        Two ConceptModels are equal if they have the same wikibase_id and model_name.
-
-        Args:
-            other: The object to compare with
-
-        Returns:
-            bool: True if the objects are equal, False otherwise
-        """
-        if not isinstance(other, ConceptModel):
-            return NotImplemented
-        return (
-            self.wikibase_id == other.wikibase_id
-            and self.model_name == other.model_name
-        )
-
-    @property
-    def concept_name(self) -> str:
-        """
-        Extract the concept name from the model name.
-
-        Examples:
-            >>> model = ConceptModel(wikibase_id=WikibaseID("Q123"),
-            ...                     model_name='KeywordClassifier("professional services sector")')
-            >>> model.concept_name
-            'professional services sector'
-            >>> model2 = ConceptModel(wikibase_id=WikibaseID("Q456"),
-            ...                      model_name='LLMClassifier("agriculture")')
-            >>> model2.concept_name
-            'agriculture'
-            >>> model3 = ConceptModel(wikibase_id=WikibaseID("Q789"),
-            ...                      model_name='InvalidModelName')
-            >>> model3.concept_name  # doctest: +IGNORE_EXCEPTION_DETAIL
-            Traceback (most recent call last):
-                ...
-            ValueError: Could not extract concept name from model name 'InvalidModelName'
-        """
-        match = re.search(r'"([^"]+)"', self.model_name)
-        if match:
-            return match.group(1)
-
-        raise ValueError(
-            f"Could not extract concept name from model name '{self.model_name}'"
-        )
 
 
 def get_document_passage_from_vespa(
@@ -228,7 +134,7 @@ def get_document_passage_from_vespa(
     return passage_id, passage
 
 
-def get_updated_passage_concepts(
+def update_concepts_on_existing_vespa_concepts(
     passage: VespaPassage,
     concepts: list[VespaConcept],
 ) -> list[dict[str, Any]]:
@@ -258,6 +164,10 @@ def get_updated_passage_concepts(
     return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
 
 
+# FIXME: From what I can tell this function should be identical to the related function
+# deindex.py. In deindex.py we need to remove_translated_suffix from the
+# document_import_id and in this function I'm assuming we should add the updates to how
+# we calculate concepts counts from results.
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_importer: DocumentImporter,
@@ -380,35 +290,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
         return concepts_counts
 
 
-async def partial_update_text_block(
-    text_block_id: TextBlockId,
-    concepts: list[VespaConcept],  # A possibly empty list
-    document_import_id: DocumentImportId,
-    vespa_search_adapter: VespaSearchAdapter,
-):
-    """Partial update a singular text block and its concepts."""
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id, document_import_id, vespa_search_adapter
-    )
-
-    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-
-    serialised_concepts = get_updated_passage_concepts(
-        document_passage,
-        concepts,
-    )
-
-    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
-        schema="document_passage",
-        namespace="doc_search",
-        data_id=data_id,
-        fields={"concepts": serialised_concepts},
-    )
-
-    if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(data_id, status_code)
-
-
+# FIXME: We can just pass in the callable and deduplicate against deindex.py
 @flow
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
@@ -440,6 +322,7 @@ async def run_partial_updates_of_concepts_for_batch(
             continue
 
 
+# FIXME: Identical function to that in index.py
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
     documents_batch_num: int,
@@ -478,6 +361,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     )
 
 
+# FIXME: Identical to deindex_by_s3
 @flow
 async def index_by_s3(
     aws_env: AwsEnv,

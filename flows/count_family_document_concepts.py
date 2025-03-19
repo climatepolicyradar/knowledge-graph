@@ -82,7 +82,7 @@ async def partial_update_family_document_concepts_counts(
     """
     Update document concept counts in Vespa via partial updates.
 
-    Similar to index.get_updated_passage_concepts, during the update
+    Similar to index.update_concepts_on_existing_vespa_concepts, during the update
     we remove all the old concepts related to a model. This is as it
     was decided that holding out dated concepts counts on the document
     in Vespa for a model is not useful.
