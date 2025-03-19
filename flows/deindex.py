@@ -13,17 +13,20 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_run_logger
+from vespa.io import VespaResponse
 
 from flows.boundary import (
+    HTTP_OK,
     ConceptModel,
     DocumentImporter,
     DocumentImportId,
     DocumentObjectUri,
     TextBlockId,
     convert_labelled_passage_to_concepts,
+    get_data_id_from_vespa_hit_id,
+    get_document_passage_from_vespa,
     get_vespa_search_adapter,
     load_labelled_passages_by_uri,
-    partial_update_text_block,
     s3_obj_generator,
     s3_object_write_text,
     s3_paths_or_s3_prefixes,
@@ -37,6 +40,7 @@ from scripts.cloud import (
     generate_deployment_name,
     get_prefect_job_variable,
 )
+from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -130,6 +134,37 @@ def remove_concepts_from_existing_vespa_concepts(
     ]
 
     return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
+
+
+async def partial_update_text_block(
+    text_block_id: TextBlockId,
+    document_import_id: DocumentImportId,
+    concepts: list[VespaConcept],  # A possibly empty list
+    vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """Partial update a singular text block and its concepts, if any."""
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id, document_import_id, vespa_search_adapter
+    )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+
+    serialised_concepts = remove_concepts_from_existing_vespa_concepts(
+        passage=document_passage,
+        concepts_to_remove=concepts,
+    )
+
+    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    if (status_code := response.get_status_code()) != HTTP_OK:
+        raise PartialUpdateError(data_id, status_code)
+
+    return None
 
 
 @flow

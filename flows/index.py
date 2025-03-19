@@ -13,9 +13,10 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_logger, get_run_logger
-from vespa.io import VespaQueryResponse
+from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.boundary import (
+    HTTP_OK,
     ConceptModel,
     DocumentImporter,
     DocumentImportId,
@@ -23,9 +24,9 @@ from flows.boundary import (
     TextBlockId,
     VespaHitId,
     convert_labelled_passage_to_concepts,
+    get_data_id_from_vespa_hit_id,
     get_vespa_search_adapter,
     load_labelled_passages_by_uri,
-    partial_update_text_block,
     s3_obj_generator,
     s3_object_write_text,
     s3_paths_or_s3_prefixes,
@@ -44,7 +45,7 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
-from src.exceptions import QueryError
+from src.exceptions import PartialUpdateError, QueryError
 from src.identifiers import WikibaseID
 
 DEFAULT_DOCUMENTS_BATCH_SIZE = 500
@@ -162,6 +163,35 @@ def update_concepts_on_existing_vespa_concepts(
     updated_concepts = existing_concepts_to_keep + concepts
 
     return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
+
+
+async def partial_update_text_block(
+    text_block_id: TextBlockId,
+    concepts: list[VespaConcept],  # A possibly empty list
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+):
+    """Partial update a singular text block and its concepts."""
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id, document_import_id, vespa_search_adapter
+    )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+
+    serialised_concepts = update_concepts_on_existing_vespa_concepts(
+        document_passage,
+        concepts,
+    )
+
+    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    if (status_code := response.get_status_code()) != HTTP_OK:
+        raise PartialUpdateError(data_id, status_code)
 
 
 # FIXME: From what I can tell this function should be identical to the related function
