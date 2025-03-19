@@ -13,24 +13,24 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 import flows.boundary as boundary
 import flows.count_family_document_concepts as count_family_document_concepts
 from flows.boundary import (
+    ConceptModel,
+    DocumentImporter,
     DocumentImportId,
+    DocumentObjectUri,
+    calculate_concepts_counts_from_results,
     get_document_from_vespa,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
-)
-from flows.deindex import (
-    CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    ConceptModel,
-    DocumentImporter,
-    DocumentObjectUri,
-    calculate_concepts_counts_from_results,
-    partial_update_text_block,
-    remove_concepts_from_existing_vespa_concepts,
-    run_partial_updates_of_concepts_for_document_passages__removal,
     serialise_concepts_counts,
     update_s3_with_all_successes,
     update_s3_with_latest_concepts_counts,
     update_s3_with_some_successes,
+)
+from flows.deindex import (
+    CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    partial_update_text_block,
+    remove_concepts_from_existing_vespa_concepts,
+    run_partial_updates_of_concepts_for_document_passages__removal,
 )
 from flows.index import update_concepts_on_existing_vespa_concepts
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels

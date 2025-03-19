@@ -1,9 +1,7 @@
 import asyncio
-import json
 import os
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -18,13 +16,14 @@ from flows.boundary import (
     ConceptModel,
     DocumentImporter,
     TextBlockId,
+    calculate_concepts_counts_from_results,
     convert_labelled_passage_to_concepts,
     get_vespa_search_adapter,
     index_by_s3,
     load_labelled_passages_by_uri,
     partial_update_text_block,
-    s3_object_write_text,
     s3_paths_or_s3_prefixes,
+    update_s3_with_latest_concepts_counts,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
@@ -38,7 +37,6 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
-from src.identifiers import WikibaseID
 
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 
@@ -186,56 +184,18 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
                 f"gathered partial {len(results)} updates tasks for batch {batch_num}"
             )
 
-            for i, result in enumerate(results):
-                text_block_id, concepts = batch[i]
+            concepts_counts = calculate_concepts_counts_from_results(results, batch)
+            concepts_counts.update(concepts_counts)
 
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"failed to do partial update for text block `{text_block_id}`: {str(result)}",
-                    )
-
-                    continue
-
-                # Example:
-                #
-                # ..
-                # "labellers": [
-                #   "KeywordClassifier(\"professional services sector\")"
-                # ],
-                # ...
-                concepts_models = [
-                    ConceptModel(
-                        wikibase_id=WikibaseID(concept.id), model_name=concept.model
-                    )
-                    for concept in concepts
-                ]
-
-                concepts_counts.update(concepts_models)
-
-        # Write concepts counts to S3
-        try:
-            s3_uri = Path(document_importer[1])
-            # Get all parts after the prefix (e.g. "Q787/v4/CCLW.executive.1813.2418.json")
-            key_parts = "/".join(s3_uri.parts[3:])  # Skip s3:/bucket/labelled_passages/
-
-            # Create new path with concepts_counts_prefix
-            concepts_counts_uri = (
-                f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
+            await update_s3_with_latest_concepts_counts(
+                document_importer=document_importer,
+                concepts_counts=concepts_counts,
+                cache_bucket=cache_bucket,
+                concepts_counts_prefix=concepts_counts_prefix,
+                document_labelled_passages=document_labelled_passages,
             )
 
-            serialised_concepts_counts = json.dumps(
-                {str(k): v for k, v in concepts_counts.items()}
-            )
-
-            # Write to S3
-            _ = s3_object_write_text(
-                s3_uri=concepts_counts_uri,
-                text=serialised_concepts_counts,
-            )
-        except Exception as e:
-            logger.error(f"Failed to write concepts counts to S3: {str(e)}")
-
-        return concepts_counts
+    return concepts_counts
 
 
 @flow(
