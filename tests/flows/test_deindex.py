@@ -2,6 +2,7 @@ import json
 from collections import Counter
 from datetime import datetime
 from io import BytesIO
+from typing import Sequence
 
 import pytest
 from botocore.exceptions import ClientError
@@ -9,9 +10,10 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.s3 import S3_PATTERN, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
+import flows.boundary as boundary
 import flows.count_family_document_concepts as count_family_document_concepts
-import flows.index as index
 from flows.boundary import (
+    DocumentImportId,
     get_document_from_vespa,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
@@ -20,16 +22,17 @@ from flows.deindex import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     ConceptModel,
     DocumentImporter,
-    DocumentImportId,
     DocumentObjectUri,
     calculate_concepts_counts_from_results,
     partial_update_text_block,
-    run_partial_updates_of_concepts_for_document_passages,
+    remove_concepts_from_existing_vespa_concepts,
+    run_partial_updates_of_concepts_for_document_passages__removal,
     serialise_concepts_counts,
     update_s3_with_all_successes,
     update_s3_with_latest_concepts_counts,
     update_s3_with_some_successes,
 )
+from flows.index import update_concepts_on_existing_vespa_concepts
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
 from src.identifiers import WikibaseID
@@ -58,18 +61,22 @@ async def test_partial_update_text_block_with_removal(
     except StopIteration:
         raise ValueError("no concepts found in any passages, check the fixtures")
 
+    assert first_passage_with_concepts.concepts
     assert len(first_passage_with_concepts.concepts) >= 2, "must be at least 2 concepts"
 
     # Get a slice of 1 concept
-    concepts_to_remove: list[VespaConcept] = first_passage_with_concepts.concepts[0:1]
-    concepts_to_keep: list[VespaConcept] = first_passage_with_concepts.concepts[1:]
+    concepts_to_remove: Sequence[VespaConcept] = first_passage_with_concepts.concepts[
+        0:1
+    ]
+    concepts_to_keep: Sequence[VespaConcept] = first_passage_with_concepts.concepts[1:]
 
     assert (
         await partial_update_text_block(
             text_block_id=first_passage_with_concepts.text_block_id,
             document_import_id=document_import_id,
-            concepts=concepts_to_remove,
+            concepts=list(concepts_to_remove),
             vespa_search_adapter=local_vespa_search_adapter,
+            update_function=remove_concepts_from_existing_vespa_concepts,
         )
         is None
     )
@@ -104,6 +111,7 @@ async def test_partial_update_text_block_with_empty(
     except StopIteration:
         raise ValueError("no concepts found in any passages, check the fixtures")
 
+    assert first_passage_with_concepts.concepts
     assert len(first_passage_with_concepts.concepts) >= 2, "must be at least 2 concepts"
 
     assert (
@@ -112,6 +120,7 @@ async def test_partial_update_text_block_with_empty(
             document_import_id=document_import_id,
             concepts=[],
             vespa_search_adapter=local_vespa_search_adapter,
+            update_function=remove_concepts_from_existing_vespa_concepts,
         )
         is None
     )
@@ -863,7 +872,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     # Add them to the document passage in the local Vespa instance for
     # the test.
     assert (
-        await index.partial_update_text_block(
+        await boundary.partial_update_text_block(
             text_block_id="1570",
             document_import_id=document_import_id_remove,
             concepts=[
@@ -879,11 +888,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
                 ),
             ],
             vespa_search_adapter=local_vespa_search_adapter,
+            update_function=update_concepts_on_existing_vespa_concepts,
         )
         is None
     )
     assert (
-        await index.partial_update_text_block(
+        await boundary.partial_update_text_block(
             text_block_id="1273",
             document_import_id=document_import_id_remove,
             concepts=[
@@ -899,6 +909,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
                 ),
             ],
             vespa_search_adapter=local_vespa_search_adapter,
+            update_function=update_concepts_on_existing_vespa_concepts,
         )
         is None
     )
@@ -923,7 +934,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     # Run the function
     assert (
-        await run_partial_updates_of_concepts_for_document_passages(
+        await run_partial_updates_of_concepts_for_document_passages__removal(
             document_importer=document_importer_remove,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,

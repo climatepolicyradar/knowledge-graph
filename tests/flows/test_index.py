@@ -11,17 +11,19 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
 
-from flows.boundary import get_document_passages_from_vespa
+from flows.boundary import (
+    ConceptModel,
+    get_document_passage_from_vespa,
+    get_document_passages_from_vespa,
+    index_by_s3,
+    partial_update_text_block,
+)
 from flows.index import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    ConceptModel,
     Config,
-    get_document_passage_from_vespa,
-    get_updated_passage_concepts,
-    index_by_s3,
     index_labelled_passages_from_s3_to_vespa,
-    partial_update_text_block,
-    run_partial_updates_of_concepts_for_document_passages,
+    run_partial_updates_of_concepts_for_document_passages__update,
+    update_concepts_on_existing_vespa_concepts,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -156,7 +158,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     assert (
         test_counts
-        == await run_partial_updates_of_concepts_for_document_passages.fn(
+        == await run_partial_updates_of_concepts_for_document_passages__update.fn(
             document_importer=(document_import_id, document_object_uri),
             vespa_search_adapter=local_vespa_search_adapter,
             cache_bucket=mock_bucket,
@@ -215,7 +217,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
         # Run the update
         assert (
             Counter()
-            == await run_partial_updates_of_concepts_for_document_passages.fn(
+            == await run_partial_updates_of_concepts_for_document_passages__update.fn(
                 document_importer=(document_import_id, document_object_uri),
                 vespa_search_adapter=local_vespa_search_adapter,
                 cache_bucket=mock_bucket,
@@ -256,6 +258,7 @@ async def test_index_by_s3_with_s3_prefixes(
     )
 
     await index_by_s3(
+        partial_update_flow=run_partial_updates_of_concepts_for_document_passages__update,
         aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
@@ -301,6 +304,7 @@ async def test_index_by_s3_with_s3_paths(
     ]
 
     await index_by_s3(
+        partial_update_flow=run_partial_updates_of_concepts_for_document_passages__update,
         aws_env=AwsEnv.sandbox,
         vespa_search_adapter=local_vespa_search_adapter,
         s3_prefixes=None,
@@ -341,10 +345,11 @@ async def test_index_by_s3_task_failure(
         raise Exception("Forced update failure")
 
     with patch(
-        "flows.index.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+        "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
         side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
     ):
         await index_by_s3(
+            partial_update_flow=run_partial_updates_of_concepts_for_document_passages__update,
             aws_env=AwsEnv.sandbox,
             vespa_search_adapter=local_vespa_search_adapter,
             s3_prefixes=[
@@ -400,6 +405,7 @@ async def test_partial_update_text_block(
         [concept_a],
         document_import_id,
         local_vespa_search_adapter,
+        update_concepts_on_existing_vespa_concepts,
     )
 
     assert result_a is None
@@ -424,6 +430,7 @@ async def test_partial_update_text_block(
         [concept_b],
         document_import_id,
         local_vespa_search_adapter,
+        update_concepts_on_existing_vespa_concepts,
     )
 
     assert result_b is None
@@ -503,7 +510,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
     with (
         patch("flows.index.get_prefect_job_variable", return_value=mock_bucket),
         patch(
-            "flows.index.get_vespa_search_adapter_from_aws_secrets",
+            "flows.boundary.get_vespa_search_adapter_from_aws_secrets",
             return_value=local_vespa_search_adapter,
         ),
         disable_run_logger(),
@@ -538,14 +545,14 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
     assert final_concepts_count == 3933
 
 
-def test_get_updated_passage_concepts(
+def test_update_concepts_on_existing_vespa_concepts(
     example_vespa_concepts: list[VespaConcept],
 ) -> None:
     """Test that we can retrieve the updated passage concepts dict."""
     for concept in example_vespa_concepts:
         # Test we can add a concept to the passage concepts that doesn't already
         # exist.
-        updated_passage_concepts = get_updated_passage_concepts(
+        updated_passage_concepts = update_concepts_on_existing_vespa_concepts(
             passage=VespaPassage(
                 text_block="Test text.",
                 text_block_id="1",
@@ -559,7 +566,7 @@ def test_get_updated_passage_concepts(
 
         # Test that we can remove old model concepts from the passage concepts and
         # add the new one.
-        updated_passage_concepts = get_updated_passage_concepts(
+        updated_passage_concepts = update_concepts_on_existing_vespa_concepts(
             passage=VespaPassage(
                 text_block="Test text.",
                 text_block_id="1",
@@ -583,7 +590,7 @@ def test_get_updated_passage_concepts(
         assert updated_passage_concepts[0] == concept.model_dump(mode="json")
 
         # Test that we can add new concepts and retain concepts from other models
-        updated_passage_concepts = get_updated_passage_concepts(
+        updated_passage_concepts = update_concepts_on_existing_vespa_concepts(
             passage=VespaPassage(
                 text_block="Test text.",
                 text_block_id="1",
