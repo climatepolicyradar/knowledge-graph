@@ -165,35 +165,6 @@ def update_concepts_on_existing_vespa_concepts(
     return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
 
 
-async def partial_update_text_block(
-    text_block_id: TextBlockId,
-    concepts: list[VespaConcept],  # A possibly empty list
-    document_import_id: DocumentImportId,
-    vespa_search_adapter: VespaSearchAdapter,
-):
-    """Partial update a singular text block and its concepts."""
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id, document_import_id, vespa_search_adapter
-    )
-
-    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-
-    serialised_concepts = update_concepts_on_existing_vespa_concepts(
-        document_passage,
-        concepts,
-    )
-
-    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
-        schema="document_passage",
-        namespace="doc_search",
-        data_id=data_id,
-        fields={"concepts": serialised_concepts},
-    )
-
-    if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(data_id, status_code)
-
-
 # FIXME: From what I can tell this function should be identical to the related function
 # deindex.py. In deindex.py we need to remove_translated_suffix from the
 # document_import_id and in this function I'm assuming we should add the updates to how
@@ -318,6 +289,35 @@ async def run_partial_updates_of_concepts_for_document_passages(
             logger.error(f"Failed to write concepts counts to S3: {str(e)}")
 
         return concepts_counts
+
+
+async def partial_update_text_block(
+    text_block_id: TextBlockId,
+    concepts: list[VespaConcept],  # A possibly empty list
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+):
+    """Partial update a singular text block and its concepts."""
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id, document_import_id, vespa_search_adapter
+    )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+
+    serialised_concepts = update_concepts_on_existing_vespa_concepts(
+        document_passage,
+        concepts,
+    )
+
+    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    if (status_code := response.get_status_code()) != HTTP_OK:
+        raise PartialUpdateError(data_id, status_code)
 
 
 # FIXME: We can just pass in the callable and deduplicate against deindex.py

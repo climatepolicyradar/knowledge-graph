@@ -136,37 +136,6 @@ def remove_concepts_from_existing_vespa_concepts(
     return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
 
 
-async def partial_update_text_block(
-    text_block_id: TextBlockId,
-    document_import_id: DocumentImportId,
-    concepts: list[VespaConcept],  # A possibly empty list
-    vespa_search_adapter: VespaSearchAdapter,
-) -> None:
-    """Partial update a singular text block and its concepts, if any."""
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id, document_import_id, vespa_search_adapter
-    )
-
-    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-
-    serialised_concepts = remove_concepts_from_existing_vespa_concepts(
-        passage=document_passage,
-        concepts_to_remove=concepts,
-    )
-
-    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
-        schema="document_passage",
-        namespace="doc_search",
-        data_id=data_id,
-        fields={"concepts": serialised_concepts},
-    )
-
-    if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(data_id, status_code)
-
-    return None
-
-
 @flow
 async def run_partial_updates_of_concepts_for_document_passages(
     document_importer: DocumentImporter,
@@ -435,6 +404,37 @@ def update_s3_with_some_successes(
     logger.info("updated S3 with updated labelled passages")
 
     logger.info("updated S3 with partial successes")
+
+    return None
+
+
+async def partial_update_text_block(
+    text_block_id: TextBlockId,
+    document_import_id: DocumentImportId,
+    concepts: list[VespaConcept],  # A possibly empty list
+    vespa_search_adapter: VespaSearchAdapter,
+) -> None:
+    """Partial update a singular text block and its concepts, if any."""
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id, document_import_id, vespa_search_adapter
+    )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+
+    serialised_concepts = remove_concepts_from_existing_vespa_concepts(
+        passage=document_passage,
+        concepts_to_remove=concepts,
+    )
+
+    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    if (status_code := response.get_status_code()) != HTTP_OK:
+        raise PartialUpdateError(data_id, status_code)
 
     return None
 
