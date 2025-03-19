@@ -1,10 +1,18 @@
 import os
 import re
 from collections.abc import Generator
-from typing import TypeVar
+from io import BytesIO
+from pathlib import Path
+from typing import TypeAlias, TypeVar
 
+import boto3
+from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+
+# Example: CCLW.executive.1813.2418
+DocumentImportId: TypeAlias = str
+DocumentStem: TypeAlias = str
 
 
 def file_name_from_path(path: str) -> str:
@@ -90,3 +98,75 @@ def iterate_batch(
                 batch = []
         if batch:  # Don't forget to yield the last partial batch
             yield batch
+
+
+def s3_file_exists(bucket_name: str, file_key: str) -> bool:
+    """Check if a file exists in an S3 bucket."""
+    s3_client = boto3.client("s3")
+
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=file_key)
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ["404", "403"]:
+            return False
+        raise
+
+
+def get_file_stems_for_document_id(
+    document_id: DocumentImportId, bucket_name: str, prefix: str
+) -> list[DocumentStem]:
+    """
+    Get the file stems for a document ID.
+
+    This function is used to get the file stems for a document ID. For example we would
+    find any translated documents in a directory for a document id as follows:
+
+    Example:
+    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"]
+    """
+    stems = [document_id]
+
+    for target_language in ["en"]:
+        stem = f"{document_id}_translated_{target_language}"
+        if s3_file_exists(
+            bucket_name=bucket_name,
+            file_key=f"{prefix}/{stem}.json",
+        ):
+            stems.append(stem)
+    return stems
+
+
+def _s3_object_write_text(s3_uri: str, text: str) -> None:
+    """Write text content to an S3 object."""
+    # Parse the S3 URI
+    s3_path: Path = Path(s3_uri)
+    if len(s3_path.parts) < 3:
+        raise ValueError(f"Invalid S3 path: {s3_path}")
+
+    bucket: str = s3_path.parts[1]
+    key = str(Path(*s3_path.parts[2:]))
+
+    # Create BytesIO buffer with the text content
+    body = BytesIO(text.encode("utf-8"))
+
+    # Upload to S3
+    s3 = boto3.client("s3")
+    _ = s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+
+
+def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
+    """Write text content to an S3 object."""
+    # Parse the S3 URI
+    s3_path: Path = Path(s3_uri)
+    if len(s3_path.parts) < 3:
+        raise ValueError(f"Invalid S3 path: {s3_path}")
+
+    bucket: str = s3_path.parts[1]
+    key = str(Path(*s3_path.parts[2:]))
+
+    # Upload to S3
+    s3 = boto3.client("s3")
+    _ = s3.put_object(
+        Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
+    )

@@ -25,7 +25,7 @@ from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
 
-from flows.index import get_vespa_search_adapter_from_aws_secrets
+from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -357,7 +357,7 @@ def s3_prefix_mock_bucket_labelled_passages(
 @pytest.fixture
 def s3_prefix_labelled_passages() -> str:
     """Returns the s3 prefix for the concepts."""
-    return "labelled_passages/Q788/v4"
+    return "labelled_passages/Q788/latest"
 
 
 @pytest.fixture()

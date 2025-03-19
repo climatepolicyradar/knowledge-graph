@@ -13,6 +13,7 @@ from typing import ContextManager, TypeAlias
 import boto3
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
@@ -421,6 +422,48 @@ def get_vespa_search_adapter(
         cm = contextlib.nullcontext()
 
     return cm, vespa_search_adapter
+
+
+def get_document_from_vespa(
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+) -> tuple[VespaHitId, VespaDocument]:
+    """Retrieve a passage for a document in Vespa."""
+    logger = get_logger()
+
+    logger.info(f"Getting document from Vespa: `{document_import_id}`")
+
+    condition = qb.QueryField("document_import_id").contains(document_import_id)
+
+    yql = (
+        qb.select("*")  # pyright:ignore[reportAttributeAccessIssue]
+        .from_("family_document")
+        .where(condition)
+    )
+
+    vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+        yql=yql
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+    if len(vespa_query_response.hits) != 1:
+        raise ValueError(
+            f"Expected 1 document `{document_import_id}`, got {len(vespa_query_response.hits)}"
+        )
+
+    logger.info(
+        (
+            f"Vespa search response for document: {document_import_id} "
+            f"with {len(vespa_query_response.hits)} hits"
+        )
+    )
+
+    hit = vespa_query_response.hits[0]
+    document_id = hit["id"]
+    document = VespaDocument.model_validate(hit["fields"])
+
+    return document_id, document
 
 
 def get_document_passage_from_vespa(

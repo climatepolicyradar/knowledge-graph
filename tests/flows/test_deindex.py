@@ -6,21 +6,32 @@ from io import BytesIO
 import pytest
 from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Concept as VespaConcept
-from cpr_sdk.s3 import _s3_object_read_text
+from cpr_sdk.s3 import S3_PATTERN, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
+import flows.count_family_document_concepts as count_family_document_concepts
+import flows.index as index
+from flows.boundary import (
+    get_document_from_vespa,
+    get_document_passage_from_vespa,
+    get_document_passages_from_vespa,
+)
 from flows.deindex import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     ConceptModel,
+    DocumentImporter,
+    DocumentImportId,
+    DocumentObjectUri,
     calculate_concepts_counts_from_results,
-    get_document_passage_from_vespa,
-    get_document_passages_from_vespa,
     partial_update_text_block,
     run_partial_updates_of_concepts_for_document_passages,
+    serialise_concepts_counts,
     update_s3_with_all_successes,
     update_s3_with_latest_concepts_counts,
     update_s3_with_some_successes,
 )
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
+from flows.utils import _s3_object_write_bytes, _s3_object_write_text
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -568,28 +579,352 @@ async def test_update_s3_with_latest_concepts_counts_some_success(
 
 @pytest.mark.asyncio
 async def test_run_partial_updates_of_concepts_for_document_passages(
-    mock_bucket,
+    mock_bucket: str,
     mock_s3_client,
-    mock_bucket_labelled_passages,
-    labelled_passage_fixture_ids,
-    labelled_passage_fixture_files,
-    s3_prefix_labelled_passages,
+    # mock_bucket_labelled_passages,
+    # mock_bucket_concepts_counts,
+    # labelled_passage_fixture_ids,
+    # labelled_passage_fixture_files,
+    # s3_prefix_labelled_passages,
     local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
 ):
-    document_import_id = labelled_passage_fixture_ids[0]
-    document_object_uri = f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{labelled_passage_fixture_files[0]}"
-    document_importer = (document_import_id, document_object_uri)
+    document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    # TODO: Get S3 state before
-    # - Concepts counts
-    # - Labelled passages
+    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/{document_import_id_remove}.json"
+    document_importer_remove: DocumentImporter = (
+        document_import_id_remove,
+        document_object_uri_remove,
+    )
 
-    # TODO: Get Vespa state before
-    # - Document passages
+    document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
+    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/{document_import_id_keep}.json"
+    _document_importer_keep: DocumentImporter = (
+        document_import_id_keep,
+        document_object_uri_keep,
+    )
+
+    # Get S3 state before
+    # Document passages
+    labelled_passages_remove: list[LabelledPassage] = [
+        LabelledPassage(
+            id="1570",
+            text="National Council for Sustainable Development of the Kyrgyz Republic",
+            spans=[
+                Span(
+                    text="National Council for Sustainable Development of the Kyrgyz Republic",
+                    start_index=0,
+                    end_index=10,
+                    concept_id=WikibaseID("Q760"),
+                    labellers=['KeywordClassifier("nuclear sector")'],
+                    timestamps=["2021-09-29T14:00:00.000Z"],
+                )
+            ],
+            metadata={
+                "concept": {
+                    "preferred_label": "nuclear sector",
+                    "alternative_labels": [
+                        "nuclear energy",
+                        "nuclear power",
+                        "nuclear industry",
+                        "atomic energy",
+                        "nuclear technology",
+                        "nuclear reactor",
+                        "nuclear fuel",
+                        "radiation protection",
+                        "nuclear engineering",
+                        "uranium processing",
+                    ],
+                    "negative_labels": [],
+                    "description": "Activities related to the development, production, and management of nuclear energy and technology.",
+                    "wikibase_id": "Q25285",
+                    "subconcept_of": ["Q11434"],
+                    "has_subconcept": [],
+                    "related_concepts": ["Q177", "Q7397", "Q8090"],
+                    "definition": None,
+                    "labelled_passages": [],
+                }
+            },
+        ),
+        LabelledPassage(
+            id="1273",
+            text="The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
+            spans=[
+                Span(
+                    text="National Council for Sustainable Development of the Kyrgyz Republic",
+                    start_index=4,
+                    end_index=14,
+                    concept_id=WikibaseID("Q761"),
+                    labellers=['KeywordClassifier("environmental hazards")'],
+                    timestamps=["2021-09-29T14:00:00.000Z"],
+                )
+            ],
+            metadata={
+                "concept": {
+                    "preferred_label": "environmental hazards",
+                    "alternative_labels": [
+                        "natural hazards",
+                        "environmental risk",
+                        "pollution",
+                        "climate hazards",
+                        "ecological risks",
+                        "environmental damage",
+                        "toxicity",
+                        "hazardous waste",
+                        "environmental contamination",
+                        "industrial pollution",
+                    ],
+                    "negative_labels": [],
+                    "description": "Factors or events that pose potential harm to the environment and living organisms.",
+                    "wikibase_id": "Q720855",
+                    "subconcept_of": ["Q42689"],
+                    "has_subconcept": [],
+                    "related_concepts": ["Q5019", "Q198504", "Q11394"],
+                    "definition": None,
+                    "labelled_passages": [],
+                }
+            },
+        ),
+    ]
+    serialised_labelled_passages_remove = serialise_labels(labelled_passages_remove)
+    labelled_passages_remove_uri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/{document_import_id_remove}.json"
+    _s3_object_write_bytes(
+        s3_uri=labelled_passages_remove_uri,
+        bytes=serialised_labelled_passages_remove,
+    )
+
+    labelled_passages_keep: list[LabelledPassage] = [
+        LabelledPassage(
+            id="p_37_b_6",
+            text="Some random text on climate change.",
+            spans=[
+                Span(
+                    text="Some random text on climate change.",
+                    start_index=10,
+                    end_index=11,
+                    concept_id=WikibaseID("Q787"),
+                    labellers=['KeywordClassifier("forestry sector")'],
+                    timestamps=["2021-09-29T14:00:00.000Z"],
+                )
+            ],
+            metadata={
+                "concept": {
+                    "preferred_label": "forestry sector",
+                    "alternative_labels": [
+                        "forest pest",
+                        "wood industry",
+                        "forest industry",
+                        "silviculture",
+                        "forest management",
+                        "forestry",
+                        "forestry sector",
+                        "forest fire prevention",
+                        "logging",
+                        "lumber",
+                        "prevention of forest fires",
+                        "timber",
+                    ],
+                    "negative_labels": [],
+                    "description": "Activities that relate to the production of goods and services from forests.",
+                    "wikibase_id": "Q787",
+                    "subconcept_of": ["Q709"],
+                    "has_subconcept": [],
+                    "related_concepts": ["Q7", "Q5", "Q4"],
+                    "definition": None,
+                    "labelled_passages": [],
+                }
+            },
+        ),
+        LabelledPassage(
+            id="p_67_b_2",
+            text="The National Council for Sustainable Development of the Kyrgyz Republic is a consultative and advisory body under the President of the Kyrgyz Republic.",
+            spans=[
+                Span(
+                    text="National Council for Sustainable Development of the Kyrgyz Republic",
+                    start_index=4,
+                    end_index=14,
+                    concept_id=WikibaseID("Q788"),
+                    labellers=['KeywordClassifier("manufacturing sector")'],
+                    timestamps=["2021-09-29T14:00:00.000Z"],
+                )
+            ],
+            metadata={
+                "concept": {
+                    "preferred_label": "manufacturing sector",
+                    "alternative_labels": [
+                        "manufacturing",
+                        "industrial production",
+                        "manufacturing industry",
+                        "fabrication",
+                        "production sector",
+                        "manufacturing processes",
+                        "goods production",
+                        "industrial sector",
+                        "assembly line",
+                        "machinery",
+                        "processing industry",
+                    ],
+                    "negative_labels": [],
+                    "description": "Activities related to the production of goods using labor, machinery, and other resources.",
+                    "wikibase_id": "Q14956",
+                    "subconcept_of": ["Q159113"],
+                    "has_subconcept": [],
+                    "related_concepts": ["Q14", "Q17", "Q12"],
+                    "definition": None,
+                    "labelled_passages": [],
+                }
+            },
+        ),
+    ]
+    serialised_labelled_passages_keep = serialise_labels(labelled_passages_keep)
+    labelled_passages_keep_uri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/{document_import_id_keep}.json"
+    _s3_object_write_bytes(
+        s3_uri=labelled_passages_keep_uri,
+        bytes=serialised_labelled_passages_keep,
+    )
+
+    # Concepts counts
+    concepts_counts_remove: Counter[ConceptModel] = Counter(
+        {
+            ConceptModel(
+                wikibase_id=WikibaseID("Q760"),
+                model_name='KeywordClassifier("nuclear sector")',
+            ): 1,
+            ConceptModel(
+                wikibase_id=WikibaseID("Q761"),
+                model_name='KeywordClassifier("environmental hazards")',
+            ): 1,
+        }
+    )
+    serialised_concepts_counts_remove = serialise_concepts_counts(
+        concepts_counts_remove
+    )
+    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id_remove}.json"
+    _s3_object_write_text(
+        s3_uri=concepts_counts_remove_uri,
+        text=serialised_concepts_counts_remove,
+    )
+
+    concepts_counts_keep: Counter[ConceptModel] = Counter(
+        {
+            ConceptModel(
+                wikibase_id=WikibaseID("Q787"),
+                model_name='KeywordClassifier("forestry sector")',
+            ): 1,
+            ConceptModel(
+                wikibase_id=WikibaseID("Q788"),
+                model_name='KeywordClassifier("manufacturing sector")',
+            ): 1,
+        }
+    )
+    serialised_concepts_counts_keep = serialise_concepts_counts(concepts_counts_keep)
+    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id_keep}.json"
+    _s3_object_write_text(
+        s3_uri=concepts_counts_keep_uri,
+        text=serialised_concepts_counts_keep,
+    )
+
+    # Get Vespa state before
+    # Document passages
+    _hit_id, passage_remove_1_pre = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_remove[0].id,
+        document_import_id=document_import_id_remove,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+    _hit_id, passage_remove_2_pre = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_remove[1].id,
+        document_import_id=document_import_id_remove,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    _hit_id, passage_keep_1_pre = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_keep[0].id,
+        document_import_id=document_import_id_keep,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+    _hit_id, passage_keep_2_pre = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_keep[1].id,
+        document_import_id=document_import_id_keep,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    # Concepts counts
+    _hit_id, document_remove_1_pre = get_document_from_vespa(
+        document_import_id=document_import_id_remove,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    _hit_id, document_keep_1_pre = get_document_from_vespa(
+        document_import_id=document_import_id_keep,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    # Add them to the document passage in the local Vespa instance for
+    # the test.
+    assert (
+        await index.partial_update_text_block(
+            text_block_id="1570",
+            document_import_id=document_import_id_remove,
+            concepts=[
+                VespaConcept(
+                    id="Q760",
+                    name='KeywordClassifier("nuclear sector")',
+                    model="nuclear_sector",
+                    start=0,
+                    end=10,
+                    timestamp=datetime.fromisoformat(
+                        "2021-09-29T14:00:00.000Z".replace("Z", "+00:00")
+                    ),
+                ),
+            ],
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        is None
+    )
+    assert (
+        await index.partial_update_text_block(
+            text_block_id="1273",
+            document_import_id=document_import_id_remove,
+            concepts=[
+                VespaConcept(
+                    id="Q761",
+                    name='KeywordClassifier("environmental hazards")',
+                    model="environmental_hazards",
+                    start=4,
+                    end=14,
+                    timestamp=datetime.fromisoformat(
+                        "2021-09-29T14:00:00.000Z".replace("Z", "+00:00")
+                    ),
+                ),
+            ],
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        is None
+    )
+
+    concept_counts__document_remove = {
+        # For this test
+        "Q760": 1,
+        "Q761": 1,
+        # That's hard-coded in the fixtures of this document's
+        # passages. This isn't the proper value, but it's
+        # close enough.
+        "concept_1723_1723": 1,
+    }
+    assert (
+        await count_family_document_concepts.partial_update_family_document_concepts_counts(
+            document_import_id=document_import_id_remove,
+            concepts_counts_with_names=concept_counts__document_remove,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+        is None
+    )
+
+    # Run the function
     assert (
         await run_partial_updates_of_concepts_for_document_passages(
-            document_importer=document_importer,
+            document_importer=document_importer_remove,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
             vespa_search_adapter=local_vespa_search_adapter,
@@ -597,12 +932,85 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         is None
     )
 
-    # TODO: Test Vespa state after
-    # - Document passages
+    # The S3 and Vespa state are checked, so that any removals only
+    # affect the 1 expected document.
 
-    # TODO: Test S3 state after
-    # - Concepts counts
-    # - Labelled passages
+    # S3 state after:
+    # Document passages
+    s3_match = S3_PATTERN.match(labelled_passages_keep_uri)
+    key = s3_match.group("prefix")
+    mock_s3_client.head_object(
+        Bucket=mock_bucket,
+        Key=key,
+    )
+
+    with pytest.raises(ClientError):
+        s3_match = S3_PATTERN.match(labelled_passages_remove_uri)
+        key = s3_match.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key,
+        )
+
+    # Concepts counts
+    s3_match = S3_PATTERN.match(concepts_counts_keep_uri)
+    key = s3_match.group("prefix")
+    mock_s3_client.head_object(
+        Bucket=mock_bucket,
+        Key=key,
+    )
+
+    with pytest.raises(ClientError):
+        s3_match = S3_PATTERN.match(concepts_counts_remove_uri)
+        key = s3_match.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key,
+        )
+
+    # Vespa state after:
+    _hit_id, passage_remove_1_post = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_remove[0].id,
+        document_import_id=document_import_id_remove,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+    _hit_id, passage_remove_2_post = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_remove[1].id,
+        document_import_id=document_import_id_remove,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert passage_remove_1_pre != passage_remove_1_post
+    assert passage_remove_2_pre != passage_remove_1_post
+
+    _hit_id, passage_keep_1_post = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_keep[0].id,
+        document_import_id=document_import_id_keep,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+    _hit_id, passage_keep_2_post = get_document_passage_from_vespa(
+        text_block_id=labelled_passages_keep[1].id,
+        document_import_id=document_import_id_keep,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert passage_keep_1_pre == passage_keep_1_post
+    assert passage_keep_2_pre == passage_keep_2_post
+
+    # Concepts counts
+    _hit_id, document_remove_1_post = get_document_from_vespa(
+        document_import_id=document_import_id_remove,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert document_remove_1_post.concept_counts == concept_counts__document_remove
+
+    _hit_id, document_keep_1_post = get_document_from_vespa(
+        document_import_id=document_import_id_keep,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert document_keep_1_pre == document_keep_1_post
 
 
 # TODO:

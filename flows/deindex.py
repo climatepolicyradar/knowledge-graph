@@ -268,7 +268,7 @@ def get_model_from_span(span: Span) -> str:
 
 def get_updated_passage_concepts(
     passage: VespaPassage,
-    concepts_in_vespa: list[VespaConcept],
+    concepts_to_remove: list[VespaConcept],
 ) -> list[dict[str, Any]]:
     """
     Update a passage's concepts with the updated/removed concepts.
@@ -280,17 +280,19 @@ def get_updated_passage_concepts(
     It is also, not possible to duplicate a Concept object in the concepts array as we
     are removing all instances where the model is the same.
     """
-    # Put them in the right structure for identification and removal
-    concepts_to_remove = {concept.model for concept in concepts_in_vespa}
+    # Get the models to remove
+    concepts_to_remove__models = [concept.model for concept in concepts_to_remove]
 
     # It's an optional sequence at the moment, so massage it
-    concepts_in_vespa = list(passage.concepts) if passage.concepts is not None else []
+    concepts_in_vespa: list[VespaConcept] = (
+        list(passage.concepts) if passage.concepts is not None else []
+    )
 
     # We'll be removing all of the listed concepts, so filter them out
     concepts_in_vespa_to_keep = [
         concept
         for concept in concepts_in_vespa
-        if concept.model not in concepts_to_remove
+        if concept.model not in concepts_to_remove__models
     ]
 
     return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
@@ -380,6 +382,8 @@ def calculate_concepts_counts_from_results(
     results: list[BaseException | None],
     batch: list[tuple[TextBlockId, list[VespaConcept]]],
 ) -> Counter[ConceptModel]:
+    logger = get_run_logger()
+
     # This can handle multiple concepts, but, in practice at the
     # moment, this function is operating on a DocumentImporter,
     # which represents a labelled passages object, which is per
@@ -410,7 +414,8 @@ def calculate_concepts_counts_from_results(
 
         if isinstance(result, Exception):
             # Since we failed to remove them from the spans, make sure
-            # they're accounted for as remaining
+            # they're accounted for as remaining.
+            logger.info(f"partial update failed: {str(result)}")
             concepts_counts.update(concepts_models)
 
     return concepts_counts
@@ -500,6 +505,10 @@ def update_s3_with_all_successes(
     return None
 
 
+def serialise_concepts_counts(concepts_counts: Counter[ConceptModel]) -> str:
+    return json.dumps({str(k): v for k, v in concepts_counts.items()})
+
+
 def update_s3_with_some_successes(
     document_object_uri: DocumentObjectUri,
     concepts_counts_filtered: Counter[ConceptModel],
@@ -512,9 +521,7 @@ def update_s3_with_some_successes(
     logger.info("updating S3 with partial successes")
 
     # First, update the concepts counts object
-    serialised_concepts_counts = json.dumps(
-        {str(k): v for k, v in concepts_counts_filtered.items()}
-    )
+    serialised_concepts_counts = serialise_concepts_counts(concepts_counts_filtered)
 
     s3_uri = Path(document_object_uri)
 
@@ -599,7 +606,7 @@ async def partial_update_text_block(
 
     serialised_concepts = get_updated_passage_concepts(
         passage=document_passage,
-        concepts_in_vespa=concepts,
+        concepts_to_remove=concepts,
     )
 
     response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
