@@ -24,7 +24,6 @@ from prefect.logging import get_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse
 
-from flows.index import CONCEPT_COUNT_SEPARATOR
 from scripts.cloud import ClassifierSpec
 from src.concept import Concept
 from src.exceptions import QueryError
@@ -33,6 +32,7 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 HTTP_OK = 200
+CONCEPT_COUNT_SEPARATOR: str = ":"
 
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418

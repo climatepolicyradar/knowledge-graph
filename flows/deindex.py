@@ -48,7 +48,6 @@ from src.span import Span
 DEFAULT_DOCUMENTS_BATCH_SIZE = 500
 DEFAULT_INDEXING_TASK_BATCH_SIZE = 20
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
-CONCEPT_COUNT_SEPARATOR: str = ":"
 
 
 @dataclass()

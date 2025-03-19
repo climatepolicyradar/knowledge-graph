@@ -14,7 +14,6 @@ from prefect.logging import disable_run_logger
 from flows.boundary import (
     ConceptModel,
     get_document_passages_from_vespa,
-    partial_update_text_block,
 )
 from flows.index import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -22,6 +21,7 @@ from flows.index import (
     get_document_passage_from_vespa,
     index_by_s3,
     index_labelled_passages_from_s3_to_vespa,
+    partial_update_text_block,
     run_partial_updates_of_concepts_for_document_passages,
     update_concepts_on_existing_vespa_concepts,
 )

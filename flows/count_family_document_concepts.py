@@ -11,9 +11,8 @@ from prefect import flow, get_run_logger
 from prefect.deployments.deployments import run_deployment
 from vespa.io import VespaResponse
 
-from flows.boundary import DocumentObjectUri, S3Accessor
+from flows.boundary import CONCEPT_COUNT_SEPARATOR, DocumentObjectUri, S3Accessor
 from flows.index import (
-    CONCEPT_COUNT_SEPARATOR,
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DocumentImportId,
     get_vespa_search_adapter,

@@ -15,7 +15,6 @@ from flows.boundary import (
     get_document_from_vespa,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
-    partial_update_text_block,
 )
 from flows.deindex import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -24,6 +23,7 @@ from flows.deindex import (
     DocumentImportId,
     DocumentObjectUri,
     calculate_concepts_counts_from_results,
+    partial_update_text_block,
     run_partial_updates_of_concepts_for_document_passages,
     serialise_concepts_counts,
     update_s3_with_all_successes,
