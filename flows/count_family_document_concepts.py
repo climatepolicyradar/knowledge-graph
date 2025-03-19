@@ -11,13 +11,17 @@ from prefect import flow, get_run_logger
 from prefect.deployments.deployments import run_deployment
 from vespa.io import VespaResponse
 
-from flows.boundary import CONCEPT_COUNT_SEPARATOR, DocumentObjectUri, S3Accessor
+from flows.boundary import (
+    CONCEPT_COUNT_SEPARATOR,
+    DocumentImportId,
+    DocumentObjectUri,
+    S3Accessor,
+    s3_obj_generator,
+)
 from flows.index import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    DocumentImportId,
     get_vespa_search_adapter,
     iterate_batch,
-    s3_obj_generator,
     s3_paths_or_s3_prefixes,
 )
 from flows.utils import SlackNotify
