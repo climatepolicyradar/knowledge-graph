@@ -357,7 +357,7 @@ def s3_prefix_mock_bucket_labelled_passages(
 @pytest.fixture
 def s3_prefix_labelled_passages() -> str:
     """Returns the s3 prefix for the concepts."""
-    return "labelled_passages/Q788/v4"
+    return "labelled_passages/Q788/latest"
 
 
 @pytest.fixture()
