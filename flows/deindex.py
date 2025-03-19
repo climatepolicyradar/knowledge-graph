@@ -15,6 +15,7 @@ from typing import Any, ContextManager, TypeAlias, TypeVar
 import boto3
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
@@ -368,7 +369,7 @@ def get_document_passage_from_vespa(
         raise QueryError(vespa_query_response.get_status_code())
     if len(vespa_query_response.hits) != 1:
         raise ValueError(
-            f"Expected 1 document passage for text block `{text_block_id}`, got {len(vespa_query_response.hits)}"
+            f"Expected 1 document passage for text block `{text_block_id}` and document `{document_import_id}`, got {len(vespa_query_response.hits)}"
         )
 
     logger.info(
@@ -385,6 +386,48 @@ def get_document_passage_from_vespa(
     return passage_id, passage
 
 
+def get_document_from_vespa(
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+) -> tuple[VespaHitId, VespaDocument]:
+    """Retrieve a passage for a document in Vespa."""
+    logger = get_logger()
+
+    logger.info(f"Getting document from Vespa: `{document_import_id}`")
+
+    condition = qb.QueryField("document_import_id").contains(document_import_id)
+
+    yql = (
+        qb.select("*")  # pyright:ignore[reportAttributeAccessIssue]
+        .from_("family_document")
+        .where(condition)
+    )
+
+    vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+        yql=yql
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+    if len(vespa_query_response.hits) != 1:
+        raise ValueError(
+            f"Expected 1 document `{document_import_id}`, got {len(vespa_query_response.hits)}"
+        )
+
+    logger.info(
+        (
+            f"Vespa search response for document: {document_import_id} "
+            f"with {len(vespa_query_response.hits)} hits"
+        )
+    )
+
+    hit = vespa_query_response.hits[0]
+    document_id = hit["id"]
+    document = VespaDocument.model_validate(hit["fields"])
+
+    return document_id, document
+
+
 def load_labelled_passages_by_uri(
     document_object_uri: DocumentObjectUri,
 ) -> list[LabelledPassage]:
@@ -396,7 +439,7 @@ def load_labelled_passages_by_uri(
 
 def get_updated_passage_concepts(
     passage: VespaPassage,
-    concepts_in_vespa: list[VespaConcept],
+    concepts_to_remove: list[VespaConcept],
 ) -> list[dict[str, Any]]:
     """
     Update a passage's concepts with the updated/removed concepts.
@@ -408,17 +451,20 @@ def get_updated_passage_concepts(
     It is also, not possible to duplicate a Concept object in the concepts array as we
     are removing all instances where the model is the same.
     """
-    # Put them in the right structure for identification and removal
-    concepts_to_remove = {concept.model for concept in concepts_in_vespa}
+
+    # Get the models to remove
+    concepts_to_remove__models = [concept.model for concept in concepts_to_remove]
 
     # It's an optional sequence at the moment, so massage it
-    concepts_in_vespa = list(passage.concepts) if passage.concepts is not None else []
+    concepts_in_vespa: list[VespaConcept] = (
+        list(passage.concepts) if passage.concepts is not None else []
+    )
 
     # We'll be removing all of the listed concepts, so filter them out
     concepts_in_vespa_to_keep = [
         concept
         for concept in concepts_in_vespa
-        if concept.model not in concepts_to_remove
+        if concept.model not in concepts_to_remove__models
     ]
 
     return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
@@ -628,6 +674,10 @@ def update_s3_with_all_successes(
     return None
 
 
+def serialise_concepts_counts(concepts_counts: Counter[ConceptModel]) -> str:
+    return json.dumps({str(k): v for k, v in concepts_counts.items()})
+
+
 def update_s3_with_some_successes(
     document_object_uri: DocumentObjectUri,
     concepts_counts_filtered: Counter[ConceptModel],
@@ -640,9 +690,7 @@ def update_s3_with_some_successes(
     logger.info("updating S3 with partial successes")
 
     # First, update the concepts counts object
-    serialised_concepts_counts = json.dumps(
-        {str(k): v for k, v in concepts_counts_filtered.items()}
-    )
+    serialised_concepts_counts = serialise_concepts_counts(concepts_counts_filtered)
 
     s3_uri = Path(document_object_uri)
 
@@ -783,7 +831,7 @@ async def partial_update_text_block(
 
     serialised_concepts = get_updated_passage_concepts(
         passage=document_passage,
-        concepts_in_vespa=concepts,
+        concepts_to_remove=concepts,
     )
 
     response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
@@ -1011,6 +1059,23 @@ def _s3_object_write_text(s3_uri: str, text: str) -> None:
     # Upload to S3
     s3 = boto3.client("s3")
     _ = s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+
+
+def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
+    """Write text content to an S3 object."""
+    # Parse the S3 URI
+    s3_path: Path = Path(s3_uri)
+    if len(s3_path.parts) < 3:
+        raise ValueError(f"Invalid S3 path: {s3_path}")
+
+    bucket: str = s3_path.parts[1]
+    key = str(Path(*s3_path.parts[2:]))
+
+    # Upload to S3
+    s3 = boto3.client("s3")
+    _ = s3.put_object(
+        Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
+    )
 
 
 def s3_obj_generator_from_s3_prefixes(
