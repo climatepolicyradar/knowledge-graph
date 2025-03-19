@@ -156,15 +156,16 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         }
     )
 
-    assert (
-        test_counts
-        == await run_partial_updates_of_concepts_for_document_passages__update.fn(
+    update_result = (
+        await run_partial_updates_of_concepts_for_document_passages__update.fn(
             document_importer=(document_import_id, document_object_uri),
             vespa_search_adapter=local_vespa_search_adapter,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
         )
     )
+
+    assert test_counts == update_result
     updated_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
         vespa_search_adapter=local_vespa_search_adapter,
