@@ -120,14 +120,12 @@ def get_file_stems_for_document_id(
         )
         if file_exists:
             stems.append(translated_file_key.stem)
-        logger.info(
-            f"Translated file {translated_file_key} exists: {file_exists}"
-        )
+        logger.info(f"Translated file {translated_file_key} exists: {file_exists}")
 
     return stems
 
 
-def get_all_document_paths_from_document_ids(
+def get_all_labelled_passage_paths_from_document_ids(
     document_ids: list[DocumentImportId],
     classifier_specs: list[ClassifierSpec],
     cache_bucket: str,
