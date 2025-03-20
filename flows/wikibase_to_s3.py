@@ -4,11 +4,14 @@ from io import BytesIO
 
 import boto3
 from cpr_sdk.ssm import get_aws_ssm_param
-from prefect import flow, get_run_logger
+from prefect import flow, get_run_logger, task
+from prefect.deployments.deployments import run_deployment
 from pydantic import SecretStr
 
+from flows.deindex import deindex_labelled_passages_from_s3_to_vespa
 from flows.utils import SlackNotify, file_name_from_path
-from scripts.cloud import AwsEnv
+from scripts.cloud import AwsEnv, function_to_flow_name, generate_deployment_name
+from scripts.update_classifier_spec import ClassifierSpec
 from src.concept import Concept
 from src.wikibase import WikibaseSession
 
@@ -30,6 +33,7 @@ class Config:
     wikibase_username: str | None = None
     wikibase_url: str | None = None
     logging_interval: int = 200
+    trigger_deindexing: bool = True
 
     @classmethod
     def create(cls) -> "Config":
@@ -119,12 +123,64 @@ def list_s3_concepts(config: Config) -> list[str]:
     return s3_concepts
 
 
+def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config):
+    """Delete concepts from S3 that no longer exist in Wikibase."""
+    logger = get_run_logger()
+
+    logger.info(
+        f"Deleting {len(extras_in_s3)} extra concepts from S3 that are no longer in Wikibase"
+    )
+    for i, concept_id in enumerate(extras_in_s3):
+        if i % config.logging_interval == 0:
+            logger.info(f"Deleting extra concept #{i}: {concept_id}")
+        try:
+            delete_from_s3(config, concept_id)
+        except Exception as e:
+            logger.error(f"Failed to delete concept #{i}: {concept_id}, error: {e}")
+
+
+@task
+async def trigger_deindexing(extras_in_s3: list[str], config: Config):
+    logger = get_run_logger()
+
+    # Run deployment for de-indexing
+    logger.info(f"Running de-indexing deployment for {len(extras_in_s3)} concepts")
+    flow_name = function_to_flow_name(deindex_labelled_passages_from_s3_to_vespa)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=config.aws_env
+    )
+
+    # Convert WikibaseIDs to ClassifierSpecs
+    classifier_specs = [
+        ClassifierSpec(
+            name=concept_id,
+            # If a concept has been removed, we'll wipe all versions of results, so just
+            # use the 'latest' version alias here.
+            alias="latest",
+        )
+        for concept_id in extras_in_s3
+    ]
+
+    try:
+        _ = await run_deployment(
+            name=f"{flow_name}/{deployment_name}",
+            parameters={
+                "classifier_specs": classifier_specs,
+            },
+            timeout=0,  # Don't wait for it to finish
+        )
+        logger.info("Successfully triggered de-indexing deployment")
+    except Exception as e:
+        logger.error(f"Failed to trigger de-indexing deployment: {e}")
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-def wikibase_to_s3(config: Config | None = None):
+async def wikibase_to_s3(config: Config | None = None):
     logger = get_run_logger()
+
     if not config:
         config = Config.create()
     logger.info(f"running with config: {config}")
@@ -159,16 +215,8 @@ def wikibase_to_s3(config: Config | None = None):
     )
 
     if extras_in_s3:
-        logger.info(
-            f"Deleting {len(extras_in_s3)} extra concepts from S3 that are no longer in Wikibase"
-        )
-        for i, concept_id in enumerate(extras_in_s3):
-            if i % config.logging_interval == 0:
-                logger.info(f"Deleting extra concept #{i}: {concept_id}")
-            try:
-                delete_from_s3(config, concept_id)
-            except Exception as e:
-                logger.error(f"Failed to delete concept #{i}: {concept_id}, error: {e}")
+        await trigger_deindexing(extras_in_s3, config)
+        delete_extra_concepts_from_s3(extras_in_s3, config)
 
     # Fail for discrepancies to trigger alerts
     if missing_from_s3:
