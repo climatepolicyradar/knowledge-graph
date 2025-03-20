@@ -1,6 +1,9 @@
 import os
 import re
-from typing import TypeAlias
+from collections.abc import Generator
+from io import BytesIO
+from pathlib import Path
+from typing import TypeAlias, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
@@ -73,6 +76,30 @@ def remove_translated_suffix(file_name: str) -> str:
     return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
 
 
+T = TypeVar("T")
+
+
+def iterate_batch(
+    data: list[T] | Generator[T, None, None],
+    batch_size: int,
+) -> Generator[list[T], None, None]:
+    """Generate batches from a list or generator with a specified size."""
+    if isinstance(data, list):
+        # For lists, we can use list slicing
+        for i in range(0, len(data), batch_size):
+            yield data[i : i + batch_size]
+    else:
+        # For generators, accumulate items until we reach batch size
+        batch: list[T] = []
+        for item in data:
+            batch.append(item)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:  # Don't forget to yield the last partial batch
+            yield batch
+
+
 def s3_file_exists(bucket_name: str, file_key: str) -> bool:
     """Check if a file exists in an S3 bucket."""
     s3_client = boto3.client("s3")
@@ -108,3 +135,38 @@ def get_file_stems_for_document_id(
         ):
             stems.append(stem)
     return stems
+
+
+def _s3_object_write_text(s3_uri: str, text: str) -> None:
+    """Write text content to an S3 object."""
+    # Parse the S3 URI
+    s3_path: Path = Path(s3_uri)
+    if len(s3_path.parts) < 3:
+        raise ValueError(f"Invalid S3 path: {s3_path}")
+
+    bucket: str = s3_path.parts[1]
+    key = str(Path(*s3_path.parts[2:]))
+
+    # Create BytesIO buffer with the text content
+    body = BytesIO(text.encode("utf-8"))
+
+    # Upload to S3
+    s3 = boto3.client("s3")
+    _ = s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
+
+
+def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
+    """Write text content to an S3 object."""
+    # Parse the S3 URI
+    s3_path: Path = Path(s3_uri)
+    if len(s3_path.parts) < 3:
+        raise ValueError(f"Invalid S3 path: {s3_path}")
+
+    bucket: str = s3_path.parts[1]
+    key = str(Path(*s3_path.parts[2:]))
+
+    # Upload to S3
+    s3 = boto3.client("s3")
+    _ = s3.put_object(
+        Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
+    )
