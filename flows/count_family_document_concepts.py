@@ -11,15 +11,17 @@ from prefect import flow, get_run_logger
 from prefect.deployments.deployments import run_deployment
 from vespa.io import VespaResponse
 
-from flows.index import (
+from flows.boundary import (
     CONCEPT_COUNT_SEPARATOR,
-    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DocumentImportId,
     DocumentObjectUri,
     S3Accessor,
+    s3_obj_generator,
+)
+from flows.index import (
+    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     get_vespa_search_adapter,
     iterate_batch,
-    s3_obj_generator,
     s3_paths_or_s3_prefixes,
 )
 from flows.utils import SlackNotify
@@ -83,7 +85,7 @@ async def partial_update_family_document_concepts_counts(
     """
     Update document concept counts in Vespa via partial updates.
 
-    Similar to index.get_updated_passage_concepts, during the update
+    Similar to index.update_concepts_on_existing_vespa_concepts, during the update
     we remove all the old concepts related to a model. This is as it
     was decided that holding out dated concepts counts on the document
     in Vespa for a model is not useful.
