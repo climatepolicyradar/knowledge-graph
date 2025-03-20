@@ -28,7 +28,7 @@ from vespa.io import VespaQueryResponse, VespaResponse
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
-    get_file_stems_for_document_id,
+    get_all_document_paths_from_document_ids,
     remove_translated_suffix,
 )
 from scripts.cloud import (
@@ -796,24 +796,12 @@ def s3_paths_or_s3_prefixes(
             # Run on specified documents, for the specified classifier
             logger.info("run on specified documents, for the specified classifier")
 
-            file_stems = []
-            for doc_id in document_ids:
-                file_stems += get_file_stems_for_document_id(
-                    doc_id, cache_bucket, prefix
-                )
-
-            document_paths = [
-                "s3://"
-                + os.path.join(
-                    cache_bucket,
-                    prefix,
-                    classifier_spec.name,
-                    classifier_spec.alias,
-                    f"{file_stem}.json",
-                )
-                for classifier_spec in classifier_specs
-                for file_stem in file_stems
-            ]
+            document_paths = get_all_document_paths_from_document_ids(
+                document_ids=document_ids,
+                classifier_specs=classifier_specs,
+                cache_bucket=cache_bucket,
+                prefix=prefix,
+            )
             return S3Accessor(paths=document_paths, prefixes=None)
 
         case (None, list()):
