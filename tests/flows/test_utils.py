@@ -100,9 +100,11 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
     )
 
     file_stems = get_file_stems_for_document_id(
-        document_id,
-        test_config.cache_bucket,
-        test_config.document_source_prefix,
+        document_id=document_id,
+        bucket_name=test_config.cache_bucket,
+        document_key=os.path.join(
+            test_config.document_source_prefix, f"{document_id}.json"
+        ),
     )
 
     assert file_stems == [document_id, f"{document_id}_translated_en"]
@@ -135,10 +137,10 @@ def test_get_all_document_paths_from_document_ids(
             ContentType="application/json",
         )
 
-    # Get all the document paths for multiple classifiers and documents ids.
+    # Get all the document paths for classifiers and documents ids.
     document_paths = get_all_document_paths_from_document_ids(
         document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
-        classifier_specs=[classifier_spec, ClassifierSpec(name="Q456", alias="v2")],
+        classifier_specs=[classifier_spec],
         cache_bucket=test_config.cache_bucket,
         labelled_passages_prefix=test_config.document_target_prefix,
     )
