@@ -135,14 +135,14 @@ def test_get_all_document_paths_from_document_ids(
             ContentType="application/json",
         )
 
-    assert sorted(
-        get_all_document_paths_from_document_ids(
-            document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
-            classifier_specs=[classifier_spec],
-            cache_bucket=test_config.cache_bucket,
-            labelled_passages_prefix=test_config.document_target_prefix,
-        )
-    ) == sorted(
+    # Get all the document paths for multiple classifiers and documents ids.
+    document_paths = get_all_document_paths_from_document_ids(
+        document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
+        classifier_specs=[classifier_spec, ClassifierSpec(name="Q456", alias="v2")],
+        cache_bucket=test_config.cache_bucket,
+        labelled_passages_prefix=test_config.document_target_prefix,
+    )
+    assert sorted(document_paths) == sorted(
         [
             f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/{file_name}"
             for file_name in s3_file_names
