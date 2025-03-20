@@ -144,7 +144,9 @@ def test_get_all_document_paths_from_document_ids(
     )
     assert sorted(document_paths) == sorted(
         [
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/{file_name}"
+            f"s3://{test_config.cache_bucket}/"
+            f"{test_config.document_target_prefix}/"
+            f"{classifier_spec.name}/{classifier_spec.alias}/{file_name}"
             for file_name in s3_file_names
         ]
     )
