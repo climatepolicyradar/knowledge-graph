@@ -25,7 +25,7 @@ from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
 
-from flows.index import get_vespa_search_adapter_from_aws_secrets
+from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -55,6 +55,7 @@ def test_wikibase_to_s3_config():
         wikibase_password=SecretStr("test_password"),
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
+        trigger_deindexing=False,
     )
 
 
