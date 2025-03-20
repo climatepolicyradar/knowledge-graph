@@ -14,7 +14,7 @@ def setup_environment():
     """Set up required environment variables from SSM parameters."""
 
     os.environ["ARGILLA_API_URL"] = get_aws_ssm_param("/Argilla/APIURL")
-    os.environ["ARGILLA_API_KEY"] = get_aws_ssm_param("/Argilla/APIKey")
+    os.environ["ARGILLA_API_KEY"] = get_aws_ssm_param("/Argilla/Owner/APIKey")
 
     os.environ["HF_TOKEN"] = get_aws_ssm_param("/Huggingface/Token")
 
