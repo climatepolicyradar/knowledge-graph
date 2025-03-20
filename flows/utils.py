@@ -1,6 +1,5 @@
 import os
 import re
-from pathlib import Path
 from typing import TypeAlias
 
 import boto3
@@ -91,7 +90,7 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
 
 
 def get_file_stems_for_document_id(
-    document_id: DocumentImportId, bucket_name: str, document_key: DocumentKey
+    document_id: DocumentImportId, bucket_name: str, prefix: str
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -106,11 +105,9 @@ def get_file_stems_for_document_id(
 
     for target_language in ["en"]:
         stem = f"{document_id}_translated_{target_language}"
-        translated_document_key = Path(document_key).with_stem(stem).__str__()
-
         if s3_file_exists(
             bucket_name=bucket_name,
-            file_key=translated_document_key,
+            file_key=f"{prefix}/{stem}.json",
         ):
             stems.append(stem)
     return stems
@@ -133,35 +130,31 @@ def get_all_document_paths_from_document_ids(
     translated file exists in the target language.
     """
 
-    document_keys: list[tuple[str, str]] = [
-        (
-            document_id,
-            os.path.join(
+    document_paths = []
+
+    for classifier_spec in classifier_specs:
+        for document_id in document_ids:
+            document_key = os.path.join(
                 prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
                 f"{document_id}.json",
-            ),
-        )
-        for classifier_spec in classifier_specs
-        for document_id in document_ids
-    ]
+            )
 
-    file_stems = []
-    for doc_id, doc_key in document_keys:
-        file_stems += get_file_stems_for_document_id(doc_id, cache_bucket, doc_key)
+            document_stems = get_file_stems_for_document_id(
+                document_id, cache_bucket, document_key
+            )
 
-    document_paths = [
-        "s3://"
-        + os.path.join(
-            cache_bucket,
-            prefix,
-            classifier_spec.name,
-            classifier_spec.alias,
-            f"{file_stem}.json",
-        )
-        for classifier_spec in classifier_specs
-        for file_stem in file_stems
-    ]
+            for file_stem in document_stems:
+                document_paths.append(
+                    "s3://"
+                    + os.path.join(
+                        cache_bucket,
+                        prefix,
+                        classifier_spec.name,
+                        classifier_spec.alias,
+                        f"{file_stem}.json",
+                    )
+                )
 
     return document_paths

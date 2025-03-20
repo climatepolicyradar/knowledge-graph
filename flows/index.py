@@ -802,6 +802,10 @@ def s3_paths_or_s3_prefixes(
                 cache_bucket=cache_bucket,
                 prefix=prefix,
             )
+
+            logger.info(
+                f"Identifier {len(document_paths)} documents to process from {len(document_ids)} document IDs"
+            )
             return S3Accessor(paths=document_paths, prefixes=None)
 
         case (None, list()):
