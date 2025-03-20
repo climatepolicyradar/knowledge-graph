@@ -475,6 +475,22 @@ def convert_labelled_passage_to_concepts(
 
     concepts: list[VespaConcept] = []
 
+    if not labelled_passage.metadata.get("concept") and not labelled_passage.spans:
+        logger.info(
+            "Inference didn't identify any results.",
+            extra={"labelled_passage_id": labelled_passage.id},
+        )
+        return concepts
+
+    if not labelled_passage.metadata.get("concept") and labelled_passage.spans:
+        logger.error(
+            "We have spans but no concept metadata.",
+            extra={"labelled_passage_id": labelled_passage.id},
+        )
+        raise ValueError(
+            "We have spans but no concept metadata.",
+        )
+
     # The concept used to label the passage holds some information on the parent
     # concepts and thus this is being used as a temporary solution for providing
     # the relationship between concepts. This has the downside that it ties a
