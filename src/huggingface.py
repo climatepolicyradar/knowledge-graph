@@ -69,5 +69,4 @@ class HuggingfaceSession:
         dataset.push_to_hub(
             repo_id=f"{self.organisation}/{dataset_name}",
             token=self.token,
-            private=True,
         )
