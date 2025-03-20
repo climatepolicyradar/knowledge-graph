@@ -156,12 +156,12 @@ create_deployment(
 )
 
 
-# # Data backup
+# Data backup
 
-# create_deployment(
-#     flow=data_backup,
-#     description="Deploy all Argilla datasets to Huggingface",
-#     env_schedules={
-#         AwsEnv.labs: "0 0 * * *",  # Every day at midnight
-#     },
-# )
+create_deployment(
+    flow=data_backup,
+    description="Deploy all Argilla datasets to Huggingface",
+    env_schedules={
+        AwsEnv.labs: "0 0 * * *",  # Every day at midnight
+    },
+)

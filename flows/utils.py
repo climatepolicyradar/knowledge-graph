@@ -1,7 +1,15 @@
 import os
+import re
+from typing import TypeAlias
 
+import boto3
+from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+
+# Example: CCLW.executive.1813.2418
+DocumentImportId: TypeAlias = str
+DocumentStem: TypeAlias = str
 
 
 def file_name_from_path(path: str) -> str:
@@ -54,3 +62,49 @@ class SlackNotify:
 
         slack = SlackWebhook.load(cls.slack_block_name)
         slack.notify(body=msg)
+
+
+def remove_translated_suffix(file_name: str) -> str:
+    """
+    Remove the suffix from a file name that indicates it has been translated.
+
+    E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
+    """
+    return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
+
+
+def s3_file_exists(bucket_name: str, file_key: str) -> bool:
+    """Check if a file exists in an S3 bucket."""
+    s3_client = boto3.client("s3")
+
+    try:
+        s3_client.head_object(Bucket=bucket_name, Key=file_key)
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ["404", "403"]:
+            return False
+        raise
+
+
+def get_file_stems_for_document_id(
+    document_id: DocumentImportId, bucket_name: str, prefix: str
+) -> list[DocumentStem]:
+    """
+    Get the file stems for a document ID.
+
+    This function is used to get the file stems for a document ID. For example we would
+    find any translated documents in a directory for a document id as follows:
+
+    Example:
+    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"]
+    """
+    stems = [document_id]
+
+    for target_language in ["en"]:
+        stem = f"{document_id}_translated_{target_language}"
+        if s3_file_exists(
+            bucket_name=bucket_name,
+            file_key=f"{prefix}/{stem}.json",
+        ):
+            stems.append(stem)
+    return stems

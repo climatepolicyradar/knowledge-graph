@@ -1,13 +1,13 @@
 name: Bump dependencies
 
-on:
-  schedule:
-    - cron: '0 0 1 * *'
-  workflow_dispatch:
+# on:
+#   schedule:
+#     - cron: '0 0 1 * *'
+#   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
+# permissions:
+#   contents: write
+#   pull-requests: write
 
 jobs:
   pre-commit:

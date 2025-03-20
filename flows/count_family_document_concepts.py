@@ -80,7 +80,14 @@ async def partial_update_family_document_concepts_counts(
     concepts_counts_with_names: dict[str, int],
     vespa_search_adapter: VespaSearchAdapter,
 ) -> None:
-    """Update document concept counts in Vespa via partial updates."""
+    """
+    Update document concept counts in Vespa via partial updates.
+
+    Similar to index.get_updated_passage_concepts, during the update
+    we remove all the old concepts related to a model. This is as it
+    was decided that holding out dated concepts counts on the document
+    in Vespa for a model is not useful.
+    """
 
     response: VespaResponse = vespa_search_adapter.client.update_data(
         schema="family_document",
@@ -88,7 +95,7 @@ async def partial_update_family_document_concepts_counts(
         data_id=document_import_id,
         fields={
             "concept_counts": concepts_counts_with_names
-        },  # Note the schema is misnamed in vespa
+        },  # Note the schema is misnamed in Vespa
     )
 
     if not response.is_successful():
@@ -132,9 +139,8 @@ async def load_parse_concepts_counts(
 
 
 @flow(
-    # TODO: Enable once confident
-    # on_failure=[SlackNotify.message],
-    # on_crashed=[SlackNotify.message],
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
 )
 async def load_update_document_concepts_counts(
     document_import_id: DocumentImportId,
@@ -143,7 +149,6 @@ async def load_update_document_concepts_counts(
     vespa_search_adapter: VespaSearchAdapter | None = None,
 ) -> dict[str, int]:
     """Load and aggregate concept counts from document URIs."""
-
     logger = get_run_logger()
 
     concepts_counts: Counter[Concept] = Counter()
@@ -191,6 +196,7 @@ async def load_update_document_concepts_counts(
 
     cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
 
+    # Serialise them
     concepts_counts_with_names = {
         f"{concept.wikibase_id}{CONCEPT_COUNT_SEPARATOR}{concept.preferred_label}": count
         for concept, count in concepts_counts.items()
