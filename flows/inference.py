@@ -196,7 +196,7 @@ def determine_file_stems(
     requested_document_stems = []
     for doc_id in requested_document_ids:
         requested_document_stems += get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, config.document_source_prefix
+            doc_id, config.cache_bucket, config.document_target_prefix
         )
 
     missing_from_bucket = list(
