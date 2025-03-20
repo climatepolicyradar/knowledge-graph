@@ -1,5 +1,6 @@
 import os
 import re
+from pathlib import Path
 from typing import TypeAlias
 
 import boto3
@@ -90,7 +91,7 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
 
 
 def get_file_stems_for_document_id(
-    document_id: DocumentImportId, bucket_name: str, prefix: str
+    document_id: DocumentImportId, bucket_name: str, document_key: str
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -104,12 +105,17 @@ def get_file_stems_for_document_id(
     stems = [document_id]
 
     for target_language in ["en"]:
-        stem = f"{document_id}_translated_{target_language}"
+        translated_stem = f"{document_id}_translated_{target_language}"
+
+        translated_file_key = (
+            Path(document_key).with_stem(translated_stem).with_suffix(".json")
+        )
         if s3_file_exists(
             bucket_name=bucket_name,
-            file_key=f"{prefix}/{stem}.json",
+            file_key=translated_file_key.__str__(),
         ):
-            stems.append(stem)
+            stems.append(translated_file_key.stem)
+
     return stems
 
 
@@ -117,7 +123,7 @@ def get_all_document_paths_from_document_ids(
     document_ids: list[DocumentImportId],
     classifier_specs: list[ClassifierSpec],
     cache_bucket: str,
-    prefix: str,
+    labelled_passages_prefix: str,
 ) -> list[str]:
     """
     Get all document paths from a list of document IDs.
@@ -135,14 +141,16 @@ def get_all_document_paths_from_document_ids(
     for classifier_spec in classifier_specs:
         for document_id in document_ids:
             document_key = os.path.join(
-                prefix,
+                labelled_passages_prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
                 f"{document_id}.json",
             )
 
             document_stems = get_file_stems_for_document_id(
-                document_id, cache_bucket, document_key
+                document_id=document_id,
+                bucket_name=cache_bucket,
+                document_key=document_key,
             )
 
             for file_stem in document_stems:
@@ -150,7 +158,7 @@ def get_all_document_paths_from_document_ids(
                     "s3://"
                     + os.path.join(
                         cache_bucket,
-                        prefix,
+                        labelled_passages_prefix,
                         classifier_spec.name,
                         classifier_spec.alias,
                         f"{file_stem}.json",

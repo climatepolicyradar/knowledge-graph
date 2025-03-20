@@ -800,7 +800,7 @@ def s3_paths_or_s3_prefixes(
                 document_ids=document_ids,
                 classifier_specs=classifier_specs,
                 cache_bucket=cache_bucket,
-                prefix=prefix,
+                labelled_passages_prefix=prefix,
             )
 
             logger.info(
