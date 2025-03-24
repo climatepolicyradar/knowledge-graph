@@ -5,7 +5,6 @@ from typing import TypeAlias
 
 import boto3
 from botocore.exceptions import ClientError
-from prefect import get_run_logger
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
 
@@ -103,9 +102,6 @@ def get_file_stems_for_document_id(
     Example:
     "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"]
     """
-    logger = get_run_logger()
-    logger.info(f"Checking for translated files for document ID: {document_id}")
-
     stems = [document_id]
 
     for target_language in ["en"]:
@@ -120,7 +116,6 @@ def get_file_stems_for_document_id(
         )
         if file_exists:
             stems.append(translated_file_key.stem)
-        logger.info(f"Translated file {translated_file_key} exists: {file_exists}")
 
     return stems
 
