@@ -10,7 +10,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, ContextManager, TypeAlias, TypeVar
+from typing import Any, ContextManager, TypeAlias, TypeVar, Union
 
 import boto3
 import vespa.querybuilder as qb
@@ -474,15 +474,16 @@ def convert_labelled_passage_to_concepts(
     logger = get_run_logger()
 
     concepts: list[VespaConcept] = []
+    concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
 
-    if not labelled_passage.metadata.get("concept") and not labelled_passage.spans:
+    if not concept_json and not labelled_passage.spans:
         logger.info(
             "Inference didn't identify any results.",
             extra={"labelled_passage_id": labelled_passage.id},
         )
         return concepts
 
-    if not labelled_passage.metadata.get("concept") and labelled_passage.spans:
+    if not concept_json and labelled_passage.spans:
         logger.error(
             "We have spans but no concept metadata.",
             extra={"labelled_passage_id": labelled_passage.id},
@@ -496,7 +497,7 @@ def convert_labelled_passage_to_concepts(
     # the relationship between concepts. This has the downside that it ties a
     # labelled passage to a particular concept when in fact the Spans that a
     # labelled passage has can be labelled by multiple concepts.
-    concept = Concept.model_validate(labelled_passage.metadata["concept"])
+    concept = Concept.model_validate(concept_json)
     parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
         concept=concept
     )
