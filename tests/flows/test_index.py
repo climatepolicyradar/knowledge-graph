@@ -183,7 +183,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     result = mock_s3_client.get_object(
         Bucket=mock_bucket,
-        Key="concepts_counts/Q788/latest/CCLW.executive.10014.4470.json",
+        Key="concepts_counts/Q788/v4/CCLW.executive.10014.4470.json",
     )
     assert test_counts_serialised == json.loads(result["Body"].read().decode("utf-8"))
 
@@ -336,7 +336,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
         len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
     )
 
-    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+    classifier_spec = ClassifierSpec(name="Q788", alias="v4")
     document_ids = [
         Path(labelled_passage_fixture_file).stem
         for labelled_passage_fixture_file in labelled_passage_fixture_files
@@ -391,7 +391,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
             len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
         )
 
-        classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+        classifier_spec = ClassifierSpec(name="Q788", alias="v4")
         document_ids = [
             Path(labelled_passage_fixture_file).stem
             for labelled_passage_fixture_file in labelled_passage_fixture_files
