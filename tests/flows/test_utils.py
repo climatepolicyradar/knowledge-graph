@@ -7,8 +7,8 @@ import pytest
 
 from flows.utils import (
     SlackNotify,
+    add_labelled_passage_paths_from_translated_files_if_existent,
     file_name_from_path,
-    get_all_labelled_passage_paths_from_document_ids,
     get_file_stems_for_document_id,
     remove_translated_suffix,
     s3_file_exists,
@@ -110,7 +110,7 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
     assert file_stems == [document_id, f"{document_id}_translated_en"]
 
 
-def test_get_all_labelled_passage_paths_from_document_ids(
+def test_add_labelled_passage_paths_from_translated_files_if_existent(
     test_config, mock_s3_client, mock_bucket
 ) -> None:
     """Test that we can get all document paths from a list of document IDs."""
@@ -138,7 +138,7 @@ def test_get_all_labelled_passage_paths_from_document_ids(
         )
 
     # Get all the document paths for classifiers and documents ids.
-    document_paths = get_all_labelled_passage_paths_from_document_ids(
+    document_paths = add_labelled_passage_paths_from_translated_files_if_existent(
         document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
         classifier_specs=[classifier_spec],
         cache_bucket=test_config.cache_bucket,

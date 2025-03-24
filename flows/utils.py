@@ -13,7 +13,6 @@ from scripts.cloud import ClassifierSpec
 # Example: CCLW.executive.1813.2418
 DocumentImportId: TypeAlias = str
 DocumentStem: TypeAlias = str
-DocumentKey: TypeAlias = str
 
 
 def file_name_from_path(path: str) -> str:
@@ -105,10 +104,10 @@ def get_file_stems_for_document_id(
     stems = [document_id]
 
     for target_language in ["en"]:
-        translated_stem = f"{document_id}_translated_{target_language}"
-
         translated_file_key = (
-            Path(document_key).with_stem(translated_stem).with_suffix(".json")
+            Path(document_key)
+            .with_stem(f"{document_id}_translated_{target_language}")
+            .with_suffix(".json")
         )
         file_exists = s3_file_exists(
             bucket_name=bucket_name,
@@ -120,14 +119,14 @@ def get_file_stems_for_document_id(
     return stems
 
 
-def get_all_labelled_passage_paths_from_document_ids(
+def add_labelled_passage_paths_from_translated_files_if_existent(
     document_ids: list[DocumentImportId],
     classifier_specs: list[ClassifierSpec],
     cache_bucket: str,
     labelled_passages_prefix: str,
 ) -> list[str]:
     """
-    Get all document paths from a list of document IDs.
+    Get document paths from a list of document IDs with translated paths if they exist.
 
     This function is used to get all document paths from a list of document IDs. For
     example CCLW.executive.1.1 is a document id that may have multiple files associated
