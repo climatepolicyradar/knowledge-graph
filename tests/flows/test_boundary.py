@@ -2,6 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -10,7 +11,9 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
 
 from flows.boundary import (
+    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DocumentImporter,
+    Operation,
     convert_labelled_passage_to_concepts,
     get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa,
@@ -20,9 +23,10 @@ from flows.boundary import (
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
+    updates_by_s3,
 )
 from flows.index import Config
-from scripts.cloud import ClassifierSpec
+from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -402,3 +406,91 @@ def test_get_document_passages_from_vespa(
             for passage_id, passage in document_passages
         ]
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_updates_by_s3_with_s3_paths(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    """We can successfully index labelled passages from S3 into Vespa."""
+    initial_passages_response = local_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    initial_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
+    )
+
+    s3_paths = [
+        f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{doc_file}"
+        for doc_file in labelled_passage_fixture_files
+    ]
+
+    await updates_by_s3(
+        partial_update_flow=Operation.INDEX,
+        aws_env=AwsEnv.sandbox,
+        s3_prefixes=None,
+        s3_paths=s3_paths,
+        as_deployment=False,
+        cache_bucket=mock_bucket,
+        concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    )
+
+    final_passages_response = local_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    final_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
+    )
+
+    assert initial_concepts_count < final_concepts_count
+    # Original + fixture (.tests/flows/fixtures/*.json)
+    assert final_concepts_count == 3933
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_updates_by_s3_task_failure(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that index_by_s3 handles task failures gracefully."""
+
+    async def mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+        *args, **kwargs
+    ):
+        raise Exception("Forced update failure")
+
+    with patch(
+        "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+        side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
+    ):
+        await updates_by_s3(
+            partial_update_flow=Operation.INDEX,
+            aws_env=AwsEnv.sandbox,
+            s3_prefixes=[
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+            ],
+            s3_paths=None,
+            as_deployment=False,
+            cache_bucket=mock_bucket,
+            concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+        )
+
+        # Verify error was logged for the failed update
+        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any(
+            "failed to process document" in r.message
+            and "Forced update failure" in r.message
+            for r in error_logs
+        ), "Expected error log for failed document update not found"

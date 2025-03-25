@@ -1,36 +1,21 @@
-import asyncio
-import json
 import os
-from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
-from cpr_sdk.models.search import Concept as VespaConcept
-from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.logging import get_run_logger
 
 from flows.boundary import (
+    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DEFAULT_DOCUMENTS_BATCH_SIZE,
     DEFAULT_UPDATES_TASK_BATCH_SIZE,
-    ConceptModel,
-    DocumentImporter,
-    TextBlockId,
-    convert_labelled_passage_to_concepts,
-    get_vespa_search_adapter,
-    load_labelled_passages_by_uri,
-    partial_update_text_block,
-    s3_object_write_text,
+    Operation,
     s3_paths_or_s3_prefixes,
     updates_by_s3,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
-    iterate_batch,
-    remove_translated_suffix,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -38,9 +23,6 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
-from src.identifiers import WikibaseID
-
-CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 
 
 @dataclass()
@@ -79,163 +61,6 @@ class Config:
             )
 
         return config
-
-
-def update_concepts_on_existing_vespa_concepts(
-    passage: VespaPassage,
-    concepts: list[VespaConcept],
-) -> list[dict[str, Any]]:
-    """
-    Update a passage's concepts with the new concepts.
-
-    During the update we remove all the old concepts related to a model. This is as it
-    was decided that holding out dated concepts/spans on the passage in Vespa for a
-    model is not useful.
-
-    It is also, not possible to duplicate a Concept object in the concepts array as we
-    are removing all instances where the model is the same.
-    """
-    if not passage.concepts:
-        return [concept.model_dump(mode="json") for concept in concepts]
-
-    new_concept_models = {concept.model for concept in concepts}
-
-    existing_concepts_to_keep = [
-        concept
-        for concept in passage.concepts
-        if concept.model not in new_concept_models
-    ]
-
-    updated_concepts = existing_concepts_to_keep + concepts
-
-    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
-
-
-# FIXME: From what I can tell this function should be identical to the related function
-# deindex.py. In deindex.py we need to remove_translated_suffix from the
-# document_import_id and in this function I'm assuming we should add the updates to how
-# we calculate concepts counts from results.
-@flow
-async def run_partial_updates_of_concepts_for_document_passages__update(
-    document_importer: DocumentImporter,
-    cache_bucket: str,
-    concepts_counts_prefix: str,
-    vespa_search_adapter: VespaSearchAdapter | None = None,
-) -> Counter[ConceptModel]:
-    """
-    Run partial update for VespaConcepts on text blocks for a document.
-
-    This is done in the document_passage index.
-
-    Assumptions:
-
-    - The ID field of the VespaConcept object holds the
-    context of the text block that it relates to. E.g. the concept ID
-    1.10 would relate to the text block ID 10.
-    """
-    logger = get_run_logger()
-
-    cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
-
-    logger.info("getting S3 labelled passages generator")
-    document_labelled_passages = load_labelled_passages_by_uri(document_importer[1])
-
-    with cm:
-        logger.info("converting labelled passages to Vespa concepts")
-        grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
-            labelled_passage.id: convert_labelled_passage_to_concepts(labelled_passage)
-            for labelled_passage in document_labelled_passages
-        }
-
-        logger.info(
-            f"starting partial updates for {len(grouped_concepts)} grouped concepts"
-        )
-
-        batches = iterate_batch(
-            list(grouped_concepts.items()),
-            batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
-        )
-
-        concepts_counts: Counter[ConceptModel] = Counter()
-
-        for batch_num, batch in enumerate(batches, start=1):
-            logger.info(f"processing partial updates batch {batch_num}")
-
-            # We query vespa for document passages that contain a matching import id.
-            # The document imported contains the file stem which could contain a
-            # translated suffix. We remove this suffix to get the document import id.
-            # E.g. CCLW.executive.1.1_translated_en -> CCLW.executive.1.1
-            document_import_id = remove_translated_suffix(document_importer[0])
-
-            partial_update_tasks = [
-                partial_update_text_block(
-                    text_block_id=text_block_id,
-                    concepts=concepts,
-                    document_import_id=document_import_id,
-                    vespa_search_adapter=vespa_search_adapter,
-                    update_function=update_concepts_on_existing_vespa_concepts,
-                )
-                for text_block_id, concepts in batch
-            ]
-
-            logger.info(f"gathering partial updates tasks for batch {batch_num}")
-            results = await asyncio.gather(
-                *partial_update_tasks, return_exceptions=True
-            )
-            logger.info(
-                f"gathered partial {len(results)} updates tasks for batch {batch_num}"
-            )
-
-            for i, result in enumerate(results):
-                text_block_id, concepts = batch[i]
-
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"failed to do partial update for text block `{text_block_id}`: {str(result)}",
-                    )
-
-                    continue
-
-                # Example:
-                #
-                # ..
-                # "labellers": [
-                #   "KeywordClassifier(\"professional services sector\")"
-                # ],
-                # ...
-                concepts_models = [
-                    ConceptModel(
-                        wikibase_id=WikibaseID(concept.id), model_name=concept.model
-                    )
-                    for concept in concepts
-                ]
-
-                concepts_counts.update(concepts_models)
-
-        # Write concepts counts to S3
-        try:
-            s3_uri = Path(document_importer[1])
-            # Get all parts after the prefix (e.g. "Q787/v4/CCLW.executive.1813.2418.json")
-            key_parts = "/".join(s3_uri.parts[3:])  # Skip s3:/bucket/labelled_passages/
-
-            # Create new path with concepts_counts_prefix
-            concepts_counts_uri = (
-                f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
-            )
-
-            serialised_concepts_counts = json.dumps(
-                {str(k): v for k, v in concepts_counts.items()}
-            )
-
-            # Write to S3
-            _ = s3_object_write_text(
-                s3_uri=concepts_counts_uri,
-                text=serialised_concepts_counts,
-            )
-        except Exception as e:
-            logger.error(f"Failed to write concepts counts to S3: {str(e)}")
-
-        return concepts_counts
 
 
 @flow(
@@ -285,9 +110,8 @@ async def index_labelled_passages_from_s3_to_vespa(
     logger.info(f"s3_prefixes: {s3_accessor.prefixes}, s3_paths: {s3_accessor.paths}")
 
     await updates_by_s3(
-        partial_update_flow=run_partial_updates_of_concepts_for_document_passages__update,
         aws_env=config.aws_env,
-        vespa_search_adapter=config.vespa_search_adapter,
+        partial_update_flow=Operation.INDEX,
         s3_prefixes=s3_accessor.prefixes,
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,

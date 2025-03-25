@@ -14,7 +14,11 @@ from prefect.client.schemas.schedules import CronSchedule
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
-from flows.boundary import run_partial_updates_of_concepts_for_batch
+from flows.boundary import (
+    run_partial_updates_of_concepts_for_batch,
+    run_partial_updates_of_concepts_for_document_passages__removal,
+    run_partial_updates_of_concepts_for_document_passages__update,
+)
 from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
@@ -22,12 +26,10 @@ from flows.count_family_document_concepts import (
 from flows.data_backup import data_backup
 from flows.deindex import (
     deindex_labelled_passages_from_s3_to_vespa,
-    run_partial_updates_of_concepts_for_document_passages__removal,
 )
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
-    run_partial_updates_of_concepts_for_document_passages__update,
 )
 from flows.inference import (
     classifier_inference,
