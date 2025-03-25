@@ -35,9 +35,9 @@ jobs:
         id: changed-file
         run: |
           if git diff --quiet --exit-code .pre-commit-config.yaml; then
-            echo "any_changed=true" >> $GITHUB_OUTPUT
-          else
             echo "any_changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "any_changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Pull Request
