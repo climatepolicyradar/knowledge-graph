@@ -33,8 +33,7 @@ REGION_NAME = "eu-west-1"
 def throw_not_logged_in(aws_env: AwsEnv):
     """Raise a typer.BadParameter exception for a not logged in AWS environment."""
     raise typer.BadParameter(
-        f"you're not logged into {aws_env.value}. "
-        f"Do `aws sso --login {aws_env.value}`"
+        f"you're not logged into {aws_env.value}. Do `aws sso --login {aws_env.value}`"
     )
 
 
