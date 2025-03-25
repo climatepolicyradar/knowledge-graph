@@ -608,10 +608,14 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ) -> None:
-    with patch("flows.index.get_prefect_job_variable", return_value=mock_bucket), patch(
-        "flows.index.get_vespa_search_adapter_from_aws_secrets",
-        return_value=local_vespa_search_adapter,
-    ), disable_run_logger():
+    with (
+        patch("flows.index.get_prefect_job_variable", return_value=mock_bucket),
+        patch(
+            "flows.index.get_vespa_search_adapter_from_aws_secrets",
+            return_value=local_vespa_search_adapter,
+        ),
+        disable_run_logger(),
+    ):
         initial_passages_response = local_vespa_search_adapter.client.query(
             yql="select * from document_passage where true"
         )
@@ -799,14 +803,17 @@ def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
 ):
     config = Config(cache_bucket=mock_bucket)
 
-    with pytest.raises(
-        ValueError,
-        match="if document IDs are specified, a classifier "
-        "specifcation must also be specified, since they're "
-        "namespaced by classifiers \\(e\\.g\\. "
-        "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
-        "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
-    ), disable_run_logger():
+    with (
+        pytest.raises(
+            ValueError,
+            match="if document IDs are specified, a classifier "
+            "specifcation must also be specified, since they're "
+            "namespaced by classifiers \\(e\\.g\\. "
+            "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
+            "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
+        ),
+        disable_run_logger(),
+    ):
         s3_paths_or_s3_prefixes(
             classifier_specs=None,
             document_ids=labelled_passage_fixture_ids,

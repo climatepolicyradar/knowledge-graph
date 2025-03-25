@@ -21,7 +21,7 @@ async def test_load_parse_concepts_counts(
 ) -> None:
     """Test that we can load and parse concept counts from S3."""
     mock_concepts_counts_document_uri = sorted(mock_concepts_counts_document_keys)[0]
-    document_object_uri = f"s3://{mock_bucket}/{ mock_concepts_counts_document_uri }"
+    document_object_uri = f"s3://{mock_bucket}/{mock_concepts_counts_document_uri}"
 
     counter = await load_parse_concepts_counts(document_object_uri)
 
@@ -133,9 +133,9 @@ async def test_load_update_document_concepts_counts(
     assert len(loaded_counts) == BATCH_SIZE
 
     counts_after = local_vespa_search_adapter.get_by_id(vespa_doc_id).concept_counts
-    assert (
-        counts_after != counts_before
-    ), f"concepts didnt change, before: {counts_before}, after: {counts_after}"
-    assert (
-        counts_after == loaded_counts[0] == expected_concept_counts
-    ), f"expected: {expected_concept_counts}, actual: {counts_after}"
+    assert counts_after != counts_before, (
+        f"concepts didnt change, before: {counts_before}, after: {counts_after}"
+    )
+    assert counts_after == loaded_counts[0] == expected_concept_counts, (
+        f"expected: {expected_concept_counts}, actual: {counts_after}"
+    )

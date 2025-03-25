@@ -15,9 +15,9 @@ invalid_wikibase_id_strategy = st.text().filter(
 @given(wikibase_id_strategy)
 def test_whether_valid_wikibase_ids_are_accepted(value):
     wikibase_id = WikibaseID(value)
-    assert isinstance(
-        wikibase_id, WikibaseID
-    ), f"Expected WikibaseID, got {type(wikibase_id)}"
+    assert isinstance(wikibase_id, WikibaseID), (
+        f"Expected WikibaseID, got {type(wikibase_id)}"
+    )
     assert str(wikibase_id) == value, f"Expected {value}, got {wikibase_id}"
 
 
@@ -83,6 +83,6 @@ def test_whether_deterministic_hash_is_consistent_across_distinct_python_process
     cmd = "python3 -c \"from src.identifiers import deterministic_hash; print(deterministic_hash('test'))\""
     hash_b = int(subprocess.check_output(cmd, shell=True).decode().strip())
 
-    assert (
-        hash_a == hash_b
-    ), "Deterministic hashes should be identical across Python processes"
+    assert hash_a == hash_b, (
+        "Deterministic hashes should be identical across Python processes"
+    )
