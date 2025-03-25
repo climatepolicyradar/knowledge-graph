@@ -1,11 +1,14 @@
 import os
 import re
+from pathlib import Path
 from typing import TypeAlias
 
 import boto3
 from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+
+from scripts.cloud import ClassifierSpec
 
 # Example: CCLW.executive.1813.2418
 DocumentImportId: TypeAlias = str
@@ -87,7 +90,7 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
 
 
 def get_file_stems_for_document_id(
-    document_id: DocumentImportId, bucket_name: str, prefix: str
+    document_id: DocumentImportId, bucket_name: str, document_key: str
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -101,10 +104,65 @@ def get_file_stems_for_document_id(
     stems = [document_id]
 
     for target_language in ["en"]:
-        stem = f"{document_id}_translated_{target_language}"
-        if s3_file_exists(
+        translated_file_key = (
+            Path(document_key)
+            .with_stem(f"{document_id}_translated_{target_language}")
+            .with_suffix(".json")
+        )
+        file_exists = s3_file_exists(
             bucket_name=bucket_name,
-            file_key=f"{prefix}/{stem}.json",
-        ):
-            stems.append(stem)
+            file_key=translated_file_key.__str__(),
+        )
+        if file_exists:
+            stems.append(translated_file_key.stem)
+
     return stems
+
+
+def get_labelled_passage_paths(
+    document_ids: list[DocumentImportId],
+    classifier_specs: list[ClassifierSpec],
+    cache_bucket: str,
+    labelled_passages_prefix: str,
+) -> list[str]:
+    """
+    Get document paths from a list of document IDs with translated paths if they exist.
+
+    This function is used to get all document paths from a list of document IDs. For
+    example CCLW.executive.1.1 is a document id that may have multiple files associated
+    with it. This function will return all the paths to those files.
+
+    Namely the translated versions of the file. This is done by checking whether a
+    translated file exists in the target language.
+    """
+
+    document_paths = []
+
+    for classifier_spec in classifier_specs:
+        for document_id in document_ids:
+            document_key = os.path.join(
+                labelled_passages_prefix,
+                classifier_spec.name,
+                classifier_spec.alias,
+                f"{document_id}.json",
+            )
+
+            document_stems = get_file_stems_for_document_id(
+                document_id=document_id,
+                bucket_name=cache_bucket,
+                document_key=document_key,
+            )
+
+            for file_stem in document_stems:
+                document_paths.append(
+                    "s3://"
+                    + os.path.join(
+                        cache_bucket,
+                        labelled_passages_prefix,
+                        classifier_spec.name,
+                        classifier_spec.alias,
+                        f"{file_stem}.json",
+                    )
+                )
+
+    return document_paths

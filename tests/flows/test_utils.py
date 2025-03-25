@@ -9,9 +9,11 @@ from flows.utils import (
     SlackNotify,
     file_name_from_path,
     get_file_stems_for_document_id,
+    get_labelled_passage_paths,
     remove_translated_suffix,
     s3_file_exists,
 )
+from scripts.cloud import ClassifierSpec
 
 
 @pytest.mark.parametrize(
@@ -98,9 +100,53 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
     )
 
     file_stems = get_file_stems_for_document_id(
-        document_id,
-        test_config.cache_bucket,
-        test_config.document_source_prefix,
+        document_id=document_id,
+        bucket_name=test_config.cache_bucket,
+        document_key=os.path.join(
+            test_config.document_source_prefix, f"{document_id}.json"
+        ),
     )
 
     assert file_stems == [document_id, f"{document_id}_translated_en"]
+
+
+def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) -> None:
+    """Test that we can get all document paths from a list of document IDs."""
+
+    classifier_spec = ClassifierSpec(name="Q123", alias="v1")
+    body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
+    s3_file_names = [
+        "CCLW.executive.1.1_translated_en.json",
+        "CCLW.executive.1.1.json",
+        "CCLW.executive.10083.rtl_190.json",
+    ]
+
+    s3_client = boto3.client("s3")
+    for file_name in s3_file_names:
+        s3_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=os.path.join(
+                test_config.document_target_prefix,
+                classifier_spec.name,
+                classifier_spec.alias,
+                file_name,
+            ),
+            Body=body,
+            ContentType="application/json",
+        )
+
+    # Get all the document paths for classifiers and documents ids.
+    document_paths = get_labelled_passage_paths(
+        document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
+        classifier_specs=[classifier_spec],
+        cache_bucket=test_config.cache_bucket,
+        labelled_passages_prefix=test_config.document_target_prefix,
+    )
+    assert sorted(document_paths) == sorted(
+        [
+            f"s3://{test_config.cache_bucket}/"
+            f"{test_config.document_target_prefix}/"
+            f"{classifier_spec.name}/{classifier_spec.alias}/{file_name}"
+            for file_name in s3_file_names
+        ]
+    )
