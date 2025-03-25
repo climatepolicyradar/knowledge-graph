@@ -13,18 +13,15 @@ from vespa.io import VespaResponse
 
 from flows.boundary import (
     CONCEPT_COUNT_SEPARATOR,
+    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DocumentImportId,
     DocumentObjectUri,
     S3Accessor,
-    s3_obj_generator,
-)
-from flows.index import (
-    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     get_vespa_search_adapter,
-    iterate_batch,
+    s3_obj_generator,
     s3_paths_or_s3_prefixes,
 )
-from flows.utils import SlackNotify
+from flows.utils import SlackNotify, iterate_batch
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,

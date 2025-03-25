@@ -14,27 +14,27 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 import flows.boundary as boundary
 import flows.count_family_document_concepts as count_family_document_concepts
 from flows.boundary import (
-    DocumentImportId,
-    get_document_passage_from_vespa,
-    get_document_passages_from_vespa,
-)
-from flows.deindex import (
-    CONCEPTS_COUNTS_PREFIX_DEFAULT,
     ConceptModel,
-    Config,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     calculate_concepts_counts_from_results,
-    deindex_labelled_passages_from_s3_to_vespa,
+    get_document_passage_from_vespa,
+    get_document_passages_from_vespa,
     partial_update_text_block,
     remove_concepts_from_existing_vespa_concepts,
     run_partial_updates_of_concepts_for_document_passages__removal,
     serialise_concepts_counts,
+    update_concepts_on_existing_vespa_concepts,
     update_s3_with_all_successes,
     update_s3_with_latest_concepts_counts,
     update_s3_with_some_successes,
 )
-from flows.index import update_concepts_on_existing_vespa_concepts
+from flows.deindex import (
+    CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    Config,
+    deindex_labelled_passages_from_s3_to_vespa,
+)
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
 from scripts.cloud import ClassifierSpec
@@ -323,7 +323,7 @@ def test_update_s3_with_all_successes(
     )
 
     expected_concepts_counts_key = (
-        f"{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id}.json"
+        f"{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id}.json"
     )
     expected_labelled_passages_key = (
         f"labelled_passages/Q787/v4/{document_import_id}.json"
@@ -642,6 +642,28 @@ async def test_update_s3_with_latest_concepts_counts_all_success(
     )
     document_importer = (document_import_id, document_object_uri)
 
+    expected_concepts_counts_key = (
+        f"{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id}.json"
+    )
+    expected_labelled_passages_key = (
+        f"labelled_passages/Q787/v4/{document_import_id}.json"
+    )
+
+    # Put some objects to be deleted
+    body = BytesIO(json.dumps({}).encode("utf-8"))
+    mock_s3_client.put_object(
+        Bucket=mock_bucket,
+        Key=expected_concepts_counts_key,
+        Body=body,
+        ContentType="application/json",
+    )
+    mock_s3_client.put_object(
+        Bucket=mock_bucket,
+        Key=expected_labelled_passages_key,
+        Body=body,
+        ContentType="application/json",
+    )
+
     concepts_counter = Counter(
         {
             ConceptModel(
@@ -660,13 +682,6 @@ async def test_update_s3_with_latest_concepts_counts_all_success(
             document_labelled_passages=[],  # Not used in this branch
         )
         is None
-    )
-
-    expected_concepts_counts_key = (
-        f"{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id}.json"
-    )
-    expected_labelled_passages_key = (
-        f"labelled_passages/Q787/v4/{document_import_id}.json"
     )
 
     # Ensure the objects were deleted
@@ -902,7 +917,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     serialised_concepts_counts_remove = serialise_concepts_counts(
         concepts_counts_remove
     )
-    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id_remove}.json"
+    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
@@ -919,7 +934,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         }
     )
     serialised_concepts_counts_keep = serialise_concepts_counts(concepts_counts_keep)
-    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id_keep}.json"
+    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
@@ -1168,7 +1183,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     serialised_concepts_counts_remove = serialise_concepts_counts(
         concepts_counts_remove
     )
-    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id_remove}.json"
+    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
@@ -1185,7 +1200,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
         }
     )
     serialised_concepts_counts_keep = serialise_concepts_counts(concepts_counts_keep)
-    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/{document_import_id_keep}.json"
+    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(

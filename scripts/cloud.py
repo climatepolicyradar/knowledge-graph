@@ -1,7 +1,7 @@
 import os
 from collections.abc import Callable
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 import boto3
 import boto3.session
@@ -87,7 +87,7 @@ def generate_deployment_name(flow_name: str, aws_env: AwsEnv):
     return f"{PROJECT_NAME}-{flow_name}-{aws_env}"
 
 
-def function_to_flow_name(fn: Callable) -> str:
+def function_to_flow_name(fn: Callable[..., Any]) -> str:
     return fn.__name__.replace("_", "-")
 
 
