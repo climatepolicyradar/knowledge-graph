@@ -28,7 +28,7 @@ from vespa.io import VespaQueryResponse, VespaResponse
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
-    add_labelled_passage_paths_from_translated_files_if_existent,
+    get_labelled_passage_paths,
     remove_translated_suffix,
 )
 from scripts.cloud import (
@@ -813,13 +813,11 @@ def s3_paths_or_s3_prefixes(
             # Run on specified documents, for the specified classifier
             logger.info("run on specified documents, for the specified classifier")
 
-            document_paths = (
-                add_labelled_passage_paths_from_translated_files_if_existent(
-                    document_ids=document_ids,
-                    classifier_specs=classifier_specs,
-                    cache_bucket=cache_bucket,
-                    labelled_passages_prefix=prefix,
-                )
+            document_paths = get_labelled_passage_paths(
+                document_ids=document_ids,
+                classifier_specs=classifier_specs,
+                cache_bucket=cache_bucket,
+                labelled_passages_prefix=prefix,
             )
 
             logger.info(

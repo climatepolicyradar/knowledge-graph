@@ -119,7 +119,7 @@ def get_file_stems_for_document_id(
     return stems
 
 
-def add_labelled_passage_paths_from_translated_files_if_existent(
+def get_labelled_passage_paths(
     document_ids: list[DocumentImportId],
     classifier_specs: list[ClassifierSpec],
     cache_bucket: str,
