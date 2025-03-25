@@ -165,7 +165,7 @@ def download(
     from_file: Path,
 ) -> None:
     """Download a file from S3."""
-    response = from_s3_client.head_object(
+    response = from_s3_client.head_object(  # pyright: ignore[reportAttributeAccessIssue]
         Bucket=from_bucket,
         Key=str(object_key),
     )
@@ -178,7 +178,7 @@ def download(
         desc=str(object_key),
     )
 
-    from_s3_client.download_file(
+    from_s3_client.download_file(  # pyright: ignore[reportAttributeAccessIssue]
         from_bucket,
         str(object_key),
         str(from_file),
@@ -204,7 +204,7 @@ def upload(
         desc=str(object_key),
     )
 
-    to_s3_client.upload_file(
+    to_s3_client.upload_file(  # pyright: ignore[reportAttributeAccessIssue]
         str(from_file),
         to_bucket,
         str(object_key),
@@ -217,8 +217,7 @@ def upload(
 def throw_not_logged_in(aws_env: AwsEnv):
     """Raise a typer.BadParameter exception for a not logged in AWS environment."""
     raise typer.BadParameter(
-        f"you're not logged into {aws_env.value}. "
-        f"Do `aws sso --login {aws_env.value}`"
+        f"you're not logged into {aws_env.value}. Do `aws sso --login {aws_env.value}`"
     )
 
 

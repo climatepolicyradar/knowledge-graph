@@ -24,8 +24,7 @@ class ClassifierSpec(BaseModel):
     )
     alias: str = Field(
         description=(
-            "The alias tag for the version to use for inference. "
-            "e.g 'latest' or 'v2'"
+            "The alias tag for the version to use for inference. e.g 'latest' or 'v2'"
         ),
         default="latest",
         min_length=1,
@@ -159,7 +158,7 @@ def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
         aws_env_as_profile = aws_env if use_aws_profiles else None
 
         sts = get_sts_client(aws_env_as_profile)
-        sts.get_caller_identity()
+        sts.get_caller_identity()  # pyright: ignore[reportAttributeAccessIssue]
 
         return True
     except (
