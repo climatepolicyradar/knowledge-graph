@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import typer
 import wandb
@@ -36,7 +36,7 @@ def read_spec_file(aws_env: AwsEnv) -> list[str]:
         return yaml.load(file, Loader=yaml.FullLoader)
 
 
-def parse_spec_file(aws_env: AwsEnv) -> List[ClassifierSpec]:
+def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
     contents = read_spec_file(aws_env)
     classifier_specs = []
     for item in contents:

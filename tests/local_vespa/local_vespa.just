@@ -23,7 +23,7 @@ vespa_healthy:
 # Deploys schema to dev instance
 vespa_deploy_schema:
 	vespa config set target local
-	@vespa deploy tests/local_vespa/test_app --wait 300
+	@vespa deploy tests/local_vespa/test_app --wait 180
 
 # Feeds some test data into local Vespa instance
 vespa_feed_data:

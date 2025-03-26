@@ -1,6 +1,8 @@
 import json
+import os
 from collections import Counter
 from datetime import datetime
+from functools import partial
 from io import BytesIO
 from typing import Sequence
 
@@ -34,6 +36,8 @@ from flows.deindex import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     Config,
     deindex_labelled_passages_from_s3_to_vespa,
+    find_all_classifier_specs_for_latest,
+    search_s3_for_aliases,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
@@ -1311,3 +1315,201 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     assert passage_keep_1_pre == passage_keep_1_post
+
+
+def put_empty_document_artifact(
+    s3_client,
+    bucket: str,
+    prefix: str,
+    concept: WikibaseID,
+    alias: str,
+    document_id: str,
+) -> None:
+    body = BytesIO(json.dumps({}).encode("utf-8"))
+
+    key = str(os.path.join(prefix, concept, alias, f"{document_id}.json"))
+    print(f"putting empty document artifact at bucket: `{bucket}`, key: `{key}`")
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
+    )
+
+
+@pytest.mark.parametrize(
+    "deindex,maintained,primaries,cleanups,exception",
+    [
+        (
+            [
+                ClassifierSpec(name="Q200", alias="latest"),
+                ClassifierSpec(name="Q300", alias="latest"),
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [
+                ClassifierSpec(name="Q100", alias="v5"),
+                ClassifierSpec(name="Q200", alias="v9"),
+                ClassifierSpec(name="Q300", alias="v2"),
+                ClassifierSpec(name="Q400", alias="v6"),
+                ClassifierSpec(name="Q500", alias="v13"),
+            ],
+            [
+                ClassifierSpec(name="Q200", alias="v9"),
+                ClassifierSpec(name="Q300", alias="v2"),
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [
+                ClassifierSpec(name="Q200", alias="v5"),
+                ClassifierSpec(name="Q200", alias="v6"),
+                ClassifierSpec(name="Q300", alias="v1"),
+            ],
+            None,
+        ),
+        (
+            [
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [],
+            [],
+            [],
+            "classifier spec. name='Q400' alias='v6' was not found in the maintained list",
+        ),
+        (
+            [
+                ClassifierSpec(name="Q400", alias="v6"),
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [],
+            [],
+            "already have name='Q400' alias='v6' as a primary",
+        ),
+    ],
+)
+def test_find_all_classifier_specs_for_latest(
+    mock_bucket,
+    mock_s3_client,
+    deindex: list[ClassifierSpec],
+    maintained: list[ClassifierSpec],
+    primaries: list[ClassifierSpec],
+    cleanups: list[ClassifierSpec],
+    exception: str | None,
+):
+    document_id = "CCLW.executive.10014.4470"
+
+    put = partial(
+        put_empty_document_artifact,
+        s3_client=mock_s3_client,
+        bucket=mock_bucket,
+        prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+        document_id=document_id,
+    )
+
+    [
+        put(
+            concept=WikibaseID(
+                classifier_spec.name,
+            ),
+            alias=classifier_spec.alias,
+        )
+        for classifier_spec in maintained
+    ]
+
+    [
+        put(
+            concept=WikibaseID(
+                classifier_spec.name,
+            ),
+            alias=classifier_spec.alias,
+        )
+        for classifier_spec in cleanups
+    ]
+
+    if exception is not None:
+        with pytest.raises(ValueError, match=exception):
+            classifier_specs_primaries, classifier_specs_cleanups = (
+                find_all_classifier_specs_for_latest(
+                    to_deindex=deindex,
+                    being_maintained=maintained,
+                    cache_bucket=mock_bucket,
+                    document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                    s3_client=mock_s3_client,
+                )
+            )
+    else:
+        classifier_specs_primaries, classifier_specs_cleanups = (
+            find_all_classifier_specs_for_latest(
+                to_deindex=deindex,
+                being_maintained=maintained,
+                cache_bucket=mock_bucket,
+                document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                s3_client=mock_s3_client,
+            )
+        )
+
+        assert set(classifier_specs_primaries) == set(primaries)
+        assert set(classifier_specs_cleanups) == set(cleanups)
+
+
+@pytest.mark.parametrize(
+    "aliases,expected,exception",
+    [
+        (
+            ["v2", "v3", "latest", "v7"],
+            ["v2", "v3", "v7"],
+            None,
+        ),
+        (
+            ["v9", "v3"],
+            ["v3", "v9"],
+            None,
+        ),
+        (
+            [],
+            [],
+            "found 0 aliases for concept Q100",
+        ),
+    ],
+)
+def test_search_s3_for_aliases(
+    mock_bucket: str,
+    mock_s3_client,
+    aliases: list[str],
+    expected: list[str],
+    exception: str | None,
+):
+    concept = WikibaseID("Q100")
+    document_id = "CCLW.executive.10014.4470"
+
+    put = partial(
+        put_empty_document_artifact,
+        s3_client=mock_s3_client,
+        bucket=mock_bucket,
+        prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+        concept=concept,
+        document_id=document_id,
+    )
+
+    [put(alias=alias) for alias in aliases]
+
+    if exception is not None:
+        with pytest.raises(ValueError, match=exception):
+            search_s3_for_aliases(
+                concept=concept,
+                cache_bucket=mock_bucket,
+                document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                s3_client=mock_s3_client,
+            )
+    else:
+        # Compare sets to ignore order
+        assert set(
+            search_s3_for_aliases(
+                concept=concept,
+                cache_bucket=mock_bucket,
+                document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                s3_client=mock_s3_client,
+            )
+        ) == set(expected)

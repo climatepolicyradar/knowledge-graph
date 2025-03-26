@@ -1283,6 +1283,7 @@ def update_s3_with_all_successes(
     cache_bucket: str,
     concepts_counts_prefix: str,
 ) -> None:
+    """Clean-up S3 objects for a document's labelled passages and concepts counts."""
     logger = get_run_logger()
 
     logger.info("updating S3 with all successes")
