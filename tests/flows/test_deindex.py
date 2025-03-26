@@ -1,6 +1,8 @@
 import json
+import os
 from collections import Counter
 from datetime import datetime
+from functools import partial
 from io import BytesIO
 from typing import Sequence
 
@@ -23,7 +25,8 @@ from flows.boundary import (
     get_document_passages_from_vespa,
     partial_update_text_block,
     remove_concepts_from_existing_vespa_concepts,
-    run_partial_updates_of_concepts_for_document_passages__removal,
+    run_partial_updates_of_concepts_for_document_passages__remove,
+    s3_paths_or_s3_prefixes,
     serialise_concepts_counts,
     update_concepts_on_existing_vespa_concepts,
     update_s3_with_all_successes,
@@ -32,12 +35,17 @@ from flows.boundary import (
 )
 from flows.deindex import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    DEFAULT_DEINDEXING_TASK_BATCH_SIZE,
+    DEFAULT_DOCUMENTS_BATCH_SIZE,
     Config,
+    cleanups_by_s3,
     deindex_labelled_passages_from_s3_to_vespa,
+    find_all_classifier_specs_for_latest,
+    search_s3_for_aliases,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
-from scripts.cloud import ClassifierSpec
+from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -1052,15 +1060,19 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ):
-    document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
+    primary_alias = "v4"
+    cleanup_1_alias = "v3"
+    cleanup_2_alias = "v1"
 
     document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
+    document_object_uri_remove_cleanup_1: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
+    document_object_uri_remove_cleanup_2: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
 
     document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
-    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
     _document_importer_keep: DocumentImporter = (
         document_import_id_keep,
         document_object_uri_keep,
@@ -1116,6 +1128,14 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     # It's setup, now write it to S3 to be available
     _s3_object_write_bytes(
         s3_uri=document_object_uri_remove,
+        bytes=serialised_labelled_passages_remove,
+    )
+    _s3_object_write_bytes(
+        s3_uri=document_object_uri_remove_cleanup_1,
+        bytes=serialised_labelled_passages_remove,
+    )
+    _s3_object_write_bytes(
+        s3_uri=document_object_uri_remove_cleanup_2,
         bytes=serialised_labelled_passages_remove,
     )
 
@@ -1183,11 +1203,21 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     serialised_concepts_counts_remove = serialise_concepts_counts(
         concepts_counts_remove
     )
-    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
+    concepts_counts_remove_uri_cleanup_1 = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
+    concepts_counts_remove_uri_cleanup_2 = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
         s3_uri=concepts_counts_remove_uri,
+        text=serialised_concepts_counts_remove,
+    )
+    _s3_object_write_text(
+        s3_uri=concepts_counts_remove_uri_cleanup_1,
+        text=serialised_concepts_counts_remove,
+    )
+    _s3_object_write_text(
+        s3_uri=concepts_counts_remove_uri_cleanup_2,
         text=serialised_concepts_counts_remove,
     )
 
@@ -1200,7 +1230,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
         }
     )
     serialised_concepts_counts_keep = serialise_concepts_counts(concepts_counts_keep)
-    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
@@ -1247,7 +1277,6 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     # Run the function
-
     config = Config(
         cache_bucket=mock_bucket,
         vespa_search_adapter=local_vespa_search_adapter,
@@ -1255,7 +1284,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     await deindex_labelled_passages_from_s3_to_vespa(
-        classifier_specs=[ClassifierSpec(name="Q760", alias="v4")],
+        classifier_specs=[ClassifierSpec(name="Q760", alias="latest")],
         document_ids=[document_import_id_remove],
         config=config,
     )
@@ -1271,6 +1300,32 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
         mock_s3_client.head_object(
             Bucket=mock_bucket,
             Key=key,
+        )
+        s3_match_cleanup_1 = S3_PATTERN.match(document_object_uri_remove_cleanup_1)
+        key_cleanup_1 = s3_match_cleanup_1.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key_cleanup_1,
+        )
+        s3_match_cleanup_2 = S3_PATTERN.match(document_object_uri_remove_cleanup_2)
+        key_cleanup_2 = s3_match_cleanup_2.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key_cleanup_2,
+        )
+
+    with pytest.raises(ClientError):
+        s3_match = S3_PATTERN.match(document_object_uri_remove)
+        key = s3_match.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key,
+        )
+        s3_match_cleanup_1 = S3_PATTERN.match(document_object_uri_remove_cleanup_1)
+        key_cleanup_1 = s3_match_cleanup_1.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key_cleanup_1,
         )
 
     s3_match = S3_PATTERN.match(document_object_uri_keep)
@@ -1311,3 +1366,277 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     assert passage_keep_1_pre == passage_keep_1_post
+
+
+def put_empty_document_artifact(
+    s3_client,
+    bucket: str,
+    prefix: str,
+    concept: WikibaseID,
+    alias: str,
+    document_id: str,
+) -> None:
+    body = BytesIO(json.dumps({}).encode("utf-8"))
+
+    key = str(os.path.join(prefix, concept, alias, f"{document_id}.json"))
+    print(f"putting empty document artifact at bucket: `{bucket}`, key: `{key}`")
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
+    )
+
+
+@pytest.mark.parametrize(
+    "deindex,maintained,primaries,cleanups,exception",
+    [
+        (
+            [
+                ClassifierSpec(name="Q200", alias="latest"),
+                ClassifierSpec(name="Q300", alias="latest"),
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [
+                ClassifierSpec(name="Q100", alias="v5"),
+                ClassifierSpec(name="Q200", alias="v9"),
+                ClassifierSpec(name="Q300", alias="v2"),
+                ClassifierSpec(name="Q400", alias="v6"),
+                ClassifierSpec(name="Q500", alias="v13"),
+            ],
+            [
+                ClassifierSpec(name="Q200", alias="v9"),
+                ClassifierSpec(name="Q300", alias="v2"),
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [
+                ClassifierSpec(name="Q200", alias="v5"),
+                ClassifierSpec(name="Q200", alias="v6"),
+                ClassifierSpec(name="Q300", alias="v1"),
+            ],
+            None,
+        ),
+        (
+            [
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [],
+            [],
+            [],
+            "classifier spec. name='Q400' alias='v6' was not found in the maintained list",
+        ),
+        (
+            [
+                ClassifierSpec(name="Q400", alias="v6"),
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [
+                ClassifierSpec(name="Q400", alias="v6"),
+            ],
+            [],
+            [],
+            "already have name='Q400' alias='v6' as a primary",
+        ),
+    ],
+)
+def test_find_all_classifier_specs_for_latest(
+    mock_bucket,
+    mock_s3_client,
+    deindex: list[ClassifierSpec],
+    maintained: list[ClassifierSpec],
+    primaries: list[ClassifierSpec],
+    cleanups: list[ClassifierSpec],
+    exception: str | None,
+):
+    document_id = "CCLW.executive.10014.4470"
+
+    put = partial(
+        put_empty_document_artifact,
+        s3_client=mock_s3_client,
+        bucket=mock_bucket,
+        prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+        document_id=document_id,
+    )
+
+    [
+        put(
+            concept=WikibaseID(
+                classifier_spec.name,
+            ),
+            alias=classifier_spec.alias,
+        )
+        for classifier_spec in maintained
+    ]
+
+    [
+        put(
+            concept=WikibaseID(
+                classifier_spec.name,
+            ),
+            alias=classifier_spec.alias,
+        )
+        for classifier_spec in cleanups
+    ]
+
+    if exception is not None:
+        with pytest.raises(ValueError, match=exception):
+            classifier_specs_primaries, classifier_specs_cleanups = (
+                find_all_classifier_specs_for_latest(
+                    to_deindex=deindex,
+                    being_maintained=maintained,
+                    cache_bucket=mock_bucket,
+                    document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                    s3_client=mock_s3_client,
+                )
+            )
+    else:
+        classifier_specs_primaries, classifier_specs_cleanups = (
+            find_all_classifier_specs_for_latest(
+                to_deindex=deindex,
+                being_maintained=maintained,
+                cache_bucket=mock_bucket,
+                document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                s3_client=mock_s3_client,
+            )
+        )
+
+        assert set(classifier_specs_primaries) == set(primaries)
+        assert set(classifier_specs_cleanups) == set(cleanups)
+
+
+@pytest.mark.parametrize(
+    "aliases,expected,exception",
+    [
+        (
+            ["v2", "v3", "latest", "v7"],
+            ["v2", "v3", "v7"],
+            None,
+        ),
+        (
+            ["v9", "v3"],
+            ["v3", "v9"],
+            None,
+        ),
+        (
+            [],
+            [],
+            "found 0 aliases for concept Q100",
+        ),
+    ],
+)
+def test_search_s3_for_aliases(
+    mock_bucket: str,
+    mock_s3_client,
+    aliases: list[str],
+    expected: list[str],
+    exception: str | None,
+):
+    concept = WikibaseID("Q100")
+    document_id = "CCLW.executive.10014.4470"
+
+    put = partial(
+        put_empty_document_artifact,
+        s3_client=mock_s3_client,
+        bucket=mock_bucket,
+        prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+        concept=concept,
+        document_id=document_id,
+    )
+
+    [put(alias=alias) for alias in aliases]
+
+    if exception is not None:
+        with pytest.raises(ValueError, match=exception):
+            search_s3_for_aliases(
+                concept=concept,
+                cache_bucket=mock_bucket,
+                document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                s3_client=mock_s3_client,
+            )
+    else:
+        # Compare sets to ignore order
+        assert set(
+            search_s3_for_aliases(
+                concept=concept,
+                cache_bucket=mock_bucket,
+                document_source_prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+                s3_client=mock_s3_client,
+            )
+        ) == set(expected)
+
+
+@pytest.mark.asyncio
+async def test_cleanups_by_s3(
+    mock_bucket: str,
+    mock_s3_client,
+):
+    aws_env = AwsEnv.sandbox
+    document_id = "CCLW.executive.10014.4470"
+    document_ids: list[str] = [document_id]
+    concept = WikibaseID("Q100")
+    classifier_specs_cleanup: list[ClassifierSpec] = [
+        ClassifierSpec(name=str(concept), alias="v1"),
+        ClassifierSpec(name=str(concept), alias="v2"),
+    ]
+
+    put = partial(
+        put_empty_document_artifact,
+        s3_client=mock_s3_client,
+        bucket=mock_bucket,
+        concept=concept,
+        document_id=document_id,
+    )
+
+    # Primary to be left alone
+    primary_alias = "v9"
+    put(alias=primary_alias, prefix=DOCUMENT_TARGET_PREFIX_DEFAULT)
+    put(alias=primary_alias, prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT)
+
+    # To be cleaned-up
+    for classifier_spec in classifier_specs_cleanup:
+        put(alias=classifier_spec.alias, prefix=DOCUMENT_TARGET_PREFIX_DEFAULT)
+        put(alias=classifier_spec.alias, prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT)
+
+    s3_accessor_cleanups = s3_paths_or_s3_prefixes(
+        classifier_specs=classifier_specs_cleanup,
+        document_ids=document_ids,
+        cache_bucket=mock_bucket,
+        prefix=DOCUMENT_TARGET_PREFIX_DEFAULT,
+    )
+
+    assert (
+        await cleanups_by_s3.fn(
+            aws_env=aws_env,
+            s3_prefixes=s3_accessor_cleanups.prefixes,
+            s3_paths=s3_accessor_cleanups.paths,
+            cache_bucket=mock_bucket,
+            batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
+            cleanups_task_batch_size=DEFAULT_DEINDEXING_TASK_BATCH_SIZE,
+            concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            as_deployment=False,
+        )
+        is None
+    )
+
+    for classifier_spec in classifier_specs_cleanup:
+        with pytest.raises(ClientError):
+            key = str(
+                os.path.join(
+                    DOCUMENT_TARGET_PREFIX_DEFAULT,
+                    concept,
+                    classifier_spec.alias,
+                    f"{document_id}.json",
+                )
+            )
+            mock_s3_client.head_object(Bucket=mock_bucket, Key=key)
+
+    key = str(
+        os.path.join(
+            DOCUMENT_TARGET_PREFIX_DEFAULT,
+            concept,
+            primary_alias,
+            f"{document_id}.json",
+        )
+    )
+    mock_s3_client.head_object(Bucket=mock_bucket, Key=key)

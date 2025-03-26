@@ -14,19 +14,13 @@ from prefect.client.schemas.schedules import CronSchedule
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
-from flows.boundary import (
-    run_partial_updates_of_concepts_for_batch,
-    run_partial_updates_of_concepts_for_document_passages__removal,
-    run_partial_updates_of_concepts_for_document_passages__update,
-)
+import flows.boundary as boundary
+import flows.deindex as deindex
 from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
 )
 from flows.data_backup import data_backup
-from flows.deindex import (
-    deindex_labelled_passages_from_s3_to_vespa,
-)
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
@@ -112,14 +106,14 @@ create_deployment(
 # Boundary
 
 create_deployment(
-    flow=run_partial_updates_of_concepts_for_batch,
+    flow=boundary.run_partial_updates_of_concepts_for_batch,
     description="Run partial updates of labelled passages stored in S3 into Vespa for a batch of documents",
 )
 
 # Index
 
 create_deployment(
-    flow=run_partial_updates_of_concepts_for_document_passages__update,
+    flow=boundary.run_partial_updates_of_concepts_for_document_passages__update,
     description="Co-ordinate updating inference results for concepts in Vespa",
 )
 
@@ -131,12 +125,17 @@ create_deployment(
 # De-index
 
 create_deployment(
-    flow=run_partial_updates_of_concepts_for_document_passages__removal,
+    flow=deindex.run_cleanup_objects_for_batch,
+    description="Clean-up a concept's versions for a document",
+)
+
+create_deployment(
+    flow=boundary.run_partial_updates_of_concepts_for_document_passages__remove,
     description="Co-ordinate removing inference results for concepts in Vespa",
 )
 
 create_deployment(
-    flow=deindex_labelled_passages_from_s3_to_vespa,
+    flow=deindex.deindex_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 

@@ -30,6 +30,10 @@ class ClassifierSpec(BaseModel):
         min_length=1,
     )
 
+    def __hash__(self):
+        """Make ClassifierSpec hashable for use in sets and as dict keys."""
+        return hash((self.name, self.alias))
+
 
 async def get_prefect_job_variable(param_name: str) -> str:
     """Get a single variable from the Prefect job variables."""

@@ -372,10 +372,6 @@ def convert_labelled_passage_to_concepts(
     concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
 
     if not concept_json and not labelled_passage.spans:
-        logger.info(
-            "Inference didn't identify any results.",
-            extra={"labelled_passage_id": labelled_passage.id},
-        )
         return concepts
 
     if not concept_json and labelled_passage.spans:
@@ -1273,6 +1269,7 @@ def update_s3_with_all_successes(
     cache_bucket: str,
     concepts_counts_prefix: str,
 ) -> None:
+    """Clean-up S3 objects for a document's labelled passages and concepts counts."""
     logger = get_run_logger()
 
     logger.info("updating S3 with all successes")
@@ -1291,14 +1288,13 @@ def update_s3_with_all_successes(
         f"deleting concepts counts from bucket `{cache_bucket}`, key: `{concepts_counts_key}`"
     )
     if not s3_file_exists(bucket_name=cache_bucket, file_key=concepts_counts_key):
-        raise ValueError(
-            (
-                "planned on deleting concepts counts from bucket: "
-                f"`{cache_bucket}`, key: `{concepts_counts_key}`, "
-                "but the object doesn't exist"
-            )
+        logger.warning(
+            "planned on deleting concepts counts from bucket: "
+            f"`{cache_bucket}`, key: `{concepts_counts_key}`, "
+            "but the object doesn't exist"
         )
-    s3.delete_object(Bucket=cache_bucket, Key=concepts_counts_key)
+    else:
+        s3.delete_object(Bucket=cache_bucket, Key=concepts_counts_key)
 
     logger.info("updated S3 with deleted concepts counts")
 
@@ -1310,14 +1306,13 @@ def update_s3_with_all_successes(
         f"deleting labelled passages from bucket `{cache_bucket}`, key: `{labelled_passages_key}`"
     )
     if not s3_file_exists(bucket_name=cache_bucket, file_key=labelled_passages_key):
-        raise ValueError(
-            (
-                "planned on deleting labelled passages from bucket: "
-                f"`{cache_bucket}`, key: `{labelled_passages_key}`, "
-                "but the object doesn't exist"
-            )
+        logger.warning(
+            "planned on deleting labelled passages from bucket: "
+            f"`{cache_bucket}`, key: `{labelled_passages_key}`, "
+            "but the object doesn't exist"
         )
-    s3.delete_object(Bucket=cache_bucket, Key=labelled_passages_key)
+    else:
+        s3.delete_object(Bucket=cache_bucket, Key=labelled_passages_key)
 
     logger.info("updated S3 with deleted labelled passages")
 
