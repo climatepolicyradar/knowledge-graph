@@ -10,6 +10,7 @@ from flows.utils import (
     file_name_from_path,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
+    iterate_batch,
     remove_translated_suffix,
     s3_file_exists,
 )
@@ -61,6 +62,24 @@ def test_remove_translated_suffix(file_name: str, expected: str) -> None:
     """Test that we can remove the translated suffix from a file name."""
 
     assert remove_translated_suffix(file_name) == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected_lengths",
+    [
+        # Lists
+        (list(range(50)), [50]),
+        (list(range(850)), [400, 400, 50]),
+        ([], [0]),
+        # Generators
+        ((x for x in range(50)), [50]),
+        ((x for x in range(850)), [400, 400, 50]),
+        ((x for x in []), [0]),
+    ],
+)
+def test_iterate_batch(data, expected_lengths):
+    for batch, expected in zip(list(iterate_batch(data, 400)), expected_lengths):
+        assert len(batch) == expected
 
 
 def test_s3_file_exists(test_config, mock_bucket_documents) -> None:
