@@ -14,7 +14,6 @@ from flows.boundary import (
     DocumentImporter,
     DocumentStem,
     Operation,
-    get_vespa_search_adapter,
     s3_obj_generator,
     s3_paths_or_s3_prefixes,
     update_s3_with_all_successes,
@@ -273,49 +272,45 @@ async def cleanups_by_s3(
     cache_bucket: str,
     concepts_counts_prefix: str,
     as_deployment: bool,
-    vespa_search_adapter: VespaSearchAdapter | None = None,
     s3_prefixes: list[str] | None = None,
     s3_paths: list[str] | None = None,
 ) -> None:
     logger = get_run_logger()
 
-    cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
+    logger.info("Getting S3 object generator")
+    documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
+    documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
+    cleanups_task_batches = iterate_batch(
+        data=documents_batches, batch_size=cleanups_task_batch_size
+    )
 
-    with cm:
-        logger.info("Getting S3 object generator")
-        documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
-        documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
-        cleanups_task_batches = iterate_batch(
-            data=documents_batches, batch_size=cleanups_task_batch_size
-        )
+    for i, cleanups_task_batch in enumerate(cleanups_task_batches, start=1):
+        logger.info(f"Processing cleanups task batch #{i}")
 
-        for i, cleanups_task_batch in enumerate(cleanups_task_batches, start=1):
-            logger.info(f"Processing cleanups task batch #{i}")
+        cleanups_tasks = [
+            cleanup_objects_for_batch_flow_or_deployment(
+                documents_batch=documents_batch,
+                documents_batch_num=documents_batch_num,
+                cache_bucket=cache_bucket,
+                concepts_counts_prefix=concepts_counts_prefix,
+                aws_env=aws_env,
+                as_deployment=as_deployment,
+            )
+            for documents_batch_num, documents_batch in enumerate(
+                cleanups_task_batch, start=1
+            )
+        ]
 
-            cleanups_tasks = [
-                cleanup_objects_for_batch_flow_or_deployment(
-                    documents_batch=documents_batch,
-                    documents_batch_num=documents_batch_num,
-                    cache_bucket=cache_bucket,
-                    concepts_counts_prefix=concepts_counts_prefix,
-                    aws_env=aws_env,
-                    as_deployment=as_deployment,
+        logger.info(f"Gathering cleanups tasks for batch #{i}")
+        results = await asyncio.gather(*cleanups_tasks, return_exceptions=True)
+        logger.info(f"Gathered cleanups tasks for batch #{i}")
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"failed to process document batch in cleanups task batch #{i}: {str(result)}",
                 )
-                for documents_batch_num, documents_batch in enumerate(
-                    cleanups_task_batch, start=1
-                )
-            ]
-
-            logger.info(f"Gathering cleanups tasks for batch #{i}")
-            results = await asyncio.gather(*cleanups_tasks, return_exceptions=True)
-            logger.info(f"Gathered cleanups tasks for batch #{i}")
-
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"failed to process document batch in cleanups task batch #{i}: {str(result)}",
-                    )
-                    continue
+                continue
 
 
 @flow(
