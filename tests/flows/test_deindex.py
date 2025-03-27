@@ -1056,15 +1056,19 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ):
-    document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
+    primary_alias = "v4"
+    cleanup_1_alias = "v3"
+    cleanup_2_alias = "v1"
 
     document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
+    document_object_uri_remove_cleanup_1: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
+    document_object_uri_remove_cleanup_2: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
 
     document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
-    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
     _document_importer_keep: DocumentImporter = (
         document_import_id_keep,
         document_object_uri_keep,
@@ -1120,6 +1124,14 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     # It's setup, now write it to S3 to be available
     _s3_object_write_bytes(
         s3_uri=document_object_uri_remove,
+        bytes=serialised_labelled_passages_remove,
+    )
+    _s3_object_write_bytes(
+        s3_uri=document_object_uri_remove_cleanup_1,
+        bytes=serialised_labelled_passages_remove,
+    )
+    _s3_object_write_bytes(
+        s3_uri=document_object_uri_remove_cleanup_2,
         bytes=serialised_labelled_passages_remove,
     )
 
@@ -1187,11 +1199,21 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     serialised_concepts_counts_remove = serialise_concepts_counts(
         concepts_counts_remove
     )
-    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    concepts_counts_remove_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
+    concepts_counts_remove_uri_cleanup_1 = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
+    concepts_counts_remove_uri_cleanup_2 = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
         s3_uri=concepts_counts_remove_uri,
+        text=serialised_concepts_counts_remove,
+    )
+    _s3_object_write_text(
+        s3_uri=concepts_counts_remove_uri_cleanup_1,
+        text=serialised_concepts_counts_remove,
+    )
+    _s3_object_write_text(
+        s3_uri=concepts_counts_remove_uri_cleanup_2,
         text=serialised_concepts_counts_remove,
     )
 
@@ -1204,7 +1226,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
         }
     )
     serialised_concepts_counts_keep = serialise_concepts_counts(concepts_counts_keep)
-    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    concepts_counts_keep_uri = f"s3://{mock_bucket}/{CONCEPTS_COUNTS_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
 
     # It's setup, now write it to S3 to be available
     _s3_object_write_text(
@@ -1251,7 +1273,6 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     # Run the function
-
     config = Config(
         cache_bucket=mock_bucket,
         vespa_search_adapter=local_vespa_search_adapter,
@@ -1259,7 +1280,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     await deindex_labelled_passages_from_s3_to_vespa(
-        classifier_specs=[ClassifierSpec(name="Q760", alias="v4")],
+        classifier_specs=[ClassifierSpec(name="Q760", alias="latest")],
         document_ids=[document_import_id_remove],
         config=config,
     )
@@ -1275,6 +1296,32 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
         mock_s3_client.head_object(
             Bucket=mock_bucket,
             Key=key,
+        )
+        s3_match_cleanup_1 = S3_PATTERN.match(document_object_uri_remove_cleanup_1)
+        key_cleanup_1 = s3_match_cleanup_1.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key_cleanup_1,
+        )
+        s3_match_cleanup_2 = S3_PATTERN.match(document_object_uri_remove_cleanup_2)
+        key_cleanup_2 = s3_match_cleanup_2.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key_cleanup_2,
+        )
+
+    with pytest.raises(ClientError):
+        s3_match = S3_PATTERN.match(document_object_uri_remove)
+        key = s3_match.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key,
+        )
+        s3_match_cleanup_1 = S3_PATTERN.match(document_object_uri_remove_cleanup_1)
+        key_cleanup_1 = s3_match_cleanup_1.group("prefix")
+        mock_s3_client.head_object(
+            Bucket=mock_bucket,
+            Key=key_cleanup_1,
         )
 
     s3_match = S3_PATTERN.match(document_object_uri_keep)
@@ -1513,3 +1560,6 @@ def test_search_s3_for_aliases(
                 s3_client=mock_s3_client,
             )
         ) == set(expected)
+
+
+# TODO: cleanups_by_s3
