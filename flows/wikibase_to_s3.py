@@ -152,11 +152,14 @@ async def trigger_deindexing(extras_in_s3: list[str], config: Config):
 
     # Convert WikibaseIDs to ClassifierSpecs
     classifier_specs = [
-        ClassifierSpec(
-            name=concept_id,
-            # If a concept has been removed, we'll wipe all versions of results, so just
-            # use the 'latest' version alias here.
-            alias="latest",
+        # Convert it to a dict, so Prefect can serialise it
+        dict(
+            ClassifierSpec(
+                name=concept_id,
+                # If a concept has been removed, we'll wipe all versions
+                # of results, so just use the 'latest' version alias here.
+                alias="latest",
+            )
         )
         for concept_id in extras_in_s3
     ]
