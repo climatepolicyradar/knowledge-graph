@@ -13,6 +13,7 @@ from flows.utils import SlackNotify, file_name_from_path
 from scripts.cloud import AwsEnv, function_to_flow_name, generate_deployment_name
 from scripts.update_classifier_spec import ClassifierSpec
 from src.concept import Concept
+from src.identifiers import WikibaseID
 from src.wikibase import WikibaseSession
 
 CDN_BUCKET_NAME_SSM_NAME = "/S3/CDNBucketName"
@@ -123,20 +124,22 @@ def list_s3_concepts(config: Config) -> list[str]:
     return s3_concepts
 
 
-def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config):
+def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config) -> list[str]:
     """Delete concepts from S3 that no longer exist in Wikibase."""
     logger = get_run_logger()
 
     logger.info(
         f"Deleting {len(extras_in_s3)} extra concepts from S3 that are no longer in Wikibase"
     )
-    for i, concept_id in enumerate(extras_in_s3):
+    failures: list[str] = []
+    for i, concept_id in enumerate(extras_in_s3, start=1):
         if i % config.logging_interval == 0:
             logger.info(f"Deleting extra concept #{i}: {concept_id}")
         try:
             delete_from_s3(config, concept_id)
         except Exception as e:
             logger.error(f"Failed to delete concept #{i}: {concept_id}, error: {e}")
+    return failures
 
 
 @task
@@ -164,17 +167,14 @@ async def trigger_deindexing(extras_in_s3: list[str], config: Config):
         for concept_id in extras_in_s3
     ]
 
-    try:
-        _ = await run_deployment(
-            name=f"{flow_name}/{deployment_name}",
-            parameters={
-                "classifier_specs": classifier_specs,
-            },
-            timeout=0,  # Don't wait for it to finish
-        )
-        logger.info("Successfully triggered de-indexing deployment")
-    except Exception as e:
-        logger.error(f"Failed to trigger de-indexing deployment: {e}")
+    await run_deployment(
+        name=f"{flow_name}/{deployment_name}",
+        parameters={
+            "classifier_specs": classifier_specs,
+        },
+        timeout=0,  # Don't wait for it to finish
+    )
+    logger.info("Successfully triggered de-indexing deployment")
 
 
 @flow(
@@ -196,9 +196,12 @@ async def wikibase_to_s3(config: Config | None = None):
     wikibase_ids = wikibase.get_all_concept_ids()
     logger.info(f"Found {len(wikibase_ids)} concept IDs in Wikibase")
 
-    for i, wikibase_id in enumerate(wikibase_ids):
-        if i % config.logging_interval == 0:
-            logger.info(f"Uploading concept #{i}: {wikibase_id}")
+    failed_wikibase_ids_uploads: list[WikibaseID] = []
+    start = 1
+    for i, wikibase_id in enumerate(wikibase_ids, start=start):
+        next_interval = min(i + config.logging_interval, len(wikibase_ids))
+        if i == start or i % config.logging_interval == 0:
+            logger.info(f"Uploading concepts #{i}..#{next_interval}")
         try:
             concept = wikibase.get_concept(
                 wikibase_id, include_recursive_subconcept_of=True
@@ -206,6 +209,7 @@ async def wikibase_to_s3(config: Config | None = None):
             upload_to_s3(config, concept)
         except Exception as e:
             logger.error(f"Failed to upload concept #{i}: {wikibase_id}, error: {e}")
+            failed_wikibase_ids_uploads.append(wikibase_id)
 
     # Identify leftovers from prior runs
     s3_concepts = list_s3_concepts(config)
@@ -217,13 +221,37 @@ async def wikibase_to_s3(config: Config | None = None):
         f"Extras: {extras_in_s3}, Missing from S3: {missing_from_s3}"
     )
 
+    failed_extras_in_s3_deletions: list[str] = []
     if extras_in_s3:
         await trigger_deindexing(extras_in_s3, config)
-        delete_extra_concepts_from_s3(extras_in_s3, config)
+        failed_extras_in_s3_deletions = delete_extra_concepts_from_s3(
+            extras_in_s3, config
+        )
+
+    # There's several different things that can go wrong. Instead of
+    # exiting as soon as any of them happen, the pipeline continues on
+    # and do as much as possible.
+    #
+    # This is possible as this pipeline is/should be idempotent.
+    failures: list[str] = []
 
     # Fail for discrepancies to trigger alerts
     if missing_from_s3:
-        raise ValueError(
-            f"{len(missing_from_s3)} concepts where found in Wikibase but "
-            f"didnt make it to S3: {missing_from_s3}"
+        failures.append(
+            f"{len(missing_from_s3)} concepts where found in Wikibase but didn't make it to S3: {missing_from_s3}"
         )
+
+    if failed_extras_in_s3_deletions:
+        failures.append(
+            f"Some extras weren't deleted from S3: {failed_extras_in_s3_deletions}"
+        )
+
+    if failed_wikibase_ids_uploads:
+        failures.append(
+            f"Some concepts weren't uploaded: {failed_wikibase_ids_uploads}"
+        )
+
+    # Join all the failures together and make it so they'll be
+    # reported.
+    if failures:
+        raise ValueError(". ".join(failures))

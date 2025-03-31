@@ -766,13 +766,14 @@ async def run_partial_updates_of_concepts_for_batch(
     partial_update_flow: Operation,
 ) -> None:
     """Run partial updates for concepts in a batch of documents."""
-
     logger = get_run_logger()
     logger.info(
         f"Updating concepts for batch of documents, documents in batch: {len(documents_batch)}."
     )
 
     fn = op_to_fn(partial_update_flow)
+
+    failures = 0
 
     for i, document_importer in enumerate(documents_batch):
         try:
@@ -789,7 +790,10 @@ async def run_partial_updates_of_concepts_for_batch(
             logger.error(
                 f"failed to process document `{document_stem}`: {e.__str__()}",
             )
-            continue
+            failures += 1
+
+    if failures:
+        raise ValueError(f"{failures}/{len(documents_batch)} partial updates failed")
 
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
@@ -868,44 +872,45 @@ async def updates_by_s3(
     """
     logger = get_run_logger()
 
-    cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
+    failures = 0
 
-    with cm:
-        logger.info("Getting S3 object generator")
-        documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
-        documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
-        updates_task_batches = iterate_batch(
-            data=documents_batches, batch_size=updates_task_batch_size
-        )
+    logger.info("Getting S3 object generator")
+    documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
+    documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
+    updates_task_batches = iterate_batch(
+        data=documents_batches, batch_size=updates_task_batch_size
+    )
 
-        for i, updates_task_batch in enumerate(updates_task_batches, start=1):
-            logger.info(f"Processing updates task batch #{i}")
+    for i, updates_task_batch in enumerate(updates_task_batches, start=1):
+        logger.info(f"Processing updates task batch #{i}")
 
-            updates_tasks = [
-                run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-                    documents_batch=documents_batch,
-                    documents_batch_num=documents_batch_num,
-                    cache_bucket=cache_bucket,
-                    concepts_counts_prefix=concepts_counts_prefix,
-                    aws_env=aws_env,
-                    as_deployment=as_deployment,
-                    partial_update_flow=partial_update_flow,
+        updates_tasks = [
+            run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+                documents_batch=documents_batch,
+                documents_batch_num=documents_batch_num,
+                cache_bucket=cache_bucket,
+                concepts_counts_prefix=concepts_counts_prefix,
+                aws_env=aws_env,
+                as_deployment=as_deployment,
+                partial_update_flow=partial_update_flow,
+            )
+            for documents_batch_num, documents_batch in enumerate(
+                updates_task_batch, start=1
+            )
+        ]
+
+        logger.info(f"Gathering updates tasks for batch #{i}")
+        results = await asyncio.gather(*updates_tasks, return_exceptions=True)
+        logger.info(f"Gathered updates tasks for batch #{i}")
+
+        for result in results:
+            if isinstance(result, Exception):
+                failures += 1
+                logger.error(
+                    f"failed to process document batch in updates task batch #{i}: {str(result)}",
                 )
-                for documents_batch_num, documents_batch in enumerate(
-                    updates_task_batch, start=1
-                )
-            ]
-
-            logger.info(f"Gathering updates tasks for batch #{i}")
-            results = await asyncio.gather(*updates_tasks, return_exceptions=True)
-            logger.info(f"Gathered updates tasks for batch #{i}")
-
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"failed to process document batch in updates task batch #{i}: {str(result)}",
-                    )
-                    continue
+    if failures:
+        raise ValueError("there was at least 1 task that failed")
 
 
 # Index -------------------------------------------------------------------------
