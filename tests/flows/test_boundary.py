@@ -462,7 +462,6 @@ async def test_updates_by_s3_task_failure(
     labelled_passage_fixture_files,
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that index_by_s3 handles task failures gracefully."""
 
@@ -471,9 +470,12 @@ async def test_updates_by_s3_task_failure(
     ):
         raise Exception("Forced update failure")
 
-    with patch(
-        "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
-        side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
+    with (
+        patch(
+            "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+            side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
+        ),
+        pytest.raises(ValueError, match="there was at least 1 task that failed"),
     ):
         await updates_by_s3(
             partial_update_flow=Operation.INDEX,
@@ -486,11 +488,3 @@ async def test_updates_by_s3_task_failure(
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
         )
-
-        # Verify error was logged for the failed update
-        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
-        assert any(
-            "failed to process document" in r.message
-            and "Forced update failure" in r.message
-            for r in error_logs
-        ), "Expected error log for failed document update not found"
