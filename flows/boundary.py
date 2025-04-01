@@ -23,6 +23,7 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
+from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments.deployments import run_deployment
 from prefect.logging import get_logger
 from pydantic import BaseModel
@@ -795,6 +796,8 @@ async def run_partial_updates_of_concepts_for_batch(
     if failures:
         raise ValueError(f"{failures}/{len(documents_batch)} partial updates failed")
 
+    return None
+
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
@@ -804,7 +807,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     aws_env: AwsEnv,
     as_deployment: bool,
     partial_update_flow: Operation,
-) -> None:
+) -> FlowRun | None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
     logger = get_run_logger()
     logger.info(
@@ -900,15 +903,31 @@ async def updates_by_s3(
         ]
 
         logger.info(f"Gathering updates tasks for batch #{i}")
-        results = await asyncio.gather(*updates_tasks, return_exceptions=True)
+        batch_results: list[Any] = await asyncio.gather(
+            *updates_tasks, return_exceptions=True
+        )
         logger.info(f"Gathered updates tasks for batch #{i}")
 
-        for result in results:
+        for result in batch_results:
             if isinstance(result, Exception):
                 failures += 1
                 logger.error(
                     f"failed to process document batch in updates task batch #{i}: {str(result)}",
                 )
+                continue
+
+            if as_deployment:
+                if result is None:
+                    continue
+            else:
+                if isinstance(result, list):
+                    for task_result in result:
+                        if task_result.type != StateType.COMPLETED:
+                            failures += 1
+                            logger.error(
+                                f"flow run task_result's state was not completed. Flow run name: `{task_result.name}`",
+                            )
+
     if failures:
         raise ValueError("there was at least 1 task that failed")
 
