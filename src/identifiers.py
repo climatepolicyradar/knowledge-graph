@@ -1,7 +1,9 @@
 import hashlib
 import re
+from functools import total_ordering
 
 
+@total_ordering
 class WikibaseID(str):
     """A Wikibase ID, which is a string that starts with a 'Q' followed by a number."""
 
