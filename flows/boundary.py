@@ -305,6 +305,14 @@ def load_labelled_passages_by_uri(
 ) -> list[LabelledPassage]:
     """Load and transforms the S3 object's body into LabelledPassages objects."""
     object_json = json.loads(_s3_object_read_text(s3_path=document_object_uri))
+    if len(object_json) == 0:
+        return []
+
+    # Currently we _sometimes_ serialise the labelled passages as a
+    # JSON list, but the items of the list are a funny serialisation
+    # of them, so they're still raw strings, when loaded in.
+    if isinstance(object_json[0], str):
+        object_json = [json.loads(labelled_passage) for labelled_passage in object_json]
 
     return [LabelledPassage(**labelled_passage) for labelled_passage in object_json]
 
