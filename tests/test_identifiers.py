@@ -44,6 +44,11 @@ def test_whether_wikibase_ids_can_be_compared():
     assert id1 != "Q456", "Expected id1 != 'Q456'"
 
 
+def test_whether_wikibase_ids_are_sorted_numerically():
+    ids = [WikibaseID("Q10"), WikibaseID("Q2"), WikibaseID("Q1")]
+    assert sorted(ids) == [WikibaseID("Q1"), WikibaseID("Q2"), WikibaseID("Q10")]
+
+
 @given(
     st.lists(st.text(min_size=10, max_size=100)),
 )

@@ -1,11 +1,29 @@
 import hashlib
 import re
+from functools import total_ordering
 
 
+@total_ordering
 class WikibaseID(str):
     """A Wikibase ID, which is a string that starts with a 'Q' followed by a number."""
 
     regex = r"^Q[1-9]\d*$"
+
+    def __lt__(self, other) -> bool:
+        """Compare two Wikibase IDs numerically"""
+        if not isinstance(other, WikibaseID):
+            return NotImplemented
+        return int(self[1:]) < int(other[1:])
+
+    def __eq__(self, other) -> bool:
+        """Check if two Wikibase IDs are equal"""
+        if not isinstance(other, WikibaseID):
+            return NotImplemented
+        return int(self[1:]) == int(other[1:])
+
+    def __hash__(self) -> int:
+        """Hash a Wikibase ID"""
+        return hash(int(self[1:]))
 
     @classmethod
     def _validate(cls, value: str, field=None) -> str:
