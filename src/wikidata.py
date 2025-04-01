@@ -24,14 +24,14 @@ class WikidataSession:
         return f"<WikidataSession: {self.WIKIDATA_API_BASE_URL}>"
 
     def get_property_values(
-        self, property_id: str, value_id: WikibaseID, inverse: bool = False
+        self, property_id: str, entity_id: WikibaseID, inverse: bool = False
     ) -> list[WikibaseID]:
         """
         Get all entities related to a given entity through a specific property.
 
         Args:
             property_id (str): The Wikidata property ID (e.g., 'P31' for instance-of)
-            value_id (WikibaseID): The Wikidata ID to search for
+            entity_id (WikibaseID): The Wikidata ID to search for
             inverse (bool): If True, search for entities that are the object of the property
                           If False, search for entities that are the subject of the property
                           Example: For P31 (instance-of):
@@ -45,14 +45,14 @@ class WikidataSession:
         if inverse:
             query = f"""
             SELECT ?item ?itemLabel WHERE {{
-              wd:{value_id} wdt:{property_id} ?item.
+              wd:{entity_id} wdt:{property_id} ?item.
               SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
             }}
             """
         else:
             query = f"""
             SELECT ?item ?itemLabel WHERE {{
-              ?item wdt:{property_id} wd:{value_id}.
+              ?item wdt:{property_id} wd:{entity_id}.
               SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
             }}
             """
@@ -71,7 +71,7 @@ class WikidataSession:
                 qids.append(WikibaseID(item_id))
 
             logger.debug(
-                f"Found {len(qids)} entities related to {value_id} through property {property_id}"
+                f"Found {len(qids)} entities related to {entity_id} through property {property_id}"
                 f" (inverse={inverse})"
             )
             return qids
@@ -88,23 +88,23 @@ class WikidataSession:
             logger.error(f"Error during SPARQL query: {e}")
             raise
 
-    def get_instances_of(self, wikidata_id: WikibaseID) -> list[WikibaseID]:
+    def get_instances_of(self, entity_id: WikibaseID) -> list[WikibaseID]:
         """
         Get all instances of a given Wikidata entity
 
         This is a convenience wrapper around get_property_values for the common
         case of finding instances of a class using the P31 property.
         """
-        return self.get_property_values("P31", wikidata_id)
+        return self.get_property_values("P31", entity_id)
 
-    def get_parent_entities(self, wikidata_id: WikibaseID) -> list[WikibaseID]:
+    def get_parent_entities(self, entity_id: WikibaseID) -> list[WikibaseID]:
         """
         Get all parent entities of a given Wikidata entity
 
         This is a convenience wrapper around get_property_values for finding parent
         items of a given Wikidata entity using the P31 property.
         """
-        return self.get_property_values("P31", wikidata_id, inverse=True)
+        return self.get_property_values("P31", entity_id, inverse=True)
 
     def get_concept(self, entity_id: WikibaseID) -> Concept:
         """Get a concept from Wikidata by its ID"""
@@ -147,16 +147,16 @@ class WikidataSession:
             ),
         )
 
-    def get_concepts(self, wikibase_ids: list[WikibaseID]) -> list[Concept]:
+    def get_concepts(self, entity_ids: list[WikibaseID]) -> list[Concept]:
         """Get multiple concepts from Wikidata"""
         concepts = []
-        for wikibase_id in wikibase_ids:
+        for entity_id in entity_ids:
             try:
-                concept = self.get_concept(wikibase_id)
+                concept = self.get_concept(entity_id)
                 concepts.append(concept)
             except (ConceptNotFoundError, ValidationError) as e:
-                logger.warning(f"Failed to fetch concept {wikibase_id}: {e}")
+                logger.warning(f"Failed to fetch concept {entity_id}: {e}")
             except Exception as e:
-                logger.error(f"Unexpected error fetching concept {wikibase_id}: {e}")
+                logger.error(f"Unexpected error fetching concept {entity_id}: {e}")
 
         return concepts
