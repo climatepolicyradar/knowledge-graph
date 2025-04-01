@@ -14,6 +14,8 @@ from prefect.client.schemas.schedules import CronSchedule
 from prefect.deployments.runner import DeploymentImage
 from prefect.flows import Flow
 
+import flows.boundary as boundary
+import flows.deindex as deindex
 from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
@@ -22,8 +24,6 @@ from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
-    run_partial_updates_of_concepts_for_batch,
-    run_partial_updates_of_concepts_for_document_passages,
 )
 from flows.inference import (
     classifier_inference,
@@ -103,10 +103,17 @@ create_deployment(
     description="Run concept classifier inference on a batch of documents",
 )
 
+# Boundary
+
+create_deployment(
+    flow=boundary.run_partial_updates_of_concepts_for_batch,
+    description="Run partial updates of labelled passages stored in S3 into Vespa for a batch of documents",
+)
+
 # Index
 
 create_deployment(
-    flow=run_partial_updates_of_concepts_for_document_passages,
+    flow=boundary.run_partial_updates_of_concepts_for_document_passages__update,
     description="Co-ordinate updating inference results for concepts in Vespa",
 )
 
@@ -115,9 +122,21 @@ create_deployment(
     description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 
+# De-index
+
 create_deployment(
-    flow=run_partial_updates_of_concepts_for_batch,
-    description="Run partial updates of labelled passages stored in S3 into Vespa for a batch of documents",
+    flow=deindex.run_cleanup_objects_for_batch,
+    description="Clean-up a concept's versions for a document",
+)
+
+create_deployment(
+    flow=boundary.run_partial_updates_of_concepts_for_document_passages__remove,
+    description="Co-ordinate removing inference results for concepts in Vespa",
+)
+
+create_deployment(
+    flow=deindex.deindex_labelled_passages_from_s3_to_vespa,
+    description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 
 # Concepts counting
@@ -154,7 +173,6 @@ create_deployment(
         AwsEnv.labs: "0 0 * * *",  # Every day at midnight
     },
 )
-
 
 # Data backup
 

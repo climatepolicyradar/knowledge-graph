@@ -23,7 +23,7 @@ vespa_healthy:
 # Deploys schema to dev instance
 vespa_deploy_schema:
 	vespa config set target local
-	@vespa deploy tests/local_vespa/test_app --wait 300
+	@vespa deploy tests/local_vespa/test_app --wait 180
 
 # Feeds some test data into local Vespa instance
 vespa_feed_data:
@@ -33,8 +33,9 @@ vespa_feed_data:
 	vespa feed tests/local_vespa/test_documents/document_passage.json
 
 # Deletes some test data into local Vespa instance
+#
+# Alternative approaches: https://docs.vespa.ai/en/operations/batch-delete.html
 vespa_delete_data:
-	# Alternative approaches: https://docs.vespa.ai/en/operations/batch-delete.html
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/search_weights/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/family_document/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/document_passage/docid?selection=true&cluster=family-document-passage"

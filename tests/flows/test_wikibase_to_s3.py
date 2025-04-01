@@ -5,11 +5,13 @@ from botocore.exceptions import ClientError
 from mypy_boto3_s3.client import S3Client
 
 from flows.wikibase_to_s3 import (
+    delete_from_s3,
     list_s3_concepts,
     upload_to_s3,
     wikibase_to_s3,
 )
 from src.concept import Concept
+from src.identifiers import WikibaseID
 
 
 def helper_get_concept_from_s3(
@@ -47,6 +49,28 @@ def test_upload_to_s3(
     assert mock_s3_client.head_object(Bucket=mock_cdn_bucket, Key=key)
 
 
+def test_delete_from_s3(
+    mock_s3_client, mock_cdn_bucket, test_wikibase_to_s3_config, mock_concepts
+):
+    mock_concept = mock_concepts[0]
+    key = f"concepts/{mock_concept.wikibase_id}.json"
+
+    # First upload the concept to S3
+    helper_upload_concept_to_s3(mock_s3_client, mock_cdn_bucket, mock_concept)
+
+    # Verify it exists
+    assert mock_s3_client.head_object(Bucket=mock_cdn_bucket, Key=key)
+
+    # Delete it
+    delete_from_s3(
+        config=test_wikibase_to_s3_config, concept_id=mock_concept.wikibase_id
+    )
+
+    # Verify it's gone
+    with pytest.raises(ClientError):
+        mock_s3_client.head_object(Bucket=mock_cdn_bucket, Key=key)
+
+
 def test_list_s3_concepts(
     mock_s3_client, mock_cdn_bucket, mock_concepts, test_wikibase_to_s3_config
 ):
@@ -61,7 +85,8 @@ def test_list_s3_concepts(
     }
 
 
-def test_wikibase_to_s3__empty_cdn_bucket(
+@pytest.mark.asyncio
+async def test_wikibase_to_s3__empty_cdn_bucket(
     MockedWikibaseSession,
     mock_cdn_bucket,
     mock_prefect_slack_webhook,
@@ -70,12 +95,13 @@ def test_wikibase_to_s3__empty_cdn_bucket(
 ):
     start = list_s3_concepts(config=test_wikibase_to_s3_config)
     assert len(start) == 0
-    wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
+    await wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
     end = list_s3_concepts(config=test_wikibase_to_s3_config)
     assert len(end) == 10
 
 
-def test_wikibase_to_s3__repeat_runs(
+@pytest.mark.asyncio
+async def test_wikibase_to_s3__repeat_runs(
     MockedWikibaseSession,
     mock_cdn_bucket,
     mock_prefect_slack_webhook,
@@ -84,44 +110,14 @@ def test_wikibase_to_s3__repeat_runs(
 ):
     start = list_s3_concepts(config=test_wikibase_to_s3_config)
     assert len(start) == 0
-    wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
-    wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
+    await wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
+    await wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
     end = list_s3_concepts(config=test_wikibase_to_s3_config)
     assert len(end) == 10
 
 
-def test_wikibase_to_s3__extras_in_cdn_bucket(
-    MockedWikibaseSession,
-    mock_prefect_slack_webhook,
-    test_wikibase_to_s3_config,
-    mock_s3_client,
-    mock_concepts,
-    mock_cdn_bucket,
-):
-    mock_SlackWebhook, mock_prefect_slack_block = mock_prefect_slack_webhook
-    # Set up extra concepts
-    for concept in mock_concepts:
-        helper_upload_concept_to_s3(mock_s3_client, mock_cdn_bucket, concept)
-
-    # Run wikibase_to_s3 and find extras
-    start = list_s3_concepts(config=test_wikibase_to_s3_config)
-    assert set(start) == {"Q10", "Q20", "Q30"}
-
-    expected_error_part = "2 concepts where found in S3 but where not part of the copy"
-    with pytest.raises(ValueError, match=expected_error_part):
-        wikibase_to_s3(config=test_wikibase_to_s3_config)
-
-    # ensure failure hook was called
-    mock_prefect_slack_block.notify.assert_called_once()
-    message = mock_prefect_slack_block.notify.call_args.kwargs.get("body", "")
-    assert expected_error_part in message
-
-    # Check end count
-    end = list_s3_concepts(config=test_wikibase_to_s3_config)
-    assert len(end) == 12
-
-
-def test_wikibase_to_s3__overwrite_concept(
+@pytest.mark.asyncio
+async def test_wikibase_to_s3__overwrite_concept(
     MockedWikibaseSession,
     mock_prefect_slack_webhook,
     test_wikibase_to_s3_config,
@@ -134,9 +130,57 @@ def test_wikibase_to_s3__overwrite_concept(
     concept_before_overwrite = helper_get_concept_from_s3(
         mock_s3_client, test_wikibase_to_s3_config.cdn_bucket_name, "Q10"
     )
-    wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
+    await wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
     concept_after_overwrite = helper_get_concept_from_s3(
         mock_s3_client, test_wikibase_to_s3_config.cdn_bucket_name, "Q10"
     )
 
     assert concept_before_overwrite != concept_after_overwrite
+
+
+@pytest.mark.asyncio
+async def test_wikibase_to_s3__trigger_deindexing_called(
+    MockedWikibaseSession,
+    mock_cdn_bucket,
+    mock_prefect_slack_webhook,
+    test_wikibase_to_s3_config,
+    mock_s3_client,
+    monkeypatch,
+):
+    test_wikibase_to_s3_config.trigger_deindexing = True
+
+    # Set up extra concept in S3 that's not in Wikibase
+    extra_concept_id = "Q999"
+    extra_concept = Concept(
+        wikibase_id=WikibaseID(extra_concept_id), preferred_label="Extra Concept"
+    )
+    helper_upload_concept_to_s3(
+        mock_s3_client, test_wikibase_to_s3_config.cdn_bucket_name, extra_concept
+    )
+
+    # Verify it exists in S3
+    s3_concepts_before = list_s3_concepts(config=test_wikibase_to_s3_config)
+    assert extra_concept_id in s3_concepts_before
+
+    # Mock the trigger_deindexing function to track if it's called
+    trigger_deindexing_called = False
+
+    async def mock_trigger_deindexing(extras_in_s3, _config):
+        nonlocal trigger_deindexing_called
+        trigger_deindexing_called = True
+        assert extra_concept_id in extras_in_s3
+        return None
+
+    monkeypatch.setattr(
+        "flows.wikibase_to_s3.trigger_deindexing", mock_trigger_deindexing
+    )
+
+    # Run the flow
+    await wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
+
+    # Verify trigger_deindexing was called
+    assert trigger_deindexing_called, "trigger_deindexing should have been called"
+
+    # Verify the extra concept was removed from S3
+    s3_concepts_after = list_s3_concepts(config=test_wikibase_to_s3_config)
+    assert extra_concept_id not in s3_concepts_after

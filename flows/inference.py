@@ -5,7 +5,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Final, Optional, Set, Tuple, TypeAlias
+from typing import Final, Optional, TypeAlias
 
 import boto3
 import prefect.artifacts as artifacts
@@ -16,11 +16,12 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
+from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import SlackNotify
+from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -42,7 +43,10 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
-DocumentRunIdentifier: TypeAlias = Tuple[str, str, str]
+# Example: CCLW.executive.1813.2418
+DocumentImportId: TypeAlias = str
+DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
+DocumentStem: TypeAlias = str
 
 
 @dataclass()
@@ -104,18 +108,23 @@ def get_bucket_paginator(config: Config, prefix: str):
     )
 
 
-def list_bucket_doc_ids(config: Config) -> list[str]:
-    """Scan configured bucket and return all IDs."""
+def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+    """
+    Scan configured bucket and return all file stems.
+
+    Where a stem refers to a file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
+    """
     page_iterator = get_bucket_paginator(config, config.document_source_prefix)
-    doc_ids = []
+    file_stems = []
 
     for p in page_iterator:
         if "Contents" in p:
             for o in p["Contents"]:
-                doc_id = Path(o["Key"]).stem
-                doc_ids.append(doc_id)
+                file_stem = Path(o["Key"]).stem
+                file_stems.append(file_stem)
 
-    return doc_ids
+    return file_stems
 
 
 def get_latest_ingest_documents(config: Config) -> list[str]:
@@ -153,36 +162,53 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
     return new + updated
 
 
-def determine_document_ids(
+def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
-    requested_document_ids: Optional[list[str]],
-    current_bucket_ids: list[str],
-) -> list[str]:
+    requested_document_ids: Optional[list[DocumentImportId]],
+    current_bucket_file_stems: list[DocumentStem],
+) -> list[DocumentStem]:
     """
-    Confirm chosen document ids or default to all if not specified.
+    Function for identifying the file stems to process.
+
+    File stems refer to the file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
 
     Compares the requested_document_ids to what actually exists in the bucket.
     If a document id has been requested but does not exist this will
-    raise a `ValueError`. If no document id were requested, this will
-    instead return the `current_bucket_ids`.
+    raise a `ValueError`. If no document ids were requested, this will
+    instead return the `current_bucket_file_stems`.
+
+    For requested document ids we identify whether there are any translated files that
+    should also be processed by identifying their file stems as well.
     """
     if use_new_and_updated and requested_document_ids:
         raise ValueError(
-            "`use_new_and_updated`, and `document_ids` are mutually exclusive"
+            "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
         )
     elif use_new_and_updated:
         requested_document_ids = get_latest_ingest_documents(config)
     elif requested_document_ids is None:
-        return current_bucket_ids
+        return current_bucket_file_stems
 
-    missing_from_bucket = list(set(requested_document_ids) - set(current_bucket_ids))
+    assert config.cache_bucket
+
+    requested_document_stems = []
+    for doc_id in requested_document_ids:
+        document_key = os.path.join(config.document_source_prefix, f"{doc_id}.json")
+        requested_document_stems += get_file_stems_for_document_id(
+            doc_id, config.cache_bucket, document_key
+        )
+
+    missing_from_bucket = list(
+        set(requested_document_stems) - set(current_bucket_file_stems)
+    )
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
-    return requested_document_ids
+    return requested_document_stems
 
 
 def download_classifier_from_wandb_to_local(
@@ -235,11 +261,11 @@ def download_s3_file(config: Config, key: str):
     return content
 
 
-def load_document(config: Config, document_id: str) -> BaseParserOutput:
+def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = os.path.join(
         config.document_source_prefix,
-        f"{document_id}.json",
+        f"{file_stem}.json",
     )
     content = download_s3_file(config=config, key=file_key)
     document = BaseParserOutput.model_validate_json(content)
@@ -271,10 +297,17 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
+def serialise_labels(labels: list[LabelledPassage]) -> BytesIO:
+    data = [label.model_dump() for label in labels]
+
+    # Use the datetime encoder from the span module when dumping to JSON
+    return BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
+
+
 def store_labels(
     config: Config,
     labels: list[LabelledPassage],
-    document_id: str,
+    file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
 ) -> None:
@@ -283,14 +316,11 @@ def store_labels(
         config.document_target_prefix,
         classifier_name,
         classifier_alias,
-        f"{document_id}.json",
+        f"{file_stem}.json",
     )
-    print(f"Storing labels for document {document_id} at {key}")
+    print(f"Storing labels for document {file_stem} at {key}")
 
-    data = [label.model_dump() for label in labels]
-
-    # Use the datetime encoder from the span module when dumping to JSON
-    body = BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
+    body = serialise_labels(labels)
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     s3.put_object(
@@ -303,27 +333,36 @@ def store_labels(
 
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
-) -> Optional[LabelledPassage]:
+) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
-    if not spans:
-        return None
 
-    # Remove the labelled passages from the concept to reduce the size of the metadata.
-    concept_no_labelled_passages = classifier.concept.model_copy(
-        update={"labelled_passages": []}
-    )
+    # If there were no inference results, don't include the concept
+    if not spans:
+        metadata = {}
+    else:
+        # Remove the labelled passages from the concept to reduce the
+        # size of the metadata.
+        concept_no_labelled_passages = classifier.concept.model_copy(
+            update={"labelled_passages": []}
+        )
+
+        concept = concept_no_labelled_passages.model_dump()
+
+        metadata = {"concept": concept}
+
     labelled_passage = LabelledPassage(
         id=block_id,
         text=text,
         spans=spans,
-        metadata={"concept": concept_no_labelled_passages.model_dump()},
+        metadata=metadata,
     )
+
     return labelled_passage
 
 
 def _name_document_run_identifiers_set(
-    documents: Set[DocumentRunIdentifier],
+    documents: set[DocumentRunIdentifier],
     status: str,
 ) -> list[dict[str, str]]:
     """Convert a set of document run identifiers for table rows."""
@@ -332,8 +371,8 @@ def _name_document_run_identifiers_set(
 
 
 async def report_documents_runs(
-    queued: Set[DocumentRunIdentifier],
-    completed: Set[DocumentRunIdentifier],
+    queued: set[DocumentRunIdentifier],
+    completed: set[DocumentRunIdentifier],
     aws_env: AwsEnv,
 ) -> None:
     try:
@@ -355,43 +394,46 @@ async def report_documents_runs(
 
 
 async def run_classifier_inference_on_document(
-    run,
     config: Config,
-    document_id: str,
+    file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
     classifier: Classifier,
 ) -> DocumentRunIdentifier:
     """Run the classifier inference flow on a document."""
-    print(f"Loading document with ID {document_id}")
+    print(f"Loading document with file stem {file_stem}")
     try:
-        document = load_document(config, document_id)
+        document = load_document(config, file_stem)
     except ClientError as e:
         if e.response["Error"]["Code"] == "NoSuchKey":
-            print(f"Document with ID {document_id} not found in cache bucket")
-            return (document_id, classifier_name, classifier_alias)
+            print(f"Document with file stem {file_stem} not found in cache bucket")
+            return (file_stem, classifier_name, classifier_alias)
         else:
             raise
-    print(f"Loaded document with ID {document_id}")
+    print(f"Loaded document with file stem {file_stem}")
 
-    doc_labels = []
+    if document.languages != ["en"]:
+        raise ValueError(
+            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"{document.languages}"
+        )
+
+    doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
         labelled_passages = text_block_inference(
             classifier=classifier, block_id=block_id, text=text
         )
-        if labelled_passages:
-            doc_labels.append(labelled_passages)
+        doc_labels.append(labelled_passages)
 
-    if doc_labels:
-        store_labels(
-            config=config,
-            labels=doc_labels,
-            document_id=document_id,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-        )
+    store_labels(
+        config=config,
+        labels=doc_labels,
+        file_stem=file_stem,
+        classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
+    )
 
-    return (document_id, classifier_name, classifier_alias)
+    return (file_stem, classifier_name, classifier_alias)
 
 
 def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
@@ -413,6 +455,8 @@ async def run_classifier_inference_on_batch_of_documents(
     This reflects the unit of work that should be run in one of many paralellised
     docker containers.
     """
+    logger = get_run_logger()
+
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
         if config_json["wandb_api_key"]
@@ -427,7 +471,7 @@ async def run_classifier_inference_on_batch_of_documents(
         job_type="concept_inference",
     )
 
-    print(
+    logger.info(
         f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
     classifier = await load_classifier(
@@ -436,23 +480,26 @@ async def run_classifier_inference_on_batch_of_documents(
         classifier_name,
         classifier_alias,
     )
-    print(
+    logger.info(
         f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
 
     tasks = [
         run_classifier_inference_on_document(
-            run=run,
             config=config,
-            document_id=document_id,
+            file_stem=file_stem,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
             classifier=classifier,
         )
-        for document_id in batch
+        for file_stem in batch
     ]
 
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if isinstance(result, Exception):
+            logger.exception(f"Failed to process document: {result}")
 
 
 @flow(
@@ -488,19 +535,19 @@ async def classifier_inference(
 
     print(f"Running with config: {config}")
 
-    current_bucket_ids = list_bucket_doc_ids(config=config)
-    validated_document_ids = determine_document_ids(
+    current_bucket_file_stems = list_bucket_file_stems(config=config)
+    validated_file_stems = determine_file_stems(
         config=config,
         use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
-        current_bucket_ids=current_bucket_ids,
+        current_bucket_file_stems=current_bucket_file_stems,
     )
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
     print(
-        f"Running with {len(validated_document_ids)} documents and "
+        f"Running with {len(validated_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -510,7 +557,7 @@ async def classifier_inference(
     )
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(validated_document_ids, batch_size)
+        batches = iterate_batch(validated_file_stems, batch_size)
 
         tasks = [
             run_deployment(

@@ -50,7 +50,7 @@ class PartialUpdateError(Exception):
 
     def __init__(self, id: str, status_code: int):
         super().__init__(
-            f"Failed to update `{id}`. " f"Received status code: {status_code}"
+            f"Failed to update `{id}`. Received status code: {status_code}"
         )
         self.id = id
         self.status_code = status_code

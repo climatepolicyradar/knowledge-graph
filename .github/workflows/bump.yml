@@ -33,11 +33,12 @@ jobs:
 
       - name: Detect changes
         id: changed-file
-        uses: tj-actions/changed-files@v45
-        with:
-          # Avoid using single or double quotes for multiline patterns
-          files: |
-            .pre-commit-config.yaml
+        run: |
+          if git diff --quiet --exit-code .pre-commit-config.yaml; then
+            echo "any_changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Pull Request
         if: steps.changed-file.outputs.any_changed == 'true'
