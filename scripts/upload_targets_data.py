@@ -19,7 +19,7 @@ from datasets import DatasetDict, load_dataset
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 
-from src.argilla_legacy import concept_to_dataset_name
+# from src.argilla_legacy import concept_to_dataset_name
 from src.identifiers import WikibaseID, generate_identifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -188,12 +188,16 @@ def main():
 
         dataset.add_records(records)  # type: ignore
 
-        dataset_name = concept_to_dataset_name(concept)
+        # NOTE: this script was run with legacy argilla v1.
+        # Since the legacy handling has been removed, this script will not work as is, but is still retained
+        # for illustration purposes.
 
-        dataset_in_argilla = dataset.push_to_argilla(
-            name=dataset_name, workspace=workspace_name, show_progress=False
-        )
-        console.log(f'✅ Created dataset for "{concept}" at {dataset_in_argilla.url}')
+        # dataset_name = concept_to_dataset_name(concept)
+
+        # dataset_in_argilla = dataset.push_to_argilla(
+        #     name=dataset_name, workspace=workspace_name, show_progress=False
+        # )
+        # console.log(f'✅ Created dataset for "{concept}" at {dataset_in_argilla.url}')
 
 
 if __name__ == "__main__":
