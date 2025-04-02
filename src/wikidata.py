@@ -64,25 +64,23 @@ class WikidataSession:
                 return []
             current_page_size = min(page_size, remaining)
 
-        # Put together a SPARQL query based on the direction of the relationship
-        if inverse:
-            query = f"""
-            SELECT ?item ?itemLabel WHERE {{
-              wd:{entity_id} wdt:{property_id} ?item.
-              SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
-            }}
-            LIMIT {current_page_size}
-            OFFSET {offset}
-            """
-        else:
-            query = f"""
-            SELECT ?item ?itemLabel WHERE {{
-              ?item wdt:{property_id} wd:{entity_id}.
-              SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
-            }}
-            LIMIT {current_page_size}
-            OFFSET {offset}
-            """
+        # Determine the subject-predicate-object pattern based on the direction specified
+        # by the user
+        triple_pattern = (
+            f"wd:{entity_id} wdt:{property_id} ?item"
+            if inverse
+            else f"?item wdt:{property_id} wd:{entity_id}"
+        )
+
+        # Construct the full SPARQL query
+        query = f"""
+        SELECT ?item ?itemLabel WHERE {{
+          {triple_pattern}.
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
+        }}
+        LIMIT {current_page_size}
+        OFFSET {offset}
+        """
 
         try:
             response = self.session.get(
@@ -142,7 +140,7 @@ class WikidataSession:
         self, entity_id: WikibaseID, limit: Optional[int] = None
     ) -> list[WikibaseID]:
         """
-        Get all instances of a given Wikidata entity.
+        Get all instances of an entity, based on the "instance of" property
 
         :param WikibaseID entity_id: The Wikidata ID to find instances of
         :param Optional[int] limit: Maximum number of results to return
@@ -152,15 +150,18 @@ class WikidataSession:
             self.INSTANCE_OF_PROPERTY, entity_id, limit=limit
         )
 
-    def get_parent_entities(
+    def get_instance_of_values(
         self, entity_id: WikibaseID, limit: Optional[int] = None
     ) -> list[WikibaseID]:
         """
-        Get all parent entities of a given Wikidata entity.
+        Get all entities that this entity is an instance of.
 
-        :param WikibaseID entity_id: The Wikidata ID to find parent entities of
+        For example, if entity "London (Q84)" is an instance of "city (Q515)" (among
+        other things), then get_instance_of_values("Q84") would return ["Q515", ...].
+
+        :param WikibaseID entity_id: The Wikidata ID to find instance-of values for
         :param Optional[int] limit: Maximum number of results to return
-        :return list[WikibaseID]: A list of Wikidata IDs that are parent entities
+        :return list[WikibaseID]: A list of Wikidata IDs that this entity is an instance of
         """
         return self.get_property_values(
             self.INSTANCE_OF_PROPERTY, entity_id, inverse=True, limit=limit
