@@ -73,6 +73,8 @@ def remove_translated_suffix(file_name: str) -> str:
     """
     Remove the suffix from a file name that indicates it has been translated.
 
+    Often used for querying Vespa.
+
     E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
     """
     return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
