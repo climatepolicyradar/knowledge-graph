@@ -1,11 +1,13 @@
 import asyncio
 import json
 import os
+from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, TypeAlias
+from uuid import UUID
 
 import boto3
 import prefect.artifacts as artifacts
@@ -14,6 +16,7 @@ from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
+from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
@@ -399,7 +402,7 @@ async def run_classifier_inference_on_document(
     classifier_name: str,
     classifier_alias: str,
     classifier: Classifier,
-) -> DocumentRunIdentifier:
+) -> None:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with file stem {file_stem}")
     try:
@@ -407,7 +410,7 @@ async def run_classifier_inference_on_document(
     except ClientError as e:
         if e.response["Error"]["Code"] == "NoSuchKey":
             print(f"Document with file stem {file_stem} not found in cache bucket")
-            return (file_stem, classifier_name, classifier_alias)
+            return None
         else:
             raise
     print(f"Loaded document with file stem {file_stem}")
@@ -433,7 +436,7 @@ async def run_classifier_inference_on_document(
         classifier_alias=classifier_alias,
     )
 
-    return (file_stem, classifier_name, classifier_alias)
+    return None
 
 
 def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
@@ -497,9 +500,23 @@ async def run_classifier_inference_on_batch_of_documents(
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    failures: list[Exception] = []
+
     for result in results:
         if isinstance(result, Exception):
             logger.exception(f"Failed to process document: {result}")
+            failures.append(result)
+        elif result is None:
+            continue
+        else:
+            raise ValueError(
+                f"Unexpected type of result. Type: `{type(result)}`, value: `{result}`"
+            )
+
+    if len(failures) > 0:
+        raise ValueError(f"Failed to process {len(failures)}/{len(results)} documents")
+
+    return None
 
 
 @flow(
@@ -556,6 +573,8 @@ async def classifier_inference(
         flow_name=flow_name, aws_env=config.aws_env
     )
 
+    failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
+
     for classifier_spec in classifier_specs:
         batches = iterate_batch(validated_file_stems, batch_size)
 
@@ -574,6 +593,21 @@ async def classifier_inference(
             for batch in batches
         ]
 
-        await asyncio.gather(*tasks)
+        results: list[FlowRun] = await asyncio.gather(*tasks)
+
+        for result in results:
+            # We'd never expect the flow run name to be missing, but
+            # Prefect does account for that in their class.
+            name: str | UUID = result.flow_run_name or result.name
+            if result.state is None:
+                failures[classifier_spec].append(name)
+            else:
+                if result.state.type != StateType.COMPLETED:
+                    failures[classifier_spec].append(name)
+
+    if failures:
+        raise ValueError(
+            f"some classifier specs. had failures: {', '.join(map(str, failures.keys()))}"
+        )
 
     print("Finished running classifier inference.")
