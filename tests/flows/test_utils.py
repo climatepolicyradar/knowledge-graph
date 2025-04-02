@@ -126,7 +126,7 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
         ),
     )
 
-    assert file_stems == [document_id, f"{document_id}_translated_en"]
+    assert file_stems == [f"{document_id}_translated_en"]
 
 
 def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) -> None:
