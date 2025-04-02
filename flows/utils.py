@@ -127,8 +127,8 @@ def get_file_stems_for_document_id(
     Example:
     "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en"]
 
-    Note that we don't include the original documemt id in the list of stems.
-    This is because we are looking for only english language documents.
+    Note that we don't include the original document ID in the list of stems.
+    This is because we are looking for only English language documents.
     """
     stems = []
 
