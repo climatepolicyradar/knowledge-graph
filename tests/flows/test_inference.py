@@ -294,8 +294,7 @@ async def test_run_classifier_inference_on_document(
         classifier=classifier,
     )
 
-    # Check the return value is a tuple with the expected values
-    assert result == (document_id, classifier_name, classifier_alias)
+    assert result is None
 
     # Verify that labels were stored in S3
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
