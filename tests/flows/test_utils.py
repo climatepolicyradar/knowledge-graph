@@ -163,9 +163,7 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
     )
     assert sorted(document_paths) == sorted(
         [
-            f"s3://{test_config.cache_bucket}/"
-            f"{test_config.document_target_prefix}/"
-            f"{classifier_spec.name}/{classifier_spec.alias}/{file_name}"
-            for file_name in s3_file_names
+            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
+            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )
