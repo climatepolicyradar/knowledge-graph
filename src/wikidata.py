@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import httpx
 from pydantic import ValidationError
@@ -16,31 +17,53 @@ class WikidataSession:
     WIKIDATA_API_BASE_URL = "https://www.wikidata.org/w/api.php"
     WIKIDATA_SPARQL_BASE_URL = "https://query.wikidata.org/sparql"
 
+    INSTANCE_OF_PROPERTY = "P31"
+
     def __init__(self):
-        self.session = httpx.Client(headers={"Accept": "application/json"})
+        """Initialize a WikidataSession with appropriate timeouts and headers"""
+        self.session = httpx.Client(
+            headers={"Accept": "application/json"},
+            timeout=300.0,
+        )
 
     def __repr__(self) -> str:
         """Return a string representation of the WikidataSession"""
         return f"<WikidataSession: {self.WIKIDATA_API_BASE_URL}>"
 
     def get_property_values(
-        self, property_id: str, entity_id: WikibaseID, inverse: bool = False
+        self,
+        property_id: str,
+        entity_id: WikibaseID,
+        inverse: bool = False,
+        limit: Optional[int] = None,
+        page_size: int = 1000,
+        offset: int = 0,
     ) -> list[WikibaseID]:
         """
         Get all entities related to a given entity through a specific property.
 
-        Args:
-            property_id (str): The Wikidata property ID (e.g., 'P31' for instance-of)
-            entity_id (WikibaseID): The Wikidata ID to search for
-            inverse (bool): If True, search for entities that are the object of the property
-                          If False, search for entities that are the subject of the property
-                          Example: For P31 (instance-of):
-                          - inverse=False: "What are instances of X?"
-                          - inverse=True: "What is X an instance of?"
-
-        Returns:
-            list[WikibaseID]: A list of Wikidata IDs related through the property
+        :param str property_id: The Wikidata property ID (e.g., 'P31' for "instance of")
+        :param WikibaseID entity_id: The Wikidata ID to search for
+        :param bool inverse: If True, search for entities that are the object of the property.
+            If False, search for entities that are the subject of the property.
+            Example: For P31 (instance of):
+            - inverse=False: "What are instances of X?"
+            - inverse=True: "What is X an instance of?"
+        :param Optional[int] limit: Maximum number of results to return in total. If
+            None, all results will be returned.
+        :param int page_size: Maximum number of results to return per query to the
+            wikidata SPARQL endpoint
+        :param int offset: Offset for pagination
+        :return list[WikibaseID]: A list of Wikidata IDs related through the property
         """
+        # Adjust page_size if it would exceed the total limit
+        current_page_size = page_size
+        if limit is not None:
+            remaining = limit - offset
+            if remaining <= 0:
+                return []
+            current_page_size = min(page_size, remaining)
+
         # Put together a SPARQL query based on the direction of the relationship
         if inverse:
             query = f"""
@@ -48,6 +71,8 @@ class WikidataSession:
               wd:{entity_id} wdt:{property_id} ?item.
               SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
             }}
+            LIMIT {current_page_size}
+            OFFSET {offset}
             """
         else:
             query = f"""
@@ -55,6 +80,8 @@ class WikidataSession:
               ?item wdt:{property_id} wd:{entity_id}.
               SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
             }}
+            LIMIT {current_page_size}
+            OFFSET {offset}
             """
 
         try:
@@ -71,40 +98,73 @@ class WikidataSession:
                 qids.append(WikibaseID(item_id))
 
             logger.debug(
-                f"Found {len(qids)} entities related to {entity_id} through property {property_id}"
-                f" (inverse={inverse})"
+                f"Found {len(qids)} entities related to {entity_id} through property {property_id} "
+                f"(inverse={inverse}, offset={offset}, page_size={page_size})"
             )
+
+            # Check whether we've got a full page of results and if we're still under the
+            # user-specified limit. If so, fetch the next page of results
+            got_a_full_page_of_results = len(qids) == current_page_size
+            still_under_the_limit = limit is None or (offset + len(qids)) < limit
+
+            if got_a_full_page_of_results and still_under_the_limit:
+                next_page = self.get_property_values(
+                    property_id,
+                    entity_id,
+                    inverse,
+                    limit,
+                    page_size,
+                    offset + len(qids),
+                )
+                qids.extend(next_page)
+
             return qids
 
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error during SPARQL query: {e}")
+            logger.error(
+                f"HTTP error during SPARQL query for {entity_id} with property {property_id}: {e}"
+            )
             raise
         except KeyError as e:
-            logger.error(f"Unexpected response format: {e}")
+            logger.error(
+                f"Unexpected response format for {entity_id} with property {property_id}: {e}"
+            )
             raise ValueError(
                 f"Unexpected response format from Wikidata SPARQL endpoint: {e}"
             )
         except Exception as e:
-            logger.error(f"Error during SPARQL query: {e}")
+            logger.error(
+                f"Error during SPARQL query for {entity_id} with property {property_id}: {e}"
+            )
             raise
 
-    def get_instances_of(self, entity_id: WikibaseID) -> list[WikibaseID]:
+    def get_instances_of(
+        self, entity_id: WikibaseID, limit: Optional[int] = None
+    ) -> list[WikibaseID]:
         """
-        Get all instances of a given Wikidata entity
+        Get all instances of a given Wikidata entity.
 
-        This is a convenience wrapper around get_property_values for the common
-        case of finding instances of a class using the P31 property.
+        :param WikibaseID entity_id: The Wikidata ID to find instances of
+        :param Optional[int] limit: Maximum number of results to return
+        :return list[WikibaseID]: A list of Wikidata IDs that are instances of the entity
         """
-        return self.get_property_values("P31", entity_id)
+        return self.get_property_values(
+            self.INSTANCE_OF_PROPERTY, entity_id, limit=limit
+        )
 
-    def get_parent_entities(self, entity_id: WikibaseID) -> list[WikibaseID]:
+    def get_parent_entities(
+        self, entity_id: WikibaseID, limit: Optional[int] = None
+    ) -> list[WikibaseID]:
         """
-        Get all parent entities of a given Wikidata entity
+        Get all parent entities of a given Wikidata entity.
 
-        This is a convenience wrapper around get_property_values for finding parent
-        items of a given Wikidata entity using the P31 property.
+        :param WikibaseID entity_id: The Wikidata ID to find parent entities of
+        :param Optional[int] limit: Maximum number of results to return
+        :return list[WikibaseID]: A list of Wikidata IDs that are parent entities
         """
-        return self.get_property_values("P31", entity_id, inverse=True)
+        return self.get_property_values(
+            self.INSTANCE_OF_PROPERTY, entity_id, inverse=True, limit=limit
+        )
 
     def get_concept(self, entity_id: WikibaseID) -> Concept:
         """Get a concept from Wikidata by its ID"""
@@ -116,8 +176,10 @@ class WikidataSession:
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             raise ConceptNotFoundError(wikibase_id=entity_id) from e
-
-        entity_data = response.json().get("entities", {}).get(entity_id, {})
+        try:
+            entity_data = response.json()["entities"][str(entity_id)]
+        except KeyError as e:
+            raise ValueError(f"Could not parse data from {response.url}") from e
 
         preferred_label = entity_data.get("labels", {}).get("en", {}).get("value")
         if preferred_label is None:
@@ -127,30 +189,30 @@ class WikidataSession:
 
         description = entity_data.get("descriptions", {}).get("en", {}).get("value")
 
-        non_english_preferred_labels = [
-            label.get("value")
-            for label in entity_data.get("labels", {}).values()
-            if label.get("language") != "en"
-        ]
-        all_language_aliases = [
-            alias.get("value")
-            for group_of_aliases_by_language in entity_data.get("aliases", {}).values()
-            for alias in group_of_aliases_by_language
+        aliases = [
+            alias.get("value") for alias in entity_data.get("aliases", {}).get("en", [])
         ]
 
-        return Concept(
+        concept = Concept(
             wikibase_id=entity_id,
             preferred_label=preferred_label,
             description=description,
-            alternative_labels=list(
-                set(non_english_preferred_labels + all_language_aliases)
-            ),
+            alternative_labels=aliases,
         )
+        return concept
 
-    def get_concepts(self, entity_ids: list[WikibaseID]) -> list[Concept]:
-        """Get multiple concepts from Wikidata"""
+    def get_concepts(
+        self, entity_ids: list[WikibaseID], limit: Optional[int] = None
+    ) -> list[Concept]:
+        """
+        Get multiple concepts from Wikidata.
+
+        :param list[WikibaseID] entity_ids: The Wikidata IDs to fetch concepts for
+        :param Optional[int] limit: Maximum number of concepts to return
+        :return list[Concept]: A list of concepts
+        """
         concepts = []
-        for entity_id in entity_ids:
+        for entity_id in entity_ids[:limit]:
             try:
                 concept = self.get_concept(entity_id)
                 concepts.append(concept)
