@@ -298,7 +298,7 @@ async def cleanups_by_s3(
         ]
 
         logger.info(f"Gathering cleanups tasks for batch #{i}")
-        results: list[None | FlowRun] = await asyncio.gather(
+        results: list[None | BaseException | FlowRun] = await asyncio.gather(
             *cleanups_tasks, return_exceptions=True
         )
         logger.info(f"Gathered cleanups tasks for batch #{i}")

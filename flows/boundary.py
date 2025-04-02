@@ -1126,16 +1126,18 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
         for labelled_passage in document_labelled_passages
     }
 
+    logger.info(
+        f"starting partial updates for {len(grouped_concepts)} grouped concepts"
+    )
+
+    batches = iterate_batch(
+        list(grouped_concepts.items()),
+        batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
+    )
+
+    has_failures = False
+
     with cm:
-        logger.info(
-            f"starting partial updates for {len(grouped_concepts)} grouped concepts"
-        )
-
-        batches = iterate_batch(
-            list(grouped_concepts.items()),
-            batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
-        )
-
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
@@ -1158,6 +1160,20 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
                 f"gathered partial {len(results)} updates tasks for batch {batch_num}"
             )
 
+            failures = list(
+                filter(
+                    lambda result: isinstance(result, Exception),
+                    results,
+                )
+            )
+
+            # It seems odd to not worry about the failures. When we
+            # calculate the concepts' counts though, we account for
+            # failures explicitly.
+            #
+            # That accounting is carried over implicitly into updating
+            # S3 with the final concepts' counts.
+
             concepts_counts = calculate_concepts_counts_from_results(results, batch)
 
             await update_s3_with_latest_concepts_counts(
@@ -1167,6 +1183,17 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
                 concepts_counts_prefix=concepts_counts_prefix,
                 document_labelled_passages=document_labelled_passages,
             )
+
+            # Now, we finally do a little bit of worrying about
+            # failures, so they aren't invisible.
+
+            if failures:
+                has_failures = True
+
+    if has_failures:
+        raise ValueError("there was at least 1 failure")
+
+    return None
 
 
 def remove_concepts_from_existing_vespa_concepts(
