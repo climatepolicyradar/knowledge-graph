@@ -4,6 +4,7 @@ from pathlib import Path
 
 import boto3
 import pytest
+from botocore.client import ClientError
 from cpr_sdk.parser_models import BlockType
 from prefect.testing.utilities import prefect_test_harness
 
@@ -316,6 +317,36 @@ async def test_run_classifier_inference_on_document(
         assert "id" in label
         assert "text" in label
         assert "spans" in label
+
+
+@pytest.mark.asyncio
+async def test_run_classifier_inference_on_document_missing(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+):
+    # Setup
+    _, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+    classifier_name = "Q788"
+    classifier_alias = "latest"
+
+    # Load classifier
+    classifier = await load_classifier(
+        mock_run, test_config, classifier_name, classifier_alias
+    )
+
+    document_id = "CCLW.executive.8133.0"
+    with pytest.raises(ClientError) as excinfo:
+        await run_classifier_inference_on_document(
+            config=test_config,
+            file_stem=document_id,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+            classifier=classifier,
+        )
+    assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
 
 
 @pytest.mark.parametrize(
