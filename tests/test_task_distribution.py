@@ -4,7 +4,6 @@ from hypothesis import strategies as st
 
 from src.argilla_v2 import ArgillaSession
 
-
 session = ArgillaSession()
 
 
