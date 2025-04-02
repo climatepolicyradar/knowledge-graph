@@ -75,4 +75,4 @@ jobs:
         run: just vespa_dev_setup
 
       - name: Run tests
-        run: just test -v -m "'not flaky_on_ci and not transformers'" --ignore tests/test_argilla_v2.py --ignore tests/test_task_distribution.py
+        run: just test -v -m "'not flaky_on_ci and not transformers'" --ignore tests/test_argilla_v2.py,tests/test_task_distribution.py
