@@ -989,10 +989,6 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
-            # We query vespa for document passages that contain a matching import id.
-            # The document imported contains the file stem which could contain a
-            # translated suffix. We remove this suffix to get the document import id.
-            # E.g. CCLW.executive.1.1_translated_en -> CCLW.executive.1.1
             document_import_id = remove_translated_suffix(document_importer[0])
 
             partial_update_tasks = [
@@ -1146,7 +1142,7 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
             partial_update_tasks = [
                 partial_update_text_block(
                     text_block_id=text_block_id,
-                    document_import_id=document_importer[0],
+                    document_import_id=remove_translated_suffix(document_importer[0]),
                     concepts=concepts,
                     vespa_search_adapter=vespa_search_adapter,
                     update_function=remove_concepts_from_existing_vespa_concepts,
