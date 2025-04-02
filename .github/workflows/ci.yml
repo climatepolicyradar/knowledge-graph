@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: "Lint"
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install poetry
+        shell: bash
+        run: pipx install poetry==1.8.2
+
+      - name: Install just
+        run: pipx install rust-just
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: poetry
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Run linting
+        run: just lint-all
+
+  test:
+    runs-on: ubuntu-latest
+    name: "Test"
+    needs: [lint]
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install poetry
+        shell: bash
+        run: pipx install poetry==1.8.2
+
+      - name: Install just
+        run: pipx install rust-just
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: poetry
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Install latest Vespa CLI
+        env:
+          VESPA_CLI_VERSION: 8.250.43
+        run: |
+          mkdir vespa-cli
+          curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | \
+            tar -zxf - -C vespa-cli --strip-component=1
+          echo "vespa-cli/bin" >> $GITHUB_PATH
+
+      - name: Setup local Vespa
+        run: just vespa_dev_setup
+
+      - name: Run tests
+        run: just test -v -m "'not flaky_on_ci and not transformers'" --ignore tests/test_argilla_v2.py
