@@ -590,7 +590,7 @@ async def classifier_inference(
         for result in results:
             # We'd never expect the flow run name to be missing, but
             # Prefect does account for that in their class.
-            name: str | UUID = result.flow_run_name or result.name
+            name: str = result.name
             if result.state is None:
                 failures[classifier_spec].append(name)
             else:
