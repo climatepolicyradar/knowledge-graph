@@ -2,6 +2,7 @@ import os
 from typing import Optional
 
 from datasets import Dataset, load_dataset
+from huggingface_hub import get_collection, add_collection_item
 
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -52,6 +53,17 @@ class HuggingfaceSession:
             text=row["text"],
             spans=[Span(**s) for s in row["spans"]],
             metadata=row["metadata"],
+        )
+
+    def add_dataset_to_collection(
+        self, dataset_name: str, collection_slug: str
+    ) -> None:
+        """Adds the dataset to a collection"""
+        add_collection_item(
+            collection_slug=f"{self.organisation}/{collection_slug}",
+            item_id=dataset_name,
+            item_type="dataset",
+            token=self.token,
         )
 
     def push(self, dataset_name: str, labelled_passages: list[LabelledPassage]) -> None:
