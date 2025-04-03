@@ -5,7 +5,7 @@ from io import BytesIO
 import boto3
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger, task
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from pydantic import SecretStr
 
 from flows.deindex import deindex_labelled_passages_from_s3_to_vespa
