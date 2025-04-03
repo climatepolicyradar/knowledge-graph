@@ -1,15 +1,14 @@
 """Flow to deploy an automated backup of Argilla to Huggingface"""
 
 import os
+from logging import getLogger
 
-from requests import exceptions
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
+from requests import exceptions
 
-from logging import getLogger
 from src.argilla_v2 import ArgillaSession
 from src.huggingface import HuggingfaceSession
-
 
 logger = getLogger(__name__)
 
