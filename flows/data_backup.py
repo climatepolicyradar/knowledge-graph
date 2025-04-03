@@ -34,6 +34,7 @@ def data_backup():
     argilla_session = ArgillaSession()
     hf_session = HuggingfaceSession()
 
+    error = False
     datasets = argilla_session.get_all_datasets("knowledge-graph")
     for dataset in datasets:
         labelled_passages = argilla_session.dataset_to_labelled_passages(dataset)
@@ -43,9 +44,15 @@ def data_backup():
                 dataset.name, KNOWLEDGE_GRAPH_COLLECTION
             )
         except exceptions.ReadTimeout:
+            error = True
             logger.warning(
                 f"Read timeout while pushing to Huggingface. Skipping dataset {dataset.name}"
             )
+
+    if error:
+        raise exceptions.ReadTimeout(
+            "Read timeout while pushing to Huggingface. Check logs for details."
+        )
 
 
 if __name__ == "__main__":
