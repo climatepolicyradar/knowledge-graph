@@ -64,6 +64,7 @@ class HuggingfaceSession:
         add_collection_item(
             collection_slug=f"{self.organisation}/{collection_slug}",
             item_id=dataset_name,
+            exists_ok=True,
             item_type="dataset",
             token=self.token,
         )
