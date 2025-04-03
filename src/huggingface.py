@@ -1,8 +1,10 @@
 import os
+
+from tenacity import retry, stop_after_attempt, wait_fixed
 from typing import Optional
 
 from datasets import Dataset, load_dataset
-from huggingface_hub import get_collection, add_collection_item
+from huggingface_hub import add_collection_item
 
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -66,6 +68,7 @@ class HuggingfaceSession:
             token=self.token,
         )
 
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(3))
     def push(self, dataset_name: str, labelled_passages: list[LabelledPassage]) -> None:
         """Pushes the dataset to the hub"""
         dataset = Dataset.from_dict(
