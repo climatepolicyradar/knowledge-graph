@@ -25,6 +25,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
+from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
@@ -815,19 +816,14 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     aws_env: AwsEnv,
     as_deployment: bool,
     partial_update_flow: Operation,
+    ttl_per_task_s: int,
 ) -> FlowRun | None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
-    logger = get_run_logger()
-    logger.info(
-        "Running partial updates of concepts for batch as sub-flow or deployment: "
-        f"batch length {len(documents_batch)}, as_deployment: {as_deployment}"
-    )
-
     if as_deployment:
         flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        return await run_deployment(
+        flow_run: FlowRun = await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "documents_batch": documents_batch,
@@ -836,7 +832,14 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                 "concepts_counts_prefix": concepts_counts_prefix,
                 "partial_update_flow": partial_update_flow,
             },
-            timeout=3600,
+            # Return the metadata immediately
+            timeout=0,
+        )
+
+        # Now, do the actual waiting, since we have the metadata
+        return await wait_for_flow_run(
+            flow_run_id=flow_run.id,
+            timeout=ttl_per_task_s,  # Seconds
         )
 
     return await run_partial_updates_of_concepts_for_batch(
@@ -895,15 +898,27 @@ async def updates_by_s3(
     for i, updates_task_batch in enumerate(updates_task_batches, start=1):
         logger.info(f"Processing updates task batch #{i}")
 
+        ttl_per_task_s = 60 * 60
+
         updates_tasks = [
-            run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-                documents_batch=documents_batch,
-                documents_batch_num=documents_batch_num,
-                cache_bucket=cache_bucket,
-                concepts_counts_prefix=concepts_counts_prefix,
-                aws_env=aws_env,
-                as_deployment=as_deployment,
-                partial_update_flow=partial_update_flow,
+            asyncio.wait_for(
+                run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+                    documents_batch=documents_batch,
+                    documents_batch_num=documents_batch_num,
+                    cache_bucket=cache_bucket,
+                    concepts_counts_prefix=concepts_counts_prefix,
+                    aws_env=aws_env,
+                    as_deployment=as_deployment,
+                    partial_update_flow=partial_update_flow,
+                    ttl_per_task_s=ttl_per_task_s,
+                ),
+                # We could just rely on the timeout via Prefect, but,
+                # this may also not be running on Prefect.
+                #
+                # Realistically, there is some spin-up time on
+                # Prefect, for the task to actually be executing our
+                # code, so be aware of that.
+                timeout=ttl_per_task_s,  # Seconds
             )
             for documents_batch_num, documents_batch in enumerate(
                 updates_task_batch, start=1
@@ -911,30 +926,32 @@ async def updates_by_s3(
         ]
 
         logger.info(f"Gathering updates tasks for batch #{i}")
-        batch_results: list[Any] = await asyncio.gather(
+        batch_results: list[FlowRun | BaseException | None] = await asyncio.gather(
             *updates_tasks, return_exceptions=True
         )
         logger.info(f"Gathered updates tasks for batch #{i}")
 
         for result in batch_results:
-            if isinstance(result, Exception):
-                failures += 1
-                logger.error(
-                    f"failed to process document batch in updates task batch #{i}: {str(result)}",
-                )
-                continue
-
-            if as_deployment:
-                if result is None:
-                    continue
-            else:
-                if isinstance(result, list):
-                    for task_result in result:
-                        if task_result.type != StateType.COMPLETED:
-                            failures += 1
-                            logger.error(
-                                f"flow run task_result's state was not completed. Flow run name: `{task_result.name}`",
-                            )
+            match result:
+                case Exception() as e:
+                    failures += 1
+                    logger.error(
+                        f"failed to process document batch in updates task batch #{i}: {str(e)}",
+                    )
+                case FlowRun() as flow_run if (
+                    flow_run.state.type != StateType.COMPLETED
+                ):
+                    failures += 1
+                    logger.error(
+                        f"flow run task_result's state was not completed. Flow run name: `{flow_run.name}`",
+                    )
+                case None:
+                    pass
+                case _:
+                    failures += 1
+                    logger.error(
+                        f"unexpected result type: {type(result)}",
+                    )
 
     if failures:
         raise ValueError("there was at least 1 task that failed")

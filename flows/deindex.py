@@ -7,6 +7,7 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
+from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_run_logger
 
 import scripts.update_classifier_spec
@@ -225,6 +226,7 @@ async def cleanup_objects_for_batch_flow_or_deployment(
     concepts_counts_prefix: str,
     aws_env: AwsEnv,
     as_deployment: bool,
+    ttl_per_task_s: int,
 ) -> None | FlowRun:
     """Run clean-up objects for a batch of documents as a sub-flow or deployment."""
     logger = get_run_logger()
@@ -245,10 +247,15 @@ async def cleanup_objects_for_batch_flow_or_deployment(
                 "cache_bucket": cache_bucket,
                 "concepts_counts_prefix": concepts_counts_prefix,
             },
-            timeout=3600,
+            # Return the metadata immediately
+            timeout=0,
         )
 
-        return flow_run
+        # Now, do the actual waiting, since we have the metadata
+        return await wait_for_flow_run(
+            flow_run_id=flow_run.id,
+            timeout=ttl_per_task_s,  # Seconds
+        )
 
     return await run_cleanup_objects_for_batch(
         documents_batch=documents_batch,
@@ -283,14 +290,26 @@ async def cleanups_by_s3(
     for i, cleanups_task_batch in enumerate(cleanups_task_batches, start=1):
         logger.info(f"Processing clean-ups task batch #{i}")
 
+        ttl_per_task_s = 30 * 60
+
         cleanups_tasks = [
-            cleanup_objects_for_batch_flow_or_deployment(
-                documents_batch=documents_batch,
-                documents_batch_num=documents_batch_num,
-                cache_bucket=cache_bucket,
-                concepts_counts_prefix=concepts_counts_prefix,
-                aws_env=aws_env,
-                as_deployment=as_deployment,
+            asyncio.wait_for(
+                cleanup_objects_for_batch_flow_or_deployment(
+                    documents_batch=documents_batch,
+                    documents_batch_num=documents_batch_num,
+                    cache_bucket=cache_bucket,
+                    concepts_counts_prefix=concepts_counts_prefix,
+                    aws_env=aws_env,
+                    as_deployment=as_deployment,
+                    ttl_per_task_s=ttl_per_task_s,
+                ),
+                # We could just rely on the timeout via Prefect, but,
+                # this may also not be running on Prefect.
+                #
+                # Realistically, there is some spin-up time on
+                # Prefect, for the task to actually be executing our
+                # code, so be aware of that.
+                timeout=ttl_per_task_s,  # Seconds
             )
             for documents_batch_num, documents_batch in enumerate(
                 cleanups_task_batch, start=1
