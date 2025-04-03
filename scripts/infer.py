@@ -1,7 +1,7 @@
 from typing import Optional
 
 import typer
-from async_typer import AsyncTyper
+from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment  # type: ignore
 from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
@@ -15,7 +15,7 @@ from scripts.cloud import (
     parse_aws_env,
 )
 
-app = AsyncTyper()
+app = typer.Typer()
 console = Console()
 
 
@@ -44,14 +44,35 @@ def convert_classifier_specs(
     return classifier_specs
 
 
-@app.async_command(
+async def _trigger_deployment(
+    deployment_name: str,
+    classifiers: list[ClassifierSpec] | None,
+    documents: list[str] | None,
+) -> FlowRun:
+    try:
+        flow_run = await run_deployment(
+            name=deployment_name,
+            parameters={
+                "classifier_specs": classifiers,
+                "document_ids": documents,
+            },
+            # Don't wait for the flow to finish before continuing script
+            timeout=0,
+        )
+        return flow_run
+    except Exception as e:
+        console.log(f"[red]Error running deployment: {e}[/red]")
+        raise e
+
+
+@app.command(
     help="""Run classifier inference on documents.
 
         This triggers the deployed inference flow to run against documents in a
         pipeline cache bucket and save the labelled passage results back to s3.
         """
 )
-async def main(
+def main(
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
@@ -88,27 +109,20 @@ async def main(
     ] = [],
 ):
     # Set to None if empty as Typer reads it as a list
-    documents = documents or None  # type: ignore
+    documents_or_default = documents or None  # type: ignore
     # Set to None if empty as Typer reads it as a list
-    classifiers = classifiers or None  # type: ignore
+    classifiers_or_default: list[ClassifierSpec] | None = classifiers or None  # type: ignore
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
     deployment_name = f"{classifier_inference.name}/{generate_deployment_name(classifier_inference.name, aws_env)}"  # pyright: ignore[reportFunctionMemberAccess]
     console.log(f"Starting run for deployment: {deployment_name}")
+    import asyncio
 
-    try:
-        flow_run = await run_deployment(
-            name=deployment_name,
-            # Don't wait for the flow to finish before continuing script
-            timeout=0,
-            parameters={
-                "classifier_specs": classifiers,
-                "document_ids": documents,
-            },
-        )
-    except Exception as e:
-        console.log(f"[red]Error running deployment: {e}[/red]")
-        raise e
+    flow_run_coroutine = _trigger_deployment(
+        deployment_name, classifiers_or_default, documents_or_default
+    )
+    # Run the coroutine
+    flow_run = asyncio.run(flow_run_coroutine)
 
     flow_url = f"{PREFECT_UI_URL.value()}/runs/flow-run/{flow_run.id}"  # type: ignore
     console.log(f"See progress at: [green]{flow_url}[/green]")

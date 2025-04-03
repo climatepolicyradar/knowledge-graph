@@ -4,6 +4,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+from scripts.cloud import AwsEnv
 from scripts.infer import app, convert_classifier_specs, main
 
 runner = CliRunner()
@@ -96,15 +97,14 @@ def test_cli_no_options():
         assert call_kwargs["parameters"]["document_ids"] is None
 
 
-@pytest.mark.asyncio
-async def test_main_function_basic():
+def test_main_function_basic():
     """Test the core function with a classifier"""
     mock_run = AsyncMock()
     mock_run.return_value.id = "test-id"
 
     with patch("scripts.infer.run_deployment", new=mock_run):
-        await main(
-            aws_env="staging",
+        main(
+            aws_env=AwsEnv.staging,
             classifiers=convert_classifier_specs(["Q123"]),
             documents=[],
         )
@@ -117,15 +117,14 @@ async def test_main_function_basic():
         assert call_kwargs["parameters"]["document_ids"] is None
 
 
-@pytest.mark.asyncio
-async def test_main_function_with_documents():
+def test_main_function_with_documents():
     """Test the core function with both classifier and documents"""
     mock_run = AsyncMock()
     mock_run.return_value.id = "test-id"
 
     with patch("scripts.infer.run_deployment", new=mock_run):
-        await main(
-            aws_env="staging",
+        main(
+            aws_env=AwsEnv.staging,
             classifiers=convert_classifier_specs(["Q123:v1"]),
             documents=["doc1", "doc2"],
         )
@@ -138,15 +137,14 @@ async def test_main_function_with_documents():
         assert call_kwargs["parameters"]["document_ids"] == ["doc1", "doc2"]
 
 
-@pytest.mark.asyncio
-async def test_main_function_no_options():
+def test_main_function_no_options():
     """Test the core function with minimal arguments"""
     mock_run = AsyncMock()
     mock_run.return_value.id = "test-id"
 
     with patch("scripts.infer.run_deployment", new=mock_run):
-        await main(
-            aws_env="staging",
+        main(
+            aws_env=AwsEnv.staging,
             classifiers=[],
             documents=[],
         )

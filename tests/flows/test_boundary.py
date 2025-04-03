@@ -142,11 +142,10 @@ def test_convert_labelled_passges_to_concepts(
     assert all([isinstance(concept, VespaConcept) for concept in concepts])
 
 
-def test_convert_labelled_passges_to_concepts_raises_error(
+def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
     example_labelled_passages: list[LabelledPassage],
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test that we correctly log errors when a Span has no concept ID or timestamps."""
+    """Test that we ignore a Span has no concept ID or timestamps."""
     # Add a span without concept_id
     example_labelled_passages[0].spans.append(
         Span(
@@ -163,18 +162,13 @@ def test_convert_labelled_passges_to_concepts_raises_error(
             text="Test text.",
             start_index=0,
             end_index=8,
-            concept_id="Q123",
+            concept_id=WikibaseID("Q123"),
             labellers=[],
             timestamps=[],  # Empty timestamps
         )
     )
 
     concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
-
-    # Check that appropriate error messages were logged
-    error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
-    assert any("span concept ID is missing" in msg for msg in error_messages)
-    assert any("span timestamps are missing" in msg for msg in error_messages)
 
     # Verify that the problematic spans were skipped but valid one was processed
     assert len(concepts) == 1

@@ -9,7 +9,7 @@ from cpr_sdk.s3 import _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from vespa.io import VespaResponse
 
 from flows.boundary import (

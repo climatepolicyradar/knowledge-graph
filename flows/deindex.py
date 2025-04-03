@@ -6,7 +6,7 @@ import boto3
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 
 import scripts.update_classifier_spec

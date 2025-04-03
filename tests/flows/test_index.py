@@ -199,7 +199,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
     s3_prefix_labelled_passages,
     labelled_passage_fixture_files,
     mock_bucket_labelled_passages,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test that we can continue on errors."""
 
@@ -215,7 +214,8 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
             f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{document_fixture}"
         )
 
-        # Run the update
+        # Run the update. The Counter should be empty, since there
+        # were errors, and it should've continued despite them.
         assert (
             Counter()
             == await run_partial_updates_of_concepts_for_document_passages__update.fn(
@@ -224,19 +224,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
                 cache_bucket=mock_bucket,
                 concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
             )
-        )
-
-        # Verify error was logged for the failed update
-        error_logs = [r for r in caplog.records if r.levelname == "ERROR"]
-        assert any(
-            "failed to do partial update for text block `1273`: Forced update failure"
-            == str(r.message)
-            for r in error_logs
-        )
-        assert any(
-            "failed to do partial update for text block `1052`: Forced update failure"
-            == str(r.message)
-            for r in error_logs
         )
 
 

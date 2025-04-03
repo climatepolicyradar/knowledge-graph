@@ -24,7 +24,7 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from prefect.logging import get_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
