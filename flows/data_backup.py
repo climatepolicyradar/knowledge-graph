@@ -2,11 +2,16 @@
 
 import os
 
+from requests import exceptions
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 
+from logging import getLogger
 from src.argilla_v2 import ArgillaSession
 from src.huggingface import HuggingfaceSession
+
+
+logger = getLogger(__name__)
 
 
 @task
@@ -32,8 +37,15 @@ def data_backup():
     datasets = argilla_session.get_all_datasets("knowledge-graph")
     for dataset in datasets:
         labelled_passages = argilla_session.dataset_to_labelled_passages(dataset)
-        hf_session.push(dataset.name, labelled_passages)
-        hf_session.add_dataset_to_collection(dataset.name, KNOWLEDGE_GRAPH_COLLECTION)
+        try:
+            hf_session.push(dataset.name, labelled_passages)
+            hf_session.add_dataset_to_collection(
+                dataset.name, KNOWLEDGE_GRAPH_COLLECTION
+            )
+        except exceptions.ReadTimeout:
+            logger.warning(
+                f"Read timeout while pushing to Huggingface. Skipping dataset {dataset.name}"
+            )
 
 
 if __name__ == "__main__":
