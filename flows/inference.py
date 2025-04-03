@@ -12,7 +12,6 @@ from uuid import UUID
 import boto3
 import prefect.artifacts as artifacts
 import wandb
-from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -405,14 +404,7 @@ async def run_classifier_inference_on_document(
 ) -> None:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with file stem {file_stem}")
-    try:
-        document = load_document(config, file_stem)
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchKey":
-            print(f"Document with file stem {file_stem} not found in cache bucket")
-            return None
-        else:
-            raise
+    document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
     if document.languages != ["en"]:
@@ -598,7 +590,7 @@ async def classifier_inference(
         for result in results:
             # We'd never expect the flow run name to be missing, but
             # Prefect does account for that in their class.
-            name: str | UUID = result.flow_run_name or result.name
+            name: str = result.name
             if result.state is None:
                 failures[classifier_spec].append(name)
             else:
