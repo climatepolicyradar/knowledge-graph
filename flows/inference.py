@@ -18,6 +18,7 @@ from prefect import flow
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
+from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
@@ -570,8 +571,12 @@ async def classifier_inference(
     for classifier_spec in classifier_specs:
         batches = iterate_batch(validated_file_stems, batch_size)
 
-        tasks = [
-            run_deployment(
+        ttl_per_task_s = 20 * 60
+
+        async def run_and_wait_for_deployment(
+            flow_name, deployment_name, batch, config, classifier_spec
+        ):
+            flow_run: FlowRun = await run_deployment(
                 name=f"{flow_name}/{deployment_name}",
                 parameters={
                     "batch": batch,
@@ -579,8 +584,32 @@ async def classifier_inference(
                     "classifier_name": classifier_spec.name,
                     "classifier_alias": classifier_spec.alias,
                 },
-                timeout=1200,
+                # Return the metadata immediately
+                timeout=0,
                 as_subflow=True,
+            )
+
+            return await wait_for_flow_run(
+                flow_run_id=flow_run.id,
+                timeout=ttl_per_task_s,  # Seconds
+            )
+
+        tasks = [
+            asyncio.wait_for(
+                run_and_wait_for_deployment(
+                    flow_name,
+                    deployment_name,
+                    batch,
+                    config,
+                    classifier_spec,
+                ),
+                # We could just rely on the timeout via Prefect, but,
+                # this may also not be running on Prefect.
+                #
+                # Realistically, there is some spin-up time on
+                # Prefect, for the task to actually be executing our
+                # code, so be aware of that.
+                timeout=ttl_per_task_s,  # Seconds
             )
             for batch in batches
         ]
