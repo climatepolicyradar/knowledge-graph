@@ -6,16 +6,14 @@ from datetime import datetime
 import huggingface_hub as hf
 import pandas as pd
 import typer
-
 from datasets import DatasetDict, load_dataset
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 
 # from src.argilla_legacy import concept_to_dataset_name
-from src.identifiers import WikibaseID, generate_identifier
+from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-from src.wikibase import WikibaseSession
 
 load_dotenv(find_dotenv())
 
@@ -81,16 +79,21 @@ def labelled_passage_from_row(
     return LabelledPassage(text=text, spans=spans, metadata=json.loads(row["metadata"]))
 
 
+# NOTE: this script was run with legacy argilla v1.
+# Since the legacy handling has been removed, this script will not work as is, but is still retained
+# for illustration purposes.
+
+
 @app.command()
 def main():
     # getting the target concepts
-    session = WikibaseSession(
-        os.getenv("WIKIBASE_USERNAME"),
-        os.getenv("WIKIBASE_PASSWORD"),
-        os.getenv("WIKIBASE_URL"),
-    )
+    # session = WikibaseSession(
+    #     os.getenv("WIKIBASE_USERNAME"),
+    #     os.getenv("WIKIBASE_PASSWORD"),
+    #     os.getenv("WIKIBASE_URL"),
+    # )
 
-    concepts = session.get_concepts(wikibase_ids=["Q1651", "Q1652", "Q1653"])  # type: ignore
+    # concepts = session.get_concepts(wikibase_ids=["Q1651", "Q1652", "Q1653"])  # type: ignore
 
     # getting the annotations from HF
     hf.login(token=os.getenv("HF_TOKEN"))
@@ -99,9 +102,6 @@ def main():
     df = ds["train"].to_pandas()
     assert isinstance(df, pd.DataFrame)
     console.log(f"✅ Loaded {len(df)} labelled passages from HF")
-    # NOTE: this script was run with legacy argilla v1.
-    # Since the legacy handling has been removed, this script will not work as is, but is still retained
-    # for illustration purposes.
 
     # wrangling and uploading to Argilla
     # rg_v1.init(

@@ -1,5 +1,4 @@
 import html
-import itertools
 import re
 
 from argilla import Argilla, Record, Response
