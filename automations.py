@@ -264,7 +264,7 @@ async def main() -> None:
         b_deployment_name=f"{PROJECT_NAME}-{classifier_inference.name}-{aws_env}",
         b_parameters={"use_new_and_updated": True},
         description="Start concept store inference with classifiers.",
-        enabled=True,
+        enabled=False,
         aws_env=aws_env,
         ignore=[AwsEnv.labs],
     )
