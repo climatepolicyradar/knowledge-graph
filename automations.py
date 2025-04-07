@@ -3,12 +3,14 @@
 import asyncio
 import logging
 import os
-from typing import List
-from uuid import UUID
+import re
+from datetime import timedelta
 
 import prefect.events.schemas.automations as automations
-from prefect.client import get_client
-from prefect.client.schemas.objects import Deployment
+import prefect.events.schemas.events as events
+from prefect.automations import Automation
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.responses import DeploymentResponse
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
@@ -28,56 +30,14 @@ ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
 
-async def read_automations_by_name(client, name: str) -> List[dict]:
-    """Read a list of automations from Prefect Cloud."""
-    response = await client._client.post(
-        "/automations/filter",
-        json={
-            "automations": {
-                "operator": "and_",
-                "name": {"any_": [name]},
-            },
-        },
-    )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-async def update_automation(client, automation_id: UUID, automation):
-    """Update an automation in Prefect Cloud."""
-    # The first step in preparing this to be serialised to JSON
-    json = automation.dict()
-
-    # Delete as it's null
-    del json["owner_resource"]
-    # Delete these as they're all sets which aren't serialisable, and
-    # also they're unused
-    del json["trigger"]["after"]
-    del json["trigger"]["for_each"]
-
-    # Transform these types to be serialisable
-    json["trigger"]["within"] = int(json["trigger"]["within"].total_seconds())
-    json["trigger"]["expect"] = list(json["trigger"]["expect"])
-    # This lens matches the structure returned in the target automation.
-    json["actions"][0]["deployment_id"] = str(json["actions"][0]["deployment_id"])
-
-    response = await client._client.put(
-        f"/automations/{automation_id}",
-        json=json,
-    )
-    response.raise_for_status
-
-
 def create_target_automation(
     a_flow_name: str,
-    a_deployment: Deployment,
-    b_deployment: Deployment,
+    a_deployment: DeploymentResponse,
+    b_deployment: DeploymentResponse,
     description: str,
     parameters: dict,
     enabled: bool,
-) -> automations.Automation:
+) -> Automation:
     """
     Create a copy of the `Automation` that triggers another `Deployment`.
 
@@ -91,40 +51,27 @@ def create_target_automation(
     watches for completion events from `Flow` A `Run`s and
     specifically from `Deployment` A, then launches `Deployment` B
     with the provided parameters.
-
-    Args:
-        a_flow_name: The name of the `Flow` that needs to complete first
-        a_deployment: The `Deployment` of `Flow` A that needs to complete
-        b_deployment: The `Deployment` to trigger after A completes
-        parameters: Parameters to pass to `Deployment` B when it's triggered
-        enabled: Whether the automation should run or not
-        description: A helpful description of what the `Automation` does
-
-    Returns:
-        A Prefect Automation object configured to trigger B after A completes
     """
-    return automations.Automation(
+    return Automation(
         name=f"trigger-{b_deployment.name}",
         description=description,
         enabled=enabled,
         # This is based on crafting the trigger in the web UI.
         trigger=automations.EventTrigger(
-            match={
+            match=events.ResourceSpecification(
                 # The `*` is to match on any ID
-                "prefect.resource.id": "prefect.flow-run.*",
-            },
-            match_related=automations.ResourceSpecification(
-                __root__={
-                    # This is the Deployment, for the specific AWS
-                    # environment, that started the `flow-run`.
-                    "prefect.resource.id": f"prefect.deployment.{a_deployment.id}",
-                    "prefect.resource.role": "deployment",
-                    "prefect.resource.name": a_deployment.name,
-                }
+                root={"prefect.resource.id": "prefect.flow-run.*"},
             ),
+            match_related={
+                # This is the Deployment, for the specific AWS
+                # environment, that started the `flow-run`.
+                "prefect.resource.id": f"prefect.deployment.{a_deployment.id}",
+                "prefect.resource.role": "deployment",
+                "prefect.resource.name": a_deployment.name,
+            },
             # > Reactive automations respond to the presence of the
             # > expected events ...
-            posture="Reactive",
+            posture=automations.Posture.Reactive,
             # > The number of events required for this Automation to
             # > trigger (for Reactive automations), or the number of
             # > events expected (for Proactive automations)
@@ -132,7 +79,7 @@ def create_target_automation(
             # > The time period over which the events must occur. For
             # > Reactive triggers, this may be as low as 0 seconds,
             # > but must be at least 10 seconds for Proactive triggers.
-            within=0,
+            within=timedelta(seconds=0),
             # > The event(s) this automation is expecting to see. If
             # > empty, this automation will evaluate any matched
             # > event.
@@ -155,6 +102,36 @@ def create_target_automation(
 
 def flow_deployment_names_id(flow_name, deployment_name):
     return f"{flow_name}/{deployment_name}"
+
+
+async def delete_if_exists(name: str) -> None:
+    """
+    Delete the Automation, if it exists.
+
+    Since there isn't an overwrite argument, like with Blocks, we
+    handle this ourselves.
+    """
+    try:
+        automation = await Automation.read(name=name)
+
+        print("Automation exists, deleting it")
+
+        assert await automation.delete()
+
+        print("Automation deleted")
+
+        return None
+    except ValueError as e:
+        error_message = str(e)
+        # From https://prefect-python-sdk-docs.netlify.app/prefect/automations/#prefect.automations.Automation.read
+        pattern = r"Automation with.*not found"
+
+        if re.match(pattern, error_message):
+            print("automation doesn't exist already, so nothing to do")
+            return None
+        else:
+            # It was a real problem, re-raise the excpetion
+            raise
 
 
 async def a_triggers_b(
@@ -216,41 +193,12 @@ async def a_triggers_b(
         enabled=enabled,
     )
 
-    automations = await read_automations_by_name(
-        client=client,
-        name=target.name,
-    )
+    print("deleting, if already exists...")
+    await delete_if_exists(name=target.name)
 
-    match len(automations):
-        case 0:
-            logger.info("Automation doesn't exist already, creating it")
-
-            automation_id = await client.create_automation(automation=target)
-
-            logger.info("Created automation with id='%s'", automation_id)
-        case 1:
-            automation = automations[0]
-
-            logger.info("Automation exists already, updating it")
-            logger.info(
-                "Read automation with id='%s', name='%s'",
-                automation["id"],
-                automation["name"],
-            )
-
-            await update_automation(
-                client=client,
-                automation_id=UUID(automation["id"]),
-                automation=target,
-            )
-
-            logger.info("Updated automation")
-        case _:
-            names = [auto["name"] for auto in automations]
-
-            raise ValueError(
-                f"Found multiple automations with name {target.name}: {names}"
-            )
+    print("creating...")
+    automation = await target.acreate()
+    print(f"created Automation with id=`{automation.id}`, name=`{automation.name}`")
 
 
 async def main() -> None:
