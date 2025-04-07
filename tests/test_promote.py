@@ -23,13 +23,13 @@ from scripts.promote import (
 
 @pytest.mark.parametrize("input_version", ["v1", "v10", "v0"])
 def test_version_valid(input_version):
-    assert str(Version(input_version)) == input_version
+    assert str(Version.from_str(input_version)) == input_version
 
 
-@pytest.mark.parametrize("invalid_version", ["1", "v", "v1.0", "latest"])
+@pytest.mark.parametrize("invalid_version", ["1", "v", "v1.0"])
 def test_version_invalid(invalid_version):
     with pytest.raises(ValueError):
-        Version(invalid_version)
+        Version.from_str(invalid_version)
 
 
 @pytest.mark.parametrize(
@@ -41,22 +41,27 @@ def test_version_invalid(invalid_version):
     ],
 )
 def test_version_comparison(version_a, version_b, expected):
-    assert (Version(version_a) < Version(version_b)) == expected
+    assert (Version.from_str(version_a) < Version.from_str(version_b)) == expected
 
 
 def test_version_sorting():
-    versions = [Version("v3"), Version("v1"), Version("v10"), Version("v2")]
+    versions = [
+        Version.from_str("v3"),
+        Version.from_str("v1"),
+        Version.from_str("v10"),
+        Version.from_str("v2"),
+    ]
     sorted_versions = sorted(versions)
     assert [str(v) for v in sorted_versions] == ["v1", "v2", "v3", "v10"]
 
 
 def test_version_sorting_with_larger_numbers():
     versions = [
-        Version("v3"),
-        Version("v1"),
-        Version("v10"),
-        Version("v2"),
-        Version("v20"),
+        Version.from_str("v3"),
+        Version.from_str("v1"),
+        Version.from_str("v10"),
+        Version.from_str("v2"),
+        Version.from_str("v20"),
     ]
     sorted_versions = sorted(versions)
     assert [str(v) for v in sorted_versions] == ["v1", "v2", "v3", "v10", "v20"]
@@ -68,7 +73,7 @@ def test_version_sorting_with_larger_numbers():
         (
             "Q123",
             "TestClassifier",
-            Version("v1"),
+            Version.from_str("v1"),
             AwsEnv.labs,
             AwsEnv.staging,
             None,
@@ -78,7 +83,7 @@ def test_version_sorting_with_larger_numbers():
         (
             "Q456",
             "AnotherClassifier",
-            Version("v2"),
+            Version.from_str("v2"),
             AwsEnv.staging,
             AwsEnv.production,
             None,
@@ -88,12 +93,22 @@ def test_version_sorting_with_larger_numbers():
         (
             "Q789",
             "ThirdClassifier",
-            Version("v3"),
+            Version.from_str("v3"),
             None,
             None,
             AwsEnv.labs,
             False,
             None,
+        ),
+        (
+            "Q789",
+            "ThirdClassifier",
+            Version.from_str("latest"),
+            None,
+            None,
+            AwsEnv.labs,
+            False,
+            ValueError,
         ),
     ],
 )
@@ -168,20 +183,19 @@ def test_main(
                 )
 
 
-def test_version_latest_not_supported():
-    with pytest.raises(ValueError, match="`latest` isn't yet supported"):
-        Version("latest")
-
-
 def test_version_equality():
-    assert Version("v1") == Version("v1")
-    assert Version("v1") == "v1"
-    assert Version("v1") != Version("v2")
-    assert Version("v1") != "v2"
+    assert Version.from_str("v1") == Version.from_str("v1")
+    assert Version.from_str("v1").value == 1
+    assert Version.from_str("v1") != Version.from_str("v2")
+    assert Version.from_str("v1").value != 2
 
 
 def test_version_hash():
-    versions = {Version("v1"), Version("v2"), Version("v1")}
+    versions = {
+        Version.from_str("v1"),
+        Version.from_str("v2"),
+        Version.from_str("v1"),
+    }
     assert len(versions) == 2
 
 
@@ -219,17 +233,17 @@ def test_get_bucket_name_for_aws_env(aws_env, expected_bucket):
         (
             "Q123",
             "TestClassifier",
-            Version("v1"),
+            Version.from_str("v1"),
         ),
         (
             "Q456",
             "AnotherClassifier",
-            Version("v2"),
+            Version.from_str("v2"),
         ),
         (
             "Q789",
             "ThirdClassifier",
-            Version("v10"),
+            Version.from_str("v10"),
         ),
     ],
 )
@@ -290,7 +304,7 @@ def test_validate_logins(promotion, login_states, expected_exception):
         (
             False,
             [],
-            Version("v1"),
+            Version.from_str("v1"),
             Within(value=AwsEnv.labs, primary=True),
             "test/path",
             None,
@@ -299,7 +313,7 @@ def test_validate_logins(promotion, login_states, expected_exception):
         (
             True,
             ["labs"],
-            Version("v1"),
+            Version.from_str("v1"),
             Within(value=AwsEnv.labs, primary=True),
             "test/path",
             None,
@@ -308,7 +322,7 @@ def test_validate_logins(promotion, login_states, expected_exception):
         (
             True,
             ["staging"],
-            Version("v1"),
+            Version.from_str("v1"),
             Within(value=AwsEnv.labs, primary=True),
             "test/path",
             "An artifact already exists with AWS environment aliases {'staging'}",
@@ -382,7 +396,7 @@ def test_find_artifact_by_version(artifacts, version, expected):
     mock_collection = Mock()
     mock_collection.artifacts.return_value = artifacts
 
-    result = find_artifact_by_version(mock_collection, Version(version))
+    result = find_artifact_by_version(mock_collection, Version.from_str(version))
 
     if expected is None:
         assert result is None
@@ -397,14 +411,14 @@ def test_find_artifact_by_version(artifacts, version, expected):
             Across(src=AwsEnv.labs, dst=AwsEnv.staging),
             "Q123",
             "TestClassifier",
-            Version("v1"),
+            Version.from_str("v1"),
             b"test content",
         ),
         (
             Across(src=AwsEnv.staging, dst=AwsEnv.production),
             "Q456",
             "AnotherClassifier",
-            Version("v2"),
+            Version.from_str("v2"),
             b"another test content",
         ),
     ],

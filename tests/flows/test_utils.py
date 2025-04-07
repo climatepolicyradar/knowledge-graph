@@ -16,6 +16,8 @@ from flows.utils import (
     s3_file_exists,
 )
 from scripts.cloud import ClassifierSpec
+from src.identifiers import WikibaseID
+from src.version import Version
 
 
 @pytest.mark.parametrize(
@@ -132,7 +134,9 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
 def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) -> None:
     """Test that we can get all document paths from a list of document IDs."""
 
-    classifier_spec = ClassifierSpec(name="Q123", alias="v1")
+    classifier_spec = ClassifierSpec(
+        name=WikibaseID("Q123"), alias=Version.from_str("v1")
+    )
     body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
     s3_file_names = [
         "CCLW.executive.1.1_translated_en.json",
@@ -147,7 +151,7 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
             Key=os.path.join(
                 test_config.document_target_prefix,
                 classifier_spec.name,
-                classifier_spec.alias,
+                str(classifier_spec.alias),
                 file_name,
             ),
             Body=body,

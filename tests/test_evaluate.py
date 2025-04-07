@@ -47,12 +47,12 @@ def test_print_metrics(capsys, metrics_df: pd.DataFrame):
         ),
         (
             None,
-            Version("v1"),
+            Version.from_str("v1"),
             "classifier and version should not be specified",
         ),
         (
             "TestClassifier",
-            Version("v1"),
+            Version.from_str("v1"),
             "classifier and version should not be specified",
         ),
     ],
@@ -69,7 +69,7 @@ def test_validate_local_args(classifier, version, expected_error):
 @pytest.mark.parametrize(
     "track,classifier,version,expected_error",
     [
-        (True, "TestClassifier", Version("v1"), None),
+        (True, "TestClassifier", Version.from_str("v1"), None),
         (False, None, None, None),
         (
             False,
@@ -80,13 +80,13 @@ def test_validate_local_args(classifier, version, expected_error):
         (
             False,
             None,
-            Version("v1"),
+            Version.from_str("v1"),
             "script was told not to track",
         ),
         (
             True,
             None,
-            Version("v1"),
+            Version.from_str("v1"),
             "without a classifier name",
         ),
         (
@@ -110,13 +110,18 @@ def test_validate_remote_args(track, classifier, version, expected_error):
     "track,classifier,version,expected_exception",
     [
         (True, None, None, None),
-        (True, None, Version("v1"), pytest.raises(typer.BadParameter)),
+        (True, None, Version.from_str("v1"), pytest.raises(typer.BadParameter)),
         (True, "TestClassifier", None, pytest.raises(typer.BadParameter)),
-        (True, "TestClassifier", Version("v1"), None),
-        (False, None, Version("v1"), pytest.raises(typer.BadParameter)),
+        (True, "TestClassifier", Version.from_str("v1"), None),
+        (False, None, Version.from_str("v1"), pytest.raises(typer.BadParameter)),
         (False, "TestClassifier", None, pytest.raises(typer.BadParameter)),
         (False, None, None, None),
-        (False, "TestClassifier", Version("v1"), pytest.raises(typer.BadParameter)),
+        (
+            False,
+            "TestClassifier",
+            Version.from_str("v1"),
+            pytest.raises(typer.BadParameter),
+        ),
     ],
 )
 def test_validate_args(
@@ -214,7 +219,7 @@ def test_load_classifier_remote(mock_classifier):
     run = Mock(spec=Run)
     run.config = {}  # Add dict for config
     classifier_name = "TestClassifier"
-    version = Version("v1")
+    version = Version.from_str("v1")
     wikibase_id = WikibaseID("Q123")
 
     # Mock the artifact

@@ -11,6 +11,7 @@ from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
+from src.version import Version
 
 load_dotenv()
 
@@ -41,7 +42,9 @@ def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
     for item in contents:
         try:
             name, alias = item.split(":")
-            classifier_specs.append(ClassifierSpec(name=name, alias=alias))
+            classifier_specs.append(
+                ClassifierSpec(name=WikibaseID(name), alias=Version.from_str(alias))
+            )
         except ValueError:
             raise ValueError(f"Invalid format in spec file: {item}")
 
@@ -149,8 +152,8 @@ def get_all_available_classifiers(
                     )
                 classifier_specs[model_env].append(
                     ClassifierSpec(
-                        name=model_parts[0],
-                        alias=model_parts[1],
+                        name=WikibaseID(model_parts[0]),
+                        alias=Version.from_str(model_parts[1]),
                     )
                 )
 
