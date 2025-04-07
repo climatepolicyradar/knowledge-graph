@@ -31,8 +31,8 @@ from scripts.cloud import (
 )
 from src.identifiers import WikibaseID
 
-DEFAULT_DOCUMENTS_BATCH_SIZE = 500
-DEFAULT_DEINDEXING_TASK_BATCH_SIZE = 20
+DEFAULT_DOCUMENTS_BATCH_SIZE = 250
+DEFAULT_DEINDEXING_TASK_BATCH_SIZE = 10
 
 
 @dataclass()
