@@ -14,6 +14,8 @@ from scripts.cloud import (
     generate_deployment_name,
     parse_aws_env,
 )
+from src.identifiers import WikibaseID
+from src.version import Version
 
 app = typer.Typer()
 console = Console()
@@ -21,26 +23,26 @@ console = Console()
 
 def convert_classifier_specs(
     requested_classifiers: list[str],
-) -> list[ClassifierSpec]:
+) -> list[dict[str, str]]:
     """
     Prepare the requested classifiers.
 
-    Validates the classifier parameter and converts it to json ready
-    to submit to prefect cloud
+    Validates the classifier parameter and converts it to JSON ready
+    to submit to Prefect Cloud.
     """
     classifier_specs = []
     for i, classifier in enumerate(requested_classifiers):
         match classifier.count(":"):
-            case 0:
-                spec = ClassifierSpec(name=classifier)
             case 1:
                 name, alias = classifier.split(":")
-                spec = ClassifierSpec(name=name, alias=alias)
+                spec = ClassifierSpec(
+                    name=WikibaseID(name), alias=Version.from_str(alias)
+                )
+                classifier_specs.append(spec.model_dump())
             case _:
                 raise typer.BadParameter(
                     f"Incorrect classifier specification for item {i}: {classifier}"
                 )
-        classifier_specs.append(spec.model_dump())
     return classifier_specs
 
 
@@ -87,8 +89,7 @@ def main(
             "-c",
             help=(
                 "Select which classifiers and their aliases to run with "
-                "Specify they alias by appending it after a ':', "
-                "alias will default to 'latest' if left unspecified"
+                "Specify they alias by appending it after a ':'. "
                 "Add more of this option to run on multiple. For example: "
                 "-c Q787:v0 -c Q787:v1 -c Q111"
             ),

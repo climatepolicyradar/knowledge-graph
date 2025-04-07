@@ -15,6 +15,7 @@ from scripts.update_classifier_spec import (
     read_spec_file,
     sort_specs,
 )
+from src.version import Version
 
 
 @pytest.fixture
@@ -73,8 +74,8 @@ def test_is_concept_model():
 
 def test_is_latest_model_in_env():
     classifier_specs = [
-        ClassifierSpec(name="Q22", alias="v1"),
-        ClassifierSpec(name="Q11", alias="v2"),
+        ClassifierSpec(name="Q22", alias=Version.from_str("v1")),
+        ClassifierSpec(name="Q11", alias=Version.from_str("v2")),
     ]
     assert not is_latest_model_in_env(classifier_specs, model_name="Q11")
     assert is_latest_model_in_env(classifier_specs, model_name="Q33")
@@ -95,13 +96,13 @@ def test_get_all_available_classifiers(mock_wandb_api):
     "spec_contents,expected_specs",
     [
         # Test valid single entry
-        (["Q123:v1"], [ClassifierSpec(name="Q123", alias="v1")]),
+        (["Q123:v1"], [ClassifierSpec(name="Q123", alias=Version.from_str("v1"))]),
         # Test valid multiple entries
         (
             ["Q123:v1", "Q456:v2"],
             [
-                ClassifierSpec(name="Q123", alias="v1"),
-                ClassifierSpec(name="Q456", alias="v2"),
+                ClassifierSpec(name="Q123", alias=Version.from_str("v1")),
+                ClassifierSpec(name="Q456", alias=Version.from_str("v2")),
             ],
         ),
         # Test empty list
@@ -158,17 +159,17 @@ def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
 
 def test_sort_specs():
     unsorted_specs = [
-        ClassifierSpec(name="Q123", alias="v4"),
-        ClassifierSpec(name="Q789", alias="v1"),
-        ClassifierSpec(name="Q456", alias="v30"),
-        ClassifierSpec(name="Q999", alias="v3"),
-        ClassifierSpec(name="Q111", alias="v3"),
+        ClassifierSpec(name="Q123", alias=Version.from_str("v4")),
+        ClassifierSpec(name="Q789", alias=Version.from_str("v1")),
+        ClassifierSpec(name="Q456", alias=Version.from_str("v30")),
+        ClassifierSpec(name="Q999", alias=Version.from_str("v3")),
+        ClassifierSpec(name="Q111", alias=Version.from_str("v3")),
     ]
 
     assert sort_specs(unsorted_specs) == [
-        ClassifierSpec(name="Q111", alias="v3"),
-        ClassifierSpec(name="Q123", alias="v4"),
-        ClassifierSpec(name="Q456", alias="v30"),
-        ClassifierSpec(name="Q789", alias="v1"),
-        ClassifierSpec(name="Q999", alias="v3"),
+        ClassifierSpec(name="Q111", alias=Version.from_str("v3")),
+        ClassifierSpec(name="Q123", alias=Version.from_str("v4")),
+        ClassifierSpec(name="Q456", alias=Version.from_str("v30")),
+        ClassifierSpec(name="Q789", alias=Version.from_str("v1")),
+        ClassifierSpec(name="Q999", alias=Version.from_str("v3")),
     ]

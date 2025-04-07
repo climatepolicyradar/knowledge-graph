@@ -272,7 +272,7 @@ def s3_paths_or_s3_prefixes(
                     cache_bucket,
                     prefix,
                     classifier_spec.name,
-                    classifier_spec.alias,
+                    str(classifier_spec.alias),
                 )
                 for classifier_spec in classifier_specs
             ]

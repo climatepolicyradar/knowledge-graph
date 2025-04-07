@@ -21,6 +21,7 @@ from flows.utils import (
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
+    disallow_latest_alias,
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
@@ -102,6 +103,8 @@ async def index_labelled_passages_from_s3_to_vespa(
     if classifier_specs is None:
         logger.info("no classifier specs. passed in, loading from file")
         classifier_specs = parse_spec_file(config.aws_env)
+
+    disallow_latest_alias(classifier_specs)
 
     logger.info(f"running with classifier specs: {classifier_specs}")
 
