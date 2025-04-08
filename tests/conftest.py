@@ -12,7 +12,7 @@ from prefect.logging import disable_run_logger
 from prefect.testing.utilities import prefect_test_harness
 
 from scripts.config import get_git_root
-from src.classifier import Classifier
+from src.classifier.classifier import Classifier
 from src.concept import Concept
 from src.wikibase import WikibaseSession
 
