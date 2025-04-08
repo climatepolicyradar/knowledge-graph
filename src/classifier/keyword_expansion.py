@@ -69,7 +69,7 @@ class KeywordExpansionClassifier(RulesBasedClassifier):
 
         return prompt
 
-    def fit(self) -> "KeywordExpansionClassifier":
+    def fit(self, **kwargs) -> "KeywordExpansionClassifier":
         """
         Expand the keyword lists using an LLM and train the classifier.
 

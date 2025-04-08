@@ -3,14 +3,14 @@ from collections import defaultdict
 from pathlib import Path
 
 import typer
-import wandb
 import yaml  # type: ignore
 from dotenv import load_dotenv
 from rich.console import Console
-from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
+import wandb
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
+from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
 load_dotenv()
 
