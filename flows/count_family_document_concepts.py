@@ -2,13 +2,14 @@ import asyncio
 import json
 import os
 from collections import Counter, defaultdict
-from collections.abc import Awaitable
 from dataclasses import dataclass
 
 from cpr_sdk.s3 import _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow, get_run_logger
-from prefect.deployments.deployments import run_deployment
+from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.deployments import run_deployment
+from prefect.flow_runs import wait_for_flow_run
 from vespa.io import VespaResponse
 
 from flows.boundary import (
@@ -156,6 +157,8 @@ async def load_update_document_concepts_counts(
         document_object_uris, batch_size=batch_size
     )
 
+    has_failures = False
+
     for (
         batch_num,
         batch,
@@ -185,7 +188,7 @@ async def load_update_document_concepts_counts(
                 logger.error(
                     f"failed to process document `{current_document_import_id}`: {str(result)}",
                 )
-
+                has_failures = True
                 continue
 
             if isinstance(result, Counter):
@@ -194,6 +197,9 @@ async def load_update_document_concepts_counts(
             logger.info(f"processed batch document object URIs #{batch_num}")
 
     cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
+
+    # Continue on, even if there were failures, as that's accounted for when
+    # calculating the concepts' counts.
 
     # Serialise them
     concepts_counts_with_names = {
@@ -208,30 +214,44 @@ async def load_update_document_concepts_counts(
             vespa_search_adapter,
         )
 
+    # Now, we finally do a little bit of worrying about
+    # failures, so they aren't invisible.
+
+    if has_failures:
+        raise ValueError("there was at least 1 failure")
+
     return concepts_counts_with_names
 
 
-def load_update_document_concepts_counts_as(
+async def load_update_document_concepts_counts_as(
     document_import_id: DocumentImportId,
     document_object_uris: list[DocumentObjectUri],
     batch_size: int,
     vespa_search_adapter: VespaSearchAdapter | None,
     aws_env: AwsEnv,
     as_deployment: bool,
-) -> Awaitable[dict[str, int]]:
+    ttl_per_task_s: int,
+) -> FlowRun | dict[str, int]:
     """Run load document concepts either as a subflow or directly."""
     if as_deployment:
         flow_name = function_to_flow_name(load_update_document_concepts_counts)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        return run_deployment(
+        flow_run: FlowRun = await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "document_import_id": document_import_id,
                 "document_object_uris": document_object_uris,
                 "batch_size": batch_size,
             },
-            timeout=1200,
+            # Return the metadata immediately
+            timeout=0,
+        )
+
+        # Now, do the actual waiting, since we have the metadata
+        return await wait_for_flow_run(
+            flow_run_id=flow_run.id,
+            timeout=ttl_per_task_s,  # Seconds
         )
     else:
         return load_update_document_concepts_counts(
@@ -324,20 +344,34 @@ async def count_family_document_concepts(
     documents_items = list(documents_by_id.items())
     documents_batches = iterate_batch(documents_items, batch_size=batch_size)
 
+    has_failures = False
+
     for (
         documents_batch_num,
         documents_batch,
     ) in enumerate(documents_batches, start=1):
         logger.info(f"processing batch documents #{documents_batch_num}")
 
+        ttl_per_task_s = 20 * 60
+
         load_update_document_groups_tasks = [
-            load_update_document_concepts_counts_as(
-                document_import_id,
-                document_object_uris,
-                batch_size,
-                config.vespa_search_adapter,
-                config.aws_env,
-                config.as_deployment,
+            asyncio.wait_for(
+                load_update_document_concepts_counts_as(
+                    document_import_id,
+                    document_object_uris,
+                    batch_size,
+                    config.vespa_search_adapter,
+                    config.aws_env,
+                    config.as_deployment,
+                    ttl_per_task_s=ttl_per_task_s,
+                ),
+                # We could just rely on the timeout via Prefect, but,
+                # this may also not be running on Prefect.
+                #
+                # Realistically, there is some spin-up time on
+                # Prefect, for the task to actually be executing our
+                # code, so be aware of that.
+                timeout=ttl_per_task_s,  # Seconds
             )
             for document_import_id, document_object_uris in documents_batch
         ]
@@ -359,9 +393,17 @@ async def count_family_document_concepts(
                 logger.error(
                     f"failed to process group for document `{document_import_id}`: {str(result)}",
                 )
-
+                has_failures = True
                 continue
 
+            if isinstance(result, FlowRun):
+                flow_run: FlowRun = result
+                if flow_run.state.type != StateType.COMPLETED:
+                    has_failures = True
+
             logger.info(f"processed batch documents #{documents_batch_num}")
+
+    if has_failures:
+        raise ValueError("there was at least 1 failure")
 
     return None

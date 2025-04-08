@@ -198,7 +198,7 @@ def mock_bucket_b(
     yield bucket
 
 
-def load_fixture(file_name):
+def load_fixture(file_name) -> str:
     fixture_path = FIXTURE_DIR / file_name
     with open(fixture_path) as f:
         return f.read()

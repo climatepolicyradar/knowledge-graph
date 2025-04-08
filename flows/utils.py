@@ -73,6 +73,8 @@ def remove_translated_suffix(file_name: str) -> str:
     """
     Remove the suffix from a file name that indicates it has been translated.
 
+    Often used for querying Vespa.
+
     E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
     """
     return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
@@ -125,9 +127,12 @@ def get_file_stems_for_document_id(
     find any translated documents in a directory for a document id as follows:
 
     Example:
-    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"]
+    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en"]
+
+    Note that we don't include the original document ID in the list of stems.
+    This is because we are looking for only English language documents.
     """
-    stems = [document_id]
+    stems = []
 
     for target_language in ["en"]:
         translated_file_key = (
@@ -141,6 +146,9 @@ def get_file_stems_for_document_id(
         )
         if file_exists:
             stems.append(translated_file_key.stem)
+
+    if not stems:
+        stems.append(document_id)
 
     return stems
 

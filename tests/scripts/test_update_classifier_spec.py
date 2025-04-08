@@ -13,6 +13,7 @@ from scripts.update_classifier_spec import (
     is_latest_model_in_env,
     parse_spec_file,
     read_spec_file,
+    sort_specs,
 )
 
 
@@ -71,7 +72,10 @@ def test_is_concept_model():
 
 
 def test_is_latest_model_in_env():
-    classifier_specs = ["Q22:v1", "Q11:v2"]
+    classifier_specs = [
+        ClassifierSpec(name="Q22", alias="v1"),
+        ClassifierSpec(name="Q11", alias="v2"),
+    ]
     assert not is_latest_model_in_env(classifier_specs, model_name="Q11")
     assert is_latest_model_in_env(classifier_specs, model_name="Q33")
 
@@ -79,8 +83,11 @@ def test_is_latest_model_in_env():
 def test_get_all_available_classifiers(mock_wandb_api):
     with TemporaryDirectory() as temp_dir:
         with patch("scripts.update_classifier_spec.SPEC_DIR", Path(temp_dir)):
-            get_all_available_classifiers(aws_envs=[AwsEnv.sandbox])
-            specs = read_spec_file("sandbox")
+            get_all_available_classifiers(
+                aws_envs=[AwsEnv.sandbox],
+                api_key="test_wandb_api_key",
+            )
+            specs = read_spec_file(AwsEnv.sandbox)
             assert specs == ["Q111:v1", "Q222:v1"]
 
 
@@ -103,7 +110,7 @@ def test_get_all_available_classifiers(mock_wandb_api):
 )
 def test_parse_spec_file(spec_contents, expected_specs, tmp_path):
     # Create a temporary spec file
-    test_env = "test"
+    test_env = AwsEnv.sandbox
     spec_dir = tmp_path / "classifier_specs"
     spec_dir.mkdir(parents=True)
     spec_file = spec_dir / f"{test_env}.yaml"
@@ -132,7 +139,7 @@ def test_parse_spec_file(spec_contents, expected_specs, tmp_path):
 )
 def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
     # Create a temporary spec file
-    test_env = "test"
+    test_env = AwsEnv.sandbox
     spec_dir = tmp_path / "classifier_specs"
     spec_dir.mkdir(parents=True)
     spec_file = spec_dir / f"{test_env}.yaml"
@@ -147,3 +154,21 @@ def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
     with patch("scripts.update_classifier_spec.SPEC_DIR", spec_dir):
         with pytest.raises(ValueError):
             parse_spec_file(test_env)
+
+
+def test_sort_specs():
+    unsorted_specs = [
+        ClassifierSpec(name="Q123", alias="v4"),
+        ClassifierSpec(name="Q789", alias="v1"),
+        ClassifierSpec(name="Q456", alias="v30"),
+        ClassifierSpec(name="Q999", alias="v3"),
+        ClassifierSpec(name="Q111", alias="v3"),
+    ]
+
+    assert sort_specs(unsorted_specs) == [
+        ClassifierSpec(name="Q111", alias="v3"),
+        ClassifierSpec(name="Q123", alias="v4"),
+        ClassifierSpec(name="Q456", alias="v30"),
+        ClassifierSpec(name="Q789", alias="v1"),
+        ClassifierSpec(name="Q999", alias="v3"),
+    ]

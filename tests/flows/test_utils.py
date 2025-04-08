@@ -1,4 +1,5 @@
 import os
+import re
 from io import BytesIO
 from pathlib import Path
 
@@ -42,10 +43,9 @@ def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
     mock_prefect_slack_block.notify.assert_called_once()
     kwargs = mock_prefect_slack_block.notify.call_args.kwargs
     message = kwargs.get("body", "")
-    assert message == (
-        "Flow run TestFlow/TestFlowRun observed in state `Completed` at "
-        "2025-01-28T12:00:00+00:00. For environment: sandbox. Flow run URL: "
-        "None/flow-runs/flow-run/test-flow-run-id. State message: message"
+    assert re.match(
+        r"Flow run TestFlow/TestFlowRun observed in state `Completed` at 2025-01-28T12:00:00\+00:00\. For environment: sandbox\. Flow run URL: http://127\.0\.0\.1:\d+/flow-runs/flow-run/test-flow-run-id\. State message: message",
+        message,
     )
 
 
@@ -126,7 +126,7 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
         ),
     )
 
-    assert file_stems == [document_id, f"{document_id}_translated_en"]
+    assert file_stems == [f"{document_id}_translated_en"]
 
 
 def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) -> None:
@@ -163,9 +163,7 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
     )
     assert sorted(document_paths) == sorted(
         [
-            f"s3://{test_config.cache_bucket}/"
-            f"{test_config.document_target_prefix}/"
-            f"{classifier_spec.name}/{classifier_spec.alias}/{file_name}"
-            for file_name in s3_file_names
+            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
+            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )

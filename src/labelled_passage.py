@@ -1,10 +1,7 @@
 import html
-import itertools
 import re
 
 from argilla import Argilla, Record, Response
-from argilla.v1 import FeedbackRecord
-from argilla.v1 import User as LegacyUser
 from pydantic import BaseModel, Field, model_validator
 
 from src.identifiers import generate_identifier
@@ -40,50 +37,6 @@ class LabelledPassage(BaseModel):
                     "end_index must be less than or equal to the length of the text"
                 )
         return self
-
-    @classmethod
-    def from_argilla_record_legacy(cls, record: FeedbackRecord) -> "LabelledPassage":  # type: ignore
-        """
-        Create a LabelledPassage object from an Argilla record
-
-        :param FeedbackRecord record: The Argilla record to create the LabelledPassage
-        object from
-        :return LabelledPassage: The created LabelledPassage object
-        """
-        text: str = record.fields.get("text", "")  # type: ignore
-
-        metadata = record.metadata or {}  # type: ignore
-        spans = []
-
-        # we've observed that users can submit multiple annotations for the same text!
-        # we should only consider the most recent annotation from each.
-        most_recent_annotation_from_each_user = [
-            max(group, key=lambda record: record.updated_at)
-            for _, group in itertools.groupby(  # type: ignore
-                sorted(record.responses, key=lambda response: response.user_id),  # type: ignore
-                key=lambda response: response.user_id,
-            )
-        ]
-        for response in most_recent_annotation_from_each_user:
-            user_name = LegacyUser.from_id(response.user_id).username
-            try:
-                for entity in response.values["entities"].value:
-                    spans.extend(
-                        [
-                            Span(
-                                text=text,
-                                start_index=entity.start,
-                                end_index=entity.end,
-                                concept_id=entity.label,
-                                labellers=[user_name],
-                                timestamps=[response.updated_at],
-                            )
-                        ]
-                    )
-            except KeyError:
-                pass
-
-        return cls(text=text, spans=spans, metadata=metadata)
 
     @classmethod
     def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":

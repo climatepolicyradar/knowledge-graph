@@ -23,7 +23,9 @@ from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
-from prefect.deployments.deployments import run_deployment
+from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.deployments import run_deployment
+from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
@@ -49,8 +51,8 @@ from src.span import Span
 HTTP_OK = 200
 CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
-DEFAULT_DOCUMENTS_BATCH_SIZE = 500
-DEFAULT_UPDATES_TASK_BATCH_SIZE = 20
+DEFAULT_DOCUMENTS_BATCH_SIZE = 250
+DEFAULT_UPDATES_TASK_BATCH_SIZE = 10
 
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
@@ -304,6 +306,14 @@ def load_labelled_passages_by_uri(
 ) -> list[LabelledPassage]:
     """Load and transforms the S3 object's body into LabelledPassages objects."""
     object_json = json.loads(_s3_object_read_text(s3_path=document_object_uri))
+    if len(object_json) == 0:
+        return []
+
+    # Currently we _sometimes_ serialise the labelled passages as a
+    # JSON list, but the items of the list are a funny serialisation
+    # of them, so they're still raw strings, when loaded in.
+    if isinstance(object_json[0], str):
+        object_json = [json.loads(labelled_passage) for labelled_passage in object_json]
 
     return [LabelledPassage(**labelled_passage) for labelled_passage in object_json]
 
@@ -795,6 +805,8 @@ async def run_partial_updates_of_concepts_for_batch(
     if failures:
         raise ValueError(f"{failures}/{len(documents_batch)} partial updates failed")
 
+    return None
+
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     documents_batch: list[DocumentImporter],
@@ -804,19 +816,14 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     aws_env: AwsEnv,
     as_deployment: bool,
     partial_update_flow: Operation,
-) -> None:
+    ttl_per_task_s: int,
+) -> FlowRun | None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
-    logger = get_run_logger()
-    logger.info(
-        "Running partial updates of concepts for batch as sub-flow or deployment: "
-        f"batch length {len(documents_batch)}, as_deployment: {as_deployment}"
-    )
-
     if as_deployment:
         flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        return await run_deployment(
+        flow_run: FlowRun = await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "documents_batch": documents_batch,
@@ -825,7 +832,14 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                 "concepts_counts_prefix": concepts_counts_prefix,
                 "partial_update_flow": partial_update_flow,
             },
-            timeout=3600,
+            # Return the metadata immediately
+            timeout=0,
+        )
+
+        # Now, do the actual waiting, since we have the metadata
+        return await wait_for_flow_run(
+            flow_run_id=flow_run.id,
+            timeout=ttl_per_task_s,  # Seconds
         )
 
     return await run_partial_updates_of_concepts_for_batch(
@@ -884,15 +898,27 @@ async def updates_by_s3(
     for i, updates_task_batch in enumerate(updates_task_batches, start=1):
         logger.info(f"Processing updates task batch #{i}")
 
+        ttl_per_task_s = 60 * 60
+
         updates_tasks = [
-            run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-                documents_batch=documents_batch,
-                documents_batch_num=documents_batch_num,
-                cache_bucket=cache_bucket,
-                concepts_counts_prefix=concepts_counts_prefix,
-                aws_env=aws_env,
-                as_deployment=as_deployment,
-                partial_update_flow=partial_update_flow,
+            asyncio.wait_for(
+                run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+                    documents_batch=documents_batch,
+                    documents_batch_num=documents_batch_num,
+                    cache_bucket=cache_bucket,
+                    concepts_counts_prefix=concepts_counts_prefix,
+                    aws_env=aws_env,
+                    as_deployment=as_deployment,
+                    partial_update_flow=partial_update_flow,
+                    ttl_per_task_s=ttl_per_task_s,
+                ),
+                # We could just rely on the timeout via Prefect, but,
+                # this may also not be running on Prefect.
+                #
+                # Realistically, there is some spin-up time on
+                # Prefect, for the task to actually be executing our
+                # code, so be aware of that.
+                timeout=ttl_per_task_s,  # Seconds
             )
             for documents_batch_num, documents_batch in enumerate(
                 updates_task_batch, start=1
@@ -900,15 +926,33 @@ async def updates_by_s3(
         ]
 
         logger.info(f"Gathering updates tasks for batch #{i}")
-        results = await asyncio.gather(*updates_tasks, return_exceptions=True)
+        batch_results: list[FlowRun | BaseException | None] = await asyncio.gather(
+            *updates_tasks, return_exceptions=True
+        )
         logger.info(f"Gathered updates tasks for batch #{i}")
 
-        for result in results:
-            if isinstance(result, Exception):
-                failures += 1
-                logger.error(
-                    f"failed to process document batch in updates task batch #{i}: {str(result)}",
-                )
+        for result in batch_results:
+            match result:
+                case Exception() as e:
+                    failures += 1
+                    logger.error(
+                        f"failed to process document batch in updates task batch #{i}: {str(e)}",
+                    )
+                case FlowRun() as flow_run if (
+                    flow_run.state.type != StateType.COMPLETED
+                ):
+                    failures += 1
+                    logger.error(
+                        f"flow run task_result's state was not completed. Flow run name: `{flow_run.name}`",
+                    )
+                case None:
+                    pass
+                case _:
+                    failures += 1
+                    logger.error(
+                        f"unexpected result type: {type(result)}",
+                    )
+
     if failures:
         raise ValueError("there was at least 1 task that failed")
 
@@ -962,10 +1006,6 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
-            # We query vespa for document passages that contain a matching import id.
-            # The document imported contains the file stem which could contain a
-            # translated suffix. We remove this suffix to get the document import id.
-            # E.g. CCLW.executive.1.1_translated_en -> CCLW.executive.1.1
             document_import_id = remove_translated_suffix(document_importer[0])
 
             partial_update_tasks = [
@@ -1103,23 +1143,25 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
         for labelled_passage in document_labelled_passages
     }
 
+    logger.info(
+        f"starting partial updates for {len(grouped_concepts)} grouped concepts"
+    )
+
+    batches = iterate_batch(
+        list(grouped_concepts.items()),
+        batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
+    )
+
+    has_failures = False
+
     with cm:
-        logger.info(
-            f"starting partial updates for {len(grouped_concepts)} grouped concepts"
-        )
-
-        batches = iterate_batch(
-            list(grouped_concepts.items()),
-            batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
-        )
-
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
             partial_update_tasks = [
                 partial_update_text_block(
                     text_block_id=text_block_id,
-                    document_import_id=document_importer[0],
+                    document_import_id=remove_translated_suffix(document_importer[0]),
                     concepts=concepts,
                     vespa_search_adapter=vespa_search_adapter,
                     update_function=remove_concepts_from_existing_vespa_concepts,
@@ -1135,6 +1177,20 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
                 f"gathered partial {len(results)} updates tasks for batch {batch_num}"
             )
 
+            failures = list(
+                filter(
+                    lambda result: isinstance(result, Exception),
+                    results,
+                )
+            )
+
+            # It seems odd to not worry about the failures. When we
+            # calculate the concepts' counts though, we account for
+            # failures explicitly.
+            #
+            # That accounting is carried over implicitly into updating
+            # S3 with the final concepts' counts.
+
             concepts_counts = calculate_concepts_counts_from_results(results, batch)
 
             await update_s3_with_latest_concepts_counts(
@@ -1144,6 +1200,17 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
                 concepts_counts_prefix=concepts_counts_prefix,
                 document_labelled_passages=document_labelled_passages,
             )
+
+            # Now, we finally do a little bit of worrying about
+            # failures, so they aren't invisible.
+
+            if failures:
+                has_failures = True
+
+    if has_failures:
+        raise ValueError("there was at least 1 failure")
+
+    return None
 
 
 def remove_concepts_from_existing_vespa_concepts(
