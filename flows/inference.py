@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
+from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, TypeAlias
@@ -18,7 +19,6 @@ from prefect import flow
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
-from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
@@ -36,6 +36,11 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
+# A singular task doing one thing
+TASK_TIMEOUT_S: int = int(timedelta(minutes=20).total_seconds())
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -436,7 +441,7 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
-@flow
+@flow(timeout_seconds=TASK_TIMEOUT_S)
 async def run_classifier_inference_on_batch_of_documents(
     batch: list[str],
     config_json: dict,
@@ -515,6 +520,7 @@ async def run_classifier_inference_on_batch_of_documents(
     task_runner=ConcurrentTaskRunner(),
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def classifier_inference(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
@@ -569,12 +575,8 @@ async def classifier_inference(
     for classifier_spec in classifier_specs:
         batches = iterate_batch(validated_file_stems, batch_size)
 
-        ttl_per_task_s = 20 * 60
-
-        async def run_and_wait_for_deployment(
-            flow_name, deployment_name, batch, config, classifier_spec
-        ):
-            flow_run: FlowRun = await run_deployment(
+        tasks = [
+            await run_deployment(
                 name=f"{flow_name}/{deployment_name}",
                 parameters={
                     "batch": batch,
@@ -582,32 +584,9 @@ async def classifier_inference(
                     "classifier_name": classifier_spec.name,
                     "classifier_alias": classifier_spec.alias,
                 },
-                # Return the metadata immediately
-                timeout=0,
+                # Rely on the flow's own timeout
+                timeout=None,
                 as_subflow=True,
-            )
-
-            return await wait_for_flow_run(
-                flow_run_id=flow_run.id,
-                timeout=ttl_per_task_s,  # Seconds
-            )
-
-        tasks = [
-            asyncio.wait_for(
-                run_and_wait_for_deployment(
-                    flow_name,
-                    deployment_name,
-                    batch,
-                    config,
-                    classifier_spec,
-                ),
-                # We could just rely on the timeout via Prefect, but,
-                # this may also not be running on Prefect.
-                #
-                # Realistically, there is some spin-up time on
-                # Prefect, for the task to actually be executing our
-                # code, so be aware of that.
-                timeout=ttl_per_task_s,  # Seconds
             )
             for batch in batches
         ]
