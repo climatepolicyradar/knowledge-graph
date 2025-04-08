@@ -41,9 +41,11 @@ class Classifier(ABC):
                 f"{expected}, not {self.concept.wikibase_id}"
             )
 
-    def fit(self) -> "Classifier":
+    def fit(self, **kwargs) -> "Classifier":
         """
         Train the classifier on the data in the concept.
+
+        Subclasses may accept additional keyword arguments for training configuration.
 
         :return Classifier: The trained classifier
         """

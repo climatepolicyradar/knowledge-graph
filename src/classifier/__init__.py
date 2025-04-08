@@ -1,7 +1,10 @@
 import importlib
 
+from src.classifier.bert_based import BertBasedClassifier
 from src.classifier.classifier import Classifier
+from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
+from src.classifier.llm import LLMClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -42,6 +45,8 @@ __all__ = [
     "EmissionsReductionTargetClassifier",  # type: ignore
     "NetZeroTargetClassifier",  # type: ignore
     "TargetClassifier",  # type: ignore
+    "BertBasedClassifier",
+    "LLMClassifier",
 ]
 
 
