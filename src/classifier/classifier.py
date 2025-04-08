@@ -45,9 +45,15 @@ class Classifier(ABC):
         """
         Train the classifier on the data in the concept.
 
-        Subclasses may accept additional keyword arguments for training configuration.
+        This is a no-op in the base class. Subclasses should override this method
+        to implement their specific training logic.
 
-        :return Classifier: The trained classifier
+        Args:
+            **kwargs: Training configuration parameters. The specific parameters
+                required will depend on the classifier implementation.
+
+        Returns:
+            Classifier: The trained classifier
         """
         return self
 
