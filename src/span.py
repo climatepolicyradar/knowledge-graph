@@ -1,20 +1,10 @@
-import json
+import re
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
 from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
-
-
-class DateTimeEncoder(json.JSONEncoder):
-    """Convert datetime objects to ISO strings for JSON serialization."""
-
-    def default(self, o):
-        """Convert datetime objects to ISO strings for JSON serialization."""
-        if isinstance(o, datetime):
-            return o.isoformat()
-        return super().default(o)
 
 
 class Span(BaseModel):
@@ -53,6 +43,11 @@ class Span(BaseModel):
             "ie they should be the same length, and their order should match."
         ),
     )
+
+    class Config:
+        """Pydantic configuration for the Span model"""
+
+        json_encoders = {datetime: lambda dt: dt.isoformat()}
 
     @computed_field
     def id(self) -> str:
@@ -179,6 +174,34 @@ class Span(BaseModel):
         :return bool: True if the spans overlap, False otherwise
         """
         return jaccard_similarity(self, other) > 0
+
+    @classmethod
+    def from_xml(
+        cls,
+        xml: str,
+        concept_id: WikibaseID,
+        labellers: list[str],
+    ) -> list["Span"]:
+        """Convert an XML string to a list of Spans."""
+        text_without_tags = xml.replace("<concept>", "").replace("</concept>", "")
+        spans = []
+        offset = 0
+        for match in re.finditer(r"<concept>(.*?)</concept>", xml):
+            start_index = match.start() - (offset * len("<concept></concept>"))
+            end_index = start_index + len(match.group(1))
+            offset += 1
+            spans.append(
+                Span(
+                    text=text_without_tags,
+                    start_index=start_index,
+                    end_index=end_index,
+                    concept_id=concept_id,
+                    labellers=labellers,
+                    timestamps=[datetime.now()],
+                )
+            )
+
+        return spans
 
 
 def jaccard_similarity(span_a: Span, span_b: Span) -> float:

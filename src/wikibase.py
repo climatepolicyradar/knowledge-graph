@@ -463,7 +463,9 @@ class WikibaseSession:
 
             for wikibase_id, entity in response.get("entities", {}).items():
                 if "redirects" in entity:
-                    redirects[wikibase_id] = entity["redirects"]["to"]
+                    redirects[WikibaseID(wikibase_id)] = WikibaseID(
+                        entity["redirects"]["to"]
+                    )
 
         return redirects
 

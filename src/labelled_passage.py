@@ -2,7 +2,7 @@ import html
 import re
 
 from argilla import Argilla, Record, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
@@ -17,11 +17,13 @@ class LabelledPassage(BaseModel):
         default_factory=list,
         title="Spans",
         description="The spans in the passage which have been labelled by the annotator",
+        repr=False,
     )
     metadata: dict = Field(
         default_factory=dict,
         title="Metadata",
         description="Additional data, eg translation status or dataset",
+        repr=False,
     )
 
     def __init__(self, text: str, spans: list[Span], **kwargs):
@@ -146,3 +148,35 @@ class LabelledPassage(BaseModel):
         if set(self.spans) != set(other.spans):
             return False
         return True
+
+    @computed_field(repr=False)
+    @property
+    def sanitised_text(self) -> str:
+        """A normalised version of the text which can be used for comparison"""
+        return self.sanitise(self.text)
+
+    @staticmethod
+    def sanitise(text: str) -> str:
+        """Sanitise text by replacing bad XML characters and normalizing text."""
+        # First handle XML special characters
+        bad_xml_strings = ["&", "<", ">", '"', "'"]
+        xml_translation = str.maketrans(
+            {string: "_" * len(string) for string in bad_xml_strings}
+        )
+        text = text.translate(xml_translation)
+
+        # Then normalize common Unicode discrepancies and whitespace variations
+        normalize_translation = str.maketrans(
+            {
+                " ": " ",
+                "\n": " ",
+                "\t": " ",
+                "…": "...",
+                "'": "'",
+                "—": "-",
+                "’": "'",
+                "“": '"',
+                "”": '"',
+            }
+        )
+        return text.translate(normalize_translation)
