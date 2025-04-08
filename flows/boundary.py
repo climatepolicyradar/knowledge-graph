@@ -9,6 +9,7 @@ import re
 import tempfile
 from collections import Counter
 from collections.abc import Callable, Generator
+from datetime import timedelta
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
@@ -25,7 +26,6 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
-from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
@@ -53,6 +53,9 @@ CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 250
 DEFAULT_UPDATES_TASK_BATCH_SIZE = 10
+
+# The "parent" AKA the higher level flows that do multiple things.
+PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
 
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
@@ -767,7 +770,12 @@ def op_to_fn(operation: Operation):
             return run_partial_updates_of_concepts_for_document_passages__remove
 
 
-@flow
+@flow(
+    # This is the next place, after the top-level (de-)index pipeline
+    # where we want to give a timeout, that's smaller than that
+    # top-level.
+    timeout_seconds=PARENT_TIMEOUT_S,
+)
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
     documents_batch_num: int,
@@ -816,14 +824,13 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     aws_env: AwsEnv,
     as_deployment: bool,
     partial_update_flow: Operation,
-    ttl_per_task_s: int,
 ) -> FlowRun | None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
     if as_deployment:
         flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        flow_run: FlowRun = await run_deployment(
+        return await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "documents_batch": documents_batch,
@@ -832,14 +839,8 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                 "concepts_counts_prefix": concepts_counts_prefix,
                 "partial_update_flow": partial_update_flow,
             },
-            # Return the metadata immediately
-            timeout=0,
-        )
-
-        # Now, do the actual waiting, since we have the metadata
-        return await wait_for_flow_run(
-            flow_run_id=flow_run.id,
-            timeout=ttl_per_task_s,  # Seconds
+            # Rely on the flow's own timeout
+            timeout=None,
         )
 
     return await run_partial_updates_of_concepts_for_batch(
@@ -851,6 +852,8 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     )
 
 
+# No timeout is set here as it's called directly from one of the
+# (de-)index pipelines which have a timeout set.
 @flow
 async def updates_by_s3(
     aws_env: AwsEnv,
@@ -898,27 +901,15 @@ async def updates_by_s3(
     for i, updates_task_batch in enumerate(updates_task_batches, start=1):
         logger.info(f"Processing updates task batch #{i}")
 
-        ttl_per_task_s = 60 * 60
-
         updates_tasks = [
-            asyncio.wait_for(
-                run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-                    documents_batch=documents_batch,
-                    documents_batch_num=documents_batch_num,
-                    cache_bucket=cache_bucket,
-                    concepts_counts_prefix=concepts_counts_prefix,
-                    aws_env=aws_env,
-                    as_deployment=as_deployment,
-                    partial_update_flow=partial_update_flow,
-                    ttl_per_task_s=ttl_per_task_s,
-                ),
-                # We could just rely on the timeout via Prefect, but,
-                # this may also not be running on Prefect.
-                #
-                # Realistically, there is some spin-up time on
-                # Prefect, for the task to actually be executing our
-                # code, so be aware of that.
-                timeout=ttl_per_task_s,  # Seconds
+            run_partial_updates_of_concepts_for_batch_flow_or_deployment(
+                documents_batch=documents_batch,
+                documents_batch_num=documents_batch_num,
+                cache_bucket=cache_bucket,
+                concepts_counts_prefix=concepts_counts_prefix,
+                aws_env=aws_env,
+                as_deployment=as_deployment,
+                partial_update_flow=partial_update_flow,
             )
             for documents_batch_num, documents_batch in enumerate(
                 updates_task_batch, start=1
@@ -960,6 +951,7 @@ async def updates_by_s3(
 # Index -------------------------------------------------------------------------
 
 
+# No timeout set since the caller of this has one.
 @flow
 async def run_partial_updates_of_concepts_for_document_passages__update(
     document_importer: DocumentImporter,
@@ -1112,6 +1104,7 @@ def update_concepts_on_existing_vespa_concepts(
 # De-index ----------------------------------------------------------------------
 
 
+# No timeout set since the caller of this has one.
 @flow
 async def run_partial_updates_of_concepts_for_document_passages__remove(
     document_importer: DocumentImporter,

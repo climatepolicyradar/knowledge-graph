@@ -3,13 +3,13 @@ import json
 import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import timedelta
 
 from cpr_sdk.s3 import _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
-from prefect.flow_runs import wait_for_flow_run
 from vespa.io import VespaResponse
 
 from flows.boundary import (
@@ -34,6 +34,11 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.concept import Concept
 from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
+# A singular task doing one thing
+TASK_TIMEOUT_S: int = int(timedelta(minutes=30).total_seconds())
 
 DEFAULT_BATCH_SIZE = 50
 
@@ -141,6 +146,7 @@ async def load_parse_concepts_counts(
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=TASK_TIMEOUT_S,
 )
 async def load_update_document_concepts_counts(
     document_import_id: DocumentImportId,
@@ -230,28 +236,21 @@ async def load_update_document_concepts_counts_as(
     vespa_search_adapter: VespaSearchAdapter | None,
     aws_env: AwsEnv,
     as_deployment: bool,
-    ttl_per_task_s: int,
 ) -> FlowRun | dict[str, int]:
     """Run load document concepts either as a subflow or directly."""
     if as_deployment:
         flow_name = function_to_flow_name(load_update_document_concepts_counts)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        flow_run: FlowRun = await run_deployment(
+        return await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "document_import_id": document_import_id,
                 "document_object_uris": document_object_uris,
                 "batch_size": batch_size,
             },
-            # Return the metadata immediately
-            timeout=0,
-        )
-
-        # Now, do the actual waiting, since we have the metadata
-        return await wait_for_flow_run(
-            flow_run_id=flow_run.id,
-            timeout=ttl_per_task_s,  # Seconds
+            # Rely on the flow's own timeout
+            timeout=None,
         )
     else:
         return load_update_document_concepts_counts(
@@ -300,6 +299,7 @@ def group_documents_uris(
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def count_family_document_concepts(
     classifier_specs: list[ClassifierSpec] | None = None,
@@ -352,26 +352,14 @@ async def count_family_document_concepts(
     ) in enumerate(documents_batches, start=1):
         logger.info(f"processing batch documents #{documents_batch_num}")
 
-        ttl_per_task_s = 20 * 60
-
         load_update_document_groups_tasks = [
-            asyncio.wait_for(
-                load_update_document_concepts_counts_as(
-                    document_import_id,
-                    document_object_uris,
-                    batch_size,
-                    config.vespa_search_adapter,
-                    config.aws_env,
-                    config.as_deployment,
-                    ttl_per_task_s=ttl_per_task_s,
-                ),
-                # We could just rely on the timeout via Prefect, but,
-                # this may also not be running on Prefect.
-                #
-                # Realistically, there is some spin-up time on
-                # Prefect, for the task to actually be executing our
-                # code, so be aware of that.
-                timeout=ttl_per_task_s,  # Seconds
+            load_update_document_concepts_counts_as(
+                document_import_id,
+                document_object_uris,
+                batch_size,
+                config.vespa_search_adapter,
+                config.aws_env,
+                config.as_deployment,
             )
             for document_import_id, document_object_uris in documents_batch
         ]

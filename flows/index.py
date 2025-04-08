@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
@@ -23,6 +24,9 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
 
 
 @dataclass()
@@ -66,6 +70,7 @@ class Config:
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
