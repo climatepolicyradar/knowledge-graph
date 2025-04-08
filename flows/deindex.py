@@ -1,13 +1,13 @@
 import asyncio
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 
 import boto3
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
-from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_run_logger
 
 import scripts.update_classifier_spec
@@ -33,6 +33,11 @@ from src.identifiers import WikibaseID
 
 DEFAULT_DOCUMENTS_BATCH_SIZE = 250
 DEFAULT_DEINDEXING_TASK_BATCH_SIZE = 10
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
+# A singular task doing one thing
+TASK_TIMEOUT_S: int = int(timedelta(minutes=30).total_seconds())
 
 
 @dataclass()
@@ -195,7 +200,7 @@ def search_s3_for_aliases(
     return list(aliases)
 
 
-@flow
+@flow(timeout_seconds=TASK_TIMEOUT_S)
 async def run_cleanup_objects_for_batch(
     documents_batch: list[DocumentImporter],
     documents_batch_num: int,
@@ -226,7 +231,6 @@ async def cleanup_objects_for_batch_flow_or_deployment(
     concepts_counts_prefix: str,
     aws_env: AwsEnv,
     as_deployment: bool,
-    ttl_per_task_s: int,
 ) -> None | FlowRun:
     """Run clean-up objects for a batch of documents as a sub-flow or deployment."""
     logger = get_run_logger()
@@ -239,7 +243,7 @@ async def cleanup_objects_for_batch_flow_or_deployment(
         flow_name = function_to_flow_name(run_cleanup_objects_for_batch)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        flow_run: FlowRun = await run_deployment(
+        return await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "documents_batch": documents_batch,
@@ -247,14 +251,8 @@ async def cleanup_objects_for_batch_flow_or_deployment(
                 "cache_bucket": cache_bucket,
                 "concepts_counts_prefix": concepts_counts_prefix,
             },
-            # Return the metadata immediately
-            timeout=0,
-        )
-
-        # Now, do the actual waiting, since we have the metadata
-        return await wait_for_flow_run(
-            flow_run_id=flow_run.id,
-            timeout=ttl_per_task_s,  # Seconds
+            # Rely on the flow's own timeout
+            timeout=None,
         )
 
     return await run_cleanup_objects_for_batch(
@@ -265,7 +263,7 @@ async def cleanup_objects_for_batch_flow_or_deployment(
     )
 
 
-@flow
+@flow(timeout_seconds=PARENT_TIMEOUT_S)
 async def cleanups_by_s3(
     batch_size: int,
     cleanups_task_batch_size: int,
@@ -290,26 +288,14 @@ async def cleanups_by_s3(
     for i, cleanups_task_batch in enumerate(cleanups_task_batches, start=1):
         logger.info(f"Processing clean-ups task batch #{i}")
 
-        ttl_per_task_s = 30 * 60
-
         cleanups_tasks = [
-            asyncio.wait_for(
-                cleanup_objects_for_batch_flow_or_deployment(
-                    documents_batch=documents_batch,
-                    documents_batch_num=documents_batch_num,
-                    cache_bucket=cache_bucket,
-                    concepts_counts_prefix=concepts_counts_prefix,
-                    aws_env=aws_env,
-                    as_deployment=as_deployment,
-                    ttl_per_task_s=ttl_per_task_s,
-                ),
-                # We could just rely on the timeout via Prefect, but,
-                # this may also not be running on Prefect.
-                #
-                # Realistically, there is some spin-up time on
-                # Prefect, for the task to actually be executing our
-                # code, so be aware of that.
-                timeout=ttl_per_task_s,  # Seconds
+            cleanup_objects_for_batch_flow_or_deployment(
+                documents_batch=documents_batch,
+                documents_batch_num=documents_batch_num,
+                cache_bucket=cache_bucket,
+                concepts_counts_prefix=concepts_counts_prefix,
+                aws_env=aws_env,
+                as_deployment=as_deployment,
             )
             for documents_batch_num, documents_batch in enumerate(
                 cleanups_task_batch, start=1
@@ -368,6 +354,7 @@ async def cleanups_by_s3(
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def deindex_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec],
