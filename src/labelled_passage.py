@@ -2,7 +2,7 @@ import html
 import re
 
 from argilla import Argilla, Record, Response
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from src.identifiers import generate_identifier
 from src.span import Span, merge_overlapping_spans
@@ -149,7 +149,6 @@ class LabelledPassage(BaseModel):
             return False
         return True
 
-    @computed_field(repr=False)
     @property
     def sanitised_text(self) -> str:
         """A normalised version of the text which can be used for comparison"""
