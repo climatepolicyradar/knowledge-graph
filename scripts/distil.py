@@ -115,7 +115,7 @@ def save_labelled_passages_and_classifier(
 
 @app.command()
 def main(
-    concept_id: WikibaseID = typer.Argument(...),
+    concept_id: str = typer.Argument(...),
     embedding_classifier_sample_size: int = typer.Option(
         50_000,
         help="The number of passages to predict against with the embedding classifier",
@@ -168,7 +168,7 @@ def main(
     """
     wikibase = WikibaseSession()
 
-    concept = wikibase.get_concept(concept_id)
+    concept = wikibase.get_concept(WikibaseID(concept_id))
     console.log(f"🧠 Loaded concept: [bold white]{concept}[/bold white]")
 
     with console.status("Loading the combined dataset..."):
