@@ -1,8 +1,6 @@
 import importlib
 
-from src.classifier.bert_based import BertBasedClassifier
 from src.classifier.classifier import Classifier
-from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.llm import LLMClassifier
 from src.classifier.rules_based import RulesBasedClassifier
@@ -24,12 +22,14 @@ def __getattr__(name):
         # the nltk data when we actually request it.
         module = importlib.import_module(".stemmed_keyword", __package__)
         return getattr(module, name)
+    elif name == "BertBasedClassifier":
+        module = importlib.import_module(".bert_based", __package__)
+        return getattr(module, name)
     elif name in (
         "EmissionsReductionTargetClassifier",
         "NetZeroTargetClassifier",
         "TargetClassifier",
     ):
-        # As above, only import bespoke targets classifiers when specifically requested
         module = importlib.import_module(".targets", __package__)
         return getattr(module, name)
     else:
@@ -45,8 +45,8 @@ __all__ = [
     "EmissionsReductionTargetClassifier",  # type: ignore
     "NetZeroTargetClassifier",  # type: ignore
     "TargetClassifier",  # type: ignore
-    "BertBasedClassifier",
-    "LLMClassifier",
+    "BertBasedClassifier",  # type: ignore
+    "LLMClassifier",  # type: ignore
 ]
 
 
