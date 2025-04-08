@@ -11,7 +11,6 @@ from uuid import UUID
 
 import boto3
 import prefect.artifacts as artifacts
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -22,8 +21,8 @@ from prefect.flow_runs import wait_for_flow_run
 from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.sdk.wandb_run import Run
 
+import wandb
 from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
@@ -35,7 +34,8 @@ from scripts.cloud import (
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
-from src.span import DateTimeEncoder, Span
+from src.span import Span
+from wandb.sdk.wandb_run import Run
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -301,10 +301,8 @@ def document_passages(
 
 
 def serialise_labels(labels: list[LabelledPassage]) -> BytesIO:
-    data = [label.model_dump() for label in labels]
-
-    # Use the datetime encoder from the span module when dumping to JSON
-    return BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
+    data = [label.model_dump_json() for label in labels]
+    return BytesIO(json.dumps(data).encode("utf-8"))
 
 
 def store_labels(
@@ -461,8 +459,8 @@ async def run_classifier_inference_on_batch_of_documents(
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
-    run = wandb.init(
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+    run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",
     )
