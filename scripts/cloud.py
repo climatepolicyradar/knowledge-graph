@@ -11,7 +11,6 @@ from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
 from src.identifiers import WikibaseID
-from src.version import Semantic, Version
 
 PROJECT_NAME = "knowledge-graph"
 
@@ -19,29 +18,21 @@ PROJECT_NAME = "knowledge-graph"
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
 
-    name: WikibaseID = Field(
-        description="The reference of the classifier in W&B. E.g. 'Q992' or 'latest'",
+    name: str = Field(
+        description="The reference of the classifier in wandb. e.g. 'Q992'",
+        min_length=1,
     )
-    alias: Version = Field(
-        description="The alias tag for the version to use for inference. E.g 'v2'",
+    alias: str = Field(
+        description=(
+            "The alias tag for the version to use for inference. e.g 'latest' or 'v2'"
+        ),
+        default="latest",
+        min_length=1,
     )
-
-    def __str__(self) -> str:
-        """Return a string representation"""
-        return f"{self.name}:{self.alias}"
 
     def __hash__(self):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""
         return hash((self.name, self.alias))
-
-
-def disallow_latest_alias(classifier_specs: list[ClassifierSpec]):
-    if any(
-        classifier_spec.alias.value == Semantic.Latest
-        for classifier_spec in classifier_specs
-    ):
-        raise ValueError(f"`{Semantic.Latest}` is not allowed")
-    return None
 
 
 async def get_prefect_job_variable(param_name: str) -> str:

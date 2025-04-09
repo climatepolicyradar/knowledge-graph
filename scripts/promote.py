@@ -26,7 +26,7 @@ from scripts.cloud import (
     validate_transition,
 )
 from src.identifiers import WikibaseID
-from src.version import Semantic, Version
+from src.version import Version
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -311,7 +311,7 @@ def main(
         Version,
         typer.Option(
             help="Version of the model (e.g., v3)",
-            parser=Version.from_str,
+            parser=Version,
         ),
     ],
     from_aws_env: Annotated[
@@ -352,9 +352,6 @@ def main(
     log.info("Starting model promotion process")
 
     log.info("Parsing promotion...")
-
-    if isinstance(version.value, Semantic):
-        raise ValueError("semantic versions not yet supported")
 
     promotion = Promotion.validate_python(
         {

@@ -177,7 +177,7 @@ def get_labelled_passage_paths(
             document_key = os.path.join(
                 labelled_passages_prefix,
                 classifier_spec.name,
-                str(classifier_spec.alias),
+                classifier_spec.alias,
                 f"{document_id}.json",
             )
 
@@ -194,7 +194,7 @@ def get_labelled_passage_paths(
                         cache_bucket,
                         labelled_passages_prefix,
                         classifier_spec.name,
-                        str(classifier_spec.alias),
+                        classifier_spec.alias,
                         f"{file_stem}.json",
                     )
                 )

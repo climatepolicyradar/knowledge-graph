@@ -10,18 +10,24 @@ from scripts.infer import app, convert_classifier_specs, main
 runner = CliRunner()
 
 
+def test_convert_classifier_specs_with_name_only():
+    input_specs = ["Q123"]
+    result = convert_classifier_specs(input_specs)
+    assert result == [{"name": "Q123", "alias": "latest"}]
+
+
 def test_convert_classifier_specs_with_name_and_alias():
     input_specs = ["Q123:v1"]
     result = convert_classifier_specs(input_specs)
-    assert result == [{"name": "Q123", "alias": {"value": 1}}]
+    assert result == [{"name": "Q123", "alias": "v1"}]
 
 
 def test_convert_classifier_specs_multiple_specs():
-    input_specs = ["Q123:v0", "Q456:v2"]
+    input_specs = ["Q123", "Q456:v2"]
     result = convert_classifier_specs(input_specs)
     assert result == [
-        {"name": "Q123", "alias": {"value": 0}},
-        {"name": "Q456", "alias": {"value": 2}},
+        {"name": "Q123", "alias": "latest"},
+        {"name": "Q456", "alias": "v2"},
     ]
 
 
@@ -36,13 +42,13 @@ def test_cli_basic():
     mock_run.return_value.id = "test-id"
 
     with patch("scripts.infer.run_deployment", new=mock_run):
-        result = runner.invoke(app, ["--aws-env", "staging", "-c", "Q123:v3"])
+        result = runner.invoke(app, ["--aws-env", "staging", "-c", "Q123"])
         assert result.exit_code == 0
 
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parameters"]["classifier_specs"] == [
-            {"name": "Q123", "alias": {"value": 3}}
+            {"name": "Q123", "alias": "latest"}
         ]
         assert call_kwargs["parameters"]["document_ids"] is None
 
@@ -71,7 +77,7 @@ def test_cli_with_documents():
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parameters"]["classifier_specs"] == [
-            {"name": "Q123", "alias": {"value": 1}}
+            {"name": "Q123", "alias": "v1"}
         ]
         assert call_kwargs["parameters"]["document_ids"] == ["doc1", "doc2"]
 
@@ -99,14 +105,14 @@ def test_main_function_basic():
     with patch("scripts.infer.run_deployment", new=mock_run):
         main(
             aws_env=AwsEnv.staging,
-            classifiers=convert_classifier_specs(["Q123:v0"]),
+            classifiers=convert_classifier_specs(["Q123"]),
             documents=[],
         )
 
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parameters"]["classifier_specs"] == [
-            {"name": "Q123", "alias": {"value": 0}}
+            {"name": "Q123", "alias": "latest"}
         ]
         assert call_kwargs["parameters"]["document_ids"] is None
 
@@ -126,7 +132,7 @@ def test_main_function_with_documents():
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["parameters"]["classifier_specs"] == [
-            {"name": "Q123", "alias": {"value": 1}}
+            {"name": "Q123", "alias": "v1"}
         ]
         assert call_kwargs["parameters"]["document_ids"] == ["doc1", "doc2"]
 

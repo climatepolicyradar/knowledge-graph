@@ -20,6 +20,7 @@ from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
+from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
@@ -27,7 +28,6 @@ from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
-    disallow_latest_alias,
     function_to_flow_name,
     generate_deployment_name,
     get_prefect_job_variable,
@@ -220,10 +220,7 @@ def determine_file_stems(
 
 
 def download_classifier_from_wandb_to_local(
-    run: Run,
-    config: Config,
-    classifier_name: str,
-    alias: str,
+    run: Run, config: Config, classifier_name: str, alias: str = "latest"
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -522,6 +519,7 @@ async def run_classifier_inference_on_batch_of_documents(
 
 @flow(
     log_prints=True,
+    task_runner=ConcurrentTaskRunner(),
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
     timeout_seconds=PARENT_TIMEOUT_S,
@@ -563,8 +561,6 @@ async def classifier_inference(
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
-
-    disallow_latest_alias(classifier_specs)
 
     print(
         f"Running with {len(validated_file_stems)} documents and "
