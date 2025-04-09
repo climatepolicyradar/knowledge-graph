@@ -27,7 +27,7 @@ from scripts.cloud import (
 from scripts.update_classifier_spec import parse_spec_file
 
 # The "parent" AKA the higher level flows that do multiple things
-PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
+PARENT_TIMEOUT_S: int = int(timedelta(hours=10).total_seconds())
 
 
 @dataclass()

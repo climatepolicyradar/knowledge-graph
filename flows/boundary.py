@@ -51,8 +51,8 @@ from src.span import Span
 HTTP_OK = 200
 CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
-DEFAULT_DOCUMENTS_BATCH_SIZE = 250
-DEFAULT_UPDATES_TASK_BATCH_SIZE = 10
+DEFAULT_DOCUMENTS_BATCH_SIZE = 50
+DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
 
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
