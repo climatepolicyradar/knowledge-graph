@@ -41,6 +41,7 @@ DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.PAGE_NUMBER,
     BlockType.TABLE,
+    BlockType.TABLE_CELL,
     BlockType.FIGURE,
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
