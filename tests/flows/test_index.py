@@ -308,6 +308,34 @@ async def test_partial_update_text_block(
 
 
 @pytest.mark.asyncio
+async def test_index_labelled_passages_from_s3_to_vespa_doesnt_allow_latest(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    classifier_spec = ClassifierSpec(name="Q788", alias="latest")
+    document_ids = [
+        Path(labelled_passage_fixture_file).stem
+        for labelled_passage_fixture_file in labelled_passage_fixture_files
+    ]
+    config = Config(
+        cache_bucket=mock_bucket,
+        vespa_search_adapter=local_vespa_search_adapter,
+        as_deployment=False,
+    )
+
+    with pytest.raises(ValueError, match="`latest` is not allowed"):
+        await index_labelled_passages_from_s3_to_vespa(
+            classifier_specs=[classifier_spec],
+            document_ids=document_ids,
+            config=config,
+        )
+
+
+@pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_config(
     mock_bucket,
