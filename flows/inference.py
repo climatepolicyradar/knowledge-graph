@@ -28,6 +28,7 @@ from flows.utils import SlackNotify, get_file_stems_for_document_id
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
+    disallow_latest_alias,
     function_to_flow_name,
     generate_deployment_name,
     get_prefect_job_variable,
@@ -220,7 +221,7 @@ def determine_file_stems(
 
 
 def download_classifier_from_wandb_to_local(
-    run: Run, config: Config, classifier_name: str, alias: str = "latest"
+    run: Run, config: Config, classifier_name: str, alias: str
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -561,6 +562,8 @@ async def classifier_inference(
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
+
+    disallow_latest_alias(classifier_specs)
 
     print(
         f"Running with {len(validated_file_stems)} documents and "

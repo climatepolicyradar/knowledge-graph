@@ -26,13 +26,18 @@ class ClassifierSpec(BaseModel):
         description=(
             "The alias tag for the version to use for inference. e.g 'latest' or 'v2'"
         ),
-        default="latest",
         min_length=1,
     )
 
     def __hash__(self):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""
         return hash((self.name, self.alias))
+
+
+def disallow_latest_alias(classifier_specs: list[ClassifierSpec]):
+    if any(classifier_spec.alias == "latest" for classifier_spec in classifier_specs):
+        raise ValueError("`latest` is not allowed")
+    return None
 
 
 async def get_prefect_job_variable(param_name: str) -> str:
