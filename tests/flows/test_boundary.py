@@ -34,7 +34,6 @@ from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-from src.version import Version
 from tests.flows.conftest import load_fixture
 
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(
@@ -241,12 +240,8 @@ def test_s3_paths_or_s3_prefixes_with_classifier_no_docs(
 ):
     """Test s3_paths_or_s3_prefixes returns classifier-specific prefix when no document IDs provided."""
     config = Config(cache_bucket=mock_bucket)
-    classifier_spec_q788 = ClassifierSpec(
-        name=WikibaseID("Q788"), alias=Version.from_str("v4")
-    )
-    classifier_spec_q699 = ClassifierSpec(
-        name=WikibaseID("Q699"), alias=Version.from_str("v4")
-    )
+    classifier_spec_q788 = ClassifierSpec(name="Q788", alias="v4")
+    classifier_spec_q699 = ClassifierSpec(name="Q699", alias="v4")
 
     s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs=[classifier_spec_q788, classifier_spec_q699],
@@ -271,9 +266,7 @@ def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
 ):
     """Test s3_paths_or_s3_prefixes returns specific paths when both classifier and document IDs provided."""
     config = Config(cache_bucket=mock_bucket)
-    classifier_spec = ClassifierSpec(
-        name=WikibaseID("Q788"), alias=Version.from_str("v4")
-    )
+    classifier_spec = ClassifierSpec(name="Q788", alias="v4")
 
     expected_paths = [
         f"{s3_prefix_mock_bucket_labelled_passages}/{labelled_passage_fixture_file}"

@@ -26,7 +26,6 @@ from flows.utils import SlackNotify, iterate_batch
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
-    disallow_latest_alias,
     function_to_flow_name,
     generate_deployment_name,
     get_prefect_job_variable,
@@ -323,8 +322,6 @@ async def count_family_document_concepts(
     if classifier_specs is None:
         logger.info("no classifier specs. passed in, loading from file")
         classifier_specs = parse_spec_file(config.aws_env)
-
-    disallow_latest_alias(classifier_specs)
 
     logger.info(f"running with classifier specs.: {classifier_specs}")
 

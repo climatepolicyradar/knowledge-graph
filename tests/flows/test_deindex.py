@@ -50,7 +50,6 @@ from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-from src.version import Semantic, Version
 
 
 def test_remove_concepts_from_existing_vespa_concepts():
@@ -1285,11 +1284,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     )
 
     await deindex_labelled_passages_from_s3_to_vespa(
-        classifier_specs=[
-            ClassifierSpec(
-                name=WikibaseID("Q760"), alias=Version(value=Semantic.Latest)
-            )
-        ],
+        classifier_specs=[ClassifierSpec(name="Q760", alias="latest")],
         document_ids=[document_import_id_remove],
         config=config,
     )
@@ -1378,12 +1373,12 @@ def put_empty_document_artifact(
     bucket: str,
     prefix: str,
     concept: WikibaseID,
-    alias: Version,
+    alias: str,
     document_id: str,
 ) -> None:
     body = BytesIO(json.dumps({}).encode("utf-8"))
 
-    key = str(os.path.join(prefix, concept, str(alias), f"{document_id}.json"))
+    key = str(os.path.join(prefix, concept, alias, f"{document_id}.json"))
     print(f"putting empty document artifact at bucket: `{bucket}`, key: `{key}`")
 
     s3_client.put_object(
@@ -1399,53 +1394,49 @@ def put_empty_document_artifact(
     [
         (
             [
-                ClassifierSpec(
-                    name=WikibaseID("Q200"), alias=Version(value=Semantic.Latest)
-                ),
-                ClassifierSpec(
-                    name=WikibaseID("Q300"), alias=Version(value=Semantic.Latest)
-                ),
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
+                ClassifierSpec(name="Q200", alias="latest"),
+                ClassifierSpec(name="Q300", alias="latest"),
+                ClassifierSpec(name="Q400", alias="v6"),
             ],
             [
-                ClassifierSpec(name=WikibaseID("Q100"), alias=Version.from_str("v5")),
-                ClassifierSpec(name=WikibaseID("Q200"), alias=Version.from_str("v9")),
-                ClassifierSpec(name=WikibaseID("Q300"), alias=Version.from_str("v2")),
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
-                ClassifierSpec(name=WikibaseID("Q500"), alias=Version.from_str("v13")),
+                ClassifierSpec(name="Q100", alias="v5"),
+                ClassifierSpec(name="Q200", alias="v9"),
+                ClassifierSpec(name="Q300", alias="v2"),
+                ClassifierSpec(name="Q400", alias="v6"),
+                ClassifierSpec(name="Q500", alias="v13"),
             ],
             [
-                ClassifierSpec(name=WikibaseID("Q200"), alias=Version.from_str("v9")),
-                ClassifierSpec(name=WikibaseID("Q300"), alias=Version.from_str("v2")),
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
+                ClassifierSpec(name="Q200", alias="v9"),
+                ClassifierSpec(name="Q300", alias="v2"),
+                ClassifierSpec(name="Q400", alias="v6"),
             ],
             [
-                ClassifierSpec(name=WikibaseID("Q200"), alias=Version.from_str("v5")),
-                ClassifierSpec(name=WikibaseID("Q200"), alias=Version.from_str("v6")),
-                ClassifierSpec(name=WikibaseID("Q300"), alias=Version.from_str("v1")),
+                ClassifierSpec(name="Q200", alias="v5"),
+                ClassifierSpec(name="Q200", alias="v6"),
+                ClassifierSpec(name="Q300", alias="v1"),
             ],
             None,
         ),
         (
             [
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
+                ClassifierSpec(name="Q400", alias="v6"),
             ],
             [],
             [],
             [],
-            "classifier spec. Q400:v6 was not found in the maintained list",
+            "classifier spec. name='Q400' alias='v6' was not found in the maintained list",
         ),
         (
             [
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
+                ClassifierSpec(name="Q400", alias="v6"),
+                ClassifierSpec(name="Q400", alias="v6"),
             ],
             [
-                ClassifierSpec(name=WikibaseID("Q400"), alias=Version.from_str("v6")),
+                ClassifierSpec(name="Q400", alias="v6"),
             ],
             [],
             [],
-            "already have Q400:v6 as a primary",
+            "already have name='Q400' alias='v6' as a primary",
         ),
     ],
 )
@@ -1518,22 +1509,13 @@ def test_find_all_classifier_specs_for_latest(
     "aliases,expected,exception",
     [
         (
-            [
-                Version.from_str("v2"),
-                Version.from_str("v3"),
-                Version(value=Semantic.Latest),
-                Version.from_str("v7"),
-            ],
-            [
-                Version.from_str("v2"),
-                Version.from_str("v3"),
-                Version.from_str("v7"),
-            ],
+            ["v2", "v3", "latest", "v7"],
+            ["v2", "v3", "v7"],
             None,
         ),
         (
-            [Version.from_str("v9"), Version.from_str("v3")],
-            [Version.from_str("v3"), Version.from_str("v9")],
+            ["v9", "v3"],
+            ["v3", "v9"],
             None,
         ),
         (
@@ -1546,8 +1528,8 @@ def test_find_all_classifier_specs_for_latest(
 def test_search_s3_for_aliases(
     mock_bucket: str,
     mock_s3_client,
-    aliases: list[Version],
-    expected: list[Version],
+    aliases: list[str],
+    expected: list[str],
     exception: str | None,
 ):
     concept = WikibaseID("Q100")
@@ -1594,8 +1576,8 @@ async def test_cleanups_by_s3(
     document_ids: list[str] = [document_id]
     concept = WikibaseID("Q100")
     classifier_specs_cleanup: list[ClassifierSpec] = [
-        ClassifierSpec(name=concept, alias=Version.from_str("v1")),
-        ClassifierSpec(name=concept, alias=Version.from_str("v2")),
+        ClassifierSpec(name=str(concept), alias="v1"),
+        ClassifierSpec(name=str(concept), alias="v2"),
     ]
 
     put = partial(
@@ -1607,7 +1589,7 @@ async def test_cleanups_by_s3(
     )
 
     # Primary to be left alone
-    primary_alias = Version.from_str("v9")
+    primary_alias = "v9"
     put(alias=primary_alias, prefix=DOCUMENT_TARGET_PREFIX_DEFAULT)
     put(alias=primary_alias, prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT)
 
@@ -1643,7 +1625,7 @@ async def test_cleanups_by_s3(
                 os.path.join(
                     DOCUMENT_TARGET_PREFIX_DEFAULT,
                     concept,
-                    str(classifier_spec.alias),
+                    classifier_spec.alias,
                     f"{document_id}.json",
                 )
             )
@@ -1653,7 +1635,7 @@ async def test_cleanups_by_s3(
         os.path.join(
             DOCUMENT_TARGET_PREFIX_DEFAULT,
             concept,
-            str(primary_alias),
+            primary_alias,
             f"{document_id}.json",
         )
     )

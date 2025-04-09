@@ -24,10 +24,8 @@ from flows.inference import (
     store_labels,
     text_block_inference,
 )
-from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-from src.version import Version
 
 
 def helper_list_labels_in_bucket(test_config, bucket_name):
@@ -79,7 +77,7 @@ async def test_load_classifier__existing_classifier(
 ):
     _, mock_run, _ = mock_wandb
     classifier = await load_classifier(
-        mock_run, test_config, local_classifier_id, alias="v1"
+        mock_run, test_config, local_classifier_id, alias="latest"
     )
     assert local_classifier_id == classifier.concept.wikibase_id
 
@@ -88,7 +86,7 @@ def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
     _, mock_run, _ = mock_wandb
     classifier_id = "Qtest"
     _ = download_classifier_from_wandb_to_local(
-        mock_run, test_config, classifier_id, alias="v1"
+        mock_run, test_config, classifier_id, alias="latest"
     )
 
 
@@ -150,12 +148,12 @@ def test_store_labels(test_config, mock_bucket):
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    store_labels(test_config, labels, "TEST.DOC.0.1", "Q9081", "v1")
+    store_labels(test_config, labels, "TEST.DOC.0.1", "Q9081", "latest")
 
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/v1/TEST.DOC.0.1.json"
+    assert labels[0] == "labelled_passages/Q9081/latest/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -164,7 +162,9 @@ async def test_text_block_inference_with_results(
 ):
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier = await load_classifier(mock_run, test_config, local_classifier_id, "v1")
+    classifier = await load_classifier(
+        mock_run, test_config, local_classifier_id, "latest"
+    )
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
@@ -188,7 +188,9 @@ async def test_text_block_inference_without_results(
 ):
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier = await load_classifier(mock_run, test_config, local_classifier_id, "v1")
+    classifier = await load_classifier(
+        mock_run, test_config, local_classifier_id, "latest"
+    )
 
     text = "Rockets are cool. We should build more rockets."
     block_id = "fish_block"
@@ -208,9 +210,7 @@ async def test_classifier_inference(
     doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
     with prefect_test_harness():
         await classifier_inference(
-            classifier_specs=[
-                ClassifierSpec(name=WikibaseID("Q788"), alias=Version.from_str("v1"))
-            ],
+            classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
@@ -265,7 +265,7 @@ async def test_run_classifier_inference_on_document(
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
     classifier_name = "Q788"
-    classifier_alias = "v1"
+    classifier_alias = "latest"
 
     # Load classifier
     classifier = await load_classifier(
@@ -330,7 +330,7 @@ async def test_run_classifier_inference_on_document_missing(
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
     classifier_name = "Q788"
-    classifier_alias = "v1"
+    classifier_alias = "latest"
 
     # Load classifier
     classifier = await load_classifier(

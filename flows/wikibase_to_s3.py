@@ -14,7 +14,6 @@ from scripts.cloud import AwsEnv, function_to_flow_name, generate_deployment_nam
 from scripts.update_classifier_spec import ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.version import Semantic, Version
 from src.wikibase import WikibaseSession
 
 CDN_BUCKET_NAME_SSM_NAME = "/S3/CDNBucketName"
@@ -162,7 +161,7 @@ async def trigger_deindexing(extras_in_s3: list[str], config: Config):
                 name=concept_id,
                 # If a concept has been removed, we'll wipe all versions
                 # of results, so just use the 'latest' version alias here.
-                alias=Version(value=Semantic.Latest),
+                alias="latest",
             )
         )
         for concept_id in extras_in_s3

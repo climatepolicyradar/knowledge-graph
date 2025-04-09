@@ -30,7 +30,6 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from src.identifiers import WikibaseID
-from src.version import Semantic, Version
 
 DEFAULT_DOCUMENTS_BATCH_SIZE = 250
 DEFAULT_DEINDEXING_TASK_BATCH_SIZE = 10
@@ -122,7 +121,7 @@ def find_all_classifier_specs_for_latest(
             raise ValueError(f"already have {classifier_spec} as a primary")
 
         # If it's not the `latest`, then we don't need to do look-ups
-        if classifier_spec.alias.value != Semantic.Latest:
+        if classifier_spec.alias != "latest":
             seen_primaries.add(classifier_spec.name)
 
             with_primary.append(classifier_spec)
@@ -130,7 +129,7 @@ def find_all_classifier_specs_for_latest(
             continue
 
         # Find all the aliases in S3 for `classifier_spec.name`
-        aliases: list[Version] = search_s3_for_aliases(
+        aliases: list[str] = search_s3_for_aliases(
             WikibaseID(classifier_spec.name),
             cache_bucket=cache_bucket,
             document_source_prefix=document_source_prefix,
@@ -159,9 +158,9 @@ def search_s3_for_aliases(
     cache_bucket: str,
     document_source_prefix: str,
     s3_client,
-) -> list[Version]:
+) -> list[str]:
     """Find all aliases for a concept that are in our artifacts."""
-    aliases: set[Version] = set()
+    aliases: set[str] = set()
 
     # Ensure trailing slash for accurate prefix matching
     prefix = str(os.path.join(document_source_prefix, concept)) + "/"
@@ -186,9 +185,9 @@ def search_s3_for_aliases(
                     f"alias parts length was {len(key_parts)} and not {expected_length}: {key_parts}"
                 )
 
-            alias: Version = Version.from_str(key_parts[2])
+            alias: str = key_parts[2]
 
-            if alias.value == Semantic.Latest:
+            if alias == "latest":
                 continue
 
             aliases.add(alias)
