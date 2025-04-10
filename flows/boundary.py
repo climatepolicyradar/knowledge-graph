@@ -562,6 +562,7 @@ def get_document_passage_from_vespa(
 def get_document_passages_from_vespa(
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
+    text_blocks: list[TextBlockId] | None = None,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
     """
     Retrieve all the passages for a document in Vespa.
@@ -573,12 +574,16 @@ def get_document_passages_from_vespa(
 
     logger.info(f"Getting document passages from Vespa: {document_import_id}")
 
+    condition = qb.QueryField("family_document_ref").contains(
+        f"id:doc_search:family_document::{document_import_id}"
+    )
+    if text_blocks:
+        condition &= qb.QueryField("text_block_id").contains(qb.equiv(*text_blocks))
+
+    yql = qb.select("*").from_("document_passage").where(condition)
+
     vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
-        yql=(
-            # trunk-ignore(bandit/B608)
-            "select * from document_passage where family_document_ref contains "
-            f'"id:doc_search:family_document::{document_import_id}"'
-        )
+        yql=yql
     )
 
     if (status_code := vespa_query_response.get_status_code()) != HTTP_OK:
