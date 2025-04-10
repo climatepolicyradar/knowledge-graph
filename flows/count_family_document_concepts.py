@@ -203,7 +203,8 @@ async def load_update_document_concepts_counts(
 
             logger.info(f"processed batch document object URIs #{batch_num}")
 
-    cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
+    if vespa_search_adapter is None:
+        vespa_search_adapter = get_vespa_search_adapter()
 
     # Continue on, even if there were failures, as that's accounted for when
     # calculating the concepts' counts.
@@ -214,12 +215,11 @@ async def load_update_document_concepts_counts(
         for concept, count in concepts_counts.items()
     }
 
-    with cm:
-        await partial_update_family_document_concepts_counts(
-            document_import_id,
-            concepts_counts_with_names,
-            vespa_search_adapter,
-        )
+    await partial_update_family_document_concepts_counts(
+        document_import_id,
+        concepts_counts_with_names,
+        vespa_search_adapter,
+    )
 
     # Now, we finally do a little bit of worrying about
     # failures, so they aren't invisible.

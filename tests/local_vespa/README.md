@@ -1,8 +1,8 @@
-# Local Vespa 
+# Local Vespa
 
 ## Setup for tests
 
-This folder has the config for a local vespa instance that is used for testing.
+This folder has the config for a local Vespa instance that is used for testing.
 
 Some tests require this in order to run. You can spin up a local version by running:
 
@@ -10,7 +10,7 @@ Some tests require this in order to run. You can spin up a local version by runn
 just vespa_dev_setup
 ```
 
-This requires the [vespa cli](https://docs.vespa.ai/en/vespa-cli.html). It also expects the docker daemon to be running.
+This requires the [Vespa CLI](https://docs.vespa.ai/en/vespa-cli.html). It also expects the Docker daemon to be running.
 
 ## Skip vespa tests instead
 
