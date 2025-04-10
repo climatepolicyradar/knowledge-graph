@@ -28,7 +28,7 @@ from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
-from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from pydantic import BaseModel, NonNegativeInt
 from vespa.io import VespaQueryResponse, VespaResponse
 
 from flows.utils import (
@@ -49,7 +49,6 @@ from src.identifiers import FamilyDocumentID, WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-HTTP_OK = 200
 CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 50
@@ -569,12 +568,7 @@ def get_document_passages_from_vespa(
     text_blocks_ids: list[TextBlockId],
     vespa_search_adapter: VespaSearchAdapter,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
-    """
-    Retrieve all the passages for a document in Vespa.
-
-    params:
-    - document_import_id: The document import id for a unique family document.
-    """
+    """Retrieve all the passages for a document in Vespa."""
     logger = get_logger()
 
     logger.info(f"Getting document passages from Vespa: {document_import_id}")
@@ -585,36 +579,28 @@ def get_document_passages_from_vespa(
             f"{text_blocks_ids_n} text block IDs exceeds {VESPA_MAX_LIMIT}"
         )
 
-    passages: list[tuple[VespaHitId, VespaPassage]] = []
-
     id = FamilyDocumentID(id=document_import_id)
 
     family_document_ref = qb.QueryField("family_document_ref")
     text_block_id = qb.QueryField("text_block_id")
 
-    def _read_page(offset) -> VespaQueryResponse:
-        query: qb.Query = (
-            qb.select("*")
-            .from_("document_passage")
-            .where(
-                family_document_ref.contains(str(id))
-                & text_block_id.contains(qb.equiv(*text_blocks_ids))
-            )
-            .set_limit(VESPA_MAX_LIMIT)
-            .set_offset(offset)
+    query: qb.Query = (
+        qb.select("*")
+        .from_("document_passage")
+        .where(
+            family_document_ref.contains(str(id))
+            & text_block_id.contains(qb.equiv(*text_blocks_ids))
         )
+        .set_limit(VESPA_MAX_LIMIT)
+    )
 
-        vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
-            yql=query
-        )
+    vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+        yql=query
+    )
 
-        if not vespa_query_response.is_successful():
-            raise QueryError(vespa_query_response.get_status_code())
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
 
-        return vespa_query_response
-
-    offset: NonNegativeInt = 0  # Start at the beginning
-    vespa_query_response = _read_page(offset=offset)
     # From `.root.fields.totalCount`
     total_count: NonNegativeInt = vespa_query_response.number_documents_retrieved
 
@@ -622,46 +608,14 @@ def get_document_passages_from_vespa(
         (
             f"Vespa search response for document: {document_import_id} "
             f"with {len(vespa_query_response.hits)} hits, "
-            f"limit {VESPA_MAX_LIMIT}, offset {offset}, and "
-            f"total count {total_count}"
+            f"limit {VESPA_MAX_LIMIT}, and total count {total_count}"
         )
     )
 
-    passages.extend(
-        [
-            (passage["id"], VespaPassage.model_validate(passage["fields"]))
-            for passage in vespa_query_response.hits
-        ]
-    )
-
-    # Early return if it all fit in the first page
-    if total_count <= VESPA_MAX_LIMIT:
-        return passages
-
-    # Skip the first page, since we've done it already
-    remaining_text_blocks_ids_n: PositiveInt = text_blocks_ids_n - VESPA_MAX_LIMIT
-
-    i: PositiveInt
-    for i in range(1, remaining_text_blocks_ids_n, VESPA_MAX_LIMIT):
-        # Parameters for the next page:
-        #
-        # Get the smaller of the 2 numbers, since if you go above the
-        # totals count, Vespa will return a query error.
-        offset: PositiveInt = min(i * VESPA_MAX_LIMIT, total_count)
-
-        vespa_query_response: VespaQueryResponse = _read_page(offset)
-
-        if not vespa_query_response.is_successful():
-            raise QueryError(vespa_query_response.get_status_code())
-
-        passages.extend(
-            [
-                (passage["id"], VespaPassage.model_validate(passage["fields"]))
-                for passage in vespa_query_response.hits
-            ]
-        )
-
-    return passages
+    return [
+        (passage["id"], VespaPassage.model_validate(passage["fields"]))
+        for passage in vespa_query_response.hits
+    ]
 
 
 def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
