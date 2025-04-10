@@ -69,7 +69,7 @@ class SlackNotify:
         slack.notify(body=msg)
 
 
-def remove_translated_suffix(file_name: str) -> str:
+def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
     """
     Remove the suffix from a file name that indicates it has been translated.
 
