@@ -4,6 +4,7 @@ import asyncio
 import base64
 import contextlib
 import json
+import math
 import os
 import re
 import tempfile
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any, ContextManager, TypeAlias, Union
 
 import boto3
+import vespa.application
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Document as VespaDocument
@@ -756,7 +758,7 @@ class ConceptModel(BaseModel):
 async def partial_update_text_block(
     text_block: tuple[VespaHitId, VespaPassage],
     concepts: list[VespaConcept],  # A possibly empty list
-    vespa_search_adapter: VespaSearchAdapter,
+    vespa_connection_pool: vespa.application.VespaAsync,
     update_function: Callable[[VespaPassage, list[VespaConcept]], list[dict[str, Any]]],
 ):
     """Partial update a singular text block and its concepts."""
@@ -766,7 +768,7 @@ async def partial_update_text_block(
 
     serialised_concepts = update_function(document_passage, concepts)
 
-    response: VespaResponse = vespa_search_adapter.client.update_data(  # pyright: ignore[reportOptionalMemberAccess]
+    response: VespaResponse = vespa_connection_pool.update_data(  # pyright: ignore[reportOptionalMemberAccess]
         schema="document_passage",
         namespace="doc_search",
         data_id=data_id,
@@ -1016,11 +1018,21 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
         batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
     )
 
+    vespa_connections_n = math.ceil(
+        len(list(grouped_concepts.items())) / DEFAULT_DOCUMENTS_BATCH_SIZE
+    )
+
     document_import_id = remove_translated_suffix(document_importer[0])
 
     text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
 
-    with cm:
+    async with (
+        cm,
+        # Create a Vespa connection pool
+        vespa_search_adapter.client.asyncio(
+            connections=vespa_connections_n
+        ) as vespa_connection_pool,
+    ):
         # Read all the document passages from Vespa in as fewer reads as possible
         def collect_text_blocks(
             acc: dict[VespaHitId, VespaPassage],
@@ -1056,7 +1068,7 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
                 partial_update_text_block(
                     text_block=(text_block_id, text_blocks[text_block_id]),
                     concepts=concepts,
-                    vespa_search_adapter=vespa_search_adapter,
+                    vespa_connection_pool=vespa_connection_pool,
                     update_function=update_concepts_on_existing_vespa_concepts,
                 )
                 for text_block_id, concepts in batch
