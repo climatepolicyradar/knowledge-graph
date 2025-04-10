@@ -3,6 +3,7 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -18,6 +19,7 @@ from flows.boundary import (
     DocumentObjectUri,
     Operation,
     TextBlockId,
+    connections_from_batch_size,
     convert_labelled_passage_to_concepts,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
@@ -391,7 +393,8 @@ def test_get_document_passage_from_vespa(
 
 
 @pytest.mark.vespa
-def test_get_some_document_passages_from_vespa(
+@pytest.mark.asyncio
+async def test_get_some_document_passages_from_vespa(
     local_vespa_search_adapter: VespaSearchAdapter,
     document_passages_test_data_file_path: str,
     vespa_app,
@@ -399,11 +402,12 @@ def test_get_some_document_passages_from_vespa(
     """Test that we can retrieve some of the passages for a document in vespa."""
 
     # Test that we retrieve no passages for a document that doesn't exist
-    document_passages = get_document_passages_from_vespa(
-        text_blocks_ids=["test_33"],
-        document_import_id="test.executive.1.1",
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            text_blocks_ids=["test_33"],
+            document_import_id="test.executive.1.1",
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     assert document_passages == []
 
@@ -422,11 +426,12 @@ def test_get_some_document_passages_from_vespa(
 
     family_document_passages_count_expected = len(text_blocks_ids)
 
-    document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=text_blocks_ids,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=text_blocks_ids,
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     assert len(document_passages) == family_document_passages_count_expected
     assert all(
@@ -446,11 +451,12 @@ def test_get_some_document_passages_from_vespa(
         family_document_passages_count_expected - less_expected
     )
 
-    document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=text_blocks_ids[less_expected:],
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=text_blocks_ids[less_expected:],
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     assert len(document_passages) == family_document_passages_count_expected
     assert all(
@@ -466,7 +472,8 @@ def test_get_some_document_passages_from_vespa(
 
 
 @pytest.mark.vespa
-def test_all_get_document_passages_from_vespa(
+@pytest.mark.asyncio
+async def test_all_get_document_passages_from_vespa(
     local_vespa_search_adapter: VespaSearchAdapter,
     document_passages_test_data_file_path: str,
     vespa_app,
@@ -486,11 +493,12 @@ def test_all_get_document_passages_from_vespa(
 
     family_document_passages_count_expected = len(text_blocks_ids)
 
-    document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     assert len(document_passages) == family_document_passages_count_expected
     assert all(
@@ -506,16 +514,18 @@ def test_all_get_document_passages_from_vespa(
 
 
 @pytest.mark.vespa
-def test_get_document_passages_from_vespa_over_limit(
+@pytest.mark.asyncio
+async def test_get_document_passages_from_vespa_over_limit(
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ) -> None:
     with pytest.raises(ValueError, match="50001 text block IDs exceeds 50000"):
-        get_document_passages_from_vespa(
-            text_blocks_ids=["test_33"] * (VESPA_MAX_LIMIT + 1),
-            document_import_id="test.executive.1.1",
-            vespa_search_adapter=local_vespa_search_adapter,
-        )
+        async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+            _ = await get_document_passages_from_vespa(
+                text_blocks_ids=["test_33"] * (VESPA_MAX_LIMIT + 1),
+                document_import_id="test.executive.1.1",
+                vespa_connection_pool=vespa_connection_pool,
+            )
 
 
 @pytest.mark.asyncio
@@ -549,6 +559,7 @@ async def test_updates_by_s3_with_s3_paths(
         as_deployment=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -589,6 +600,7 @@ async def test_updates_by_s3_with_s3_prefixes(
         as_deployment=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -637,6 +649,7 @@ async def test_updates_by_s3_task_failure(
             as_deployment=False,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            vespa_search_adapter=local_vespa_search_adapter,
         )
 
 
@@ -669,6 +682,7 @@ async def test_updates_by_s3_task_unexpected_result(
             as_deployment=False,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            vespa_search_adapter=local_vespa_search_adapter,
         )
 
 
@@ -996,3 +1010,26 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
             },
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "items,batch_size,connections",
+    [
+        ([], 10, 1),
+        ([1, 2, 3, 4], 2, 2),
+        ([1, 2], 10, 1),
+        ([1] * 11, 5, 3),
+        ([1] * 10, 10, 1),
+        ([1] * 0, 1, 1),
+        ([1] * 25, 10, 3),
+        ([1] * 10, 3, 4),
+        ([1] * 9, 3, 3),
+        ([1], 100, 1),
+    ],
+)
+def test_connections_from_batch_size(
+    items: list[Any],
+    batch_size: int,
+    connections: int,
+) -> None:
+    assert connections_from_batch_size(items, batch_size) == connections

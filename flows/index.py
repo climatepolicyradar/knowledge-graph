@@ -127,4 +127,5 @@ async def index_labelled_passages_from_s3_to_vespa(
         as_deployment=config.as_deployment,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
+        vespa_search_adapter=config.vespa_search_adapter,
     )
