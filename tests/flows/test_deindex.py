@@ -13,7 +13,6 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import S3_PATTERN, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
-import flows.boundary as boundary
 import flows.count_family_document_concepts as count_family_document_concepts
 from flows.boundary import (
     ConceptModel,
@@ -234,11 +233,12 @@ async def test_partial_update_text_block_with_removal(
     document_import_id = "CCLW.executive.10014.4470"
 
     # Confirm that the concepts to remove are in the document passages
-    initial_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        initial_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     try:
         first_passage_hit_id, first_passage_with_concepts = next(
@@ -258,15 +258,16 @@ async def test_partial_update_text_block_with_removal(
     ]
     concepts_to_keep: Sequence[VespaConcept] = first_passage_with_concepts.concepts[1:]
 
-    assert (
-        await partial_update_text_block(
-            text_block=(first_passage_hit_id, first_passage_with_concepts),
-            concepts=list(concepts_to_remove),
-            vespa_search_adapter=local_vespa_search_adapter,
-            update_function=remove_concepts_from_existing_vespa_concepts,
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        assert (
+            await partial_update_text_block(
+                text_block=(first_passage_hit_id, first_passage_with_concepts),
+                concepts=list(concepts_to_remove),
+                vespa_connection_pool=vespa_connection_pool,
+                update_function=remove_concepts_from_existing_vespa_concepts,
+            )
+            is None
         )
-        is None
-    )
 
     _hit_id, updated_passage = get_document_passage_from_vespa(
         text_block_id=first_passage_with_concepts.text_block_id,
@@ -286,11 +287,12 @@ async def test_partial_update_text_block_with_empty(
     document_import_id = "CCLW.executive.10014.4470"
 
     # Confirm that the concepts to remove are in the document passages
-    initial_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        initial_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     try:
         first_passage_hit_id, first_passage_with_concepts = next(
@@ -304,15 +306,16 @@ async def test_partial_update_text_block_with_empty(
     assert first_passage_with_concepts.concepts
     assert len(first_passage_with_concepts.concepts) >= 2, "must be at least 2 concepts"
 
-    assert (
-        await partial_update_text_block(
-            text_block=(first_passage_hit_id, first_passage_with_concepts),
-            concepts=[],
-            vespa_search_adapter=local_vespa_search_adapter,
-            update_function=remove_concepts_from_existing_vespa_concepts,
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        assert (
+            await partial_update_text_block(
+                text_block=(first_passage_hit_id, first_passage_with_concepts),
+                concepts=[],
+                vespa_connection_pool=vespa_connection_pool,
+                update_function=remove_concepts_from_existing_vespa_concepts,
+            )
+            is None
         )
-        is None
-    )
 
     _hit_id, updated_passage = get_document_passage_from_vespa(
         text_block_id=first_passage_with_concepts.text_block_id,
@@ -970,26 +973,27 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     # Add the concepts expected to be removed, to the document passage
     # in the local Vespa instance for the test.
-    assert (
-        await boundary.partial_update_text_block(
-            text_block=(hit_id_1, passage_remove_1_pre),
-            concepts=[
-                VespaConcept(
-                    id="Q760",
-                    name="nuclear sector",
-                    model='KeywordClassifier("nuclear sector")',
-                    start=0,
-                    end=10,
-                    timestamp=datetime.fromisoformat(
-                        "2021-09-29T14:00:00.000Z".replace("Z", "+00:00")
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        assert (
+            await partial_update_text_block(
+                text_block=(hit_id_1, passage_remove_1_pre),
+                concepts=[
+                    VespaConcept(
+                        id="Q760",
+                        name="nuclear sector",
+                        model='KeywordClassifier("nuclear sector")',
+                        start=0,
+                        end=10,
+                        timestamp=datetime.fromisoformat(
+                            "2021-09-29T14:00:00.000Z".replace("Z", "+00:00")
+                        ),
                     ),
-                ),
-            ],
-            vespa_search_adapter=local_vespa_search_adapter,
-            update_function=update_concepts_on_existing_vespa_concepts,
+                ],
+                vespa_connection_pool=vespa_connection_pool,
+                update_function=update_concepts_on_existing_vespa_concepts,
+            )
+            is None
         )
-        is None
-    )
 
     # Run the function
     assert (
@@ -1257,26 +1261,27 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
 
     # Add the concepts expected to be removed, to the document passage
     # in the local Vespa instance for the test.
-    assert (
-        await boundary.partial_update_text_block(
-            text_block=(hit_id_1, passage_remove_1_pre),
-            concepts=[
-                VespaConcept(
-                    id="Q760",
-                    name="nuclear sector",
-                    model='KeywordClassifier("nuclear sector")',
-                    start=0,
-                    end=10,
-                    timestamp=datetime.fromisoformat(
-                        "2021-09-29T14:00:00.000Z".replace("Z", "+00:00")
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        assert (
+            await partial_update_text_block(
+                text_block=(hit_id_1, passage_remove_1_pre),
+                concepts=[
+                    VespaConcept(
+                        id="Q760",
+                        name="nuclear sector",
+                        model='KeywordClassifier("nuclear sector")',
+                        start=0,
+                        end=10,
+                        timestamp=datetime.fromisoformat(
+                            "2021-09-29T14:00:00.000Z".replace("Z", "+00:00")
+                        ),
                     ),
-                ),
-            ],
-            vespa_search_adapter=local_vespa_search_adapter,
-            update_function=update_concepts_on_existing_vespa_concepts,
+                ],
+                vespa_connection_pool=vespa_connection_pool,
+                update_function=update_concepts_on_existing_vespa_concepts,
+            )
+            is None
         )
-        is None
-    )
 
     # Run the function
     config = Config(
