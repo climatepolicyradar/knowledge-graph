@@ -30,6 +30,7 @@ from prefect.logging import get_logger
 from pydantic import BaseModel
 from vespa.io import VespaQueryResponse, VespaResponse
 
+from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     get_labelled_passage_paths,
     iterate_batch,
@@ -43,7 +44,7 @@ from scripts.cloud import (
     generate_deployment_name,
 )
 from src.concept import Concept
-from src.exceptions import PartialUpdateError, QueryError
+from src.exceptions import QueryError
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -738,7 +739,7 @@ async def partial_update_text_block(
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
     update_function: Callable[[VespaPassage, list[VespaConcept]], list[dict[str, Any]]],
-):
+) -> Result[tuple[TextBlockId, list[VespaConcept]], Error]:
     """Partial update a singular text block and its concepts."""
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id, document_import_id, vespa_search_adapter
@@ -756,9 +757,14 @@ async def partial_update_text_block(
     )
 
     if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(data_id, status_code)
+        return Err(
+            Error(
+                msg="failed to perform partial update",
+                metadata={"id": data_id, "status_code": status_code},
+            )
+        )
 
-    return None
+    return Ok((text_block_id, concepts))
 
 
 def op_to_fn(operation: Operation):
@@ -1012,38 +1018,39 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
             ]
 
             logger.info(f"gathering partial updates tasks for batch {batch_num}")
-            results = await asyncio.gather(
-                *partial_update_tasks, return_exceptions=True
-            )
+            results: list[
+                Result[tuple[TextBlockId, list[VespaConcept]], Error]
+            ] = await asyncio.gather(*partial_update_tasks, return_exceptions=False)
             logger.info(
                 f"gathered partial {len(results)} updates tasks for batch {batch_num}"
             )
 
             for i, result in enumerate(results):
-                text_block_id, concepts = batch[i]
+                match result:
+                    case Ok(value):
+                        _text_block_id, concepts = value
 
-                if isinstance(result, Exception):
-                    logger.error(
-                        f"failed to do partial update for text block `{text_block_id}`: {str(result)}",
-                    )
+                        # Example:
+                        #
+                        # ..
+                        # "labellers": [
+                        #   "KeywordClassifier(\"professional services sector\")"
+                        # ],
+                        # ...
+                        concepts_models = [
+                            ConceptModel(
+                                wikibase_id=WikibaseID(concept.id),
+                                model_name=concept.model,
+                            )
+                            for concept in concepts
+                        ]
 
-                    continue
-
-                # Example:
-                #
-                # ..
-                # "labellers": [
-                #   "KeywordClassifier(\"professional services sector\")"
-                # ],
-                # ...
-                concepts_models = [
-                    ConceptModel(
-                        wikibase_id=WikibaseID(concept.id), model_name=concept.model
-                    )
-                    for concept in concepts
-                ]
-
-                concepts_counts.update(concepts_models)
+                        concepts_counts.update(concepts_models)
+                    case Err(err):
+                        logger.error(
+                            f"{err.msg}: {err.metadata}",
+                        )
+                        continue
 
         # Write concepts counts to S3
         try:
