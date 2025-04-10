@@ -1,7 +1,7 @@
 import json
-import os
 from collections import Counter
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,99 +13,18 @@ from prefect.logging import disable_run_logger
 
 from flows.boundary import (
     ConceptModel,
-    Operation,
-    get_document_passage_from_vespa,
     get_document_passages_from_vespa,
     partial_update_text_block,
     run_partial_updates_of_concepts_for_document_passages__update,
     update_concepts_on_existing_vespa_concepts,
-    updates_by_s3,
 )
 from flows.index import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     Config,
     index_labelled_passages_from_s3_to_vespa,
 )
-from scripts.cloud import AwsEnv, ClassifierSpec
+from scripts.cloud import ClassifierSpec
 from src.identifiers import WikibaseID
-from tests.flows.test_boundary import DOCUMENT_PASSAGE_ID_PATTERN
-
-
-@pytest.mark.vespa
-def test_get_document_passages_from_vespa(
-    local_vespa_search_adapter: VespaSearchAdapter,
-    document_passages_test_data_file_path: str,
-    vespa_app,
-) -> None:
-    """Test that we can retrieve all the passages for a document in vespa."""
-
-    # Test that we retrieve no passages for a document that doesn't exist
-    document_passages = get_document_passages_from_vespa(
-        document_import_id="test.executive.1.1",
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    assert document_passages == []
-
-    # Test that we can retrieve all the passages for a document that does exist
-    document_import_id = "CCLW.executive.10014.4470"
-
-    with open(document_passages_test_data_file_path) as f:
-        document_passage_test_data = json.load(f)
-
-    family_document_passages_count_expected = sum(
-        1
-        for doc in document_passage_test_data
-        if doc["fields"]["family_document_ref"]
-        == f"id:doc_search:family_document::{document_import_id}"
-    )
-
-    document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    assert len(document_passages) > 0
-    assert len(document_passages) == family_document_passages_count_expected
-    assert all(
-        [
-            (
-                type(passage) is VespaPassage
-                and type(passage_id) is str
-                and bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
-            )
-            for passage_id, passage in document_passages
-        ]
-    )
-
-
-@pytest.mark.vespa
-def test_get_document_passage_from_vespa(
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-) -> None:
-    """Test that we can retrieve a passage for a document in vespa."""
-
-    # Test that we retrieve no passages for a document that doesn't exist
-    with pytest.raises(
-        ValueError, match="Expected 1 document passage for text block `00001`, got 0"
-    ):
-        get_document_passage_from_vespa(
-            text_block_id="00001",  # This text block doesn't exist
-            document_import_id="test.executive.1.1",  # This document doesn't exist
-            vespa_search_adapter=local_vespa_search_adapter,
-        )
-
-    # Test that we can retrieve all the passages for a document that does exist
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id="1457",
-        document_import_id="CCLW.executive.10014.4470",
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    assert isinstance(document_passage, VespaPassage)
-    assert isinstance(document_passage_id, str)
-    assert DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(document_passage_id)
 
 
 @pytest.mark.asyncio
@@ -115,13 +34,14 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     vespa_app,
     mock_bucket,
     s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
+    labelled_passage_fixture_files: list[str],
+    labelled_passage_fixture_ids: list[str],
     mock_bucket_labelled_passages,
     mock_s3_client,
 ) -> None:
     """Test that we can run partial updates of concepts for document passages."""
     document_fixture = labelled_passage_fixture_files[0]
-    document_import_id = Path(document_fixture).stem
+    document_import_id = labelled_passage_fixture_ids[0]
     document_object_uri = (
         f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{document_fixture}"
     )
@@ -129,18 +49,213 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     # Confirm that the example concepts are not in the document passages
     initial_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=["1570", "1273", "1052"],
         vespa_search_adapter=local_vespa_search_adapter,
     )
-    initial_concepts = [
-        concept
-        for _, passage in initial_passages
-        if passage.concepts
-        for concept in passage.concepts
-    ]
-    assert len(initial_concepts) == 3660
+
+    # Make the lists' orders deterministic for comparisons
+    s = partial(sorted, key=lambda x: x[0])
+
+    assert s(initial_passages) == s(
+        [
+            (
+                "id:doc_search:document_passage::CCLW.executive.10014.4470.1052",
+                VespaPassage(
+                    family_name=None,
+                    family_description=None,
+                    family_source=None,
+                    family_import_id=None,
+                    family_slug=None,
+                    family_category=None,
+                    family_publication_ts=None,
+                    family_geography=None,
+                    family_geographies=None,
+                    document_import_id=None,
+                    document_slug=None,
+                    document_languages=None,
+                    document_content_type=None,
+                    document_cdn_object=None,
+                    document_source_url=None,
+                    corpus_type_name=None,
+                    corpus_import_id=None,
+                    metadata=None,
+                    concepts=[
+                        VespaConcept(
+                            id="concept_2_2",
+                            name="sectors",
+                            parent_concepts=[
+                                {"name": "Q2-name", "id": "Q2"},
+                                {"name": "Q3-name", "id": "Q3"},
+                            ],
+                            parent_concept_ids_flat="Q2,Q3,",
+                            model="sectors_model",
+                            end=11,
+                            start=0,
+                            timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+                        ),
+                        VespaConcept(
+                            id="concept_2_2",
+                            name="environment",
+                            parent_concepts=[
+                                {"name": "Q2-name", "id": "Q2"},
+                                {"name": "Q3-name", "id": "Q3"},
+                            ],
+                            parent_concept_ids_flat="Q2,Q3,",
+                            model="environment_model",
+                            end=31,
+                            start=15,
+                            timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+                        ),
+                    ],
+                    relevance=None,
+                    rank_features=None,
+                    concept_counts=None,
+                    text_block="Environmental protection provisions integrated into sectoral policy documents (energy, agriculture, industry, trade, transport, constructions and public health)",
+                    text_block_id="1052",
+                    text_block_type="BlockType.TABLE_CELL",
+                    text_block_page=73,
+                    text_block_coords=[
+                        (529.3079833984375, 133.9416046142578),
+                        (613.2672119140625, 133.9416046142578),
+                        (613.2672119140625, 314.8775939941406),
+                        (529.3079833984375, 314.8775939941406),
+                    ],
+                ),
+            ),
+            (
+                "id:doc_search:document_passage::CCLW.executive.10014.4470.1273",
+                VespaPassage(
+                    family_name=None,
+                    family_description=None,
+                    family_source=None,
+                    family_import_id=None,
+                    family_slug=None,
+                    family_category=None,
+                    family_publication_ts=None,
+                    family_geography=None,
+                    family_geographies=None,
+                    document_import_id=None,
+                    document_slug=None,
+                    document_languages=None,
+                    document_content_type=None,
+                    document_cdn_object=None,
+                    document_source_url=None,
+                    corpus_type_name=None,
+                    corpus_import_id=None,
+                    metadata=None,
+                    concepts=[
+                        VespaConcept(
+                            id="concept_1_1",
+                            name="just transition",
+                            parent_concepts=[
+                                {"name": "Q1-name", "id": "Q1"},
+                                {"name": "Q2-name", "id": "Q2"},
+                            ],
+                            parent_concept_ids_flat="Q1,Q2,",
+                            model="just transition_model",
+                            end=20,
+                            start=1,
+                            timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+                        ),
+                        VespaConcept(
+                            id="concept_1_1",
+                            name="sectors",
+                            parent_concepts=[
+                                {"name": "Q1-name", "id": "Q1"},
+                                {"name": "Q2-name", "id": "Q2"},
+                            ],
+                            parent_concept_ids_flat="Q1,Q2,",
+                            model="sectors_model",
+                            end=31,
+                            start=18,
+                            timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+                        ),
+                    ],
+                    relevance=None,
+                    rank_features=None,
+                    concept_counts=None,
+                    text_block="5",
+                    text_block_id="1273",
+                    text_block_type="BlockType.TABLE_CELL",
+                    text_block_page=79,
+                    text_block_coords=[
+                        (528.7536010742188, 494.80560302734375),
+                        (613.2528076171875, 494.80560302734375),
+                        (613.2528076171875, 509.731201171875),
+                        (528.7536010742188, 509.731201171875),
+                    ],
+                ),
+            ),
+            (
+                "id:doc_search:document_passage::CCLW.executive.10014.4470.1570",
+                VespaPassage(
+                    family_name=None,
+                    family_description=None,
+                    family_source=None,
+                    family_import_id=None,
+                    family_slug=None,
+                    family_category=None,
+                    family_publication_ts=None,
+                    family_geography=None,
+                    family_geographies=None,
+                    document_import_id=None,
+                    document_slug=None,
+                    document_languages=None,
+                    document_content_type=None,
+                    document_cdn_object=None,
+                    document_source_url=None,
+                    corpus_type_name=None,
+                    corpus_import_id=None,
+                    metadata=None,
+                    concepts=[
+                        VespaConcept(
+                            id="concept_1723_1723",
+                            name="floods",
+                            parent_concepts=[
+                                {"name": "Q1723-name", "id": "Q1723"},
+                                {"name": "Q1724-name", "id": "Q1724"},
+                            ],
+                            parent_concept_ids_flat="Q1723,Q1724,",
+                            model="floods_model",
+                            end=15,
+                            start=0,
+                            timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+                        ),
+                        VespaConcept(
+                            id="concept_1723_1723",
+                            name="just transition",
+                            parent_concepts=[
+                                {"name": "Q1723-name", "id": "Q1723"},
+                                {"name": "Q1724-name", "id": "Q1724"},
+                            ],
+                            parent_concept_ids_flat="Q1723,Q1724,",
+                            model="just transition_model",
+                            end=34,
+                            start=16,
+                            timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+                        ),
+                    ],
+                    relevance=None,
+                    rank_features=None,
+                    concept_counts=None,
+                    text_block="7",
+                    text_block_id="1570",
+                    text_block_type="BlockType.TABLE_CELL",
+                    text_block_page=86,
+                    text_block_coords=[
+                        (691.6176147460938, 495.1296081542969),
+                        (784.0223999023438, 494.41680908203125),
+                        (784.0223999023438, 509.349609375),
+                        (691.6176147460938, 509.349609375),
+                    ],
+                ),
+            ),
+        ]
+    )
 
     # Confirm that we can add the example concepts to the document passages
-
+    #
+    # The model names should be different. It's to do with bad fixture setup by us.
     test_counts = Counter(
         {
             ConceptModel(
@@ -154,6 +269,8 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         }
     )
 
+    print("document_import_id", document_import_id)
+    print("document_object_uri", document_object_uri)
     assert (
         test_counts
         == await run_partial_updates_of_concepts_for_document_passages__update.fn(
@@ -165,6 +282,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     )
     updated_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=None,
         vespa_search_adapter=local_vespa_search_adapter,
     )
     updated_concepts = [
@@ -238,6 +356,7 @@ async def test_partial_update_text_block(
     # Confirm that the example concepts are not in the document passages
     initial_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=None,
         vespa_search_adapter=local_vespa_search_adapter,
     )
     initial_concepts = [
@@ -252,12 +371,19 @@ async def test_partial_update_text_block(
 
     text_block_id = "1401"
 
+    passage = next(
+        ((i, p) for i, p in initial_passages if p.text_block_id == text_block_id), None
+    )
+    assert passage is not None, (
+        f"failed to find text `{text_block_id}` block in fixtures"
+    )
+    hit_id, text_block = passage
+
     assert concept_a not in initial_concepts
 
     result_a = await partial_update_text_block(
-        text_block_id,
+        (hit_id, text_block),
         [concept_a],
-        document_import_id,
         local_vespa_search_adapter,
         update_concepts_on_existing_vespa_concepts,
     )
@@ -266,6 +392,7 @@ async def test_partial_update_text_block(
 
     passages_a = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=None,
         vespa_search_adapter=local_vespa_search_adapter,
     )
     concepts_a = [
@@ -280,9 +407,8 @@ async def test_partial_update_text_block(
     assert concept_b not in concepts_a
 
     result_b = await partial_update_text_block(
-        text_block_id,
+        (hit_id, text_block),
         [concept_b],
-        document_import_id,
         local_vespa_search_adapter,
         update_concepts_on_existing_vespa_concepts,
     )
@@ -291,6 +417,7 @@ async def test_partial_update_text_block(
 
     passages_b = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=None,
         vespa_search_adapter=local_vespa_search_adapter,
     )
     concepts_b = [
@@ -375,7 +502,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
 
     assert initial_concepts_count < final_concepts_count
     # Original + fixture (.tests/flows/fixtures/*.json)
-    assert final_concepts_count == 3933
+    assert final_concepts_count == 3935
 
 
 @pytest.mark.asyncio
@@ -494,43 +621,3 @@ def test_update_concepts_on_existing_vespa_concepts(
         )
         assert len(updated_passage_concepts) == 2
         assert concept.model_dump(mode="json") in updated_passage_concepts
-
-
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_updates_by_s3_with_s3_prefixes(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-) -> None:
-    """We can successfully index labelled passages from S3 into Vespa."""
-    initial_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    initial_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
-    )
-
-    await updates_by_s3(
-        partial_update_flow=Operation.INDEX,
-        aws_env=AwsEnv.sandbox,
-        s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
-        s3_paths=None,
-        as_deployment=False,
-        cache_bucket=mock_bucket,
-        concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    )
-
-    final_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    final_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
-    )
-
-    assert initial_concepts_count < final_concepts_count
-    # Original + fixture (.tests/flows/fixtures/*.json)
-    assert final_concepts_count == 3933
