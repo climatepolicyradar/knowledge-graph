@@ -153,14 +153,16 @@ class WikibaseSession:
         ).json()
 
         page_id = str(
-            page_id_response.get("entities", {}).get(wikibase_id, {}).get("pageid")
+            page_id_response.get("entities", {})
+            .get(wikibase_id.__str__(), {})
+            .get("pageid")
         )
         if not page_id:
             raise ConceptNotFoundError(wikibase_id)
 
         redirects = (
             page_id_response.get("entities", {})
-            .get(wikibase_id, {})
+            .get(wikibase_id.__str__(), {})
             .get("redirects", {})
         )
         if redirects:
@@ -345,7 +347,7 @@ class WikibaseSession:
             },
         ).json()
 
-        entity = response["entities"][wikibase_id]
+        entity = response["entities"][wikibase_id.__str__()]
         hierarchically_related_concepts = []
         if "claims" in entity:
             for claim in entity["claims"].values():
