@@ -414,6 +414,8 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
+    # FIXME: This makes the logs look like the run has failed and can happen like 300
+    # times per batch.
     if document.languages != ["en"]:
         raise ValueError(
             f"Cannot run inference on {file_stem} as it has non-english language: "
@@ -581,7 +583,7 @@ async def classifier_inference(
         batches = iterate_batch(validated_file_stems, batch_size)
 
         tasks = [
-            await run_deployment(
+            run_deployment(
                 name=f"{flow_name}/{deployment_name}",
                 parameters={
                     "batch": batch,
