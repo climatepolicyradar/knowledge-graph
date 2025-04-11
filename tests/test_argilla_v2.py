@@ -2,14 +2,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from argilla import (
-    Dataset,
-    Record,
-    Settings,
-    SpanQuestion,
-    TextField,
-    TextQuestion,
-)
+from argilla import Dataset, Record, Settings, SpanQuestion, TextField, TextQuestion
 from dotenv import find_dotenv, load_dotenv
 
 from src.argilla_v2 import ArgillaSession

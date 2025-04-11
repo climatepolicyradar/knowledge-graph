@@ -41,11 +41,19 @@ class Classifier(ABC):
                 f"{expected}, not {self.concept.wikibase_id}"
             )
 
-    def fit(self) -> "Classifier":
+    def fit(self, **kwargs) -> "Classifier":
         """
         Train the classifier on the data in the concept.
 
-        :return Classifier: The trained classifier
+        This is a no-op in the base class. Subclasses should override this method
+        to implement their specific training logic.
+
+        Args:
+            **kwargs: Training configuration parameters. The specific parameters
+                required will depend on the classifier implementation.
+
+        Returns:
+            Classifier: The trained classifier
         """
         return self
 

@@ -16,9 +16,7 @@ app = typer.Typer()
 def main(
     wikibase_id: Annotated[
         WikibaseID,
-        typer.Option(
-            ..., help="The Wikibase ID of the concept to fetch", parser=WikibaseID
-        ),
+        typer.Option(..., help="The Wikibase ID of the concept to fetch"),
     ],
 ):
     with console.status("Connecting to Wikibase..."):

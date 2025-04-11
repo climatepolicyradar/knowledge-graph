@@ -26,10 +26,7 @@ from flows.index import (
     Config,
     index_labelled_passages_from_s3_to_vespa,
 )
-from scripts.cloud import (
-    AwsEnv,
-    ClassifierSpec,
-)
+from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
 from tests.flows.test_boundary import DOCUMENT_PASSAGE_ID_PATTERN
 

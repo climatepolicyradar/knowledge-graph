@@ -50,11 +50,13 @@ class KeywordClassifier(Classifier):
 
         for label in sorted_labels:
             if label.strip():  # Ensure the label is not just whitespace
-                if any(char.isupper() for char in label):
-                    # Labels including uppercase characters are added to the case-sensitive list
+                if any(char.isupper() for char in label) or any(
+                    ord(char) > 127 for char in label
+                ):
+                    # Labels including uppercase or non-ASCII characters are added to the case-sensitive list
                     self.case_sensitive_labels.append(re.escape(label))
                 else:
-                    # Labels with only lowercase characters are added to the case-insensitive list
+                    # Only pure ASCII lowercase labels are added to the case-insensitive list
                     self.case_insensitive_labels.append(re.escape(label))
 
         # Case-sensitive pattern: matches exactly as provided

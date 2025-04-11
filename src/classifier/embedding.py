@@ -9,7 +9,7 @@ from src.span import Span
 
 class EmbeddingClassifier(Classifier):
     """
-    A classifier that uses an embedding model identify concepts in text.
+    A classifier that uses an embedding model to identify concepts in text.
 
     This classifier uses a SentenceTransformer model to create a vector representation
     of a concept. When .predict() is called, the classifier will encode the input text
