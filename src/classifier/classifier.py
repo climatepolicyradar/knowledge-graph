@@ -45,8 +45,11 @@ class Classifier(ABC):
         """
         Train the classifier on the data in the concept.
 
-        This is a no-op in the base class. Subclasses should override this method
-        to implement their specific training logic.
+        This is a template method, which subclasses can override to implement their
+        specific training logic. The base class is a no-op, allowing subclasses to
+        optionally implement it, only when training is needed. Keeping the template
+        method here provides a consistent interface across all classifiers while
+        allowing flexibility in implementation.
 
         Args:
             **kwargs: Training configuration parameters. The specific parameters
