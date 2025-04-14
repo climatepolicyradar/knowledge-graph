@@ -82,6 +82,9 @@ class BertBasedClassifier(Classifier):
         results = []
         for text, prediction in zip(texts, predictions):
             text_results = []
+            # By default, the huggingface text classification pipeline returns LABEL_0
+            # for negative predictions and LABEL_1 for positive predictions. We check
+            # for LABEL_1 to determine if the text contains an instance of the concept.
             if prediction["label"] == "LABEL_1":
                 span = Span(
                     text=text,
