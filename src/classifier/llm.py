@@ -72,7 +72,7 @@ class LLMClassifier(Classifier):
                     "variables needed to run each."
                 ),
             ),
-        ] = "gemini-1.5-flash",
+        ] = "gemini-1.5-flash-002",
         system_prompt_template: Annotated[
             str,
             Field(
