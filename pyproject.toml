@@ -14,7 +14,6 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
-httpx = "^0.26.0"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
@@ -36,6 +35,8 @@ typer = "0.15.1"
 schedule = "^1.2.2"
 awscli = "^1.37.24"
 prefect = {extras = ["slack"], version = "^3.3.1"}
+pydantic-ai = "^0.0.53"
+httpx = "^0.28.1"
 
 [tool.poetry.group.transformers]
 optional = true
@@ -43,14 +44,10 @@ optional = true
 [tool.poetry.group.transformers.dependencies]
 torch = {version = "2.4.1+cpu", source = "pytorch"}
 sentence-transformers = "^3.1.1"
-transformers = "^4.48.1"
+transformers = {extras = ["torch"], version = "^4.51.3"}
+scikit-learn = "^1.6.1"
+accelerate = "^1.6.0"
 
-
-[tool.poetry.group.llm]
-optional = true
-
-[tool.poetry.group.llm.dependencies]
-anthropic = "^0.39.0"
 
 [[tool.poetry.source]]
 name = "pytorch"

@@ -41,11 +41,22 @@ class Classifier(ABC):
                 f"{expected}, not {self.concept.wikibase_id}"
             )
 
-    def fit(self) -> "Classifier":
+    def fit(self, **kwargs) -> "Classifier":
         """
         Train the classifier on the data in the concept.
 
-        :return Classifier: The trained classifier
+        This is a template method, which subclasses can override to implement their
+        specific training logic. The base class is a no-op, allowing subclasses to
+        optionally implement it, only when training is needed. Keeping the template
+        method here provides a consistent interface across all classifiers while
+        allowing flexibility in implementation.
+
+        Args:
+            **kwargs: Training configuration parameters. The specific parameters
+                required will depend on the classifier implementation.
+
+        Returns:
+            Classifier: The trained classifier
         """
         return self
 

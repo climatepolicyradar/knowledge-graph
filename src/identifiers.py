@@ -22,6 +22,8 @@ class WikibaseID(str):
 
     def __eq__(self, other) -> bool:
         """Check if two Wikibase IDs are equal"""
+        if isinstance(other, str):
+            other = WikibaseID(other)
         if not isinstance(other, WikibaseID):
             return NotImplemented
         return self.numeric == other.numeric

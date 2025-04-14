@@ -1,4 +1,4 @@
-from src.classifier import Classifier
+from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
 from src.concept import Concept
 from src.span import Span

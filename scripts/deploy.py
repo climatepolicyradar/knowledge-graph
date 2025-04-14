@@ -9,11 +9,7 @@ from dotenv import load_dotenv
 import scripts.get_concept
 import scripts.promote
 import scripts.train
-from scripts.cloud import (
-    AwsEnv,
-    parse_aws_env,
-    validate_transition,
-)
+from scripts.cloud import AwsEnv, parse_aws_env, validate_transition
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
     parse_spec_file,
