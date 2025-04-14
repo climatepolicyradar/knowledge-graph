@@ -103,6 +103,10 @@ class LLMClassifier(Classifier):
             result_type=LLMResponse,
         )
 
+    def __repr__(self):
+        """Return a string representation of the classifier."""
+        return f'{self.name}({self.concept.preferred_label}, model_name="{self.model_name}")'
+
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""
         state = self.__dict__.copy()
