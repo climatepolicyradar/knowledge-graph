@@ -1,4 +1,3 @@
-import json
 import os
 import random
 
@@ -18,12 +17,7 @@ from rich.progress import (
 from rich.table import Table
 from sklearn.model_selection import train_test_split
 
-from scripts.config import (
-    classifier_dir,
-    equity_columns,
-    interim_data_dir,
-    processed_data_dir,
-)
+from scripts.config import classifier_dir, equity_columns, processed_data_dir
 from src.classifier import (
     BertBasedClassifier,
     Classifier,
@@ -97,13 +91,17 @@ def save_labelled_passages_and_classifier(
     classifier: Classifier,
 ):
     """Save the labelled passages and classifier to a set of standardised paths"""
-    labelled_passages_path = (
-        interim_data_dir / classifier.concept.wikibase_id / f"{classifier.id}.json"
+
+    predictions_path = (
+        processed_data_dir
+        / "predictions"
+        / str(classifier.concept.wikibase_id)
+        / f"{classifier.id}.jsonl"
     )
-    labelled_passages_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(labelled_passages_path, "w", encoding="utf-8") as f:
-        json.dump([passage.model_dump_json() for passage in labelled_passages], f)
-    console.log(f"💾 Saved labelled passages to {labelled_passages_path}")
+    predictions_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(predictions_path, "w", encoding="utf-8") as f:
+        f.write("\n".join([passage.model_dump_json() for passage in labelled_passages]))
+    console.log(f"💾 Saved labelled passages to {predictions_path}")
 
     classifier_path = (
         classifier_dir / classifier.concept.wikibase_id / f"{classifier.id}.pickle"
