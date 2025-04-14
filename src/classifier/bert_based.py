@@ -125,18 +125,16 @@ class BertBasedClassifier(Classifier):
     def fit(
         self,
         *,
-        labelled_passages: list[LabelledPassage],
         use_wandb: bool = False,
         **kwargs,
     ) -> "BertBasedClassifier":
         """
-        Fine tune the base model using the provided labelled passages.
+        Fine tune the base model using the labelled passages of the supplied concept.
 
         The model will be trained to predict whether a supplied text contains an
         instance of the concept.
 
         Args:
-            labelled_passages: List of labelled passages to train on
             use_wandb: Whether to use Weights & Biases for logging
             **kwargs: Additional keyword arguments passed to the base class
 
@@ -145,7 +143,12 @@ class BertBasedClassifier(Classifier):
         """
         super().fit(**kwargs)
 
-        tokenized_dataset = self._prepare_dataset(labelled_passages)
+        if len(self.concept.labelled_passages) < 10:
+            raise ValueError(
+                f"Not enough labelled passages to train a {self.name} for {self.concept.wikibase_id}"
+            )
+
+        tokenized_dataset = self._prepare_dataset(self.concept.labelled_passages)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # N.B. These training arguments should probably be configurable. Deliberately

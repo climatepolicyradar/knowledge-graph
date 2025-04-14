@@ -261,6 +261,8 @@ def main(
         classifier=llm_classifier,
     )
 
+    concept.labelled_passages = passages_labelled_by_llm_classifier
+
     bert_based_classifier = BertBasedClassifier(concept=concept)
     console.log(f"🤖 Created a {bert_based_classifier}")
 
