@@ -153,9 +153,7 @@ class WikibaseSession:
         ).json()
 
         page_id = str(
-            page_id_response.get("entities", {})
-            .get(str(wikibase_id), {})
-            .get("pageid")
+            page_id_response.get("entities", {}).get(str(wikibase_id), {}).get("pageid")
         )
         if not page_id:
             raise ConceptNotFoundError(wikibase_id)
