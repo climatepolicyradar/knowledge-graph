@@ -436,7 +436,7 @@ async def run_classifier_inference_on_document(
     # Raise on non-english documents
     if document.languages != ["en"]:
         raise ValueError(
-            f"Cannot run inference on {file_stem}, it has non-english language: "
+            f"Cannot run inference on {file_stem} as it has non-english language: "
             f"{document.languages}"
         )
 
