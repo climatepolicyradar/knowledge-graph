@@ -262,9 +262,9 @@ def filter_non_english_language_file_stems(
 
     filtered_file_stems = []
     for group in grouped.values():
-        group_file_stems = [f for f in group if "_translated" in f]
-        if group_file_stems:
-            filtered_file_stems.extend(group_file_stems)
+        translated_file_stems = [f for f in group if "_translated" in f]
+        if translated_file_stems:
+            filtered_file_stems.extend(translated_file_stems)
         else:
             filtered_file_stems.extend(group)
 
