@@ -47,8 +47,16 @@ def test_list_bucket_file_stems(test_config, mock_bucket_documents):
 @pytest.mark.parametrize(
     ("doc_ids", "bucket_ids", "expected"),
     [
-        (["1"], ["1", "2", "3"], ["1"]),
-        (None, ["1"], ["1"]),
+        (
+            ["AF.document.002MMUCR.n0000"],
+            [
+                "AF.document.002MMUCR.n0000",
+                "AF.document.AFRDG00038.n0000",
+                "CCLW.document.i00001313.n0000",
+            ],
+            ["AF.document.002MMUCR.n0000"],
+        ),
+        (None, ["AF.document.002MMUCR.n0000"], ["AF.document.002MMUCR.n0000"]),
     ],
 )
 def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
@@ -62,12 +70,18 @@ def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
 
 
 def test_determine_file_stems__error(test_config):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Requested document_ids not found in bucket:"):
         determine_file_stems(
             config=test_config,
             use_new_and_updated=False,
-            requested_document_ids=["1", "2"],
-            current_bucket_file_stems=["3", "4"],
+            requested_document_ids=[
+                "AF.document.002MMUCR.n0000",
+                "AF.document.AFRDG00038.n00002",
+            ],
+            current_bucket_file_stems=[
+                "CCLW.document.i00001313.n0000",
+                "AF.document.002MMUCR.n0000",
+            ],
         )
 
 
