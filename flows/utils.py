@@ -1,5 +1,6 @@
 import os
 import re
+from collections import defaultdict
 from collections.abc import Generator
 from io import BytesIO
 from pathlib import Path
@@ -235,3 +236,36 @@ def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
     _ = s3.put_object(
         Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
     )
+
+
+def filter_non_english_language_file_stems(
+    file_stems: list[DocumentStem],
+) -> list[DocumentStem]:
+    """Filter non-english related file stems."""
+
+    DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
+    grouped = defaultdict(list)
+
+    for f in file_stems:
+        match = DOCUMENT_ID_PATTERN.match(f)
+        if match:
+            document_id = match.group(1)
+            grouped[document_id].append(f)
+        else:
+            grouped["no_match"].append(f)
+
+    if grouped["no_match"]:
+        raise ValueError(
+            f"File stems that do not match the pattern: {grouped['no_match']}"
+        )
+
+    filtered_file_stems = []
+    for group in grouped.values():
+        group_file_stems = [f for f in group if "_translated" in f]
+        if group_file_stems:
+            filtered_file_stems.extend(group_file_stems)
+        else:
+            filtered_file_stems.extend(group)
+
+    return filtered_file_stems
