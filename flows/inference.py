@@ -419,11 +419,11 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
-    # FIXME: This makes the logs look like the run has failed and can happen like 300
-    # times per batch.
-    if document.languages != ["en"]:
+    if document.languages != ["en"] and (
+        document.pdf_data is not None or document.html_data is not None
+    ):
         raise ValueError(
-            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"Cannot run inference on {file_stem}, it has text and non-english language: "
             f"{document.languages}"
         )
 
