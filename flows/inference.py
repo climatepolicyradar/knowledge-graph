@@ -433,6 +433,8 @@ async def run_classifier_inference_on_document(
             classifier_alias=classifier_alias,
         )
 
+        return None
+
     # Raise on non-english documents
     if document.languages != ["en"]:
         raise ValueError(
