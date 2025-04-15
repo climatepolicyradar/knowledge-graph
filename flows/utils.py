@@ -1,3 +1,4 @@
+import inspect
 import os
 import re
 from collections.abc import Generator
@@ -41,7 +42,7 @@ class SlackNotify:
     slack_block_name = f"slack-webhook-{slack_channel_name}-prefect-mvp-{environment}"
 
     @classmethod
-    def message(cls, flow, flow_run, state):
+    async def message(cls, flow, flow_run, state):
         """
         Send a notification to a Slack channel about the state of a Prefect flow run.
 
@@ -66,7 +67,11 @@ class SlackNotify:
         )
 
         slack = SlackWebhook.load(cls.slack_block_name)
-        slack.notify(body=msg)
+        if inspect.isawaitable(slack):
+            slack = await slack
+        result = slack.notify(body=msg)
+        if inspect.isawaitable(result):
+            _ = await result
 
 
 def remove_translated_suffix(file_name: str) -> str:
