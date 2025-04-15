@@ -17,6 +17,8 @@ from scripts.cloud import ClassifierSpec
 DocumentImportId: TypeAlias = str
 DocumentStem: TypeAlias = str
 
+DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
 
 def file_name_from_path(path: str) -> str:
     """Get the file name from a path without the path or extension"""
@@ -242,8 +244,6 @@ def filter_non_english_language_file_stems(
     file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
     """Filter non-english related file stems."""
-
-    DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
 
     grouped = defaultdict(list)
 
