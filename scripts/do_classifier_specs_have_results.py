@@ -1,38 +1,56 @@
+import os
+
 import boto3
+import typer
 import yaml
 from botocore.exceptions import ClientError
 
-PROD_YAML = "flows/classifier_specs/prod.yaml"
-PROD_LABELLED_PASSAGES_S3_PATH = "s3://cpr-prod-data-pipeline-cache/labelled_passages/"
+app = typer.Typer()
 
-with open(PROD_YAML, "r") as file:
-    data = yaml.safe_load(file)
 
-s3 = boto3.client("s3")
+@app.command()
+def check_classifier_specs(
+    yaml_path: str = typer.Argument(
+        help="Path to the YAML file containing classifier specifications"
+    ),
+    labelled_passages_s3_path: str = typer.Argument(
+        help="S3 path where labelled passages should be stored"
+    ),
+) -> None:
+    """Check if the classifier specs in the YAML file have corresponding S3 paths."""
+    with open(yaml_path, "r") as file:
+        data = yaml.safe_load(file)
 
-to_process = []
-for classifier_spec in data:
-    classifier_model = classifier_spec.split(":")[0]
-    classifier_alias = classifier_spec.split(":")[1]
+    s3 = boto3.client("s3")
 
-    labelled_passages_s3_path = (
-        PROD_LABELLED_PASSAGES_S3_PATH + classifier_model + "/" + classifier_alias + "/"
-    )
+    to_process = []
+    for classifier_spec in data:
+        classifier_model = classifier_spec.split(":")[0]
+        classifier_alias = classifier_spec.split(":")[1]
 
-    # Parse the S3 URI to get bucket and prefix
-    bucket_name = labelled_passages_s3_path.split("/")[2]
-    prefix = "/".join(labelled_passages_s3_path.split("/")[3:])
+        # Use os.path.join for path construction
+        s3_path = os.path.join(
+            labelled_passages_s3_path, classifier_model, classifier_alias
+        )
 
-    try:
-        # List objects with the given prefix to see if path exists
-        response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, MaxKeys=1)
+        # Parse the S3 URI to get bucket and prefix
+        bucket_name = s3_path.split("/")[2]
+        prefix = "/".join(s3_path.split("/")[3:])
 
-        if "Contents" in response:
-            print(f"✅ S3 path exists: {labelled_passages_s3_path}")
-        else:
-            print(f"❌ S3 path does not exist: {labelled_passages_s3_path}")
-            to_process.append(f"{classifier_model}:{classifier_alias}")
-    except ClientError as e:
-        print(f"Error checking S3 path {labelled_passages_s3_path}: {e}")
+        try:
+            # List objects with the given prefix to see if path exists
+            response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, MaxKeys=1)
 
-print(f"to_process: {to_process}")
+            if "Contents" in response:
+                print(f"✅ S3 path exists: {s3_path}")
+            else:
+                print(f"❌ S3 path does not exist: {s3_path}")
+                to_process.append(f"{classifier_model}:{classifier_alias}")
+        except ClientError as e:
+            print(f"Error checking S3 path {s3_path}: {e}")
+
+    print(f"to_process: {to_process}")
+
+
+if __name__ == "__main__":
+    app()
