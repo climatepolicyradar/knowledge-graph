@@ -18,5 +18,5 @@ poetry run python scripts/train.py --wikibase-id "Q123" --track --upload --aws-e
 Then we promote:
 
 ```shell
-poetry run python scripts/promote.py --wikibase-id "Q123" --classifier KeywordClassifier --version v3 --within-aws-env prod --primary
+just promote "Q123" --classifier KeywordClassifier --version v3 --within-aws-env prod --primary
 ```
