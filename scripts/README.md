@@ -12,7 +12,7 @@ First we run the training scripts. This will increment the version of the classi
 _Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires s3 access._
 
 ```shell
-poetry run python scripts/train.py --wikibase-id "Q123" --track --upload --aws-env prod
+just train "Q123" --track --upload --aws-env prod
 ```
 
 Then we promote:
