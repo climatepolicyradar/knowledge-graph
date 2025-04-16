@@ -32,8 +32,8 @@ def test_file_name_from_path(path, expected):
     assert file_name_from_path(path) == expected
 
 
-def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
-    SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
+async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
+    await SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
     mock_SlackWebhook, mock_prefect_slack_block = mock_prefect_slack_webhook
 
     # `.load`
