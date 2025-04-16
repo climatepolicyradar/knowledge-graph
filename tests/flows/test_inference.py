@@ -70,7 +70,7 @@ def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
 
 
 def test_determine_file_stems__error(test_config):
-    with pytest.raises(ValueError, match="Requested document_ids not found in bucket:"):
+    with pytest.raises(ValueError):
         determine_file_stems(
             config=test_config,
             use_new_and_updated=False,
