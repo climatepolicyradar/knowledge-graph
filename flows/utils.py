@@ -17,6 +17,8 @@ from scripts.cloud import ClassifierSpec
 DocumentImportId: TypeAlias = str
 DocumentStem: TypeAlias = str
 
+DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
 
 def file_name_from_path(path: str) -> str:
     """Get the file name from a path without the path or extension"""
@@ -239,4 +241,35 @@ def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
     s3 = boto3.client("s3")
     _ = s3.put_object(
         Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
+    )
+
+
+def is_file_stem_for_english_language_document(
+    file_stem: DocumentStem,
+    file_stems: list[DocumentStem],
+    english_translation_suffix: str = "_translated_en",
+) -> bool:
+    """
+    Check if a file stem is in English language.
+
+    - If the file stem has the translated_en suffix then we can infer that it's english.
+    - If there's a translated version of the document in the list, we can infer that it's
+        not english.
+    """
+    if english_translation_suffix in file_stem:
+        return True
+    if file_stem + english_translation_suffix in file_stems:
+        return False
+    return True
+
+
+def filter_non_english_language_file_stems(
+    file_stems: list[DocumentStem],
+) -> list[DocumentStem]:
+    """Filter out file stems that are for non-English language documents."""
+    return list(
+        filter(
+            lambda f: is_file_stem_for_english_language_document(f, file_stems),
+            file_stems,
+        )
     )

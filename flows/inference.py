@@ -24,7 +24,11 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import SlackNotify, get_file_stems_for_document_id
+from flows.utils import (
+    SlackNotify,
+    filter_non_english_language_file_stems,
+    get_file_stems_for_document_id,
+)
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -198,7 +202,10 @@ def determine_file_stems(
     elif use_new_and_updated:
         requested_document_ids = get_latest_ingest_documents(config)
     elif requested_document_ids is None:
-        return current_bucket_file_stems
+        current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
+            file_stems=current_bucket_file_stems
+        )
+        return current_bucket_file_stems__filtered
 
     assert config.cache_bucket
 
@@ -412,11 +419,26 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
-    # FIXME: This makes the logs look like the run has failed and can happen like 300
-    # times per batch.
+    # Handle documents with no text and no language
+    if (
+        not document.languages
+        and document.pdf_data is None
+        and document.html_data is None
+    ):
+        store_labels(
+            config=config,
+            labels=[],
+            file_stem=file_stem,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
+
+        return None
+
+    # Raise on non-English documents
     if document.languages != ["en"]:
         raise ValueError(
-            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"Cannot run inference on {file_stem} as it has non-English language: "
             f"{document.languages}"
         )
 
