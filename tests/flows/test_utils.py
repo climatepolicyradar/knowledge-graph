@@ -172,9 +172,9 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
 
 
 def test_filter_non_english_file_stems() -> None:
-    """Test that we can successfully filter out non-english file stems."""
+    """Test that we can successfully filter out non-English file stems."""
 
-    # Test we can filter out non-english file stems
+    # Test we can filter out non-English file stems
     file_stems = [
         "AF.document.002MMUCR.n0000",
         "AF.document.AFRDG00038.n0000_translated_en",
@@ -209,10 +209,6 @@ def test_filter_non_english_file_stems() -> None:
         "UNFCCC.document.i00000546.n0000",
         "UNFCCC.non-party.1243.0",
     ]
-
-    # Test that we raise an error for invalid file stems
-    with pytest.raises(ValueError, match="File stems that do not match the pattern"):
-        filter_non_english_language_file_stems(file_stems=["no_match"])
 
     # Test that we can filter quickly even on very long lists
     file_stems = []

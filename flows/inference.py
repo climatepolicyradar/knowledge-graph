@@ -419,7 +419,7 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
-    # Handle documents with no text or language
+    # Handle documents with no text and no language
     if (
         not document.languages
         and document.pdf_data is None
@@ -435,10 +435,10 @@ async def run_classifier_inference_on_document(
 
         return None
 
-    # Raise on non-english documents
+    # Raise on non-English documents
     if document.languages != ["en"]:
         raise ValueError(
-            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"Cannot run inference on {file_stem} as it has non-English language: "
             f"{document.languages}"
         )
 

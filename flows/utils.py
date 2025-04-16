@@ -1,6 +1,5 @@
 import os
 import re
-from collections import defaultdict
 from collections.abc import Generator
 from io import BytesIO
 from pathlib import Path
@@ -240,32 +239,32 @@ def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
     )
 
 
+def is_file_stem_for_english_language_document(
+    file_stem: DocumentStem,
+    file_stems: list[DocumentStem],
+    english_translation_suffix: str = "_translated_en",
+) -> bool:
+    """
+    Check if a file stem is in English language.
+
+    - If the file stem has the translated_en suffix then we can infer that it's english.
+    - If there's a translated version of the document in the list, we can infer that it's
+        not english.
+    """
+    if english_translation_suffix in file_stem:
+        return True
+    if file_stem + english_translation_suffix in file_stems:
+        return False
+    return True
+
+
 def filter_non_english_language_file_stems(
     file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
-    """Filter non-english related file stems."""
-
-    grouped = defaultdict(list)
-
-    for f in file_stems:
-        match = DOCUMENT_ID_PATTERN.match(f)
-        if match:
-            document_id = match.group(1)
-            grouped[document_id].append(f)
-        else:
-            grouped["no_match"].append(f)
-
-    if grouped["no_match"]:
-        raise ValueError(
-            f"File stems that do not match the pattern: {grouped['no_match']}"
+    """Filter out file stems that are for non-English language documents."""
+    return list(
+        filter(
+            lambda f: is_file_stem_for_english_language_document(f, file_stems),
+            file_stems,
         )
-
-    filtered_file_stems = []
-    for group in grouped.values():
-        translated_file_stems = [f for f in group if "_translated" in f]
-        if translated_file_stems:
-            filtered_file_stems.extend(translated_file_stems)
-        else:
-            filtered_file_stems.extend(group)
-
-    return filtered_file_stems
+    )
