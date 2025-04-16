@@ -179,7 +179,7 @@ class Span(BaseModel):
     def from_xml(
         cls,
         xml: str,
-        concept_id: WikibaseID,
+        concept_id: Optional[WikibaseID],
         labellers: list[str],
     ) -> list["Span"]:
         """Convert an XML string to a list of Spans."""
