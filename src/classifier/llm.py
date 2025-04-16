@@ -128,6 +128,7 @@ class LLMClassifier(Classifier):
         """Make sure the output text does not augment the input text in unexpected ways"""
         input_sanitised = LabelledPassage.sanitise(input_text)
         output_sanitised = LabelledPassage.sanitise(
+            # remove the concept tags from the LLM output
             response.marked_up_text.replace("<concept>", "").replace("</concept>", "")
         )
         if input_sanitised != output_sanitised:
@@ -174,12 +175,25 @@ class LLMClassifier(Classifier):
         for text, response in zip(texts, responses):
             try:
                 self._validate_response(input_text=text, response=response.data)
+
+                spans = Span.from_xml(
+                    xml=response.data.marked_up_text,
+                    concept_id=self.concept.wikibase_id,
+                    labellers=[str(self)],
+                )
+
+                # We validate that the sanitised versions of input and output text are
+                # identical, but that doesn't guarantee that the un-sanitised responses
+                # match the input! For example, whitespace differences are deliberately
+                # ignored by the sanitisation step.
+                # To guard against the possibility of the LLM corrupting the input in
+                # subtle ways that the sanitisation step misses, we replace the text
+                # in the output spans with the original input text
                 batch_spans.append(
-                    Span.from_xml(
-                        xml=response.data.marked_up_text,
-                        concept_id=self.concept.wikibase_id,
-                        labellers=[str(self)],
-                    )
+                    [
+                        span.model_copy(update={"text": text}, deep=True)
+                        for span in spans
+                    ]
                 )
             except LLMOutputMismatchError:
                 batch_spans.append([])
