@@ -236,12 +236,15 @@ async def test_partial_update_text_block_with_removal(
     # Confirm that the concepts to remove are in the document passages
     initial_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=None,
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
     try:
-        first_passage_with_concepts = next(
-            passage for _, passage in initial_passages if passage.concepts
+        first_passage_hit_id, first_passage_with_concepts = next(
+            (hit_id, passage)
+            for hit_id, passage in initial_passages
+            if passage.concepts
         )
     except StopIteration:
         raise ValueError("no concepts found in any passages, check the fixtures")
@@ -257,8 +260,7 @@ async def test_partial_update_text_block_with_removal(
 
     assert (
         await partial_update_text_block(
-            text_block_id=first_passage_with_concepts.text_block_id,
-            document_import_id=document_import_id,
+            text_block=(first_passage_hit_id, first_passage_with_concepts),
             concepts=list(concepts_to_remove),
             vespa_search_adapter=local_vespa_search_adapter,
             update_function=remove_concepts_from_existing_vespa_concepts,
@@ -286,12 +288,15 @@ async def test_partial_update_text_block_with_empty(
     # Confirm that the concepts to remove are in the document passages
     initial_passages = get_document_passages_from_vespa(
         document_import_id=document_import_id,
+        text_blocks_ids=None,
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
     try:
-        first_passage_with_concepts = next(
-            passage for _, passage in initial_passages if passage.concepts
+        first_passage_hit_id, first_passage_with_concepts = next(
+            (hit_id, passage)
+            for hit_id, passage in initial_passages
+            if passage.concepts
         )
     except StopIteration:
         raise ValueError("no concepts found in any passages, check the fixtures")
@@ -301,8 +306,7 @@ async def test_partial_update_text_block_with_empty(
 
     assert (
         await partial_update_text_block(
-            text_block_id=first_passage_with_concepts.text_block_id,
-            document_import_id=document_import_id,
+            text_block=(first_passage_hit_id, first_passage_with_concepts),
             concepts=[],
             vespa_search_adapter=local_vespa_search_adapter,
             update_function=remove_concepts_from_existing_vespa_concepts,
@@ -864,7 +868,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     # To be kept
     labelled_passages_keep: list[LabelledPassage] = [
         LabelledPassage(
-            id="p_37_b_6",
+            id="197",
             text="Some random text on climate change.",
             spans=[
                 Span(
@@ -952,7 +956,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     # Vespa state before
     # Document passages
-    _hit_id, passage_remove_1_pre = get_document_passage_from_vespa(
+    hit_id_1, passage_remove_1_pre = get_document_passage_from_vespa(
         text_block_id=labelled_passages_remove[0].id,
         document_import_id=document_import_id_remove,
         vespa_search_adapter=local_vespa_search_adapter,
@@ -968,8 +972,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     # in the local Vespa instance for the test.
     assert (
         await boundary.partial_update_text_block(
-            text_block_id=labelled_passages_remove[0].id,
-            document_import_id=document_import_id_remove,
+            text_block=(hit_id_1, passage_remove_1_pre),
             concepts=[
                 VespaConcept(
                     id="Q760",
@@ -1142,7 +1145,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     # To be kept
     labelled_passages_keep: list[LabelledPassage] = [
         LabelledPassage(
-            id="p_37_b_6",
+            id="197",
             text="Some random text on climate change.",
             spans=[
                 Span(
@@ -1240,7 +1243,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
 
     # Vespa state before
     # Document passages
-    _hit_id, passage_remove_1_pre = get_document_passage_from_vespa(
+    hit_id_1, passage_remove_1_pre = get_document_passage_from_vespa(
         text_block_id=labelled_passages_remove[0].id,
         document_import_id=document_import_id_remove,
         vespa_search_adapter=local_vespa_search_adapter,
@@ -1256,8 +1259,7 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
     # in the local Vespa instance for the test.
     assert (
         await boundary.partial_update_text_block(
-            text_block_id=labelled_passages_remove[0].id,
-            document_import_id=document_import_id_remove,
+            text_block=(hit_id_1, passage_remove_1_pre),
             concepts=[
                 VespaConcept(
                     id="Q760",

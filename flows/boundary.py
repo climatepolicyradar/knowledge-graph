@@ -11,6 +11,7 @@ from collections import Counter
 from collections.abc import Callable, Generator
 from datetime import timedelta
 from enum import Enum
+from functools import reduce
 from io import BytesIO
 from pathlib import Path
 from typing import Any, ContextManager, TypeAlias, Union
@@ -27,8 +28,9 @@ from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.io import VespaQueryResponse, VespaResponse
+from vespa.package import Document, Schema
 
 from flows.utils import (
     get_labelled_passage_paths,
@@ -44,15 +46,16 @@ from scripts.cloud import (
 )
 from src.concept import Concept
 from src.exceptions import PartialUpdateError, QueryError
-from src.identifiers import WikibaseID
+from src.identifiers import FamilyDocumentID, WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
-HTTP_OK = 200
 CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 50
 DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
+
+VESPA_MAX_LIMIT: int = 50_000
 
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
@@ -63,6 +66,7 @@ DocumentImportId: TypeAlias = str
 # Needed to load the inference results
 # Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
 DocumentObjectUri: TypeAlias = str
+# A filename without the extension
 DocumentStem: TypeAlias = str
 # Passed to a self-sufficient flow run
 DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
@@ -561,33 +565,66 @@ def get_document_passage_from_vespa(
 
 def get_document_passages_from_vespa(
     document_import_id: DocumentImportId,
+    text_blocks_ids: list[TextBlockId] | None,
     vespa_search_adapter: VespaSearchAdapter,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
-    """
-    Retrieve all the passages for a document in Vespa.
-
-    params:
-    - document_import_id: The document import id for a unique family document.
-    """
+    """Retrieve some or all passages for a document in Vespa."""
     logger = get_logger()
 
     logger.info(f"Getting document passages from Vespa: {document_import_id}")
 
-    vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
-        yql=(
-            # trunk-ignore(bandit/B608)
-            "select * from document_passage where family_document_ref contains "
-            f'"id:doc_search:family_document::{document_import_id}"'
+    id = FamilyDocumentID(id=document_import_id)
+
+    family_document_ref: qb.QueryField = qb.QueryField("family_document_ref")
+
+    conditions = family_document_ref.contains(str(id))
+
+    # Possibly don't bother even going to Vespa
+    if text_blocks_ids is not None and len(text_blocks_ids) == 0:
+        return []
+
+    if text_blocks_ids is not None:
+        text_blocks_ids_n: PositiveInt = len(text_blocks_ids)
+
+        if text_blocks_ids_n > VESPA_MAX_LIMIT:
+            raise ValueError(
+                f"{text_blocks_ids_n} text block IDs exceeds {VESPA_MAX_LIMIT}"
+            )
+
+        text_block_id: qb.QueryField = qb.QueryField("text_block_id")
+
+        # equiv expects ≥ 2
+        if text_blocks_ids_n == 1:
+            text_block_id_contains = text_blocks_ids[0]
+        else:
+            text_block_id_contains = qb.equiv(*text_blocks_ids)
+
+        conditions &= text_block_id.contains(text_block_id_contains)
+
+    query: qb.Query = (
+        qb.select("*")
+        .from_(
+            Schema(name="document_passage", document=Document()),
         )
+        .where(conditions)
+        .set_limit(VESPA_MAX_LIMIT)
     )
 
-    if (status_code := vespa_query_response.get_status_code()) != HTTP_OK:
-        raise QueryError(status_code)
+    vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+        yql=query
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+
+    # From `.root.fields.totalCount`
+    total_count: NonNegativeInt = vespa_query_response.number_documents_retrieved
 
     logger.info(
         (
             f"Vespa search response for document: {document_import_id} "
-            f"with {len(vespa_query_response.hits)} hits"
+            f"with {len(vespa_query_response.hits)} hits, "
+            f"limit {VESPA_MAX_LIMIT}, and total count {total_count}"
         )
     )
 
@@ -733,16 +770,13 @@ class ConceptModel(BaseModel):
 
 
 async def partial_update_text_block(
-    text_block_id: TextBlockId,
+    text_block: tuple[VespaHitId, VespaPassage],
     concepts: list[VespaConcept],  # A possibly empty list
-    document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
     update_function: Callable[[VespaPassage, list[VespaConcept]], list[dict[str, Any]]],
 ):
     """Partial update a singular text block and its concepts."""
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id, document_import_id, vespa_search_adapter
-    )
+    document_passage_id, document_passage = text_block[0], text_block[1]
 
     data_id = get_data_id_from_vespa_hit_id(document_passage_id)
 
@@ -755,8 +789,8 @@ async def partial_update_text_block(
         fields={"concepts": serialised_concepts},
     )
 
-    if (status_code := response.get_status_code()) != HTTP_OK:
-        raise PartialUpdateError(data_id, status_code)
+    if not response.is_successful():
+        raise PartialUpdateError(data_id, response.get_status_code())
 
     return None
 
@@ -917,32 +951,31 @@ async def updates_by_s3(
         ]
 
         logger.info(f"Gathering updates tasks for batch #{i}")
-        batch_results: list[FlowRun | BaseException | None] = await asyncio.gather(
+        batch_results: list["FlowRun | BaseException | None"] = await asyncio.gather(
             *updates_tasks, return_exceptions=True
         )
         logger.info(f"Gathered updates tasks for batch #{i}")
 
         for result in batch_results:
-            match result:
-                case Exception() as e:
-                    failures += 1
-                    logger.error(
-                        f"failed to process document batch in updates task batch #{i}: {str(e)}",
-                    )
-                case FlowRun() as flow_run if (
-                    flow_run.state.type != StateType.COMPLETED
-                ):
+            if result is None:
+                pass
+            elif isinstance(result, BaseException):
+                failures += 1
+                logger.error(
+                    f"failed to process document batch in updates task batch #{i}: {str(result)}",
+                )
+            elif isinstance(result, FlowRun):
+                flow_run: FlowRun = result
+                if flow_run.state.type != StateType.COMPLETED:
                     failures += 1
                     logger.error(
                         f"flow run task_result's state was not completed. Flow run name: `{flow_run.name}`",
                     )
-                case None:
-                    pass
-                case _:
-                    failures += 1
-                    logger.error(
-                        f"unexpected result type: {type(result)}",
-                    )
+            else:
+                failures += 1
+                logger.error(
+                    f"unexpected result type: {type(result)}",
+                )
 
     if failures:
         raise ValueError("there was at least 1 task that failed")
@@ -977,34 +1010,79 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
     logger.info("getting S3 labelled passages generator")
     document_labelled_passages = load_labelled_passages_by_uri(document_importer[1])
 
+    logger.info("converting labelled passages to Vespa concepts")
+
+    # To do just 1 write per document passage, group all their concepts together.
+    #
+    # This also means we don't need to do |concepts| reads too, since
+    # we can read the document passage once, and then merge it with
+    # the concepts.
+    grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
+        labelled_passage.id: convert_labelled_passage_to_concepts(labelled_passage)
+        for labelled_passage in document_labelled_passages
+    }
+
+    logger.info(
+        f"starting partial updates for {len(grouped_concepts)} grouped concepts"
+    )
+
+    tasks_batches = iterate_batch(
+        list(grouped_concepts.items()),
+        batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+    )
+
+    document_import_id = remove_translated_suffix(document_importer[0])
+
+    text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
+
     with cm:
-        logger.info("converting labelled passages to Vespa concepts")
-        grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
-            labelled_passage.id: convert_labelled_passage_to_concepts(labelled_passage)
-            for labelled_passage in document_labelled_passages
-        }
+        # Read all the document passages from Vespa in as fewer reads as possible
+        def collect_text_blocks(
+            acc: dict[TextBlockId, tuple[VespaHitId, VespaPassage]],
+            text_blocks_ids_batch: list[TextBlockId],
+        ) -> dict[TextBlockId, tuple[VespaHitId, VespaPassage]]:
+            next_text_blocks = {
+                text_block.text_block_id: (vespa_hit_id, text_block)
+                for vespa_hit_id, text_block in get_document_passages_from_vespa(
+                    document_import_id=document_import_id,
+                    text_blocks_ids=text_blocks_ids_batch,
+                    vespa_search_adapter=vespa_search_adapter,
+                )
+            }
 
-        logger.info(
-            f"starting partial updates for {len(grouped_concepts)} grouped concepts"
+            return acc | next_text_blocks
+
+        text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = reduce(
+            collect_text_blocks,
+            iterate_batch(text_blocks_ids, VESPA_MAX_LIMIT),
+            {},
         )
 
-        batches = iterate_batch(
-            list(grouped_concepts.items()),
-            batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
-        )
+        grouped_concepts_n = len(grouped_concepts)
+        text_blocks_n = len(text_blocks)
+        if grouped_concepts_n != text_blocks_n:
+            raise ValueError(
+                f"there were {grouped_concepts_n} labelled passages and only "
+                f"{text_blocks_n} document passages were read from Vespa"
+            )
 
+        # We need to count the concepts across all document passages
         concepts_counts: Counter[ConceptModel] = Counter()
 
-        for batch_num, batch in enumerate(batches, start=1):
+        # For each document passage, update (AKA merge) its concepts.
+        #
+        # We use several tasks at once to speed this up.
+        for batch_num, batch in enumerate(tasks_batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
-
-            document_import_id = remove_translated_suffix(document_importer[0])
 
             partial_update_tasks = [
                 partial_update_text_block(
-                    text_block_id=text_block_id,
+                    text_block=(
+                        # It's a little awkward, but this is our current data structures
+                        text_blocks[text_block_id][0],
+                        text_blocks[text_block_id][1],
+                    ),
                     concepts=concepts,
-                    document_import_id=document_import_id,
                     vespa_search_adapter=vespa_search_adapter,
                     update_function=update_concepts_on_existing_vespa_concepts,
                 )
@@ -1145,16 +1223,52 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
         batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,
     )
 
+    document_import_id = remove_translated_suffix(document_importer[0])
+
+    text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
+
     has_failures = False
 
     with cm:
+        # Read all the document passages from Vespa in as fewer reads as possible
+        def collect_text_blocks(
+            acc: dict[TextBlockId, tuple[VespaHitId, VespaPassage]],
+            text_blocks_ids_batch: list[TextBlockId],
+        ) -> dict[TextBlockId, tuple[VespaHitId, VespaPassage]]:
+            next_text_blocks = {
+                text_block.text_block_id: (vespa_hit_id, text_block)
+                for vespa_hit_id, text_block in get_document_passages_from_vespa(
+                    document_import_id=document_import_id,
+                    text_blocks_ids=text_blocks_ids_batch,
+                    vespa_search_adapter=vespa_search_adapter,
+                )
+            }
+
+            return acc | next_text_blocks
+
+        text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = reduce(
+            collect_text_blocks,
+            iterate_batch(text_blocks_ids, VESPA_MAX_LIMIT),
+            {},
+        )
+
+        grouped_concepts_n = len(grouped_concepts)
+        text_blocks_n = len(text_blocks)
+        if grouped_concepts_n != text_blocks_n:
+            raise ValueError(
+                f"there were {grouped_concepts_n} labelled passages and only "
+                f"{text_blocks_n} document passages were read from Vespa"
+            )
+
         for batch_num, batch in enumerate(batches, start=1):
             logger.info(f"processing partial updates batch {batch_num}")
 
             partial_update_tasks = [
                 partial_update_text_block(
-                    text_block_id=text_block_id,
-                    document_import_id=remove_translated_suffix(document_importer[0]),
+                    text_block=(
+                        text_blocks[text_block_id][0],
+                        text_blocks[text_block_id][1],
+                    ),
                     concepts=concepts,
                     vespa_search_adapter=vespa_search_adapter,
                     update_function=remove_concepts_from_existing_vespa_concepts,
