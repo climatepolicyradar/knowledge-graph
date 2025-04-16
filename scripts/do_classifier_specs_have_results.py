@@ -39,11 +39,20 @@ def check_classifier_specs(
 
         try:
             # List objects with the given prefix to see if path exists
-            response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix, MaxKeys=1)
+            # Check if path exists and count objects with pagination
+            paginator = s3.get_paginator("list_objects_v2")
+            total_objects = 0
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                if "Contents" in page:
+                    total_objects += len(page["Contents"])
 
-            if "Contents" in response:
-                print(f"✅ S3 path exists: {s3_path}")
-            else:
+            response = {"Contents": []} if total_objects > 0 else {}
+            if total_objects > 0:
+                print(
+                    f"✅ S3 path exists: {s3_path} (contains {total_objects} objects)"
+                )
+
+            if "Contents" not in response:
                 print(f"❌ S3 path does not exist: {s3_path}")
                 to_process.append(f"{classifier_model}:{classifier_alias}")
         except ClientError as e:
