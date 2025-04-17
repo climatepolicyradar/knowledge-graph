@@ -13,7 +13,6 @@ from uuid import UUID
 
 import boto3
 import prefect.artifacts as artifacts
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -23,8 +22,8 @@ from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.sdk.wandb_run import Run
 
+import wandb
 from flows.utils import (
     SlackNotify,
     filter_non_english_language_file_stems,
@@ -42,6 +41,7 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from wandb.sdk.wandb_run import Run
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
@@ -637,6 +637,30 @@ async def classifier_inference(
         )
 
     print("Finished running classifier inference.")
+
+
+@flow(timeout_seconds=10)
+async def timeout_investigation_async():
+    print("Starting async flow")
+    await asyncio.sleep(25)
+    print("Flow completed successfully!")
+
+
+@flow(timeout_seconds=60)
+def timeout_investigation_async_parent():
+    print("Running parent flow async")
+    flow_name = function_to_flow_name(timeout_investigation_async)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=AwsEnv.sandbox
+    )
+    print(f"Running child flow: {flow_name}/{deployment_name}")
+    run_deployment(
+        name=f"{flow_name}/{deployment_name}",
+        # Rely on the flow's own timeout
+        timeout=None,
+        as_subflow=True,
+    )
+    print("Finished running parent flow")
 
 
 @flow(timeout_seconds=10)

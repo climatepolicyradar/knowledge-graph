@@ -31,6 +31,8 @@ from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
     timeout_investigation,
+    timeout_investigation_async,
+    timeout_investigation_async_parent,
     timeout_investigation_parent,
 )
 from flows.wikibase_to_s3 import wikibase_to_s3
@@ -207,4 +209,14 @@ create_deployment(
 create_deployment(
     flow=timeout_investigation_parent,
     description="Parent of an example flow to test deployment",
+)
+
+create_deployment(
+    flow=timeout_investigation_async,
+    description="Investigate timeouts in Prefect async",
+)
+
+create_deployment(
+    flow=timeout_investigation_async_parent,
+    description="Parent of an example async flow to test deployment",
 )
