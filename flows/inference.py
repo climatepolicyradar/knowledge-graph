@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -12,7 +13,6 @@ from uuid import UUID
 
 import boto3
 import prefect.artifacts as artifacts
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -22,8 +22,8 @@ from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.sdk.wandb_run import Run
 
+import wandb
 from flows.utils import (
     SlackNotify,
     filter_non_english_language_file_stems,
@@ -41,6 +41,7 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from wandb.sdk.wandb_run import Run
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
@@ -466,7 +467,7 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
-@flow(timeout_seconds=TASK_TIMEOUT_S)
+@flow
 async def run_classifier_inference_on_batch_of_documents(
     batch: list[str],
     config_json: dict,
@@ -612,7 +613,7 @@ async def classifier_inference(
                     "classifier_alias": classifier_spec.alias,
                 },
                 # Rely on the flow's own timeout
-                timeout=None,
+                timeout=2 * 60,
                 as_subflow=True,
             )
             for batch in batches
@@ -636,3 +637,81 @@ async def classifier_inference(
         )
 
     print("Finished running classifier inference.")
+
+
+async def rate_limited_func() -> None:
+    """Mock rate limited function."""
+    print("Starting rate limited function")
+    async with concurrency("rate_limited_func", occupy=5):
+        await asyncio.sleep(5)
+        print("Rate limited function completed!")
+
+
+@flow(timeout_seconds=10)
+async def timeout_investigation_async(x: int):
+    print("Starting async flow")
+
+    async def some_long_async_function():
+        print("Starting long async function")
+        await asyncio.sleep(25_000)
+        print("Long async function completed!")
+
+    tasks = [some_long_async_function()]
+
+    await asyncio.gather(*tasks)
+
+    print("Flow completed successfully!")
+
+
+@flow(timeout_seconds=60 * 5)
+async def timeout_investigation_async_parent():
+    print("Running parent flow async")
+    flow_name = function_to_flow_name(timeout_investigation_async)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=AwsEnv.sandbox
+    )
+    print(f"Running child flow: {flow_name}/{deployment_name}")
+
+    for i in list(range(10_000)):
+        print(f"Running bath{i}")
+
+        tasks = [
+            run_deployment(
+                name=f"{flow_name}/{deployment_name}",
+                timeout=None,
+                as_subflow=True,
+                parameters={
+                    "x": i,
+                },
+            )
+        ] * 10
+
+        _ = await asyncio.gather(*tasks)
+
+        print("Finished running batch" + str(i))
+
+    print("Finished running parent flow")
+
+
+@flow(timeout_seconds=10)
+async def timeout_investigation():
+    print("Flow started successfully!")
+    time.sleep(60)
+    print("Flow completed successfully!")
+
+
+@flow(timeout_seconds=60 * 5)
+def timeout_investigation_parent():
+    print("Running parent flow")
+    flow_name = function_to_flow_name(timeout_investigation)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=AwsEnv.sandbox
+    )
+    print(f"Running child flow: {flow_name}/{deployment_name}")
+    run_deployment(
+        name=f"{flow_name}/{deployment_name}",
+        # Rely on the flow's own timeout
+        timeout=None,
+        as_subflow=True,
+    )
+    print("Finished running parent flow")
