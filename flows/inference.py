@@ -654,16 +654,22 @@ async def timeout_investigation_async_parent():
         flow_name=flow_name, aws_env=AwsEnv.sandbox
     )
     print(f"Running child flow: {flow_name}/{deployment_name}")
-    tasks = [
-        run_deployment(
-            name=f"{flow_name}/{deployment_name}",
-            # Rely on the flow's own timeout
-            timeout=None,
-            as_subflow=True,
-        )
-    ]
 
-    _ = await asyncio.gather(*tasks)
+    for i in [1, 2, 3]:
+        print(f"Running bath{i}")
+
+        tasks = [
+            run_deployment(
+                name=f"{flow_name}/{deployment_name}",
+                # Rely on the flow's own timeout
+                timeout=None,
+                as_subflow=True,
+            )
+        ] * 10
+
+        _ = await asyncio.gather(*tasks)
+
+        print("Finished running batch" + str(i))
 
     print("Finished running parent flow")
 
