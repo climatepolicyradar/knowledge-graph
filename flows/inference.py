@@ -639,9 +639,19 @@ async def classifier_inference(
     print("Finished running classifier inference.")
 
 
+async def rate_limited_func() -> None:
+    """Mock rate limited function."""
+    print("Starting rate limited function")
+    async with concurrency("rate_limited_func", occupy=5):
+        await asyncio.sleep(5)
+        print("Rate limited function completed!")
+
+
 @flow(timeout_seconds=10)
-async def timeout_investigation_async():
+async def timeout_investigation_async(x: int):
     print("Starting async flow")
+    await rate_limited_func()
+    print("Loaded mock classifier")
     await asyncio.sleep(25)
     print("Flow completed successfully!")
 
@@ -655,15 +665,17 @@ async def timeout_investigation_async_parent():
     )
     print(f"Running child flow: {flow_name}/{deployment_name}")
 
-    for i in [1, 2, 3]:
+    for i in list(range(10_000)):
         print(f"Running bath{i}")
 
         tasks = [
             run_deployment(
                 name=f"{flow_name}/{deployment_name}",
-                # Rely on the flow's own timeout
                 timeout=None,
                 as_subflow=True,
+                parameters={
+                    "x": i,
+                },
             )
         ] * 10
 
