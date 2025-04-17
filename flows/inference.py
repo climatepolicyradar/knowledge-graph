@@ -694,8 +694,9 @@ async def timeout_investigation_async_parent():
 
 
 @flow(timeout_seconds=10)
-def timeout_investigation():
-    time.sleep(15)
+async def timeout_investigation():
+    print("Flow started successfully!")
+    time.sleep(60)
     print("Flow completed successfully!")
 
 
