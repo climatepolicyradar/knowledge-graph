@@ -613,7 +613,7 @@ async def classifier_inference(
                     "classifier_alias": classifier_spec.alias,
                 },
                 # Rely on the flow's own timeout
-                timeout=20 * 60,
+                timeout=2 * 60,
                 as_subflow=True,
             )
             for batch in batches
