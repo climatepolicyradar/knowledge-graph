@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -636,3 +637,26 @@ async def classifier_inference(
         )
 
     print("Finished running classifier inference.")
+
+
+@flow(timeout_seconds=10)
+def timeout_investigation():
+    time.sleep(15)
+    print("Flow completed successfully!")
+
+
+@flow(timeout_seconds=60)
+def timeout_investigation_parent():
+    print("Running parent flow")
+    flow_name = function_to_flow_name(timeout_investigation)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=AwsEnv.sandbox
+    )
+    print(f"Running child flow: {flow_name}/{deployment_name}")
+    run_deployment(
+        name=f"{flow_name}/{deployment_name}",
+        # Rely on the flow's own timeout
+        timeout=None,
+        as_subflow=True,
+    )
+    print("Finished running parent flow")

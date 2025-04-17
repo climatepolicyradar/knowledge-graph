@@ -30,6 +30,7 @@ from flows.index import (
 from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
+    timeout_investigation,
 )
 from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
@@ -192,4 +193,12 @@ create_deployment(
     env_schedules={
         AwsEnv.labs: "0 0 * * *",  # Every day at midnight
     },
+)
+
+
+# Investigation of timeouts (temp)
+
+create_deployment(
+    flow=timeout_investigation,
+    description="Investigate timeouts in Prefect",
 )
