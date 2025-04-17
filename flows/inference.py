@@ -646,20 +646,25 @@ async def timeout_investigation_async():
     print("Flow completed successfully!")
 
 
-@flow(timeout_seconds=60)
-def timeout_investigation_async_parent():
+@flow(timeout_seconds=60 * 5)
+async def timeout_investigation_async_parent():
     print("Running parent flow async")
     flow_name = function_to_flow_name(timeout_investigation_async)
     deployment_name = generate_deployment_name(
         flow_name=flow_name, aws_env=AwsEnv.sandbox
     )
     print(f"Running child flow: {flow_name}/{deployment_name}")
-    run_deployment(
-        name=f"{flow_name}/{deployment_name}",
-        # Rely on the flow's own timeout
-        timeout=None,
-        as_subflow=True,
-    )
+    tasks = [
+        run_deployment(
+            name=f"{flow_name}/{deployment_name}",
+            # Rely on the flow's own timeout
+            timeout=None,
+            as_subflow=True,
+        )
+    ]
+
+    _ = await asyncio.gather(*tasks)
+
     print("Finished running parent flow")
 
 
@@ -669,7 +674,7 @@ def timeout_investigation():
     print("Flow completed successfully!")
 
 
-@flow(timeout_seconds=60)
+@flow(timeout_seconds=60 * 5)
 def timeout_investigation_parent():
     print("Running parent flow")
     flow_name = function_to_flow_name(timeout_investigation)
