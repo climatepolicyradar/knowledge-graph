@@ -467,7 +467,7 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
-@flow(timeout_seconds=TASK_TIMEOUT_S)
+@flow
 async def run_classifier_inference_on_batch_of_documents(
     batch: list[str],
     config_json: dict,
@@ -613,7 +613,7 @@ async def classifier_inference(
                     "classifier_alias": classifier_spec.alias,
                 },
                 # Rely on the flow's own timeout
-                timeout=None,
+                timeout=20 * 60,
                 as_subflow=True,
             )
             for batch in batches
@@ -650,9 +650,16 @@ async def rate_limited_func() -> None:
 @flow(timeout_seconds=10)
 async def timeout_investigation_async(x: int):
     print("Starting async flow")
-    await rate_limited_func()
-    print("Loaded mock classifier")
-    await asyncio.sleep(25)
+
+    async def some_long_async_function():
+        print("Starting long async function")
+        await asyncio.sleep(25_000)
+        print("Long async function completed!")
+
+    tasks = [some_long_async_function()]
+
+    await asyncio.gather(*tasks)
+
     print("Flow completed successfully!")
 
 
