@@ -3,7 +3,6 @@
 import asyncio
 import base64
 import json
-import math
 import os
 import re
 import tempfile
@@ -970,25 +969,6 @@ async def updates_by_s3(
         raise ValueError("there was at least 1 task that failed")
 
 
-def connections_from_batch_size(
-    items: list[T],
-    batch_size: int,
-) -> PositiveInt:
-    """
-    Get an appropriate number of connections for items in batches.
-
-    Calculates a minimum of 1 connection.
-    """
-    return max(
-        # Guarantee: 1 if the list is empty and `ceil(0/batch size)` is none.
-        1,
-        # Guarantee: 1 if the quotient is a fraction. E.g. 2 items
-        # and a batch size of 10 would be 0.2 at 2/10. Using the
-        # ceiling gives 1.
-        math.ceil(len(items) / batch_size),
-    )
-
-
 # Index -------------------------------------------------------------------------
 
 
@@ -1037,11 +1017,6 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
         batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
     )
 
-    # Get the ceiling so the minimum is "above" e.g. if the result is < 0.1 it becomes 1.
-    vespa_connections_n = connections_from_batch_size(
-        list(grouped_concepts.items()), DEFAULT_DOCUMENTS_BATCH_SIZE
-    )
-
     document_import_id = remove_translated_suffix(document_importer[0])
 
     text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
@@ -1055,9 +1030,11 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
             vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
         )
 
-    async with vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
-        connections=vespa_connections_n
-    ) as vespa_connection_pool:
+    async with (
+        vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
+            connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+        ) as vespa_connection_pool
+    ):
         # Read all the document passages from Vespa in as fewer reads as possible
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
 
@@ -1253,13 +1230,11 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
 
     has_failures = False
 
-    vespa_connections_n = connections_from_batch_size(
-        list(grouped_concepts.items()), DEFAULT_DOCUMENTS_BATCH_SIZE
-    )
-
-    async with vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
-        connections=vespa_connections_n
-    ) as vespa_connection_pool:
+    async with (
+        vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
+            connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+        ) as vespa_connection_pool
+    ):
         # Read all the document passages from Vespa in as fewer reads as possible
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
 
