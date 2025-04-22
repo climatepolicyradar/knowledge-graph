@@ -1,13 +1,12 @@
-import numpy as np
-
-from itertools import chain, combinations
+from enum import Enum
+from itertools import combinations
 from typing import Optional
 
+import numpy as np
 from pydantic import BaseModel, Field
-from enum import Enum
 
 from src.classifier.classifier import Classifier
-from src.classifier.llm import LLMClassifier, LLMOutputMismatchError
+from src.classifier.llm import LLMOutputMismatchError
 from src.concept import Concept
 from src.span import Span, jaccard_similarity
 
