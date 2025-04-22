@@ -407,7 +407,7 @@ async def report_documents_runs(
         pass
 
 
-async def run_classifier_inference_on_document(
+def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
     classifier_name: str,
@@ -508,34 +508,22 @@ async def run_classifier_inference_on_batch_of_documents(
         f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
     )
 
-    tasks = [
-        run_classifier_inference_on_document(
-            config=config,
-            file_stem=file_stem,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-            classifier=classifier,
-        )
-        for file_stem in batch
-    ]
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
     failures: list[Exception] = []
-
-    for result in results:
-        if isinstance(result, Exception):
-            logger.exception(f"Failed to process document: {result}")
-            failures.append(result)
-        elif result is None:
-            continue
-        else:
-            raise ValueError(
-                f"Unexpected type of result. Type: `{type(result)}`, value: `{result}`"
+    for file_stem in batch:
+        try:
+            run_classifier_inference_on_document(
+                config=config,
+                file_stem=file_stem,
+                classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
+                classifier=classifier,
             )
+        except Exception as e:
+            logger.warning(f"Failed to process document: {file_stem}: {e}")
+            failures.append(e)
 
     if len(failures) > 0:
-        raise ValueError(f"Failed to process {len(failures)}/{len(results)} documents")
+        raise ValueError(f"Failed to process {len(failures)}/{len(batch)} documents")
 
     return None
 
