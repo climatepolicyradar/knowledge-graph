@@ -57,6 +57,9 @@ class SlackNotify:
         ```
         """
 
+        if cls.environment != "prod":
+            return None
+
         ui_url = cls.FLOW_RUN_URL.format(
             prefect_base_url=PREFECT_UI_URL.value(), flow_run=flow_run
         )
@@ -74,6 +77,8 @@ class SlackNotify:
         result = slack.notify(body=msg)
         if inspect.isawaitable(result):
             _ = await result
+
+        return None
 
 
 def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
