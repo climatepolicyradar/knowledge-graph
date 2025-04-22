@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import timedelta
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, TypeAlias
@@ -61,6 +62,9 @@ DocumentImportId: TypeAlias = str
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 DocumentStem: TypeAlias = str
 
+
+def get_time():
+    return datetime.now().strftime("%I:%M:%S %p")
 
 @dataclass()
 class Config:
@@ -349,19 +353,29 @@ def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
     """Run predict on a single text block."""
+    print(f"Running inference on block {block_id} at {get_time()}")
     spans: list[Span] = classifier.predict(text)
+    print(f"Finished inference on block {block_id} at {get_time()}")
 
     # If there were no inference results, don't include the concept
     if not spans:
+        print(f"No spans for block {block_id} at {get_time()}")
         metadata = {}
     else:
         # Remove the labelled passages from the concept to reduce the
         # size of the metadata.
+        print(
+            f"Creating concept no labelled passages for block {block_id} at {get_time()}"
+        )
         concept_no_labelled_passages = classifier.concept.model_copy(
             update={"labelled_passages": []}
         )
+        print(
+            f"Finished creating concept no labelled passages for block {block_id} at {get_time()}"
+        )
 
         concept = concept_no_labelled_passages.model_dump()
+        print(f"Created concept for block {block_id} at {get_time()}")
 
         metadata = {"concept": concept}
 
@@ -371,6 +385,7 @@ def text_block_inference(
         spans=spans,
         metadata=metadata,
     )
+    print(f"Created labelled passage for block {block_id} at {get_time()}")
 
     return labelled_passage
 
@@ -415,9 +430,10 @@ async def run_classifier_inference_on_document(
     classifier: Classifier,
 ) -> None:
     """Run the classifier inference flow on a document."""
-    print(f"Loading document with file stem {file_stem}")
+
+    print(f"Loading document with file stem {file_stem}, at {get_time()}")
     document = load_document(config, file_stem)
-    print(f"Loaded document with file stem {file_stem}")
+    print(f"Loaded document with file stem {file_stem} at {get_time()}")
 
     # Handle documents with no text and no language
     if (
@@ -425,6 +441,10 @@ async def run_classifier_inference_on_document(
         and document.pdf_data is None
         and document.html_data is None
     ):
+        print(
+            f"Document {file_stem} has no text and no language. "
+            f"Skipping inference at {get_time()}"
+        )
         store_labels(
             config=config,
             labels=[],
@@ -432,6 +452,7 @@ async def run_classifier_inference_on_document(
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )
+        print(f"Stored labels for document {file_stem} at {get_time()}")
 
         return None
 
@@ -442,6 +463,7 @@ async def run_classifier_inference_on_document(
             f"{document.languages}"
         )
 
+    print(f"Running inference on document {file_stem} at {get_time()}")
     doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
         labelled_passages = text_block_inference(
