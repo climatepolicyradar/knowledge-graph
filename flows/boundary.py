@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import math
 import os
 import re
 import tempfile
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any, TypeAlias, TypeVar, Union
 
 import boto3
+import httpx
 import vespa.application
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -57,7 +59,17 @@ CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 50
 DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
 
+
+def total_milliseconds(td: timedelta) -> int:
+    return int(td.total_seconds() * 1_000)
+
+
 VESPA_MAX_LIMIT: int = 50_000
+# Vespa's own default is 500ms [1]
+#
+# [1] https://vespa-engine.github.io/pyvespa/query.html#error-handling
+VESPA_DEFAULT_TIMEOUT_MS: int = total_milliseconds(timedelta(milliseconds=500))
+VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
 
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
@@ -536,9 +548,7 @@ async def get_document_passages_from_vespa(
     vespa_connection_pool: vespa.application.VespaAsync,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
     """Retrieve some or all passages for a document in Vespa."""
-    logger = get_logger()
-
-    logger.info(f"Getting document passages from Vespa: {document_import_id}")
+    print(f"Getting document passages from Vespa: {document_import_id}")
 
     id = FamilyDocumentID(id=document_import_id)
 
@@ -552,6 +562,8 @@ async def get_document_passages_from_vespa(
 
     if text_blocks_ids is not None:
         text_blocks_ids_n: PositiveInt = len(text_blocks_ids)
+
+        print(f"{text_blocks_ids_n} text blocks' IDs passed in")
 
         if text_blocks_ids_n > VESPA_MAX_LIMIT:
             raise ValueError(
@@ -568,6 +580,21 @@ async def get_document_passages_from_vespa(
 
         conditions &= text_block_id.contains(text_block_id_contains)
 
+    text_blocks_ids_n: PositiveInt = (
+        VESPA_MAX_LIMIT if text_blocks_ids is None else len(text_blocks_ids)
+    )
+
+    timeout_ms: int = max(
+        # Consider the overall max timeout
+        VESPA_MAX_TIMEOUT_MS,
+        # Per every n text block IDs, allow the default timeout
+        math.ceil((text_blocks_ids_n / 5_000) * VESPA_DEFAULT_TIMEOUT_MS),
+    )
+
+    print(
+        f"using timeout of {timeout_ms} milliseconds for {text_blocks_ids_n} text blocks' IDs"
+    )
+
     query: qb.Query = (
         qb.select("*")
         .from_(
@@ -575,6 +602,7 @@ async def get_document_passages_from_vespa(
         )
         .where(conditions)
         .set_limit(VESPA_MAX_LIMIT)
+        .set_timeout(timeout_ms)
     )
 
     vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
@@ -587,7 +615,7 @@ async def get_document_passages_from_vespa(
     # From `.root.fields.totalCount`
     total_count: NonNegativeInt = vespa_query_response.number_documents_retrieved
 
-    logger.info(
+    print(
         (
             f"Vespa search response for document: {document_import_id} "
             f"with {len(vespa_query_response.hits)} hits, "
@@ -973,7 +1001,7 @@ async def updates_by_s3(
 
 
 # No timeout set since the caller of this has one.
-@flow
+@flow(log_prints=True)
 async def run_partial_updates_of_concepts_for_document_passages__update(
     document_importer: DocumentImporter,
     cache_bucket: str,
@@ -1033,6 +1061,7 @@ async def run_partial_updates_of_concepts_for_document_passages__update(
     async with (
         vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
             connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
         # Read all the document passages from Vespa in as fewer reads as possible
@@ -1233,6 +1262,7 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
     async with (
         vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
             connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
         # Read all the document passages from Vespa in as fewer reads as possible
