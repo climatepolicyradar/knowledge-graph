@@ -100,14 +100,19 @@ class ClassifierPooler:
                     )
                 )
             else:
+                mergable_spans = overlapping_spans + [span]
                 jaccard_similarities = []
-                for s1, s2 in combinations(overlapping_spans + [span], 2):
+                for s1, s2 in combinations(mergable_spans, 2):
                     jaccard_similarities.append(jaccard_similarity(s1, s2))
 
-                confidence = np.mean(jaccard_similarities)
+                confidence = (
+                    np.mean(jaccard_similarities)
+                    * len(mergable_spans)
+                    / len(self.classifiers)
+                )
                 results.append(
                     PoolResult(
-                        span=Span.union(overlapping_spans + [span]),
+                        span=Span.union(mergable_spans),
                         confidence=float(confidence),
                         confidence_type=ConfidenceType.AGGREGATE,
                     )
