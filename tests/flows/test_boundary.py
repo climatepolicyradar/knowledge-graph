@@ -3,7 +3,6 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +18,6 @@ from flows.boundary import (
     DocumentObjectUri,
     Operation,
     TextBlockId,
-    connections_from_batch_size,
     convert_labelled_passage_to_concepts,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
@@ -1010,26 +1008,3 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
             },
         )
     ]
-
-
-@pytest.mark.parametrize(
-    "items,batch_size,connections",
-    [
-        ([], 10, 1),
-        ([1, 2, 3, 4], 2, 2),
-        ([1, 2], 10, 1),
-        ([1] * 11, 5, 3),
-        ([1] * 10, 10, 1),
-        ([1] * 0, 1, 1),
-        ([1] * 25, 10, 3),
-        ([1] * 10, 3, 4),
-        ([1] * 9, 3, 3),
-        ([1], 100, 1),
-    ],
-)
-def test_connections_from_batch_size(
-    items: list[Any],
-    batch_size: int,
-    connections: int,
-) -> None:
-    assert connections_from_batch_size(items, batch_size) == connections
