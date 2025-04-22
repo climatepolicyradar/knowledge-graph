@@ -155,7 +155,7 @@ class LLMClassifier(Classifier):
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
         response: AgentRunResult[LLMResponse] = self.agent.run_sync(text)
-        self._validate_response(input_text=text, response=response)
+        self._validate_response(input_text=text, response=response.data)
         return Span.from_xml(
             xml=response.data.marked_up_text,
             concept_id=self.concept.wikibase_id,

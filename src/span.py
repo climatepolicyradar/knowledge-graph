@@ -53,7 +53,11 @@ class Span(BaseModel):
     def id(self) -> str:
         """Return the unique identifier for the span."""
         return generate_identifier(
-            self.text, self.start_index, self.end_index, self.concept_id
+            self.text,
+            self.start_index,
+            self.end_index,
+            self.concept_id,
+            ",".join(self.labellers),
         )
 
     @model_validator(mode="after")
