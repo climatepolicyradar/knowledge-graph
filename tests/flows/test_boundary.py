@@ -23,6 +23,7 @@ from flows.boundary import (
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
     get_parent_concepts_from_concept,
+    get_text_block_id_from_vespa_data_id,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
     s3_obj_generator,
@@ -46,7 +47,7 @@ DATA_ID_PATTERN = re.compile(r"[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+")
 
 
 def test_get_data_id_from_vespa_hit_id() -> None:
-    """Test that we can extract the data ID from a vespa hit id."""
+    """Test that we can extract the data ID from a Vespa hit ID."""
     assert (
         DATA_ID_PATTERN.match(
             get_data_id_from_vespa_hit_id(
@@ -55,6 +56,22 @@ def test_get_data_id_from_vespa_hit_id() -> None:
         )
         is not None
     )
+
+
+def test_get_text_block_id_from_vespa_data_id():
+    assert (
+        get_text_block_id_from_vespa_data_id("CCLW.executive.10014.4470.1273") == "1273"
+    )
+
+
+def test_get_text_block_id_from_vespa_data_id_raises():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "received 6 splits, when expecting 5: ['CCLW', 'executive', '10014', '4470', '1273', '777']"
+        ),
+    ):
+        get_text_block_id_from_vespa_data_id("CCLW.executive.10014.4470.1273.777")
 
 
 def test_vespa_search_adapter_from_aws_secrets(
