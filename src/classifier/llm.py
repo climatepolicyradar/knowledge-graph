@@ -5,9 +5,11 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
+from pydantic_ai.settings import ModelSettings
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
+from src.identifiers import deterministic_hash
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -83,6 +85,16 @@ class LLMClassifier(Classifier):
                 ),
             ),
         ] = DEFAULT_SYSTEM_PROMPT,
+        random_seed: Annotated[
+            int,
+            Field(
+                description=(
+                    "Random seed for the classifier. "
+                    "Used for reproducibility and the ability to spawn multiple "
+                    "distinguishable classifiers at the same time"
+                )
+            ),
+        ] = 42,
     ):
         super().__init__(concept)
         self.concept = concept
@@ -103,9 +115,24 @@ class LLMClassifier(Classifier):
             result_type=LLMResponse,
         )
 
+        self.random_seed = random_seed
+
+    def __hash__(self) -> int:
+        """Overrides the default hash function, to enrich the hash with metadata"""
+        return deterministic_hash(
+            [
+                self.name,
+                self.concept.__hash__(),
+                self.version if self.version else None,
+                self.model_name,
+                self.system_prompt_template,
+                self.random_seed,
+            ]
+        )
+
     def __repr__(self):
         """Return a string representation of the classifier."""
-        return f'{self.name}({self.concept.preferred_label}, model_name="{self.model_name}")'
+        return f'{self.name}({self.concept.preferred_label}, model_name="{self.model_name}", id={self.id})'
 
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""
@@ -138,8 +165,10 @@ class LLMClassifier(Classifier):
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        response: AgentRunResult[LLMResponse] = self.agent.run_sync(text)
-        self._validate_response(input_text=text, response=response)
+        response: AgentRunResult[LLMResponse] = self.agent.run_sync(
+            text, model_settings=ModelSettings(seed=self.random_seed)
+        )
+        self._validate_response(input_text=text, response=response.data)
         return Span.from_xml(
             xml=response.data.marked_up_text,
             concept_id=self.concept.wikibase_id,
@@ -150,7 +179,12 @@ class LLMClassifier(Classifier):
         """Predict whether the supplied texts contain instances of the concept."""
 
         async def run_predictions():
-            async_responses = [self.agent.run(text) for text in texts]
+            async_responses = [
+                self.agent.run(
+                    text, model_settings=ModelSettings(seed=self.random_seed)
+                )
+                for text in texts
+            ]
             return await gather(*async_responses)
 
         # Create a single event loop for all batches
@@ -176,6 +210,8 @@ class LLMClassifier(Classifier):
             try:
                 self._validate_response(input_text=text, response=response.data)
 
+                # str(self) includes the id now, as this is important in distinguishing between different instances
+                # of the same classifier + config, when comparing spans with each other
                 spans = Span.from_xml(
                     xml=response.data.marked_up_text,
                     concept_id=self.concept.wikibase_id,
