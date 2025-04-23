@@ -132,7 +132,7 @@ class LLMClassifier(Classifier):
 
     def __repr__(self):
         """Return a string representation of the classifier."""
-        return f'{self.name}({self.concept.preferred_label}, model_name="{self.model_name}")'
+        return f'{self.name}({self.concept.preferred_label}, model_name="{self.model_name}", id={self.id})'
 
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""
@@ -210,6 +210,8 @@ class LLMClassifier(Classifier):
             try:
                 self._validate_response(input_text=text, response=response.data)
 
+                # str(self) includes the id now, as this is important in distinguishing between different instances
+                # of the same classifier + config, when comparing spans with each other
                 spans = Span.from_xml(
                     xml=response.data.marked_up_text,
                     concept_id=self.concept.wikibase_id,
