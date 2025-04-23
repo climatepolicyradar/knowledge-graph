@@ -1,10 +1,11 @@
 import json
 import os
 import subprocess
+from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import boto3
@@ -25,7 +26,6 @@ from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
 
-from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -146,13 +146,18 @@ def vespa_app(
 @pytest.fixture
 def local_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmp_path
-) -> VespaSearchAdapter:
-    """VespaSearchAdapter instantiated from mocked ssm params."""
-    adapter = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=str(tmp_path),
-        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+) -> Generator[VespaSearchAdapter, None, None]:
+    """VespaSearchAdapter instantiated from mocked SSM params."""
+    instance_url = "http://localhost:8080"
+    adapter = VespaSearchAdapter(
+        instance_url=instance_url,
     )
+
+    # We can't currently optionally use certs with our search adapter.
+    #
+    # Instead, overwrite it here.
+    adapter.client = Vespa(url=instance_url, cert=None)
+
     try:
         adapter.client.get_application_status()
     except ConnectionError:

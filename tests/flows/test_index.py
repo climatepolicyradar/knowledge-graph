@@ -46,12 +46,13 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{document_fixture}"
     )
 
-    # Confirm that the example concepts are not in the document passages
-    initial_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=["1570", "1273", "1052"],
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        # Confirm that the example concepts are not in the document passages
+        initial_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=["1570", "1273", "1052"],
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     # Make the lists' orders deterministic for comparisons
     s = partial(sorted, key=lambda x: x[0])
@@ -269,8 +270,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         }
     )
 
-    print("document_import_id", document_import_id)
-    print("document_object_uri", document_object_uri)
     assert (
         test_counts
         == await run_partial_updates_of_concepts_for_document_passages__update.fn(
@@ -280,11 +279,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
         )
     )
-    updated_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        updated_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
     updated_concepts = [
         concept
         for _, passage in updated_passages
@@ -317,11 +317,13 @@ async def test_run_partial_updates_of_concepts_for_document_passages_task_failur
 ) -> None:
     """Test that we can continue on errors."""
 
-    def mock_update_data(schema, namespace, data_id, fields):
+    def mock_update_data(
+        _text_block, _concepts, _vespa_connection_pool, _update_function
+    ):
         raise Exception("Forced update failure")
 
-    with patch.object(
-        local_vespa_search_adapter.client, "update_data", side_effect=mock_update_data
+    with patch(
+        "flows.boundary.partial_update_text_block", side_effect=mock_update_data
     ):
         document_fixture = labelled_passage_fixture_files[0]
         document_import_id = Path(document_fixture).stem
@@ -353,12 +355,13 @@ async def test_partial_update_text_block(
 
     concept_a, concept_b = example_vespa_concepts
 
-    # Confirm that the example concepts are not in the document passages
-    initial_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        # Confirm that the example concepts are not in the document passages
+        initial_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
     initial_concepts = [
         concept
         for _, passage in initial_passages
@@ -381,20 +384,22 @@ async def test_partial_update_text_block(
 
     assert concept_a not in initial_concepts
 
-    result_a = await partial_update_text_block(
-        (hit_id, text_block),
-        [concept_a],
-        local_vespa_search_adapter,
-        update_concepts_on_existing_vespa_concepts,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        result_a = await partial_update_text_block(
+            (hit_id, text_block),
+            [concept_a],
+            vespa_connection_pool,
+            update_concepts_on_existing_vespa_concepts,
+        )
 
     assert result_a is None
 
-    passages_a = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        passages_a = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
     concepts_a = [
         concept
         for _, passage in passages_a
@@ -406,20 +411,22 @@ async def test_partial_update_text_block(
 
     assert concept_b not in concepts_a
 
-    result_b = await partial_update_text_block(
-        (hit_id, text_block),
-        [concept_b],
-        local_vespa_search_adapter,
-        update_concepts_on_existing_vespa_concepts,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        result_b = await partial_update_text_block(
+            (hit_id, text_block),
+            [concept_b],
+            vespa_connection_pool,
+            update_concepts_on_existing_vespa_concepts,
+        )
 
     assert result_b is None
 
-    passages_b = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        text_blocks_ids=None,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        passages_b = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
     concepts_b = [
         concept
         for _, passage in passages_b
@@ -551,7 +558,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_d
 
     assert initial_concepts_count < final_concepts_count
     # Original + fixture (.tests/flows/fixtures/*.json)
-    assert final_concepts_count == 3933
+    assert final_concepts_count == 3935
 
 
 def test_update_concepts_on_existing_vespa_concepts(
