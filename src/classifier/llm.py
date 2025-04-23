@@ -4,6 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
+from pydantic_ai.settings import ModelSettings
 from pydantic_ai.agent import AgentRunResult
 
 from src.classifier.classifier import Classifier
@@ -84,6 +85,16 @@ class LLMClassifier(Classifier):
                 ),
             ),
         ] = DEFAULT_SYSTEM_PROMPT,
+        random_seed: Annotated[
+            int,
+            Field(
+                description=(
+                    "Random seed for the classifier. "
+                    "Used for reproducibility and the ability to spawn multiple "
+                    "distinguishable classifiers at the same time"
+                )
+            ),
+        ] = 42,
     ):
         super().__init__(concept)
         self.concept = concept
@@ -104,6 +115,8 @@ class LLMClassifier(Classifier):
             result_type=LLMResponse,
         )
 
+        self.random_seed = random_seed
+
     def __hash__(self) -> int:
         """Overrides the default hash function, to enrich the hash with metadata"""
         return deterministic_hash(
@@ -113,6 +126,7 @@ class LLMClassifier(Classifier):
                 self.version if self.version else None,
                 self.model_name,
                 self.system_prompt_template,
+                self.random_seed,
             ]
         )
 
@@ -151,7 +165,9 @@ class LLMClassifier(Classifier):
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        response: AgentRunResult[LLMResponse] = self.agent.run_sync(text)
+        response: AgentRunResult[LLMResponse] = self.agent.run_sync(
+            text, model_settings=ModelSettings(seed=self.random_seed)
+        )
         self._validate_response(input_text=text, response=response.data)
         return Span.from_xml(
             xml=response.data.marked_up_text,
@@ -163,7 +179,12 @@ class LLMClassifier(Classifier):
         """Predict whether the supplied texts contain instances of the concept."""
 
         async def run_predictions():
-            async_responses = [self.agent.run(text) for text in texts]
+            async_responses = [
+                self.agent.run(
+                    text, model_settings=ModelSettings(seed=self.random_seed)
+                )
+                for text in texts
+            ]
             return await gather(*async_responses)
 
         # Create a single event loop for all batches
