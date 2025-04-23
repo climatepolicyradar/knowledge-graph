@@ -33,9 +33,9 @@ class PoolResult(BaseModel):
         default=ConfidenceType.AGGREGATE,
         description="The type of confidence score returned by the classifier",
     )
-    reasoning: Optional[list[str]] = Field(
+    confidence_reasonings: Optional[dict[str, str]] = Field(
         default=None,
-        description="The reasoning (if provided) behind the classification",
+        description="The reasoning (if provided) behind the classification. In the form of {model_name: reasoning}",
     )
 
 
