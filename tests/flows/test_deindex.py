@@ -1,17 +1,21 @@
 import json
 import os
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime
 from functools import partial
 from io import BytesIO
-from typing import Sequence
+from typing import Any
 
 import pytest
+import vespa
+import vespa.application
 from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import S3_PATTERN, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
+from vespa.io import VespaResponse
 
 import flows.count_family_document_concepts as count_family_document_concepts
 from flows.boundary import (
@@ -19,10 +23,9 @@ from flows.boundary import (
     DocumentImporter,
     DocumentImportId,
     DocumentObjectUri,
-    calculate_concepts_counts_from_results,
+    VespaHitId,
+    get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
-    get_document_passages_from_vespa,
-    partial_update_text_block,
     remove_concepts_from_existing_vespa_concepts,
     run_partial_updates_of_concepts_for_document_passages__remove,
     s3_paths_or_s3_prefixes,
@@ -46,6 +49,7 @@ from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
+from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -224,108 +228,6 @@ def test_remove_concepts_from_existing_vespa_concepts_non_matching():
     assert result_non_matching[2].get("id") == "Q789"
 
 
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_partial_update_text_block_with_removal(
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-):
-    document_import_id = "CCLW.executive.10014.4470"
-
-    # Confirm that the concepts to remove are in the document passages
-    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        initial_passages = await get_document_passages_from_vespa(
-            document_import_id=document_import_id,
-            text_blocks_ids=None,
-            vespa_connection_pool=vespa_connection_pool,
-        )
-
-    try:
-        first_passage_hit_id, first_passage_with_concepts = next(
-            (hit_id, passage)
-            for hit_id, passage in initial_passages
-            if passage.concepts
-        )
-    except StopIteration:
-        raise ValueError("no concepts found in any passages, check the fixtures")
-
-    assert first_passage_with_concepts.concepts
-    assert len(first_passage_with_concepts.concepts) >= 2, "must be at least 2 concepts"
-
-    # Get a slice of 1 concept
-    concepts_to_remove: Sequence[VespaConcept] = first_passage_with_concepts.concepts[
-        0:1
-    ]
-    concepts_to_keep: Sequence[VespaConcept] = first_passage_with_concepts.concepts[1:]
-
-    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        assert (
-            await partial_update_text_block(
-                text_block=(first_passage_hit_id, first_passage_with_concepts),
-                concepts=list(concepts_to_remove),
-                vespa_connection_pool=vespa_connection_pool,
-                update_function=remove_concepts_from_existing_vespa_concepts,
-            )
-            is None
-        )
-
-    _hit_id, updated_passage = get_document_passage_from_vespa(
-        text_block_id=first_passage_with_concepts.text_block_id,
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    assert updated_passage.concepts == concepts_to_keep
-
-
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_partial_update_text_block_with_empty(
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-):
-    document_import_id = "CCLW.executive.10014.4470"
-
-    # Confirm that the concepts to remove are in the document passages
-    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        initial_passages = await get_document_passages_from_vespa(
-            document_import_id=document_import_id,
-            text_blocks_ids=None,
-            vespa_connection_pool=vespa_connection_pool,
-        )
-
-    try:
-        first_passage_hit_id, first_passage_with_concepts = next(
-            (hit_id, passage)
-            for hit_id, passage in initial_passages
-            if passage.concepts
-        )
-    except StopIteration:
-        raise ValueError("no concepts found in any passages, check the fixtures")
-
-    assert first_passage_with_concepts.concepts
-    assert len(first_passage_with_concepts.concepts) >= 2, "must be at least 2 concepts"
-
-    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        assert (
-            await partial_update_text_block(
-                text_block=(first_passage_hit_id, first_passage_with_concepts),
-                concepts=[],
-                vespa_connection_pool=vespa_connection_pool,
-                update_function=remove_concepts_from_existing_vespa_concepts,
-            )
-            is None
-        )
-
-    _hit_id, updated_passage = get_document_passage_from_vespa(
-        text_block_id=first_passage_with_concepts.text_block_id,
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    assert updated_passage.concepts == first_passage_with_concepts.concepts
-
-
 def test_update_s3_with_all_successes(
     mock_bucket,
     mock_s3_client,
@@ -455,195 +357,6 @@ def test_update_s3_with_some_successes(
             s3_path=f"s3://{mock_bucket}/concepts_counts/Q787/v4/{document_import_id}.json"
         )
     ) == {"Q456:agriculture": 3}
-
-
-@pytest.mark.parametrize(
-    "results,batch,expected_counts",
-    [
-        # Case: All successful updates (no exceptions)
-        (
-            [None, None],
-            [
-                (
-                    "text_block_1",
-                    [
-                        VespaConcept(
-                            id="Q123",
-                            name="concept1",
-                            model='KeywordClassifier("concept1")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        )
-                    ],
-                ),
-                (
-                    "text_block_2",
-                    [
-                        VespaConcept(
-                            id="Q456",
-                            name="concept2",
-                            model='KeywordClassifier("concept2")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        )
-                    ],
-                ),
-            ],
-            Counter(
-                {
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q123"),
-                        model_name='KeywordClassifier("concept1")',
-                    ): 0,
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q456"),
-                        model_name='KeywordClassifier("concept2")',
-                    ): 0,
-                }
-            ),
-        ),
-        # Case: One failed update (with exception)
-        (
-            [None, Exception("Update failed")],
-            [
-                (
-                    "text_block_1",
-                    [
-                        VespaConcept(
-                            id="Q123",
-                            name="concept1",
-                            model='KeywordClassifier("concept1")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        )
-                    ],
-                ),
-                (
-                    "text_block_2",
-                    [
-                        VespaConcept(
-                            id="Q456",
-                            name="concept2",
-                            model='KeywordClassifier("concept2")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        )
-                    ],
-                ),
-            ],
-            Counter(
-                {
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q123"),
-                        model_name='KeywordClassifier("concept1")',
-                    ): 0,
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q456"),
-                        model_name='KeywordClassifier("concept2")',
-                    ): 1,
-                }
-            ),
-        ),
-        # Case: Multiple concepts in one text block
-        (
-            [None],
-            [
-                (
-                    "text_block_1",
-                    [
-                        VespaConcept(
-                            id="Q123",
-                            name="concept1",
-                            model='KeywordClassifier("concept1")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        ),
-                        VespaConcept(
-                            id="Q456",
-                            name="concept2",
-                            model='KeywordClassifier("concept2")',
-                            start=20,
-                            end=30,
-                            timestamp=datetime.now(),
-                        ),
-                    ],
-                )
-            ],
-            Counter(
-                {
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q123"),
-                        model_name='KeywordClassifier("concept1")',
-                    ): 0,
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q456"),
-                        model_name='KeywordClassifier("concept2")',
-                    ): 0,
-                }
-            ),
-        ),
-        # Case: All failed updates
-        (
-            [Exception("Update failed"), Exception("Another failure")],
-            [
-                (
-                    "text_block_1",
-                    [
-                        VespaConcept(
-                            id="Q123",
-                            name="concept1",
-                            model='KeywordClassifier("concept1")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        )
-                    ],
-                ),
-                (
-                    "text_block_2",
-                    [
-                        VespaConcept(
-                            id="Q456",
-                            name="concept2",
-                            model='KeywordClassifier("concept2")',
-                            start=0,
-                            end=10,
-                            timestamp=datetime.now(),
-                        )
-                    ],
-                ),
-            ],
-            Counter(
-                {
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q123"),
-                        model_name='KeywordClassifier("concept1")',
-                    ): 1,
-                    ConceptModel(
-                        wikibase_id=WikibaseID("Q456"),
-                        model_name='KeywordClassifier("concept2")',
-                    ): 1,
-                }
-            ),
-        ),
-        # Case: Empty batch
-        ([], [], Counter()),
-    ],
-)
-def test_calculate_concepts_counts_from_results(
-    results,
-    batch,
-    expected_counts,
-):
-    """Test that subtract_concepts_counts correctly processes results and batch data."""
-    actual_counts = calculate_concepts_counts_from_results(results, batch)
-
-    assert actual_counts == expected_counts
 
 
 @pytest.mark.asyncio
@@ -789,6 +502,32 @@ async def test_update_s3_with_latest_concepts_counts_some_success(
             s3_path=f"s3://{mock_bucket}/concepts_counts/Q787/v4/{document_import_id}.json"
         )
     ) == {"Q123:concept1": 1}
+
+
+async def partial_update_text_block(
+    text_block: tuple[VespaHitId, VespaPassage],
+    concepts: list[VespaConcept],  # A possibly empty list
+    vespa_connection_pool: vespa.application.VespaAsync,
+    update_function: Callable[[VespaPassage, list[VespaConcept]], list[dict[str, Any]]],
+):
+    """Partial update a singular text block and its concepts."""
+    document_passage_id, document_passage = text_block[0], text_block[1]
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+
+    serialised_concepts = update_function(document_passage, concepts)
+
+    response: VespaResponse = await vespa_connection_pool.update_data(
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    if not response.is_successful():
+        raise PartialUpdateError(data_id, response.get_status_code())
+
+    return None
 
 
 @pytest.mark.asyncio
@@ -995,15 +734,23 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
             is None
         )
 
-    # Run the function
+    test_counts = Counter(
+        {
+            ConceptModel(
+                wikibase_id=WikibaseID("Q760"),
+                model_name='KeywordClassifier("nuclear sector")',
+            ): 0
+        }
+    )
+
     assert (
-        await run_partial_updates_of_concepts_for_document_passages__remove(
+        test_counts
+        == await run_partial_updates_of_concepts_for_document_passages__remove(
             document_importer=document_importer_remove,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
             vespa_search_adapter=local_vespa_search_adapter,
         )
-        is None
     )
 
     # The S3 and Vespa state are checked, so that any removals only
