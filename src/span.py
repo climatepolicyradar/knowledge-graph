@@ -57,7 +57,6 @@ class Span(BaseModel):
             self.start_index,
             self.end_index,
             self.concept_id,
-            ",".join(self.labellers),
         )
 
     @model_validator(mode="after")

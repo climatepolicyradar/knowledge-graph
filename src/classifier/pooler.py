@@ -18,7 +18,7 @@ class ConfidenceType(str, Enum):
     SELF_REPORTED = "self-reported"
 
 
-class PoolResult(BaseModel):
+class PoolerAggregatedSpan(BaseModel):
     """Results from a classifier pooler"""
 
     span: Span = Field(
@@ -40,11 +40,7 @@ class PoolResult(BaseModel):
 
 
 class ClassifierPooler:
-    """
-    Manages a pool of classifiers, and is responsible for predicting, and aggregating their results.
-
-    NOTE: Currently only implemented for LLMClassifier.
-    """
+    """Manages a pool of classifiers, and is responsible for predicting, and aggregating their results."""
 
     def __init__(self, classifiers: list[Classifier], concept: Concept):
         if any(classifier.concept != concept for classifier in classifiers):
@@ -52,7 +48,7 @@ class ClassifierPooler:
         self.classifiers = classifiers
         self.concept = concept
 
-    def predict(self, text: str) -> list[PoolResult]:
+    def predict(self, text: str) -> list[PoolerAggregatedSpan]:
         """Run prediction with all classifiers and aggregate their results"""
 
         predictions = self._get_predictions(text)
@@ -70,7 +66,17 @@ class ClassifierPooler:
 
         return predictions
 
-    def _aggregate(self, spans: list[Span]) -> list[PoolResult]:
+    def _same_spans(self, span1: Span, span2: Span) -> bool:
+        """
+        Does a comparison of the spans
+
+        This is required because the spans may have different labellers, and the labeller is not
+        part of the id on purpose. For this, see the test `test_whether_equivalent_spans_with_different_labellers_are_equal`
+        for more details.
+        """
+        return span1 == span2 and span1.labellers == span2.labellers
+
+    def _aggregate(self, spans: list[Span]) -> list[PoolerAggregatedSpan]:
         """
         Aggregates the results of the classifiers
 
@@ -87,12 +93,14 @@ class ClassifierPooler:
         for span in spans:
             if span in handled_spans:
                 continue
-            overlapping_spans = [s for s in spans if s.overlaps(span) and s != span]
+            overlapping_spans = [
+                s for s in spans if s.overlaps(span) and not self._same_spans(s, span)
+            ]
             handled_spans.update(overlapping_spans)
 
             if len(overlapping_spans) == 0:
                 results.append(
-                    PoolResult(
+                    PoolerAggregatedSpan(
                         span=span,
                         confidence=1.0 / len(self.classifiers),
                         confidence_type=ConfidenceType.AGGREGATE,
@@ -110,7 +118,7 @@ class ClassifierPooler:
                     / len(self.classifiers)
                 )
                 results.append(
-                    PoolResult(
+                    PoolerAggregatedSpan(
                         span=Span.union(mergable_spans),
                         confidence=float(confidence),
                         confidence_type=ConfidenceType.AGGREGATE,
