@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
@@ -18,7 +19,7 @@ from flows.boundary import (
     DocumentImportId,
     DocumentObjectUri,
     S3Accessor,
-    get_vespa_search_adapter,
+    get_vespa_search_adapter_from_aws_secrets,
     s3_obj_generator,
     s3_paths_or_s3_prefixes,
 )
@@ -203,7 +204,14 @@ async def load_update_document_concepts_counts(
 
             logger.info(f"processed batch document object URIs #{batch_num}")
 
-    cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
+    if vespa_search_adapter is None:
+        temp_dir = tempfile.TemporaryDirectory()
+
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+            cert_dir=temp_dir.name,
+            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        )
 
     # Continue on, even if there were failures, as that's accounted for when
     # calculating the concepts' counts.
@@ -214,12 +222,11 @@ async def load_update_document_concepts_counts(
         for concept, count in concepts_counts.items()
     }
 
-    with cm:
-        await partial_update_family_document_concepts_counts(
-            document_import_id,
-            concepts_counts_with_names,
-            vespa_search_adapter,
-        )
+    await partial_update_family_document_concepts_counts(
+        document_import_id,
+        concepts_counts_with_names,
+        vespa_search_adapter,
+    )
 
     # Now, we finally do a little bit of worrying about
     # failures, so they aren't invisible.
