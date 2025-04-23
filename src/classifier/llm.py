@@ -8,6 +8,7 @@ from pydantic_ai.agent import AgentRunResult
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
+from src.identifiers import deterministic_hash
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -89,9 +90,9 @@ class LLMClassifier(Classifier):
         self.model_name = model_name
         self.system_prompt_template = system_prompt_template
 
-        assert "{concept_description}" in system_prompt_template, (
-            "System prompt must contain {concept_description}"
-        )
+        assert (
+            "{concept_description}" in system_prompt_template
+        ), "System prompt must contain {concept_description}"
 
         self.system_prompt = system_prompt_template.format(
             concept_description=self.concept.to_markdown()
@@ -103,20 +104,16 @@ class LLMClassifier(Classifier):
             result_type=LLMResponse,
         )
 
-    def __eq__(self, other):
-        """
-        Check if two classifiers are equivalent.
-
-        NOTE: this only checks for model name, so equality does not mean the results from the two will
-        also be equivalent (i.e. we can't guarantee determinism of the LLM, especially without locking
-        the seed and other parameters).
-        """
-        if not isinstance(other, LLMClassifier):
-            return False
-        return (
-            str(self.concept) == str(other.concept)
-            and self.model_name == other.model_name
-            and self.system_prompt_template == other.system_prompt_template
+    def __hash__(self) -> int:
+        """Overrides the default hash function, to enrich the hash with metadata"""
+        return deterministic_hash(
+            [
+                self.name,
+                self.concept.__hash__(),
+                self.version if self.version else None,
+                self.model_name,
+                self.system_prompt_template,
+            ]
         )
 
     def __repr__(self):
