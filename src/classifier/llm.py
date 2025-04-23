@@ -4,8 +4,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
-from pydantic_ai.settings import ModelSettings
 from pydantic_ai.agent import AgentRunResult
+from pydantic_ai.settings import ModelSettings
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
@@ -101,9 +101,9 @@ class LLMClassifier(Classifier):
         self.model_name = model_name
         self.system_prompt_template = system_prompt_template
 
-        assert (
-            "{concept_description}" in system_prompt_template
-        ), "System prompt must contain {concept_description}"
+        assert "{concept_description}" in system_prompt_template, (
+            "System prompt must contain {concept_description}"
+        )
 
         self.system_prompt = system_prompt_template.format(
             concept_description=self.concept.to_markdown()
