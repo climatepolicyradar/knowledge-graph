@@ -17,7 +17,15 @@ def check_classifier_specs(
         help="S3 path where labelled passages should be stored"
     ),
 ) -> None:
-    """Check if the classifier specs in the YAML file have corresponding S3 paths."""
+    """
+    Check if the classifier specs have s3 outputs and there respective counts.
+
+    Once inference has been run we want to validate whether the classifiers that we 
+    have listed in the classifier spec yaml files have labelled passage outputs 
+    as well as the respective counts of the labelled passages for the classifiers. 
+
+    This can be used to help us validate that inference has run correctly. 
+    """
     with open(yaml_path, "r") as file:
         data = yaml.safe_load(file)
 
