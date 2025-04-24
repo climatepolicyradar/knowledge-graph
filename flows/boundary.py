@@ -13,7 +13,7 @@ from datetime import timedelta
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Iterable, TypeAlias, TypedDict, TypeVar, Union
+from typing import Any, Iterable, Protocol, TypeAlias, TypedDict, TypeVar, Union
 
 import boto3
 import httpx
@@ -784,13 +784,63 @@ class ConceptModel(BaseModel):
         )
 
 
-def op_to_fn(operation: Operation):
-    """Get the appropriate function to implement an operation"""
+class _ConceptsCombiner(Protocol):
+    """Protocol defining interface for combining concepts changes with existing concepts from Vespa."""
+
+    def __call__(
+        self,
+        passage: VespaPassage,
+        concepts: list[VespaConcept],
+    ) -> list[dict[str, Any]]: ...
+
+
+class _FeedResultCallback(Protocol):
+    """Protocol defining interface for handling fed results from Vespa."""
+
+    def __call__(
+        self,
+        failures: list[VespaResponse],
+        concepts_counts: Counter[ConceptModel],
+        grouped_concepts: dict[TextBlockId, list[VespaConcept]],
+        response: VespaResponse,
+        data_id: VespaDataId,
+    ) -> None: ...
+
+
+class _ConceptsCountsCombiner(Protocol):
+    """Protocol defining interface for combined concepts' counts after attempting updates to Vespa."""
+
+    async def __call__(
+        self,
+        document_importer: DocumentImporter,
+        concepts_counts: Counter[ConceptModel],
+        cache_bucket: str,
+        concepts_counts_prefix: str,
+        document_labelled_passages: list[LabelledPassage],
+    ) -> None: ...
+
+
+def op_to_fn(
+    operation: Operation,
+) -> tuple[
+    _ConceptsCombiner,
+    _FeedResultCallback,
+    _ConceptsCountsCombiner,
+]:
+    """Get the appropriate functions to implement an operation"""
     match operation:
         case Operation.INDEX:
-            return run_partial_updates_of_concepts_for_document_passages__update
+            return (
+                update_concepts_on_existing_vespa_concepts,
+                update_feed_result_callback,
+                update_s3_with_update_concepts_counts,
+            )
         case Operation.DEINDEX:
-            return run_partial_updates_of_concepts_for_document_passages__remove
+            return (
+                remove_concepts_from_existing_vespa_concepts,
+                remove_feed_result_callback,
+                update_s3_with_latest_concepts_counts,
+            )
 
 
 @flow(
@@ -813,7 +863,11 @@ async def run_partial_updates_of_concepts_for_batch(
         f"Updating concepts for batch of documents, documents in batch: {len(documents_batch)}. Operation is `{partial_update_flow}`"
     )
 
-    fn = op_to_fn(partial_update_flow)
+    (
+        merge_serialise_concepts_cb,
+        vespa_response_handler_cb,
+        concepts_counts_updater_cb,
+    ) = op_to_fn(partial_update_flow)
 
     if vespa_search_adapter is None:
         temp_dir = tempfile.TemporaryDirectory()
@@ -828,10 +882,13 @@ async def run_partial_updates_of_concepts_for_batch(
 
     for i, document_importer in enumerate(documents_batch):
         try:
-            await fn(
+            await run_partial_updates_of_concepts_for_document_passages(
                 document_importer=document_importer,
                 cache_bucket=cache_bucket,
                 concepts_counts_prefix=concepts_counts_prefix,
+                merge_serialise_concepts_cb=merge_serialise_concepts_cb,
+                vespa_response_handler_cb=vespa_response_handler_cb,
+                concepts_counts_updater_cb=concepts_counts_updater_cb,
                 vespa_search_adapter=vespa_search_adapter,
             )
 
@@ -991,239 +1048,24 @@ async def updates_by_s3(
         raise ValueError("there was at least 1 task that failed")
 
 
-# Index -------------------------------------------------------------------------
-
-
 # No timeout set since the caller of this has one.
 @flow(log_prints=True)
-async def run_partial_updates_of_concepts_for_document_passages__update(
+async def run_partial_updates_of_concepts_for_document_passages(
     document_importer: DocumentImporter,
     cache_bucket: str,
     concepts_counts_prefix: str,
+    # How to merge concepts for the document passage pre- and post-fetching
+    merge_serialise_concepts_cb,
+    # What to do with the response, in particular with our failures and concepts counts tracking
+    vespa_response_handler_cb,
+    # The final effect of recording the change in concepts counts to an artifact
+    concepts_counts_updater_cb,
     vespa_search_adapter: VespaSearchAdapter | None = None,
 ) -> Counter[ConceptModel]:
     """
     Run partial update for VespaConcepts on text blocks for a document.
 
     This is done in the document_passage index.
-
-    Assumptions:
-
-    - The ID field of the VespaConcept object holds the
-    context of the text block that it relates to. E.g. the concept ID
-    1.10 would relate to the text block ID 10.
-    """
-    logger = get_run_logger()
-
-    logger.info("getting S3 labelled passages generator")
-    document_labelled_passages = load_labelled_passages_by_uri(document_importer[1])
-
-    logger.info("converting labelled passages to Vespa concepts")
-
-    # To do just 1 write per document passage, group all their concepts together.
-    #
-    # This also means we don't need to do |concepts| reads too, since
-    # we can read the document passage once, and then merge it with
-    # the concepts.
-    grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
-        labelled_passage.id: convert_labelled_passage_to_concepts(labelled_passage)
-        for labelled_passage in document_labelled_passages
-    }
-
-    logger.info(
-        f"starting partial updates for {len(grouped_concepts)} grouped concepts"
-    )
-
-    document_import_id = remove_translated_suffix(document_importer[0])
-
-    text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
-
-    if vespa_search_adapter is None:
-        temp_dir = tempfile.TemporaryDirectory()
-
-        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-            cert_dir=temp_dir.name,
-            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-        )
-
-    async with (
-        vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
-            connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
-            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
-        ) as vespa_connection_pool
-    ):
-        # Read all the document passages from Vespa in as fewer reads as possible
-        text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
-
-        for text_blocks_ids_batch in iterate_batch(text_blocks_ids, VESPA_MAX_LIMIT):
-            results = await get_document_passages_from_vespa(
-                document_import_id=document_import_id,
-                text_blocks_ids=text_blocks_ids_batch,
-                vespa_connection_pool=vespa_connection_pool,
-            )
-
-            # Update the accumulated dictionary with new results
-            next_text_blocks = {
-                text_block.text_block_id: (vespa_hit_id, text_block)
-                for vespa_hit_id, text_block in results
-            }
-            text_blocks = text_blocks | next_text_blocks
-
-        grouped_concepts_n = len(grouped_concepts)
-        text_blocks_n = len(text_blocks)
-        if grouped_concepts_n != text_blocks_n:
-            raise ValueError(
-                f"there were {grouped_concepts_n} labelled passages and only "
-                f"{text_blocks_n} document passages were read from Vespa"
-            )
-
-    # We need to count the concepts across all document passages
-    concepts_counts: Counter[ConceptModel] = Counter()
-
-    failures: list[VespaResponse] = []
-
-    # Batch updates (writes) and let the Vespa SDK take care of the complexities
-    def _feed_result_callback(response: VespaResponse, data_id: VespaDataId) -> None:
-        nonlocal failures, concepts_counts
-
-        if not response.is_successful():
-            logger.error(
-                f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
-            )
-            failures.append(response)
-            return
-
-        # Update concepts counts
-        text_block_id = get_text_block_id_from_vespa_data_id(data_id)
-        concepts = grouped_concepts[text_block_id]
-
-        # Example:
-        #
-        # ..
-        # "labellers": [
-        #   "KeywordClassifier(\"professional services sector\")"
-        # ],
-        # ...
-        concepts_models = [
-            ConceptModel(wikibase_id=WikibaseID(concept.id), model_name=concept.model)
-            for concept in concepts
-        ]
-
-        concepts_counts.update(concepts_models)
-
-    class DataPoint(TypedDict):
-        id: VespaDataId
-        fields: dict[str, Any]
-
-    def _to_data(text_block_id: TextBlockId, concepts: list[VespaConcept]) -> DataPoint:
-        document_passage_id = text_blocks[text_block_id][0]
-        document_passage = text_blocks[text_block_id][1]
-
-        data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-
-        serialised_concepts = update_concepts_on_existing_vespa_concepts(
-            document_passage,
-            concepts,
-        )
-
-        return {"id": data_id, "fields": {"concepts": serialised_concepts}}
-
-    data: Iterable[dict[str, Any]] = list(
-        map(lambda x: dict(_to_data(*x)), grouped_concepts.items())
-    )
-
-    # The previously established connection pool isn't used since
-    # `feed_iterable` creates its own.
-    vespa_search_adapter.client.feed_iterable(  # pyright: ignore[reportOptionalMemberAccess]
-        iter=data,
-        schema="document_passage",
-        namespace="doc_search",
-        operation_type="update",
-        max_connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
-        callback=_feed_result_callback,
-    )
-
-    # Write concepts counts to S3
-    try:
-        s3_uri = Path(document_importer[1])
-        # Get all parts after the prefix (e.g. "Q787/v4/CCLW.executive.1813.2418.json")
-        key_parts = "/".join(s3_uri.parts[3:])  # Skip s3:/bucket/labelled_passages/
-
-        # Create new path with concepts_counts_prefix
-        concepts_counts_uri = (
-            f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
-        )
-
-        serialised_concepts_counts = json.dumps(
-            {str(k): v for k, v in concepts_counts.items()}
-        )
-
-        # Write to S3
-        s3_object_write_text(
-            s3_uri=concepts_counts_uri,
-            text=serialised_concepts_counts,
-        )
-    except Exception as e:
-        logger.error(f"failed to write concepts counts to S3: {str(e)}")
-
-    if failures:
-        raise ValueError(f"there was {len(failures)} failures")
-
-    return concepts_counts
-
-
-def update_concepts_on_existing_vespa_concepts(
-    passage: VespaPassage,
-    concepts: list[VespaConcept],
-) -> list[dict[str, Any]]:
-    """
-    Update a passage's concepts with the new concepts.
-
-    During the update we remove all the old concepts related to a model. This is as it
-    was decided that holding out dated concepts/spans on the passage in Vespa for a
-    model is not useful.
-
-    It is also, not possible to duplicate a Concept object in the concepts array as we
-    are removing all instances where the model is the same.
-    """
-    if not passage.concepts:
-        return [concept.model_dump(mode="json") for concept in concepts]
-
-    new_concept_models = {concept.model for concept in concepts}
-
-    existing_concepts_to_keep = [
-        concept
-        for concept in passage.concepts
-        if concept.model not in new_concept_models
-    ]
-
-    updated_concepts = existing_concepts_to_keep + concepts
-
-    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
-
-
-# De-index ----------------------------------------------------------------------
-
-
-# No timeout set since the caller of this has one.
-@flow
-async def run_partial_updates_of_concepts_for_document_passages__remove(
-    document_importer: DocumentImporter,
-    cache_bucket: str,
-    concepts_counts_prefix: str,
-    vespa_search_adapter: VespaSearchAdapter | None = None,
-) -> Counter[ConceptModel]:
-    """
-    Run partial update for VespaConcepts on text blocks for a document.
-
-    This is done in the document_passage index.
-
-    Assumptions:
-
-    - The ID field of the VespaConcept object holds the
-    context of the text block that it relates to. E.g. the concept ID
-    1.10 would relate to the text block ID 10.
     """
     logger = get_run_logger()
 
@@ -1294,41 +1136,6 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
     concepts_counts: Counter[ConceptModel] = Counter()
 
     # Batch updates (writes) and let the Vespa SDK take care of the complexities
-    def _feed_result_callback(response: VespaResponse, data_id: VespaDataId) -> None:
-        nonlocal failures, concepts_counts
-
-        # Update concepts counts
-        text_block_id = get_text_block_id_from_vespa_data_id(data_id)
-        concepts = grouped_concepts[text_block_id]
-
-        # Example:
-        #
-        # ..
-        # "labellers": [
-        #   "KeywordClassifier(\"professional services sector\")"
-        # ],
-        # ...
-        concepts_models = [
-            ConceptModel(wikibase_id=WikibaseID(concept.id), model_name=concept.model)
-            for concept in concepts
-        ]
-
-        # Set 0s in the counter for all seen concepts. This ensures
-        # all concepts are represented in the counter even if they're
-        # not updated.
-        for concept_model in concepts_models:
-            if concept_model not in concepts_counts:
-                concepts_counts[concept_model] = 0
-
-        if not response.is_successful():
-            logger.error(
-                f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
-            )
-            failures.append(response)
-
-            # Since we failed to remove them from the spans, make sure
-            # they're accounted for as remaining.
-            concepts_counts.update(concepts_models)
 
     class DataPoint(TypedDict):
         id: VespaDataId
@@ -1340,7 +1147,7 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
 
         data_id = get_data_id_from_vespa_hit_id(document_passage_id)
 
-        serialised_concepts = remove_concepts_from_existing_vespa_concepts(
+        serialised_concepts = merge_serialise_concepts_cb(
             document_passage,
             concepts,
         )
@@ -1351,6 +1158,19 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
         map(lambda x: dict(_to_data(*x)), grouped_concepts.items())
     )
 
+    # Wrap the callback with the appropriate state and make it match
+    # the expected signature.
+    def _vespa_response_handler_cb_with_state(
+        response: VespaResponse, data_id: VespaDataId
+    ):
+        vespa_response_handler_cb(
+            failures,
+            concepts_counts,
+            grouped_concepts,
+            response,
+            data_id,
+        )
+
     # The previously established connection pool isn't used since
     # `feed_iterable` creates its own.
     vespa_search_adapter.client.feed_iterable(  # pyright: ignore[reportOptionalMemberAccess]
@@ -1359,12 +1179,12 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
         namespace="doc_search",
         operation_type="update",
         max_connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
-        callback=_feed_result_callback,
+        callback=_vespa_response_handler_cb_with_state,
     )
 
     # Write concepts counts to S3
     try:
-        await update_s3_with_latest_concepts_counts(
+        await concepts_counts_updater_cb(
             document_importer=document_importer,
             concepts_counts=concepts_counts,
             cache_bucket=cache_bucket,
@@ -1380,9 +1200,150 @@ async def run_partial_updates_of_concepts_for_document_passages__remove(
     return concepts_counts
 
 
+# Index -------------------------------------------------------------------------
+
+
+def update_feed_result_callback(
+    failures: list[VespaResponse],
+    concepts_counts: Counter[ConceptModel],
+    grouped_concepts: dict[TextBlockId, list[VespaConcept]],
+    response: VespaResponse,
+    data_id: VespaDataId,
+) -> None:
+    logger = get_run_logger()
+
+    if not response.is_successful():
+        logger.error(
+            f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
+        )
+        failures.append(response)
+        return
+
+    # Update concepts counts
+    text_block_id = get_text_block_id_from_vespa_data_id(data_id)
+    concepts = grouped_concepts[text_block_id]
+
+    # Example:
+    #
+    # ..
+    # "labellers": [
+    #   "KeywordClassifier(\"professional services sector\")"
+    # ],
+    # ...
+    concepts_models = [
+        ConceptModel(wikibase_id=WikibaseID(concept.id), model_name=concept.model)
+        for concept in concepts
+    ]
+
+    concepts_counts.update(concepts_models)
+
+
+async def update_s3_with_update_concepts_counts(
+    document_importer: DocumentImporter,
+    concepts_counts: Counter[ConceptModel],
+    cache_bucket: str,
+    concepts_counts_prefix: str,
+    document_labelled_passages: list[LabelledPassage],
+) -> None:
+    s3_uri = Path(document_importer[1])
+    # Get all parts after the prefix (e.g. "Q787/v4/CCLW.executive.1813.2418.json")
+    key_parts = "/".join(s3_uri.parts[3:])  # Skip s3:/bucket/labelled_passages/
+
+    # Create new path with concepts_counts_prefix
+    concepts_counts_uri = f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
+
+    serialised_concepts_counts = json.dumps(
+        {str(k): v for k, v in concepts_counts.items()}
+    )
+
+    # Write to S3
+    s3_object_write_text(
+        s3_uri=concepts_counts_uri,
+        text=serialised_concepts_counts,
+    )
+
+    return None
+
+
+def update_concepts_on_existing_vespa_concepts(
+    passage: VespaPassage,
+    concepts: list[VespaConcept],
+) -> list[dict[str, Any]]:
+    """
+    Update a passage's concepts with the new concepts.
+
+    During the update we remove all the old concepts related to a model. This is as it
+    was decided that holding out dated concepts/spans on the passage in Vespa for a
+    model is not useful.
+
+    It is also, not possible to duplicate a Concept object in the concepts array as we
+    are removing all instances where the model is the same.
+    """
+    if not passage.concepts:
+        return [concept.model_dump(mode="json") for concept in concepts]
+
+    new_concept_models = {concept.model for concept in concepts}
+
+    existing_concepts_to_keep = [
+        concept
+        for concept in passage.concepts
+        if concept.model not in new_concept_models
+    ]
+
+    updated_concepts = existing_concepts_to_keep + concepts
+
+    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
+
+
+# De-index ----------------------------------------------------------------------
+
+
+def remove_feed_result_callback(
+    failures: list[VespaResponse],
+    concepts_counts: Counter[ConceptModel],
+    grouped_concepts: dict[TextBlockId, list[VespaConcept]],
+    response: VespaResponse,
+    data_id: VespaDataId,
+) -> None:
+    logger = get_run_logger()
+
+    # Update concepts counts
+    text_block_id = get_text_block_id_from_vespa_data_id(data_id)
+    concepts = grouped_concepts[text_block_id]
+
+    # Example:
+    #
+    # ..
+    # "labellers": [
+    #   "KeywordClassifier(\"professional services sector\")"
+    # ],
+    # ...
+    concepts_models = [
+        ConceptModel(wikibase_id=WikibaseID(concept.id), model_name=concept.model)
+        for concept in concepts
+    ]
+
+    # Set 0s in the counter for all seen concepts. This ensures
+    # all concepts are represented in the counter even if they're
+    # not updated.
+    for concept_model in concepts_models:
+        if concept_model not in concepts_counts:
+            concepts_counts[concept_model] = 0
+
+    if not response.is_successful():
+        logger.error(
+            f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
+        )
+        failures.append(response)
+
+        # Since we failed to remove them from the spans, make sure
+        # they're accounted for as remaining.
+        concepts_counts.update(concepts_models)
+
+
 def remove_concepts_from_existing_vespa_concepts(
     passage: VespaPassage,
-    concepts_to_remove: list[VespaConcept],
+    concepts: list[VespaConcept],
 ) -> list[dict[str, Any]]:
     """
     Update a passage's concepts with the updated/removed concepts.
@@ -1395,7 +1356,7 @@ def remove_concepts_from_existing_vespa_concepts(
     are removing all instances where the model is the same.
     """
     # Get the models to remove
-    concepts_to_remove__models = [concept.model for concept in concepts_to_remove]
+    concepts_to_remove__models = [concept.model for concept in concepts]
 
     # It's an optional sequence at the moment, so massage it
     concepts_in_vespa: list[VespaConcept] = (
