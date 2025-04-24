@@ -60,6 +60,18 @@ class BaseTargetClassifier(Classifier, ABC):
         )
 
     @abstractmethod
+    def _relevant_labels(self, prediction: list[dict]) -> list[dict]:
+        """
+        Get the relevant labels from the prediction.
+
+        Args:
+            prediction: The prediction returned by the model -- a list of dictionaries for each of
+                the 3 labels, containing the keys "label" and "score"
+
+        Returns:
+            list[dict]: The relevant labels from the prediction.
+        """
+
     def _check_prediction_conditions(
         self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
     ) -> bool:
@@ -79,6 +91,9 @@ class BaseTargetClassifier(Classifier, ABC):
         Returns:
             bool: Whether the prediction meets the conditions for this target type.
         """
+        return any(
+            label["score"] >= threshold for label in self._relevant_labels(prediction)
+        )
 
     def predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
         """Predict whether the supplied text contains a target."""
@@ -104,6 +119,9 @@ class BaseTargetClassifier(Classifier, ABC):
                     concept_id=self.concept.wikibase_id,
                     labellers=[str(self)],
                     timestamps=[datetime.now()],
+                    confidence=prediction[0][
+                        "score"
+                    ],  # TODO: this is only the first label
                 )
                 text_results.append(span)
 
@@ -124,11 +142,9 @@ class TargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1651")]
 
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
-        """Check whether the prediction meets the conditions for a generic target."""
-        return any(label["score"] >= threshold for label in prediction)
+    def _relevant_labels(self, prediction: list[dict]) -> list[dict]:
+        """Get the relevant scores from the prediction."""
+        return prediction
 
 
 class EmissionsReductionTargetClassifier(BaseTargetClassifier):
@@ -136,14 +152,9 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1652")]
 
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
-        """Check whether the prediction meets the conditions for a reduction target."""
-        return any(
-            label["score"] >= threshold and label["label"] in {"NZT", "Reduction"}
-            for label in prediction
-        )
+    def _relevant_labels(self, prediction: list[dict]) -> list[dict]:
+        """Get the relevant scores from the prediction."""
+        return [label for label in prediction if label["label"] in {"NZT", "Reduction"}]
 
 
 class NetZeroTargetClassifier(BaseTargetClassifier):
@@ -151,11 +162,6 @@ class NetZeroTargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1653")]
 
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
-        """Check whether the prediction meets the conditions for a net-zero target."""
-        return any(
-            label["score"] >= threshold and label["label"] in {"NZT"}
-            for label in prediction
-        )
+    def _relevant_labels(self, prediction: list[dict]) -> list[dict]:
+        """Get the relevant scores from the prediction."""
+        return [label for label in prediction if label["label"] == "NZT"]

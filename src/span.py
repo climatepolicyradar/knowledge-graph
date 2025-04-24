@@ -43,6 +43,12 @@ class Span(BaseModel):
             "ie they should be the same length, and their order should match."
         ),
     )
+    confidence: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="The confidence score of the classifier",
+    )
 
     class Config:
         """Pydantic configuration for the Span model"""
