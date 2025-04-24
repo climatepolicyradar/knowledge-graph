@@ -90,7 +90,7 @@ class BaseTargetClassifier(Classifier, ABC):
         """Predict whether the supplied texts contain targets."""
 
         predictions: list[list[dict]] = self.pipeline(
-            texts, padding=True, truncation=True, return_all_scores=True
+            texts, padding=True, truncation=True, top_k=None
         )
 
         results = []
