@@ -23,11 +23,16 @@ from flows.boundary import (
     DocumentImporter,
     DocumentImportId,
     DocumentObjectUri,
+    Operation,
+    TextBlockId,
+    VespaDataId,
     VespaHitId,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
+    op_to_fn,
     remove_concepts_from_existing_vespa_concepts,
-    run_partial_updates_of_concepts_for_document_passages__remove,
+    remove_feed_result_callback,
+    run_partial_updates_of_concepts_for_document_passages,
     s3_paths_or_s3_prefixes,
     serialise_concepts_counts,
     update_concepts_on_existing_vespa_concepts,
@@ -743,12 +748,21 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
         }
     )
 
+    (
+        merge_serialise_concepts_cb,
+        vespa_response_handler_cb,
+        concepts_counts_updater_cb,
+    ) = op_to_fn(Operation.DEINDEX)
+
     assert (
         test_counts
-        == await run_partial_updates_of_concepts_for_document_passages__remove(
+        == await run_partial_updates_of_concepts_for_document_passages.fn(
             document_importer=document_importer_remove,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            merge_serialise_concepts_cb=merge_serialise_concepts_cb,
+            vespa_response_handler_cb=vespa_response_handler_cb,
+            concepts_counts_updater_cb=concepts_counts_updater_cb,
             vespa_search_adapter=local_vespa_search_adapter,
         )
     )
@@ -1394,3 +1408,93 @@ async def test_cleanups_by_s3(
         )
     )
     mock_s3_client.head_object(Bucket=mock_bucket, Key=key)
+
+
+def test_remove_feed_result_callback():
+    failures: list[VespaResponse] = []
+    concepts_counts: Counter[ConceptModel] = Counter()
+    grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
+        "18593": [
+            VespaConcept(
+                id="Q100",
+                name="sectors",
+                parent_concepts=[
+                    {"name": "Q2-name", "id": "Q200"},
+                    {"name": "Q3-name", "id": "Q300"},
+                ],
+                parent_concept_ids_flat="Q200,Q300,",
+                model="sectors_model",
+                end=11,
+                start=0,
+                timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+            ),
+        ]
+    }
+    response: VespaResponse = VespaResponse(
+        json={},
+        status_code=200,
+        url="test-url",
+        operation_type="update",
+    )
+    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+
+    assert (
+        remove_feed_result_callback(
+            failures=failures,
+            concepts_counts=concepts_counts,
+            grouped_concepts=grouped_concepts,
+            response=response,
+            data_id=data_id,
+        )
+        is None
+    )
+
+    assert concepts_counts == Counter(
+        {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 0}
+    )
+    assert failures == []
+
+
+def test_remove_feed_result_callback_not_successful_response():
+    failures: list[VespaResponse] = []
+    concepts_counts: Counter[ConceptModel] = Counter()
+    grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
+        "18593": [
+            VespaConcept(
+                id="Q100",
+                name="sectors",
+                parent_concepts=[
+                    {"name": "Q2-name", "id": "Q200"},
+                    {"name": "Q3-name", "id": "Q300"},
+                ],
+                parent_concept_ids_flat="Q200,Q300,",
+                model="sectors_model",
+                end=11,
+                start=0,
+                timestamp=datetime(2024, 9, 26, 16, 15, 39, 817896),
+            ),
+        ]
+    }
+    response: VespaResponse = VespaResponse(
+        json={},
+        status_code=403,
+        url="test-url",
+        operation_type="update",
+    )
+    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+
+    assert (
+        remove_feed_result_callback(
+            failures=failures,
+            concepts_counts=concepts_counts,
+            grouped_concepts=grouped_concepts,
+            response=response,
+            data_id=data_id,
+        )
+        is None
+    )
+
+    assert concepts_counts == Counter(
+        {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 1}
+    )
+    assert failures == [response]
