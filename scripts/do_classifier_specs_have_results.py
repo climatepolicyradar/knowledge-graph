@@ -25,8 +25,7 @@ def check_classifier_specs(
 
     to_process = []
     for classifier_spec in data:
-        classifier_model = classifier_spec.split(":")[0]
-        classifier_alias = classifier_spec.split(":")[1]
+        classifier_model, classifier_alias = classifier_spec.split(":")
 
         # Use os.path.join for path construction
         s3_path = os.path.join(
