@@ -130,6 +130,7 @@ def count_span_level_metrics(
 def count_passage_level_metrics(
     ground_truth_passages: list[LabelledPassage],
     predicted_passages: list[LabelledPassage],
+    threshold: float = 0.9,
 ) -> ConfusionMatrix:
     """
     Count the passage-level metrics for a given set of human and model labelled passages
