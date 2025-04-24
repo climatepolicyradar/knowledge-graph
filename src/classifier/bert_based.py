@@ -93,6 +93,7 @@ class BertBasedClassifier(Classifier):
                     end_index=len(text),
                     labellers=[str(self)],
                     timestamps=[datetime.now()],
+                    confidence=prediction["score"],
                 )
                 text_results.append(span)
             results.append(text_results)
