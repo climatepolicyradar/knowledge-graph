@@ -72,7 +72,7 @@ VESPA_DEFAULT_TIMEOUT_MS: int = total_milliseconds(timedelta(milliseconds=500))
 VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
 
 # The "parent" AKA the higher level flows that do multiple things.
-PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
+PARENT_TIMEOUT_S: int = int(timedelta(hours=4).total_seconds())
 
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
