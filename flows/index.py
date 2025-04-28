@@ -71,7 +71,7 @@ class Config:
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
-    timeout_seconds=PARENT_TIMEOUT_S,
+    # timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
