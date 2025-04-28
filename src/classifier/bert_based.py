@@ -73,7 +73,9 @@ class BertBasedClassifier(Classifier):
         """Predict whether the supplied text contains an instance of the concept."""
         return self.predict_batch([text])[0]
 
-    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+    def predict_batch(
+        self, texts: list[str], threshold: float = 0.5
+    ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
         self.model.eval()
 
