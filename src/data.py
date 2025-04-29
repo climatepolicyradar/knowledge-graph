@@ -1,14 +1,14 @@
 from abc import abstractmethod
 from typing import Iterable, TypeVar
-from pydantic_ai import Agent
+
 from pydantic import BaseModel, Field
+from pydantic_ai import Agent
 from rich.console import Console
 
 from src.classifier.bert_based import BertBasedClassifier
 from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
-
 
 console = Console(highlight=False)
 
@@ -57,6 +57,7 @@ class SyntheticData:
     def generate(
         self, num_samples: int, **kwargs
     ) -> list[SyntheticPassageWithClassifierConfidence]:
+        """Generates synthetic data for training"""
         pass
 
 
@@ -145,9 +146,6 @@ class ActiveLearningData:
 class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
     """A class for generating and handling of synthetic data on the decision boundary"""
 
-    UPPER_BOUND = 0.7
-    LOWER_BOUND = 0.3
-
     def __init__(
         self,
         concept: Concept,
@@ -170,6 +168,7 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
     def generate(  # type: ignore
         self, num_samples: int, max_iterations: int = 20
     ) -> list[SyntheticPassageWithClassifierConfidence]:
+        """Generates synthetcic data for training near the decision boundary"""
         with console.status(f"Making predictions with {self.agent}"):
             output = self.agent.run_sync(
                 "Your examples with text and expected confidence:"
@@ -194,7 +193,7 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                 )
 
                 generated_passages.append(synth_passage)
-                if self.LOWER_BOUND <= actual_confidence <= self.UPPER_BOUND:
+                if self.lower_bound <= actual_confidence <= self.upper_bound:
                     correct_generated_passages.append(synth_passage)
 
                 if len(correct_generated_passages) >= num_samples:
