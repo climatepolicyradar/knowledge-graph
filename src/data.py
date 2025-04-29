@@ -1,7 +1,7 @@
 import time
 
 from abc import abstractmethod
-from typing import TypeVar
+from typing import Iterable, Optional, TypeVar
 import pandas as pd
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
@@ -106,6 +106,44 @@ Your 3 examples which the classifier will predict ~0.5 confidence for, that are 
 
 
 NNClassifier = TypeVar("NNClassifier", BertBasedClassifier, TargetClassifier)
+
+
+class ActiveLearningData:
+    """Class for identifying data on the decision boundary of a classifier"""
+
+    def __init__(
+        self,
+        classifier: NNClassifier,
+        upper_bound: float = 0.7,
+        lower_bound: float = 0.3,
+    ):
+        self.classifier = classifier
+        self.upper_bound = upper_bound
+        self.lower_bound = lower_bound
+
+    def filter_text(self, passages: Iterable[str]) -> list[str]:
+        """Filters the text to only include those with confidence scores between the upper and lower bounds."""
+        filtered_passages = []
+        predictions = self.classifier.predict_batch(list(passages), threshold=0.0)
+        for passage, spans in zip(passages, predictions):
+            if spans and spans[0].confidence is not None:
+                c = spans[0].confidence
+                if self.lower_bound <= c <= self.upper_bound:
+                    filtered_passages.append(passage)
+
+        console.log(
+            f"Identified {len(filtered_passages)} passages near the decision boundary (in [{self.lower_bound}, {self.upper_bound}]) "
+            f"out of {len(list(passages))} total passages."
+        )
+        return filtered_passages
+
+    def filter_labelled_passages(
+        self, labelled_passages: list[LabelledPassage]
+    ) -> list[LabelledPassage]:
+        """Filters the labelled passages to only include those with confidence scores between the upper and lower bounds."""
+        text_to_passage = {passage.text: passage for passage in labelled_passages}
+        filtered_text = self.filter_text(text_to_passage.keys())
+        return [text_to_passage[text] for text in filtered_text]
 
 
 class ActiveLearningSyntheticData(SyntheticData):
