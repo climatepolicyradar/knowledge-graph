@@ -1,14 +1,10 @@
-import time
-
 from abc import abstractmethod
-from typing import Iterable, Optional, TypeVar
-import pandas as pd
+from typing import Iterable, TypeVar
 from pydantic_ai import Agent
 from pydantic import BaseModel, Field
 from rich.console import Console
 
 from src.classifier.bert_based import BertBasedClassifier
-from src.classifier.classifier import Classifier
 from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
@@ -146,7 +142,7 @@ class ActiveLearningData:
         return [text_to_passage[text] for text in filtered_text]
 
 
-class ActiveLearningSyntheticData(SyntheticData):
+class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
     """A class for generating and handling of synthetic data on the decision boundary"""
 
     UPPER_BOUND = 0.7
@@ -159,65 +155,17 @@ class ActiveLearningSyntheticData(SyntheticData):
         classifier: NNClassifier,
         model_name: str,
     ):
-        super().__init__(concept, human_labelled_passages)
-        self.classifier = classifier
-        self.human_labelled_passages = human_labelled_passages
+        SyntheticData.__init__(self, concept, human_labelled_passages)
+        ActiveLearningData.__init__(self, classifier)
+
         self.agent = Agent(
             model_name,
             system_prompt=SYSTEM_PROMPT.format(
                 concept_description=concept.description,
-                examples=self._sample_ambiguous_passages(),
+                examples=self.filter_labelled_passages(human_labelled_passages),
             ),
             result_type=list[SyntheticPassageWithConfidence],
         )
-
-    def _sample_ambiguous_passages(self) -> list[dict]:
-        """Samples passages, that are near the decision boundary of the classifier."""
-        predictions = self._get_all_predictions()
-        sampled_passages_with_confidence = self._filter_ambiguous_passages(
-            predictions,
-        )
-        return sampled_passages_with_confidence
-
-    def _get_all_predictions(self) -> list[LabelledPassage]:
-        """Generates classifier predictions for all the human labelled passages."""
-        texts = [
-            labelled_passage.text for labelled_passage in self.human_labelled_passages
-        ]
-
-        predictions = [
-            labelled_passage.model_copy(update={"spans": spans}, deep=True)
-            for labelled_passage, spans in zip(
-                self.human_labelled_passages,
-                self.classifier.predict_batch(texts, threshold=0.0),
-                # generating with threshold=0.0, to get all the confidence scores in [0.0, 1.0]
-            )
-        ]
-
-        return predictions
-
-    def _filter_ambiguous_passages(
-        self, predictions: list[LabelledPassage]
-    ) -> list[dict]:
-        """Filters the passages to only include those with confidence scores between 0.3 and 0.7."""
-        filtered_passages = []
-        for passage in predictions:
-            if passage.spans and passage.spans[0].confidence is not None:
-                if (
-                    passage.spans[0].confidence < self.UPPER_BOUND
-                    and passage.spans[0].confidence > self.LOWER_BOUND
-                ):
-                    filtered_passages.append(
-                        {
-                            "passage": str(passage.text),
-                            "confidence": f"{passage.spans[0].confidence:.2f}",
-                        }
-                    )
-
-        console.log(
-            f"Filtered {len(filtered_passages)} passages near the decision boundary"
-        )
-        return filtered_passages
 
     def generate(  # type: ignore
         self, num_samples: int, max_iterations: int = 20
@@ -227,50 +175,43 @@ class ActiveLearningSyntheticData(SyntheticData):
                 "Your examples with text and expected confidence:"
             )
 
-        synthetic_batch = []
-
-        previous_examples = []
+        correct_generated_passages: list[SyntheticPassageWithClassifierConfidence] = []
+        generated_passages: list[SyntheticPassageWithClassifierConfidence] = []
         for i in range(max_iterations):
             passage_spans = self.classifier.predict_batch(
                 [r.text for r in output.data], threshold=0.0
             )
 
-            if passage_spans:
-                for span, example in zip(passage_spans, output.data):
-                    actual_confidence = span[0].confidence
-                    if actual_confidence is None:
-                        continue
-                    previous_examples.append(
-                        {
-                            "text": example.text,
-                            "predicted_confidence": example.expected_confidence,
-                            "actual_confidence": actual_confidence,
-                        }
-                    )
-                    if self.LOWER_BOUND <= actual_confidence <= self.UPPER_BOUND:
-                        synthetic_batch.append(
-                            SyntheticPassageWithClassifierConfidence(
-                                text=example.text,
-                                expected_confidence=example.expected_confidence,
-                                actual_confidence=actual_confidence,
-                            )
-                        )
+            for span, example in zip(passage_spans, output.data):
+                actual_confidence = span[0].confidence
+                if actual_confidence is None:
+                    continue
 
-                    if len(synthetic_batch) >= num_samples:
-                        return synthetic_batch
-
-                console.log(
-                    f"Iteration {i + 1}, confidence scores: {[span[0].confidence for span in passage_spans]}"
+                synth_passage = SyntheticPassageWithClassifierConfidence(
+                    text=example.text,
+                    expected_confidence=example.expected_confidence,
+                    actual_confidence=actual_confidence,
                 )
+
+                generated_passages.append(synth_passage)
+                if self.LOWER_BOUND <= actual_confidence <= self.UPPER_BOUND:
+                    correct_generated_passages.append(synth_passage)
+
+                if len(correct_generated_passages) >= num_samples:
+                    return correct_generated_passages
+
+            console.log(
+                f"Iteration {i + 1}, confidence scores: {[span[0].confidence for span in passage_spans]}"
+            )
             output = self.agent.run_sync(
                 ITERATION_PROMPT.format(
-                    examples=previous_examples,
+                    examples=[sp.model_dump() for sp in generated_passages],
                 )
             )
 
         console.log(
             f"Haven't converged in {max_iterations} iterations, "
-            f"returning {len(synthetic_batch)} examples",
+            f"returning {len(correct_generated_passages)} examples",
         )
 
-        return synthetic_batch
+        return correct_generated_passages
