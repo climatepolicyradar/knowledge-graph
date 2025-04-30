@@ -550,31 +550,37 @@ def get_document_passage_from_vespa(
 def get_continuation_tokens_from_query_response(
     vespa_query_response: VespaQueryResponse,
 ) -> list[str]:
-    """Retrieve a continuation token from the response if it exists."""
+    """
+    Retrieve continuation tokens from the query response if it exists.
 
-    continuations = []
+    Continuation tokens can occur at the top level, e.g. under `"children"`, or deeper
+    within the nested structure. We take the continuation tokens deeper in the nested
+    structure that exist for each of the hits in the group.
+    """
+
+    continuation_tokens = []
 
     vespa_query_response_root = vespa_query_response.json["root"]
     group_hits = dig(vespa_query_response_root, "children", 0, "children")
     for hit in group_hits:
         hit_continuation_token = dig(hit, "continuation", "next")
         if hit_continuation_token:
-            continuations.append(hit_continuation_token)
-    return continuations
+            continuation_tokens.append(hit_continuation_token)
+    return continuation_tokens
 
 
 def get_vespa_passages_from_query_response(
     vespa_query_response: VespaQueryResponse,
 ) -> list[tuple[str, VespaPassage]]:
-    """Retrieve the passages from the response root."""
+    """Retrieve the passages from the query response."""
 
     vespa_query_response_root = vespa_query_response.json["root"]
-    passage_roots = dig(
+    passages_root = dig(
         vespa_query_response_root, "children", 0, "children", 0, "children", default=[]
     )
     passage_hits = [
         dig(passage_root, "children", 0, "children", 0)
-        for passage_root in passage_roots
+        for passage_root in passages_root
     ]
     vespa_passages: list[tuple[str, VespaPassage]] = [
         (passage["id"], VespaPassage.model_validate(passage["fields"]))
