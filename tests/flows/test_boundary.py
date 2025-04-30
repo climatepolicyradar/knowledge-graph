@@ -22,6 +22,7 @@ from flows.boundary import (
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
+    get_document_passages_from_vespa__generator,
     get_parent_concepts_from_concept,
     get_text_block_id_from_vespa_data_id,
     get_vespa_search_adapter_from_aws_secrets,
@@ -1025,3 +1026,31 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
             },
         )
     ]
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_get_document_passages_from_vespa__generator(
+    local_vespa_search_adapter: VespaSearchAdapter, vespa_app
+):
+    """Test that we can successfully utilise pagination with continuation tokens."""
+
+    grouping_max = 10
+    vespa_passage_generator = get_document_passages_from_vespa__generator(
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=local_vespa_search_adapter,
+        continuation_tokens=["BKAAAAABKBGA"],
+        grouping_max=grouping_max,
+    )
+
+    response = list(vespa_passage_generator)
+
+    assert len(response) > 1  # Validate that we did paginate
+    for vespa_passages in vespa_passage_generator:
+        assert isinstance(vespa_passages, list)
+        assert len(vespa_passages) == grouping_max
+        for passage in vespa_passages:
+            assert isinstance(passage[0], str)
+            assert isinstance(passage[1], VespaPassage)
+
+    # TODO: Confirm that we yield all the passages for a family_document_ref

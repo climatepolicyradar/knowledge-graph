@@ -25,6 +25,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
+from cpr_sdk.utils import dig
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
@@ -32,6 +33,7 @@ from prefect.logging import get_logger
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
+from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
     get_labelled_passage_paths,
@@ -543,6 +545,78 @@ def get_document_passage_from_vespa(
     passage = VespaPassage.model_validate(hit["fields"])
 
     return passage_id, passage
+
+
+def get_next_continuation_tokens(vespa_query_response_root: dict) -> list[str]:
+    """Retrieve a continuation token from the response if it exists."""
+    continuations = []
+    group_hits = dig(vespa_query_response_root, "children", 0, "children")
+    for hit in group_hits:
+        hit_continuation_token = dig(hit, "continuation", "next")
+        if hit_continuation_token:
+            continuations.append(hit_continuation_token)
+    return continuations
+
+
+def get_vespa_passages_from_query_response_root(
+    vespa_query_response_root: dict,
+) -> list[tuple[str, VespaPassage]]:
+    """Retrieve the passages from the response root."""
+    passage_roots = dig(
+        vespa_query_response_root, "children", 0, "children", 0, "children", default=[]
+    )
+    passage_hits = [
+        dig(passage_root, "children", 0, "children", 0)
+        for passage_root in passage_roots
+    ]
+    vespa_passages: list[tuple[str, VespaPassage]] = [
+        (passage["id"], VespaPassage.model_validate(passage["fields"]))
+        for passage in passage_hits
+    ]
+
+    return vespa_passages
+
+
+def get_document_passages_from_vespa__generator(
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+    continuation_tokens: list[str],
+    grouping_max: int = 10,
+) -> Generator[list[tuple[str, VespaPassage]], None, None]:
+    conditions = qb.QueryField("family_document_ref").contains(
+        f"id:doc_search:family_document::{document_import_id}"
+    )
+
+    grouping = G.all(
+        G.group("text_block_id"),
+        G.max(grouping_max),
+        G.each(G.each(G.output(G.summary()))),
+    )
+
+    while continuation_tokens:
+        query: qb.Query = (
+            qb.select("*")  # type: ignore
+            .from_(
+                Schema(name="document_passage", document=Document()),
+            )
+            .where(conditions)
+            .set_limit(0)
+            .groupby(grouping, continuations=continuation_tokens)
+        )
+
+        vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+            yql=query
+        )
+
+        if not vespa_query_response.is_successful():
+            raise QueryError(vespa_query_response.get_status_code())
+
+        response_root = vespa_query_response.json["root"]
+        vespa_passages = get_vespa_passages_from_query_response_root(response_root)
+
+        yield vespa_passages
+
+        continuation_tokens = get_next_continuation_tokens(response_root)
 
 
 async def get_document_passages_from_vespa(
