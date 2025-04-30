@@ -547,9 +547,14 @@ def get_document_passage_from_vespa(
     return passage_id, passage
 
 
-def get_next_continuation_tokens(vespa_query_response_root: dict) -> list[str]:
+def get_continuation_tokens_from_query_response(
+    vespa_query_response: VespaQueryResponse,
+) -> list[str]:
     """Retrieve a continuation token from the response if it exists."""
+
     continuations = []
+
+    vespa_query_response_root = vespa_query_response.json["root"]
     group_hits = dig(vespa_query_response_root, "children", 0, "children")
     for hit in group_hits:
         hit_continuation_token = dig(hit, "continuation", "next")
@@ -558,10 +563,12 @@ def get_next_continuation_tokens(vespa_query_response_root: dict) -> list[str]:
     return continuations
 
 
-def get_vespa_passages_from_query_response_root(
-    vespa_query_response_root: dict,
+def get_vespa_passages_from_query_response(
+    vespa_query_response: VespaQueryResponse,
 ) -> list[tuple[str, VespaPassage]]:
     """Retrieve the passages from the response root."""
+
+    vespa_query_response_root = vespa_query_response.json["root"]
     passage_roots = dig(
         vespa_query_response_root, "children", 0, "children", 0, "children", default=[]
     )
@@ -611,12 +618,13 @@ def get_document_passages_from_vespa__generator(
         if not vespa_query_response.is_successful():
             raise QueryError(vespa_query_response.get_status_code())
 
-        response_root = vespa_query_response.json["root"]
-        vespa_passages = get_vespa_passages_from_query_response_root(response_root)
+        vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
 
         yield vespa_passages
 
-        continuation_tokens = get_next_continuation_tokens(response_root)
+        continuation_tokens = get_continuation_tokens_from_query_response(
+            vespa_query_response
+        )
 
 
 async def get_document_passages_from_vespa(

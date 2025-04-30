@@ -25,6 +25,7 @@ from prefect import Flow, State
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
+from vespa.io import VespaQueryResponse
 
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -552,3 +553,163 @@ def mock_bucket_concepts_counts(
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
+
+
+def mock_vespa_query_response_json() -> dict:
+    """Mock Vespa query response JSON"""
+
+    # TODO: Move to file
+    return {
+        "root": {
+            "id": "toplevel",
+            "relevance": 1.0,
+            "fields": {"totalCount": 1830},
+            "coverage": {
+                "coverage": 100,
+                "documents": 1965,
+                "full": True,
+                "nodes": 1,
+                "results": 1,
+                "resultsFull": 1,
+            },
+            "children": [
+                {
+                    "id": "group:root:0",
+                    "relevance": 1.0,
+                    "continuation": {"this": "BGAAABEDBJEA"},
+                    "children": [
+                        {
+                            "id": "grouplist:text_block_id",
+                            "relevance": 1.0,
+                            "label": "text_block_id",
+                            "continuation": {
+                                "next": "BGAAABEDBJGBC",
+                                "prev": "BGAAABEDBJCBC",
+                            },
+                            "children": [
+                                {
+                                    "id": "group:string:985",
+                                    "relevance": 0.0017429193899782135,
+                                    "value": "985",
+                                    "children": [
+                                        {
+                                            "id": "hitlist:hits",
+                                            "relevance": 1.0,
+                                            "label": "hits",
+                                            "children": [
+                                                {
+                                                    "id": "id:doc_search:document_passage::CCLW.executive.10014.4470.985",
+                                                    "relevance": 0.0017429193899782135,
+                                                    "source": "family-document-passage",
+                                                    "fields": {
+                                                        "sddocname": "document_passage",
+                                                        "documentid": "id:doc_search:document_passage::CCLW.executive.10014.4470.985",
+                                                        "text_block_not_stemmed": "1",
+                                                        "search_weights_ref": "id:doc_search:search_weights::default_weights",
+                                                        "family_document_ref": "id:doc_search:family_document::CCLW.executive.10014.4470",
+                                                        "text_block_id": "985",
+                                                        "text_block_coords": [
+                                                            [
+                                                                93.83039855957031,
+                                                                494.9424133300781,
+                                                            ],
+                                                            [
+                                                                125.05680084228516,
+                                                                494.9424133300781,
+                                                            ],
+                                                            [
+                                                                125.05680084228516,
+                                                                509.8031921386719,
+                                                            ],
+                                                            [
+                                                                93.83039855957031,
+                                                                509.8031921386719,
+                                                            ],
+                                                        ],
+                                                        "text_block_page": 72,
+                                                        "text_block_type": "BlockType.TABLE_CELL",
+                                                        "text_block": "1",
+                                                        "concepts": [
+                                                            {
+                                                                "parent_concepts": [
+                                                                    {
+                                                                        "name": "Q149-name",
+                                                                        "id": "Q149",
+                                                                    },
+                                                                    {
+                                                                        "name": "Q150-name",
+                                                                        "id": "Q150",
+                                                                    },
+                                                                ],
+                                                                "name": "sectors",
+                                                                "id": "concept_149_149",
+                                                                "parent_concept_ids_flat": "Q149,Q150,",
+                                                                "model": "sectors_model",
+                                                                "end": 13,
+                                                                "start": 3,
+                                                                "timestamp": "2024-09-26T16:15:39.817896",
+                                                            },
+                                                            {
+                                                                "parent_concepts": [
+                                                                    {
+                                                                        "name": "Q149-name",
+                                                                        "id": "Q149",
+                                                                    },
+                                                                    {
+                                                                        "name": "Q150-name",
+                                                                        "id": "Q150",
+                                                                    },
+                                                                ],
+                                                                "name": "environment",
+                                                                "id": "concept_149_149",
+                                                                "parent_concept_ids_flat": "Q149,Q150,",
+                                                                "model": "environment_model",
+                                                                "end": 31,
+                                                                "start": 12,
+                                                                "timestamp": "2024-09-26T16:15:39.817896",
+                                                            },
+                                                        ],
+                                                    },
+                                                }
+                                            ],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+
+@pytest.fixture
+def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryResponse:
+    """Mock Vespa query response"""
+
+    return VespaQueryResponse(
+        json=mock_vespa_query_response_json(),
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+
+@pytest.fixture
+def mock_vespa_query_response_no_continuation_token(
+    mock_vespa_credentials: dict,
+) -> VespaQueryResponse:
+    """Mock Vespa query response with no hits"""
+
+    json_data = mock_vespa_query_response_json()
+    json_data["root"]["children"][0]["children"][0]["continuation"] = {
+        "prev": "BGAAABEBCBC"
+    }
+
+    return VespaQueryResponse(
+        json=json_data,
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )

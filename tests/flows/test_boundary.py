@@ -10,6 +10,7 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
+from vespa.io import VespaQueryResponse
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -19,6 +20,7 @@ from flows.boundary import (
     Operation,
     TextBlockId,
     convert_labelled_passage_to_concepts,
+    get_continuation_tokens_from_query_response,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
@@ -1026,6 +1028,23 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
             },
         )
     ]
+
+
+def test_get_continuation_tokens_from_query_response(
+    mock_vespa_query_response: VespaQueryResponse,
+    mock_vespa_query_response_no_continuation_token: VespaQueryResponse,
+) -> None:
+    """Test that we can get the next continuation tokens from a vespa response."""
+
+    continuation_tokens = get_continuation_tokens_from_query_response(
+        mock_vespa_query_response
+    )
+    assert continuation_tokens == ["BGAAABEDBJGBC"]
+
+    continuation_tokens = get_continuation_tokens_from_query_response(
+        mock_vespa_query_response_no_continuation_token
+    )
+    assert continuation_tokens == []
 
 
 @pytest.mark.vespa
