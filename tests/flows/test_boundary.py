@@ -27,6 +27,7 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_parent_concepts_from_concept,
     get_text_block_id_from_vespa_data_id,
+    get_vespa_passages_from_query_response,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
     s3_obj_generator,
@@ -1045,6 +1046,17 @@ def test_get_continuation_tokens_from_query_response(
         mock_vespa_query_response_no_continuation_token
     )
     assert continuation_tokens == []
+
+
+def test_get_vespa_passages_from_query_response(
+    mock_vespa_query_response: VespaQueryResponse,
+) -> None:
+    """Test that we can get the passages from a vespa response."""
+
+    passages = get_vespa_passages_from_query_response(mock_vespa_query_response)
+    assert len(passages) == 1
+    assert isinstance(passages[0][0], str)
+    assert isinstance(passages[0][1], VespaPassage)
 
 
 @pytest.mark.vespa
