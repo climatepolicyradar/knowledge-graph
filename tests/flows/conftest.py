@@ -558,7 +558,6 @@ def mock_bucket_concepts_counts(
 def mock_vespa_query_response_json() -> dict:
     """Mock Vespa query response JSON"""
 
-    # TODO: Think of a better name for the file or directory structure for the query response.
     with open(
         "tests/flows/fixtures/query_responses/grouped_text_block_by_family_document_ref.json"
     ) as f:
