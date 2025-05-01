@@ -624,25 +624,6 @@ def get_document_passages_from_vespa__generator(
         if not vespa_query_response.is_successful():
             raise QueryError(vespa_query_response.get_status_code())
 
-        # TODO: Do we need to handle empty responses here like:
-        # {
-        #     "root": {
-        #         "id": "toplevel",
-        #         "relevance": 1.0,
-        #         "fields": {
-        #             "totalCount": 0
-        #         },
-        #         "coverage": {
-        #             "coverage": 100,
-        #             "documents": 0,
-        #             "full": true,
-        #             "nodes": 1,
-        #             "results": 1,
-        #             "resultsFull": 1
-        #         }
-        #     }
-        # }
-
         vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
 
         if vespa_passages:
