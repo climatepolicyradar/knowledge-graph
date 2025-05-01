@@ -10,7 +10,6 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
-from vespa.application import VespaAsync
 from vespa.io import VespaQueryResponse
 
 from flows.boundary import (
@@ -1067,7 +1066,7 @@ def test_get_vespa_passages_from_query_response(
 @pytest.mark.asyncio
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
-    local_vespa_connection_pool: VespaAsync,
+    local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
@@ -1086,26 +1085,30 @@ async def test_get_document_passages_from_vespa__generator(
         ]
     )
 
-    vespa_passage_generator = get_document_passages_from_vespa__generator(
-        document_import_id=document_import_id,
-        vespa_connection_pool=local_vespa_connection_pool,
-        continuation_tokens=["BKAAAAABKBGA"],
-        grouping_max=grouping_max,
-    )
+    async with local_vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
+        connections=1,  # How many tasks to have running at once
+        timeout=10,  # Seconds
+    ) as local_vespa_connection_pool:
+        passages_generator = get_document_passages_from_vespa__generator(
+            document_import_id=document_import_id,
+            vespa_connection_pool=local_vespa_connection_pool,
+            continuation_tokens=["BKAAAAABKBGA"],
+            grouping_max=grouping_max,
+        )
 
-    response = []
-    async for vespa_passages in vespa_passage_generator:
-        response.append(vespa_passages)
+        responses = []
+        async for vespa_passages in passages_generator:
+            responses.append(vespa_passages)
 
-    assert len(response) > 1  # Validate that we did paginate
-    for vespa_passages in response:
-        assert isinstance(vespa_passages, list)
-        assert len(vespa_passages) == grouping_max
-        for passage in vespa_passages:
-            assert isinstance(passage[0], str)
-            assert isinstance(passage[1], VespaPassage)
+        assert len(responses) > 1  # Validate that we did paginate
+        for vespa_passages in responses:
+            assert isinstance(vespa_passages, dict)
+            assert len(vespa_passages.keys()) == grouping_max
+            for passage in vespa_passages.items():
+                assert isinstance(passage[1][0], str)
+                assert isinstance(passage[1][1], VespaPassage)
 
-    assert (
-        sum(len(vespa_passages) for vespa_passages in response)
-        == document_passages_count
-    )
+        assert (
+            sum(len(vespa_passages) for vespa_passages in responses)
+            == document_passages_count
+        )
