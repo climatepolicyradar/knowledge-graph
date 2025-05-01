@@ -1062,13 +1062,28 @@ def test_get_vespa_passages_from_query_response(
 @pytest.mark.vespa
 @pytest.mark.asyncio
 async def test_get_document_passages_from_vespa__generator(
-    local_vespa_search_adapter: VespaSearchAdapter, vespa_app
+    document_passages_test_data_file_path: str,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
 
     grouping_max = 10
+    document_import_id = "CCLW.executive.10014.4470"
+
+    with open(document_passages_test_data_file_path) as f:
+        document_passage_test_data = json.load(f)
+
+    document_passages_count = len(
+        [
+            i["fields"]["family_document_ref"]
+            for i in document_passage_test_data
+            if document_import_id in i["fields"]["family_document_ref"]
+        ]
+    )
+
     vespa_passage_generator = get_document_passages_from_vespa__generator(
-        document_import_id="CCLW.executive.10014.4470",
+        document_import_id=document_import_id,
         vespa_search_adapter=local_vespa_search_adapter,
         continuation_tokens=["BKAAAAABKBGA"],
         grouping_max=grouping_max,
@@ -1084,4 +1099,7 @@ async def test_get_document_passages_from_vespa__generator(
             assert isinstance(passage[0], str)
             assert isinstance(passage[1], VespaPassage)
 
-    # TODO: Confirm that we yield all the passages for a family_document_ref
+    assert (
+        sum(len(vespa_passages) for vespa_passages in response)
+        == document_passages_count
+    )

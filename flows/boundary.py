@@ -561,9 +561,9 @@ def get_continuation_tokens_from_query_response(
     continuation_tokens = []
 
     vespa_query_response_root = vespa_query_response.json["root"]
-    group_hits = dig(vespa_query_response_root, "children", 0, "children")
+    group_hits = dig(vespa_query_response_root, "children", 0, "children", default=[])
     for hit in group_hits:
-        hit_continuation_token = dig(hit, "continuation", "next")
+        hit_continuation_token = dig(hit, "continuation", "next", default=None)
         if hit_continuation_token:
             continuation_tokens.append(hit_continuation_token)
     return continuation_tokens
@@ -624,9 +624,29 @@ def get_document_passages_from_vespa__generator(
         if not vespa_query_response.is_successful():
             raise QueryError(vespa_query_response.get_status_code())
 
+        # TODO: Do we need to handle empty responses here like:
+        # {
+        #     "root": {
+        #         "id": "toplevel",
+        #         "relevance": 1.0,
+        #         "fields": {
+        #             "totalCount": 0
+        #         },
+        #         "coverage": {
+        #             "coverage": 100,
+        #             "documents": 0,
+        #             "full": true,
+        #             "nodes": 1,
+        #             "results": 1,
+        #             "resultsFull": 1
+        #         }
+        #     }
+        # }
+
         vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
 
-        yield vespa_passages
+        if vespa_passages:
+            yield vespa_passages
 
         continuation_tokens = get_continuation_tokens_from_query_response(
             vespa_query_response
