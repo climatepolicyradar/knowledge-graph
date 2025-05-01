@@ -597,8 +597,18 @@ async def get_document_passages_from_vespa__generator(
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
     continuation_tokens: list[str],
-    grouping_max: int = 10,
+    grouping_max: int = 1000,
 ) -> AsyncGenerator[dict[TextBlockId, tuple[VespaHitId, VespaPassage]], None]:
+    """
+    An async generator of vespa passages using continuation tokens to paginate.
+
+    params:
+    - document_import_id: The import id to filter on passages in vespa with.
+    - vespa_connection_pool: The vespa connection pool to use as the query client.
+    - continuation_tokens: The tokens used to paginate over the vespa hits.
+    - grouping_max: The maximum amount of grouping subquery hits to return at once.
+    """
+
     conditions = qb.QueryField("family_document_ref").contains(
         f"id:doc_search:family_document::{document_import_id}"
     )
@@ -1194,10 +1204,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
         passages_generator = get_document_passages_from_vespa__generator(
             document_import_id=document_import_id,
             vespa_connection_pool=vespa_connection_pool,
-            continuation_tokens=[
-                "BKAAAAABKBGA"
-            ],  # TODO: Confirm whether we need a starting value
-            grouping_max=100,  # TODO: Parameterise
+            continuation_tokens=["BKAAAAABKBGA"],
         )
 
         # FIXME: For very large documents this dict could become very large, we may have
