@@ -1085,13 +1085,10 @@ async def test_get_document_passages_from_vespa__generator(
         ]
     )
 
-    async with local_vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
-        connections=1,  # How many tasks to have running at once
-        timeout=10,  # Seconds
-    ) as local_vespa_connection_pool:
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         passages_generator = get_document_passages_from_vespa__generator(
             document_import_id=document_import_id,
-            vespa_connection_pool=local_vespa_connection_pool,
+            vespa_connection_pool=vespa_connection_pool,
             continuation_tokens=["BKAAAAABKBGA"],
             grouping_max=grouping_max,
         )
