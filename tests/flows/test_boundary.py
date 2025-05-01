@@ -10,6 +10,7 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
+from vespa.application import VespaAsync
 from vespa.io import VespaQueryResponse
 
 from flows.boundary import (
@@ -1055,15 +1056,18 @@ def test_get_vespa_passages_from_query_response(
 
     passages = get_vespa_passages_from_query_response(mock_vespa_query_response)
     assert len(passages) == 1
-    assert isinstance(passages[0][0], str)
-    assert isinstance(passages[0][1], VespaPassage)
+    assert isinstance(passages, dict)
+
+    passage = list(passages.values())[0]
+    assert isinstance(passage[0], str)
+    assert isinstance(passage[1], VespaPassage)
 
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
-    local_vespa_search_adapter: VespaSearchAdapter,
+    local_vespa_connection_pool: VespaAsync,
     vespa_app,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
@@ -1084,15 +1088,17 @@ async def test_get_document_passages_from_vespa__generator(
 
     vespa_passage_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
+        vespa_connection_pool=local_vespa_connection_pool,
         continuation_tokens=["BKAAAAABKBGA"],
         grouping_max=grouping_max,
     )
 
-    response = list(vespa_passage_generator)
+    response = []
+    async for vespa_passages in vespa_passage_generator:
+        response.append(vespa_passages)
 
     assert len(response) > 1  # Validate that we did paginate
-    for vespa_passages in vespa_passage_generator:
+    for vespa_passages in response:
         assert isinstance(vespa_passages, list)
         assert len(vespa_passages) == grouping_max
         for passage in vespa_passages:

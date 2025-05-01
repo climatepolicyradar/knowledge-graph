@@ -5,7 +5,7 @@ from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncGenerator
 from unittest.mock import MagicMock, Mock, patch
 
 import boto3
@@ -168,6 +168,22 @@ def local_vespa_search_adapter(
         )
 
     yield adapter
+
+
+@pytest.fixture
+def local_vespa_connection_pool(
+    local_vespa_search_adapter,
+) -> Generator[AsyncGenerator, None, None]:
+    """Vespa connection pool for async tests."""
+
+    vespa_connection_pool = local_vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
+        connections=1,  # How many tasks to have running at once
+        timeout=10,  # Seconds
+    )
+
+    yield vespa_connection_pool
+
+    vespa_connection_pool.close()  # Close the connection pool
 
 
 @pytest.fixture
