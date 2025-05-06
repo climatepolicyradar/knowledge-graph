@@ -4,11 +4,11 @@ from typing import Iterable, TypeVar
 from pydantic_ai import Agent
 from rich.console import Console
 
+from src._prompts import ITERATION_PROMPT, SYSTEM_PROMPT
 from src.classifier.bert_based import BertBasedClassifier
 from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
-from src._prompts import SYSTEM_PROMPT, ITERATION_PROMPT
 from src.passage import (
     SyntheticPassageWithClassifierConfidence,
     SyntheticPassageWithConfidence,
@@ -76,7 +76,14 @@ class ActiveLearningData:
 
 
 class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
-    """A class for generating and handling of synthetic data on the decision boundary"""
+    """
+    A class for generating and handling of synthetic data on the decision boundary
+
+    Implements both the SyntheticData and ActiveLearningData classes. It uses the Agent of
+    the SyntheticData class to generate synthetic data, and the ActiveLearningData class to
+    filter the generated data to only include those with confidence scores between the upper
+    and lower bounds.
+    """
 
     def __init__(
         self,
@@ -100,7 +107,7 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
     def generate(  # type: ignore
         self, num_samples: int, max_iterations: int = 20
     ) -> list[SyntheticPassageWithClassifierConfidence]:
-        """Generates synthetcic data for training near the decision boundary"""
+        """Generates synthetic data for training near the decision boundary"""
         with console.status(f"Making predictions with {self.agent}"):
             output = self.agent.run_sync(
                 "Your examples with text and expected confidence:"
@@ -119,8 +126,7 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                     continue
 
                 synth_passage = SyntheticPassageWithClassifierConfidence(
-                    text=example.text,
-                    expected_confidence=example.expected_confidence,
+                    **example.model_dump(),
                     actual_confidence=actual_confidence,
                 )
 
