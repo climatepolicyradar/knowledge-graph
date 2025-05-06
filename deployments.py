@@ -123,7 +123,7 @@ create_deployment(
 # Index
 
 create_deployment(
-    flow=boundary.run_partial_updates_of_concepts_for_document_passages__update,
+    flow=boundary.run_partial_updates_of_concepts_for_document_passages,
     description="Co-ordinate updating inference results for concepts in Vespa",
 )
 
@@ -137,11 +137,6 @@ create_deployment(
 create_deployment(
     flow=deindex.run_cleanup_objects_for_batch,
     description="Clean-up a concept's versions for a document",
-)
-
-create_deployment(
-    flow=boundary.run_partial_updates_of_concepts_for_document_passages__remove,
-    description="Co-ordinate removing inference results for concepts in Vespa",
 )
 
 create_deployment(
