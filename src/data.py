@@ -10,10 +10,12 @@ from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.passage import (
+    Passage,
     PassageWithClassifierConfidence,
     SyntheticPassageWithClassifierConfidence,
     SyntheticPassageWithConfidence,
 )
+from src.span import Span
 
 console = Console(highlight=False)
 
@@ -51,30 +53,53 @@ class ActiveLearningData:
         self.upper_bound = upper_bound
         self.lower_bound = lower_bound
 
-    def filter_text(self, passages: Iterable[str], silent: bool = False) -> list[str]:
-        """Filters the text to only include those with confidence scores between the upper and lower bounds."""
-        filtered_passages = []
-        predictions = self.classifier.predict_batch(list(passages), threshold=0.0)
-        for passage, spans in zip(passages, predictions):
-            if spans and spans[0].confidence is not None:
-                c = spans[0].confidence
-                if self.lower_bound <= c <= self.upper_bound:
-                    filtered_passages.append(passage)
+    @staticmethod
+    def _aggregate_spans_to_confidence(spans: list[Span]) -> float:
+        """The rationale here is that we're running text classification, hence taking the max confidence"""
+        confidences = [s.confidence for s in spans if s.confidence is not None]
+        if not confidences:
+            return 0.0
+        return max(confidences)
 
-        if not silent:
-            console.log(
-                f"Identified {len(filtered_passages)} passages near the decision boundary (in [{self.lower_bound}, {self.upper_bound}]) "
-                f"out of {len(list(passages))} total passages."
+    def predict(self, passages: Iterable[str]) -> list[PassageWithClassifierConfidence]:
+        """Runs predictions to obtain the confidence for each passage"""
+        predictions = self.classifier.predict_batch(list(passages), threshold=0.0)
+        return [
+            PassageWithClassifierConfidence(
+                text=passage,
+                confidence=self._aggregate_spans_to_confidence(spans),
+                source=None,
             )
-        return filtered_passages
+            for passage, spans in zip(passages, predictions)
+        ]
 
     def filter_labelled_passages(
         self, labelled_passages: list[LabelledPassage]
     ) -> list[LabelledPassage]:
         """Filters the labelled passages to only include those with confidence scores between the upper and lower bounds."""
-        text_to_passage = {passage.text: passage for passage in labelled_passages}
-        filtered_text = self.filter_text(text_to_passage.keys())
-        return [text_to_passage[text] for text in filtered_text]
+        predicted_passages = self.predict(
+            [labelled_passage.text for labelled_passage in labelled_passages]
+        )
+        filtered_passages = []
+        for pred, passage in zip(predicted_passages, labelled_passages):
+            if self.lower_bound <= pred.confidence <= self.upper_bound:
+                filtered_passages.append(passage)
+
+        return filtered_passages
+
+    def filter_passages(
+        self, passages: list[Passage]
+    ) -> list[PassageWithClassifierConfidence]:
+        predicted_passages = self.predict([p.text for p in passages])
+
+        for pred, passage in zip(predicted_passages, passages):
+            passage.source = pred.source
+
+        return [
+            p
+            for p in predicted_passages
+            if self.lower_bound <= p.confidence <= self.upper_bound
+        ]
 
 
 class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
@@ -167,7 +192,7 @@ class ActiveLearningCorpusData(ActiveLearningData):
 
     def find_examples(
         self, num_samples: int, dataset: Iterable, skip: int = 100
-    ) -> list[str]:
+    ) -> list[PassageWithClassifierConfidence]:
         """
         Finds examples on the decision boundary of the classifier
 

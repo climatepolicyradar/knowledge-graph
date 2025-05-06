@@ -29,7 +29,7 @@ class Passage(BaseModel):
     """Raw passage object"""
 
     text: str
-    source: Source
+    source: Optional[Source]
 
 
 class SyntheticPassageWithConfidence(BaseModel):
