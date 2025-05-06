@@ -12,6 +12,7 @@ from src.labelled_passage import LabelledPassage
 from src.passage import (
     Passage,
     PassageWithClassifierConfidence,
+    Source,
     SyntheticPassageWithClassifierConfidence,
     SyntheticPassageWithConfidence,
 )
@@ -93,7 +94,7 @@ class ActiveLearningData:
         predicted_passages = self.predict([p.text for p in passages])
 
         for pred, passage in zip(predicted_passages, passages):
-            passage.source = pred.source
+            pred.source = passage.source
 
         return [
             p
@@ -209,7 +210,16 @@ class ActiveLearningCorpusData(ActiveLearningData):
             if counter % skip == 0:
                 text = i["text_block.text"]
                 if text is not None and len(text) > 50:
-                    passages += self.filter_text([text], silent=True)
+                    passages += self.filter_passages(
+                        [
+                            Passage(
+                                text=text,
+                                source=Source(
+                                    type="Natural", document_id=i["document_id"]
+                                ),
+                            )
+                        ]
+                    )
 
                     if len(passages) >= num_samples:
                         console.print(

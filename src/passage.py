@@ -7,9 +7,9 @@ class Source(BaseModel):
     """Source of the passage"""
 
     type: Literal["Synthetic", "Natural"]
-    model: Optional[str]
-    prompt: Optional[str]
-    document_id: Optional[str]
+    model: Optional[str] = Field(default=None)
+    prompt: Optional[str] = Field(default=None)
+    document_id: Optional[str] = Field(default=None)
 
     @model_validator(mode="after")
     def check_source(self):
