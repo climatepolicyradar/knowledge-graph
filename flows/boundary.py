@@ -70,6 +70,8 @@ VESPA_MAX_LIMIT: int = 50_000
 # [1] https://vespa-engine.github.io/pyvespa/query.html#error-handling
 VESPA_DEFAULT_TIMEOUT_MS: int = total_milliseconds(timedelta(milliseconds=500))
 VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
+# The maximum number of elements to use in equivalent operator of a vespa yql query.
+VESPA_EQUIV_OPERATOR_LIMIT: int = 500
 
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=4).total_seconds())
@@ -608,6 +610,7 @@ async def get_document_passages_from_vespa(
         .set_timeout(timeout_ms)
     )
 
+    # FIXME: Query too long during indexing
     vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
         yql=query
     )
@@ -1104,7 +1107,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
         # Read all the document passages from Vespa in as fewer reads as possible
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
 
-        for text_blocks_ids_batch in iterate_batch(text_blocks_ids, VESPA_MAX_LIMIT):
+        for text_blocks_ids_batch in iterate_batch(
+            text_blocks_ids, VESPA_EQUIV_OPERATOR_LIMIT
+        ):
             results = await get_document_passages_from_vespa(
                 document_import_id=document_import_id,
                 text_blocks_ids=text_blocks_ids_batch,
