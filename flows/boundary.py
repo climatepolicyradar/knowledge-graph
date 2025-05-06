@@ -1313,9 +1313,6 @@ def remove_feed_result_callback(
     data_id: VespaDataId,
     logger: Union[Logger, LoggingAdapter],
 ) -> None:
-    # FIXME: logger
-    logger = get_run_logger()
-
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
     concepts = grouped_concepts[text_block_id]
