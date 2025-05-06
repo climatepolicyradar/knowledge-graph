@@ -133,8 +133,9 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                 ]
             ),
         )
+        self.model_name = model_name
         self.agent = Agent(
-            model_name,
+            self.model_name,
             system_prompt=self.system_prompt,
             result_type=list[SyntheticPassageWithConfidence],
             model_settings=ModelSettings(temperature=temperature),
@@ -168,8 +169,8 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                     actual_confidence=actual_confidence,
                     source=Source(
                         type="Synthetic",
-                        model=str(self.agent.name),
-                        prompt=self.system_prompt,
+                        model=self.model_name,
+                        prompt="system_prompt_v1",  # TODO: need to decide whether we want to retain the whole prompt
                     ),
                 )
 

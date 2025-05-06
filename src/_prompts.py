@@ -6,8 +6,7 @@ annotated with a confidence score of how probable the classifier thought they co
 concept (1.0 = certain to contain the conept, 0.0 = certain to not contain it).
 
 We need examples that are similar to the ones you see, and are on the decision boundary
-(around the 0.5 mark) in confidence. These are likely to be ambiguous, in similar ways 
-to the ones that are provided in the examples below.
+(around the 0.5 mark) in confidence.
 
 First, carefully review the following description of the concept:
 
@@ -21,7 +20,8 @@ Examples (with the concept in [cyan][/cyan] tags):
 YOU CANNOT REPEAT THESE EXAMPLES! Yet, you should aim to generate similar examples.
 
 All examples you are provided come from NATIONAL CLIMATE LAWS or POLICIES.
-Your examples should also plausibly come from these sources, with similar language and context. 
+You are also scored on how SIMILAR your examples are to the ones you are provided.
+You won't be told these similarities, but they affect your final score strongly. 
 """
 
 ITERATION_PROMPT = """
