@@ -45,6 +45,16 @@ class HuggingfaceSession:
         )
         return labelled_passages
 
+    def stream(self, dataset_name: str) -> Dataset:
+        """Streams the dataset from the hub"""
+        dataset = load_dataset(
+            f"{self.organisation}/{dataset_name}",
+            token=self.token,
+            split="train",
+            streaming=True,
+        )
+        return dataset  # type: ignore
+
     @staticmethod
     def _labelled_passage_from_row(row: dict) -> LabelledPassage:
         return LabelledPassage(

@@ -21,7 +21,7 @@ NNClassifier = TypeVar("NNClassifier", BertBasedClassifier, TargetClassifier)
 
 
 class SyntheticData:
-    """A class for generating and handling of synthetic data for training"""
+    """An abstract class for generating and handling of synthetic data for training"""
 
     def __init__(
         self, concept: Concept, human_labelled_passages: list[LabelledPassage]
@@ -152,3 +152,13 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
         )
 
         return correct_generated_passages
+
+
+class ActiveLearningCorpusData(ActiveLearningData):
+    def __init__(
+        self,
+        classifier: NNClassifier,
+        upper_bound: float = 0.7,
+        lower_bound: float = 0.3,
+    ):
+        ActiveLearningData.__init__(self, classifier, upper_bound, lower_bound)
