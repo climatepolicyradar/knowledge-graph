@@ -1107,7 +1107,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
 
         for text_blocks_ids_batch in iterate_batch(
-            text_blocks_ids, VESPA_EQUIV_OPERATOR_LIMIT
+            text_blocks_ids, VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY
         ):
             results = await get_document_passages_from_vespa(
                 document_import_id=document_import_id,
