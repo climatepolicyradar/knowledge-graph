@@ -14,6 +14,16 @@ schema family_document {
         stemming: none
     }
 
+    field document_title_index type string {
+        indexing: input document_title | index
+        index: enable-bm25
+    }
+
+    field document_title_not_stemmed type string {
+        indexing: input document_title | index
+        stemming: none
+    }
+
     document family_document {
 
         field search_weights_ref type reference<search_weights> {
@@ -211,6 +221,16 @@ schema family_document {
             expression: (query(name_weight) * name_score()) + (query(description_weight) * description_score())
         }
         summary-features: name_score() description_score() bm25(family_name_index) bm25(family_description_index) closeness(family_description_embedding)
+    }
+    
+    rank-profile bm25_document_title inherits default_family {
+        function name_score() {
+            expression: bm25(document_title_index)
+        }
+        first-phase {
+            expression: (query(name_weight) * name_score())
+        }
+        summary-features: name_score() bm25(document_title_index)
     }
     
     rank-profile hybrid_nativerank inherits default_family {
