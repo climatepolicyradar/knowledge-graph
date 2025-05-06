@@ -354,7 +354,7 @@ def test_update_s3_with_some_successes(
             s3_path=f"s3://{mock_bucket}/labelled_passages/Q787/v4/{document_import_id}.json"
         )
     ) == [
-        '{"id":"lp1","text":"once upon a time","spans":[{"text":"upon","start_index":0,"end_index":1,"concept_id":"Q456","labellers":[],"timestamps":[],"id":"bpp4juku","labelled_text":"u"}],"metadata":{}}',
+        '{"id":"lp1","text":"once upon a time","spans":[{"text":"upon","start_index":0,"end_index":1,"concept_id":"Q456","labellers":[],"timestamps":[],"confidence":null,"id":"bpp4juku","labelled_text":"u"}],"metadata":{}}',
         '{"id":"lp2","text":"lorem ipsum","spans":[],"metadata":{}}',
     ]
     assert json.loads(
@@ -499,7 +499,7 @@ async def test_update_s3_with_latest_concepts_counts_some_success(
             s3_path=f"s3://{mock_bucket}/labelled_passages/Q787/v4/{document_import_id}.json"
         )
     ) == [
-        '{"id":"lp1","text":"once upon a time","spans":[{"text":"once","start_index":0,"end_index":1,"concept_id":"Q123","labellers":[],"timestamps":[],"id":"z55va9eh","labelled_text":"o"}],"metadata":{}}',
+        '{"id":"lp1","text":"once upon a time","spans":[{"text":"once","start_index":0,"end_index":1,"concept_id":"Q123","labellers":[],"timestamps":[],"confidence":null,"id":"z55va9eh","labelled_text":"o"}],"metadata":{}}',
         '{"id":"lp2","text":"lorem ipsum","spans":[],"metadata":{}}',
     ]
     assert json.loads(
@@ -545,7 +545,9 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 ):
     document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    document_object_uri_remove: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    )
     document_importer_remove: DocumentImporter = (
         document_import_id_remove,
         document_object_uri_remove,
@@ -553,7 +555,9 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
-    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    document_object_uri_keep: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    )
     _document_importer_keep: DocumentImporter = (
         document_import_id_keep,
         document_object_uri_keep,
@@ -834,13 +838,21 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
 
     document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
-    document_object_uri_remove_cleanup_1: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
-    document_object_uri_remove_cleanup_2: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
+    document_object_uri_remove: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
+    )
+    document_object_uri_remove_cleanup_1: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
+    )
+    document_object_uri_remove_cleanup_2: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
+    )
 
     document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
-    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
+    document_object_uri_keep: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
+    )
     _document_importer_keep: DocumentImporter = (
         document_import_id_keep,
         document_object_uri_keep,
