@@ -15,7 +15,7 @@ First, carefully review the following description of the concept:
 {concept_description}
 </concept_description>
 
-Examples:
+Examples (with the concept in [cyan][/cyan] tags):
 {examples}
 
 YOU CANNOT REPEAT THESE EXAMPLES! Yet, you should aim to generate similar examples.

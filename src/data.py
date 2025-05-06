@@ -2,6 +2,7 @@ from abc import abstractmethod
 from typing import Iterable, TypeVar
 
 from pydantic_ai import Agent
+from pydantic_ai.settings import ModelSettings
 from rich.console import Console
 
 from src._prompts import ITERATION_PROMPT, SYSTEM_PROMPT
@@ -118,18 +119,25 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
         human_labelled_passages: list[LabelledPassage],
         classifier: NNClassifier,
         model_name: str,
+        temperature: float = 0.1,
     ):
         SyntheticData.__init__(self, concept, human_labelled_passages)
         ActiveLearningData.__init__(self, classifier)
 
         self.system_prompt = SYSTEM_PROMPT.format(
             concept_description=concept.description,
-            examples=self.filter_labelled_passages(human_labelled_passages),
+            examples="\n\t- ".join(
+                [
+                    lp.get_highlighted_text()
+                    for lp in self.filter_labelled_passages(human_labelled_passages)[:5]
+                ]
+            ),
         )
         self.agent = Agent(
             model_name,
             system_prompt=self.system_prompt,
             result_type=list[SyntheticPassageWithConfidence],
+            model_settings=ModelSettings(temperature=temperature),
         )
 
     def generate(  # type: ignore
@@ -161,7 +169,7 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                     source=Source(
                         type="Synthetic",
                         model=str(self.agent.name),
-                        prompt=self.system_prompt + "\n" + task_prompt,
+                        prompt=self.system_prompt,
                     ),
                 )
 
@@ -176,7 +184,9 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                 f"Iteration {i + 1}, confidence scores: {[span[0].confidence for span in passage_spans]}"
             )
             task_prompt = ITERATION_PROMPT.format(
-                examples=[sp.model_dump() for sp in generated_passages],
+                examples=[
+                    sp.model_dump(exclude={"source"}) for sp in generated_passages
+                ],
             )
             output = self.agent.run_sync(task_prompt)
 
