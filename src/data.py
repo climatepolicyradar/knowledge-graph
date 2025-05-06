@@ -10,6 +10,7 @@ from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.passage import (
+    PassageWithClassifierConfidence,
     SyntheticPassageWithClassifierConfidence,
     SyntheticPassageWithConfidence,
 )
@@ -50,7 +51,7 @@ class ActiveLearningData:
         self.upper_bound = upper_bound
         self.lower_bound = lower_bound
 
-    def filter_text(self, passages: Iterable[str]) -> list[str]:
+    def filter_text(self, passages: Iterable[str], silent: bool = False) -> list[str]:
         """Filters the text to only include those with confidence scores between the upper and lower bounds."""
         filtered_passages = []
         predictions = self.classifier.predict_batch(list(passages), threshold=0.0)
@@ -60,10 +61,11 @@ class ActiveLearningData:
                 if self.lower_bound <= c <= self.upper_bound:
                     filtered_passages.append(passage)
 
-        console.log(
-            f"Identified {len(filtered_passages)} passages near the decision boundary (in [{self.lower_bound}, {self.upper_bound}]) "
-            f"out of {len(list(passages))} total passages."
-        )
+        if not silent:
+            console.log(
+                f"Identified {len(filtered_passages)} passages near the decision boundary (in [{self.lower_bound}, {self.upper_bound}]) "
+                f"out of {len(list(passages))} total passages."
+            )
         return filtered_passages
 
     def filter_labelled_passages(
@@ -162,3 +164,35 @@ class ActiveLearningCorpusData(ActiveLearningData):
         lower_bound: float = 0.3,
     ):
         ActiveLearningData.__init__(self, classifier, upper_bound, lower_bound)
+
+    def find_examples(
+        self, num_samples: int, dataset: Iterable, skip: int = 100
+    ) -> list[str]:
+        """
+        Finds examples on the decision boundary of the classifier
+
+        Takes a dataset (e.g. a stream from `HuggingfaceSession`) and finds example in it, using the
+        `filter_text` method. The `skip` argumante is used to skip every nth passage in the dataset for
+        speed and variety in sampling. If you want to scan all passages, set it to 1.
+        """
+
+        passages = []
+
+        counter = 0
+        for i in dataset:
+            counter += 1
+            if counter % skip == 0:
+                text = i["text_block.text"]
+                if text is not None and len(text) > 50:
+                    passages += self.filter_text([text], silent=True)
+
+                    if len(passages) >= num_samples:
+                        console.print(
+                            f"Scanned a total of {counter / skip} passages and found {len(passages)}"
+                        )
+                        return passages
+
+        console.print(
+            f"Scanned a total of {counter / skip} passages and found {len(passages)}"
+        )
+        return passages

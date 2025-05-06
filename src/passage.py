@@ -57,3 +57,13 @@ class SyntheticPassageWithClassifierConfidence(BaseModel):
     text: str
     expected_confidence: float = Field(ge=0.0, le=1.0)
     actual_confidence: float = Field(ge=0.0, le=1.0)
+
+
+class PassageWithClassifierConfidence(Passage):
+    """
+    Passage with a confidence score from the classifier
+
+    This is used to store passages selected by Active Learning for further labelling and training of a classifier.
+    """
+
+    confidence: float = Field(ge=0.0, le=1.0)
