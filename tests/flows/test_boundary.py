@@ -491,7 +491,7 @@ async def test_get_some_document_passages_from_vespa(
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         _ = await get_document_passages_from_vespa(
             document_import_id="test.executive.1.1",
-            text_blocks_ids=["test_33"] * VESPA_EQUIV_OPERATOR_LIMIT,
+            text_blocks_ids=["test_33"] * VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
             vespa_connection_pool=vespa_connection_pool,
         )
 
