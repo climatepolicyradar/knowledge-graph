@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from typing import Iterable, TypeVar
 
-from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from rich.console import Console
 
@@ -9,39 +8,16 @@ from src.classifier.bert_based import BertBasedClassifier
 from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
+from src._prompts import SYSTEM_PROMPT, ITERATION_PROMPT
+from src.passage import (
+    SyntheticPassageWithClassifierConfidence,
+    SyntheticPassageWithConfidence,
+)
 
 console = Console(highlight=False)
 
 
-class SyntheticPassageWithConfidence(BaseModel):
-    """Response from the LLM"""
-
-    text: str = Field(
-        description="The text of the response",
-    )
-    expected_confidence: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="The expected confidence score attached to the response",
-    )
-
-
-class SyntheticPassageWithClassifierConfidence(BaseModel):
-    """Response from the LLM"""
-
-    text: str = Field(
-        description="The text of the response",
-    )
-    expected_confidence: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="The expected confidence score attached to the response",
-    )
-    actual_confidence: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="The actual confidence score attached to the response",
-    )
+NNClassifier = TypeVar("NNClassifier", BertBasedClassifier, TargetClassifier)
 
 
 class SyntheticData:
@@ -59,50 +35,6 @@ class SyntheticData:
     ) -> list[SyntheticPassageWithClassifierConfidence]:
         """Generates synthetic data for training"""
         pass
-
-
-SYSTEM_PROMPT = """
-You are a specialist climate policy analyst, tasked with writing sentences similar
-to the examples you are provided. We have trained a classifier to identify sentences
-matching the concept desctiption (in <concept_description> tags), and the examples are 
-annotated with a confidence score of how probable the classifier thought they contain the 
-concept (1.0 = certain to contain the conept, 0.0 = certain to not contain it).
-
-We need examples that are similar to the ones you see, and are on the decision boundary
-(around the 0.5 mark) in confidence. These are likely to be ambiguous, in similar ways 
-to the ones that are provided in the examples below.
-
-First, carefully review the following description of the concept:
-
-<concept_description>
-{concept_description}
-</concept_description>
-
-Examples:
-{examples}
-
-YOU CANNOT REPEAT THESE EXAMPLES! Yet, you should aim to generate similar examples.
-
-All examples you are provided come from NATIONAL CLIMATE LAWS or POLICIES.
-Your examples should also plausibly come from these sources, with similar language and context. 
-"""
-
-ITERATION_PROMPT = """
-You have predicted the following examples. I attach the confidence you predicted, and the classifier's predicted confidences.
-Your aim is to generate examples where the actual confidence is as close to 0.5 as possible.
-You'll get a number of chances after each failure. You'll have 10 rounds to try in total to get it right. After each round,
-I'll add the new examples + predicted confidences + actual confidences to the list below.
-
-Your previous examples:
-{examples}
-
-If any of the  actual confidence scores are above 0.8 or below 0.2, you're doing it wrong. If there's a large difference (> 0.2)
-between your predicted confidence and the actual confidence, you're doing it wrong.
-Your 3 examples which the classifier will predict ~0.5 confidence for, that are better than your previous attempts:
-"""
-
-
-NNClassifier = TypeVar("NNClassifier", BertBasedClassifier, TargetClassifier)
 
 
 class ActiveLearningData:
