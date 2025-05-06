@@ -71,7 +71,7 @@ VESPA_MAX_LIMIT: int = 50_000
 VESPA_DEFAULT_TIMEOUT_MS: int = total_milliseconds(timedelta(milliseconds=500))
 VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
 # The maximum number of elements to use in equivalent operator of a vespa yql query.
-VESPA_EQUIV_OPERATOR_LIMIT: int = 2_500
+VESPA_EQUIV_OPERATOR_LIMIT: int = 1_000
 
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=4).total_seconds())
