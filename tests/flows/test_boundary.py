@@ -13,7 +13,7 @@ from prefect.logging import disable_run_logger
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    VESPA_EQUIV_OPERATOR_LIMIT,
+    VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
     DocumentObjectUri,
