@@ -67,9 +67,7 @@ class ActiveLearningData:
         predictions = self.classifier.predict_batch(list(passages), threshold=0.0)
         return [
             PassageWithClassifierConfidence(
-                text=passage,
-                confidence=self._aggregate_spans_to_confidence(spans),
-                source=None,
+                text=passage, confidence=self._aggregate_spans_to_confidence(spans)
             )
             for passage, spans in zip(passages, predictions)
         ]
@@ -91,6 +89,7 @@ class ActiveLearningData:
     def filter_passages(
         self, passages: list[Passage]
     ) -> list[PassageWithClassifierConfidence]:
+        """Filters the raw passages to those between the upper and lower bounds"""
         predicted_passages = self.predict([p.text for p in passages])
 
         for pred, passage in zip(predicted_passages, passages):
@@ -123,12 +122,13 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
         SyntheticData.__init__(self, concept, human_labelled_passages)
         ActiveLearningData.__init__(self, classifier)
 
+        self.system_prompt = SYSTEM_PROMPT.format(
+            concept_description=concept.description,
+            examples=self.filter_labelled_passages(human_labelled_passages),
+        )
         self.agent = Agent(
             model_name,
-            system_prompt=SYSTEM_PROMPT.format(
-                concept_description=concept.description,
-                examples=self.filter_labelled_passages(human_labelled_passages),
-            ),
+            system_prompt=self.system_prompt,
             result_type=list[SyntheticPassageWithConfidence],
         )
 
@@ -141,6 +141,7 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                 "Your examples with text and expected confidence:"
             )
 
+        task_prompt = ""
         correct_generated_passages: list[SyntheticPassageWithClassifierConfidence] = []
         generated_passages: list[SyntheticPassageWithClassifierConfidence] = []
         for i in range(max_iterations):
@@ -154,8 +155,14 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
                     continue
 
                 synth_passage = SyntheticPassageWithClassifierConfidence(
-                    **example.model_dump(),
+                    text=example.text,
+                    expected_confidence=example.expected_confidence,
                     actual_confidence=actual_confidence,
+                    source=Source(
+                        type="Synthetic",
+                        model=str(self.agent.name),
+                        prompt=self.system_prompt + "\n" + task_prompt,
+                    ),
                 )
 
                 generated_passages.append(synth_passage)
@@ -168,11 +175,10 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
             console.log(
                 f"Iteration {i + 1}, confidence scores: {[span[0].confidence for span in passage_spans]}"
             )
-            output = self.agent.run_sync(
-                ITERATION_PROMPT.format(
-                    examples=[sp.model_dump() for sp in generated_passages],
-                )
+            task_prompt = ITERATION_PROMPT.format(
+                examples=[sp.model_dump() for sp in generated_passages],
             )
+            output = self.agent.run_sync(task_prompt)
 
         console.log(
             f"Haven't converged in {max_iterations} iterations, "
@@ -183,6 +189,8 @@ class ActiveLearningSyntheticData(SyntheticData, ActiveLearningData):
 
 
 class ActiveLearningCorpusData(ActiveLearningData):
+    """Active Learning filtering for the existing CPR corpus"""
+
     def __init__(
         self,
         classifier: NNClassifier,

@@ -1,3 +1,4 @@
+from types import NoneType
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -29,7 +30,7 @@ class Passage(BaseModel):
     """Raw passage object"""
 
     text: str
-    source: Optional[Source]
+    source: Optional[Source] = Field(default=None)
 
 
 class SyntheticPassageWithConfidence(BaseModel):
@@ -39,13 +40,16 @@ class SyntheticPassageWithConfidence(BaseModel):
     When generating these, we prompt the LLM to return an expected confidence relative to the classifier.
     This is stored in the `expected_confidence` field, and denotes the probability the LLM thought this
     passage will have when passed to the classifier.
+
+    Since this class is also used as the agent return type, I couldn't make it a descendant of Passage. When
+    I did, the agent made errors trying to construct a `Source` for this object, making it unfeasible to use.
     """
 
     text: str
     expected_confidence: float = Field(ge=0.0, le=1.0)
 
 
-class SyntheticPassageWithClassifierConfidence(BaseModel):
+class SyntheticPassageWithClassifierConfidence(SyntheticPassageWithConfidence, Passage):
     """
     Text generated for active learning with expected and actual confidence
 
@@ -54,8 +58,6 @@ class SyntheticPassageWithClassifierConfidence(BaseModel):
     according to our classifier.
     """
 
-    text: str
-    expected_confidence: float = Field(ge=0.0, le=1.0)
     actual_confidence: float = Field(ge=0.0, le=1.0)
 
 
