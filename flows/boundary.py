@@ -1100,6 +1100,13 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
     text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
 
+    # Do no merge this change, this is to unblock getting 100 docs onto staging by
+    # skipping the large documents that are causing the fasttop error.
+    if len(text_blocks_ids) >= 1500:
+        raise ValueError(
+            "text block IDs exceed 1500, we can't yet process this amount."
+        )
+
     async with (
         vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
             connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
