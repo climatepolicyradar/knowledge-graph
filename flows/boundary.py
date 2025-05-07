@@ -12,6 +12,7 @@ from collections.abc import AsyncGenerator, Generator
 from datetime import timedelta
 from enum import Enum
 from io import BytesIO
+from logging import Logger
 from pathlib import Path
 from typing import Any, Iterable, Protocol, TypeAlias, TypedDict, TypeVar, Union
 
@@ -29,6 +30,7 @@ from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
+from prefect.logging.loggers import LoggingAdapter
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaQueryResponse, VespaResponse
@@ -72,6 +74,8 @@ VESPA_MAX_LIMIT: int = 50_000
 # [1] https://vespa-engine.github.io/pyvespa/query.html#error-handling
 VESPA_DEFAULT_TIMEOUT_MS: int = total_milliseconds(timedelta(milliseconds=500))
 VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
+# The maximum number of elements to use in equivalent operator of a vespa yql query.
+VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY: int = 1_000
 
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=4).total_seconds())
@@ -906,6 +910,7 @@ class _FeedResultCallback(Protocol):
         grouped_concepts: dict[TextBlockId, list[VespaConcept]],
         response: VespaResponse,
         data_id: VespaDataId,
+        logger: Union[Logger, LoggingAdapter],
     ) -> None: ...
 
 
@@ -1257,6 +1262,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
             grouped_concepts,
             response,
             data_id,
+            logger,
         )
 
     # The previously established connection pool isn't used since
@@ -1297,9 +1303,8 @@ def update_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
+    logger: Union[Logger, LoggingAdapter],
 ) -> None:
-    logger = get_run_logger()
-
     if not response.is_successful():
         logger.error(
             f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
@@ -1392,9 +1397,8 @@ def remove_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
+    logger: Union[Logger, LoggingAdapter],
 ) -> None:
-    logger = get_run_logger()
-
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
     concepts = grouped_concepts[text_block_id]
