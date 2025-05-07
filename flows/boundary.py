@@ -90,6 +90,8 @@ DocumentObjectUri: TypeAlias = str
 DocumentStem: TypeAlias = str
 # Passed to a self-sufficient flow run
 DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
+# A continuation token used by vespa to enable pagination over query results
+ContinuationToken: TypeAlias = str
 
 
 class S3Accessor(BaseModel):
@@ -553,7 +555,7 @@ def get_document_passage_from_vespa(
 
 def get_continuation_tokens_from_query_response(
     vespa_query_response: VespaQueryResponse,
-) -> list[str]:
+) -> list[ContinuationToken]:
     """
     Retrieve continuation tokens from the query response if it exists.
 
@@ -600,10 +602,28 @@ def get_document_passages_from_vespa__generator(
     continuation_tokens: list[str],
     grouping_max: int = 10,
 ) -> Generator[list[tuple[str, VespaPassage]], None, None]:
+    """
+    A generator of vespa passages using continuation tokens to paginate.
+
+    Continuation tokens are opaque objects that are used to move through the grouping
+    step of a query to facilitate pagination over results.
+    - https://docs.vespa.ai/en/reference/grouping-syntax.html?mode=cloud#continuations
+
+    params:
+    - document_import_id: The import id to filter on passages in vespa with.
+    - vespa_connection_pool: The vespa connection pool to use as the query client.
+    - continuation_tokens: The tokens used to paginate over the vespa hits.
+    - grouping_max: The maximum amount of grouping subquery hits to return at once.
+    """
+
     conditions = qb.QueryField("family_document_ref").contains(
         f"id:doc_search:family_document::{document_import_id}"
     )
 
+    # Group the results of the select query by text_block_id in to groups of
+    # grouping_max size. For each of the results in the group we output the summary of
+    # the passage in vespa.
+    # - https://docs.vespa.ai/en/grouping.html?mode=cloud
     grouping = G.all(
         G.group("text_block_id"),
         G.max(grouping_max),

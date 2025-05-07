@@ -1092,6 +1092,10 @@ async def test_get_document_passages_from_vespa__generator(
         ]
     )
 
+    # FIXME: Add this in once we can configure the max hits at test time.
+    # assert document_passages_count > boundary.VESPA_MAX_LIMIT, "the fixture has
+    # insufficient document passages to validate the test case"
+
     vespa_passage_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_import_id,
         vespa_search_adapter=local_vespa_search_adapter,
