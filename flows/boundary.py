@@ -1287,7 +1287,7 @@ def update_concepts_on_existing_vespa_concepts(
     are removing all instances where the model is the same.
     """
     if not passage.concepts:
-        return [concept.model_dump(mode="json") for concept in concepts]
+        return [concept.model_dump_json() for concept in concepts]
 
     new_concept_models = {concept.model for concept in concepts}
 
@@ -1299,7 +1299,7 @@ def update_concepts_on_existing_vespa_concepts(
 
     updated_concepts = existing_concepts_to_keep + concepts
 
-    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
+    return [concept_.model_dump_json() for concept_ in updated_concepts]
 
 
 # De-index ----------------------------------------------------------------------
@@ -1376,7 +1376,7 @@ def remove_concepts_from_existing_vespa_concepts(
         if concept.model not in concepts_to_remove__models
     ]
 
-    return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
+    return [concept_.model_dump_json() for concept_ in concepts_in_vespa_to_keep]
 
 
 async def update_s3_with_latest_concepts_counts(

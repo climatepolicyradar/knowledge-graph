@@ -462,7 +462,7 @@ def test_update_concepts_on_existing_vespa_concepts(
             concepts=[concept],
         )
         assert len(updated_passage_concepts) == 1
-        assert updated_passage_concepts[0] == concept.model_dump(mode="json")
+        assert updated_passage_concepts[0] == concept.model_dump_json()
 
         # Test that we can remove old model concepts from the passage concepts and
         # add the new one.
@@ -487,7 +487,7 @@ def test_update_concepts_on_existing_vespa_concepts(
             concepts=[concept],
         )
         assert len(updated_passage_concepts) == 1
-        assert updated_passage_concepts[0] == concept.model_dump(mode="json")
+        assert updated_passage_concepts[0] == concept.model_dump_json()
 
         # Test that we can add new concepts and retain concepts from other models
         updated_passage_concepts = update_concepts_on_existing_vespa_concepts(
@@ -511,7 +511,7 @@ def test_update_concepts_on_existing_vespa_concepts(
             concepts=[concept],
         )
         assert len(updated_passage_concepts) == 2
-        assert concept.model_dump(mode="json") in updated_passage_concepts
+        assert concept.model_dump_json() in updated_passage_concepts
 
 
 def test_update_feed_result_callback():
