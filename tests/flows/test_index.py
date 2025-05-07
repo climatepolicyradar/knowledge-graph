@@ -35,10 +35,6 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
 
-# FIXME: Failing because the number of text blocks yielded from vespa doesn't match the
-# length of the laebelled passages loaded from locals. Looking at the data this just
-# looks correct though, we are indexing more passages than we're getting from the local
-# labelled passages?
 @pytest.mark.asyncio
 @pytest.mark.vespa
 async def test_run_partial_updates_of_concepts_for_document_passages(
