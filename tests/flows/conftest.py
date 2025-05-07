@@ -555,7 +555,7 @@ def mock_bucket_concepts_counts(
         )
 
 
-def mock_vespa_query_response_json() -> dict:
+def mock_grouped_text_block_vespa_query_response_json() -> dict:
     """Mock Vespa query response JSON"""
 
     with open(
@@ -571,7 +571,7 @@ def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryRespons
     """Mock Vespa query response"""
 
     return VespaQueryResponse(
-        json=mock_vespa_query_response_json(),
+        json=mock_grouped_text_block_vespa_query_response_json(),
         status_code=200,
         url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         request_body={},
@@ -584,7 +584,7 @@ def mock_vespa_query_response_no_continuation_token(
 ) -> VespaQueryResponse:
     """Mock Vespa query response with no hits"""
 
-    json_data = mock_vespa_query_response_json()
+    json_data = mock_grouped_text_block_vespa_query_response_json()
     json_data["root"]["children"][0]["children"][0]["continuation"] = {
         "prev": "BGAAABEBCBC"
     }
