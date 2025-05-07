@@ -616,9 +616,7 @@ def get_document_passages_from_vespa__generator(
     - grouping_max: The maximum amount of grouping subquery hits to return at once.
     """
 
-    conditions = qb.QueryField("family_document_ref").contains(
-        f"id:doc_search:family_document::{document_import_id}"
-    )
+    conditions = qb.QueryField("document_import_id").contains(document_import_id)
 
     # Group the results of the select query by text_block_id in to groups of
     # grouping_max size. For each of the results in the group we output the summary of
