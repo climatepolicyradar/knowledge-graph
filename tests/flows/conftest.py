@@ -28,6 +28,7 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.inference import Config as InferenceConfig
+from flows.utils import DocumentImportId
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
 from src.concept import Concept
@@ -145,25 +146,47 @@ def vespa_app(
 
 
 @pytest.fixture(scope="function")
+def extra_document_passages_file_path(
+    document_passages_test_data_file_path: str,
+) -> str:
+    """Returns the path to the extra document passages test data file."""
+    return os.path.join(
+        os.path.dirname(document_passages_test_data_file_path),
+        "extra_document_passages.json",
+    )
+
+
+@pytest.fixture(scope="function")
+def example_document_passage(
+    document_passages_test_data_file_path: str,
+) -> dict[str, Any]:
+    """Returns an example document passage."""
+    with open(document_passages_test_data_file_path) as f:
+        return json.load(f)[0]
+
+
+def document_import_id_with_extra_passages() -> DocumentImportId:
+    """Returns the import id of the first document passage."""
+    return DocumentImportId("CCLW.executive.10014.4470")
+
+
+@pytest.fixture(scope="function")
 def vespa_app_with_large_docs(
     vespa_app,
     document_passages_test_data_file_path: str,
+    extra_document_passages_file_path: str,
+    example_document_passage: dict[str, Any],
+    document_import_id_with_extra_passages: DocumentImportId,
 ):
     """Load the vespa app with a document with more than 50,000 hits."""
 
-    extra_document_passages_file_path = (
-        "tests/local_vespa/test_documents/extra_document_passages.json"
-    )
     app = Vespa("http://localhost:8080")
 
-    print("\rCreating extra document passages...")
-    with open(document_passages_test_data_file_path) as f:
-        example_document_passage = json.load(f)[0]
-
+    print("\nCreating extra document passages...")
     extra_document_passages = []
     for i in range(60_000):
         example_document_passage["id"] = (
-            f"id:doc_search:document_passage::CCLW.executive.10014.4470.{i}_large_doc"
+            f"id:doc_search:document_passage::{document_import_id_with_extra_passages}.{i}_large_doc"
         )
         example_document_passage["fields"]["text_block_id"] = f"{i}_large_doc"
         extra_document_passages.append(example_document_passage)
@@ -191,7 +214,7 @@ def vespa_app_with_large_docs(
         timeout=60,  # Seconds
     )
 
-    print("\nCleaning up exrta passages file...")
+    print("\nCleaning up extra passages file...")
     os.remove(extra_document_passages_file_path)
 
     yield app

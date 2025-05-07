@@ -17,6 +17,7 @@ from flows.boundary import (
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
     TextBlockId,
@@ -1075,11 +1076,11 @@ async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app_with_large_docs,
+    document_import_id_with_extra_passages: DocumentImportId,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
 
     grouping_max = 10
-    document_import_id = "CCLW.executive.10014.4470"
 
     with open(document_passages_test_data_file_path) as f:
         document_passage_test_data = json.load(f)
@@ -1088,7 +1089,8 @@ async def test_get_document_passages_from_vespa__generator(
         [
             i["fields"]["family_document_ref"]
             for i in document_passage_test_data
-            if document_import_id in i["fields"]["family_document_ref"]
+            if document_import_id_with_extra_passages
+            in i["fields"]["family_document_ref"]
         ]
     )
 
@@ -1097,7 +1099,7 @@ async def test_get_document_passages_from_vespa__generator(
     )
 
     vespa_passage_generator = get_document_passages_from_vespa__generator(
-        document_import_id=document_import_id,
+        document_import_id=document_import_id_with_extra_passages,
         vespa_search_adapter=local_vespa_search_adapter,
         continuation_tokens=["BKAAAAABKBGA"],
         grouping_max=grouping_max,
