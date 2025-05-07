@@ -14,6 +14,7 @@ from vespa.io import VespaQueryResponse
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
     DocumentObjectUri,
@@ -488,6 +489,15 @@ async def test_get_some_document_passages_from_vespa(
             for passage_id, passage in document_passages[less_expected:]
         ]
     )
+
+    # Test that we can construct a query with the configured total text blocks for use
+    # in the equivalent operator part of the query.
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        _ = await get_document_passages_from_vespa(
+            document_import_id="test.executive.1.1",
+            text_blocks_ids=["test_33"] * VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
 
 @pytest.mark.vespa
