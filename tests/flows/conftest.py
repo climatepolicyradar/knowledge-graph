@@ -160,7 +160,7 @@ def extra_document_passages_file_path(
 def example_document_passage(
     document_passages_test_data_file_path: str,
 ) -> dict[str, Any]:
-    """Returns an example document passage."""
+    """Returns an example document passage test fixture."""
     with open(document_passages_test_data_file_path) as f:
         return json.load(f)[0]
 
