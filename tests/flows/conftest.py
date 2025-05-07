@@ -144,6 +144,59 @@ def vespa_app(
     )
 
 
+@pytest.fixture(scope="function")
+def vespa_app_with_large_docs(
+    vespa_app,
+    document_passages_test_data_file_path: str,
+):
+    """Load the vespa app with a document with more than 50,000 hits."""
+
+    extra_document_passages_file_path = (
+        "tests/local_vespa/test_documents/extra_document_passages.json"
+    )
+    app = Vespa("http://localhost:8080")
+
+    print("\rCreating extra document passages...")
+    with open(document_passages_test_data_file_path) as f:
+        example_document_passage = json.load(f)[0]
+
+    extra_document_passages = []
+    for i in range(60_000):
+        example_document_passage["id"] = (
+            f"id:doc_search:document_passage::CCLW.executive.10014.4470.{i}_large_doc"
+        )
+        example_document_passage["fields"]["text_block_id"] = f"{i}_large_doc"
+        extra_document_passages.append(example_document_passage)
+
+    print("\nWriting extra document passages to file...")
+    with open(extra_document_passages_file_path, "w") as f:
+        f.write(json.dumps(extra_document_passages))
+
+    print("\nLoading extra document passages into vespa...")
+    subprocess.run(
+        ["vespa", "config", "set", "target", "local"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        [
+            "vespa",
+            "feed",
+            extra_document_passages_file_path,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,  # Seconds
+    )
+
+    print("\nCleaning up exrta passages file...")
+    os.remove(extra_document_passages_file_path)
+
+    yield app
+
+
 @pytest.fixture
 def local_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmp_path
