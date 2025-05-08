@@ -25,6 +25,7 @@ from prefect import Flow, State
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
+from vespa.io import VespaQueryResponse
 
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -552,3 +553,45 @@ def mock_bucket_concepts_counts(
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
+
+
+def mock_grouped_text_block_vespa_query_response_json() -> dict:
+    """Mock Vespa query response JSON"""
+
+    with open(
+        "tests/flows/fixtures/query_responses/grouped_text_block_by_family_document_ref.json"
+    ) as f:
+        data = json.load(f)
+
+    return data
+
+
+@pytest.fixture
+def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryResponse:
+    """Mock Vespa query response"""
+
+    return VespaQueryResponse(
+        json=mock_grouped_text_block_vespa_query_response_json(),
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+
+@pytest.fixture
+def mock_vespa_query_response_no_continuation_token(
+    mock_vespa_credentials: dict,
+) -> VespaQueryResponse:
+    """Mock Vespa query response with no hits"""
+
+    json_data = mock_grouped_text_block_vespa_query_response_json()
+    json_data["root"]["children"][0]["children"][0]["continuation"] = {
+        "prev": "BGAAABEBCBC"
+    }
+
+    return VespaQueryResponse(
+        json=json_data,
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
