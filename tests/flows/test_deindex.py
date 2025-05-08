@@ -823,6 +823,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.flaky_on_ci
 async def test_deindex_labelled_passages_from_s3_to_vespa(
     mock_bucket: str,
     mock_s3_client,
