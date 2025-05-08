@@ -48,8 +48,7 @@ class BaseTargetClassifier(Classifier, ABC):
         self.pipeline: Callable = pipeline(
             "text-classification",
             model=AutoModelForSequenceClassification.from_pretrained(
-                self.model_name,
-                revision=self.commit_hash,
+                self.model_name, revision=self.commit_hash
             ),
             tokenizer=AutoTokenizer.from_pretrained(
                 self.model_name,

@@ -122,7 +122,7 @@ def get_all_available_classifiers(
 
     if not api_key:
         api_key = os.environ["WANDB_API_KEY"]
-    api = wandb.Api(api_key=api_key)
+    api = wandb.Api(api_key=api_key)  # type: ignore
     model_type = ArtifactType(
         api.client,
         entity=WANDB_MODEL_ORG,
