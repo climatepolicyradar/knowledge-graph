@@ -150,3 +150,18 @@ serve-static-site tool:
 # Generate a static site
 generate-static-site tool:
     poetry run python -m static_sites.{{tool}}
+
+# Train and promote a model to primary for the given AWS environment.
+train-promote id aws_env:
+    poetry run python scripts/train_promote.py \
+        --wikibase-id {{id}} \
+        --aws-env {{aws_env}}
+
+# Run train and promote for multiple concepts.
+# example: just train-promote-many "Q1 Q2 Q3" sandbox
+train-promote-many concepts aws_env:
+    #!/bin/bash
+    set -e
+    for concept in {{concepts}}; do
+        just train-promote "$concept" {{aws_env}}
+    done
