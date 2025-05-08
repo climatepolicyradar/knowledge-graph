@@ -8,12 +8,12 @@ from typing import Annotated, List, Optional, Union
 import botocore
 import botocore.client
 import typer
-import wandb
-import wandb.apis.public.api
 from pydantic import BaseModel, TypeAdapter, model_validator
 from tqdm import tqdm  # type: ignore
 from typing_extensions import Self
 
+import wandb
+import wandb.apis.public.api
 from scripts.cloud import (
     AwsEnv,
     get_s3_client,

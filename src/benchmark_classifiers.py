@@ -13,7 +13,6 @@ from flows.inference import (
 # NOTE: these model aliases are to be found in STAGING.
 # Initially I was debugging errors, because I was looking for versions not present in this env.
 async def main():
-
     config = await Config.create()
 
     wandb.login(key=config.wandb_api_key.get_secret_value())  # type: ignore
