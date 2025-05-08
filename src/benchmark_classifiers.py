@@ -2,6 +2,7 @@ import asyncio
 import time
 
 import wandb
+
 from flows.inference import (
     Config,
     batch_text_block_inference,

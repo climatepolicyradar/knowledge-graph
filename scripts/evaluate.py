@@ -1,4 +1,5 @@
 import os
+import wandb
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
@@ -9,8 +10,8 @@ import typer
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from wandb.wandb_run import Run
 
-import wandb
 from scripts.cloud import Namespace
 from scripts.config import (
     classifier_dir,
@@ -30,7 +31,6 @@ from src.metrics import (
 )
 from src.span import Span, group_overlapping_spans
 from src.version import Version
-from wandb.wandb_run import Run
 
 console = Console()
 

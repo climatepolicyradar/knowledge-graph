@@ -3,6 +3,8 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import pytest
+from wandb.apis.public import ArtifactType
+from wandb.apis.public.artifacts import ArtifactCollection
 
 from scripts.cloud import AwsEnv, ClassifierSpec
 from scripts.update_classifier_spec import (
@@ -13,8 +15,6 @@ from scripts.update_classifier_spec import (
     read_spec_file,
     sort_specs,
 )
-from wandb.apis.public import ArtifactType
-from wandb.apis.public.artifacts import ArtifactCollection
 
 
 @pytest.fixture
