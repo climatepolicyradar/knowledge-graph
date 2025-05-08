@@ -5,9 +5,9 @@ import os
 from typing import Annotated
 
 import typer
-import wandb
 from rich.logging import RichHandler
 
+import wandb
 from scripts.cloud import AwsEnv, is_logged_in
 from src.identifiers import WikibaseID
 
@@ -104,7 +104,7 @@ def main(
 
     target_path = f"wandb-registry-{REGISTRY_NAME}/{collection_name}:{aws_env}"
 
-    api = wandb.Api()
+    api = wandb.Api()  # type: ignore[reportGeneralTypeIssues]
 
     model = api.artifact(target_path)
     model.aliases.remove(aws_env.value)
