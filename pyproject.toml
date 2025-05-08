@@ -91,6 +91,7 @@ env = [
   "WIKIBASE_URL=https://test.test.test"
 ]
 markers = ["vespa", "flaky_on_ci", "transformers"]
+asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
 requires = ["poetry-core"]

@@ -341,9 +341,12 @@ def load_labelled_passages_by_uri(
     if len(object_json) == 0:
         return []
 
-    # Currently we _sometimes_ serialise the labelled passages as a
-    # JSON list, but the items of the list are a funny serialisation
-    # of them, so they're still raw strings, when loaded in.
+    # We had a window where we hadn't serialised the labelled
+    # passages correctly, and needed this special handling.
+    #
+    # This has now been fixed[1], and in the near future this can be removed.
+    #
+    # [1] https://linear.app/climate-policy-radar/issue/PLA-505/labelled-passage-serialisation-varies-in-format-and-should-be-the-same
     if isinstance(object_json[0], str):
         object_json = [json.loads(labelled_passage) for labelled_passage in object_json]
 

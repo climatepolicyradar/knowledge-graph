@@ -12,6 +12,10 @@ permissions:
 
 jobs:
   deploy_docs:
+    # Currently disabled as it's failing and possibly isn't needed[1].
+    #
+    # [1] https://climate-policy-radar.slack.com/archives/C06JZKM6PGQ/p1745844798378639
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
