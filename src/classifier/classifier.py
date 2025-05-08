@@ -124,7 +124,7 @@ class Classifier(ABC):
             pickle.dump(self, f)
 
     @classmethod
-    def load(cls, path: Union[str, Path]) -> "Classifier":
+    def load(cls, path: Union[str, Path], model_to_cuda: bool = False) -> "Classifier":
         """
         Load a classifier from a file.
 
@@ -134,4 +134,9 @@ class Classifier(ABC):
         with open(path, "rb") as f:
             classifier = pickle.load(f)
         assert isinstance(classifier, Classifier)
+        if model_to_cuda and hasattr(classifier, "pipeline"):
+            classifier.pipeline.model.to("cuda:0")  # type: ignore
+            import torch
+
+            classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
