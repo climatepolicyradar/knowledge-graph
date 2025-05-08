@@ -355,7 +355,7 @@ def test_update_s3_with_some_successes(
             s3_path=f"s3://{mock_bucket}/labelled_passages/Q787/v4/{document_import_id}.json"
         )
     ) == [
-        '{"id":"lp1","text":"once upon a time","spans":[{"text":"upon","start_index":0,"end_index":1,"concept_id":"Q456","labellers":[],"timestamps":[],"id":"bpp4juku","labelled_text":"u"}],"metadata":{}}',
+        '{"id":"lp1","text":"once upon a time","spans":[{"text":"upon","start_index":0,"end_index":1,"concept_id":"Q456","labellers":[],"timestamps":[],"confidence":null,"id":"bpp4juku","labelled_text":"u"}],"metadata":{}}',
         '{"id":"lp2","text":"lorem ipsum","spans":[],"metadata":{}}',
     ]
     assert json.loads(
@@ -500,7 +500,7 @@ async def test_update_s3_with_latest_concepts_counts_some_success(
             s3_path=f"s3://{mock_bucket}/labelled_passages/Q787/v4/{document_import_id}.json"
         )
     ) == [
-        '{"id":"lp1","text":"once upon a time","spans":[{"text":"once","start_index":0,"end_index":1,"concept_id":"Q123","labellers":[],"timestamps":[],"id":"z55va9eh","labelled_text":"o"}],"metadata":{}}',
+        '{"id":"lp1","text":"once upon a time","spans":[{"text":"once","start_index":0,"end_index":1,"concept_id":"Q123","labellers":[],"timestamps":[],"confidence":null,"id":"z55va9eh","labelled_text":"o"}],"metadata":{}}',
         '{"id":"lp2","text":"lorem ipsum","spans":[],"metadata":{}}',
     ]
     assert json.loads(
