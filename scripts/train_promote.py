@@ -31,14 +31,14 @@ def main(
     ],
 ) -> None:
     """
-    Train and promote a modeldirectly to primary for the given AWS environment.
+    Train and promote a model directly to primary for the given AWS environment.
 
     :param wikibase_id: The Wikibase ID of the concept classifier to train.
     :type wikibase_id: WikibaseID
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     """
-    upload = track = primary = True  # because we wantmake this the primary version
+    upload = track = primary = True  # because we want to make this the primary version
 
     classifier = train(wikibase_id, track, upload, aws_env)
     assert classifier.version is not None, "Classifier version None, cannot promote"
