@@ -217,7 +217,7 @@ class ActiveLearningCorpusData(ActiveLearningData):
         Finds examples on the decision boundary of the classifier
 
         Takes a dataset (e.g. a stream from `HuggingfaceSession`) and finds example in it, using the
-        `filter_text` method. The `skip` argumante is used to skip every nth passage in the dataset for
+        `filter_text` method. The `skip` argument is used to skip every nth passage in the dataset for
         speed and variety in sampling. If you want to scan all passages, set it to 1.
 
         NOTE: currently only supporting the CPR HF dataset format, with the `text_block.text` and
