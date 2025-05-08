@@ -2,10 +2,10 @@
 
 import logging
 import os
-import wandb
 from typing import Annotated
 
 import typer
+import wandb
 from rich.logging import RichHandler
 
 from scripts.cloud import AwsEnv, is_logged_in

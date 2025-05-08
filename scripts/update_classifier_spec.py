@@ -1,9 +1,9 @@
 import os
-import wandb
 from collections import defaultdict
 from pathlib import Path
 
 import typer
+import wandb
 import yaml  # type: ignore
 from dotenv import load_dotenv
 from rich.console import Console

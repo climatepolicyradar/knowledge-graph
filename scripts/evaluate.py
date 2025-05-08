@@ -1,5 +1,4 @@
 import os
-import wandb
 from collections import defaultdict
 from enum import Enum
 from pathlib import Path
@@ -7,6 +6,7 @@ from typing import Annotated, Any, Optional
 
 import pandas as pd
 import typer
+import wandb
 from rich import box
 from rich.console import Console
 from rich.table import Table

@@ -4,10 +4,11 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+import wandb
 from pydantic import BaseModel, Field
 from rich.console import Console
+from wandb.sdk.wandb_run import Run
 
-import wandb
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
 from scripts.config import classifier_dir
 from scripts.utils import get_local_classifier_path
@@ -15,7 +16,6 @@ from src.classifier import Classifier, ClassifierFactory
 from src.identifiers import WikibaseID
 from src.version import Version
 from src.wikibase import WikibaseSession
-from wandb.sdk.wandb_run import Run
 
 console = Console()
 app = typer.Typer()

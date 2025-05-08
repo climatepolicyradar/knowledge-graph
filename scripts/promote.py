@@ -2,14 +2,14 @@
 
 import logging
 import os
-import wandb
-import wandb.apis.public.api
 from pathlib import Path
 from typing import Annotated, List, Optional, Union
 
 import botocore
 import botocore.client
 import typer
+import wandb
+import wandb.apis.public.api
 from pydantic import BaseModel, TypeAdapter, model_validator
 from tqdm import tqdm  # type: ignore
 from typing_extensions import Self
@@ -161,11 +161,9 @@ def download(
     from_file: Path,
 ) -> None:
     """Download a file from S3."""
-    response = (
-        from_s3_client.head_object(  # pyright: ignore[reportAttributeAccessIssue]
-            Bucket=from_bucket,
-            Key=str(object_key),
-        )
+    response = from_s3_client.head_object(  # pyright: ignore[reportAttributeAccessIssue]
+        Bucket=from_bucket,
+        Key=str(object_key),
     )
     total_length = int(response["ContentLength"])
 

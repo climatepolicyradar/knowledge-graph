@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import wandb
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -13,6 +12,7 @@ from uuid import UUID
 
 import boto3
 import prefect.artifacts as artifacts
+import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -533,9 +533,7 @@ async def run_classifier_inference_on_batch_of_documents(
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
-    wandb.login(
-        key=config.wandb_api_key.get_secret_value()
-    )  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",
