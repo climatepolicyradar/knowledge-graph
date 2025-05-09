@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 import boto3
 import typer
@@ -16,6 +17,39 @@ YAML_FILES_MAP = {
     "sandbox": "flows/classifier_specs/sandbox.yaml",
     "labs": "flows/classifier_specs/labs.yaml",
 }
+
+
+@dataclass
+class Result:
+    """Result of checking a single classifier spec"""
+
+    path_exists: bool = False
+
+
+def check_single_spec(bucket_name: str, classifier_spec):
+    """Check inference output for a single classifier_spec."""
+    s3 = boto3.client("s3")
+    classifier_model, classifier_alias = classifier_spec.split(":")
+    s3_path = os.path.join(bucket_name, PREFIX, classifier_model, classifier_alias)
+    try:
+        paginator = s3.get_paginator("list_objects_v2")
+        total_objects = 0
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=PREFIX):
+            if "Contents" in page:
+                total_objects += len(page["Contents"])
+
+        response = {"Contents": []} if total_objects > 0 else {}
+        if total_objects > 0:
+            print(f"✅ S3 path exists: {s3_path} (contains {total_objects} objects)")
+
+        if "Contents" not in response:
+            print(f"❌ S3 path does not exist: {s3_path}")
+            return Result(path_exists=False)
+    except ClientError as e:
+        print(f"Error checking S3 path {s3_path}: {e}")
+        return Result(path_exists=False)
+
+    return Result(path_exists=True)
 
 
 @app.command()
@@ -44,35 +78,11 @@ def check_classifier_specs(
     with open(YAML_FILES_MAP[aws_env], "r") as file:
         data = yaml.safe_load(file)
 
-    s3 = boto3.client("s3")
-
     to_process = []
     for classifier_spec in data:
-        classifier_model, classifier_alias = classifier_spec.split(":")
-
-        # Use os.path.join for path construction
-        s3_path = os.path.join(bucket_name, PREFIX, classifier_model, classifier_alias)
-
-        try:
-            # List objects with the given prefix to see if path exists
-            # Check if path exists and count objects with pagination
-            paginator = s3.get_paginator("list_objects_v2")
-            total_objects = 0
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=PREFIX):
-                if "Contents" in page:
-                    total_objects += len(page["Contents"])
-
-            response = {"Contents": []} if total_objects > 0 else {}
-            if total_objects > 0:
-                print(
-                    f"✅ S3 path exists: {s3_path} (contains {total_objects} objects)"
-                )
-
-            if "Contents" not in response:
-                print(f"❌ S3 path does not exist: {s3_path}")
-                to_process.append(f"{classifier_model}:{classifier_alias}")
-        except ClientError as e:
-            print(f"Error checking S3 path {s3_path}: {e}")
+        result = check_single_spec(bucket_name, classifier_spec)
+        if not result.path_exists:
+            to_process.append(classifier_spec)
 
     print(f"to_process: {to_process}")
 
