@@ -3,6 +3,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 import boto3
 import typer
@@ -67,15 +68,21 @@ def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
         return Result(path_exists=False, classifier_spec=classifier_spec, file_names=[])
 
 
-def write_result(result: Result, start_time: str):
+def write_result(
+    result: Result,
+    start_time: str,
+    parent_dir: Path = INFERENCE_RESULTS_AUDIT_DIR,
+) -> Path:
     """Write the file names for a given classifier spec to the audit directory."""
-    dir_path = INFERENCE_RESULTS_AUDIT_DIR / start_time
+    dir_path = parent_dir / start_time
     if not dir_path.exists():
         dir_path.mkdir(parents=True)
 
     path = dir_path / f"{result.classifier_spec}.json"
     with open(path, "w") as f:
         json.dump(result.file_names, f)
+
+    return path
 
 
 @app.command()
@@ -123,7 +130,7 @@ def check_classifier_specs(
         for future in as_completed(future_to_spec):
             result = future.result()
             if write_file_names:
-                write_result(result, start_time)
+                write_result(result, start_time, INFERENCE_RESULTS_AUDIT_DIR)
 
             if not result.path_exists:
                 to_process.append(result.classifier_spec)
