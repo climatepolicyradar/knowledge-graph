@@ -1,6 +1,8 @@
+import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 
 import boto3
 import typer
@@ -8,6 +10,7 @@ import yaml
 from botocore.exceptions import ClientError
 
 from scripts.cloud import AwsEnv
+from scripts.config import data_dir
 
 app = typer.Typer()
 
@@ -18,6 +21,7 @@ YAML_FILES_MAP = {
     "sandbox": "flows/classifier_specs/sandbox.yaml",
     "labs": "flows/classifier_specs/labs.yaml",
 }
+INFERENCE_RESULTS_AUDIT_DIR = data_dir / "audit" / "inference_results"
 
 
 @dataclass
@@ -26,6 +30,7 @@ class Result:
 
     path_exists: bool = False
     classifier_spec: str = ""
+    file_names: list[str] = field(default_factory=list)
 
 
 def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
@@ -36,7 +41,9 @@ def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
     file_names = []
     for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
         if "Contents" in page:
-            file_names.extend([obj["Key"] for obj in page["Contents"]])
+            file_names.extend(
+                [obj["Key"].removeprefix(f"{prefix}/") for obj in page["Contents"]]
+            )
     return file_names
 
 
@@ -52,10 +59,12 @@ def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
 
     if file_names:
         print(f"✅ Results for {classifier_spec}: {len(file_names)} objects")
-        return Result(path_exists=True, classifier_spec=classifier_spec)
+        return Result(
+            path_exists=True, classifier_spec=classifier_spec, file_names=file_names
+        )
     else:
         print(f"❌ No results for {classifier_spec}")
-        return Result(path_exists=False, classifier_spec=classifier_spec)
+        return Result(path_exists=False, classifier_spec=classifier_spec, file_names=[])
 
 
 @app.command()
@@ -75,6 +84,10 @@ def check_classifier_specs(
         default=10,
         help="Maximum number of parallel workers to use for checking specs",
     ),
+    write_file_names: bool = typer.Option(
+        default=False,
+        help="Whether to write the file names to a file in the audit directory",
+    ),
 ) -> None:
     """
     Check if the classifier specs have s3 outputs and there respective counts.
@@ -89,6 +102,11 @@ def check_classifier_specs(
     with open(YAML_FILES_MAP[aws_env], "r") as file:
         data = yaml.safe_load(file)
 
+    dir_path = INFERENCE_RESULTS_AUDIT_DIR / datetime.now().isoformat()
+    if write_file_names:
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True)
+
     to_process = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_spec = {
@@ -97,6 +115,11 @@ def check_classifier_specs(
 
         for future in as_completed(future_to_spec):
             result = future.result()
+            if write_file_names:
+                path = dir_path / f"{result.classifier_spec}.json"
+                with open(path, "w") as f:
+                    json.dump(result.file_names, f)
+
             if not result.path_exists:
                 to_process.append(result.classifier_spec)
 
