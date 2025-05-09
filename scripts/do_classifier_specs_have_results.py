@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 import boto3
@@ -24,9 +25,10 @@ class Result:
     """Result of checking a single classifier spec"""
 
     path_exists: bool = False
+    classifier_spec: str = ""
 
 
-def check_single_spec(bucket_name: str, classifier_spec):
+def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
     """Check inference output for a single classifier_spec."""
     s3 = boto3.client("s3")
     classifier_model, classifier_alias = classifier_spec.split(":")
@@ -44,12 +46,12 @@ def check_single_spec(bucket_name: str, classifier_spec):
 
         if "Contents" not in response:
             print(f"❌ S3 path does not exist: {s3_path}")
-            return Result(path_exists=False)
+            return Result(path_exists=False, classifier_spec=classifier_spec)
     except ClientError as e:
         print(f"Error checking S3 path {s3_path}: {e}")
-        return Result(path_exists=False)
+        return Result(path_exists=False, classifier_spec=classifier_spec)
 
-    return Result(path_exists=True)
+    return Result(path_exists=True, classifier_spec=classifier_spec)
 
 
 @app.command()
@@ -65,6 +67,10 @@ def check_classifier_specs(
             "i.e. my-bucket-name"
         )
     ),
+    max_workers: int = typer.Option(
+        default=10,
+        help="Maximum number of parallel workers to use for checking specs",
+    ),
 ) -> None:
     """
     Check if the classifier specs have s3 outputs and there respective counts.
@@ -79,10 +85,15 @@ def check_classifier_specs(
         data = yaml.safe_load(file)
 
     to_process = []
-    for classifier_spec in data:
-        result = check_single_spec(bucket_name, classifier_spec)
-        if not result.path_exists:
-            to_process.append(classifier_spec)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_spec = {
+            executor.submit(check_single_spec, bucket_name, spec): spec for spec in data
+        }
+
+        for future in as_completed(future_to_spec):
+            result = future.result()
+            if not result.path_exists:
+                to_process.append(result.classifier_spec)
 
     print(f"to_process: {to_process}")
 
