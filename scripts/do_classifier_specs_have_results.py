@@ -11,7 +11,7 @@ from scripts.cloud import AwsEnv
 
 app = typer.Typer()
 
-PREFIX = os.getenv("LABELLED_PASSAGES_PREFIX", "labelled_passages")
+BASE_PREFIX = os.getenv("LABELLED_PASSAGES_PREFIX", "labelled_passages")
 YAML_FILES_MAP = {
     "prod": "flows/classifier_specs/prod.yaml",
     "staging": "flows/classifier_specs/staging.yaml",
@@ -32,23 +32,23 @@ def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
     """Check inference output for a single classifier_spec."""
     s3 = boto3.client("s3")
     classifier_model, classifier_alias = classifier_spec.split(":")
-    s3_path = os.path.join(bucket_name, PREFIX, classifier_model, classifier_alias)
+    prefix = os.path.join(BASE_PREFIX, classifier_model, classifier_alias)
     try:
         paginator = s3.get_paginator("list_objects_v2")
         total_objects = 0
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=PREFIX):
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
             if "Contents" in page:
                 total_objects += len(page["Contents"])
 
         response = {"Contents": []} if total_objects > 0 else {}
         if total_objects > 0:
-            print(f"✅ S3 path exists: {s3_path} (contains {total_objects} objects)")
+            print(f"✅ Results for {classifier_spec}: {total_objects} objects")
 
         if "Contents" not in response:
-            print(f"❌ S3 path does not exist: {s3_path}")
+            print(f"❌ No results for {classifier_spec}")
             return Result(path_exists=False, classifier_spec=classifier_spec)
     except ClientError as e:
-        print(f"Error checking S3 path {s3_path}: {e}")
+        print(f"Error checking results for {classifier_spec}: {e}")
         return Result(path_exists=False, classifier_spec=classifier_spec)
 
     return Result(path_exists=True, classifier_spec=classifier_spec)
@@ -81,6 +81,7 @@ def check_classifier_specs(
 
     This can be used to help us validate that inference has run correctly.
     """
+    typer.echo(f"Checking {aws_env} classifier specs in {bucket_name}/{BASE_PREFIX}")
     with open(YAML_FILES_MAP[aws_env], "r") as file:
         data = yaml.safe_load(file)
 
@@ -95,7 +96,7 @@ def check_classifier_specs(
             if not result.path_exists:
                 to_process.append(result.classifier_spec)
 
-    print(f"to_process: {to_process}")
+    typer.echo(f"to_process: {to_process}")
 
 
 if __name__ == "__main__":
