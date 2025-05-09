@@ -67,6 +67,17 @@ def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
         return Result(path_exists=False, classifier_spec=classifier_spec, file_names=[])
 
 
+def write_result(result: Result, start_time: str):
+    """Write the file names for a given classifier spec to the audit directory."""
+    dir_path = INFERENCE_RESULTS_AUDIT_DIR / start_time
+    if not dir_path.exists():
+        dir_path.mkdir(parents=True)
+
+    path = dir_path / f"{result.classifier_spec}.json"
+    with open(path, "w") as f:
+        json.dump(result.file_names, f)
+
+
 @app.command()
 def check_classifier_specs(
     aws_env: AwsEnv = typer.Argument(
@@ -98,14 +109,10 @@ def check_classifier_specs(
 
     This can be used to help us validate that inference has run correctly.
     """
+    start_time = datetime.now().isoformat()
     typer.echo(f"Checking {aws_env} classifier specs in {bucket_name}/{BASE_PREFIX}")
     with open(YAML_FILES_MAP[aws_env], "r") as file:
         data = yaml.safe_load(file)
-
-    dir_path = INFERENCE_RESULTS_AUDIT_DIR / datetime.now().isoformat()
-    if write_file_names:
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True)
 
     to_process = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -116,9 +123,7 @@ def check_classifier_specs(
         for future in as_completed(future_to_spec):
             result = future.result()
             if write_file_names:
-                path = dir_path / f"{result.classifier_spec}.json"
-                with open(path, "w") as f:
-                    json.dump(result.file_names, f)
+                write_result(result, start_time)
 
             if not result.path_exists:
                 to_process.append(result.classifier_spec)
