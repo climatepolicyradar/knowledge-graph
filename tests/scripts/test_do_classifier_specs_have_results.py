@@ -61,6 +61,10 @@ def test_write_result():
             file_names=[test_file_name],
         )
         path = write_result(
-            result=result, start_time="YYYY-MM-DD", parent_dir=Path(temp_dir)
+            result=result,
+            start_time="YYYY-MM-DD",
+            parent_dir=Path(temp_dir),
+            aws_env="sandbox",
         )
         assert path.read_text() == json.dumps([test_file_name])
+        assert path.parent.name == "sandbox"

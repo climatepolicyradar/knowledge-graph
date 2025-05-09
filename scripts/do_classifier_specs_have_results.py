@@ -72,9 +72,10 @@ def write_result(
     result: Result,
     start_time: str,
     parent_dir: Path = INFERENCE_RESULTS_AUDIT_DIR,
+    aws_env: AwsEnv = AwsEnv.sandbox,
 ) -> Path:
     """Write the file names for a given classifier spec to the audit directory."""
-    dir_path = parent_dir / start_time
+    dir_path = parent_dir / aws_env.value / start_time
     if not dir_path.exists():
         dir_path.mkdir(parents=True)
 
@@ -90,7 +91,7 @@ def check_classifier_specs(
     aws_env: AwsEnv = typer.Argument(
         help="Which aws environment to look for results in. Determines which spec file"
         "to use",
-        default="sandbox",
+        default=AwsEnv.sandbox,
     ),
     bucket_name: str = typer.Argument(
         help=(
@@ -130,7 +131,7 @@ def check_classifier_specs(
         for future in as_completed(future_to_spec):
             result = future.result()
             if write_file_names:
-                write_result(result, start_time, INFERENCE_RESULTS_AUDIT_DIR)
+                write_result(result, start_time, INFERENCE_RESULTS_AUDIT_DIR, aws_env)
 
             if not result.path_exists:
                 to_process.append(result.classifier_spec)
