@@ -5,15 +5,25 @@ import typer
 import yaml
 from botocore.exceptions import ClientError
 
+from scripts.cloud import AwsEnv
+
 app = typer.Typer()
 
 PREFIX = os.getenv("LABELLED_PASSAGES_PREFIX", "labelled_passages")
+YAML_FILES_MAP = {
+    "prod": "flows/classifier_specs/prod.yaml",
+    "staging": "flows/classifier_specs/staging.yaml",
+    "sandbox": "flows/classifier_specs/sandbox.yaml",
+    "labs": "flows/classifier_specs/labs.yaml",
+}
 
 
 @app.command()
 def check_classifier_specs(
-    yaml_path: str = typer.Argument(
-        help="Path to the YAML file containing classifier specifications"
+    aws_env: AwsEnv = typer.Argument(
+        help="Which aws environment to look for results in. Determines which spec file"
+        "to use",
+        default="sandbox",
     ),
     bucket_name: str = typer.Argument(
         help=(
@@ -31,7 +41,7 @@ def check_classifier_specs(
 
     This can be used to help us validate that inference has run correctly.
     """
-    with open(yaml_path, "r") as file:
+    with open(YAML_FILES_MAP[aws_env], "r") as file:
         data = yaml.safe_load(file)
 
     s3 = boto3.client("s3")
