@@ -28,30 +28,34 @@ class Result:
     classifier_spec: str = ""
 
 
+def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
+    """Collect the names of all files under a given prefix in an s3 bucket."""
+
+    s3 = boto3.client("s3")
+    paginator = s3.get_paginator("list_objects_v2")
+    file_names = []
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        if "Contents" in page:
+            file_names.extend([obj["Key"] for obj in page["Contents"]])
+    return file_names
+
+
 def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
     """Check inference output for a single classifier_spec."""
-    s3 = boto3.client("s3")
     classifier_model, classifier_alias = classifier_spec.split(":")
     prefix = os.path.join(BASE_PREFIX, classifier_model, classifier_alias)
     try:
-        paginator = s3.get_paginator("list_objects_v2")
-        total_objects = 0
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-            if "Contents" in page:
-                total_objects += len(page["Contents"])
-
-        response = {"Contents": []} if total_objects > 0 else {}
-        if total_objects > 0:
-            print(f"✅ Results for {classifier_spec}: {total_objects} objects")
-
-        if "Contents" not in response:
-            print(f"❌ No results for {classifier_spec}")
-            return Result(path_exists=False, classifier_spec=classifier_spec)
+        file_names = collect_file_names(bucket_name, prefix)
     except ClientError as e:
         print(f"Error checking results for {classifier_spec}: {e}")
         return Result(path_exists=False, classifier_spec=classifier_spec)
 
-    return Result(path_exists=True, classifier_spec=classifier_spec)
+    if file_names:
+        print(f"✅ Results for {classifier_spec}: {len(file_names)} objects")
+        return Result(path_exists=True, classifier_spec=classifier_spec)
+    else:
+        print(f"❌ No results for {classifier_spec}")
+        return Result(path_exists=False, classifier_spec=classifier_spec)
 
 
 @app.command()
