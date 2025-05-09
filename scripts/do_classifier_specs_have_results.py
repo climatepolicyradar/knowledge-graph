@@ -7,14 +7,19 @@ from botocore.exceptions import ClientError
 
 app = typer.Typer()
 
+PREFIX = os.getenv("LABELLED_PASSAGES_PREFIX", "labelled_passages")
+
 
 @app.command()
 def check_classifier_specs(
     yaml_path: str = typer.Argument(
         help="Path to the YAML file containing classifier specifications"
     ),
-    labelled_passages_s3_path: str = typer.Argument(
-        help="S3 path where labelled passages should be stored"
+    bucket_name: str = typer.Argument(
+        help=(
+            "Name of the s3 bucket, should be the root without protocol or prefix"
+            "i.e. my-bucket-name"
+        )
     ),
 ) -> None:
     """
@@ -36,20 +41,14 @@ def check_classifier_specs(
         classifier_model, classifier_alias = classifier_spec.split(":")
 
         # Use os.path.join for path construction
-        s3_path = os.path.join(
-            labelled_passages_s3_path, classifier_model, classifier_alias
-        )
-
-        # Parse the S3 URI to get bucket and prefix
-        bucket_name = s3_path.split("/")[2]
-        prefix = "/".join(s3_path.split("/")[3:])
+        s3_path = os.path.join(bucket_name, PREFIX, classifier_model, classifier_alias)
 
         try:
             # List objects with the given prefix to see if path exists
             # Check if path exists and count objects with pagination
             paginator = s3.get_paginator("list_objects_v2")
             total_objects = 0
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=PREFIX):
                 if "Contents" in page:
                     total_objects += len(page["Contents"])
 
