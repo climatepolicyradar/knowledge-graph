@@ -12,7 +12,6 @@ from collections.abc import Generator
 from datetime import timedelta
 from enum import Enum
 from io import BytesIO
-from logging import Logger
 from pathlib import Path
 from typing import Any, Iterable, Protocol, TypeAlias, TypedDict, TypeVar, Union
 
@@ -30,7 +29,6 @@ from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
-from prefect.logging.loggers import LoggingAdapter
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
@@ -811,7 +809,6 @@ class _FeedResultCallback(Protocol):
         grouped_concepts: dict[TextBlockId, list[VespaConcept]],
         response: VespaResponse,
         data_id: VespaDataId,
-        logger: Union[Logger, LoggingAdapter],
     ) -> None: ...
 
 
@@ -1179,7 +1176,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
             grouped_concepts,
             response,
             data_id,
-            logger,
         )
 
     # The previously established connection pool isn't used since
@@ -1220,10 +1216,9 @@ def update_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
-    logger: Union[Logger, LoggingAdapter],
 ) -> None:
     if not response.is_successful():
-        logger.error(
+        print(
             f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
         )
         failures.append(response)
@@ -1314,7 +1309,6 @@ def remove_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
-    logger: Union[Logger, LoggingAdapter],
 ) -> None:
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
@@ -1340,7 +1334,7 @@ def remove_feed_result_callback(
             concepts_counts[concept_model] = 0
 
     if not response.is_successful():
-        logger.error(
+        print(
             f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
         )
         failures.append(response)
