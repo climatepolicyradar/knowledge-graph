@@ -43,9 +43,9 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 # The "parent" AKA the higher level flows that do multiple things
-PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
+PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
 # A singular task doing one thing
-TASK_TIMEOUT_S: int = int(timedelta(minutes=20).total_seconds())
+TASK_TIMEOUT_S: int = int(timedelta(minutes=60).total_seconds())
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
