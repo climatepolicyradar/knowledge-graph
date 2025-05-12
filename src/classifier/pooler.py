@@ -60,12 +60,12 @@ class ClassifierPooler:
         handled_spans = set()
         results = []
         for span in spans:
-            # TODO: handle cases where the spans already have confidences
             if span in handled_spans:
                 continue
             overlapping_spans = [
                 s for s in spans if s.overlaps(span) and not self._same_spans(s, span)
             ]
+            print(overlapping_spans)
             handled_spans.update(overlapping_spans)
 
             if len(overlapping_spans) == 0:
@@ -81,13 +81,18 @@ class ClassifierPooler:
                 mergable_spans = overlapping_spans + [span]
                 jaccard_similarities = []
                 for s1, s2 in combinations(mergable_spans, 2):
-                    jaccard_similarities.append(jaccard_similarity(s1, s2))
+                    c1 = s1.confidence or 1.0
+                    c2 = s2.confidence or 1.0
+                    jaccard_similarities.append(
+                        jaccard_similarity(s1, s2) * (c1 + c2) / 2
+                    )
 
                 confidence = (
                     np.mean(jaccard_similarities)
                     * len(mergable_spans)
                     / len(self.classifiers)
                 )
+
                 results.append(
                     Span(
                         **{

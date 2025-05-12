@@ -433,3 +433,94 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
     concept = Concept(wikibase_id="Q123", preferred_label="test")
 
     assert EmptyIDClassifier(concept)
+
+
+from src.classifier.pooler import ClassifierPooler
+
+
+@pytest.mark.parametrize(
+    "n_classifiers,input_spans,output_spans",
+    [
+        (1, [], []),
+        (
+            2,
+            [
+                Span(
+                    text="test",
+                    start_index=0,
+                    end_index=4,
+                    confidence=0.6,
+                    concept_id="Q123",
+                    labellers=["c1"],
+                ),
+                Span(
+                    text="test",
+                    start_index=0,
+                    end_index=4,
+                    confidence=0.2,
+                    concept_id="Q123",
+                    labellers=["c2"],
+                ),
+            ],
+            [
+                Span(
+                    text="test",
+                    start_index=0,
+                    end_index=4,
+                    confidence=0.4,
+                    concept_id="Q123",
+                )
+            ],
+        ),
+        (
+            2,
+            [
+                Span(
+                    text="testte",
+                    start_index=0,
+                    end_index=4,
+                    confidence=0.6,
+                    concept_id="Q123",
+                ),
+                Span(
+                    text="testte",
+                    start_index=2,
+                    end_index=6,
+                    confidence=0.2,
+                    concept_id="Q123",
+                ),
+            ],
+            [
+                Span(
+                    text="testte",
+                    start_index=0,
+                    end_index=6,
+                    confidence=0.4 / 3,
+                    concept_id="Q123",
+                )
+            ],
+        ),
+    ],
+)
+def test_classifier_pooler_aggregation(
+    n_classifiers: int, input_spans: list[Span], output_spans: list[Span]
+):
+    class TClassifier(Classifier):
+        def predict(self, text: str) -> list[Span]:
+            return []
+
+    concept = Concept(wikibase_id="Q123", preferred_label="test")
+    pooler = ClassifierPooler(
+        classifiers=[TClassifier(concept=concept) for i in range(n_classifiers)],
+        concept=concept,
+    )
+
+    resulting_spans = pooler._aggregate(input_spans)
+
+    assert len(resulting_spans) == len(output_spans)
+    assert set(resulting_spans) == set(output_spans)
+
+    for resulting_span in resulting_spans:
+        for output_span in output_spans:
+            if resulting_span == output_span:
+                assert resulting_span.confidence == output_span.confidence
