@@ -1252,9 +1252,17 @@ async def run_partial_updates_of_concepts_for_document_passages(
         id: VespaDataId
         fields: dict[str, Any]
 
-    def _to_data(text_block_id: TextBlockId, concepts: list[VespaConcept]) -> DataPoint:
-        document_passage_id = text_blocks[text_block_id][0]
-        document_passage = text_blocks[text_block_id][1]
+    def _to_data(
+        text_block_id: TextBlockId, concepts: list[VespaConcept]
+    ) -> DataPoint | None:
+        try:
+            document_passage_id = text_blocks[text_block_id][0]
+            document_passage = text_blocks[text_block_id][1]
+        except KeyError:
+            logger.error(
+                f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+            )
+            return None
 
         data_id = get_data_id_from_vespa_hit_id(document_passage_id)
 
@@ -1266,9 +1274,11 @@ async def run_partial_updates_of_concepts_for_document_passages(
         return {"id": data_id, "fields": {"concepts": serialised_concepts}}
 
     logger.info("Beginning creation of DataPoints.")
-    data: Iterable[dict[str, Any]] = list(
-        map(lambda x: dict(_to_data(*x)), grouped_concepts.items())
-    )
+    data: Iterable[dict[str, Any]] = []
+    for text_block_id, concepts in grouped_concepts.items():
+        data_point = _to_data(text_block_id, concepts)
+        if data_point:
+            data.append(dict(data_point))
     logger.info("Finished creation of DataPoints.")
 
     # Wrap the callback with the appropriate state and make it match
