@@ -1344,6 +1344,7 @@ def update_feed_result_callback(
 
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
+    # TODO: Key Errors being thrown
     concepts = grouped_concepts[text_block_id]
 
     # Example:
@@ -1431,6 +1432,7 @@ def remove_feed_result_callback(
 ) -> None:
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
+    # TODO: Key Errors being thrown
     concepts = grouped_concepts[text_block_id]
 
     # Example:
