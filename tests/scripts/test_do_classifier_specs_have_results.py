@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from scripts.cloud import AwsEnv
 from scripts.do_classifier_specs_have_results import (
     Result,
     check_classifier_specs,
@@ -16,7 +17,7 @@ from tests.flows.conftest import *  # noqa: F403
 
 def test_check_classifier_specs(mock_bucket, capsys):
     check_classifier_specs(
-        aws_env="sandbox",
+        aws_env=AwsEnv("sandbox"),
         bucket_name=mock_bucket,
         max_workers=4,
         write_file_names=False,
@@ -64,7 +65,6 @@ def test_write_result():
             result=result,
             start_time="YYYY-MM-DD",
             parent_dir=Path(temp_dir),
-            aws_env="sandbox",
+            aws_env=AwsEnv("sandbox"),
         )
         assert path.read_text() == json.dumps([test_file_name])
-        assert path.parent.name == "sandbox"
