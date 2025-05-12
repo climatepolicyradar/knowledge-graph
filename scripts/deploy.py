@@ -93,7 +93,8 @@ def new(
     wikibase_ids: Annotated[
         list[WikibaseID],
         typer.Option(
-            help="List of Wikibase IDs to deploy",
+            "--wikibase-id",
+            help="List of Wikibase IDs to deploy (can be used multiple times)",
             parser=lambda x: WikibaseID(x),
         ),
     ] = [],
