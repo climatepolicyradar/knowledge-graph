@@ -173,7 +173,7 @@ def document_import_id_with_extra_passages() -> DocumentImportId:
 
 @pytest.fixture(scope="function")
 def vespa_app_with_large_docs(
-    vespa_app,
+    mock_vespa_credentials,
     document_passages_test_data_file_path: str,
     extra_document_passages_file_path: str,
     example_document_passage: dict[str, Any],
@@ -181,7 +181,9 @@ def vespa_app_with_large_docs(
 ):
     """Load the vespa app with a document with more than 50,000 hits."""
 
-    app = Vespa("http://localhost:8080")
+    # Connection
+    print("\nSetting up Vespa connection...")
+    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
 
     print("\nCreating extra document passages...")
     all_document_passages = []
@@ -226,7 +228,17 @@ def vespa_app_with_large_docs(
     with open(document_passages_test_data_file_path, "w") as f:
         f.write(json.dumps(all_document_passages))
 
-    yield app
+    yield app  # This is where the test function will be executed
+
+    # Teardown
+    print("\nTearing down Vespa connection...")
+    subprocess.run(
+        ["just", "vespa_delete_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,  # Seconds
+    )
 
 
 @pytest.fixture

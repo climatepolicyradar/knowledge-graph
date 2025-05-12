@@ -1072,6 +1072,7 @@ def test_get_vespa_passages_from_query_response(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
+@pytest.mark.long_running
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
     local_vespa_search_adapter: VespaSearchAdapter,
