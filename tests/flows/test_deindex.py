@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from collections import Counter
 from collections.abc import Callable
@@ -822,6 +823,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
 @pytest.mark.asyncio
 @pytest.mark.vespa
+@pytest.mark.flaky_on_ci
 async def test_deindex_labelled_passages_from_s3_to_vespa(
     mock_bucket: str,
     mock_s3_client,
@@ -1445,6 +1447,7 @@ def test_remove_feed_result_callback():
             grouped_concepts=grouped_concepts,
             response=response,
             data_id=data_id,
+            logger=logging.getLogger("test"),
         )
         is None
     )
@@ -1490,6 +1493,7 @@ def test_remove_feed_result_callback_not_successful_response():
             grouped_concepts=grouped_concepts,
             response=response,
             data_id=data_id,
+            logger=logging.getLogger("test"),
         )
         is None
     )

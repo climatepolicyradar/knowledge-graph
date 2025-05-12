@@ -97,8 +97,6 @@ def find_all_classifier_specs_for_latest(
     `Q200:latest` is passed, and in our artifacts we have versions
     `v3`, `v4`, and `v7`. `v7` is otherwise the latest AKA primary version.
 
-    We'd
-
     [1] In S3 for labelled passages and concepts counts and the
     corollaries in Vespa.
     """

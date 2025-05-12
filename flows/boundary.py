@@ -12,6 +12,7 @@ from collections.abc import Generator
 from datetime import timedelta
 from enum import Enum
 from io import BytesIO
+from logging import Logger
 from pathlib import Path
 from typing import Any, Iterable, Protocol, TypeAlias, TypedDict, TypeVar, Union
 
@@ -29,6 +30,7 @@ from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
+from prefect.logging.loggers import LoggingAdapter
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
@@ -335,9 +337,12 @@ def load_labelled_passages_by_uri(
     if len(object_json) == 0:
         return []
 
-    # Currently we _sometimes_ serialise the labelled passages as a
-    # JSON list, but the items of the list are a funny serialisation
-    # of them, so they're still raw strings, when loaded in.
+    # We had a window where we hadn't serialised the labelled
+    # passages correctly, and needed this special handling.
+    #
+    # This has now been fixed[1], and in the near future this can be removed.
+    #
+    # [1] https://linear.app/climate-policy-radar/issue/PLA-505/labelled-passage-serialisation-varies-in-format-and-should-be-the-same
     if isinstance(object_json[0], str):
         object_json = [json.loads(labelled_passage) for labelled_passage in object_json]
 
@@ -806,6 +811,7 @@ class _FeedResultCallback(Protocol):
         grouped_concepts: dict[TextBlockId, list[VespaConcept]],
         response: VespaResponse,
         data_id: VespaDataId,
+        logger: Union[Logger, LoggingAdapter],
     ) -> None: ...
 
 
@@ -1173,6 +1179,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
             grouped_concepts,
             response,
             data_id,
+            logger,
         )
 
     # The previously established connection pool isn't used since
@@ -1213,9 +1220,8 @@ def update_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
+    logger: Union[Logger, LoggingAdapter],
 ) -> None:
-    logger = get_run_logger()
-
     if not response.is_successful():
         logger.error(
             f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
@@ -1308,9 +1314,8 @@ def remove_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
+    logger: Union[Logger, LoggingAdapter],
 ) -> None:
-    logger = get_run_logger()
-
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
     concepts = grouped_concepts[text_block_id]
