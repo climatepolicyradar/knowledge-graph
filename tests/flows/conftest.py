@@ -165,6 +165,7 @@ def example_document_passage(
         return json.load(f)[0]
 
 
+@pytest.fixture
 def document_import_id_with_extra_passages() -> DocumentImportId:
     """Returns the import id of the first document passage."""
     return DocumentImportId("CCLW.executive.10014.4470")
@@ -183,39 +184,47 @@ def vespa_app_with_large_docs(
     app = Vespa("http://localhost:8080")
 
     print("\nCreating extra document passages...")
-    extra_document_passages = []
-    for i in range(60_000):
-        example_document_passage["id"] = (
-            f"id:doc_search:document_passage::{document_import_id_with_extra_passages}.{i}_large_doc"
+    all_document_passages = []
+    for i in range(30):  # 30 * 2000 = 60_000
+        extra_document_passages = []
+        for j in range(2000):
+            example_document_passage["id"] = (
+                f"id:doc_search:document_passage::{document_import_id_with_extra_passages}.{i}_{j}_large_doc"
+            )
+            example_document_passage["fields"]["text_block_id"] = f"{i}_{j}_large_doc"
+            extra_document_passages.append(example_document_passage)
+
+        print("\nWriting extra document passages to file...")
+        with open(extra_document_passages_file_path, "w") as f:
+            f.write(json.dumps(extra_document_passages))
+
+        print("\nLoading extra document passages into vespa...")
+        subprocess.run(
+            ["vespa", "config", "set", "target", "local"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
-        example_document_passage["fields"]["text_block_id"] = f"{i}_large_doc"
-        extra_document_passages.append(example_document_passage)
+        subprocess.run(
+            [
+                "vespa",
+                "feed",
+                extra_document_passages_file_path,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,  # Seconds
+        )
 
-    print("\nWriting extra document passages to file...")
-    with open(extra_document_passages_file_path, "w") as f:
-        f.write(json.dumps(extra_document_passages))
+        print("\nCleaning up extra passages file...")
+        os.remove(extra_document_passages_file_path)
 
-    print("\nLoading extra document passages into vespa...")
-    subprocess.run(
-        ["vespa", "config", "set", "target", "local"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    subprocess.run(
-        [
-            "vespa",
-            "feed",
-            extra_document_passages_file_path,
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
+        all_document_passages.extend(extra_document_passages)
 
-    print("\nCleaning up extra passages file...")
-    os.remove(extra_document_passages_file_path)
+    print("\nWriting all document passages to local file...")
+    with open(document_passages_test_data_file_path, "w") as f:
+        f.write(json.dumps(all_document_passages))
 
     yield app
 
