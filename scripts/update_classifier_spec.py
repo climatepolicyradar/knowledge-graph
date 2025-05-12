@@ -98,8 +98,7 @@ def model_artifact_is_primary(aliases: list[str], aws_env: AwsEnv) -> bool:
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
     # Have stable ordering. First, the name is gotten from
     # `Q000:v0`, and then the number part is gotten from `Q000`.
-    # The end result is to sort on 000, so that Q100 is before Q1000
-    return sorted(specs, key=lambda x: int(x.name.removeprefix("Q")))
+    return sorted(specs, key=lambda x: int(WikibaseID(x.name).numeric))
 
 
 @app.command()
