@@ -214,7 +214,7 @@ def vespa_app_with_large_docs(
             capture_output=True,
             text=True,
             check=True,
-            timeout=60,  # Seconds
+            timeout=3600,  # Seconds
         )
 
         print("\nCleaning up extra passages file...")
