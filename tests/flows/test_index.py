@@ -1,5 +1,4 @@
 import json
-import logging
 from collections import Counter
 from datetime import datetime
 from functools import partial
@@ -549,7 +548,6 @@ def test_update_feed_result_callback():
             grouped_concepts=grouped_concepts,
             response=response,
             data_id=data_id,
-            logger=logging.getLogger("test"),
         )
         is None
     )
@@ -579,7 +577,6 @@ def test_update_feed_result_callback_not_successful_response():
             grouped_concepts=grouped_concepts,
             response=response,
             data_id=data_id,
-            logger=logging.getLogger("test"),
         )
         is None
     )

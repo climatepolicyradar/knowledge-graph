@@ -85,18 +85,20 @@ def get_relevant_model_version(
             return model_artifacts.name
 
 
-def is_latest_model_in_env(
-    classifier_specs: list[ClassifierSpec], model_name: str
-) -> bool:
+def model_seen_in_env(classifier_specs: list[ClassifierSpec], model_name: str) -> bool:
     """Check to see if this model already has a version found for the env"""
     env_models = [m.name for m in classifier_specs]
-    return model_name not in env_models
+    return model_name in env_models
+
+
+def model_artifact_is_primary(aliases: list[str], aws_env: AwsEnv) -> bool:
+    return aws_env.value in aliases
 
 
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
     # Have stable ordering. First, the name is gotten from
     # `Q000:v0`, and then the number part is gotten from `Q000`.
-    return sorted(specs, key=lambda x: x.name)
+    return sorted(specs, key=lambda x: int(WikibaseID(x.name).numeric))
 
 
 @app.command()
@@ -120,7 +122,7 @@ def get_all_available_classifiers(
 
     if not api_key:
         api_key = os.environ["WANDB_API_KEY"]
-    api = wandb.Api(api_key=api_key)
+    api = wandb.Api(api_key=api_key)  # type: ignore
     model_type = ArtifactType(
         api.client,
         entity=WANDB_MODEL_ORG,
@@ -136,23 +138,38 @@ def get_all_available_classifiers(
             continue
 
         console.log(model.name)
-        for model_artifacts in model.artifacts():
-            model_env = AwsEnv(model_artifacts.metadata.get("aws_env"))
-            if model_env not in aws_envs:
+        for model_artifact in model.artifacts():
+            model_env = AwsEnv(model_artifact.metadata.get("aws_env"))
+
+            if (
+                # Is it a known AWS env.?
+                model_env not in aws_envs
+                # Does it have any aliases? If there's none, there's no
+                # way it could be the primary.
+                or not model_artifact.aliases
+                # Is it the primary version or not?
+                or not model_artifact_is_primary(model_artifact.aliases, model_env)
+            ):
                 continue
 
-            if is_latest_model_in_env(classifier_specs[model_env], model.name):
-                model_parts: list[str] = model_artifacts.name.split(":")
-                if len(model_parts) != 2:
-                    raise ValueError(
-                        f"Model name had unexpected format: {model_artifacts.name}"
-                    )
-                classifier_specs[model_env].append(
-                    ClassifierSpec(
-                        name=model_parts[0],
-                        alias=model_parts[1],
-                    )
+            # Has the primary model already been found?
+            if model_seen_in_env(
+                classifier_specs[model_env],
+                model.name,
+            ):
+                break
+
+            model_parts: list[str] = model_artifact.name.split(":")
+            if len(model_parts) != 2:
+                raise ValueError(
+                    f"Model name had unexpected format: {model_artifact.name}"
                 )
+            classifier_specs[model_env].append(
+                ClassifierSpec(
+                    name=model_parts[0],
+                    alias=model_parts[1],
+                )
+            )
 
     for aws_env, specs in classifier_specs.items():
         aws_env = AwsEnv(aws_env)

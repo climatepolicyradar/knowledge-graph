@@ -12,7 +12,6 @@ from collections.abc import Generator
 from datetime import timedelta
 from enum import Enum
 from io import BytesIO
-from logging import Logger
 from pathlib import Path
 from typing import Any, Iterable, Protocol, TypeAlias, TypedDict, TypeVar, Union
 
@@ -31,7 +30,6 @@ from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
-from prefect.logging.loggers import LoggingAdapter
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
@@ -185,8 +183,6 @@ def s3_obj_generator_from_s3_prefixes(
     None,
 ]:
     """Return a generator that yields keys from a list of S3 prefixes."""
-    logger = get_logger()
-
     for s3_prefix in s3_prefixes:
         try:
             # E.g. Path("s3://bucket/prefix/file.json").parts[1] == "bucket"
@@ -198,7 +194,7 @@ def s3_obj_generator_from_s3_prefixes(
 
                 yield stem, key
         except Exception as e:
-            logger.error(
+            print(
                 f"failed to yield from S3 prefix. Error: {str(e)}",
             )
             continue
@@ -219,14 +215,13 @@ def s3_obj_generator_from_s3_paths(
 
     E.g. "s3://bucket/prefix/file.json" -> "prefix/file.json"
     """
-    logger = get_logger()
     for s3_path in s3_paths:
         try:
             stem: DocumentStem = Path(s3_path).stem
             uri: DocumentObjectUri = s3_path
             yield stem, uri
         except Exception as e:
-            logger.error(
+            print(
                 f"failed to yield from S3 path. Error: {str(e)}",
             )
             continue
@@ -246,18 +241,16 @@ def s3_obj_generator(
     These will be for each output from the inference stage, of
     labelled passages.
     """
-    logger = get_run_logger()
-
     match (s3_prefixes, s3_paths):
         case (list(), list()):
             raise ValueError(
                 "Either s3_prefixes or s3_paths must be provided, not both."
             )
         case (list(), None):
-            logger.info("S3 object generator: prefixes")
+            print("S3 object generator: prefixes")
             return s3_obj_generator_from_s3_prefixes(s3_prefixes=s3_prefixes)
         case (None, list()):
-            logger.info("S3 object generator: paths")
+            print("S3 object generator: paths")
             return s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
         case (None, None):
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
@@ -280,12 +273,10 @@ def s3_paths_or_s3_prefixes(
         "s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.legislative.10695.6015.json",
       ]
     """
-    logger = get_run_logger()
-
     match (classifier_specs, document_ids):
         case (None, None):
             # Run on all documents, regardless of classifier
-            logger.info("run on all documents, regardless of classifier")
+            print("run on all documents, regardless of classifier")
             s3_prefix: str = "s3://" + os.path.join(
                 cache_bucket,
                 prefix,
@@ -294,7 +285,7 @@ def s3_paths_or_s3_prefixes(
 
         case (list(), None):
             # Run on all documents, for the specified classifier
-            logger.info("run on all documents, for the specified classifier")
+            print("run on all documents, for the specified classifier")
             s3_prefixes = [
                 "s3://"
                 + os.path.join(
@@ -309,7 +300,7 @@ def s3_paths_or_s3_prefixes(
 
         case (list(), list()):
             # Run on specified documents, for the specified classifier
-            logger.info("run on specified documents, for the specified classifier")
+            print("run on specified documents, for the specified classifier")
 
             document_paths = get_labelled_passage_paths(
                 document_ids=document_ids,
@@ -318,7 +309,7 @@ def s3_paths_or_s3_prefixes(
                 labelled_passages_prefix=prefix,
             )
 
-            logger.info(
+            print(
                 f"Identified {len(document_paths)} documents to process from {len(document_ids)} document IDs"
             )
             return S3Accessor(paths=document_paths, prefixes=None)
@@ -411,8 +402,6 @@ def convert_labelled_passage_to_concepts(
     The labelled passage contains a list of spans relating to concepts
     that we must convert to VespaConcept objects.
     """
-    logger = get_run_logger()
-
     concepts: list[VespaConcept] = []
     concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
 
@@ -420,9 +409,9 @@ def convert_labelled_passage_to_concepts(
         return concepts
 
     if not concept_json and labelled_passage.spans:
-        logger.error(
-            "We have spans but no concept metadata.",
-            extra={"labelled_passage_id": labelled_passage.id},
+        print(
+            "We have spans but no concept metadata for "
+            f"labelled passage {labelled_passage.id}"
         )
         raise ValueError(
             "We have spans but no concept metadata.",
@@ -442,13 +431,13 @@ def convert_labelled_passage_to_concepts(
     for span_idx, span in enumerate(labelled_passage.spans):
         if span.concept_id is None:
             # Include the Span index since Span's don't have IDs
-            logger.error(
+            print(
                 f"span concept ID is missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
             )
             continue
 
         if not span.timestamps:
-            logger.error(
+            print(
                 f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
             )
             continue
@@ -918,7 +907,6 @@ class _FeedResultCallback(Protocol):
         grouped_concepts: dict[TextBlockId, list[VespaConcept]],
         response: VespaResponse,
         data_id: VespaDataId,
-        logger: Union[Logger, LoggingAdapter],
     ) -> None: ...
 
 
@@ -1286,7 +1274,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
             grouped_concepts,
             response,
             data_id,
-            logger,
         )
 
     # The previously established connection pool isn't used since
@@ -1327,10 +1314,9 @@ def update_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
-    logger: Union[Logger, LoggingAdapter],
 ) -> None:
     if not response.is_successful():
-        logger.error(
+        print(
             f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
         )
         failures.append(response)
@@ -1421,7 +1407,6 @@ def remove_feed_result_callback(
     grouped_concepts: dict[TextBlockId, list[VespaConcept]],
     response: VespaResponse,
     data_id: VespaDataId,
-    logger: Union[Logger, LoggingAdapter],
 ) -> None:
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
@@ -1447,7 +1432,7 @@ def remove_feed_result_callback(
             concepts_counts[concept_model] = 0
 
     if not response.is_successful():
-        logger.error(
+        print(
             f"Vespa feed result wasn't successful. Error: {json.dumps(response.get_json())}"
         )
         failures.append(response)
@@ -1496,8 +1481,6 @@ async def update_s3_with_latest_concepts_counts(
     concepts_counts_prefix: str,
     document_labelled_passages: list[LabelledPassage],
 ) -> None:
-    logger = get_run_logger()
-
     # Ideally, we'd remove the concepts count file entirely, but, we may fail above in updating
     # 1 or more document passages in Vespa, which means that they'd still have the concept present.
     #
@@ -1517,7 +1500,7 @@ async def update_s3_with_latest_concepts_counts(
     # succeeded in all the partial updates to the document
     # passages.
     if len(concepts_counts_filtered) == 0:
-        logger.info("successfully updated all concepts")
+        print("successfully updated all concepts")
         update_s3_with_all_successes(
             document_object_uri=document_importer[1],
             cache_bucket=cache_bucket,
@@ -1525,7 +1508,7 @@ async def update_s3_with_latest_concepts_counts(
         )
     # We didn't succeed with all, so write the concepts counts still
     else:
-        logger.info("only updated some concepts")
+        print("only updated some concepts")
         update_s3_with_some_successes(
             document_object_uri=document_importer[1],
             concepts_counts_filtered=concepts_counts_filtered,
@@ -1543,9 +1526,7 @@ def update_s3_with_all_successes(
     concepts_counts_prefix: str,
 ) -> None:
     """Clean-up S3 objects for a document's labelled passages and concepts counts."""
-    logger = get_run_logger()
-
-    logger.info("updating S3 with all successes")
+    print("updating S3 with all successes")
 
     s3 = boto3.client("s3")
 
@@ -1557,11 +1538,11 @@ def update_s3_with_all_successes(
 
     concepts_counts_key = f"{concepts_counts_prefix}/{key_parts}"
 
-    logger.info(
+    print(
         f"deleting concepts counts from bucket `{cache_bucket}`, key: `{concepts_counts_key}`"
     )
     if not s3_file_exists(bucket_name=cache_bucket, file_key=concepts_counts_key):
-        logger.warning(
+        print(
             "planned on deleting concepts counts from bucket: "
             f"`{cache_bucket}`, key: `{concepts_counts_key}`, "
             "but the object doesn't exist"
@@ -1569,17 +1550,17 @@ def update_s3_with_all_successes(
     else:
         s3.delete_object(Bucket=cache_bucket, Key=concepts_counts_key)
 
-    logger.info("updated S3 with deleted concepts counts")
+    print("updated S3 with deleted concepts counts")
 
     # Second, delete the labelled passages
     # Get all parts except for the bucket (e.g. "labelled_passages/Q787/v4/CCLW.executive.1813.2418.json")
     labelled_passages_key = "/".join(s3_uri.parts[2:])  # Skip s3://bucket/
 
-    logger.info(
+    print(
         f"deleting labelled passages from bucket `{cache_bucket}`, key: `{labelled_passages_key}`"
     )
     if not s3_file_exists(bucket_name=cache_bucket, file_key=labelled_passages_key):
-        logger.warning(
+        print(
             "planned on deleting labelled passages from bucket: "
             f"`{cache_bucket}`, key: `{labelled_passages_key}`, "
             "but the object doesn't exist"
@@ -1587,9 +1568,9 @@ def update_s3_with_all_successes(
     else:
         s3.delete_object(Bucket=cache_bucket, Key=labelled_passages_key)
 
-    logger.info("updated S3 with deleted labelled passages")
+    print("updated S3 with deleted labelled passages")
 
-    logger.info("updated S3 with all successes")
+    print("updated S3 with all successes")
 
     return None
 
@@ -1601,9 +1582,7 @@ def update_s3_with_some_successes(
     cache_bucket: str,
     concepts_counts_prefix: str,
 ) -> None:
-    logger = get_run_logger()
-
-    logger.info("updating S3 with partial successes")
+    print("updating S3 with partial successes")
 
     # First, update the concepts counts object
     serialised_concepts_counts = serialise_concepts_counts(concepts_counts_filtered)
@@ -1620,7 +1599,7 @@ def update_s3_with_some_successes(
         text=serialised_concepts_counts,
     )
 
-    logger.info("updated S3 with updated concepts counts")
+    print("updated S3 with updated concepts counts")
 
     # Second, update the labelled passages
     concept_ids_to_keep: list[WikibaseID] = [
@@ -1648,9 +1627,9 @@ def update_s3_with_some_successes(
         labelled_passages=filtered_labelled_passages,
     )
 
-    logger.info("updated S3 with updated labelled passages")
+    print("updated S3 with updated labelled passages")
 
-    logger.info("updated S3 with partial successes")
+    print("updated S3 with partial successes")
 
     return None
 

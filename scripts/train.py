@@ -55,7 +55,7 @@ def link_model_artifact(
     run: Run,
     classifier: Classifier,
     storage_link: StorageLink,
-) -> wandb.Artifact:
+) -> wandb.Artifact:  # type: ignore
     """
     Links a model artifact, stored in S3, to a Weights & Biases run.
 
@@ -73,7 +73,7 @@ def link_model_artifact(
     # Set this, so W&B knows where to look for AWS credentials profile
     os.environ["AWS_PROFILE"] = storage_link.aws_env.value
 
-    artifact = wandb.Artifact(
+    artifact = wandb.Artifact(  # type: ignore
         name=classifier.name,
         type="model",
         metadata=metadata,
@@ -111,7 +111,7 @@ def get_next_version(
     version = 0  # Default value
 
     try:
-        api = wandb.Api()
+        api = wandb.Api()  # type: ignore
         latest = api.artifact(f"{namespace.project}/{classifier.name}:latest")._version
         version = int(latest[1:]) + 1  # type: ignore
     except wandb.errors.CommError as e:  # type: ignore
@@ -234,7 +234,7 @@ def main(
         )
 
     if track:
-        run = wandb.init(
+        run = wandb.init(  # type: ignore
             entity=namespace.entity, project=namespace.project, job_type=job_type
         )
 
