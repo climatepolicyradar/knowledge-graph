@@ -1,42 +1,11 @@
-from enum import Enum
 from itertools import combinations
-from typing import Optional
 
 import numpy as np
-from pydantic import BaseModel, Field
 
 from src.classifier.classifier import Classifier
 from src.classifier.llm import LLMOutputMismatchError
 from src.concept import Concept
 from src.span import Span, jaccard_similarity
-
-
-class ConfidenceType(str, Enum):
-    """Confidence type for the classifier"""
-
-    AGGREGATE = "aggregate"
-    SELF_REPORTED = "self-reported"
-
-
-class PoolerAggregatedSpan(BaseModel):
-    """Results from a classifier pooler"""
-
-    span: Span = Field(
-        description="The span of text that was classified",
-    )
-    confidence: float = Field(
-        ge=0.0,
-        le=1.0,
-        description="The confidence score of the classifier",
-    )
-    confidence_type: ConfidenceType = Field(
-        default=ConfidenceType.AGGREGATE,
-        description="The type of confidence score returned by the classifier",
-    )
-    confidence_reasonings: Optional[dict[str, str]] = Field(
-        default=None,
-        description="The reasoning (if provided) behind the classification. In the form of {model_name: reasoning}",
-    )
 
 
 class ClassifierPooler:
@@ -48,7 +17,7 @@ class ClassifierPooler:
         self.classifiers = classifiers
         self.concept = concept
 
-    def predict(self, text: str) -> list[PoolerAggregatedSpan]:
+    def predict(self, text: str) -> list[Span]:
         """Run prediction with all classifiers and aggregate their results"""
 
         predictions = self._get_predictions(text)
@@ -76,7 +45,7 @@ class ClassifierPooler:
         """
         return span1 == span2 and span1.labellers == span2.labellers
 
-    def _aggregate(self, spans: list[Span]) -> list[PoolerAggregatedSpan]:
+    def _aggregate(self, spans: list[Span]) -> list[Span]:
         """
         Aggregates the results of the classifiers
 
@@ -91,6 +60,7 @@ class ClassifierPooler:
         handled_spans = set()
         results = []
         for span in spans:
+            # TODO: handle cases where the spans already have confidences
             if span in handled_spans:
                 continue
             overlapping_spans = [
@@ -100,10 +70,11 @@ class ClassifierPooler:
 
             if len(overlapping_spans) == 0:
                 results.append(
-                    PoolerAggregatedSpan(
-                        span=span,
-                        confidence=1.0 / len(self.classifiers),
-                        confidence_type=ConfidenceType.AGGREGATE,
+                    Span(
+                        **{
+                            **span.model_dump(),
+                            "confidence": 1.0 / len(self.classifiers),
+                        }
                     )
                 )
             else:
@@ -118,10 +89,11 @@ class ClassifierPooler:
                     / len(self.classifiers)
                 )
                 results.append(
-                    PoolerAggregatedSpan(
-                        span=Span.union(mergable_spans),
-                        confidence=float(confidence),
-                        confidence_type=ConfidenceType.AGGREGATE,
+                    Span(
+                        **{
+                            **Span.union(mergable_spans).model_dump(),
+                            "confidence": float(confidence),
+                        }
                     )
                 )
 
