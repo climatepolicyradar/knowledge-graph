@@ -72,6 +72,7 @@ schema document_passage {
 
         field concepts type array<concept> {
             indexing: summary
+            summary:  matched-elements-only
 
             struct-field name {
                 indexing: attribute
