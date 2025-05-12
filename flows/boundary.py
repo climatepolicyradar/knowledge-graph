@@ -1229,6 +1229,13 @@ async def run_partial_updates_of_concepts_for_document_passages(
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
         async for passage_batch in passages_generator:
             text_blocks.update(passage_batch)
+            logger.info(
+                "No. of text blocks in text blocks dict: %s", len(text_blocks.keys())
+            )
+        logger.info(
+            "Finished getting document passages from Vespa, total number of text blocks: %s",
+            len(text_blocks.keys()),
+        )
 
     # Batch updates (writes)
     failures: list[VespaResponse] = []
@@ -1258,9 +1265,11 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
         return {"id": data_id, "fields": {"concepts": serialised_concepts}}
 
+    logger.info("Beginning creation of DataPoints.")
     data: Iterable[dict[str, Any]] = list(
         map(lambda x: dict(_to_data(*x)), grouped_concepts.items())
     )
+    logger.info("Finished creation of DataPoints.")
 
     # Wrap the callback with the appropriate state and make it match
     # the expected signature.
