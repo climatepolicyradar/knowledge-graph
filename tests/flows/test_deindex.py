@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 from collections import Counter
 from collections.abc import Callable
@@ -1447,7 +1446,6 @@ def test_remove_feed_result_callback():
             grouped_concepts=grouped_concepts,
             response=response,
             data_id=data_id,
-            logger=logging.getLogger("test"),
         )
         is None
     )
@@ -1493,7 +1491,6 @@ def test_remove_feed_result_callback_not_successful_response():
             grouped_concepts=grouped_concepts,
             response=response,
             data_id=data_id,
-            logger=logging.getLogger("test"),
         )
         is None
     )
