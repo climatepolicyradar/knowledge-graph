@@ -3,14 +3,14 @@ from collections import defaultdict
 from pathlib import Path
 
 import typer
-import wandb
 import yaml  # type: ignore
 from dotenv import load_dotenv
 from rich.console import Console
-from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
+import wandb
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.identifiers import WikibaseID
+from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
 load_dotenv()
 
@@ -98,7 +98,8 @@ def model_artifact_is_primary(aliases: list[str], aws_env: AwsEnv) -> bool:
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
     # Have stable ordering. First, the name is gotten from
     # `Q000:v0`, and then the number part is gotten from `Q000`.
-    return sorted(specs, key=lambda x: x.name)
+    # The end result is to sort on 000, so that Q100 is before Q1000
+    return sorted(specs, key=lambda x: int(x.name.removeprefix("Q")))
 
 
 @app.command()
