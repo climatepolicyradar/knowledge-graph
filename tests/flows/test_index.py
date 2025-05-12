@@ -384,7 +384,7 @@ async def test_index_labelled_passages_from_s3_to_vespa_with_document_ids_with_c
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
+        yql="select * from document_passage where concepts.id contains \"Q\""
     )
     final_concepts_count = sum(
         len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
