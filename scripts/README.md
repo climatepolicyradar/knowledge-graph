@@ -24,13 +24,13 @@ just promote "Q123" --classifier KeywordClassifier --version v3 --within-aws-env
 You can also achieve the above directly with:
 
 ```shell
-just train-promote Q374 sandbox
+just deploy-classifiers sandbox Q374
 ```
 
 Or run a batch sequentially with:
 
 ```shell
-just train-promote-many "Q374 Q473" sandbox
+just deploy-classifiers sandbox "Q374 Q473"
 ```
 
 This is useful when you are already resolved that the trained model will become the new primary.
