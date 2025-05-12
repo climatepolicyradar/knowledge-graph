@@ -162,6 +162,7 @@ def test_sort_specs():
     unsorted_specs = [
         ClassifierSpec(name="Q123", alias="v4"),
         ClassifierSpec(name="Q789", alias="v1"),
+        ClassifierSpec(name="Q1023", alias="v2"),
         ClassifierSpec(name="Q456", alias="v30"),
         ClassifierSpec(name="Q999", alias="v3"),
         ClassifierSpec(name="Q111", alias="v3"),
@@ -173,6 +174,7 @@ def test_sort_specs():
         ClassifierSpec(name="Q456", alias="v30"),
         ClassifierSpec(name="Q789", alias="v1"),
         ClassifierSpec(name="Q999", alias="v3"),
+        ClassifierSpec(name="Q1023", alias="v2"),
     ]
 
 
