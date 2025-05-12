@@ -231,7 +231,7 @@ class ActiveLearningCorpusData(ActiveLearningData):
             counter += 1
             if counter % skip == 0:
                 text = i["text_block.text"]
-                if text is not None and len(text) > 50:
+                if text is not None:
                     passages += self.filter_passages(
                         [
                             Passage(
