@@ -617,7 +617,7 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
     lower_max_hits_limit = None
     for field in root.findall("field"):
         name = field.get("name")
-        if name == "hits":
+        if name == "maxHits":
             lower_max_hits_limit = field.text
             break
 

@@ -11,6 +11,7 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
+from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse
 from vespa.package import Document, Schema
 
@@ -1141,21 +1142,26 @@ async def test_lower_max_hits_query_profile(
         .from_(
             Schema(name="document_passage", document=Document()),
         )
-        # .set_limit(vespa_lower_max_hit_limit)
         .where(True)
     )
 
+    # Confirm that we don't raise below limits
     _: VespaQueryResponse = local_vespa_search_adapter.client.query(
         yql=query,
         queryProfile=vespa_lower_max_hit_limit_query_profile_name,
         hits=hits_within_limit,
     )
 
-    # FIXME: This should raise! Replicating via the cli and the query profile seems to be ignored...
-    # The following did not raise locally.
-    #  vespa query queryPofile=this_doesnt_exist "select * from document_passage where true limit 1"
-    _ = local_vespa_search_adapter.client.query(
-        yql=query,
-        queryProfile=vespa_lower_max_hit_limit_query_profile_name,
-        hits=hits_beyond_limit,
-    )
+    # Confirm that we raise above limits
+    with pytest.raises(VespaError) as excinfo:
+        local_vespa_search_adapter.client.query(
+            yql=query,
+            queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+            hits=hits_beyond_limit,
+        )
+
+    error_info = excinfo.value.args[0][0]
+    assert error_info["code"] == 3
+    assert error_info["summary"] == "Illegal query"
+    assert f"{hits_beyond_limit} hits requested" in error_info["message"]
+    assert "configured limit" in error_info["message"]
