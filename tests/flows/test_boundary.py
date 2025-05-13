@@ -6,10 +6,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
+from vespa.exceptions import VespaError
+from vespa.io import VespaQueryResponse
+from vespa.package import Document, Schema
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -20,11 +24,14 @@ from flows.boundary import (
     Operation,
     TextBlockId,
     convert_labelled_passage_to_concepts,
+    get_continuation_tokens_from_query_response,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
+    get_document_passages_from_vespa__generator,
     get_parent_concepts_from_concept,
     get_text_block_id_from_vespa_data_id,
+    get_vespa_passages_from_query_response,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
     s3_obj_generator,
@@ -1035,3 +1042,127 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
             },
         )
     ]
+
+
+def test_get_continuation_tokens_from_query_response(
+    mock_vespa_query_response: VespaQueryResponse,
+    mock_vespa_query_response_no_continuation_token: VespaQueryResponse,
+) -> None:
+    """Test that we can get the next continuation tokens from a vespa response."""
+
+    continuation_tokens = get_continuation_tokens_from_query_response(
+        mock_vespa_query_response
+    )
+    assert continuation_tokens == ["BGAAABEDBJGBC"]
+
+    continuation_tokens = get_continuation_tokens_from_query_response(
+        mock_vespa_query_response_no_continuation_token
+    )
+    assert continuation_tokens == []
+
+
+def test_get_vespa_passages_from_query_response(
+    mock_vespa_query_response: VespaQueryResponse,
+) -> None:
+    """Test that we can get the passages from a vespa response."""
+
+    passages = get_vespa_passages_from_query_response(mock_vespa_query_response)
+    assert len(passages) == 1
+    assert isinstance(passages[0][0], str)
+    assert isinstance(passages[0][1], VespaPassage)
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_get_document_passages_from_vespa__generator(
+    document_passages_test_data_file_path: str,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    vespa_lower_max_hit_limit: int,
+    vespa_lower_max_hit_limit_query_profile_name: str,
+):
+    """Test that we can successfully utilise pagination with continuation tokens."""
+
+    grouping_max = 10
+    document_import_id = "CCLW.executive.10014.4470"
+
+    with open(document_passages_test_data_file_path) as f:
+        document_passage_test_data = json.load(f)
+
+    document_passages_count = len(
+        [
+            i["fields"]["family_document_ref"]
+            for i in document_passage_test_data
+            if document_import_id in i["fields"]["family_document_ref"]
+        ]
+    )
+
+    assert document_passages_count > vespa_lower_max_hit_limit, (
+        "the fixture has insufficient document passages to validate the test case"
+    )
+
+    vespa_passage_generator = get_document_passages_from_vespa__generator(
+        document_import_id=document_import_id,
+        vespa_search_adapter=local_vespa_search_adapter,
+        continuation_tokens=["BKAAAAABKBGA"],
+        grouping_max=grouping_max,
+        query_profile=vespa_lower_max_hit_limit_query_profile_name,
+    )
+
+    response = list(vespa_passage_generator)
+
+    assert len(response) > 1  # Validate that we did paginate
+    for vespa_passages in vespa_passage_generator:
+        assert isinstance(vespa_passages, list)
+        assert 0 <= len(vespa_passages) <= grouping_max
+        for passage in vespa_passages:
+            assert isinstance(passage[0], str)
+            assert isinstance(passage[1], VespaPassage)
+
+    assert (
+        sum(len(vespa_passages) for vespa_passages in response)
+        == document_passages_count
+    )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_lower_max_hits_query_profile(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_lower_max_hit_limit: int,
+    vespa_lower_max_hit_limit_query_profile_name: str,
+) -> None:
+    """Test that we can successfully use the lower_max_hits query profile."""
+
+    hits_within_limit = int(vespa_lower_max_hit_limit / 2)
+    hits_beyond_limit = int(vespa_lower_max_hit_limit * 2)
+
+    query: qb.Query = (
+        qb.select("*")  # type: ignore
+        .from_(
+            Schema(name="document_passage", document=Document()),
+        )
+        .where(True)
+    )
+
+    # Confirm that we don't raise below limits
+    _: VespaQueryResponse = local_vespa_search_adapter.client.query(
+        yql=query,
+        queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+        hits=hits_within_limit,
+    )
+
+    # Confirm that we raise above limits
+    with pytest.raises(VespaError) as excinfo:
+        local_vespa_search_adapter.client.query(
+            yql=query,
+            queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+            hits=hits_beyond_limit,
+        )
+
+    error_info = excinfo.value.args[0][0]
+    assert error_info["code"] == 3
+    assert error_info["summary"] == "Illegal query"
+    assert f"{hits_beyond_limit} hits requested" in error_info["message"]
+    assert "configured limit" in error_info["message"]

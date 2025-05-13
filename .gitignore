@@ -179,3 +179,6 @@ scratch/
 *.DS_Store
 tests/local_wikibase/config/*
 !tests/local_wikibase/config/.gitkeep
+
+# The query profile location once copied into the application package
+tests/local_vespa/test_app/search/query-profiles/lower_max_hits.xml

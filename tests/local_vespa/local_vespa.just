@@ -40,9 +40,14 @@ vespa_delete_data:
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/family_document/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/document_passage/docid?selection=true&cluster=family-document-passage"
 
+
+copy_query_profiles_to_appn_pkg:
+	cp -r tests/local_vespa/additional_query_profiles/* tests/local_vespa/test_app/search/query-profiles/
+
 # Set up a local instance of vespa
 vespa_dev_setup:
     just vespa_confirm_cli_installed
+    just copy_query_profiles_to_appn_pkg
     just vespa_dev_start
     just vespa_healthy
     just vespa_deploy_schema

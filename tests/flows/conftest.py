@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
@@ -25,6 +26,7 @@ from prefect import Flow, State
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
+from vespa.io import VespaQueryResponse
 
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -127,7 +129,7 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
     yield app  # This is where the test function will be executed
@@ -552,3 +554,73 @@ def mock_bucket_concepts_counts(
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
+
+
+def mock_grouped_text_block_vespa_query_response_json() -> dict:
+    """Mock Vespa query response JSON"""
+
+    with open(
+        "tests/flows/fixtures/query_responses/grouped_text_block_by_family_document_ref.json"
+    ) as f:
+        data = json.load(f)
+
+    return data
+
+
+@pytest.fixture
+def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryResponse:
+    """Mock Vespa query response"""
+
+    return VespaQueryResponse(
+        json=mock_grouped_text_block_vespa_query_response_json(),
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+
+@pytest.fixture
+def mock_vespa_query_response_no_continuation_token(
+    mock_vespa_credentials: dict,
+) -> VespaQueryResponse:
+    """Mock Vespa query response with no hits"""
+
+    json_data = mock_grouped_text_block_vespa_query_response_json()
+    json_data["root"]["children"][0]["children"][0]["continuation"] = {
+        "prev": "BGAAABEBCBC"
+    }
+
+    return VespaQueryResponse(
+        json=json_data,
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit_query_profile_name() -> str:
+    """The name of the query profile to use for the lower max hits limit."""
+    return "lower_max_hits"
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str) -> int:
+    """Mock Vespa max hit limit"""
+
+    tree = ET.parse(
+        "tests/local_vespa/additional_query_profiles/"
+        f"{vespa_lower_max_hit_limit_query_profile_name}.xml"
+    )
+    root = tree.getroot()
+
+    lower_max_hits_limit = None
+    for field in root.findall("field"):
+        name = field.get("name")
+        if name == "maxHits":
+            lower_max_hits_limit = field.text
+            break
+
+    if not lower_max_hits_limit:
+        raise ValueError("Lower max hits limit not found in XML file.")
+    return int(lower_max_hits_limit)

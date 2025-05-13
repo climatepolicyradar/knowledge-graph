@@ -35,6 +35,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
+from cpr_sdk.utils import dig
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
@@ -43,6 +44,7 @@ from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
+from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
     SlackNotify,
@@ -98,6 +100,8 @@ DocumentObjectUri: TypeAlias = str
 DocumentStem: TypeAlias = str
 # Passed to a self-sufficient flow run
 DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
+# A continuation token used by vespa to enable pagination over query results
+ContinuationToken: TypeAlias = str
 
 
 class S3Accessor(BaseModel):
@@ -571,6 +575,113 @@ def get_document_passage_from_vespa(
     passage = VespaPassage.model_validate(hit["fields"])
 
     return passage_id, passage
+
+
+def get_continuation_tokens_from_query_response(
+    vespa_query_response: VespaQueryResponse,
+) -> list[ContinuationToken]:
+    """
+    Retrieve continuation tokens from the query response if it exists.
+
+    Continuation tokens can occur at the top level, e.g. under `"children"`, or deeper
+    within the nested structure. We take the continuation tokens deeper in the nested
+    structure that exist for each of the hits in the group.
+    """
+
+    continuation_tokens = []
+
+    vespa_query_response_root = vespa_query_response.json["root"]
+    group_hits = dig(vespa_query_response_root, "children", 0, "children", default=[])
+    for hit in group_hits:
+        hit_continuation_token = dig(hit, "continuation", "next", default=None)
+        if hit_continuation_token:
+            continuation_tokens.append(hit_continuation_token)
+    return continuation_tokens
+
+
+def get_vespa_passages_from_query_response(
+    vespa_query_response: VespaQueryResponse,
+) -> list[tuple[VespaHitId, VespaPassage]]:
+    """Retrieve the passages from the query response."""
+
+    vespa_query_response_root = vespa_query_response.json["root"]
+    passages_root = dig(
+        vespa_query_response_root, "children", 0, "children", 0, "children", default=[]
+    )
+    passage_hits = [
+        dig(passage_root, "children", 0, "children", 0)
+        for passage_root in passages_root
+    ]
+    vespa_passages: list[tuple[str, VespaPassage]] = [
+        (passage["id"], VespaPassage.model_validate(passage["fields"]))
+        for passage in passage_hits
+    ]
+
+    return vespa_passages
+
+
+def get_document_passages_from_vespa__generator(
+    document_import_id: DocumentImportId,
+    vespa_search_adapter: VespaSearchAdapter,
+    continuation_tokens: list[str],
+    grouping_max: int = 10,
+    query_profile: str = "default",
+) -> Generator[list[tuple[VespaHitId, VespaPassage]], None, None]:
+    """
+    A generator of vespa passages using continuation tokens to paginate.
+
+    Continuation tokens are opaque objects that are used to move through the grouping
+    step of a query to facilitate pagination over results.
+    - https://docs.vespa.ai/en/reference/grouping-syntax.html?mode=cloud#continuations
+
+    params:
+    - document_import_id: The import id to filter on passages in vespa with.
+    - vespa_connection_pool: The vespa connection pool to use as the query client.
+    - continuation_tokens: The tokens used to paginate over the vespa hits.
+    - grouping_max: The maximum amount of grouping subquery hits to return at once.
+    - query_profile: The query profile to use for the query. This is defined in the
+        search/query-profiles/ subdirectory of the application package for vespa.
+    """
+
+    conditions = qb.QueryField("document_import_id").contains(document_import_id)
+
+    # Group the results of the select query by text_block_id in to groups of
+    # grouping_max size. For each of the results in the group we output the summary of
+    # the passage in vespa.
+    # - https://docs.vespa.ai/en/grouping.html?mode=cloud
+    grouping = G.all(
+        G.group("text_block_id"),
+        G.max(grouping_max),
+        G.each(G.each(G.output(G.summary()))),
+    )
+
+    while continuation_tokens:
+        query: qb.Query = (
+            qb.select("*")  # type: ignore
+            .from_(
+                Schema(name="document_passage", document=Document()),
+            )
+            .where(conditions)
+            .set_limit(0)
+            .groupby(grouping, continuations=continuation_tokens)
+        )
+
+        vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
+            yql=query,
+            queryProfile=query_profile,
+        )
+
+        if not vespa_query_response.is_successful():
+            raise QueryError(vespa_query_response.get_status_code())
+
+        vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
+
+        if vespa_passages:
+            yield vespa_passages
+
+        continuation_tokens = get_continuation_tokens_from_query_response(
+            vespa_query_response
+        )
 
 
 @vespa_retry()
