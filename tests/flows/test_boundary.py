@@ -1071,10 +1071,12 @@ def test_get_vespa_passages_from_query_response(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
+@pytest.mark.lower_max_hits_vespa
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
     local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
+    vespa_app_with_lower_max_hits,
+    vespa_lower_max_hit_limit: int,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
 
@@ -1092,10 +1094,9 @@ async def test_get_document_passages_from_vespa__generator(
         ]
     )
 
-    # FIXME: Add this in once we can configure the max hits at test time or add a
-    # document with greater than 50_000 hits.
-    # assert document_passages_count > boundary.VESPA_MAX_LIMIT, "the fixture has
-    # insufficient document passages to validate the test case"
+    assert document_passages_count > vespa_lower_max_hit_limit, (
+        "the fixture has insufficient document passages to validate the test case"
+    )
 
     vespa_passage_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_import_id,
