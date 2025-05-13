@@ -37,6 +37,7 @@ awscli = "^1.37.24"
 prefect = {extras = ["slack"], version = "^3.3.1"}
 pydantic-ai = "^0.0.53"
 httpx = "^0.28.1"
+tenacity = "^9.1.2"
 
 [tool.poetry.group.transformers]
 optional = true
