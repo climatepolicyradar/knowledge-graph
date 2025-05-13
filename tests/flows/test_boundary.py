@@ -1075,7 +1075,7 @@ def test_get_vespa_passages_from_query_response(
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
     local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app_with_lower_max_hits,
+    vespa_app,
     vespa_lower_max_hit_limit: int,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""

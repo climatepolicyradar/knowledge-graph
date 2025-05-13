@@ -128,7 +128,7 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
     yield app  # This is where the test function will be executed
@@ -137,72 +137,6 @@ def vespa_app(
     print("\nTearing down Vespa connection...")
     subprocess.run(
         ["just", "vespa_delete_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-
-@pytest.fixture(scope="function")
-def vespa_app_with_lower_max_hits(
-    mock_vespa_credentials,
-):
-    """
-    For the duration of the test using this fixture change the max hits.
-
-    We bring down the existing vespa instance, change the max hits in the default.xml
-    file and bring it back up with the new configuration. We then revert the change and
-    restore the original state for further tests.
-
-    This is useful for testing max hits in the query response.
-    """
-    # Connection
-    print("\nSetting up Vespa connection...")
-    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
-
-    subprocess.run(
-        ["just", "vespa_dev_down"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-    # TODO: Update the default.xml file in the local vespa
-
-    subprocess.run(
-        ["just", "vespa_dev_start"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-    subprocess.run(
-        ["just", "vespa_feed_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-    yield app  # This is where the test function will be executed
-
-    # Teardown
-    print("\nTearing down Vespa connection...")
-    subprocess.run(
-        ["just", "vespa_delete_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-    # TODO: Revert the default.xml file in the local vespa
-
-    subprocess.run(
-        ["just", "vespa_dev_start"],
         capture_output=True,
         text=True,
         check=True,
@@ -661,3 +595,9 @@ def mock_vespa_query_response_no_continuation_token(
         url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         request_body={},
     )
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit() -> int:
+    """Mock Vespa max hit limit"""
+    return 1500

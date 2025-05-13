@@ -632,7 +632,9 @@ def get_document_passages_from_vespa__generator(
         )
 
         vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
-            yql=query
+            yql=query,
+            queryProfile="lower_max_hits",
+            hits=1000,  # This has to be lower than the max hits, believe it defaults to 5000
         )
 
         if not vespa_query_response.is_successful():

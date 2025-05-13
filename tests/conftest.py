@@ -19,7 +19,7 @@ from src.wikibase import WikibaseSession
 
 @pytest.fixture(autouse=True, scope="session")
 def prefect_test_fixture():
-    with prefect_test_harness():
+    with prefect_test_harness(server_startup_timeout=120):
         with disable_run_logger():
             yield
 
