@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
@@ -600,4 +601,17 @@ def mock_vespa_query_response_no_continuation_token(
 @pytest.fixture
 def vespa_lower_max_hit_limit() -> int:
     """Mock Vespa max hit limit"""
-    return 1500
+
+    tree = ET.parse("tests/local_vespa/additional_query_profiles/lower_max_hits.xml")
+    root = tree.getroot()
+
+    lower_max_hits_limit = None
+    for field in root.findall("field"):
+        name = field.get("name")
+        if name == "hits":
+            lower_max_hits_limit = field.text
+            break
+
+    if not lower_max_hits_limit:
+        raise ValueError("Lower max hits limit not found in XML file.")
+    return int(lower_max_hits_limit)
