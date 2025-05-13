@@ -43,9 +43,9 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 # The "parent" AKA the higher level flows that do multiple things
-PARENT_TIMEOUT_S: int = int(timedelta(hours=5).total_seconds())
+PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
 # A singular task doing one thing
-TASK_TIMEOUT_S: int = int(timedelta(minutes=20).total_seconds())
+TASK_TIMEOUT_S: int = int(timedelta(minutes=60).total_seconds())
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -345,12 +345,58 @@ def store_labels(
     )
 
 
+def batch_text_block_inference(
+    classifier: Classifier,
+    all_text: list[str],
+    all_block_ids: list[str],
+    batch_size: int = 10,
+) -> list[LabelledPassage]:
+    """Runs inference and batches the text blocks"""
+
+    outputs = []
+    for batch_idx in range(0, len(all_text), batch_size):
+        text_batch = all_text[batch_idx : batch_idx + batch_size]
+        block_ids = all_block_ids[batch_idx : batch_idx + batch_size]
+
+        outputs.extend(
+            _text_block_inference_for_single_batch(
+                classifier=classifier, text_batch=text_batch, block_ids=block_ids
+            )
+        )
+    return outputs
+
+
+def _text_block_inference_for_single_batch(
+    classifier: Classifier, text_batch: list[str], block_ids: list[str]
+) -> list[LabelledPassage]:
+    """Runs predict on a batch of blocks."""
+    spans: list[list[Span]] = classifier.predict_batch(text_batch)
+
+    labelled_passages = [
+        _get_labelled_passage_from_prediction(classifier, spans, block_id, text)
+        for spans, block_id, text in zip(spans, block_ids, text_batch)
+    ]
+
+    return labelled_passages
+
+
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
 
+    labelled_passage = _get_labelled_passage_from_prediction(
+        classifier, spans, block_id, text
+    )
+
+    return labelled_passage
+
+
+def _get_labelled_passage_from_prediction(
+    classifier: Classifier, spans: list[Span], block_id: str, text: str
+) -> LabelledPassage:
+    """Creates the LabelledPassage from the list of spans output by the classifier"""
     # If there were no inference results, don't include the concept
     if not spans:
         metadata = {}
@@ -365,14 +411,12 @@ def text_block_inference(
 
         metadata = {"concept": concept}
 
-    labelled_passage = LabelledPassage(
+    return LabelledPassage(
         id=block_id,
         text=text,
         spans=spans,
         metadata=metadata,
     )
-
-    return labelled_passage
 
 
 def _name_document_run_identifiers_set(

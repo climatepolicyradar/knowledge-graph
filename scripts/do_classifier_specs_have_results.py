@@ -1,20 +1,111 @@
+import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 import boto3
 import typer
 import yaml
 from botocore.exceptions import ClientError
 
+from scripts.cloud import AwsEnv
+from scripts.config import data_dir
+
 app = typer.Typer()
+
+BASE_PREFIX = os.getenv("LABELLED_PASSAGES_PREFIX", "labelled_passages")
+YAML_FILES_MAP = {
+    "prod": "flows/classifier_specs/prod.yaml",
+    "staging": "flows/classifier_specs/staging.yaml",
+    "sandbox": "flows/classifier_specs/sandbox.yaml",
+    "labs": "flows/classifier_specs/labs.yaml",
+}
+INFERENCE_RESULTS_AUDIT_DIR = data_dir / "audit" / "inference_results"
+
+
+@dataclass
+class Result:
+    """Result of checking a single classifier spec"""
+
+    path_exists: bool = False
+    classifier_spec: str = ""
+    file_names: list[str] = field(default_factory=list)
+
+
+def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
+    """Collect the names of all files under a given prefix in an s3 bucket."""
+
+    s3 = boto3.client("s3")
+    paginator = s3.get_paginator("list_objects_v2")
+    file_names = []
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        if "Contents" in page:
+            file_names.extend(
+                [obj["Key"].removeprefix(f"{prefix}/") for obj in page["Contents"]]
+            )
+    return file_names
+
+
+def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
+    """Check inference output for a single classifier_spec."""
+    classifier_model, classifier_alias = classifier_spec.split(":")
+    prefix = os.path.join(BASE_PREFIX, classifier_model, classifier_alias)
+    try:
+        file_names = collect_file_names(bucket_name, prefix)
+    except ClientError as e:
+        print(f"Error checking results for {classifier_spec}: {e}")
+        return Result(path_exists=False, classifier_spec=classifier_spec)
+
+    if file_names:
+        print(f"✅ Results for {classifier_spec}: {len(file_names)} objects")
+        return Result(
+            path_exists=True, classifier_spec=classifier_spec, file_names=file_names
+        )
+    else:
+        print(f"❌ No results for {classifier_spec}")
+        return Result(path_exists=False, classifier_spec=classifier_spec, file_names=[])
+
+
+def write_result(
+    result: Result,
+    start_time: str,
+    parent_dir: Path = INFERENCE_RESULTS_AUDIT_DIR,
+    aws_env: AwsEnv = AwsEnv.sandbox,
+) -> Path:
+    """Write the file names for a given classifier spec to the audit directory."""
+    dir_path = parent_dir / aws_env.value / start_time
+    if not dir_path.exists():
+        dir_path.mkdir(parents=True)
+
+    path = dir_path / f"{result.classifier_spec}.json"
+    with open(path, "w") as f:
+        json.dump(result.file_names, f)
+
+    return path
 
 
 @app.command()
 def check_classifier_specs(
-    yaml_path: str = typer.Argument(
-        help="Path to the YAML file containing classifier specifications"
+    aws_env: AwsEnv = typer.Argument(
+        help="Which aws environment to look for results in. Determines which spec file"
+        "to use",
+        default=AwsEnv.sandbox,
     ),
-    labelled_passages_s3_path: str = typer.Argument(
-        help="S3 path where labelled passages should be stored"
+    bucket_name: str = typer.Argument(
+        help=(
+            "Name of the s3 bucket, should be the root without protocol or prefix"
+            "i.e. my-bucket-name"
+        )
+    ),
+    max_workers: int = typer.Option(
+        default=10,
+        help="Maximum number of parallel workers to use for checking specs",
+    ),
+    write_file_names: bool = typer.Option(
+        default=False,
+        help="Whether to write the file names to a file in the audit directory",
     ),
 ) -> None:
     """
@@ -26,46 +117,26 @@ def check_classifier_specs(
 
     This can be used to help us validate that inference has run correctly.
     """
-    with open(yaml_path, "r") as file:
+    start_time = datetime.now().isoformat()
+    typer.echo(f"Checking {aws_env} classifier specs in {bucket_name}/{BASE_PREFIX}")
+    with open(YAML_FILES_MAP[aws_env], "r") as file:
         data = yaml.safe_load(file)
 
-    s3 = boto3.client("s3")
-
     to_process = []
-    for classifier_spec in data:
-        classifier_model, classifier_alias = classifier_spec.split(":")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_spec = {
+            executor.submit(check_single_spec, bucket_name, spec): spec for spec in data
+        }
 
-        # Use os.path.join for path construction
-        s3_path = os.path.join(
-            labelled_passages_s3_path, classifier_model, classifier_alias
-        )
+        for future in as_completed(future_to_spec):
+            result = future.result()
+            if write_file_names:
+                write_result(result, start_time, INFERENCE_RESULTS_AUDIT_DIR, aws_env)
 
-        # Parse the S3 URI to get bucket and prefix
-        bucket_name = s3_path.split("/")[2]
-        prefix = "/".join(s3_path.split("/")[3:])
+            if not result.path_exists:
+                to_process.append(result.classifier_spec)
 
-        try:
-            # List objects with the given prefix to see if path exists
-            # Check if path exists and count objects with pagination
-            paginator = s3.get_paginator("list_objects_v2")
-            total_objects = 0
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-                if "Contents" in page:
-                    total_objects += len(page["Contents"])
-
-            response = {"Contents": []} if total_objects > 0 else {}
-            if total_objects > 0:
-                print(
-                    f"✅ S3 path exists: {s3_path} (contains {total_objects} objects)"
-                )
-
-            if "Contents" not in response:
-                print(f"❌ S3 path does not exist: {s3_path}")
-                to_process.append(f"{classifier_model}:{classifier_alias}")
-        except ClientError as e:
-            print(f"Error checking S3 path {s3_path}: {e}")
-
-    print(f"to_process: {to_process}")
+    typer.echo(f"to_process: {to_process}")
 
 
 if __name__ == "__main__":

@@ -12,11 +12,25 @@ First we run the training scripts. This will increment the version of the classi
 _Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires s3 access._
 
 ```shell
-just train "Q123" --track --upload --aws-env prod
+just train "Q123" --track --upload --aws-env sandbox
 ```
 
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier KeywordClassifier --version v3 --within-aws-env prod --primary
+just promote "Q123" --classifier KeywordClassifier --version v3 --within-aws-env sandbox --primary
 ```
+
+You can also achieve the above directly with:
+
+```shell
+just deploy-classifiers sandbox Q374
+```
+
+Or run a batch sequentially with:
+
+```shell
+just deploy-classifiers sandbox "Q374 Q473"
+```
+
+This is useful when you are already resolved that the trained model will become the new primary.

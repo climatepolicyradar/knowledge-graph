@@ -1,4 +1,4 @@
-FROM prefecthq/prefect:2.20.7-python3.10
+FROM prefecthq/prefect:3.3.7-python3.10
 
 RUN pip install --upgrade pip
 RUN pip install "poetry==1.8.3"
