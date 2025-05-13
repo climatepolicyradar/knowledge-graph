@@ -28,6 +28,7 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.inference import Config as InferenceConfig
+from flows.utils import DocumentImportId
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
 from src.concept import Concept
@@ -128,7 +129,7 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
     yield app  # This is where the test function will be executed
@@ -140,7 +141,103 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
+    )
+
+
+@pytest.fixture(scope="function")
+def extra_document_passages_file_path(
+    document_passages_test_data_file_path: str,
+) -> str:
+    """Returns the path to the extra document passages test data file."""
+    return os.path.join(
+        os.path.dirname(document_passages_test_data_file_path),
+        "extra_document_passages.json",
+    )
+
+
+@pytest.fixture(scope="function")
+def example_document_passage(
+    document_passages_test_data_file_path: str,
+) -> dict[str, Any]:
+    """Returns an example document passage test fixture."""
+    with open(document_passages_test_data_file_path) as f:
+        return json.load(f)[0]
+
+
+@pytest.fixture
+def document_import_id_with_extra_passages() -> DocumentImportId:
+    """Returns the import id of the first document passage."""
+    return DocumentImportId("CCLW.executive.10014.4470")
+
+
+@pytest.fixture(scope="function")
+def vespa_app_with_large_docs(
+    mock_vespa_credentials,
+    document_passages_test_data_file_path: str,
+    extra_document_passages_file_path: str,
+    example_document_passage: dict[str, Any],
+    document_import_id_with_extra_passages: DocumentImportId,
+):
+    """Load the vespa app with a document with more than 50,000 hits."""
+
+    # Connection
+    print("\nSetting up Vespa connection...")
+    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
+
+    print("\nCreating extra document passages...")
+    all_document_passages = []
+    for i in range(30):  # 30 * 2000 = 60_000
+        extra_document_passages = []
+        for j in range(2000):
+            example_document_passage["id"] = (
+                f"id:doc_search:document_passage::{document_import_id_with_extra_passages}.{i}_{j}_large_doc"
+            )
+            example_document_passage["fields"]["text_block_id"] = f"{i}_{j}_large_doc"
+            extra_document_passages.append(example_document_passage)
+
+        print("\nWriting extra document passages to file...")
+        with open(extra_document_passages_file_path, "w") as f:
+            f.write(json.dumps(extra_document_passages))
+
+        print("\nLoading extra document passages into vespa...")
+        subprocess.run(
+            ["vespa", "config", "set", "target", "local"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        subprocess.run(
+            [
+                "vespa",
+                "feed",
+                extra_document_passages_file_path,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=3600,  # Seconds
+        )
+
+        print("\nCleaning up extra passages file...")
+        os.remove(extra_document_passages_file_path)
+
+        all_document_passages.extend(extra_document_passages)
+
+    print("\nWriting all document passages to local file...")
+    with open(document_passages_test_data_file_path, "w") as f:
+        f.write(json.dumps(all_document_passages))
+
+    yield app  # This is where the test function will be executed
+
+    # Teardown
+    print("\nTearing down Vespa connection...")
+    subprocess.run(
+        ["just", "vespa_delete_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=600,  # Seconds
     )
 
 

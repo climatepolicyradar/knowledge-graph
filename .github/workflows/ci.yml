@@ -2,8 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
+    # Temp change so we run on stacked PR's
+    # branches:
+    #   - main
   push:
     branches:
       - main

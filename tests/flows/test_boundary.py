@@ -17,6 +17,7 @@ from flows.boundary import (
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
     TextBlockId,
@@ -1071,15 +1072,16 @@ def test_get_vespa_passages_from_query_response(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
+@pytest.mark.long_running
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
     local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
+    vespa_app_with_large_docs,
+    document_import_id_with_extra_passages: DocumentImportId,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
 
     grouping_max = 10
-    document_import_id = "CCLW.executive.10014.4470"
 
     with open(document_passages_test_data_file_path) as f:
         document_passage_test_data = json.load(f)
@@ -1088,17 +1090,17 @@ async def test_get_document_passages_from_vespa__generator(
         [
             i["fields"]["family_document_ref"]
             for i in document_passage_test_data
-            if document_import_id in i["fields"]["family_document_ref"]
+            if document_import_id_with_extra_passages
+            in i["fields"]["family_document_ref"]
         ]
     )
 
-    # FIXME: Add this in once we can configure the max hits at test time or add a
-    # document with greater than 50_000 hits.
-    # assert document_passages_count > boundary.VESPA_MAX_LIMIT, "the fixture has
-    # insufficient document passages to validate the test case"
+    assert document_passages_count > VESPA_MAX_LIMIT, (
+        "the fixture has insufficient document passages to validate the test case"
+    )
 
     vespa_passage_generator = get_document_passages_from_vespa__generator(
-        document_import_id=document_import_id,
+        document_import_id=document_import_id_with_extra_passages,
         vespa_search_adapter=local_vespa_search_adapter,
         continuation_tokens=["BKAAAAABKBGA"],
         grouping_max=grouping_max,
