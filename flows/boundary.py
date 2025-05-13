@@ -659,7 +659,7 @@ async def get_document_passages_from_vespa__generator(
         G.each(G.each(G.output(G.summary()))),
     )
 
-    tokens = [] if continuation_tokens is None else continuation_tokens
+    tokens = continuation_tokens or []
 
     while tokens is not None:
         query: qb.Query = (
