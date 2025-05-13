@@ -19,3 +19,10 @@ If you'd rather avoid this you can also run pytest without vespa using the follo
 ```shell
 just test-without-vespa
 ```
+
+
+## Additional Query Profiles
+
+The `additional_query_profiles` subdirectory contains query profiles that are copied into the local vespa instance's application package for the duration of the tests as we need additional ones to facilitate unit testing.
+
+This is done at test time as we automatically update the application package under the `test_app` directory should there be any changes to the application package in the `infra` repo in github. 

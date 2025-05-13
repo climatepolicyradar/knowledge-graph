@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import xml.etree.ElementTree as ET
 from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
@@ -128,7 +129,7 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
     yield app  # This is where the test function will be executed
@@ -595,3 +596,31 @@ def mock_vespa_query_response_no_continuation_token(
         url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         request_body={},
     )
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit_query_profile_name() -> str:
+    """The name of the query profile to use for the lower max hits limit."""
+    return "lower_max_hits"
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str) -> int:
+    """Mock Vespa max hit limit"""
+
+    tree = ET.parse(
+        "tests/local_vespa/additional_query_profiles/"
+        f"{vespa_lower_max_hit_limit_query_profile_name}.xml"
+    )
+    root = tree.getroot()
+
+    lower_max_hits_limit = None
+    for field in root.findall("field"):
+        name = field.get("name")
+        if name == "maxHits":
+            lower_max_hits_limit = field.text
+            break
+
+    if not lower_max_hits_limit:
+        raise ValueError("Lower max hits limit not found in XML file.")
+    return int(lower_max_hits_limit)
