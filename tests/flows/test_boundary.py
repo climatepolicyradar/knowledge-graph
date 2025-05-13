@@ -1079,6 +1079,7 @@ async def test_get_document_passages_from_vespa__generator(
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
     vespa_lower_max_hit_limit: int,
+    vespa_lower_max_hit_limit_query_profile_name: str,
 ):
     """Test that we can successfully utilise pagination with continuation tokens."""
 
@@ -1105,7 +1106,7 @@ async def test_get_document_passages_from_vespa__generator(
         vespa_search_adapter=local_vespa_search_adapter,
         continuation_tokens=["BKAAAAABKBGA"],
         grouping_max=grouping_max,
-        query_profile="lower_max_hits",
+        query_profile=vespa_lower_max_hit_limit_query_profile_name,
     )
 
     response = list(vespa_passage_generator)
