@@ -141,7 +141,7 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
 
