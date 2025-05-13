@@ -599,10 +599,19 @@ def mock_vespa_query_response_no_continuation_token(
 
 
 @pytest.fixture
-def vespa_lower_max_hit_limit() -> int:
+def vespa_lower_max_hit_limit_query_profile_name() -> str:
+    """The name of the query profile to use for the lower max hits limit."""
+    return "lower_max_hits"
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str) -> int:
     """Mock Vespa max hit limit"""
 
-    tree = ET.parse("tests/local_vespa/additional_query_profiles/lower_max_hits.xml")
+    tree = ET.parse(
+        "tests/local_vespa/additional_query_profiles/"
+        f"{vespa_lower_max_hit_limit_query_profile_name}.xml"
+    )
     root = tree.getroot()
 
     lower_max_hits_limit = None

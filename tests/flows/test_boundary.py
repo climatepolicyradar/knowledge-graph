@@ -6,11 +6,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
 from vespa.io import VespaQueryResponse
+from vespa.package import Document, Schema
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -1071,7 +1073,6 @@ def test_get_vespa_passages_from_query_response(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-@pytest.mark.lower_max_hits_vespa
 async def test_get_document_passages_from_vespa__generator(
     document_passages_test_data_file_path: str,
     local_vespa_search_adapter: VespaSearchAdapter,
@@ -1119,4 +1120,42 @@ async def test_get_document_passages_from_vespa__generator(
     assert (
         sum(len(vespa_passages) for vespa_passages in response)
         == document_passages_count
+    )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_lower_max_hits_query_profile(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_lower_max_hit_limit: int,
+    vespa_lower_max_hit_limit_query_profile_name: str,
+) -> None:
+    """Test that we can successfully use the lower_max_hits query profile."""
+
+    hits_within_limit = int(vespa_lower_max_hit_limit / 2)
+    hits_beyond_limit = int(vespa_lower_max_hit_limit * 2)
+
+    query: qb.Query = (
+        qb.select("*")  # type: ignore
+        .from_(
+            Schema(name="document_passage", document=Document()),
+        )
+        # .set_limit(vespa_lower_max_hit_limit)
+        .where(True)
+    )
+
+    _: VespaQueryResponse = local_vespa_search_adapter.client.query(
+        yql=query,
+        queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+        hits=hits_within_limit,
+    )
+
+    # FIXME: This should raise! Replicating via the cli and the query profile seems to be ignored...
+    # The following did not raise locally.
+    #  vespa query queryPofile=this_doesnt_exist "select * from document_passage where true limit 1"
+    _ = local_vespa_search_adapter.client.query(
+        yql=query,
+        queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+        hits=hits_beyond_limit,
     )
