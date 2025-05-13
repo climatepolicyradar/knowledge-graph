@@ -510,7 +510,7 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
-@flow(timeout_seconds=TASK_TIMEOUT_S)
+@flow()
 async def run_classifier_inference_on_batch_of_documents(
     batch: list[str],
     config_json: dict,
@@ -589,7 +589,6 @@ async def run_classifier_inference_on_batch_of_documents(
     task_runner=ConcurrentTaskRunner(),
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
-    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def classifier_inference(
     classifier_specs: Optional[list[ClassifierSpec]] = None,
