@@ -495,7 +495,35 @@ from src.classifier.pooler import ClassifierPooler
                     text="testte",
                     start_index=0,
                     end_index=6,
-                    confidence=0.4 / 3,
+                    confidence=0.2666,
+                    concept_id="Q123",
+                )
+            ],
+        ),
+        (
+            3,
+            [
+                Span(
+                    text="testtesttest",
+                    start_index=0,
+                    end_index=6,
+                    confidence=0.9,
+                    concept_id="Q123",
+                ),
+                Span(
+                    text="testtesttest",
+                    start_index=5,
+                    end_index=10,
+                    confidence=0.9,
+                    concept_id="Q123",
+                ),
+            ],
+            [
+                Span(
+                    text="testtesttest",
+                    start_index=0,
+                    end_index=10,
+                    confidence=0.33,
                     concept_id="Q123",
                 )
             ],
@@ -523,4 +551,6 @@ def test_classifier_pooler_aggregation(
     for resulting_span in resulting_spans:
         for output_span in output_spans:
             if resulting_span == output_span:
-                assert resulting_span.confidence == output_span.confidence
+                assert resulting_span.confidence == pytest.approx(
+                    output_span.confidence, 0.001
+                )

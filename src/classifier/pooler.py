@@ -45,6 +45,68 @@ class ClassifierPooler:
         """
         return span1 == span2 and span1.labellers == span2.labellers
 
+    def _aggregate_two_overlapping_span_confidence(
+        self, spans: list[Span], n_classifiers: int
+    ) -> float:
+        """
+        Aggregates the confidence of two overlapping spans
+
+        NOTE: I've first implemented this with the pairwise Jaccard index, but it penalised
+        low overlaps too strongly, resulting in c=0.09 for example two below. I didn't
+        feel this is representative of how confident we would be in that case.
+
+        Instead, I use the average confidence for each of the characters in the merged span.
+        For each character, the sum of the confidences of the classifiers that predicted it
+        is divided by the number of classifiers in total.
+
+        ```
+        Example 1:
+        Span 1: -----000000------- length: 6, confidence: 0.7
+        Span 2: ---000000--------- length: 6, confidence: 0.3
+        Span 3: ------------------ (this is to illustrate classifier 3 not predicting)
+        Merged: ---00000000------- length: 8, confidence: 0.125
+
+        > c_merged = (0.3 * 2 + 1 * 4 + 0.7 * 2) / 3 / 8 = 3 / 8 = 0.125
+
+        Example 2:
+        Span 1: -----000000------- length: 6, confidence: 0.9
+        Span 2: ----------00000--- length: 5, confidence: 0.9
+        Merged: -----0000000000--- length: 10, confidence: 0.495
+
+        > c_merged = (0.9 * 5 + 1.8 * 1 + 0.9 * 4) / 2 / 10 = 0.495
+
+        Example 3:
+        Span 1: -----000000------- length: 6, confidence: 0.9
+        Span 2: -------00000000--- length: 5, confidence: 0.8
+        Span 3: ----------00000--- length: 5, confidence: 0.8
+        Merged: -----0000000000--- length: 10, confidence: 0.5266...
+
+        > c_merged = (0.9 * 2 + 1.7 * 3 + 2.5 * 1 + 1.6 * 4) / 3 / 10 = 0.5266...
+        ```
+
+        TODO: I'm still slightly uncomfortable with this aggregation. I'm not quite sure
+        what the last 2 examples would mean in terms of confidence. I'm starting to think
+        that we could either:
+            > consider confidence on the token level
+            > separate type-confidence and border-confidence
+        """
+        merged_span = Span.union(spans)
+
+        char_confidences: list[float] = []
+        for char_index in range(merged_span.start_index, merged_span.end_index):
+            char_confidences.append(
+                sum(
+                    [
+                        s.confidence if s.confidence is not None else 1.0
+                        for s in spans
+                        if s.start_index <= char_index < s.end_index
+                    ]
+                )
+                / n_classifiers
+            )
+
+        return np.mean(char_confidences).astype(float)
+
     def _aggregate(self, spans: list[Span]) -> list[Span]:
         """
         Aggregates the results of the classifiers
@@ -65,7 +127,7 @@ class ClassifierPooler:
             overlapping_spans = [
                 s for s in spans if s.overlaps(span) and not self._same_spans(s, span)
             ]
-            print(overlapping_spans)
+
             handled_spans.update(overlapping_spans)
 
             if len(overlapping_spans) == 0:
@@ -79,18 +141,9 @@ class ClassifierPooler:
                 )
             else:
                 mergable_spans = overlapping_spans + [span]
-                jaccard_similarities = []
-                for s1, s2 in combinations(mergable_spans, 2):
-                    c1 = s1.confidence or 1.0
-                    c2 = s2.confidence or 1.0
-                    jaccard_similarities.append(
-                        jaccard_similarity(s1, s2) * (c1 + c2) / 2
-                    )
 
-                confidence = (
-                    np.mean(jaccard_similarities)
-                    * len(mergable_spans)
-                    / len(self.classifiers)
+                confidence = self._aggregate_two_overlapping_span_confidence(
+                    mergable_spans, len(self.classifiers)
                 )
 
                 results.append(
