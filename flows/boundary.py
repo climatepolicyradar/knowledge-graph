@@ -1266,6 +1266,14 @@ async def run_partial_updates_of_concepts_for_document_passages(
             len(text_blocks.keys()),
         )
 
+        grouped_concepts_n = len(grouped_concepts)
+        text_blocks_n = len(text_blocks)
+        if grouped_concepts_n != text_blocks_n:
+            raise ValueError(
+                f"there were {grouped_concepts_n} labelled passages and only "
+                f"{text_blocks_n} document passages were read from Vespa"
+            )
+
     # Batch updates (writes)
     failures: list[VespaResponse] = []
 
