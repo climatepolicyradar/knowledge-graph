@@ -91,7 +91,7 @@ env = [
   "WIKIBASE_PASSWORD=test_password",
   "WIKIBASE_URL=https://test.test.test"
 ]
-markers = ["vespa", "flaky_on_ci", "transformers"]
+markers = ["vespa", "flaky_on_ci", "transformers", "slow"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
