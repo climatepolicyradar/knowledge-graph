@@ -1254,9 +1254,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
             continuation_tokens=["BKAAAAABKBGA"],
         )
 
-        # FIXME: For very large documents this dict could become very large, we may have
-        # to yield passages, write to the relevant passages in vespa and then continue
-        # as opposed to creating one huge dict.
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
         async for passage_batch in passages_generator:
             text_blocks.update(passage_batch)
