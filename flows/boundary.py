@@ -580,7 +580,7 @@ def get_document_passage_from_vespa(
 
 def get_continuation_tokens_from_query_response(
     vespa_query_response: VespaQueryResponse,
-) -> list[ContinuationToken]:
+) -> list[ContinuationToken] | None:
     """
     Retrieve continuation tokens from the query response if it exists.
 
@@ -597,7 +597,7 @@ def get_continuation_tokens_from_query_response(
         hit_continuation_token = dig(hit, "continuation", "next", default=None)
         if hit_continuation_token:
             continuation_tokens.append(hit_continuation_token)
-    return continuation_tokens
+    return continuation_tokens if continuation_tokens else None
 
 
 def get_vespa_passages_from_query_response(
@@ -627,7 +627,7 @@ def get_vespa_passages_from_query_response(
 async def get_document_passages_from_vespa__generator(
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
-    continuation_tokens: list[str],
+    continuation_tokens: list[str] | None = [],
     grouping_max: int = 1000,
     query_profile: str = "default",
 ) -> AsyncGenerator[dict[TextBlockId, tuple[VespaHitId, VespaPassage]], None]:
@@ -659,7 +659,7 @@ async def get_document_passages_from_vespa__generator(
         G.each(G.each(G.output(G.summary()))),
     )
 
-    while continuation_tokens:
+    while continuation_tokens is not None:
         query: qb.Query = (
             qb.select("*")  # type: ignore
             .from_(
@@ -1252,7 +1252,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
         passages_generator = get_document_passages_from_vespa__generator(
             document_import_id=document_import_id,
             vespa_connection_pool=vespa_connection_pool,
-            continuation_tokens=["BKAAAAABKBGA"],
         )
 
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}

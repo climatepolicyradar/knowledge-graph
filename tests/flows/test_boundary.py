@@ -1058,7 +1058,7 @@ def test_get_continuation_tokens_from_query_response(
     continuation_tokens = get_continuation_tokens_from_query_response(
         mock_vespa_query_response_no_continuation_token
     )
-    assert continuation_tokens == []
+    assert continuation_tokens is None
 
 
 def test_get_vespa_passages_from_query_response(
@@ -1108,7 +1108,6 @@ async def test_get_document_passages_from_vespa__generator(
         passages_generator = get_document_passages_from_vespa__generator(
             document_import_id=document_import_id,
             vespa_connection_pool=vespa_connection_pool,
-            continuation_tokens=["BKAAAAABKBGA"],
             grouping_max=grouping_max,
             query_profile=vespa_lower_max_hit_limit_query_profile_name,
         )
