@@ -45,6 +45,7 @@ from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
 
 from flows.utils import (
+    SlackNotify,
     get_labelled_passage_paths,
     iterate_batch,
     remove_translated_suffix,
@@ -1077,7 +1078,13 @@ async def updates_by_s3(
 
 
 # No timeout set since the caller of this has one.
-@flow(log_prints=True)
+@flow(
+    log_prints=True,
+    retries=2,
+    retry_delay_seconds=5,
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def run_partial_updates_of_concepts_for_document_passages(
     document_importer: DocumentImporter,
     cache_bucket: str,
