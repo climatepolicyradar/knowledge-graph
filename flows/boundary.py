@@ -569,7 +569,7 @@ def get_continuation_tokens_from_query_response(
 
 def get_vespa_passages_from_query_response(
     vespa_query_response: VespaQueryResponse,
-) -> list[tuple[str, VespaPassage]]:
+) -> list[tuple[VespaHitId, VespaPassage]]:
     """Retrieve the passages from the query response."""
 
     vespa_query_response_root = vespa_query_response.json["root"]
@@ -593,7 +593,7 @@ def get_document_passages_from_vespa__generator(
     vespa_search_adapter: VespaSearchAdapter,
     continuation_tokens: list[str],
     grouping_max: int = 10,
-) -> Generator[list[tuple[str, VespaPassage]], None, None]:
+) -> Generator[list[tuple[VespaHitId, VespaPassage]], None, None]:
     """
     A generator of vespa passages using continuation tokens to paginate.
 
