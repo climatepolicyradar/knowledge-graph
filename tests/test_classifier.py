@@ -6,6 +6,7 @@ from hypothesis import strategies as st
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
+from src.classifier.pooler import ClassifierPooler
 from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
@@ -433,9 +434,6 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
     concept = Concept(wikibase_id="Q123", preferred_label="test")
 
     assert EmptyIDClassifier(concept)
-
-
-from src.classifier.pooler import ClassifierPooler
 
 
 @pytest.mark.parametrize(

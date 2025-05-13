@@ -1,11 +1,9 @@
-from itertools import combinations
-
 import numpy as np
 
 from src.classifier.classifier import Classifier
 from src.classifier.llm import LLMOutputMismatchError
 from src.concept import Concept
-from src.span import Span, jaccard_similarity
+from src.span import Span
 
 
 class ClassifierPooler:
