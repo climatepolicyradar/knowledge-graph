@@ -7,6 +7,7 @@ import math
 import os
 import re
 import tempfile
+import threading
 from collections import Counter
 from collections.abc import AsyncGenerator, Generator
 from datetime import timedelta
@@ -1299,18 +1300,29 @@ async def run_partial_updates_of_concepts_for_document_passages(
     )
     logger.info("Finished creation of DataPoints.")
 
+    response_cb_lock: threading.Lock = threading.Lock()
+
     # Wrap the callback with the appropriate state and make it match
     # the expected signature.
     def _vespa_response_handler_cb_with_state(
         response: VespaResponse, data_id: VespaDataId
     ):
-        vespa_response_handler_cb(
-            failures,
-            concepts_counts,
-            grouped_concepts,
-            response,
-            data_id,
-        )
+        try:
+            response_cb_lock.acquire(
+                blocking=True,
+                timeout=timedelta(seconds=60).total_seconds(),
+            )
+
+            vespa_response_handler_cb(
+                failures,
+                concepts_counts,
+                grouped_concepts,
+                response,
+                data_id,
+            )
+        finally:
+            if response_cb_lock.locked():
+                response_cb_lock.release()
 
     @vespa_retry()
     def _feed_updates(
