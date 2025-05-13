@@ -593,6 +593,7 @@ def get_document_passages_from_vespa__generator(
     vespa_search_adapter: VespaSearchAdapter,
     continuation_tokens: list[str],
     grouping_max: int = 10,
+    query_profile: str = "default",
 ) -> Generator[list[tuple[VespaHitId, VespaPassage]], None, None]:
     """
     A generator of vespa passages using continuation tokens to paginate.
@@ -606,6 +607,8 @@ def get_document_passages_from_vespa__generator(
     - vespa_connection_pool: The vespa connection pool to use as the query client.
     - continuation_tokens: The tokens used to paginate over the vespa hits.
     - grouping_max: The maximum amount of grouping subquery hits to return at once.
+    - query_profile: The query profile to use for the query. This is defined in the
+        search/query-profiles/ subdirectory of the application package for vespa.
     """
 
     conditions = qb.QueryField("document_import_id").contains(document_import_id)
@@ -633,8 +636,7 @@ def get_document_passages_from_vespa__generator(
 
         vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
             yql=query,
-            queryProfile="lower_max_hits",
-            hits=1000,  # This has to be lower than the max hits, believe it defaults to 5000
+            queryProfile=query_profile,
         )
 
         if not vespa_query_response.is_successful():

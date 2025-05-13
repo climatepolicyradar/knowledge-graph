@@ -1103,6 +1103,7 @@ async def test_get_document_passages_from_vespa__generator(
         vespa_search_adapter=local_vespa_search_adapter,
         continuation_tokens=["BKAAAAABKBGA"],
         grouping_max=grouping_max,
+        query_profile="lower_max_hits",
     )
 
     response = list(vespa_passage_generator)
