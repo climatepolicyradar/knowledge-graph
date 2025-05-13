@@ -129,7 +129,7 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
     yield app  # This is where the test function will be executed
@@ -237,7 +237,7 @@ def vespa_app_with_large_docs(
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,  # Seconds
+        timeout=600,  # Seconds
     )
 
 
