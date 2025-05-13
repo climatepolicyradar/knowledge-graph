@@ -1,0 +1,51 @@
+[
+      {
+        "id": "id:doc_search:family_document::UNFCCC.party.309.0",
+        "fields": {
+          "search_weights_ref": "id:doc_search:search_weights::default_weights",
+          "family_name": "Colombia National inventory report. NIR2",
+          "family_description": "<p>Colombia National inventory report submitted in 2019</p>",
+          "family_import_id": "UNFCCC.family.309.0",
+          "family_slug": "colombia-national-inventory-report-nir2_7da5",
+          "family_publication_ts": "2019-04-11T00:00:00+00:00",
+          "family_category": "UNFCCC",
+          "family_geography": "COL",
+          "family_geographies": [
+            "COL"
+          ],
+          "family_source": "UNFCCC",
+          "document_import_id": "UNFCCC.party.309.0",
+          "document_title": "Colombia National inventory report - Informe de Inventario Nacional de GEI de Colombia",
+          "document_slug": "colombia-national-inventory-report-informe-de-inventario-nacional-de-gei-de-colombia_3df3",
+          "document_languages": [
+            "Spanish"
+          ],
+          "document_md5_sum": "3e0c676eb6f59569063416112ba35cca",
+          "document_content_type": "application/pdf",
+          "document_cdn_object": "COL/1900/colombia-biennial-update-report-bur-bur-2-national-inventory-report_3e0c676eb6f59569063416112ba35cca.pdf",
+          "document_source_url": "https://unfccc.int/sites/default/files/resource/NIR_BUR2_Colombia.pdf",
+          "corpus_import_id": "UNFCCC.corpus.i00000001.n0000",
+          "corpus_type_name": "Intl. agreements",
+          "metadata": [
+            {
+              "name": "family.author",
+              "value": "Colombia"
+            },
+            {
+              "name": "family.author_type",
+              "value": "Party"
+            },
+            {
+              "name": "document.role",
+              "value": "MAIN"
+            },
+            {
+              "name": "document.type",
+              "value": "National Inventory Report"
+            }
+          ],
+          "family_name_index": "Colombia National inventory report. NIR2",
+          "family_description_index": "<p>Colombia National inventory report submitted in 2019</p>"
+        }
+      }
+    ]
