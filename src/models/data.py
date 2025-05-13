@@ -1,10 +1,7 @@
 from abc import abstractmethod
-from typing import TypeVar
 
 from rich.console import Console
 
-from src.classifier.bert_based import BertBasedClassifier
-from src.classifier.targets import TargetClassifier
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.models.passage import (
@@ -12,9 +9,6 @@ from src.models.passage import (
 )
 
 console = Console(highlight=False)
-
-
-NNClassifier = TypeVar("NNClassifier", BertBasedClassifier, TargetClassifier)
 
 
 class SyntheticData:

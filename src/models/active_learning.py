@@ -1,7 +1,12 @@
-from src._prompts import ITERATION_PROMPT, SYSTEM_PROMPT
-from src.concept import Concept
+from typing import Iterable, TypeVar
+
 from pydantic_ai import Agent
 from pydantic_ai.settings import ModelSettings
+
+from src._prompts import ITERATION_PROMPT, SYSTEM_PROMPT
+from src.classifier.bert_based import BertBasedClassifier
+from src.classifier.targets import TargetClassifier
+from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.models.data import SyntheticData, console
 from src.models.passage import (
@@ -13,8 +18,7 @@ from src.models.passage import (
 )
 from src.span import Span
 
-
-from typing import Iterable
+NNClassifier = TypeVar("NNClassifier", BertBasedClassifier, TargetClassifier)
 
 
 class ActiveLearningData:
