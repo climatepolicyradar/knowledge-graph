@@ -1362,7 +1362,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
         response: VespaResponse, data_id: VespaDataId
     ):
         try:
-            print("acquiring lock")
             acquired_lock = response_cb_lock.acquire(
                 blocking=True,
                 timeout=timedelta(minutes=2).total_seconds(),
@@ -1372,7 +1371,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 print("failed to acquire lock")
                 return
 
-            print("handling response")
             vespa_response_handler_cb(
                 failures,
                 concepts_counts,
@@ -1382,7 +1380,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
             )
         finally:
             locked = response_cb_lock.locked()
-            print(f"releasing lock? {locked}")
             if locked:
                 response_cb_lock.release()
 

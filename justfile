@@ -17,9 +17,13 @@ install +OPTS="":
 test +OPTS="":
     poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}}
 
-# test the project, excluding tests that rely on a local vespa instance
+# test the project, excluding tests that rely on a local Vespa instance
 test-without-vespa +OPTS="":
     poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
+
+# test the project, excluding slow tests
+test-without-slow +OPTS="":
+    poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
 
 # update the snapshots for the tests
 test-snapshot-update:
