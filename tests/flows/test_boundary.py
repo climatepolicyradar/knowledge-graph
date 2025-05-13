@@ -1125,11 +1125,6 @@ async def test_get_document_passages_from_vespa__generator(
                 assert isinstance(passage[1][0], str)
                 assert isinstance(passage[1][1], VespaPassage)
 
-        assert (
-            sum(len(vespa_passages) for vespa_passages in responses)
-            == document_passages_count
-        )
-
     assert (
         sum(len(vespa_passages) for vespa_passages in responses)
         == document_passages_count
