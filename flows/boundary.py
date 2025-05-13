@@ -13,10 +13,20 @@ from datetime import timedelta
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Iterable, Protocol, TypeAlias, TypedDict, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Protocol,
+    TypeAlias,
+    TypedDict,
+    TypeVar,
+    Union,
+)
 
 import boto3
 import httpx
+import tenacity
 import vespa.application
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -31,11 +41,13 @@ from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
+    SlackNotify,
     get_labelled_passage_paths,
     iterate_batch,
     remove_translated_suffix,
@@ -117,6 +129,24 @@ class Operation(Enum):
 
     INDEX = "index"
     DEINDEX = "deindex"
+
+
+def vespa_retry(
+    max_attempts: int = 3,
+    wait_seconds: int = 2,
+    exception_types: tuple[type[Exception], ...] = (QueryError, VespaError),
+) -> Callable:
+    """Template for retries, use as a decorator."""
+
+    return tenacity.retry(
+        retry=tenacity.retry_if_exception_type(exception_types),
+        stop=tenacity.stop_after_attempt(max_attempts),
+        wait=tenacity.wait_fixed(wait_seconds),
+        before_sleep=lambda retry_state: print(
+            f"Retrying after error. Attempt {retry_state.attempt_number} of {max_attempts}"
+        ),
+        reraise=True,
+    )
 
 
 def get_vespa_search_adapter_from_aws_secrets(
@@ -460,6 +490,7 @@ def convert_labelled_passage_to_concepts(
     return concepts
 
 
+@vespa_retry()
 def get_document_from_vespa(
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
@@ -502,6 +533,7 @@ def get_document_from_vespa(
     return document_id, document
 
 
+@vespa_retry()
 def get_document_passage_from_vespa(
     text_block_id: str,
     document_import_id: DocumentImportId,
@@ -652,6 +684,7 @@ def get_document_passages_from_vespa__generator(
         )
 
 
+@vespa_retry()
 async def get_document_passages_from_vespa(
     document_import_id: DocumentImportId,
     text_blocks_ids: list[TextBlockId] | None,
@@ -1156,7 +1189,13 @@ async def updates_by_s3(
 
 
 # No timeout set since the caller of this has one.
-@flow(log_prints=True)
+@flow(
+    log_prints=True,
+    retries=2,
+    retry_delay_seconds=5,
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def run_partial_updates_of_concepts_for_document_passages(
     document_importer: DocumentImporter,
     cache_bucket: str,
@@ -1280,15 +1319,27 @@ async def run_partial_updates_of_concepts_for_document_passages(
             data_id,
         )
 
-    # The previously established connection pool isn't used since
-    # `feed_iterable` creates its own.
-    vespa_search_adapter.client.feed_iterable(  # pyright: ignore[reportOptionalMemberAccess]
-        iter=data,
-        schema="document_passage",
-        namespace="doc_search",
-        operation_type="update",
-        max_connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
-        callback=_vespa_response_handler_cb_with_state,
+    @vespa_retry()
+    def _feed_updates(
+        vespa_search_adapter: VespaSearchAdapter,
+        data: Iterable[dict[str, Any]],
+        callback: Callable[[VespaResponse, VespaDataId], None],
+    ) -> None:
+        # The previously established connection pool isn't used since
+        # `feed_iterable` creates its own.
+        vespa_search_adapter.client.feed_iterable(  # pyright: ignore[reportOptionalMemberAccess]
+            iter=data,
+            schema="document_passage",
+            namespace="doc_search",
+            operation_type="update",
+            max_connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+            callback=callback,
+        )
+
+    _feed_updates(
+        vespa_search_adapter,
+        data,
+        _vespa_response_handler_cb_with_state,
     )
 
     # Write concepts counts to S3
