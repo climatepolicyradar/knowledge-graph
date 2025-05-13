@@ -627,7 +627,7 @@ def get_vespa_passages_from_query_response(
 async def get_document_passages_from_vespa__generator(
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
-    continuation_tokens: list[str] | None = [],
+    continuation_tokens: list[ContinuationToken] | None = [],
     grouping_max: int = 1000,
     query_profile: str = "default",
 ) -> AsyncGenerator[dict[TextBlockId, tuple[VespaHitId, VespaPassage]], None]:
@@ -659,7 +659,9 @@ async def get_document_passages_from_vespa__generator(
         G.each(G.each(G.output(G.summary()))),
     )
 
-    while continuation_tokens is not None:
+    tokens = [] if continuation_tokens is None else continuation_tokens
+
+    while tokens is not None:
         query: qb.Query = (
             qb.select("*")  # type: ignore
             .from_(
@@ -667,7 +669,7 @@ async def get_document_passages_from_vespa__generator(
             )
             .where(conditions)
             .set_limit(0)
-            .groupby(grouping, continuations=continuation_tokens)
+            .groupby(grouping, continuations=tokens)
         )
 
         vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
@@ -683,8 +685,8 @@ async def get_document_passages_from_vespa__generator(
         if vespa_passages:
             yield vespa_passages
 
-        continuation_tokens = get_continuation_tokens_from_query_response(
-            vespa_query_response
+        tokens: list[ContinuationToken] | None = (
+            get_continuation_tokens_from_query_response(vespa_query_response)
         )
 
 
