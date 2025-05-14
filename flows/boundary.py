@@ -597,7 +597,7 @@ def get_continuation_tokens_from_query_response(
         hit_continuation_token = dig(hit, "continuation", "next", default=None)
         if hit_continuation_token:
             continuation_tokens.append(hit_continuation_token)
-    return continuation_tokens if continuation_tokens else None
+    return continuation_tokens or None
 
 
 def get_vespa_passages_from_query_response(
