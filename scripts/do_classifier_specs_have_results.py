@@ -32,6 +32,8 @@ class Result:
     path_exists: bool = False
     classifier_spec: str = ""
     file_names: list[str] = field(default_factory=list)
+    span_count: int = 0
+    passage_count: int = 0
 
 
 def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
@@ -48,18 +50,44 @@ def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
     return file_names
 
 
-def check_single_spec(bucket_name: str, classifier_spec: str) -> Result:
+def count_spans_in_labelled_passages(
+    bucket_name: str, prefix: str, file_names: list[str]
+) -> tuple[int, int]:
+    """Count the spans in the labelled passages."""
+    s3 = boto3.client("s3")
+    passage_count = 0
+    span_count = 0
+
+    for file_name in file_names:
+        obj = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{file_name}")
+        data = json.loads(obj["Body"].read())
+        passage_count += len(data)
+        for passage in data:
+            span_count += len(json.loads(passage)["spans"])
+
+    return span_count, passage_count
+
+
+def check_single_spec(
+    bucket_name: str, classifier_spec: str, count_spans: bool
+) -> Result:
     """Check inference output for a single classifier_spec."""
     classifier_model, classifier_alias = classifier_spec.split(":")
     prefix = os.path.join(BASE_PREFIX, classifier_model, classifier_alias)
     try:
         file_names = collect_file_names(bucket_name, prefix)
+        stats = f"{len(file_names):,} objects"
+        if count_spans:
+            span_count, passage_count = count_spans_in_labelled_passages(
+                bucket_name, prefix, file_names
+            )
+            stats = f"{stats}, {span_count:,} spans, {passage_count:,} passages"
     except ClientError as e:
         print(f"Error checking results for {classifier_spec}: {e}")
         return Result(path_exists=False, classifier_spec=classifier_spec)
 
     if file_names:
-        print(f"✅ Results for {classifier_spec}: {len(file_names)} objects")
+        print(f"✅ Results for {classifier_spec}: {stats}")
         return Result(
             path_exists=True, classifier_spec=classifier_spec, file_names=file_names
         )
@@ -107,6 +135,10 @@ def check_classifier_specs(
         default=False,
         help="Whether to write the file names to a file in the audit directory",
     ),
+    count_spans: bool = typer.Option(
+        default=False,
+        help="Whether to count the spans in the labelled passages, this is slow.",
+    ),
 ) -> None:
     """
     Check if the classifier specs have s3 outputs and there respective counts.
@@ -125,7 +157,8 @@ def check_classifier_specs(
     to_process = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_spec = {
-            executor.submit(check_single_spec, bucket_name, spec): spec for spec in data
+            executor.submit(check_single_spec, bucket_name, spec, count_spans): spec
+            for spec in data
         }
 
         for future in as_completed(future_to_spec):
