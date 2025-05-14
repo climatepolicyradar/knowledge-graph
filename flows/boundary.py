@@ -2,12 +2,16 @@
 
 import asyncio
 import base64
+import gc
 import json
+import logging
 import math
 import os
 import re
+import sys
 import tempfile
 import threading
+import time
 from collections import Counter
 from collections.abc import AsyncGenerator, Generator
 from datetime import timedelta
@@ -73,6 +77,12 @@ CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 50
 DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
+
+# Get more logs
+logging.basicConfig(level=logging.DEBUG)
+
+# Set the garbage collection debugging flags. Debugging information will be written to sys.stderr. See below for a list of debugging flags which can be combined using bit operations to control debugging.
+gc.set_debug(gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_SAVEALL)
 
 
 def total_milliseconds(td: timedelta) -> int:
@@ -1249,36 +1259,46 @@ async def run_partial_updates_of_concepts_for_document_passages(
         for labelled_passage in document_labelled_passages
     }
 
-    logger.info(
-        f"starting partial updates for {len(grouped_concepts)} grouped concepts"
-    )
+    grouped_concepts_n = len(grouped_concepts)
+    logger.info(f"starting partial updates for {grouped_concepts_n} grouped concepts")
 
     document_import_id = remove_translated_suffix(document_importer[0])
 
+    logger.info("creating Vespa connection pool")
     async with (
         vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
             connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
+        logger.info("Starting getting document passages from Vespa")
         passages_generator = get_document_passages_from_vespa__generator(
             document_import_id=document_import_id,
             vespa_connection_pool=vespa_connection_pool,
         )
+        logger.info("got document passage from Vespa generator")
 
+        start = time.perf_counter()
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
+        text_blocks_n = 0
         async for passage_batch in passages_generator:
             text_blocks.update(passage_batch)
+            text_blocks_n = len(text_blocks)
             logger.info(
-                "No. of text blocks in text blocks dict: %s", len(text_blocks.keys())
+                f"No. of text blocks in text blocks dict so far: {text_blocks_n}"
             )
+        elapsed_time = time.perf_counter() - start
+
+        text_blocks_size_in_bytes = sys.getsizeof(text_blocks)
+        text_blocks_size_in_mb = text_blocks_size_in_bytes / (1024 * 1024)
+
         logger.info(
-            "Finished getting document passages from Vespa, total number of text blocks: %s",
-            len(text_blocks.keys()),
+            "Finished getting document passages from Vespa. Total "
+            f"number of text blocks: {text_blocks_n}. "
+            f"Duration (Seconds): {elapsed_time:.2f}. "
+            f"Memory size (Mb): {text_blocks_size_in_mb}. "
         )
 
-        grouped_concepts_n = len(grouped_concepts)
-        text_blocks_n = len(text_blocks)
         if grouped_concepts_n != text_blocks_n:
             logger.warning(
                 f"There were {grouped_concepts_n} text block ids from the labelled "
@@ -1295,7 +1315,8 @@ async def run_partial_updates_of_concepts_for_document_passages(
     # concept.
     concepts_counts: Counter[ConceptModel] = Counter()
 
-    # Batch updates (writes) and let the Vespa SDK take care of the complexities
+    # Batch updates (writes) and let the Vespa SDK take care of the
+    # complexities.
 
     class DataPoint(TypedDict):
         id: VespaDataId
@@ -1305,7 +1326,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
         text_block_id: TextBlockId, concepts: list[VespaConcept]
     ) -> DataPoint | None:
         if text_block_id not in text_blocks:
-            logger.error(
+            print(
                 f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
             )
             return None
@@ -1322,13 +1343,13 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
         return {"id": data_id, "fields": {"concepts": serialised_concepts}}
 
-    logger.info("Beginning creation of DataPoints.")
+    logger.info("Beginning creation of for bulk feed update")
     data: Iterable[dict[str, Any]] = []
     for text_block_id, concepts in grouped_concepts.items():
         data_point = _to_data(text_block_id, concepts)
         if data_point:
             data.append(dict(data_point))
-    logger.info("Finished creation of DataPoints.")
+    logger.info("Finished creation of data for bulk feed update")
 
     response_cb_lock: threading.Lock = threading.Lock()
 
@@ -1338,11 +1359,17 @@ async def run_partial_updates_of_concepts_for_document_passages(
         response: VespaResponse, data_id: VespaDataId
     ):
         try:
-            response_cb_lock.acquire(
+            print("acquiring lock")
+            acquired_lock = response_cb_lock.acquire(
                 blocking=True,
-                timeout=timedelta(seconds=60).total_seconds(),
+                timeout=timedelta(minutes=2).total_seconds(),
             )
 
+            if not acquired_lock:
+                print("failed to acquire lock")
+                return
+
+            print("handling response")
             vespa_response_handler_cb(
                 failures,
                 concepts_counts,
@@ -1351,7 +1378,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 data_id,
             )
         finally:
-            if response_cb_lock.locked():
+            locked = response_cb_lock.locked()
+            print(f"releasing lock? {locked}")
+            if locked:
                 response_cb_lock.release()
 
     @vespa_retry()
@@ -1371,13 +1400,19 @@ async def run_partial_updates_of_concepts_for_document_passages(
             callback=callback,
         )
 
+    logger.info("starting feed update")
+    start = time.perf_counter()
     _feed_updates(
         vespa_search_adapter,
         data,
         _vespa_response_handler_cb_with_state,
     )
+    elapsed_time = time.perf_counter() - start
+    logger.info(f"finished feed update in {elapsed_time:.2f}s")
 
     # Write concepts counts to S3
+    logger.info("starting concepts counting and writing to store")
+    start = time.perf_counter()
     try:
         await concepts_counts_updater_cb(
             document_importer=document_importer,
@@ -1388,6 +1423,10 @@ async def run_partial_updates_of_concepts_for_document_passages(
         )
     except Exception as e:
         logger.error(f"failed to write concepts counts to S3: {str(e)}")
+
+    logger.info(
+        f"finished concepts counting and writing to store in {elapsed_time:.2f}s"
+    )
 
     if failures:
         raise ValueError(f"there was {len(failures)} failures")
@@ -1414,7 +1453,18 @@ def update_feed_result_callback(
 
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
-    concepts = grouped_concepts[text_block_id]
+
+    try:
+        concepts = grouped_concepts[text_block_id]
+    except KeyError as e:
+        # Add context to the error. Only sample the first 10, since
+        # there could be > 50,000. The intent is to get an idea of the
+        # keys values' themselves, since we already know this key is
+        # missing.
+        raise KeyError(
+            f"Missing text block ID '{text_block_id}' in grouped concepts. "
+            f"All grouped concepts' keys: {','.join(list(grouped_concepts.keys())[:10])}"
+        ) from e
 
     # Example:
     #
