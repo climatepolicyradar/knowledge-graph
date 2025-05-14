@@ -1399,7 +1399,8 @@ async def run_partial_updates_of_concepts_for_document_passages(
             schema="document_passage",
             namespace="doc_search",
             operation_type="update",
-            max_connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+            max_connections=1,  # How many tasks to have running at once
+            max_workers=1,
             callback=callback,
         )
 
