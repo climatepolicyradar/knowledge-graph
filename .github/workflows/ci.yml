@@ -2,8 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
+    # TEMP
+    # branches:
+    #   - main
   push:
     branches:
       - main
