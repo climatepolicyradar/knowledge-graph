@@ -1272,7 +1272,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
         if grouped_concepts_n != text_blocks_n:
             logger.warning(
                 f"There were {grouped_concepts_n} text block ids from the labelled "
-                f"passages and only {text_blocks_n} document passages were read from "
+                f"passages but {text_blocks_n} document passages were read from "
                 f"Vespa for {document_import_id}"
             )
 
