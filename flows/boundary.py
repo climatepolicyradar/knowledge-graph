@@ -111,6 +111,16 @@ class S3Accessor(BaseModel):
     paths: list[str] | None = None
     prefixes: list[str] | None = None
 
+    def __str__(self) -> str:
+        """String representation of the S3Accessor for logging"""
+        prefix_count = len(self.prefixes) if self.prefixes else 0
+        path_count = len(self.paths) if self.paths else 0
+        return f"(prefixes={prefix_count}, paths={path_count})"
+
+    def __repr__(self) -> str:
+        """String representation of the S3Accessor for logging"""
+        return self.__str__()
+
 
 # AKA LabelledPassage
 # Example: 18593
