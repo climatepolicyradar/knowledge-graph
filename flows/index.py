@@ -114,7 +114,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         config.document_source_prefix,
     )
 
-    print(f"s3_prefixes: {s3_accessor.prefixes}, s3_paths: {s3_accessor.paths}")
+    print(f"Running on: {s3_accessor}")
 
     await updates_by_s3(
         aws_env=config.aws_env,
