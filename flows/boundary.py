@@ -1265,10 +1265,12 @@ async def run_partial_updates_of_concepts_for_document_passages(
     document_import_id = remove_translated_suffix(document_importer[0])
 
     logger.info("creating Vespa connection pool")
-    async with vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
-        connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
-        timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
-    ) as vespa_connection_pool:
+    async with (
+        vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
+            connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
+        ) as vespa_connection_pool
+    ):
         logger.info("Starting getting document passages from Vespa")
         passages_generator = get_document_passages_from_vespa__generator(
             document_import_id=document_import_id,

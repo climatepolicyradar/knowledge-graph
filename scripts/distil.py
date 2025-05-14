@@ -25,8 +25,8 @@ from src.classifier import (
     LLMClassifier,
 )
 from src.identifiers import WikibaseID
-from src.models.labelled_passage import LabelledPassage
 from src.metrics import count_passage_level_metrics
+from src.models.labelled_passage import LabelledPassage
 from src.sampling import create_balanced_sample
 from src.wikibase import WikibaseSession
 

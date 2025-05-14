@@ -7,8 +7,8 @@ from src._prompts import ITERATION_PROMPT, SYSTEM_PROMPT
 from src.classifier.bert_based import BertBasedClassifier
 from src.classifier.targets import TargetClassifier
 from src.concept import Concept
-from src.models.labelled_passage import LabelledPassage
 from src.models.data import SyntheticData, console
+from src.models.labelled_passage import LabelledPassage
 from src.models.passage import (
     Passage,
     PassageWithClassifierConfidence,

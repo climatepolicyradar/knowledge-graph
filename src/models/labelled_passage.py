@@ -3,10 +3,10 @@ import re
 from typing import Optional
 
 from argilla import Argilla, Record, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from src.models.passage import Passage
 from src.identifiers import generate_identifier
+from src.models.passage import Passage
 from src.span import Span, merge_overlapping_spans
 
 

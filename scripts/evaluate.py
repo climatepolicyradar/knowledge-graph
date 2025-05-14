@@ -23,12 +23,12 @@ from scripts.config import (
 from src.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.models.labelled_passage import LabelledPassage
 from src.metrics import (
     ConfusionMatrix,
     count_passage_level_metrics,
     count_span_level_metrics,
 )
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span, group_overlapping_spans
 from src.version import Version
 

@@ -533,9 +533,7 @@ async def run_classifier_inference_on_batch_of_documents(
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
-    wandb.login(
-        key=config.wandb_api_key.get_secret_value()
-    )  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",

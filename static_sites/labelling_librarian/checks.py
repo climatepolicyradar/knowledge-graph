@@ -9,8 +9,8 @@ from pydantic import BaseModel
 
 from scripts.evaluate import create_gold_standard_labelled_passages
 from src.argilla_v2 import client, dataset_to_labelled_passages
-from src.models.labelled_passage import LabelledPassage
 from src.metrics import count_span_level_metrics
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
