@@ -3,7 +3,7 @@ from abc import abstractmethod
 from rich.console import Console
 
 from src.concept import Concept
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.models.passage import (
     SyntheticPassageWithClassifierConfidence,
 )

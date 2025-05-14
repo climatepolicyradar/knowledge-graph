@@ -14,7 +14,7 @@ from transformers import (
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 

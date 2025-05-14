@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.identifiers import WikibaseID, deterministic_hash
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 if TYPE_CHECKING:
     # only import this circular dependency if we're running in a type-checking

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import jaccard_similarity
 
 

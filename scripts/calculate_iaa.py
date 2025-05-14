@@ -10,7 +10,7 @@ from rich.table import Table
 from scripts.config import concept_dir
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.metrics import count_passage_level_metrics, count_span_level_metrics
 
 console = Console()

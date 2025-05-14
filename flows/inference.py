@@ -39,7 +39,7 @@ from scripts.cloud import (
 )
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 # The "parent" AKA the higher level flows that do multiple things
@@ -533,7 +533,9 @@ async def run_classifier_inference_on_batch_of_documents(
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+    wandb.login(
+        key=config.wandb_api_key.get_secret_value()
+    )  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",

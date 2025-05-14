@@ -22,7 +22,7 @@ from typing_extensions import Annotated
 from scripts.config import classifier_dir, concept_dir, metrics_dir
 from src.classifier import Classifier
 from src.concept import Concept
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 app = typer.Typer()
 
@@ -121,9 +121,9 @@ def main(
                 "Passage-level precision": f"{passage_level_precision:.2f}",
                 "Span-level precision": f"{span_level_precision:.2f}",
                 "Span-level precision standard deviation": f"{span_level_precision_std:.2f}",
-                "Equity strata consistency": "✅"
-                if span_level_precision_std < 0.1
-                else "❌",
+                "Equity strata consistency": (
+                    "✅" if span_level_precision_std < 0.1 else "❌"
+                ),
             }
         )
 

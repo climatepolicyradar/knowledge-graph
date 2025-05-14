@@ -24,7 +24,7 @@ from flows.inference import (
     store_labels,
     text_block_inference,
 )
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 

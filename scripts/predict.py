@@ -13,7 +13,7 @@ from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession
 
 console = Console()

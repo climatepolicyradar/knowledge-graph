@@ -5,7 +5,7 @@ from rich.progress import track
 
 from scripts.config import classifier_dir, processed_data_dir
 from src.classifier import Classifier
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.neo4j import get_neo4j_session
 from src.neo4j.models import ConceptNode, DocumentNode, PassageNode
 from src.wikibase import WikibaseSession

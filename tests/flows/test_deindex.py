@@ -56,7 +56,7 @@ from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 
@@ -545,7 +545,9 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 ):
     document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    document_object_uri_remove: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/v4/{document_import_id_remove}.json"
+    )
     document_importer_remove: DocumentImporter = (
         document_import_id_remove,
         document_object_uri_remove,
@@ -553,7 +555,9 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 
     document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
-    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    document_object_uri_keep: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/v4/{document_import_id_keep}.json"
+    )
     _document_importer_keep: DocumentImporter = (
         document_import_id_keep,
         document_object_uri_keep,
@@ -835,13 +839,21 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
 
     document_import_id_remove: DocumentImportId = "CCLW.executive.10014.4470"
 
-    document_object_uri_remove: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
-    document_object_uri_remove_cleanup_1: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
-    document_object_uri_remove_cleanup_2: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
+    document_object_uri_remove: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{primary_alias}/{document_import_id_remove}.json"
+    )
+    document_object_uri_remove_cleanup_1: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_1_alias}/{document_import_id_remove}.json"
+    )
+    document_object_uri_remove_cleanup_2: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q760/{cleanup_2_alias}/{document_import_id_remove}.json"
+    )
 
     document_import_id_keep: DocumentImportId = "CCLW.executive.4934.1571"
 
-    document_object_uri_keep: DocumentObjectUri = f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
+    document_object_uri_keep: DocumentObjectUri = (
+        f"s3://{mock_bucket}/{DOCUMENT_TARGET_PREFIX_DEFAULT}/Q787/{primary_alias}/{document_import_id_keep}.json"
+    )
     _document_importer_keep: DocumentImporter = (
         document_import_id_keep,
         document_object_uri_keep,

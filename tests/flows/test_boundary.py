@@ -44,7 +44,7 @@ from flows.index import Config
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 from tests.flows.conftest import load_fixture
 
@@ -895,7 +895,9 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
         ContentType="application/json",
     )
 
-    document_object_uri: DocumentObjectUri = f"s3://{mock_bucket}/labelled_passages/Q857/v6/AF.document.i00000021.n0000_translated_en.json"
+    document_object_uri: DocumentObjectUri = (
+        f"s3://{mock_bucket}/labelled_passages/Q857/v6/AF.document.i00000021.n0000_translated_en.json"
+    )
     assert load_labelled_passages_by_uri(document_object_uri) == [
         LabelledPassage(
             id="58",
@@ -1100,9 +1102,9 @@ async def test_get_document_passages_from_vespa__generator(
         ]
     )
 
-    assert document_passages_count > vespa_lower_max_hit_limit, (
-        "the fixture has insufficient document passages to validate the test case"
-    )
+    assert (
+        document_passages_count > vespa_lower_max_hit_limit
+    ), "the fixture has insufficient document passages to validate the test case"
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         passages_generator = get_document_passages_from_vespa__generator(

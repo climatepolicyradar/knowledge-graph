@@ -23,7 +23,7 @@ from scripts.config import (
 from src.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.metrics import (
     ConfusionMatrix,
     count_passage_level_metrics,

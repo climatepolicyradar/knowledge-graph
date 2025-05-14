@@ -10,7 +10,7 @@ from pydantic_ai.settings import ModelSettings
 from src.classifier.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import deterministic_hash
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 
@@ -101,9 +101,9 @@ class LLMClassifier(Classifier):
         self.model_name = model_name
         self.system_prompt_template = system_prompt_template
 
-        assert "{concept_description}" in system_prompt_template, (
-            "System prompt must contain {concept_description}"
-        )
+        assert (
+            "{concept_description}" in system_prompt_template
+        ), "System prompt must contain {concept_description}"
 
         self.system_prompt = system_prompt_template.format(
             concept_description=self.concept.to_markdown()

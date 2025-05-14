@@ -3,7 +3,7 @@ from typing import Optional
 
 from datasets import Dataset, load_dataset
 
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 
