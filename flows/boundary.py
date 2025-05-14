@@ -1112,9 +1112,6 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     )
 
 
-# No timeout is set here as it's called directly from one of the
-# (de-)index pipelines which have a timeout set.
-@flow
 async def updates_by_s3(
     aws_env: AwsEnv,
     cache_bucket: str,
