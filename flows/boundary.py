@@ -2,13 +2,18 @@
 
 import asyncio
 import base64
+import gc
 import json
+import logging
 import math
 import os
 import re
+import sys
 import tempfile
+import threading
+import time
 from collections import Counter
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from datetime import timedelta
 from enum import Enum
 from io import BytesIO
@@ -27,7 +32,6 @@ from typing import (
 import boto3
 import httpx
 import tenacity
-import vespa.application
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Document as VespaDocument
@@ -35,14 +39,17 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _get_s3_keys_with_prefix, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
+from cpr_sdk.utils import dig
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from vespa.application import VespaAsync
 from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse, VespaResponse
 from vespa.package import Document, Schema
+from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
     SlackNotify,
@@ -71,6 +78,12 @@ CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 50
 DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
 
+# Get more logs
+logging.basicConfig(level=logging.DEBUG)
+
+# Set the garbage collection debugging flags. Debugging information will be written to sys.stderr. See below for a list of debugging flags which can be combined using bit operations to control debugging.
+gc.set_debug(gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_SAVEALL)
+
 
 def total_milliseconds(td: timedelta) -> int:
     return int(td.total_seconds() * 1_000)
@@ -98,6 +111,8 @@ DocumentObjectUri: TypeAlias = str
 DocumentStem: TypeAlias = str
 # Passed to a self-sufficient flow run
 DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
+# A continuation token used by vespa to enable pagination over query results
+ContinuationToken: TypeAlias = str
 
 
 class S3Accessor(BaseModel):
@@ -105,6 +120,16 @@ class S3Accessor(BaseModel):
 
     paths: list[str] | None = None
     prefixes: list[str] | None = None
+
+    def __str__(self) -> str:
+        """String representation of the S3Accessor for logging"""
+        prefix_count = len(self.prefixes) if self.prefixes else 0
+        path_count = len(self.paths) if self.paths else 0
+        return f"(prefixes={prefix_count}, paths={path_count})"
+
+    def __repr__(self) -> str:
+        """String representation of the S3Accessor for logging"""
+        return self.__str__()
 
 
 # AKA LabelledPassage
@@ -573,11 +598,123 @@ def get_document_passage_from_vespa(
     return passage_id, passage
 
 
+def get_continuation_tokens_from_query_response(
+    vespa_query_response: VespaQueryResponse,
+) -> list[ContinuationToken] | None:
+    """
+    Retrieve continuation tokens from the query response if it exists.
+
+    Continuation tokens can occur at the top level, e.g. under `"children"`, or deeper
+    within the nested structure. We take the continuation tokens deeper in the nested
+    structure that exist for each of the hits in the group.
+    """
+
+    continuation_tokens = []
+
+    vespa_query_response_root = vespa_query_response.json["root"]
+    group_hits = dig(vespa_query_response_root, "children", 0, "children", default=[])
+    for hit in group_hits:
+        hit_continuation_token = dig(hit, "continuation", "next", default=None)
+        if hit_continuation_token:
+            continuation_tokens.append(hit_continuation_token)
+    return continuation_tokens or None
+
+
+def get_vespa_passages_from_query_response(
+    vespa_query_response: VespaQueryResponse,
+) -> dict[TextBlockId, tuple[VespaHitId, VespaPassage]]:
+    """Retrieve the passages from the query response."""
+
+    vespa_query_response_root = vespa_query_response.json["root"]
+    passages_root = dig(
+        vespa_query_response_root, "children", 0, "children", 0, "children", default=[]
+    )
+    passage_hits = [
+        dig(passage_root, "children", 0, "children", 0)
+        for passage_root in passages_root
+    ]
+    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {
+        passage["fields"]["text_block_id"]: (
+            passage["id"],
+            VespaPassage.model_validate(passage["fields"]),
+        )
+        for passage in passage_hits
+    }
+
+    return vespa_passages
+
+
+async def get_document_passages_from_vespa__generator(
+    document_import_id: DocumentImportId,
+    vespa_connection_pool: VespaAsync,
+    continuation_tokens: list[ContinuationToken] | None = [],
+    grouping_max: int = 1000,
+    query_profile: str = "default",
+) -> AsyncGenerator[dict[TextBlockId, tuple[VespaHitId, VespaPassage]], None]:
+    """
+    An async generator of vespa passages using continuation tokens to paginate.
+
+    Continuation tokens are opaque objects that are used to move through the grouping
+    step of a query to facilitate pagination over results.
+    - https://docs.vespa.ai/en/reference/grouping-syntax.html?mode=cloud#continuations
+
+    params:
+    - document_import_id: The import id to filter on passages in vespa with.
+    - vespa_connection_pool: The vespa connection pool to use as the query client.
+    - continuation_tokens: The tokens used to paginate over the vespa hits.
+    - grouping_max: The maximum amount of grouping subquery hits to return at once.
+    - query_profile: The query profile to use for the query. This is defined in the
+        search/query-profiles/ subdirectory of the application package for vespa.
+    """
+
+    conditions = qb.QueryField("document_import_id").contains(document_import_id)
+
+    # Group the results of the select query by text_block_id in to groups of
+    # grouping_max size. For each of the results in the group we output the summary of
+    # the passage in vespa.
+    # - https://docs.vespa.ai/en/grouping.html?mode=cloud
+    grouping = G.all(
+        G.group("text_block_id"),
+        G.max(grouping_max),
+        G.each(G.each(G.output(G.summary()))),
+    )
+
+    tokens = continuation_tokens or []
+
+    while tokens is not None:
+        query: qb.Query = (
+            qb.select("*")  # type: ignore
+            .from_(
+                Schema(name="document_passage", document=Document()),
+            )
+            .where(conditions)
+            .set_limit(0)
+            .groupby(grouping, continuations=tokens)
+        )
+
+        vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
+            yql=query,
+            queryProfile=query_profile,
+        )
+
+        if not vespa_query_response.is_successful():
+            raise QueryError(vespa_query_response.get_status_code())
+
+        vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
+
+        if vespa_passages:
+            yield vespa_passages
+
+        tokens: list[ContinuationToken] | None = (
+            get_continuation_tokens_from_query_response(vespa_query_response)
+        )
+
+
 @vespa_retry()
 async def get_document_passages_from_vespa(
     document_import_id: DocumentImportId,
     text_blocks_ids: list[TextBlockId] | None,
-    vespa_connection_pool: vespa.application.VespaAsync,
+    vespa_connection_pool: VespaAsync,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
     """Retrieve some or all passages for a document in Vespa."""
     print(f"Getting document passages from Vespa: {document_import_id}")
@@ -1122,45 +1259,51 @@ async def run_partial_updates_of_concepts_for_document_passages(
         for labelled_passage in document_labelled_passages
     }
 
-    logger.info(
-        f"starting partial updates for {len(grouped_concepts)} grouped concepts"
-    )
+    grouped_concepts_n = len(grouped_concepts)
+    logger.info(f"starting partial updates for {grouped_concepts_n} grouped concepts")
 
     document_import_id = remove_translated_suffix(document_importer[0])
 
-    text_blocks_ids: list[TextBlockId] = list(grouped_concepts.keys())
-
+    logger.info("creating Vespa connection pool")
     async with (
         vespa_search_adapter.client.asyncio(  # pyright: ignore[reportOptionalMemberAccess]
             connections=DEFAULT_DOCUMENTS_BATCH_SIZE,  # How many tasks to have running at once
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
-        # Read all the document passages from Vespa in as fewer reads as possible
+        logger.info("Starting getting document passages from Vespa")
+        passages_generator = get_document_passages_from_vespa__generator(
+            document_import_id=document_import_id,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+        logger.info("got document passage from Vespa generator")
+
+        start = time.perf_counter()
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
-
-        for text_blocks_ids_batch in iterate_batch(
-            text_blocks_ids, VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY
-        ):
-            results = await get_document_passages_from_vespa(
-                document_import_id=document_import_id,
-                text_blocks_ids=text_blocks_ids_batch,
-                vespa_connection_pool=vespa_connection_pool,
+        text_blocks_n = 0
+        async for passage_batch in passages_generator:
+            text_blocks.update(passage_batch)
+            text_blocks_n = len(text_blocks)
+            logger.info(
+                f"No. of text blocks in text blocks dict so far: {text_blocks_n}"
             )
+        elapsed_time = time.perf_counter() - start
 
-            # Update the accumulated dictionary with new results
-            next_text_blocks = {
-                text_block.text_block_id: (vespa_hit_id, text_block)
-                for vespa_hit_id, text_block in results
-            }
-            text_blocks = text_blocks | next_text_blocks
+        text_blocks_size_in_bytes = sys.getsizeof(text_blocks)
+        text_blocks_size_in_mb = text_blocks_size_in_bytes / (1024 * 1024)
 
-        grouped_concepts_n = len(grouped_concepts)
-        text_blocks_n = len(text_blocks)
+        logger.info(
+            "Finished getting document passages from Vespa. Total "
+            f"number of text blocks: {text_blocks_n}. "
+            f"Duration (Seconds): {elapsed_time:.2f}. "
+            f"Memory size (Mb): {text_blocks_size_in_mb}. "
+        )
+
         if grouped_concepts_n != text_blocks_n:
-            raise ValueError(
-                f"there were {grouped_concepts_n} labelled passages and only "
-                f"{text_blocks_n} document passages were read from Vespa"
+            logger.warning(
+                f"There were {grouped_concepts_n} text block ids from the labelled "
+                f"passages but {text_blocks_n} document passages were read from "
+                f"Vespa for {document_import_id}"
             )
 
     # Batch updates (writes)
@@ -1172,13 +1315,22 @@ async def run_partial_updates_of_concepts_for_document_passages(
     # concept.
     concepts_counts: Counter[ConceptModel] = Counter()
 
-    # Batch updates (writes) and let the Vespa SDK take care of the complexities
+    # Batch updates (writes) and let the Vespa SDK take care of the
+    # complexities.
 
     class DataPoint(TypedDict):
         id: VespaDataId
         fields: dict[str, Any]
 
-    def _to_data(text_block_id: TextBlockId, concepts: list[VespaConcept]) -> DataPoint:
+    def _to_data(
+        text_block_id: TextBlockId, concepts: list[VespaConcept]
+    ) -> DataPoint | None:
+        if text_block_id not in text_blocks:
+            print(
+                f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+            )
+            return None
+
         document_passage_id = text_blocks[text_block_id][0]
         document_passage = text_blocks[text_block_id][1]
 
@@ -1191,22 +1343,45 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
         return {"id": data_id, "fields": {"concepts": serialised_concepts}}
 
-    data: Iterable[dict[str, Any]] = list(
-        map(lambda x: dict(_to_data(*x)), grouped_concepts.items())
-    )
+    logger.info("Beginning creation of for bulk feed update")
+    data: Iterable[dict[str, Any]] = []
+    for text_block_id, concepts in grouped_concepts.items():
+        data_point = _to_data(text_block_id, concepts)
+        if data_point:
+            data.append(dict(data_point))
+    logger.info("Finished creation of data for bulk feed update")
+
+    response_cb_lock: threading.Lock = threading.Lock()
 
     # Wrap the callback with the appropriate state and make it match
     # the expected signature.
     def _vespa_response_handler_cb_with_state(
         response: VespaResponse, data_id: VespaDataId
     ):
-        vespa_response_handler_cb(
-            failures,
-            concepts_counts,
-            grouped_concepts,
-            response,
-            data_id,
-        )
+        try:
+            print("acquiring lock")
+            acquired_lock = response_cb_lock.acquire(
+                blocking=True,
+                timeout=timedelta(minutes=2).total_seconds(),
+            )
+
+            if not acquired_lock:
+                print("failed to acquire lock")
+                return
+
+            print("handling response")
+            vespa_response_handler_cb(
+                failures,
+                concepts_counts,
+                grouped_concepts,
+                response,
+                data_id,
+            )
+        finally:
+            locked = response_cb_lock.locked()
+            print(f"releasing lock? {locked}")
+            if locked:
+                response_cb_lock.release()
 
     @vespa_retry()
     def _feed_updates(
@@ -1225,13 +1400,19 @@ async def run_partial_updates_of_concepts_for_document_passages(
             callback=callback,
         )
 
+    logger.info("starting feed update")
+    start = time.perf_counter()
     _feed_updates(
         vespa_search_adapter,
         data,
         _vespa_response_handler_cb_with_state,
     )
+    elapsed_time = time.perf_counter() - start
+    logger.info(f"finished feed update in {elapsed_time:.2f}s")
 
     # Write concepts counts to S3
+    logger.info("starting concepts counting and writing to store")
+    start = time.perf_counter()
     try:
         await concepts_counts_updater_cb(
             document_importer=document_importer,
@@ -1242,6 +1423,10 @@ async def run_partial_updates_of_concepts_for_document_passages(
         )
     except Exception as e:
         logger.error(f"failed to write concepts counts to S3: {str(e)}")
+
+    logger.info(
+        f"finished concepts counting and writing to store in {elapsed_time:.2f}s"
+    )
 
     if failures:
         raise ValueError(f"there was {len(failures)} failures")
@@ -1268,7 +1453,18 @@ def update_feed_result_callback(
 
     # Update concepts counts
     text_block_id = get_text_block_id_from_vespa_data_id(data_id)
-    concepts = grouped_concepts[text_block_id]
+
+    try:
+        concepts = grouped_concepts[text_block_id]
+    except KeyError as e:
+        # Add context to the error. Only sample the first 10, since
+        # there could be > 50,000. The intent is to get an idea of the
+        # keys values' themselves, since we already know this key is
+        # missing.
+        raise KeyError(
+            f"Missing text block ID '{text_block_id}' in grouped concepts. "
+            f"All grouped concepts' keys: {','.join(list(grouped_concepts.keys())[:10])}"
+        ) from e
 
     # Example:
     #

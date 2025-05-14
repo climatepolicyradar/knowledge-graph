@@ -72,6 +72,7 @@ class Config:
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
     timeout_seconds=None,
+    log_prints=True,
 )
 async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
@@ -88,25 +89,23 @@ async def index_labelled_passages_from_s3_to_vespa(
     file in the specified S3 path is expected to represent the
     document's import ID.
     """
-    logger = get_run_logger()
-
     if not config:
-        logger.info("no config provided, creating one")
+        print("no config provided, creating one")
 
         config = await Config.create()
     else:
-        logger.info("config provided")
+        print("config provided")
     assert config.cache_bucket
 
-    logger.info(f"running with config: {config}")
+    print(f"running with config: {config}")
 
     if classifier_specs is None:
-        logger.info("no classifier specs. passed in, loading from file")
+        print("no classifier specs. passed in, loading from file")
         classifier_specs = parse_spec_file(config.aws_env)
 
     disallow_latest_alias(classifier_specs)
 
-    logger.info(f"running with classifier specs: {classifier_specs}")
+    print(f"running with classifier specs: {classifier_specs}")
 
     s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs,
@@ -115,7 +114,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         config.document_source_prefix,
     )
 
-    logger.info(f"s3_prefixes: {s3_accessor.prefixes}, s3_paths: {s3_accessor.paths}")
+    print(f"Running on: {s3_accessor}")
 
     await updates_by_s3(
         aws_env=config.aws_env,
