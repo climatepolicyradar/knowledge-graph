@@ -1270,9 +1270,10 @@ async def run_partial_updates_of_concepts_for_document_passages(
         grouped_concepts_n = len(grouped_concepts)
         text_blocks_n = len(text_blocks)
         if grouped_concepts_n != text_blocks_n:
-            raise ValueError(
-                f"there were {grouped_concepts_n} labelled passages and only "
-                f"{text_blocks_n} document passages were read from Vespa"
+            logger.warning(
+                f"There were {grouped_concepts_n} text block ids from the labelled "
+                f"passages but {text_blocks_n} document passages were read from "
+                f"Vespa for {document_import_id}"
             )
 
     # Batch updates (writes)
@@ -1290,7 +1291,15 @@ async def run_partial_updates_of_concepts_for_document_passages(
         id: VespaDataId
         fields: dict[str, Any]
 
-    def _to_data(text_block_id: TextBlockId, concepts: list[VespaConcept]) -> DataPoint:
+    def _to_data(
+        text_block_id: TextBlockId, concepts: list[VespaConcept]
+    ) -> DataPoint | None:
+        if text_block_id not in text_blocks:
+            logger.error(
+                f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+            )
+            return None
+
         document_passage_id = text_blocks[text_block_id][0]
         document_passage = text_blocks[text_block_id][1]
 
@@ -1304,9 +1313,11 @@ async def run_partial_updates_of_concepts_for_document_passages(
         return {"id": data_id, "fields": {"concepts": serialised_concepts}}
 
     logger.info("Beginning creation of DataPoints.")
-    data: Iterable[dict[str, Any]] = list(
-        map(lambda x: dict(_to_data(*x)), grouped_concepts.items())
-    )
+    data: Iterable[dict[str, Any]] = []
+    for text_block_id, concepts in grouped_concepts.items():
+        data_point = _to_data(text_block_id, concepts)
+        if data_point:
+            data.append(dict(data_point))
     logger.info("Finished creation of DataPoints.")
 
     response_cb_lock: threading.Lock = threading.Lock()
