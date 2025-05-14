@@ -76,24 +76,28 @@ def check_single_spec(
     prefix = os.path.join(BASE_PREFIX, classifier_model, classifier_alias)
     try:
         file_names = collect_file_names(bucket_name, prefix)
+        result = Result(
+            path_exists=True,
+            classifier_spec=classifier_spec,
+            file_names=file_names,
+        )
         stats = f"{len(file_names):,} objects"
         if count_spans:
-            span_count, passage_count = count_spans_in_labelled_passages(
+            result.span_count, result.passage_count = count_spans_in_labelled_passages(
                 bucket_name, prefix, file_names
             )
-            stats = f"{stats}, {span_count:,} spans, {passage_count:,} passages"
+            stats = f"{stats}, {result.span_count:,} spans, {result.passage_count:,} passages"
     except ClientError as e:
         print(f"Error checking results for {classifier_spec}: {e}")
         return Result(path_exists=False, classifier_spec=classifier_spec)
 
     if file_names:
         print(f"✅ Results for {classifier_spec}: {stats}")
-        return Result(
-            path_exists=True, classifier_spec=classifier_spec, file_names=file_names
-        )
+        return result
     else:
         print(f"❌ No results for {classifier_spec}")
-        return Result(path_exists=False, classifier_spec=classifier_spec, file_names=[])
+        result.path_exists = False
+        return result
 
 
 def write_result(
@@ -155,6 +159,8 @@ def check_classifier_specs(
         data = yaml.safe_load(file)
 
     to_process = []
+    span_count = 0
+    passage_count = 0
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_spec = {
             executor.submit(check_single_spec, bucket_name, spec, count_spans): spec
@@ -169,7 +175,14 @@ def check_classifier_specs(
             if not result.path_exists:
                 to_process.append(result.classifier_spec)
 
-    typer.echo(f"to_process: {to_process}")
+            if count_spans:
+                span_count += result.span_count
+                passage_count += result.passage_count
+
+    typer.echo(f"Specs without results: {to_process}")
+    if count_spans:
+        typer.echo(f"Total spans: {span_count:,}")
+        typer.echo(f"Total passages: {passage_count:,}")
 
 
 if __name__ == "__main__":
