@@ -1296,8 +1296,11 @@ async def run_partial_updates_of_concepts_for_document_passages(
             f"Memory size (Mb): {text_blocks_size_in_mb}. "
         )
 
-        if grouped_concepts_n != text_blocks_n:
-            logger.warning(
+        # It's normal for there to be less text blocks from inference than vespa
+        # because inference filters out more types. However it should never be
+        # The other way around
+        if grouped_concepts_n > text_blocks_n:
+            raise ValueError(
                 f"There were {grouped_concepts_n} text block ids from the labelled "
                 f"passages but {text_blocks_n} document passages were read from "
                 f"Vespa for {document_import_id}"
