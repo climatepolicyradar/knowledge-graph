@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -17,9 +18,11 @@ from vespa.package import Document, Schema
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
     TextBlockId,
@@ -1183,8 +1186,8 @@ async def test__update_text_block__update(
     local_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts,
 ) -> None:
-    text_block_id = "1457"
-    document_import_id = "CCLW.executive.10014.4470"
+    text_block_id = TextBlockId("1457")
+    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
 
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id=text_block_id,
@@ -1192,12 +1195,15 @@ async def test__update_text_block__update(
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
+    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         (
             vespa_response,
             text_block_id_response,
             document_import_id_response,
         ) = await _update_text_block(
+            semaphore=semaphore,
             text_block_id=text_block_id,
             document_passage_id=document_passage_id,
             document_passage=document_passage,
@@ -1221,8 +1227,8 @@ async def test__update_text_block__remove(
     local_vespa_search_adapter: VespaSearchAdapter,
     example_vespa_concepts,
 ) -> None:
-    text_block_id = "1457"
-    document_import_id = "CCLW.executive.10014.4470"
+    text_block_id = TextBlockId("1457")
+    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
 
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id=text_block_id,
@@ -1230,12 +1236,15 @@ async def test__update_text_block__remove(
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
+    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         (
             vespa_response,
             text_block_id_response,
             document_import_id_response,
         ) = await _update_text_block(
+            semaphore=semaphore,
             text_block_id=text_block_id,
             document_passage_id=document_passage_id,
             document_passage=document_passage,

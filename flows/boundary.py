@@ -555,7 +555,7 @@ def get_document_from_vespa(
 
 @vespa_retry()
 def get_document_passage_from_vespa(
-    text_block_id: str,
+    text_block_id: TextBlockId,
     document_import_id: DocumentImportId,
     vespa_search_adapter: VespaSearchAdapter,
 ) -> tuple[VespaHitId, VespaPassage]:
@@ -1214,6 +1214,7 @@ async def updates_by_s3(
 
 
 async def _update_text_block(
+    semaphore: asyncio.Semaphore,
     text_block_id: TextBlockId,
     document_passage_id: VespaHitId,
     document_passage: VespaPassage,
@@ -1221,25 +1222,26 @@ async def _update_text_block(
     concepts: list[VespaConcept],
     vespa_connection_pool: VespaAsync,
 ) -> tuple[VespaResponse, TextBlockId, VespaHitId]:
-    # Prepare the concepts' counts for Vespa
-    serialised_concepts = merge_serialise_concepts_cb(
-        document_passage,
-        concepts,
-    )
+    async with semaphore:
+        # Prepare the concepts' counts for Vespa
+        serialised_concepts = merge_serialise_concepts_cb(
+            document_passage,
+            concepts,
+        )
 
-    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-    response: VespaResponse = await vespa_connection_pool.update_data(
-        schema="document_passage",
-        namespace="doc_search",
-        data_id=data_id,
-        fields={"concepts": serialised_concepts},
-    )
+        data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+        response: VespaResponse = await vespa_connection_pool.update_data(
+            schema="document_passage",
+            namespace="doc_search",
+            data_id=data_id,
+            fields={"concepts": serialised_concepts},
+        )
 
-    return (
-        response,
-        text_block_id,
-        document_passage_id,
-    )
+        return (
+            response,
+            text_block_id,
+            document_passage_id,
+        )
 
 
 # No timeout set since the caller of this has one.
@@ -1369,46 +1371,43 @@ async def run_partial_updates_of_concepts_for_document_passages(
         logger.info("starting partial updates")
         start = time.perf_counter()
 
-        text_blocks_batches = iterate_batch(
-            data=list(grouped_concepts.items()),
-            batch_size=DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
-        )
-
         responses: list[
             tuple[VespaResponse, TextBlockId, VespaHitId] | BaseException
         ] = []
 
-        for i, text_block_batch in enumerate(text_blocks_batches, start=1):
-            logger.info(f"Processing text blocks task batch #{i}")
+        semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
 
-            tasks = []
-
-            for text_block_id, concepts in text_block_batch:
-                if text_block_id not in text_blocks:
-                    logger.error(
-                        f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
-                    )
-                    missing_text_block_ids_from_vespa.append(text_block_id)
-                    continue
-
-                document_passage_id = text_blocks[text_block_id][0]
-                document_passage = text_blocks[text_block_id][1]
-
-                tasks.append(
-                    _update_text_block(
-                        text_block_id=text_block_id,
-                        document_passage_id=document_passage_id,
-                        document_passage=document_passage,
-                        merge_serialise_concepts_cb=merge_serialise_concepts_cb,
-                        concepts=concepts,
-                        vespa_connection_pool=vespa_connection_pool,
-                    )
+        tasks = []
+        for text_block_id, concepts in grouped_concepts.items():
+            if text_block_id not in text_blocks:
+                logger.error(
+                    f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
                 )
+                missing_text_block_ids_from_vespa.append(text_block_id)
+                continue
 
-            logger.info(f"Gathering updates tasks for batch #{i}")
-            tasks_results = await asyncio.gather(*tasks, return_exceptions=True)
-            responses.extend(tasks_results)
-            logger.info(f"Gathered updates tasks for batch #{i}")
+            document_passage_id = text_blocks[text_block_id][0]
+            document_passage = text_blocks[text_block_id][1]
+
+            tasks.append(
+                _update_text_block(
+                    semaphore=semaphore,
+                    text_block_id=text_block_id,
+                    document_passage_id=document_passage_id,
+                    document_passage=document_passage,
+                    merge_serialise_concepts_cb=merge_serialise_concepts_cb,
+                    concepts=concepts,
+                    vespa_connection_pool=vespa_connection_pool,
+                )
+            )
+
+        start = time.perf_counter()
+        logger.info("starting gathering updates tasks")
+        tasks_results = await asyncio.gather(*tasks, return_exceptions=True)
+        responses.extend(tasks_results)
+        logger.info(
+            f"finished gathering updates tasks in {time.perf_counter() - start:.2f}s"
+        )
 
         for response in responses:
             if isinstance(response, BaseException):
