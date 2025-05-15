@@ -1016,6 +1016,7 @@ def op_to_fn(
     # where we want to give a timeout, that's smaller than that
     # top-level.
     timeout_seconds=PARENT_TIMEOUT_S,
+    log_prints=True,
 )
 async def run_partial_updates_of_concepts_for_batch(
     documents_batch: list[DocumentImporter],
@@ -1502,6 +1503,7 @@ async def update_s3_with_update_concepts_counts(
     )
 
     # Write to S3
+    print(f"Updating concepts counts s3 file for: {concepts_counts_uri}")
     s3_object_write_text(
         s3_uri=concepts_counts_uri,
         text=serialised_concepts_counts,
