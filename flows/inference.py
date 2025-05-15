@@ -39,7 +39,7 @@ from scripts.cloud import (
 )
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 # The "parent" AKA the higher level flows that do multiple things

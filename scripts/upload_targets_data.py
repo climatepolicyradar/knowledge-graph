@@ -12,7 +12,7 @@ from rich.console import Console
 
 # from src.argilla_legacy import concept_to_dataset_name
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 load_dotenv(find_dotenv())
