@@ -74,6 +74,7 @@ T = TypeVar("T")
 CONCEPT_COUNT_SEPARATOR: Final[str] = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: Final[str] = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE: Final[PositiveInt] = 50
+DEFAULT_TEXT_BLOCKS_BATCH_SIZE: Final[PositiveInt] = 50
 DEFAULT_UPDATES_TASK_BATCH_SIZE: Final[PositiveInt] = 5
 
 # Get more logs
@@ -1212,6 +1213,35 @@ async def updates_by_s3(
         raise ValueError("there was at least 1 task that failed")
 
 
+async def _update_text_block(
+    text_block_id: TextBlockId,
+    document_passage_id: VespaHitId,
+    document_passage: VespaPassage,
+    merge_serialise_concepts_cb: _ConceptsCombiner,
+    concepts: list[VespaConcept],
+    vespa_connection_pool: VespaAsync,
+) -> tuple[VespaResponse, TextBlockId, VespaHitId]:
+    # Prepare the concepts' counts for Vespa
+    serialised_concepts = merge_serialise_concepts_cb(
+        document_passage,
+        concepts,
+    )
+
+    data_id = get_data_id_from_vespa_hit_id(document_passage_id)
+    response: VespaResponse = await vespa_connection_pool.update_data(
+        schema="document_passage",
+        namespace="doc_search",
+        data_id=data_id,
+        fields={"concepts": serialised_concepts},
+    )
+
+    return (
+        response,
+        text_block_id,
+        document_passage_id,
+    )
+
+
 # No timeout set since the caller of this has one.
 @flow(
     log_prints=True,
@@ -1336,32 +1366,47 @@ async def run_partial_updates_of_concepts_for_document_passages(
         logger.info("starting partial updates")
         start = time.perf_counter()
 
-        # TODO: Use an asynchronous group of tasks
-        for text_block_id, concepts in grouped_concepts.items():
-            if text_block_id not in text_blocks:
-                logger.error(
-                    f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+        text_blocks_batches = iterate_batch(
+            data=list(grouped_concepts.items()),
+            batch_size=DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
+        )
+
+        responses: list[tuple[VespaResponse, TextBlockId, VespaHitId]] = []
+
+        for i, text_block_batch in enumerate(text_blocks_batches, start=1):
+            logger.info(f"Processing text blocks task batch #{i}")
+
+            tasks = []
+
+            for text_block_id, concepts in text_block_batch:
+                if text_block_id not in text_blocks:
+                    logger.error(
+                        f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+                    )
+                    missing_text_block_ids_from_vespa.append(text_block_id)
+                    continue
+
+                document_passage_id = text_blocks[text_block_id][0]
+                document_passage = text_blocks[text_block_id][1]
+
+                tasks.append(
+                    _update_text_block(
+                        text_block_id=text_block_id,
+                        document_passage_id=document_passage_id,
+                        document_passage=document_passage,
+                        merge_serialise_concepts_cb=merge_serialise_concepts_cb,
+                        concepts=concepts,
+                        vespa_connection_pool=vespa_connection_pool,
+                    )
                 )
-                missing_text_block_ids_from_vespa.append(text_block_id)
-                continue
 
-            document_passage_id = text_blocks[text_block_id][0]
-            document_passage = text_blocks[text_block_id][1]
+            logger.info(f"Gathering updates tasks for batch #{i}")
+            # TODO: Exceptions
+            tasks_results = await asyncio.gather(*tasks)
+            responses.extend(tasks_results)
+            logger.info(f"Gathered updates tasks for batch #{i}")
 
-            # Prepare the concepts' counts for Vespa
-            serialised_concepts = merge_serialise_concepts_cb(
-                document_passage,
-                concepts,
-            )
-
-            data_id = get_data_id_from_vespa_hit_id(document_passage_id)
-            response: VespaResponse = await vespa_connection_pool.update_data(
-                schema="document_passage",
-                namespace="doc_search",
-                data_id=data_id,
-                fields={"concepts": serialised_concepts},
-            )
-
+        for response, text_block_id, document_passage_id in responses:
             if not response.is_successful():
                 response_json = json.dumps(response.get_json())
                 logger.error(
