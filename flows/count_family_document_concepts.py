@@ -222,6 +222,9 @@ async def load_update_document_concepts_counts(
         for concept, count in concepts_counts.items()
     }
 
+    logger.info(
+        f"Updating: {document_import_id}, in vespa with: {concepts_counts_with_names=}"
+    )
     await partial_update_family_document_concepts_counts(
         document_import_id,
         concepts_counts_with_names,
