@@ -648,7 +648,8 @@ async def get_document_passages_from_vespa__generator(
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
     continuation_tokens: list[ContinuationToken] | None = [],
-    grouping_max: int = 1000,
+    grouping_max: int = 5_000,
+    grouping_precision: int = 100_000,
     query_profile: str = "default",
 ) -> AsyncGenerator[dict[TextBlockId, tuple[VespaHitId, VespaPassage]], None]:
     """
@@ -676,6 +677,7 @@ async def get_document_passages_from_vespa__generator(
     grouping = G.all(
         G.group("text_block_id"),
         G.max(grouping_max),
+        G.precision(grouping_precision),
         G.each(G.each(G.output(G.summary()))),
     )
 
