@@ -127,165 +127,30 @@ class WikibaseSession:
             complete subconcepts, recursively down the hierarchy
         :return Concept: The concept with the given Wikibase ID
         """
-        # Resolve any redirects first
-        wikibase_id = self._resolve_redirect(wikibase_id)
+        # Get the base concept first
+        concept = self.get_concepts(wikibase_ids=[wikibase_id], timestamp=timestamp)[0]
 
-        if timestamp:
-            if timestamp.tzinfo is None:
-                timestamp = timestamp.astimezone(timezone.utc)
-            if timestamp > datetime.now(timezone.utc):
-                raise ValueError(
-                    "Can't fetch concepts from the future... "
-                    "The value of timestamp must be in the past"
-                )
-        else:
-            timestamp = datetime.now(timezone.utc)
-
-        # First get the pageid for this wikibase ID
-        page_id_response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "wbgetentities",
-                "format": "json",
-                "ids": wikibase_id,
-                "props": "info",
-            },
-        ).json()
-
-        page_id = str(
-            page_id_response.get("entities", {}).get(str(wikibase_id), {}).get("pageid")
-        )
-        if not page_id:
-            raise ConceptNotFoundError(wikibase_id)
-
-        redirects = (
-            page_id_response.get("entities", {})
-            .get(str(wikibase_id), {})
-            .get("redirects", {})
-        )
-        if redirects:
-            logger.warning(
-                f"Made a request to {self.base_url} for {wikibase_id} but was "
-                f"redirected to {redirects.get('to')}"
+        # Get recursive relationships if needed
+        recursive_subconcept_ids = []
+        if include_recursive_has_subconcept or include_labels_from_subconcepts:
+            recursive_subconcept_ids = self.get_recursive_has_subconcept_relationships(
+                wikibase_id
             )
-            wikibase_id = redirects.get("to")
-
-        # Use the pageid to get the latest revision before the supplied timestamp
-        # https://www.mediawiki.org/wiki/API:Revisions
-        revisions_response = self.session.get(
-            url=self.api_url,
-            params={
-                "action": "query",
-                "format": "json",
-                "pageids": page_id,
-                "prop": "revisions",
-                "rvdir": "older",
-                "rvlimit": 1,
-                "rvprop": "content",
-                "rvslots": "main",
-                "rvstart": timestamp.isoformat(),
-            },
-        ).json()
-
-        # Extract useful content from the revision response
-        pages = revisions_response.get("query", {}).get("pages", {})
-        if not pages:
-            raise ConceptNotFoundError(wikibase_id)
-
-        page = next(iter(pages.values()))
-        revisions = page.get("revisions", [])
-        if not revisions:
-            raise RevisionNotFoundError(wikibase_id, timestamp)
-
-        entity = json.loads(revisions[0].get("slots", {}).get("main", {}).get("*"))
-        preferred_label = entity.get("labels", {}).get("en", {}).get("value", "")
-
-        if isinstance(entity["aliases"], dict):
-            alternative_labels = [
-                alias.get("value")
-                for alias in entity.get("aliases", {}).get("en", [])
-                if alias.get("language") == "en"
-            ]
-        else:
-            alternative_labels = []
-
-        description = (
-            entity.get("descriptions", {}).get("en", {}).get("value", "")
-            if isinstance(entity["descriptions"], dict)
-            else ""
-        )
-
-        preferred_label = entity.get("labels", {}).get("en", {}).get("value", "")
-
-        if isinstance(entity["aliases"], dict):
-            alternative_labels = [
-                alias.get("value")
-                for alias in entity.get("aliases", {}).get("en", [])
-                if alias.get("language") == "en"
-            ]
-        else:
-            alternative_labels = []
-
-        description = (
-            entity.get("descriptions", {}).get("en", {}).get("value", "")
-            if isinstance(entity["descriptions"], dict)
-            else ""
-        )
-
-        concept = Concept(
-            preferred_label=preferred_label,
-            alternative_labels=alternative_labels,
-            description=description,
-            wikibase_id=wikibase_id,
-        )
-
-        if "claims" in entity and entity["claims"] != []:
-            for claim in entity["claims"].values():
-                for statement in claim:
-                    if statement["mainsnak"]["snaktype"] == "value":
-                        property_id = statement["mainsnak"]["property"]
-                        value = statement["mainsnak"]["datavalue"]["value"]
-                        if property_id == self.subconcept_of_property_id:
-                            concept.subconcept_of = concept.subconcept_of + [
-                                self._resolve_redirect(value["id"])
-                            ]
-                        elif property_id == self.has_subconcept_property_id:
-                            concept.has_subconcept = concept.has_subconcept + [
-                                self._resolve_redirect(value["id"])
-                            ]
-                        elif property_id == self.related_concept_property_id:
-                            concept.related_concepts = concept.related_concepts + [
-                                self._resolve_redirect(value["id"])
-                            ]
-                        elif property_id == self.negative_labels_property_id:
-                            concept.negative_labels = concept.negative_labels + [value]
-                        elif property_id == self.definition_property_id:
-                            concept.definition = value
+            if include_recursive_has_subconcept:
+                concept.recursive_has_subconcept = recursive_subconcept_ids
 
         if include_recursive_subconcept_of:
             concept.recursive_subconcept_of = (
                 self.get_recursive_subconcept_of_relationships(wikibase_id)
             )
 
-        if include_recursive_has_subconcept:
-            concept.recursive_has_subconcept = (
-                self.get_recursive_has_subconcept_relationships(wikibase_id)
+        # Get labels from subconcepts if needed
+        if include_labels_from_subconcepts and recursive_subconcept_ids:
+            subconcepts = self.get_concepts(
+                wikibase_ids=recursive_subconcept_ids, timestamp=timestamp
             )
 
-        if include_labels_from_subconcepts:
-            # don't bother fetching the recursive subconcepts if we already have them
-            # from the clause above
-            if concept.recursive_subconcept_of:
-                recursive_subconcept_ids = concept.recursive_subconcept_of
-            else:
-                recursive_subconcept_ids = (
-                    self.get_recursive_has_subconcept_relationships(wikibase_id)
-                )
-
-            subconcepts = self.get_concepts(wikibase_ids=recursive_subconcept_ids)
-
-            # fetch all of the labels and negative_labels for all of the subconcepts
-            # and the concept itself
+            # Collect all labels
             all_positive_labels = set(concept.all_labels)
             all_negative_labels = set(concept.negative_labels)
             for subconcept in subconcepts:
@@ -303,24 +168,28 @@ class WikibaseSession:
         property_id: str,
         max_depth: int = 50,
         current_depth: int = 0,
+        visited: Optional[set[WikibaseID]] = None,
     ) -> list[WikibaseID]:
         """
         Helper method to fetch recursive relationships by following a property.
 
+        Uses a 'visited' set to avoid cycles and redundant API calls.
+
         :param WikibaseID wikibase_id: The Wikibase ID to start from
         :param str property_id: The property ID to traverse
         :param int max_depth: The maximum number of hops to traverse across the
-            hierarchy, defaults to 50. If the max depth is reached, the function
-            will return a list of the unique ids it has traversed so far.
+            hierarchy, defaults to 50
         :param int current_depth: Internal parameter to track recursion depth
+        :param set[WikibaseID] visited: Set of already visited IDs to avoid cycles
         :return list[WikibaseID]: List of related concept IDs
         """
-        if current_depth >= max_depth:
-            logger.warning(
-                f"Hit maximum recursion depth ({max_depth}) while fetching relationships "
-                f"for {wikibase_id}. Returning partial results."
-            )
+        if visited is None:
+            visited = set()
+
+        if current_depth >= max_depth or wikibase_id in visited:
             return []
+
+        visited.add(wikibase_id)
 
         valid_property_ids = [
             self.subconcept_of_property_id,
@@ -341,29 +210,40 @@ class WikibaseSession:
                 "action": "wbgetentities",
                 "format": "json",
                 "ids": wikibase_id,
-                "props": "claims",
+                "props": "claims",  # Only fetch claims to reduce response size
             },
         ).json()
 
         entity = response["entities"][str(wikibase_id)]
         hierarchically_related_concepts = []
+
         if "claims" in entity:
+            related_ids = []
             for claim in entity["claims"].values():
                 for statement in claim:
-                    if statement["mainsnak"]["snaktype"] == "value":
-                        if statement["mainsnak"]["property"] == property_id:
-                            resolved_id = self._resolve_redirect(
-                                statement["mainsnak"]["datavalue"]["value"]["id"]
-                            )
-                            hierarchically_related_concepts.append(resolved_id)
-                            hierarchically_related_concepts.extend(
-                                self._get_recursive_relationships(
-                                    resolved_id,
-                                    property_id,
-                                    max_depth=max_depth,
-                                    current_depth=current_depth + 1,
-                                )
-                            )
+                    if (
+                        statement["mainsnak"]["snaktype"] == "value"
+                        and statement["mainsnak"]["property"] == property_id
+                    ):
+                        related_id = self._resolve_redirect(
+                            statement["mainsnak"]["datavalue"]["value"]["id"]
+                        )
+                        if related_id not in visited:
+                            related_ids.append(related_id)
+
+            # Batch fetch the next level of relationships
+            if related_ids:
+                hierarchically_related_concepts.extend(related_ids)
+                for related_id in related_ids:
+                    hierarchically_related_concepts.extend(
+                        self._get_recursive_relationships(
+                            related_id,
+                            property_id,
+                            max_depth=max_depth,
+                            current_depth=current_depth + 1,
+                            visited=visited,
+                        )
+                    )
 
         return list(set(hierarchically_related_concepts))
 
@@ -473,26 +353,178 @@ class WikibaseSession:
         self,
         limit: Optional[int] = None,
         wikibase_ids: Optional[list[WikibaseID]] = None,
+        timestamp: Optional[datetime] = None,
     ) -> list[Concept]:
         """
-        Get concepts from Wikibase, optionally specified by their Wikibase IDs
+        Get concepts from Wikibase, optionally specified by their Wikibase IDs.
+
+        Fetches concepts in batches for better performance.
 
         :param Optional[int] limit: The maximum number of concepts to fetch
         :param list[WikibaseID] wikibase_ids: The Wikibase IDs of the concepts
+        :param Optional[datetime] timestamp: The timestamp to fetch concepts at.
+            If not provided, the latest version will be fetched.
         :return list[Concept]: The concepts, optionally with the given Wikibase IDs
+        :raises ConceptNotFoundError: If a concept doesn't exist
+        :raises RevisionNotFoundError: If a concept exists but no revision is found at the specified timestamp
         """
         if not wikibase_ids:
             wikibase_ids = self.get_all_concept_ids()
 
-        concepts = []
-        for wikibase_id in wikibase_ids[:limit]:
-            try:
-                concept = self.get_concept(wikibase_id)
-                concepts.append(concept)
-            except ValidationError as e:
-                logger.warning(
-                    f"Failed to fetch concept with Wikibase ID: {wikibase_id} with error: {e}"
+        if limit:
+            wikibase_ids = wikibase_ids[:limit]
+
+        if timestamp:
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.astimezone(timezone.utc)
+            if timestamp > datetime.now(timezone.utc):
+                raise ValueError(
+                    "Can't fetch concepts from the future... "
+                    "The value of timestamp must be in the past"
                 )
+        else:
+            timestamp = datetime.now(timezone.utc)
+
+        # Process in batches of 50 for better performance
+        BATCH_SIZE = 50
+        concepts = []
+
+        for i in range(0, len(wikibase_ids), BATCH_SIZE):
+            batch_ids = wikibase_ids[i : i + BATCH_SIZE]
+            # First resolve any redirects
+            batch_ids = [self._resolve_redirect(wid) for wid in batch_ids]
+
+            # Then get the basic entity data
+            entity_response = self.session.get(
+                url=self.api_url,
+                params={
+                    "action": "wbgetentities",
+                    "format": "json",
+                    "ids": "|".join(batch_ids),
+                    "props": "info",
+                },
+            ).json()
+
+            if "error" in entity_response:
+                logger.warning(f"Error fetching batch: {entity_response['error']}")
+                continue
+
+            # Then get the full concept data using revisions API
+            for wikibase_id in batch_ids:
+                try:
+                    # Get the pageid for this wikibase ID
+                    page_id = str(
+                        entity_response.get("entities", {})
+                        .get(str(wikibase_id), {})
+                        .get("pageid")
+                    )
+                    if not page_id:
+                        raise ConceptNotFoundError(wikibase_id)
+
+                    # Get the revision at the specified timestamp
+                    revisions_response = self.session.get(
+                        url=self.api_url,
+                        params={
+                            "action": "query",
+                            "format": "json",
+                            "pageids": page_id,
+                            "prop": "revisions",
+                            "rvdir": "older",
+                            "rvlimit": 1,
+                            "rvprop": "content",
+                            "rvslots": "main",
+                            "rvstart": timestamp.isoformat(),
+                        },
+                    ).json()
+
+                    pages = revisions_response.get("query", {}).get("pages", {})
+                    if not pages:
+                        raise ConceptNotFoundError(wikibase_id)
+
+                    page = next(iter(pages.values()))
+                    revisions = page.get("revisions", [])
+                    if not revisions:
+                        raise RevisionNotFoundError(wikibase_id, timestamp)
+
+                    entity = json.loads(
+                        revisions[0].get("slots", {}).get("main", {}).get("*", "{}")
+                    )
+
+                    if not entity:
+                        raise ConceptNotFoundError(wikibase_id)
+
+                    preferred_label = (
+                        entity.get("labels", {})
+                        .get("en", {})
+                        .get("value", f"concept {wikibase_id}")
+                    )
+                    alternative_labels = []
+                    if isinstance(entity.get("aliases"), dict):
+                        alternative_labels = [
+                            alias.get("value")
+                            for alias in entity.get("aliases", {}).get("en", [])
+                            if alias.get("language") == "en"
+                        ]
+
+                    description = (
+                        entity.get("descriptions", {}).get("en", {}).get("value", "")
+                        if isinstance(entity.get("descriptions"), dict)
+                        else ""
+                    )
+
+                    concept = Concept(
+                        preferred_label=preferred_label,
+                        alternative_labels=alternative_labels,
+                        description=description,
+                        wikibase_id=wikibase_id,
+                    )
+
+                    if "claims" in entity and entity["claims"] != []:
+                        for claim in entity["claims"].values():
+                            for statement in claim:
+                                if statement["mainsnak"]["snaktype"] == "value":
+                                    property_id = statement["mainsnak"]["property"]
+                                    value = statement["mainsnak"]["datavalue"]["value"]
+                                    if property_id == self.subconcept_of_property_id:
+                                        concept.subconcept_of = (
+                                            concept.subconcept_of
+                                            + [self._resolve_redirect(value["id"])]
+                                        )
+                                    elif property_id == self.has_subconcept_property_id:
+                                        concept.has_subconcept = (
+                                            concept.has_subconcept
+                                            + [self._resolve_redirect(value["id"])]
+                                        )
+                                    elif (
+                                        property_id == self.related_concept_property_id
+                                    ):
+                                        concept.related_concepts = (
+                                            concept.related_concepts
+                                            + [self._resolve_redirect(value["id"])]
+                                        )
+                                    elif (
+                                        property_id == self.negative_labels_property_id
+                                    ):
+                                        concept.negative_labels = (
+                                            concept.negative_labels + [value]
+                                        )
+                                    elif property_id == self.definition_property_id:
+                                        concept.definition = value
+
+                    concepts.append(concept)
+                except (KeyError, json.JSONDecodeError) as e:
+                    logger.warning(
+                        f"Failed to parse concept with Wikibase ID: {wikibase_id} with error: {e}"
+                    )
+                except (ConceptNotFoundError, RevisionNotFoundError) as e:
+                    logger.warning(str(e))
+                except ValidationError as e:
+                    logger.warning(
+                        f"Failed to validate concept with Wikibase ID: {wikibase_id} with error: {e}"
+                    )
+
+        if not concepts and wikibase_ids:
+            raise ConceptNotFoundError(wikibase_ids[0])
 
         return concepts
 
