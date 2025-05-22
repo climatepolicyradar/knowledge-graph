@@ -18,12 +18,11 @@ from flows.boundary import (
     ConceptModel,
     Operation,
     TextBlockId,
-    VespaDataId,
     get_document_passages_from_vespa,
     op_to_fn,
     run_partial_updates_of_concepts_for_document_passages,
     update_concepts_on_existing_vespa_concepts,
-    update_feed_result_callback,
+    update_result_callback,
     update_s3_with_update_concepts_counts,
 )
 from flows.index import (
@@ -609,8 +608,7 @@ def test_update_concepts_on_existing_vespa_concepts(
         assert concept.model_dump(mode="json") in updated_passage_concepts
 
 
-def test_update_feed_result_callback():
-    failures: list[VespaResponse] = []
+def test_update_result_callback():
     concepts_counts: Counter[ConceptModel] = Counter()
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
         "18593": [
@@ -635,15 +633,14 @@ def test_update_feed_result_callback():
         url="test-url",
         operation_type="update",
     )
-    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+    text_block_id: TextBlockId = "18593"
 
     assert (
-        update_feed_result_callback(
-            failures=failures,
+        update_result_callback(
             concepts_counts=concepts_counts,
             grouped_concepts=grouped_concepts,
             response=response,
-            data_id=data_id,
+            text_block_id=text_block_id,
         )
         is None
     )
@@ -651,11 +648,9 @@ def test_update_feed_result_callback():
     assert concepts_counts == Counter(
         {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 1}
     )
-    assert failures == []
 
 
-def test_update_feed_result_callback_not_successful_response():
-    failures: list[VespaResponse] = []
+def test_update_result_callback_not_successful_response():
     concepts_counts: Counter[ConceptModel] = Counter()
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {}
     response: VespaResponse = VespaResponse(
@@ -664,21 +659,19 @@ def test_update_feed_result_callback_not_successful_response():
         url="test-url",
         operation_type="update",
     )
-    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+    text_block_id: TextBlockId = "18593"
 
     assert (
-        update_feed_result_callback(
-            failures=failures,
+        update_result_callback(
             concepts_counts=concepts_counts,
             grouped_concepts=grouped_concepts,
             response=response,
-            data_id=data_id,
+            text_block_id=text_block_id,
         )
         is None
     )
 
     assert concepts_counts == Counter()
-    assert failures == [response]
 
 
 @pytest.mark.asyncio
