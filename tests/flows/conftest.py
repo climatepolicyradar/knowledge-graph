@@ -23,11 +23,14 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
+from prefect.logging import disable_run_logger
+from prefect.testing.utilities import prefect_test_harness
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
+from flows.aggregate_inference_results import Config as AggregateInferenceResultsConfig
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -36,6 +39,13 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def prefect_test_fixture():
+    with prefect_test_harness(server_startup_timeout=120):
+        with disable_run_logger():
+            yield
 
 
 @pytest.fixture()
@@ -58,6 +68,14 @@ def test_wikibase_to_s3_config():
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
         trigger_deindexing=False,
+    )
+
+
+@pytest.fixture()
+def test_aggregate_config():
+    yield AggregateInferenceResultsConfig(
+        cache_bucket="test_bucket",
+        aws_env=AwsEnv("sandbox"),
     )
 
 
@@ -436,6 +454,31 @@ def mock_bucket_labelled_passages_b(
         mock_s3_client.put_object(
             Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
         )
+
+
+@pytest.fixture
+def mock_bucket_labelled_passages_large(
+    mock_s3_client,
+    mock_bucket,
+) -> None:
+    """A version of the labelled_passage bucket with more files"""
+    fixture_root = FIXTURE_DIR / "labelled_passages"
+    fixture_files = list(fixture_root.glob("**/*.json"))
+
+    keys = []
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
+        body = BytesIO(data.encode("utf-8"))
+
+        key = "labelled_passages/" + str(file_path.relative_to(fixture_root))
+        keys.append(key)
+
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+    return (keys, mock_bucket, mock_s3_client)
 
 
 @pytest.fixture
