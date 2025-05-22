@@ -33,6 +33,7 @@ class Config:
 
     cache_bucket: str | None = None
     document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
+    aggregate_inference_results_prefix: str = INFERENCE_RESULTS_PREFIX
     bucket_region: str = "eu-west-1"
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
@@ -49,7 +50,7 @@ class Config:
             )
 
 
-def build_run_output_prefix() -> str:
+def build_run_output_prefix(aggregate_inference_results_prefix: str) -> str:
     """Get the name of the flow run."""
     run_context = get_run_context()
     if not run_context:
@@ -58,7 +59,7 @@ def build_run_output_prefix() -> str:
         timespec="minutes"
     )
     run_name = run_context.flow_run.name
-    return f"{INFERENCE_RESULTS_PREFIX}/{start_time}-{run_name}"
+    return f"{aggregate_inference_results_prefix}/{start_time}-{run_name}"
 
 
 def get_all_labelled_passages_for_one_document(
@@ -145,7 +146,9 @@ def aggregate_inference_results(document_ids: list[str], config: Config | None =
         print("no config provided, creating one")
         config = Config()
 
-    run_output_prefix = build_run_output_prefix()
+    run_output_prefix = build_run_output_prefix(
+        config.aggregate_inference_results_prefix
+    )
     classifier_specs = parse_spec_file(config.aws_env)
 
     print(

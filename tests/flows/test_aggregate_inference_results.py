@@ -96,7 +96,7 @@ def test_aggregate_inference_results(
 def test_build_run_output_prefix():
     @flow()
     def fake_flow():
-        return build_run_output_prefix()
+        return build_run_output_prefix("test-prefix")
 
     prefix = fake_flow()
     # From https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
@@ -106,6 +106,7 @@ def test_build_run_output_prefix():
         assert char not in prefix, f"Unsupported char found in prefix: {prefix}"
 
     assert "None" not in prefix
+    assert "test-prefix" in prefix
 
 
 def test_get_all_labelled_passages_for_one_document(
