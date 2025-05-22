@@ -145,6 +145,35 @@ def vespa_app(
     )
 
 
+@pytest.fixture(scope="function")
+def vespa_large_app(
+    mock_vespa_credentials,
+):
+    # Connection
+    print("\nSetting up Vespa connection...")
+    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
+
+    subprocess.run(
+        ["just", "vespa_feed_large_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=600,  # Seconds
+    )
+
+    yield app  # This is where the test function will be executed
+
+    # Teardown
+    print("\nTearing down Vespa connection...")
+    subprocess.run(
+        ["just", "vespa_delete_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,  # Seconds
+    )
+
+
 @pytest.fixture
 def local_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmp_path

@@ -1,6 +1,4 @@
 import json
-import subprocess
-import time
 from collections import Counter
 from datetime import datetime
 from functools import partial
@@ -331,6 +329,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
 async def test_run_partial_updates_of_concepts_for_document_passages_for_large_document(
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
+    vespa_large_app,
     mock_bucket,
     mock_s3_client,
 ) -> None:
@@ -345,39 +344,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages_for_large_d
     key = "labelled_passages/Q218/v4/UNFCCC.party.309.0_translated_en.json"
     mock_s3_client.put_object(
         Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
-    )
-
-    # Setup Vespa
-    start = time.perf_counter()
-    subprocess.run(
-        [
-            "vespa",
-            "feed",
-            "tests/local_vespa/test_documents/family_document_UNFCCC.party.309.0.json",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=600,  # Seconds
-    )
-    print(
-        f"finished feeding family document (seconds): {time.perf_counter() - start:.2f}"
-    )
-
-    start = time.perf_counter()
-    subprocess.run(
-        [
-            "vespa",
-            "feed",
-            "tests/local_vespa/test_documents/document_passage_UNFCCC.party.309.0.json",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=600,  # Seconds
-    )
-    print(
-        f"finished feeding document passages (seconds): {time.perf_counter() - start:.2f}"
     )
 
     # Make sure the expected document passages are in Vespa
