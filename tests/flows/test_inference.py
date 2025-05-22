@@ -399,7 +399,7 @@ def test_iterate_batch(data, expected_lengths):
         (["sabin.document.16944.17490", "SABIN.document.16945.17491"], []),
         (
             ["SabinIndustries.document.1234.5678", "DocumentSabin.12345.6789"],
-            ["SabinIndustries.document.1234.5678", "DocumentSabin.12345.6789"],
+            ["DocumentSabin.12345.6789"],
         ),
     ],
 )
