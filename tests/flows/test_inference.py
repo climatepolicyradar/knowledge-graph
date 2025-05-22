@@ -10,6 +10,7 @@ from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
     ClassifierSpec,
+    DocumentStem,
     _stringify,
     classifier_inference,
     determine_file_stems,
@@ -20,6 +21,7 @@ from flows.inference import (
     list_bucket_file_stems,
     load_classifier,
     load_document,
+    remove_sabin_file_stems,
     run_classifier_inference_on_document,
     store_labels,
     text_block_inference,
@@ -374,3 +376,35 @@ async def test_run_classifier_inference_on_document_missing(
 def test_iterate_batch(data, expected_lengths):
     for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
         assert len(batch) == expected
+
+
+@pytest.mark.parametrize(
+    "input_stems,expected_output",
+    [
+        ([], []),
+        (
+            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
+            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
+        ),
+        (["Sabin.document.16944.17490", "Sabin.document.16945.17491"], []),
+        (
+            [
+                "CCLW.executive.12345.6789",
+                "Sabin.document.16944.17490",
+                "UNFCCC.document.1234.5678",
+                "Sabin.document.16945.17491",
+            ],
+            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
+        ),
+        (["sabin.document.16944.17490", "SABIN.document.16945.17491"], []),
+        (
+            ["SabinIndustries.document.1234.5678", "DocumentSabin.12345.6789"],
+            ["DocumentSabin.12345.6789"],
+        ),
+    ],
+)
+def test_remove_sabin_file_stems(
+    input_stems: list[DocumentStem], expected_output: list[DocumentStem]
+):
+    result = remove_sabin_file_stems(input_stems)
+    assert result == expected_output

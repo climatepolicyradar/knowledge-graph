@@ -227,6 +227,18 @@ def determine_file_stems(
     return requested_document_stems
 
 
+def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
+    """
+    Remove Sabin document file stems from the list of file stems.
+
+    File stems of the Sabin source follow the below naming convention:
+    - "Sabin.document.16944.17490"
+    """
+    return [
+        stem for stem in file_stems if not stem.startswith(("Sabin", "sabin", "SABIN"))
+    ]
+
+
 def download_classifier_from_wandb_to_local(
     run: Run, config: Config, classifier_name: str, alias: str
 ) -> str:
@@ -624,6 +636,7 @@ async def classifier_inference(
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
     )
+    filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
@@ -631,7 +644,7 @@ async def classifier_inference(
     disallow_latest_alias(classifier_specs)
 
     print(
-        f"Running with {len(validated_file_stems)} documents and "
+        f"Running with {len(filtered_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -643,7 +656,7 @@ async def classifier_inference(
     failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(validated_file_stems, batch_size)
+        batches = iterate_batch(filtered_file_stems, batch_size)
 
         tasks = [
             run_deployment(
