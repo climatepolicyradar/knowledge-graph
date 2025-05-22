@@ -12,7 +12,6 @@ from uuid import UUID
 
 import boto3
 import prefect.artifacts as artifacts
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -22,8 +21,8 @@ from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
-from wandb.sdk.wandb_run import Run
 
+import wandb
 from flows.utils import (
     SlackNotify,
     filter_non_english_language_file_stems,
@@ -41,6 +40,7 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from wandb.sdk.wandb_run import Run
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
@@ -225,6 +225,16 @@ def determine_file_stems(
         )
 
     return requested_document_stems
+
+
+def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
+    """
+    Remove Sabin document file stems from the list of file stems.
+
+    File stems of the Sabin source follow the below naming convention:
+    - "Sabin.document.16944.17490"
+    """
+    return [stem for stem in file_stems if stem.split(".")[0].lower() != "sabin"]
 
 
 def download_classifier_from_wandb_to_local(
@@ -624,6 +634,7 @@ async def classifier_inference(
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
     )
+    filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
@@ -631,7 +642,7 @@ async def classifier_inference(
     disallow_latest_alias(classifier_specs)
 
     print(
-        f"Running with {len(validated_file_stems)} documents and "
+        f"Running with {len(filtered_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -643,7 +654,7 @@ async def classifier_inference(
     failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(validated_file_stems, batch_size)
+        batches = iterate_batch(filtered_file_stems, batch_size)
 
         tasks = [
             run_deployment(
