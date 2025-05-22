@@ -234,7 +234,7 @@ def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem
     File stems of the Sabin source follow the below naming convention:
     - "Sabin.document.16944.17490"
     """
-    return [stem for stem in file_stems if not stem.startswith(("Sabin", "sabin"))]
+    return [stem for stem in file_stems if not stem.startswith(("Sabin", "sabin", "SABIN"))]
 
 
 def download_classifier_from_wandb_to_local(
