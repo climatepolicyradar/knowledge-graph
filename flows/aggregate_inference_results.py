@@ -11,7 +11,11 @@ from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.logging import get_run_logger
 
-from flows.boundary import convert_labelled_passage_to_concepts, s3_object_write_text
+from flows.boundary import (
+    TextBlockId,
+    convert_labelled_passage_to_concepts,
+    s3_object_write_text,
+)
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
@@ -107,7 +111,7 @@ def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) 
 
 def combine_labelled_passages(
     labelled_passages: dict[str, list[LabelledPassage]],
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[TextBlockId, list[dict[str, str]]]:
     """Combine the labelled passages across the different classifier specs."""
     labelled_passages_lists = list(labelled_passages.values())
     if not check_all_values_are_the_same([len(lpl) for lpl in labelled_passages_lists]):
@@ -140,7 +144,9 @@ def combine_labelled_passages(
     timeout_seconds=None,
     log_prints=True,
 )
-def aggregate_inference_results(document_ids: list[str], config: Config | None = None):
+def aggregate_inference_results(
+    document_ids: list[str], config: Config | None = None
+) -> str:
     """Aggregate the inference results for the given document ids."""
     if not config:
         print("no config provided, creating one")
