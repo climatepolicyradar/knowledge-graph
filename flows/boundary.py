@@ -962,8 +962,8 @@ class _ConceptsCombiner(Protocol):
     ) -> list[dict[str, Any]]: ...
 
 
-class _FeedResultCallback(Protocol):
-    """Protocol defining interface for handling feed results from Vespa."""
+class _UpdateResultCallback(Protocol):
+    """Protocol defining interface for handling update operation results from Vespa."""
 
     def __call__(
         self,
@@ -991,7 +991,7 @@ def op_to_fn(
     operation: Operation,
 ) -> tuple[
     _ConceptsCombiner,
-    _FeedResultCallback,
+    _UpdateResultCallback,
     _ConceptsCountsCombiner,
 ]:
     """Get the appropriate functions to implement an operation"""
@@ -1358,8 +1358,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
         # Keep them separate, so it's easier to report on them later.
         missing_text_block_ids_from_vespa: list[TextBlockId] = []
         missing_text_block_ids_from_labelled_passages: list[TextBlockId] = []
-        failures: dict[TextBlockId, VespaResponse] = {}
-        successes: dict[TextBlockId, VespaResponse] = {}
+        updates_exceptions: list[BaseException] = []
+        responses_failures: dict[TextBlockId, VespaResponse] = {}
+        responses_successes: dict[TextBlockId, VespaResponse] = {}
 
         # This is the main process of updating each document passage
 
@@ -1371,7 +1372,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
             batch_size=DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
         )
 
-        responses: list[tuple[VespaResponse, TextBlockId, VespaHitId]] = []
+        responses: list[
+            tuple[VespaResponse, TextBlockId, VespaHitId] | BaseException
+        ] = []
 
         for i, text_block_batch in enumerate(text_blocks_batches, start=1):
             logger.info(f"Processing text blocks task batch #{i}")
@@ -1401,20 +1404,25 @@ async def run_partial_updates_of_concepts_for_document_passages(
                 )
 
             logger.info(f"Gathering updates tasks for batch #{i}")
-            # TODO: Exceptions
-            tasks_results = await asyncio.gather(*tasks)
+            tasks_results = await asyncio.gather(*tasks, return_exceptions=True)
             responses.extend(tasks_results)
             logger.info(f"Gathered updates tasks for batch #{i}")
 
-        for response, text_block_id, document_passage_id in responses:
-            if not response.is_successful():
-                response_json = json.dumps(response.get_json())
-                logger.error(
-                    f"document passage update failed. {document_passage_id=}, {response_json=}"
-                )
-                failures[text_block_id] = response
+        for response in responses:
+            if isinstance(response, BaseException):
+                logger.error(f"text block update for failed: {str(response)}")
+                updates_exceptions.append(response)
             else:
-                successes[text_block_id] = response
+                response, text_block_id, document_passage_id = response
+
+                if not response.is_successful():
+                    response_json = json.dumps(response.get_json())
+                    logger.error(
+                        f"document passage update failed. {document_passage_id=}, {response_json=}"
+                    )
+                    responses_failures[text_block_id] = response
+                else:
+                    responses_successes[text_block_id] = response
 
         logger.info(f"finished partial updates in {time.perf_counter() - start:.2f}s")
 
@@ -1432,7 +1440,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
         # Bring them together, since the callbacks vary in their
         # behaviour on if it was a success or not.
-        for text_block_id, response in (failures | successes).items():
+        for text_block_id, response in (
+            responses_failures | responses_successes
+        ).items():
             try:
                 vespa_response_handler_cb(
                     concepts_counts,
@@ -1475,16 +1485,29 @@ async def run_partial_updates_of_concepts_for_document_passages(
         if (
             missing_text_block_ids_from_vespa
             or missing_text_block_ids_from_labelled_passages
-            or failures
+            or updates_exceptions
+            or responses_failures
         ):
+            missing_text_block_ids_from_vespa_n = len(missing_text_block_ids_from_vespa)
+            missing_text_block_ids_from_labelled_passages_n = len(
+                missing_text_block_ids_from_labelled_passages
+            )
+            updates_exceptions_n = len(updates_exceptions)
+            responses_failures_n = len(responses_failures)
+
             combined_failures = (
-                len(missing_text_block_ids_from_vespa)
-                + len(missing_text_block_ids_from_labelled_passages)
-                + len(failures)
+                missing_text_block_ids_from_vespa_n
+                + missing_text_block_ids_from_labelled_passages_n
+                + updates_exceptions_n
+                + responses_failures_n
             )
             raise ValueError(
                 f"there were {combined_failures} combined failures. Please "
-                "review the logs for specifics"
+                "review the logs for specifics. "
+                f"{missing_text_block_ids_from_vespa_n} missing text blocks from Vespa, "
+                f"{missing_text_block_ids_from_labelled_passages_n} missing text blocks from labelled passages, "
+                f"{updates_exceptions_n} updates raised exceptions, "
+                f"{responses_failures_n} updates responses were failures"
             )
 
         # All Vespa updating has finished, return the final concepts' counts
