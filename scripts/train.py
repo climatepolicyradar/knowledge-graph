@@ -245,7 +245,7 @@ def main(
     # Fetch all of its subconcepts recursively
     concept = wikibase.get_concept(
         wikibase_id,
-        include_recursive_subconcept_of=True,
+        include_recursive_has_subconcept=True,
         include_labels_from_subconcepts=True,
     )
 
