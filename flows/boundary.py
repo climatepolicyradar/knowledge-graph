@@ -73,6 +73,7 @@ T = TypeVar("T")
 CONCEPT_COUNT_SEPARATOR: str = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE = 50
+DEFAULT_TEXT_BLOCKS_BATCH_SIZE = 50
 DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
 
 # Get more logs
@@ -1366,7 +1367,8 @@ async def run_partial_updates_of_concepts_for_document_passages(
         start = time.perf_counter()
 
         text_blocks_batches = iterate_batch(
-            data=list(grouped_concepts.items()), batch_size=DEFAULT_DOCUMENTS_BATCH_SIZE
+            data=list(grouped_concepts.items()),
+            batch_size=DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
         )
 
         responses: list[
