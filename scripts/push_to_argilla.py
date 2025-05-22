@@ -12,7 +12,7 @@ from scripts.config import concept_dir, processed_data_dir
 from src.argilla_v2 import ArgillaSession
 from src.concept import Concept
 from src.identifiers import WikibaseID, generate_identifier
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 tqdm.pandas()
 

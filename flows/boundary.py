@@ -67,7 +67,7 @@ from scripts.cloud import (
 from src.concept import Concept
 from src.exceptions import QueryError
 from src.identifiers import FamilyDocumentID, WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 # Provide a generic type to use instead of `Any` for types hints

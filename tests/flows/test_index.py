@@ -32,7 +32,7 @@ from flows.index import (
 )
 from scripts.cloud import ClassifierSpec
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 
 @pytest.mark.asyncio

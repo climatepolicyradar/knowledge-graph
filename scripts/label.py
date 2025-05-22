@@ -6,7 +6,7 @@ from rich.console import Console
 from scripts.config import classifier_dir
 from src.classifier import Classifier
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 console = Console()
 
