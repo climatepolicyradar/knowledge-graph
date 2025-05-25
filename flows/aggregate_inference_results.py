@@ -7,7 +7,6 @@ from typing import Any, TypeAlias, TypedDict
 
 import boto3
 from prefect import flow, task
-from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ConcurrentTaskRunner
@@ -226,6 +225,9 @@ async def aggregate_inference_results(
         print("no config provided, creating one")
         config = await Config.create()
 
+    if not document_ids:
+        raise ValueError("No document ids provided, fallback is not supported yet")
+
     run_output_identifier = build_run_output_identifier()
     classifier_specs = parse_spec_file(config.aws_env)
 
@@ -260,12 +262,10 @@ async def aggregate_inference_results(
                     DocumentFailure(document_id=document_id, exception=error)
                 )
 
+    # Results
     print(f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}")
 
-    create_table_artifact(
-        table=failures,
-        key=f"failures-{run_output_identifier}",
-        description="The document ids and exceptions that failed to aggregate inference results",
-    )
+    if failures:
+        print(f"Failures: {failures}")
 
     return run_output_identifier
