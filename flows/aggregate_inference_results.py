@@ -180,7 +180,7 @@ def combine_labelled_passages(
     return combined_passages
 
 
-@task(retries=2, retry_delay_seconds=5)
+@task()
 async def process_single_document(
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
