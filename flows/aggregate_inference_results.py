@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from collections import defaultdict
@@ -5,10 +6,11 @@ from dataclasses import dataclass
 from typing import Any, TypeAlias, TypedDict
 
 import boto3
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
+from prefect.task_runners import ConcurrentTaskRunner
 
 from flows.boundary import (
     DocumentImportId,
@@ -19,6 +21,7 @@ from flows.boundary import (
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
+    iterate_batch,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -177,14 +180,46 @@ def combine_labelled_passages(
     return combined_passages
 
 
+@task(retries=2, retry_delay_seconds=5)
+async def process_single_document(
+    document_id: DocumentImportId,
+    classifier_specs: list[ClassifierSpec],
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> tuple[DocumentImportId, Exception | None]:
+    """Process a single document and return its status."""
+    try:
+        all_labelled_passages = get_all_labelled_passages_for_one_document(
+            document_id, classifier_specs, config
+        )
+        vespa_concepts = combine_labelled_passages(all_labelled_passages)
+
+        # Write to s3
+        s3_uri = S3Uri(
+            bucket=config.cache_bucket,
+            key=os.path.join(
+                config.aggregate_inference_results_prefix,
+                run_output_identifier,
+                f"{document_id}.json",
+            ),
+        )
+        s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
+        return document_id, None
+    except Exception as e:
+        return document_id, e
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
     timeout_seconds=None,
     log_prints=True,
+    task_runner=ConcurrentTaskRunner(),
 )
 async def aggregate_inference_results(
-    document_ids: list[DocumentImportId], config: Config | None = None
+    document_ids: list[DocumentImportId],
+    config: Config | None = None,
+    max_concurrent_tasks: int = 10,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
@@ -199,35 +234,37 @@ async def aggregate_inference_results(
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
 
+    # Create tasks for each document
+    tasks = [
+        process_single_document(
+            document_id,
+            classifier_specs,
+            config,
+            run_output_identifier,
+        )
+        for document_id in document_ids
+    ]
+
+    # Process documents in batches to control concurrency
     failures: list[DocumentFailure] = []
     successes: list[DocumentImportId] = []
-    for document_id in document_ids:
-        try:
-            all_labelled_passages = get_all_labelled_passages_for_one_document(
-                document_id, classifier_specs, config
-            )
-            vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
-            # Write to s3
-            s3_uri = S3Uri(
-                bucket=config.cache_bucket,
-                key=os.path.join(
-                    config.aggregate_inference_results_prefix,
-                    run_output_identifier,
-                    f"{document_id}.json",
-                ),
-            )
-            s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
-            successes.append(document_id)
-        except Exception as e:
-            failures.append(DocumentFailure(document_id=document_id, exception=e))
+    for batch in iterate_batch(tasks, max_concurrent_tasks):
+        results = await asyncio.gather(*batch)
 
-    print(f"Successfully aggregated inference results for {len(successes)} documents")
-    print(f"Failed to aggregate inference results for {len(failures)} documents")
+        for document_id, error in results:
+            if not error:
+                successes.append(document_id)
+            else:
+                failures.append(
+                    DocumentFailure(document_id=document_id, exception=error)
+                )
+
+    print(f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}")
 
     create_table_artifact(
         table=failures,
-        name=f"failures-{run_output_identifier}",
+        key=f"failures-{run_output_identifier}",
         description="The document ids and exceptions that failed to aggregate inference results",
     )
 
