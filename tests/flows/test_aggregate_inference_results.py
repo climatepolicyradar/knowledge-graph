@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pydantic
 import pytest
-import yaml
 from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
 
@@ -19,6 +18,7 @@ from flows.aggregate_inference_results import (
     validate_passages_are_same_except_concepts,
 )
 from scripts.cloud import ClassifierSpec
+from scripts.update_classifier_spec import write_spec_file
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -39,10 +39,15 @@ async def test_aggregate_inference_results(
     with tempfile.TemporaryDirectory() as spec_dir:
         # Write the concept specs to a YAML file
         temp_spec_dir = Path(spec_dir)
-        concept_specs = ["Q123:v4", "Q223:v3", "Q218:v5", "Q767:v3", "Q1286:v3"]
+        classifier_specs = [
+            ClassifierSpec(name="Q123", alias="v4"),
+            ClassifierSpec(name="Q223", alias="v3"),
+            ClassifierSpec(name="Q218", alias="v5"),
+            ClassifierSpec(name="Q767", alias="v3"),
+            ClassifierSpec(name="Q1286", alias="v3"),
+        ]
         spec_file = temp_spec_dir / "sandbox.yaml"
-        with open(spec_file, "w") as f:
-            yaml.dump(concept_specs, f)
+        write_spec_file(spec_file, classifier_specs)
 
         with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
             run_reference = await aggregate_inference_results(
@@ -70,7 +75,7 @@ async def test_aggregate_inference_results(
                     pytest.fail(f"Unexpected error: {e}")
 
                 wikibase_ids = [
-                    concept_spec.split(":")[0] for concept_spec in concept_specs
+                    classifier_spec.name for classifier_spec in classifier_specs
                 ]
 
                 document_inference_output = list(data.values())
