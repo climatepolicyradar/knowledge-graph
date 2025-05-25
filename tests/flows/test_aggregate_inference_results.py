@@ -23,7 +23,8 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-def test_aggregate_inference_results(
+@pytest.mark.asyncio
+async def test_aggregate_inference_results(
     mock_bucket_labelled_passages_large, test_aggregate_config
 ):
     keys, bucket, s3_client = mock_bucket_labelled_passages_large
@@ -44,7 +45,7 @@ def test_aggregate_inference_results(
             yaml.dump(concept_specs, f)
 
         with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
-            run_reference = aggregate_inference_results(
+            run_reference = await aggregate_inference_results(
                 document_ids, test_aggregate_config
             )
 

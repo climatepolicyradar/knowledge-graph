@@ -29,6 +29,23 @@ from src.labelled_passage import LabelledPassage
 INFERENCE_RESULTS_PREFIX = "inference_results"
 
 
+class S3Uri:
+    """A URI for an S3 object."""
+
+    def __init__(
+        self, protocol: str = "s3", bucket: str | None = None, key: str | None = None
+    ):
+        self.protocol = protocol
+        self.bucket = bucket
+        self.key = key
+
+    def __str__(self) -> str:
+        """Return the string representation of the S3 URI."""
+        if not self.bucket or not self.key:
+            raise ValueError("Bucket and key must be set")
+        return f"{self.protocol}://{self.bucket}/{self.key}"
+
+
 @dataclass()
 class Config:
     """Configuration used across flow runs."""
@@ -71,10 +88,16 @@ def get_all_labelled_passages_for_one_document(
 
     labelled_passages = defaultdict(list)
     for spec in classifier_specs:
-        key = os.path.join(
-            DOCUMENT_TARGET_PREFIX_DEFAULT, spec.name, spec.alias, f"{document_id}.json"
+        s3_uri = S3Uri(
+            bucket=config.cache_bucket,
+            key=os.path.join(
+                config.document_source_prefix,
+                spec.name,
+                spec.alias,
+                f"{document_id}.json",
+            ),
         )
-        response = s3.get_object(Bucket=config.cache_bucket, Key=key)
+        response = s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
         body = response["Body"].read().decode("utf-8")
         spec_doc = [
             LabelledPassage.model_validate_json(passage) for passage in json.loads(body)
@@ -165,7 +188,10 @@ async def aggregate_inference_results(
         vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
         # Write to s3
-        s3_uri = f"s3://{config.cache_bucket}/{run_output_prefix}/{document_id}.json"
-        s3_object_write_text(s3_uri, json.dumps(vespa_concepts))
+        s3_uri = S3Uri(
+            bucket=config.cache_bucket,
+            key=os.path.join(run_output_prefix, f"{document_id}.json"),
+        )
+        s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
 
     return run_output_prefix
