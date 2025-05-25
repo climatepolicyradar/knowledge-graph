@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from collections import defaultdict
@@ -9,7 +8,6 @@ import boto3
 from prefect import flow
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
-from prefect.logging import get_run_logger
 
 from flows.boundary import (
     TextBlockId,
@@ -41,17 +39,16 @@ class Config:
     bucket_region: str = "eu-west-1"
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
-    def __post_init__(self):
+    @classmethod
+    async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
-        logger = get_run_logger()
+        config = cls()
+        if not config.cache_bucket:
+            config.cache_bucket = await get_prefect_job_variable(
+                "pipeline_cache_bucket_name"
+            )
 
-        if not self.cache_bucket:
-            logger.info(
-                "no cache bucket provided, getting it from Prefect job variable"
-            )
-            self.cache_bucket = asyncio.run(
-                get_prefect_job_variable("pipeline_cache_bucket_name")
-            )
+        return config
 
 
 def build_run_output_prefix(aggregate_inference_results_prefix: str) -> str:
@@ -144,13 +141,13 @@ def combine_labelled_passages(
     timeout_seconds=None,
     log_prints=True,
 )
-def aggregate_inference_results(
+async def aggregate_inference_results(
     document_ids: list[str], config: Config | None = None
 ) -> str:
     """Aggregate the inference results for the given document ids."""
     if not config:
         print("no config provided, creating one")
-        config = Config()
+        config = await Config.create()
 
     run_output_prefix = build_run_output_prefix(
         config.aggregate_inference_results_prefix
