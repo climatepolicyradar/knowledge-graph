@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pydantic
 import pytest
-from botocore.exceptions import NoSuchKey
+from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
 
@@ -208,7 +208,14 @@ async def test_process_single_document__failure(
                 test_aggregate_config,
                 "run_output_identifier",
             )
-            assert isinstance(error, NoSuchKey)
+            assert isinstance(error, ClientError)
+            code = error.response["Error"]["Code"]
+            assert code == "NoSuchKey"
+            key = error.response["Error"]["Key"]
+            assert (
+                key
+                == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"
+            )
 
 
 def test_combine_labelled_passages(concept):
