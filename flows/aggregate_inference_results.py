@@ -2,7 +2,7 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeAlias
 
 import boto3
 from prefect import flow
@@ -10,6 +10,7 @@ from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 
 from flows.boundary import (
+    DocumentImportId,
     TextBlockId,
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
@@ -26,7 +27,17 @@ from scripts.cloud import (
 from scripts.update_classifier_spec import parse_spec_file
 from src.labelled_passage import LabelledPassage
 
+# Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
+
+# A unique identifier for the run output made from the run context
+RunOutputIdentifier: TypeAlias = str
+
+# A string representation of a classifier spec (i.e. Q123:v4)
+SpecStr: TypeAlias = str
+
+# A serialised vespa concept, see cpr_sdk.models.search.Concept
+SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 
 
 class S3Uri:
@@ -68,7 +79,7 @@ class Config:
         return config
 
 
-def build_run_output_identifier() -> str:
+def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""
     run_context = get_run_context()
     if not run_context:
@@ -81,8 +92,10 @@ def build_run_output_identifier() -> str:
 
 
 def get_all_labelled_passages_for_one_document(
-    document_id: str, classifier_specs: list[ClassifierSpec], config: Config
-) -> dict[str, list[LabelledPassage]]:
+    document_id: DocumentImportId,
+    classifier_specs: list[ClassifierSpec],
+    config: Config,
+) -> dict[SpecStr, list[LabelledPassage]]:
     """Get the labelled passages from s3."""
     s3 = boto3.client("s3")
 
@@ -128,8 +141,8 @@ def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) 
 
 
 def combine_labelled_passages(
-    labelled_passages: dict[str, list[LabelledPassage]],
-) -> dict[TextBlockId, list[dict[str, str]]]:
+    labelled_passages: dict[SpecStr, list[LabelledPassage]],
+) -> dict[TextBlockId, SerialisedVespaConcept]:
     """Combine the labelled passages across the different classifier specs."""
     labelled_passages_lists = list(labelled_passages.values())
     if not check_all_values_are_the_same([len(lpl) for lpl in labelled_passages_lists]):
@@ -163,8 +176,8 @@ def combine_labelled_passages(
     log_prints=True,
 )
 async def aggregate_inference_results(
-    document_ids: list[str], config: Config | None = None
-) -> str:
+    document_ids: list[DocumentImportId], config: Config | None = None
+) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
         print("no config provided, creating one")
