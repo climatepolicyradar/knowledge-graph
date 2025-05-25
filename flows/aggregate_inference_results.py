@@ -2,10 +2,11 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypedDict
 
 import boto3
 from prefect import flow
+from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 
@@ -55,6 +56,13 @@ class S3Uri:
         if not self.bucket or not self.key:
             raise ValueError("Bucket and key must be set")
         return f"{self.protocol}://{self.bucket}/{self.key}"
+
+
+class DocumentFailure(TypedDict):
+    """A document failure."""
+
+    document_id: DocumentImportId
+    exception: Exception
 
 
 @dataclass()
@@ -187,24 +195,40 @@ async def aggregate_inference_results(
     classifier_specs = parse_spec_file(config.aws_env)
 
     print(
-        f"Aggregating inference results for {len(document_ids)} documents, using"
+        f"Aggregating inference results for {len(document_ids)} documents, using "
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
-    for document_id in document_ids:
-        all_labelled_passages = get_all_labelled_passages_for_one_document(
-            document_id, classifier_specs, config
-        )
-        vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
-        # Write to s3
-        s3_uri = S3Uri(
-            bucket=config.cache_bucket,
-            key=os.path.join(
-                config.aggregate_inference_results_prefix,
-                run_output_identifier,
-                f"{document_id}.json",
-            ),
-        )
-        s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
+    failures: list[DocumentFailure] = []
+    successes: list[DocumentImportId] = []
+    for document_id in document_ids:
+        try:
+            all_labelled_passages = get_all_labelled_passages_for_one_document(
+                document_id, classifier_specs, config
+            )
+            vespa_concepts = combine_labelled_passages(all_labelled_passages)
+
+            # Write to s3
+            s3_uri = S3Uri(
+                bucket=config.cache_bucket,
+                key=os.path.join(
+                    config.aggregate_inference_results_prefix,
+                    run_output_identifier,
+                    f"{document_id}.json",
+                ),
+            )
+            s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
+            successes.append(document_id)
+        except Exception as e:
+            failures.append(DocumentFailure(document_id=document_id, exception=e))
+
+    print(f"Successfully aggregated inference results for {len(successes)} documents")
+    print(f"Failed to aggregate inference results for {len(failures)} documents")
+
+    create_table_artifact(
+        table=failures,
+        name=f"failures-{run_output_identifier}",
+        description="The document ids and exceptions that failed to aggregate inference results",
+    )
 
     return run_output_identifier
