@@ -33,6 +33,14 @@ class ClassifierSpec(BaseModel):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""
         return hash((self.name, self.alias))
 
+    def __str__(self):
+        """Return a string representation of the classifier spec."""
+        return f"{self.name}:{self.alias}"
+
+    def __repr__(self):
+        """Return a string representation of the classifier spec."""
+        return f"{self.name}:{self.alias}"
+
 
 def disallow_latest_alias(classifier_specs: list[ClassifierSpec]):
     if any(classifier_spec.alias == "latest" for classifier_spec in classifier_specs):

@@ -102,7 +102,7 @@ def get_all_labelled_passages_for_one_document(
         spec_doc = [
             LabelledPassage.model_validate_json(passage) for passage in json.loads(body)
         ]
-        labelled_passages[f"{spec.name}:{spec.alias}"].extend(spec_doc)
+        labelled_passages[str(spec)].extend(spec_doc)
 
     return labelled_passages
 
@@ -113,7 +113,7 @@ def check_all_values_are_the_same(values: list[Any]) -> bool:
 
 
 def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) -> None:
-    """Check if two passages are the same except for the spans."""
+    """Check if passages are the same (except for metadata & spans."""
     properties = [
         "id",
         "text",
