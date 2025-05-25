@@ -13,7 +13,7 @@ from prefect import flow
 
 from flows.aggregate_inference_results import (
     aggregate_inference_results,
-    build_run_output_prefix,
+    build_run_output_identifier,
     combine_labelled_passages,
     get_all_labelled_passages_for_one_document,
     validate_passages_are_same_except_concepts,
@@ -53,7 +53,11 @@ async def test_aggregate_inference_results(
             collected_ids_for_document = []
 
             for document_id in document_ids:
-                s3_path = os.path.join(run_reference, f"{document_id}.json")
+                s3_path = os.path.join(
+                    test_aggregate_config.aggregate_inference_results_prefix,
+                    run_reference,
+                    f"{document_id}.json",
+                )
                 try:
                     response = s3_client.get_object(Bucket=bucket, Key=s3_path)
                     data = response["Body"].read().decode("utf-8")
@@ -97,7 +101,7 @@ async def test_aggregate_inference_results(
 def test_build_run_output_prefix():
     @flow()
     def fake_flow():
-        return build_run_output_prefix("test-prefix")
+        return build_run_output_identifier()
 
     prefix = fake_flow()
     # From https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
@@ -107,7 +111,6 @@ def test_build_run_output_prefix():
         assert char not in prefix, f"Unsupported char found in prefix: {prefix}"
 
     assert "None" not in prefix
-    assert "test-prefix" in prefix
 
 
 def test_get_all_labelled_passages_for_one_document(

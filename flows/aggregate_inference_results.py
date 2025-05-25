@@ -68,8 +68,8 @@ class Config:
         return config
 
 
-def build_run_output_prefix(aggregate_inference_results_prefix: str) -> str:
-    """Get the name of the flow run."""
+def build_run_output_identifier() -> str:
+    """Builds an identifier from the start time and name of the flow run."""
     run_context = get_run_context()
     if not run_context:
         raise MissingContextError()
@@ -77,7 +77,7 @@ def build_run_output_prefix(aggregate_inference_results_prefix: str) -> str:
         timespec="minutes"
     )
     run_name = run_context.flow_run.name
-    return f"{aggregate_inference_results_prefix}/{start_time}-{run_name}"
+    return f"{start_time}-{run_name}"
 
 
 def get_all_labelled_passages_for_one_document(
@@ -172,14 +172,12 @@ async def aggregate_inference_results(
         print("no config provided, creating one")
         config = await Config.create()
 
-    run_output_prefix = build_run_output_prefix(
-        config.aggregate_inference_results_prefix
-    )
+    run_output_identifier = build_run_output_identifier()
     classifier_specs = parse_spec_file(config.aws_env)
 
     print(
         f"Aggregating inference results for {len(document_ids)} documents, using"
-        f"{len(classifier_specs)} classifiers, outputting to {run_output_prefix}"
+        f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
     for document_id in document_ids:
         all_labelled_passages = get_all_labelled_passages_for_one_document(
@@ -190,8 +188,12 @@ async def aggregate_inference_results(
         # Write to s3
         s3_uri = S3Uri(
             bucket=config.cache_bucket,
-            key=os.path.join(run_output_prefix, f"{document_id}.json"),
+            key=os.path.join(
+                config.aggregate_inference_results_prefix,
+                run_output_identifier,
+                f"{document_id}.json",
+            ),
         )
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
 
-    return run_output_prefix
+    return run_output_identifier
