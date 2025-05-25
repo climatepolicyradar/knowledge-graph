@@ -263,9 +263,14 @@ async def aggregate_inference_results(
                 )
 
     # Results
-    print(f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}")
+    print(
+        f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}/{len(document_ids)}"
+    )
 
     if failures:
         print(f"Failures: {failures}")
+        raise ValueError(
+            f"Saw {len(failures)} failures when aggregating inference results"
+        )
 
     return run_output_identifier
