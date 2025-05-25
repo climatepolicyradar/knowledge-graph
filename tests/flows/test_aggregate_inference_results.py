@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pydantic
 import pytest
+from botocore.exceptions import NoSuchKey
 from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
 
@@ -15,6 +16,7 @@ from flows.aggregate_inference_results import (
     build_run_output_identifier,
     combine_labelled_passages,
     get_all_labelled_passages_for_one_document,
+    process_single_document,
     validate_passages_are_same_except_concepts,
 )
 from scripts.cloud import ClassifierSpec
@@ -156,6 +158,57 @@ def test_validate_passages_are_same_except_concepts():
             )
         )
         validate_passages_are_same_except_concepts(passages)
+
+
+@pytest.mark.asyncio
+async def test_process_single_document__success(
+    mock_bucket_labelled_passages_large, test_aggregate_config
+):
+    document_id = "CCLW.executive.10061.4515"
+    classifier_specs = [
+        ClassifierSpec(name="Q218", alias="v5"),
+        ClassifierSpec(name="Q767", alias="v3"),
+    ]
+
+    with tempfile.TemporaryDirectory() as spec_dir:
+        temp_spec_dir = Path(spec_dir)
+        spec_file = temp_spec_dir / "sandbox.yaml"
+        write_spec_file(spec_file, classifier_specs)
+
+        with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
+            assert (document_id, None) == await process_single_document(
+                document_id,
+                classifier_specs,
+                test_aggregate_config,
+                "run_output_identifier",
+            )
+
+
+@pytest.mark.asyncio
+async def test_process_single_document__failure(
+    mock_bucket_labelled_passages_large, test_aggregate_config
+):
+    document_id = "CCLW.executive.10061.4515"
+    classifier_specs = [
+        ClassifierSpec(name="Q218", alias="v5"),
+        ClassifierSpec(
+            name="Q9999999999", alias="v99"
+        ),  # Nothing will be found for this one
+    ]
+
+    with tempfile.TemporaryDirectory() as spec_dir:
+        temp_spec_dir = Path(spec_dir)
+        spec_file = temp_spec_dir / "sandbox.yaml"
+        write_spec_file(spec_file, classifier_specs)
+
+        with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
+            document_id, error = await process_single_document(
+                document_id,
+                classifier_specs,
+                test_aggregate_config,
+                "run_output_identifier",
+            )
+            assert isinstance(error, NoSuchKey)
 
 
 def test_combine_labelled_passages(concept):
