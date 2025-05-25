@@ -109,9 +109,7 @@ def get_all_labelled_passages_for_one_document(
 
 def check_all_values_are_the_same(values: list[Any]) -> bool:
     """Check if all values are the same."""
-    if len(set(values)) == 1:
-        return True
-    return False
+    return len(set(values)) == 1
 
 
 def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) -> None:
