@@ -190,7 +190,7 @@ async def load_update_document_concepts_counts(
         )
 
         for i, result in enumerate(results):
-            current_document_import_id: DocumentImportId = batch[i]
+            current_document_import_id = DocumentImportId(batch[i])
 
             if isinstance(result, Exception):
                 logger.error(
@@ -264,7 +264,7 @@ async def load_update_document_concepts_counts_as(
             timeout=None,
         )
     else:
-        return load_update_document_concepts_counts(
+        return await load_update_document_concepts_counts(
             document_import_id,
             document_object_uris,
             batch_size,
@@ -292,15 +292,19 @@ def group_documents_uris(
     documents_by_id: dict[DocumentImportId, list[DocumentObjectUri]] = defaultdict(list)
 
     # Group documents by their ID
-    for document_import_id, document_object_uri in documents_generator:
+    for stem, uri in documents_generator:
+        # Convert DocumentStem to DocumentImportId
+        document_import_id = DocumentImportId(stem)
         # Check if URI ends with {document_import_id}.json
         expected_suffix = f"{document_import_id}.json"
 
-        if not document_object_uri.endswith(expected_suffix):
+        if not uri.endswith(expected_suffix):
             # If not, append it
-            document_object_uri = (
-                document_object_uri.rstrip("/") + "/" + expected_suffix
+            document_object_uri = DocumentObjectUri(
+                uri.rstrip("/") + "/" + expected_suffix
             )
+        else:
+            document_object_uri = uri
 
         documents_by_id[document_import_id].append(document_object_uri)
 
@@ -399,7 +403,7 @@ async def count_family_document_concepts(
 
             if isinstance(result, FlowRun):
                 flow_run: FlowRun = result
-                if flow_run.state.type != StateType.COMPLETED:
+                if flow_run.state is None or flow_run.state.type != StateType.COMPLETED:
                     has_failures = True
 
             logger.info(f"processed batch documents #{documents_batch_num}")

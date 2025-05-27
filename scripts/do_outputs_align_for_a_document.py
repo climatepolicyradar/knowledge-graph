@@ -18,6 +18,7 @@ from vespa.application import Vespa
 from vespa.exceptions import VespaError
 
 from flows.boundary import (
+    DocumentImportId,
     get_document_passages_from_vespa__generator,
 )
 from scripts.cloud import AwsEnv
@@ -59,7 +60,7 @@ class Profiler:
             typer.secho(f"> Done in: {self.duration:.2f} seconds", fg="white", dim=True)
 
 
-def get_document_from_vespa(client: Vespa, document_id: str) -> list[dict]:
+def get_document_from_vespa(client: Vespa, document_id: str) -> VespaDocument:
     response = client.get_data(
         namespace="doc_search",
         schema="family_document",
@@ -78,7 +79,7 @@ async def get_passages_from_vespa(
     passages = []
     async with vespa.asyncio(connections=max_workers) as vespa_connection_pool:
         async for batch in get_document_passages_from_vespa__generator(
-            document_import_id=document_id,
+            document_import_id=DocumentImportId(document_id),
             vespa_connection_pool=vespa_connection_pool,
         ):
             batch_passages = [p[1] for p in batch.values()]
