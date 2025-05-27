@@ -114,9 +114,7 @@ def build_s3_path(id_from_vespa, spec_version, document_id):
 
 def get_labelled_passages(bucket_name: str, s3_path: str) -> list[dict]:
     s3 = boto3.client("s3")
-    bucket_name = bucket_name
-    key = s3_path
-    response = s3.get_object(Bucket=bucket_name, Key=key)
+    response = s3.get_object(Bucket=bucket_name, Key=s3_path)
     body = response["Body"].read().decode("utf-8")
     return [json.loads(passage) for passage in json.loads(body)]
 
