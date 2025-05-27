@@ -145,7 +145,7 @@ def count_concepts_in_s3_labelled_passages(
 ) -> list[str]:
     concept_list = []
     for passage in s3_labelled_passages:
-        if len(passage["spans"]) > 1:
+        if len(passage["spans"]) > 0:
             for span in passage["spans"]:
                 concept_list.append(
                     f"{span['concept_id']}:{parse_concept_name_from_labelled_passage(span)}"
