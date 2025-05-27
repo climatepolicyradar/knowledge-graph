@@ -34,7 +34,7 @@ class Config:
     wikibase_username: str | None = None
     wikibase_url: str | None = None
     logging_interval: int = 200
-    trigger_deindexing: bool = False
+    trigger_deindexing: bool = True
 
     @classmethod
     def create(cls) -> "Config":
