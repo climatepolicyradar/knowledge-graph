@@ -1606,8 +1606,13 @@ def remove_concepts_from_existing_vespa_concepts(
     It is also, not possible to duplicate a Concept object in the concepts array as we
     are removing all instances where the model is the same.
     """
+    # Print the incoming parameters
+    print(f"Passage to update: {passage.model_dump_json()}")
+    print(f"Concepts to remove: {[concept.model_dump_json() for concept in concepts]}")
+
     # Get the models to remove
     concepts_to_remove__models = [concept.model for concept in concepts]
+    print(f"removing concepts with models: {concepts_to_remove__models}")
 
     # It's an optional sequence at the moment, so massage it
     concepts_in_vespa: list[VespaConcept] = (
@@ -1620,6 +1625,9 @@ def remove_concepts_from_existing_vespa_concepts(
         for concept in concepts_in_vespa
         if concept.model not in concepts_to_remove__models
     ]
+    print(
+        f"keeping concepts: {[concept.model_dump_json() for concept in concepts_in_vespa_to_keep]}"
+    )
 
     return [concept_.model_dump(mode="json") for concept_ in concepts_in_vespa_to_keep]
 
