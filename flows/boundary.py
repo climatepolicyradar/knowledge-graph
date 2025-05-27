@@ -812,7 +812,7 @@ def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
     splits = hit_id.split("::")
     if len(splits) != 2:
         raise ValueError(f"received {len(splits)} splits, when expecting 2: {splits}")
-    return splits[1]
+    return VespaDataId(splits[1])
 
 
 def get_text_block_id_from_vespa_data_id(data_id: VespaDataId) -> TextBlockId:
@@ -1364,7 +1364,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     # Wrap the callback with the appropriate state and make it match
     # the expected signature.
     def _vespa_response_handler_cb_with_state(
-        response: VespaResponse, data_id: VespaDataId
+        response: VespaResponse, data_id_str: str
     ):
         try:
             acquired_lock = response_cb_lock.acquire(
@@ -1375,6 +1375,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
             if not acquired_lock:
                 print("failed to acquire lock")
                 return
+
+            # Convert the string data_id to VespaDataId
+            data_id = VespaDataId(data_id_str)
 
             vespa_response_handler_cb(
                 failures,
@@ -1392,7 +1395,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     def _feed_updates(
         vespa_search_adapter: VespaSearchAdapter,
         data: Iterable[dict[str, Any]],
-        callback: Callable[[VespaResponse, VespaDataId], None],
+        callback: Callable[[VespaResponse, str], None],
     ) -> None:
         # The previously established connection pool isn't used since
         # `feed_iterable` creates its own.
