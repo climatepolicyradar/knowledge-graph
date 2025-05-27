@@ -21,9 +21,10 @@ from pathlib import Path
 from typing import (
     Any,
     Callable,
+    Final,
     Iterable,
+    NewType,
     Protocol,
-    TypeAlias,
     TypedDict,
     TypeVar,
     Union,
@@ -73,10 +74,10 @@ from src.span import Span
 # Provide a generic type to use instead of `Any` for types hints
 T = TypeVar("T")
 
-CONCEPT_COUNT_SEPARATOR: str = ":"
-CONCEPTS_COUNTS_PREFIX_DEFAULT: str = "concepts_counts"
-DEFAULT_DOCUMENTS_BATCH_SIZE = 50
-DEFAULT_UPDATES_TASK_BATCH_SIZE = 5
+CONCEPT_COUNT_SEPARATOR: Final[str] = ":"
+CONCEPTS_COUNTS_PREFIX_DEFAULT: Final[str] = "concepts_counts"
+DEFAULT_DOCUMENTS_BATCH_SIZE: Final[PositiveInt] = 50
+DEFAULT_UPDATES_TASK_BATCH_SIZE: Final[PositiveInt] = 5
 
 # Get more logs
 logging.basicConfig(level=logging.DEBUG)
@@ -103,16 +104,16 @@ PARENT_TIMEOUT_S: int = int(timedelta(hours=4).total_seconds())
 
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
-DocumentImportId: TypeAlias = str
+DocumentImportId = NewType("DocumentImportId", str)
 # Needed to load the inference results
 # Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
-DocumentObjectUri: TypeAlias = str
+DocumentObjectUri = NewType("DocumentObjectUri", str)
 # A filename without the extension
-DocumentStem: TypeAlias = str
+DocumentStem = NewType("DocumentStem", str)
 # Passed to a self-sufficient flow run
-DocumentImporter: TypeAlias = tuple[DocumentStem, DocumentObjectUri]
+DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 # A continuation token used by vespa to enable pagination over query results
-ContinuationToken: TypeAlias = str
+ContinuationToken = NewType("ContinuationToken", str)
 
 
 class S3Accessor(BaseModel):
@@ -134,15 +135,15 @@ class S3Accessor(BaseModel):
 
 # AKA LabelledPassage
 # Example: 18593
-TextBlockId: TypeAlias = str
-SpanId: TypeAlias = str
+TextBlockId = NewType("TextBlockId", str)
+SpanId = NewType("SpanId", str)
 # The ID used in Vespa, that we don't keep in our models in the CPR
 # SDK, that is in a Hit.
 # Example: id:doc_search:document_passage::UNFCCC.party.1062.0.18593
-VespaHitId: TypeAlias = str
+VespaHitId = NewType("VespaHitId", str)
 # The same as above, but without the schema
 # Example: UNFCCC.party.1062.0.18593
-VespaDataId: TypeAlias = str
+VespaDataId = NewType("VespaDataId", str)
 
 
 class Operation(Enum):
@@ -240,10 +241,10 @@ def s3_obj_generator_from_s3_prefixes(
             bucket = Path(s3_prefix).parts[1]
             object_keys = _get_s3_keys_with_prefix(s3_prefix=s3_prefix)
             for key in object_keys:
-                stem: DocumentStem = Path(key).stem
-                key: DocumentObjectUri = os.path.join("s3://", bucket, key)
+                stem = DocumentStem(Path(key).stem)
+                uri = DocumentObjectUri(os.path.join("s3://", bucket, key))
 
-                yield stem, key
+                yield DocumentImporter((stem, uri))
         except Exception as e:
             print(
                 f"failed to yield from S3 prefix. Error: {str(e)}",
@@ -268,9 +269,9 @@ def s3_obj_generator_from_s3_paths(
     """
     for s3_path in s3_paths:
         try:
-            stem: DocumentStem = Path(s3_path).stem
-            uri: DocumentObjectUri = s3_path
-            yield stem, uri
+            stem = DocumentStem(Path(s3_path).stem)
+            uri = DocumentObjectUri(s3_path)
+            yield DocumentImporter((stem, uri))
         except Exception as e:
             print(
                 f"failed to yield from S3 path. Error: {str(e)}",
@@ -811,7 +812,7 @@ def get_data_id_from_vespa_hit_id(hit_id: VespaHitId) -> VespaDataId:
     splits = hit_id.split("::")
     if len(splits) != 2:
         raise ValueError(f"received {len(splits)} splits, when expecting 2: {splits}")
-    return splits[1]
+    return VespaDataId(splits[1])
 
 
 def get_text_block_id_from_vespa_data_id(data_id: VespaDataId) -> TextBlockId:
@@ -828,7 +829,7 @@ def get_text_block_id_from_vespa_data_id(data_id: VespaDataId) -> TextBlockId:
             f"received {len(splits)} splits, when expecting {expected_splits}: {splits}"
         )
     # Get the last of the splits
-    return splits[-1]
+    return TextBlockId(splits[-1])
 
 
 def get_document_passage_from_all_document_passages(
@@ -1255,14 +1256,18 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
     logger.info("converting labelled passages to Vespa concepts")
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
-        labelled_passage.id: convert_labelled_passage_to_concepts(labelled_passage)
+        TextBlockId(labelled_passage.id): convert_labelled_passage_to_concepts(
+            labelled_passage
+        )
         for labelled_passage in document_labelled_passages
     }
 
     grouped_concepts_n = len(grouped_concepts)
     logger.info(f"starting partial updates for {grouped_concepts_n} grouped concepts")
 
-    document_import_id = remove_translated_suffix(document_importer[0])
+    document_import_id = DocumentImportId(
+        remove_translated_suffix(document_importer[0])
+    )
 
     logger.info("creating Vespa connection pool")
     async with (
@@ -1359,7 +1364,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     # Wrap the callback with the appropriate state and make it match
     # the expected signature.
     def _vespa_response_handler_cb_with_state(
-        response: VespaResponse, data_id: VespaDataId
+        response: VespaResponse, data_id_str: str
     ):
         try:
             acquired_lock = response_cb_lock.acquire(
@@ -1370,6 +1375,9 @@ async def run_partial_updates_of_concepts_for_document_passages(
             if not acquired_lock:
                 print("failed to acquire lock")
                 return
+
+            # Convert the string data_id to VespaDataId
+            data_id = VespaDataId(data_id_str)
 
             vespa_response_handler_cb(
                 failures,
@@ -1387,7 +1395,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     def _feed_updates(
         vespa_search_adapter: VespaSearchAdapter,
         data: Iterable[dict[str, Any]],
-        callback: Callable[[VespaResponse, VespaDataId], None],
+        callback: Callable[[VespaResponse, str], None],
     ) -> None:
         # The previously established connection pool isn't used since
         # `feed_iterable` creates its own.
