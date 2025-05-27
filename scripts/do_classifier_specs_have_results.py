@@ -7,7 +7,7 @@ from pathlib import Path
 
 import boto3
 import typer
-import yaml
+import yaml  # pyright: ignore[reportAttributeAccessIssue]
 from botocore.exceptions import ClientError
 
 from scripts.cloud import AwsEnv
