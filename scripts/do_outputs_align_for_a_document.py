@@ -160,9 +160,9 @@ def get_s3_count_for_one_spec(
     s3_path = build_s3_path(classifier_id, spec_version, document_id)
     try:
         s3_labelled_passages = get_labelled_passages(bucket_name, s3_path)
-    except Exception:
+    except Exception as e:
         typer.secho("x", fg="red", nl=False)
-        typer.secho(f"Error getting {s3_path}", fg="red")
+        typer.secho(f"Error getting {s3_path}: {e}", fg="red")
         return []
     counts = count_concepts_in_s3_labelled_passages(s3_labelled_passages)
     typer.secho(".", fg="green", nl=False)
