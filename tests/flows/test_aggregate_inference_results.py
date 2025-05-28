@@ -7,23 +7,26 @@ from unittest.mock import patch
 
 import pydantic
 import pytest
-import yaml
+from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
 
 from flows.aggregate_inference_results import (
     aggregate_inference_results,
-    build_run_output_prefix,
+    build_run_output_identifier,
     combine_labelled_passages,
     get_all_labelled_passages_for_one_document,
+    process_single_document,
     validate_passages_are_same_except_concepts,
 )
 from scripts.cloud import ClassifierSpec
+from scripts.update_classifier_spec import write_spec_file
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-def test_aggregate_inference_results(
+@pytest.mark.asyncio
+async def test_aggregate_inference_results(
     mock_bucket_labelled_passages_large, test_aggregate_config
 ):
     keys, bucket, s3_client = mock_bucket_labelled_passages_large
@@ -38,13 +41,18 @@ def test_aggregate_inference_results(
     with tempfile.TemporaryDirectory() as spec_dir:
         # Write the concept specs to a YAML file
         temp_spec_dir = Path(spec_dir)
-        concept_specs = ["Q123:v4", "Q223:v3", "Q218:v5", "Q767:v3", "Q1286:v3"]
+        classifier_specs = [
+            ClassifierSpec(name="Q123", alias="v4"),
+            ClassifierSpec(name="Q223", alias="v3"),
+            ClassifierSpec(name="Q218", alias="v5"),
+            ClassifierSpec(name="Q767", alias="v3"),
+            ClassifierSpec(name="Q1286", alias="v3"),
+        ]
         spec_file = temp_spec_dir / "sandbox.yaml"
-        with open(spec_file, "w") as f:
-            yaml.dump(concept_specs, f)
+        write_spec_file(spec_file, classifier_specs)
 
         with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
-            run_reference = aggregate_inference_results(
+            run_reference = await aggregate_inference_results(
                 document_ids, test_aggregate_config
             )
 
@@ -52,7 +60,11 @@ def test_aggregate_inference_results(
             collected_ids_for_document = []
 
             for document_id in document_ids:
-                s3_path = os.path.join(run_reference, f"{document_id}.json")
+                s3_path = os.path.join(
+                    test_aggregate_config.aggregate_inference_results_prefix,
+                    run_reference,
+                    f"{document_id}.json",
+                )
                 try:
                     response = s3_client.get_object(Bucket=bucket, Key=s3_path)
                     data = response["Body"].read().decode("utf-8")
@@ -65,7 +77,7 @@ def test_aggregate_inference_results(
                     pytest.fail(f"Unexpected error: {e}")
 
                 wikibase_ids = [
-                    concept_spec.split(":")[0] for concept_spec in concept_specs
+                    classifier_spec.name for classifier_spec in classifier_specs
                 ]
 
                 document_inference_output = list(data.values())
@@ -96,7 +108,7 @@ def test_aggregate_inference_results(
 def test_build_run_output_prefix():
     @flow()
     def fake_flow():
-        return build_run_output_prefix("test-prefix")
+        return build_run_output_identifier()
 
     prefix = fake_flow()
     # From https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
@@ -106,7 +118,6 @@ def test_build_run_output_prefix():
         assert char not in prefix, f"Unsupported char found in prefix: {prefix}"
 
     assert "None" not in prefix
-    assert "test-prefix" in prefix
 
 
 def test_get_all_labelled_passages_for_one_document(
@@ -147,6 +158,64 @@ def test_validate_passages_are_same_except_concepts():
             )
         )
         validate_passages_are_same_except_concepts(passages)
+
+
+@pytest.mark.asyncio
+async def test_process_single_document__success(
+    mock_bucket_labelled_passages_large, test_aggregate_config
+):
+    document_id = "CCLW.executive.10061.4515"
+    classifier_specs = [
+        ClassifierSpec(name="Q218", alias="v5"),
+        ClassifierSpec(name="Q767", alias="v3"),
+    ]
+
+    with tempfile.TemporaryDirectory() as spec_dir:
+        temp_spec_dir = Path(spec_dir)
+        spec_file = temp_spec_dir / "sandbox.yaml"
+        write_spec_file(spec_file, classifier_specs)
+
+        with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
+            assert (document_id, None) == await process_single_document(
+                document_id,
+                classifier_specs,
+                test_aggregate_config,
+                "run_output_identifier",
+            )
+
+
+@pytest.mark.asyncio
+async def test_process_single_document__failure(
+    mock_bucket_labelled_passages_large, test_aggregate_config
+):
+    document_id = "CCLW.executive.10061.4515"
+    classifier_specs = [
+        ClassifierSpec(name="Q218", alias="v5"),
+        ClassifierSpec(
+            name="Q9999999999", alias="v99"
+        ),  # Nothing will be found for this one
+    ]
+
+    with tempfile.TemporaryDirectory() as spec_dir:
+        temp_spec_dir = Path(spec_dir)
+        spec_file = temp_spec_dir / "sandbox.yaml"
+        write_spec_file(spec_file, classifier_specs)
+
+        with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
+            document_id, error = await process_single_document(
+                document_id,
+                classifier_specs,
+                test_aggregate_config,
+                "run_output_identifier",
+            )
+            assert isinstance(error, ClientError)
+            code = error.response["Error"]["Code"]
+            assert code == "NoSuchKey"
+            key = error.response["Error"]["Key"]
+            assert (
+                key
+                == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"
+            )
 
 
 def test_combine_labelled_passages(concept):

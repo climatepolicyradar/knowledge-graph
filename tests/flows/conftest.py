@@ -23,8 +23,6 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
-from prefect.logging import disable_run_logger
-from prefect.testing.utilities import prefect_test_harness
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
@@ -39,13 +37,6 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
-
-
-@pytest.fixture(autouse=True, scope="session")
-def prefect_test_fixture():
-    with prefect_test_harness(server_startup_timeout=120):
-        with disable_run_logger():
-            yield
 
 
 @pytest.fixture()

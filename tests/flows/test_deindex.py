@@ -1192,7 +1192,7 @@ def put_empty_document_artifact(
             [],
             [],
             [],
-            "classifier spec. name='Q400' alias='v6' was not found in the maintained list",
+            "classifier spec. Q400:v6 was not found in the maintained list",
         ),
         (
             [
@@ -1204,7 +1204,7 @@ def put_empty_document_artifact(
             ],
             [],
             [],
-            "already have name='Q400' alias='v6' as a primary",
+            "already have Q400:v6 as a primary",
         ),
     ],
 )
