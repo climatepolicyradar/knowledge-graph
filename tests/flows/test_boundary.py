@@ -20,6 +20,7 @@ from flows.boundary import (
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
     TextBlockId,
@@ -1188,7 +1189,7 @@ async def test__update_text_block__update(
 
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id=text_block_id,
-        document_import_id=document_import_id,
+        document_import_id=DocumentImportId(document_import_id),
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
@@ -1198,7 +1199,7 @@ async def test__update_text_block__update(
             text_block_id_response,
             document_import_id_response,
         ) = await _update_text_block(
-            text_block_id=text_block_id,
+            text_block_id=TextBlockId(text_block_id),
             document_passage_id=document_passage_id,
             document_passage=document_passage,
             merge_serialise_concepts_cb=update_concepts_on_existing_vespa_concepts,
@@ -1212,6 +1213,20 @@ async def test__update_text_block__update(
             == document_import_id_response
         )
         assert vespa_response.is_successful()
+
+    # Validate that the concepts on the passage are the same as those we supplied to
+    # the update.
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id=text_block_id,
+        document_import_id=DocumentImportId(document_import_id),
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert document_passage.concepts is not None
+    assert len(document_passage.concepts) == len(example_vespa_concepts)
+    assert all(
+        concept in document_passage.concepts for concept in example_vespa_concepts
+    )
 
 
 @pytest.mark.vespa
