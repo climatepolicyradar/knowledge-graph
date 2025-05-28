@@ -3,6 +3,7 @@ import json
 import os
 import re
 import time
+import warnings
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -42,6 +43,12 @@ class Profiler:
     """Context manager for profiling and printing the duration"""
 
     def __init__(self, should_profile: bool = False):
+        warnings.warn(
+            "Profiler class is deprecated and will be removed in a future version. "
+            "Please use `flows.Profiler`",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.start_time = time.perf_counter()
         self.end_time = None
         self.duration = None
