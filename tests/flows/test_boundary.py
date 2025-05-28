@@ -20,6 +20,7 @@ from flows.boundary import (
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
     TextBlockId,
@@ -1188,9 +1189,15 @@ async def test__update_text_block__update(
 
     document_passage_id, document_passage = get_document_passage_from_vespa(
         text_block_id=text_block_id,
-        document_import_id=document_import_id,
+        document_import_id=DocumentImportId(document_import_id),
         vespa_search_adapter=local_vespa_search_adapter,
     )
+
+    # Need to make sure that we have a concept in the example passages that has the same
+    # model as an existing concept and is thus cleared down.
+    assert document_passage.concepts is not None
+    concept_to_clear_down = document_passage.concepts[0]
+    example_vespa_concepts[0].model = concept_to_clear_down.model
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         (
@@ -1198,7 +1205,7 @@ async def test__update_text_block__update(
             text_block_id_response,
             document_import_id_response,
         ) = await _update_text_block(
-            text_block_id=text_block_id,
+            text_block_id=TextBlockId(text_block_id),
             document_passage_id=document_passage_id,
             document_passage=document_passage,
             merge_serialise_concepts_cb=update_concepts_on_existing_vespa_concepts,
@@ -1212,6 +1219,18 @@ async def test__update_text_block__update(
             == document_import_id_response
         )
         assert vespa_response.is_successful()
+
+    # Validate that we removed the original concept with the matching model name to a
+    # concept in the updates from the passage.
+    _, document_passage__final = get_document_passage_from_vespa(
+        text_block_id=text_block_id,
+        document_import_id=DocumentImportId(document_import_id),
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    # Check whether we removed the concept that had a matching model.
+    assert document_passage__final.concepts is not None
+    assert concept_to_clear_down not in document_passage__final.concepts
 
 
 @pytest.mark.vespa
