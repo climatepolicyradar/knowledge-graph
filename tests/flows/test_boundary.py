@@ -1193,6 +1193,12 @@ async def test__update_text_block__update(
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
+    # Need to make sure that we have a concept in the example passages that has the same
+    # model as an existing concept and is thus cleared down.
+    assert document_passage.concepts is not None
+    concept_to_clear_down = document_passage.concepts[0]
+    example_vespa_concepts[0].model = concept_to_clear_down.model
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         (
             vespa_response,
@@ -1216,17 +1222,15 @@ async def test__update_text_block__update(
 
     # Validate that the concepts on the passage are the same as those we supplied to
     # the update.
-    document_passage_id, document_passage = get_document_passage_from_vespa(
+    _, document_passage__final = get_document_passage_from_vespa(
         text_block_id=text_block_id,
         document_import_id=DocumentImportId(document_import_id),
         vespa_search_adapter=local_vespa_search_adapter,
     )
 
-    assert document_passage.concepts is not None
-    assert len(document_passage.concepts) == len(example_vespa_concepts)
-    assert all(
-        concept in document_passage.concepts for concept in example_vespa_concepts
-    )
+    # Check whether we removed the concept that had a matching model.
+    assert document_passage__final.concepts is not None
+    assert concept_to_clear_down not in document_passage__final.concepts
 
 
 @pytest.mark.vespa
