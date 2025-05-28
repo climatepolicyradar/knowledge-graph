@@ -10,8 +10,6 @@ from flows.aggregate_inference_results import DocumentImportId, S3Uri
 from flows.boundary import TextBlockId
 
 
-# Copied to a new function as it is now different to the original, didn't want to break
-# tests for the original and refactor etc.
 async def _update_text_block(
     text_block_id: TextBlockId,
     document_import_id: DocumentImportId,
@@ -42,8 +40,6 @@ async def index_aggregate_results_from_s3_to_vespa(
     s3 = boto3.client("s3")
     response = s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
     body = response["Body"].read().decode("utf-8")
-    # Do we want to convert to a pydantic type here?
-    # Good for validation but seemes odd if we're just going to convert it back to json.
     aggregated_inference_results = json.loads(body)
 
     # TODO: Find a better solution for this

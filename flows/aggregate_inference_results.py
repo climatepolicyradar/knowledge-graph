@@ -106,6 +106,7 @@ def get_all_labelled_passages_for_one_document(
     s3 = boto3.client("s3")
 
     labelled_passages = defaultdict(list)
+    # TODO: Improve this
     assert config.cache_bucket is not None, "Cache bucket must be set in config"
     for spec in classifier_specs:
         s3_uri = S3Uri(
@@ -190,6 +191,7 @@ async def process_single_document(
         )
         vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
+        # TODO: Improve this
         assert config.cache_bucket is not None, "Cache bucket must be set in config"
 
         # Write to s3
