@@ -1,31 +1,27 @@
+import pytest
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
+from flows.aggregate_inference_results import S3Uri
+from flows.index_from_aggregate_results import index_aggregate_results_from_s3_to_vespa
 
-def test_index_from_aggregated_inference_results(
+
+@pytest.mark.asyncio
+async def test_index_from_aggregated_inference_results(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
     mock_bucket: str,
-    mock_bucket_inference_results,
+    mock_bucket_inference_results: list[str],
     s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        file_keys = mock_bucket_inference_results
+        for file_key in file_keys:
+            await index_aggregate_results_from_s3_to_vespa(
+                s3_uri=S3Uri(bucket=mock_bucket, key=file_key),
+                vespa_connection_pool=vespa_connection_pool,
+            )
 
-    # TODO: The aggregate inference results function returns a unique s3 sub prefix,
-    # move this functionality into a parent flow that takes the prefix as a parameter
-    # and passes into the subflow once we have developed it.
-    response = mock_s3_client.list_objects_v2(
-        Bucket=mock_bucket, Prefix=s3_prefix_inference_results
-    )
-    assert "Contents" in response, "No objects found in bucket"
-    assert len(response["Contents"]) > 0, "Empty response contents"
-
-    file_keys = [
-        obj["Key"] for obj in response["Contents"] if obj["Key"].endswith(".json")
-    ]
-    assert file_keys, "No JSON files found in bucket"
-
-    for file_key in file_keys:
-        response = mock_s3_client.get_object(Bucket=mock_bucket, Key=file_key)
-
-        # TODO: Run the flow to index the results.
+    # Assert that for each passage that the only concepts present were those from the
+    # aggregated inference results.
