@@ -309,6 +309,15 @@ def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
         doc_names=latest_docs,
         timestamp="2023-01-1T01.01.01.000001",
     )
+
+    for doc_id in [*latest_docs, *previous_docs]:
+        data = json.dumps([{"import_id": doc_id}])
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join("embeddings_input", f"{doc_id}.json")
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
     yield previous_docs, latest_docs
 
 

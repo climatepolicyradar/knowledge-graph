@@ -12,13 +12,17 @@ from prefect.exceptions import MissingContextError
 from prefect.task_runners import ConcurrentTaskRunner
 
 from flows.boundary import (
-    DocumentImportId,
     TextBlockId,
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from flows.inference import (
+    DOCUMENT_SOURCE_PREFIX_DEFAULT,
+    DOCUMENT_TARGET_PREFIX_DEFAULT,
+)
 from flows.utils import (
+    DocumentImportId,
+    S3FileStemFetcher,
     SlackNotify,
     iterate_batch,
 )
@@ -72,7 +76,9 @@ class Config:
     """Configuration used across flow runs."""
 
     cache_bucket: str | None = None
-    document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
+    raw_inference_results_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
+    parser_output_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
+    pipeline_state_prefix: str = "input"
     aggregate_inference_results_prefix: str = INFERENCE_RESULTS_PREFIX
     bucket_region: str = "eu-west-1"
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
@@ -114,7 +120,7 @@ def get_all_labelled_passages_for_one_document(
         s3_uri = S3Uri(
             bucket=config.cache_bucket,
             key=os.path.join(
-                config.document_source_prefix,
+                config.raw_inference_results_prefix,
                 spec.name,
                 spec.alias,
                 f"{document_id}.json",
@@ -216,25 +222,32 @@ async def process_single_document(
     task_runner=ConcurrentTaskRunner(),
 )
 async def aggregate_inference_results(
-    document_ids: list[DocumentImportId],
+    document_ids: list[DocumentImportId] | None = None,
     config: Config | None = None,
+    use_new_and_updated: bool = False,
     max_concurrent_tasks: int = 10,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
         print("no config provided, creating one")
         config = await Config.create()
+    print(f"Running with config: {config}")
 
-    if not document_ids:
-        raise NotImplementedError(
-            "No document ids provided, fallback is not supported yet"
-        )
+    assert config.cache_bucket
+    file_stems = S3FileStemFetcher(
+        bucket_region=config.bucket_region,
+        cache_bucket=config.cache_bucket,
+        document_source_prefix=config.parser_output_prefix,
+        pipeline_state_prefix=config.pipeline_state_prefix,
+        use_new_and_updated=use_new_and_updated,
+        document_ids=document_ids,
+    ).fetch()
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = parse_spec_file(config.aws_env)
 
     print(
-        f"Aggregating inference results for {len(document_ids)} documents, using "
+        f"Aggregating inference results for {len(file_stems)} documents, using "
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
 
@@ -246,7 +259,7 @@ async def aggregate_inference_results(
             config,
             run_output_identifier,
         )
-        for document_id in document_ids
+        for document_id in file_stems
     ]
 
     # Process documents in batches to control concurrency
@@ -266,7 +279,7 @@ async def aggregate_inference_results(
 
     # Results
     print(
-        f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}/{len(document_ids)}"
+        f"Successes: {len(successes)}/{len(file_stems)}, failures: {len(failures)}/{len(file_stems)}"
     )
 
     if failures:
