@@ -75,7 +75,7 @@ T = TypeVar("T")
 CONCEPT_COUNT_SEPARATOR: Final[str] = ":"
 CONCEPTS_COUNTS_PREFIX_DEFAULT: Final[str] = "concepts_counts"
 DEFAULT_DOCUMENTS_BATCH_SIZE: Final[PositiveInt] = 50
-DEFAULT_TEXT_BLOCKS_BATCH_SIZE: Final[PositiveInt] = 50
+DEFAULT_TEXT_BLOCKS_BATCH_SIZE: Final[PositiveInt] = 20
 DEFAULT_UPDATES_TASK_BATCH_SIZE: Final[PositiveInt] = 5
 
 # Get more logs
@@ -1383,7 +1383,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
             printer=print,
             name="partial updates",
         ):
-            semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+            semaphore = asyncio.Semaphore(DEFAULT_TEXT_BLOCKS_BATCH_SIZE)
 
             tasks = []
             for text_block_id, concepts in grouped_concepts.items():
