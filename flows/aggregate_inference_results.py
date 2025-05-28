@@ -226,7 +226,7 @@ async def aggregate_inference_results(
         config = await Config.create()
 
     if not document_ids:
-        raise ValueError("No document ids provided, fallback is not supported yet")
+        raise NotImplementedError("No document ids provided, fallback is not supported yet")
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = parse_spec_file(config.aws_env)
