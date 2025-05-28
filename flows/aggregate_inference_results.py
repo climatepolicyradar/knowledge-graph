@@ -136,7 +136,7 @@ def check_all_values_are_the_same(values: list[Any]) -> bool:
 
 
 def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) -> None:
-    """Check if passages are the same (except for metadata & spans."""
+    """Check if passages are the same (except for metadata & spans)."""
     properties = [
         "id",
         "text",
