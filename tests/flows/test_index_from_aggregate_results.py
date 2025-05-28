@@ -1,8 +1,13 @@
+from cpr_sdk.search_adaptors import VespaSearchAdapter
+
+
 def test_index_from_aggregated_inference_results(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
-    mock_bucket,
+    mock_bucket: str,
     mock_bucket_inference_results,
-    s3_prefix_inference_results,
+    s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
