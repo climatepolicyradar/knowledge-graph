@@ -226,12 +226,24 @@ def create_results_table(
     aggregated_concepts: None | dict[str, int],
 ) -> Table:
     table = Table(title="Concept Counts")
-    table.add_column("Concept", justify="left", style="cyan")
-    table.add_column("Inference Count", justify="right", style="green")
-    table.add_column("Aggregated", justify="right", style="green")
-    table.add_column("Passage Count", justify="right", style="green")
-    table.add_column("Document Count", justify="right", style="green")
-    table.add_column("Aligned", justify="right", style="magenta")
+    table.add_column(
+        "Concept", justify="left", style="cyan"
+    )  # The name an ID of the concept
+    table.add_column(
+        "Inference Count", justify="right", style="green"
+    )  # Count of that concept in the raw s3 inference output
+    table.add_column(
+        "Aggregated", justify="right", style="green"
+    )  # Count of that concept in the s3 aggregated output
+    table.add_column(
+        "Passage Count", justify="right", style="green"
+    )  # Count of that concept in vespa on passages
+    table.add_column(
+        "Document Count", justify="right", style="green"
+    )  # Count from concepts_counts in the vespa document
+    table.add_column(
+        "Aligned", justify="right", style="magenta"
+    )  # Whether the counts are aligned
 
     # TODO: Use classifier specs
     for concept, count in s3_concept_counts.items():
