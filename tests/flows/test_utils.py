@@ -7,13 +7,17 @@ from pathlib import Path
 import boto3
 import pytest
 
+from flows.inference import DocumentStem
 from flows.utils import (
     SlackNotify,
+    determine_file_stems,
     file_name_from_path,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
+    list_bucket_file_stems,
+    remove_sabin_file_stems,
     remove_translated_suffix,
     s3_file_exists,
 )
@@ -222,3 +226,92 @@ def test_filter_non_english_file_stems() -> None:
     end_time = time.time()
 
     assert end_time - start_time < 1, "Filtering took too long"
+
+
+def test_list_bucket_file_stems(test_config, mock_bucket_documents):
+    expected_ids = [Path(d).stem for d in mock_bucket_documents]
+    got_ids = list_bucket_file_stems(
+        bucket_region=test_config.bucket_region,
+        cache_bucket=test_config.cache_bucket,
+        document_source_prefix=test_config.document_source_prefix,
+    )
+    assert sorted(expected_ids) == sorted(got_ids)
+
+
+@pytest.mark.parametrize(
+    ("doc_ids", "bucket_ids", "expected"),
+    [
+        (
+            ["AF.document.002MMUCR.n0000"],
+            [
+                "AF.document.002MMUCR.n0000",
+                "AF.document.AFRDG00038.n0000",
+                "CCLW.document.i00001313.n0000",
+            ],
+            ["AF.document.002MMUCR.n0000"],
+        ),
+        (None, ["AF.document.002MMUCR.n0000"], ["AF.document.002MMUCR.n0000"]),
+    ],
+)
+def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
+    got = determine_file_stems(
+        bucket_region=test_config.bucket_region,
+        cache_bucket=test_config.cache_bucket,
+        document_source_prefix=test_config.document_source_prefix,
+        pipeline_state_prefix=test_config.pipeline_state_prefix,
+        use_new_and_updated=False,
+        requested_document_ids=doc_ids,
+        current_bucket_file_stems=bucket_ids,
+    )
+    assert got == expected
+
+
+@pytest.mark.parametrize(
+    "input_stems,expected_output",
+    [
+        ([], []),
+        (
+            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
+            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
+        ),
+        (["Sabin.document.16944.17490", "Sabin.document.16945.17491"], []),
+        (
+            [
+                "CCLW.executive.12345.6789",
+                "Sabin.document.16944.17490",
+                "UNFCCC.document.1234.5678",
+                "Sabin.document.16945.17491",
+            ],
+            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
+        ),
+        (["sabin.document.16944.17490", "SABIN.document.16945.17491"], []),
+        (
+            ["SabinIndustries.document.1234.5678", "DocumentSabin.12345.6789"],
+            ["DocumentSabin.12345.6789"],
+        ),
+    ],
+)
+def test_remove_sabin_file_stems(
+    input_stems: list[DocumentStem], expected_output: list[DocumentStem]
+):
+    result = remove_sabin_file_stems(input_stems)
+    assert result == expected_output
+
+
+def test_determine_file_stems__error(test_config):
+    with pytest.raises(ValueError):
+        determine_file_stems(
+            bucket_region=test_config.bucket_region,
+            cache_bucket=test_config.cache_bucket,
+            document_source_prefix=test_config.document_source_prefix,
+            pipeline_state_prefix=test_config.pipeline_state_prefix,
+            use_new_and_updated=False,
+            requested_document_ids=[
+                "AF.document.002MMUCR.n0000",
+                "AF.document.AFRDG00038.n00002",
+            ],
+            current_bucket_file_stems=[
+                "CCLW.document.i00001313.n0000",
+                "AF.document.002MMUCR.n0000",
+            ],
+        )

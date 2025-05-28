@@ -10,18 +10,13 @@ from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
     ClassifierSpec,
-    DocumentStem,
     _stringify,
     classifier_inference,
-    determine_file_stems,
     document_passages,
     download_classifier_from_wandb_to_local,
-    get_latest_ingest_documents,
     iterate_batch,
-    list_bucket_file_stems,
     load_classifier,
     load_document,
-    remove_sabin_file_stems,
     run_classifier_inference_on_document,
     store_labels,
     text_block_inference,
@@ -38,53 +33,6 @@ def helper_list_labels_in_bucket(test_config, bucket_name):
     )
     labels = [c.get("Key") for c in response.get("Contents", [])]
     return labels
-
-
-def test_list_bucket_file_stems(test_config, mock_bucket_documents):
-    expected_ids = [Path(d).stem for d in mock_bucket_documents]
-    got_ids = list_bucket_file_stems(test_config)
-    assert sorted(expected_ids) == sorted(got_ids)
-
-
-@pytest.mark.parametrize(
-    ("doc_ids", "bucket_ids", "expected"),
-    [
-        (
-            ["AF.document.002MMUCR.n0000"],
-            [
-                "AF.document.002MMUCR.n0000",
-                "AF.document.AFRDG00038.n0000",
-                "CCLW.document.i00001313.n0000",
-            ],
-            ["AF.document.002MMUCR.n0000"],
-        ),
-        (None, ["AF.document.002MMUCR.n0000"], ["AF.document.002MMUCR.n0000"]),
-    ],
-)
-def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
-    got = determine_file_stems(
-        config=test_config,
-        use_new_and_updated=False,
-        requested_document_ids=doc_ids,
-        current_bucket_file_stems=bucket_ids,
-    )
-    assert got == expected
-
-
-def test_determine_file_stems__error(test_config):
-    with pytest.raises(ValueError):
-        determine_file_stems(
-            config=test_config,
-            use_new_and_updated=False,
-            requested_document_ids=[
-                "AF.document.002MMUCR.n0000",
-                "AF.document.AFRDG00038.n00002",
-            ],
-            current_bucket_file_stems=[
-                "CCLW.document.i00001313.n0000",
-                "AF.document.002MMUCR.n0000",
-            ],
-        )
 
 
 @pytest.mark.asyncio
@@ -253,26 +201,6 @@ async def test_classifier_inference(
         assert len(with_spans) > 0
 
 
-def test_get_latest_ingest_documents(
-    test_config, mock_bucket_new_and_updated_documents_json
-):
-    _, latest_docs = mock_bucket_new_and_updated_documents_json
-    doc_ids = get_latest_ingest_documents(test_config)
-    assert set(doc_ids) == latest_docs
-
-
-def test_get_latest_ingest_documents_no_latest(
-    test_config,
-    # Setup the empty bucket
-    mock_bucket,
-):
-    with pytest.raises(
-        ValueError,
-        match="failed to find",
-    ):
-        get_latest_ingest_documents(test_config)
-
-
 @pytest.mark.asyncio
 async def test_run_classifier_inference_on_document(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
@@ -376,35 +304,3 @@ async def test_run_classifier_inference_on_document_missing(
 def test_iterate_batch(data, expected_lengths):
     for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
         assert len(batch) == expected
-
-
-@pytest.mark.parametrize(
-    "input_stems,expected_output",
-    [
-        ([], []),
-        (
-            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
-            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
-        ),
-        (["Sabin.document.16944.17490", "Sabin.document.16945.17491"], []),
-        (
-            [
-                "CCLW.executive.12345.6789",
-                "Sabin.document.16944.17490",
-                "UNFCCC.document.1234.5678",
-                "Sabin.document.16945.17491",
-            ],
-            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
-        ),
-        (["sabin.document.16944.17490", "SABIN.document.16945.17491"], []),
-        (
-            ["SabinIndustries.document.1234.5678", "DocumentSabin.12345.6789"],
-            ["DocumentSabin.12345.6789"],
-        ),
-    ],
-)
-def test_remove_sabin_file_stems(
-    input_stems: list[DocumentStem], expected_output: list[DocumentStem]
-):
-    result = remove_sabin_file_stems(input_stems)
-    assert result == expected_output

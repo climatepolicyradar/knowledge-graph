@@ -26,8 +26,10 @@ from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
     SlackNotify,
-    filter_non_english_language_file_stems,
-    get_file_stems_for_document_id,
+    determine_file_stems,
+    download_s3_file,
+    list_bucket_file_stems,
+    remove_sabin_file_stems,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -111,134 +113,6 @@ class Config:
         }
 
 
-def get_bucket_paginator(config: Config, prefix: str):
-    """Returns an s3 paginator for the pipeline cache bucket"""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    paginator = s3.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=config.cache_bucket,
-        Prefix=prefix,
-    )
-
-
-def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
-    """
-    Scan configured bucket and return all file stems.
-
-    Where a stem refers to a file name without the extension. Often, this is the same as
-    the document id, but not always as we have translated documents.
-    """
-    page_iterator = get_bucket_paginator(config, config.document_source_prefix)
-    file_stems = []
-
-    for p in page_iterator:
-        if "Contents" in p:
-            for o in p["Contents"]:
-                file_stem = Path(o["Key"]).stem
-                file_stems.append(file_stem)
-
-    return file_stems
-
-
-def get_latest_ingest_documents(config: Config) -> list[str]:
-    """
-    Get IDs of changed documents from the latest ingest run
-
-    Retrieves the `new_and_updated_docs.json` file from the latest ingest.
-    Extracts the ids from the file, and returns them as a single list.
-    """
-    page_iterator = get_bucket_paginator(config, config.pipeline_state_prefix)
-    file_name = "new_and_updated_documents.json"
-
-    # First get all matching files, then sort them
-    matching_files = [
-        item
-        for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
-        if item is not None
-    ]
-
-    if not matching_files:
-        raise ValueError(
-            f"failed to find any `{file_name}` files in "
-            f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
-        )
-
-    # Sort by Key and get the last one
-    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
-
-    data = download_s3_file(config, latest["Key"])
-    content = json.loads(data)
-    updated = list(content["updated_documents"].keys())
-    new = [d["import_id"] for d in content["new_documents"]]
-
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")
-    return new + updated
-
-
-def determine_file_stems(
-    config: Config,
-    use_new_and_updated: bool,
-    requested_document_ids: Optional[list[DocumentImportId]],
-    current_bucket_file_stems: list[DocumentStem],
-) -> list[DocumentStem]:
-    """
-    Function for identifying the file stems to process.
-
-    File stems refer to the file name without the extension. Often, this is the same as
-    the document id, but not always as we have translated documents.
-
-    Compares the requested_document_ids to what actually exists in the bucket.
-    If a document id has been requested but does not exist this will
-    raise a `ValueError`. If no document ids were requested, this will
-    instead return the `current_bucket_file_stems`.
-
-    For requested document ids we identify whether there are any translated files that
-    should also be processed by identifying their file stems as well.
-    """
-    if use_new_and_updated and requested_document_ids:
-        raise ValueError(
-            "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
-        )
-    elif use_new_and_updated:
-        requested_document_ids = get_latest_ingest_documents(config)
-    elif requested_document_ids is None:
-        current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
-            file_stems=current_bucket_file_stems
-        )
-        return current_bucket_file_stems__filtered
-
-    assert config.cache_bucket
-
-    requested_document_stems = []
-    for doc_id in requested_document_ids:
-        document_key = os.path.join(config.document_source_prefix, f"{doc_id}.json")
-        requested_document_stems += get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key
-        )
-
-    missing_from_bucket = list(
-        set(requested_document_stems) - set(current_bucket_file_stems)
-    )
-    if len(missing_from_bucket) > 0:
-        raise ValueError(
-            f"Requested document_ids not found in bucket: {missing_from_bucket}"
-        )
-
-    return requested_document_stems
-
-
-def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
-    """
-    Remove Sabin document file stems from the list of file stems.
-
-    File stems of the Sabin source follow the below naming convention:
-    - "Sabin.document.16944.17490"
-    """
-    return [
-        stem for stem in file_stems if not stem.startswith(("Sabin", "sabin", "SABIN"))
-    ]
-
-
 def download_classifier_from_wandb_to_local(
     run: Run, config: Config, classifier_name: str, alias: str
 ) -> str:
@@ -280,22 +154,17 @@ async def load_classifier(
         return classifier
 
 
-def download_s3_file(config: Config, key: str):
-    """Retrieve an s3 file from the pipeline cache"""
-
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    response = s3.get_object(Bucket=config.cache_bucket, Key=key)
-    content = response["Body"].read().decode("utf-8")
-    return content
-
-
 def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = os.path.join(
         config.document_source_prefix,
         f"{file_stem}.json",
     )
-    content = download_s3_file(config=config, key=file_key)
+    content = download_s3_file(
+        bucket_region=config.bucket_region,
+        cache_bucket=config.cache_bucket,
+        key=file_key,
+    )
     document = BaseParserOutput.model_validate_json(content)
     return document
 
@@ -629,9 +498,16 @@ async def classifier_inference(
 
     print(f"Running with config: {config}")
 
-    current_bucket_file_stems = list_bucket_file_stems(config=config)
+    current_bucket_file_stems = list_bucket_file_stems(
+        bucket_region=config.bucket_region,
+        cache_bucket=config.cache_bucket,
+        document_source_prefix=config.document_source_prefix,
+    )
     validated_file_stems = determine_file_stems(
-        config=config,
+        bucket_region=config.bucket_region,
+        cache_bucket=config.cache_bucket,
+        document_source_prefix=config.document_source_prefix,
+        pipeline_state_prefix=config.pipeline_state_prefix,
         use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
