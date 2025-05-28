@@ -1087,37 +1087,41 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     aws_env: AwsEnv,
     as_deployment: bool,
     partial_update_flow: Operation,
+    semaphore: asyncio.Semaphore,
     vespa_search_adapter: VespaSearchAdapter | None = None,
     text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
 ) -> FlowRun | None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
-    if as_deployment:
-        flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
-        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+    async with semaphore:
+        if as_deployment:
+            flow_name = function_to_flow_name(run_partial_updates_of_concepts_for_batch)
+            deployment_name = generate_deployment_name(
+                flow_name=flow_name, aws_env=aws_env
+            )
 
-        return await run_deployment(
-            name=f"{flow_name}/{deployment_name}",
-            parameters={
-                "documents_batch": documents_batch,
-                "documents_batch_num": documents_batch_num,
-                "cache_bucket": cache_bucket,
-                "concepts_counts_prefix": concepts_counts_prefix,
-                "partial_update_flow": partial_update_flow,
-                "text_update_task_batch_size": text_update_task_batch_size,
-            },
-            # Rely on the flow's own timeout
-            timeout=None,
+            return await run_deployment(
+                name=f"{flow_name}/{deployment_name}",
+                parameters={
+                    "documents_batch": documents_batch,
+                    "documents_batch_num": documents_batch_num,
+                    "cache_bucket": cache_bucket,
+                    "concepts_counts_prefix": concepts_counts_prefix,
+                    "partial_update_flow": partial_update_flow,
+                    "text_update_task_batch_size": text_update_task_batch_size,
+                },
+                # Rely on the flow's own timeout
+                timeout=None,
+            )
+
+        return await run_partial_updates_of_concepts_for_batch(
+            documents_batch=documents_batch,
+            documents_batch_num=documents_batch_num,
+            cache_bucket=cache_bucket,
+            concepts_counts_prefix=concepts_counts_prefix,
+            partial_update_flow=partial_update_flow,
+            vespa_search_adapter=vespa_search_adapter,
+            text_update_task_batch_size=text_update_task_batch_size,
         )
-
-    return await run_partial_updates_of_concepts_for_batch(
-        documents_batch=documents_batch,
-        documents_batch_num=documents_batch_num,
-        cache_bucket=cache_bucket,
-        concepts_counts_prefix=concepts_counts_prefix,
-        partial_update_flow=partial_update_flow,
-        vespa_search_adapter=vespa_search_adapter,
-        text_update_task_batch_size=text_update_task_batch_size,
-    )
 
 
 @Profiler(printer=print)
@@ -1162,14 +1166,13 @@ async def updates_by_s3(
     logger.info("Getting S3 object generator")
     documents_generator = s3_obj_generator(s3_prefixes, s3_paths)
     documents_batches = iterate_batch(documents_generator, batch_size=batch_size)
-    updates_task_batches = iterate_batch(
-        data=documents_batches, batch_size=updates_task_batch_size
-    )
 
-    for i, updates_task_batch in enumerate(updates_task_batches, start=1):
-        logger.info(f"Processing updates task batch #{i}")
+    semaphore = asyncio.Semaphore(text_update_task_batch_size)
 
-        updates_tasks = [
+    updates_tasks = []
+
+    for documents_batch_num, documents_batch in enumerate(documents_batches, start=1):
+        updates_tasks.append(
             run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                 documents_batch=documents_batch,
                 documents_batch_num=documents_batch_num,
@@ -1180,43 +1183,41 @@ async def updates_by_s3(
                 partial_update_flow=partial_update_flow,
                 vespa_search_adapter=vespa_search_adapter,
                 text_update_task_batch_size=text_update_task_batch_size,
+                semaphore=semaphore,
             )
-            for documents_batch_num, documents_batch in enumerate(
-                updates_task_batch, start=1
-            )
-        ]
-
-        logger.info(f"Gathering updates tasks for batch #{i}")
-        batch_results: list["FlowRun | BaseException | None"] = await asyncio.gather(
-            *updates_tasks, return_exceptions=True
         )
-        logger.info(f"Gathered updates tasks for batch #{i}")
 
-        for result in batch_results:
-            if result is None:
-                pass
-            elif isinstance(result, BaseException):
+    logger.info("Gathering updates tasks")
+    updates_results: list["FlowRun | BaseException | None"] = await asyncio.gather(
+        *updates_tasks, return_exceptions=True
+    )
+    logger.info("Gathered updates tasks")
+
+    for result in updates_results:
+        if result is None:
+            pass
+        elif isinstance(result, BaseException):
+            failures += 1
+            logger.error(
+                f"failed to process document batch in updates task: {str(result)}",
+            )
+        elif isinstance(result, FlowRun):
+            flow_run: FlowRun = result
+            if not flow_run.state:
                 failures += 1
                 logger.error(
-                    f"failed to process document batch in updates task batch #{i}: {str(result)}",
+                    f"flow run's state was unknown. Flow run name: `{flow_run.name}`",
                 )
-            elif isinstance(result, FlowRun):
-                flow_run: FlowRun = result
-                if not flow_run.state:
-                    failures += 1
-                    logger.error(
-                        f"flow run's state was unknown. Flow run name: `{flow_run.name}`",
-                    )
-                elif flow_run.state.type != StateType.COMPLETED:
-                    failures += 1
-                    logger.error(
-                        f"flow run's state was not completed. Flow run name: `{flow_run.name}`",
-                    )
-            else:
+            elif flow_run.state.type != StateType.COMPLETED:
                 failures += 1
                 logger.error(
-                    f"unexpected result type: {type(result)}",
+                    f"flow run's state was not completed. Flow run name: `{flow_run.name}`",
                 )
+        else:
+            failures += 1
+            logger.error(
+                f"unexpected result type: {type(result)}",
+            )
 
     if failures:
         raise ValueError("there was at least 1 task that failed")
