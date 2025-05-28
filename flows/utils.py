@@ -5,7 +5,7 @@ import re
 from collections.abc import Generator
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, TypeAlias, TypeVar
+from typing import TypeAlias, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
@@ -291,7 +291,7 @@ class S3FileStemFetcher:
         document_source_prefix: str,
         pipeline_state_prefix: str,
         use_new_and_updated: bool,
-        document_ids: list[DocumentImportId],
+        document_ids: None | list[DocumentImportId],
     ):
         self.bucket_region = bucket_region
         self.cache_bucket = cache_bucket
@@ -309,7 +309,7 @@ class S3FileStemFetcher:
             Prefix=prefix,
         )
 
-    def list_bucket_file_stems(self) -> list[DocumentStem]:
+    def list_bucket_file_stems(self) -> list[DocumentImportId]:
         """
         Scan configured bucket and return all file stems.
 
@@ -330,9 +330,9 @@ class S3FileStemFetcher:
     def determine_file_stems(
         self,
         use_new_and_updated: bool,
-        requested_document_ids: Optional[list[DocumentImportId]],
-        current_bucket_file_stems: list[DocumentStem],
-    ) -> list[DocumentStem]:
+        requested_document_ids: None | list[DocumentImportId],
+        current_bucket_file_stems: list[DocumentImportId],
+    ) -> list[DocumentImportId]:
         """
         Function for identifying the file stems to process.
 
@@ -415,8 +415,8 @@ class S3FileStemFetcher:
         return new + updated
 
     def remove_sabin_file_stems(
-        self, file_stems: list[DocumentStem]
-    ) -> list[DocumentStem]:
+        self, file_stems: list[DocumentImportId]
+    ) -> list[DocumentImportId]:
         """
         Remove Sabin document file stems from the list of file stems.
 
@@ -429,7 +429,7 @@ class S3FileStemFetcher:
             if not stem.startswith(("Sabin", "sabin", "SABIN"))
         ]
 
-    def fetch(self) -> list[DocumentStem]:
+    def fetch(self) -> list[DocumentImportId]:
         """Fetch file stems for a list of document IDs"""
         current_bucket_file_stems = self.list_bucket_file_stems()
 
