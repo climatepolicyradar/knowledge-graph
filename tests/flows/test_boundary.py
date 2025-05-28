@@ -1220,8 +1220,8 @@ async def test__update_text_block__update(
         )
         assert vespa_response.is_successful()
 
-    # Validate that the concepts on the passage are the same as those we supplied to
-    # the update.
+    # Validate that we removed the original concept with the matching model name to a
+    # concept in the updates from the passage.
     _, document_passage__final = get_document_passage_from_vespa(
         text_block_id=text_block_id,
         document_import_id=DocumentImportId(document_import_id),
