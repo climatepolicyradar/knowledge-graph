@@ -25,11 +25,9 @@ from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
+    S3FileStemFetcher,
     SlackNotify,
-    determine_file_stems,
     download_s3_file,
-    list_bucket_file_stems,
-    remove_sabin_file_stems,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -160,6 +158,7 @@ def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
         config.document_source_prefix,
         f"{file_stem}.json",
     )
+    assert config.cache_bucket
     content = download_s3_file(
         bucket_region=config.bucket_region,
         cache_bucket=config.cache_bucket,
@@ -497,22 +496,16 @@ async def classifier_inference(
         config = await Config.create()
 
     print(f"Running with config: {config}")
+    assert config.cache_bucket
 
-    current_bucket_file_stems = list_bucket_file_stems(
-        bucket_region=config.bucket_region,
-        cache_bucket=config.cache_bucket,
-        document_source_prefix=config.document_source_prefix,
-    )
-    validated_file_stems = determine_file_stems(
+    file_stems = S3FileStemFetcher(
         bucket_region=config.bucket_region,
         cache_bucket=config.cache_bucket,
         document_source_prefix=config.document_source_prefix,
         pipeline_state_prefix=config.pipeline_state_prefix,
         use_new_and_updated=use_new_and_updated,
-        requested_document_ids=document_ids,
-        current_bucket_file_stems=current_bucket_file_stems,
-    )
-    filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
+        document_ids=document_ids or [],
+    ).fetch()
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
@@ -520,7 +513,7 @@ async def classifier_inference(
     disallow_latest_alias(classifier_specs)
 
     print(
-        f"Running with {len(filtered_file_stems)} documents and "
+        f"Running with {len(file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -532,7 +525,7 @@ async def classifier_inference(
     failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(filtered_file_stems, batch_size)
+        batches = iterate_batch(file_stems, batch_size)
 
         tasks = [
             run_deployment(

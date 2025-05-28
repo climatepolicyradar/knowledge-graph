@@ -9,15 +9,13 @@ import pytest
 
 from flows.inference import DocumentStem
 from flows.utils import (
+    S3FileStemFetcher,
     SlackNotify,
-    determine_file_stems,
     file_name_from_path,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
-    list_bucket_file_stems,
-    remove_sabin_file_stems,
     remove_translated_suffix,
     s3_file_exists,
 )
@@ -230,11 +228,14 @@ def test_filter_non_english_file_stems() -> None:
 
 def test_list_bucket_file_stems(test_config, mock_bucket_documents):
     expected_ids = [Path(d).stem for d in mock_bucket_documents]
-    got_ids = list_bucket_file_stems(
+    got_ids = S3FileStemFetcher(
         bucket_region=test_config.bucket_region,
         cache_bucket=test_config.cache_bucket,
         document_source_prefix=test_config.document_source_prefix,
-    )
+        use_new_and_updated=False,
+        document_ids=[],
+        pipeline_state_prefix=test_config.pipeline_state_prefix,
+    ).list_bucket_file_stems()
     assert sorted(expected_ids) == sorted(got_ids)
 
 
@@ -254,11 +255,14 @@ def test_list_bucket_file_stems(test_config, mock_bucket_documents):
     ],
 )
 def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
-    got = determine_file_stems(
+    got = S3FileStemFetcher(
         bucket_region=test_config.bucket_region,
         cache_bucket=test_config.cache_bucket,
         document_source_prefix=test_config.document_source_prefix,
         pipeline_state_prefix=test_config.pipeline_state_prefix,
+        use_new_and_updated=False,
+        document_ids=doc_ids,
+    ).determine_file_stems(
         use_new_and_updated=False,
         requested_document_ids=doc_ids,
         current_bucket_file_stems=bucket_ids,
@@ -292,19 +296,29 @@ def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
     ],
 )
 def test_remove_sabin_file_stems(
-    input_stems: list[DocumentStem], expected_output: list[DocumentStem]
+    test_config, input_stems: list[DocumentStem], expected_output: list[DocumentStem]
 ):
-    result = remove_sabin_file_stems(input_stems)
+    result = S3FileStemFetcher(
+        bucket_region=test_config.bucket_region,
+        cache_bucket=test_config.cache_bucket,
+        document_source_prefix=test_config.document_source_prefix,
+        pipeline_state_prefix=test_config.pipeline_state_prefix,
+        use_new_and_updated=False,
+        document_ids=[],
+    ).remove_sabin_file_stems(input_stems)
     assert result == expected_output
 
 
 def test_determine_file_stems__error(test_config):
     with pytest.raises(ValueError):
-        determine_file_stems(
+        S3FileStemFetcher(
             bucket_region=test_config.bucket_region,
             cache_bucket=test_config.cache_bucket,
             document_source_prefix=test_config.document_source_prefix,
             pipeline_state_prefix=test_config.pipeline_state_prefix,
+            use_new_and_updated=False,
+            document_ids=[],
+        ).determine_file_stems(
             use_new_and_updated=False,
             requested_document_ids=[
                 "AF.document.002MMUCR.n0000",
@@ -315,3 +329,66 @@ def test_determine_file_stems__error(test_config):
                 "AF.document.002MMUCR.n0000",
             ],
         )
+
+
+def test_get_latest_ingest_documents(
+    test_config, mock_bucket_new_and_updated_documents_json
+):
+    _, latest_docs = mock_bucket_new_and_updated_documents_json
+    doc_ids = S3FileStemFetcher(
+        bucket_region=test_config.bucket_region,
+        cache_bucket=test_config.cache_bucket,
+        document_source_prefix=test_config.document_source_prefix,
+        pipeline_state_prefix=test_config.pipeline_state_prefix,
+        use_new_and_updated=False,
+        document_ids=[],
+    ).get_latest_ingest_documents()
+    assert set(doc_ids) == latest_docs
+
+
+def test_get_latest_ingest_documents_no_latest(
+    test_config,
+    # Setup the empty bucket
+    mock_bucket,
+):
+    with pytest.raises(
+        ValueError,
+        match="failed to find",
+    ):
+        S3FileStemFetcher(
+            bucket_region=test_config.bucket_region,
+            cache_bucket=test_config.cache_bucket,
+            document_source_prefix=test_config.document_source_prefix,
+            pipeline_state_prefix=test_config.pipeline_state_prefix,
+            use_new_and_updated=False,
+            document_ids=[],
+        ).get_latest_ingest_documents()
+
+
+def test_fetch__specific_document(test_config, mock_bucket_documents):
+    # Specific document
+    fetcher = S3FileStemFetcher(
+        bucket_region=test_config.bucket_region,
+        cache_bucket=test_config.cache_bucket,
+        document_source_prefix=test_config.document_source_prefix,
+        pipeline_state_prefix=test_config.pipeline_state_prefix,
+        use_new_and_updated=False,
+        document_ids=["HTML.document.0.1"],
+    )
+    assert fetcher.fetch() == ["HTML.document.0.1"]
+
+
+def test_fetch__latest_documents(
+    test_config, mock_bucket_documents, mock_bucket_new_and_updated_documents_json
+):
+    _, latest_docs = mock_bucket_new_and_updated_documents_json
+    # Latest documents
+    fetcher = S3FileStemFetcher(
+        bucket_region=test_config.bucket_region,
+        cache_bucket=test_config.cache_bucket,
+        document_source_prefix=test_config.document_source_prefix,
+        pipeline_state_prefix=test_config.pipeline_state_prefix,
+        use_new_and_updated=True,
+        document_ids=[],
+    )
+    assert set(fetcher.fetch()) == set(latest_docs)

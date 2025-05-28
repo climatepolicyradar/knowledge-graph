@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional, TypeAlias, TypeVar
 
 import boto3
-import pytest
 from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
@@ -282,173 +281,165 @@ def filter_non_english_language_file_stems(
     )
 
 
-def list_bucket_file_stems(
-    bucket_region: str, cache_bucket: str, document_source_prefix: str
-) -> list[DocumentStem]:
-    """
-    Scan configured bucket and return all file stems.
+class S3FileStemFetcher:
+    """Fetch file stems from S3"""
 
-    Where a stem refers to a file name without the extension. Often, this is the same as
-    the document id, but not always as we have translated documents.
-    """
-    page_iterator = get_bucket_paginator(
-        bucket_region, cache_bucket, document_source_prefix
-    )
-    file_stems = []
-
-    for p in page_iterator:
-        if "Contents" in p:
-            for o in p["Contents"]:
-                file_stem = Path(o["Key"]).stem
-                file_stems.append(file_stem)
-
-    return file_stems
-
-
-def determine_file_stems(
-    bucket_region: str,
-    cache_bucket: str,
-    document_source_prefix: str,
-    pipeline_state_prefix: str,
-    use_new_and_updated: bool,
-    requested_document_ids: Optional[list[DocumentImportId]],
-    current_bucket_file_stems: list[DocumentStem],
-) -> list[DocumentStem]:
-    """
-    Function for identifying the file stems to process.
-
-    File stems refer to the file name without the extension. Often, this is the same as
-    the document id, but not always as we have translated documents.
-
-    Compares the requested_document_ids to what actually exists in the bucket.
-    If a document id has been requested but does not exist this will
-    raise a `ValueError`. If no document ids were requested, this will
-    instead return the `current_bucket_file_stems`.
-
-    For requested document ids we identify whether there are any translated files that
-    should also be processed by identifying their file stems as well.
-    """
-    if use_new_and_updated and requested_document_ids:
-        raise ValueError(
-            "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
-        )
-    elif use_new_and_updated:
-        requested_document_ids = get_latest_ingest_documents(
-            bucket_region, cache_bucket, pipeline_state_prefix
-        )
-    elif requested_document_ids is None:
-        current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
-            file_stems=current_bucket_file_stems
-        )
-        return current_bucket_file_stems__filtered
-
-    assert cache_bucket
-
-    requested_document_stems = []
-    for doc_id in requested_document_ids:
-        document_key = os.path.join(document_source_prefix, f"{doc_id}.json")
-        requested_document_stems += get_file_stems_for_document_id(
-            doc_id, cache_bucket, document_key
-        )
-
-    missing_from_bucket = list(
-        set(requested_document_stems) - set(current_bucket_file_stems)
-    )
-    if len(missing_from_bucket) > 0:
-        raise ValueError(
-            f"Requested document_ids not found in bucket: {missing_from_bucket}"
-        )
-
-    return requested_document_stems
-
-
-def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
-    """
-    Remove Sabin document file stems from the list of file stems.
-
-    File stems of the Sabin source follow the below naming convention:
-    - "Sabin.document.16944.17490"
-    """
-    return [
-        stem for stem in file_stems if not stem.startswith(("Sabin", "sabin", "SABIN"))
-    ]
-
-
-def get_bucket_paginator(bucket_region: str, cache_bucket: str, prefix: str):
-    """Returns an s3 paginator for the pipeline cache bucket"""
-    s3 = boto3.client("s3", region_name=bucket_region)
-    paginator = s3.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=cache_bucket,
-        Prefix=prefix,
-    )
-
-
-def get_latest_ingest_documents(
-    bucket_region: str, cache_bucket: str, pipeline_state_prefix: str
-) -> list[str]:
-    """
-    Get IDs of changed documents from the latest ingest run
-
-    Retrieves the `new_and_updated_docs.json` file from the latest ingest.
-    Extracts the ids from the file, and returns them as a single list.
-    """
-    page_iterator = get_bucket_paginator(
-        bucket_region, cache_bucket, pipeline_state_prefix
-    )
-    file_name = "new_and_updated_documents.json"
-
-    # First get all matching files, then sort them
-    matching_files = [
-        item
-        for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
-        if item is not None
-    ]
-
-    if not matching_files:
-        raise ValueError(
-            f"failed to find any `{file_name}` files in "
-            f"`{cache_bucket}/{pipeline_state_prefix}`"
-        )
-
-    # Sort by Key and get the last one
-    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
-
-    data = download_s3_file(bucket_region, cache_bucket, latest["Key"])
-    content = json.loads(data)
-    updated = list(content["updated_documents"].keys())
-    new = [d["import_id"] for d in content["new_documents"]]
-
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")
-    return new + updated
-
-
-def test_get_latest_ingest_documents(
-    test_config, mock_bucket_new_and_updated_documents_json
-):
-    _, latest_docs = mock_bucket_new_and_updated_documents_json
-    doc_ids = get_latest_ingest_documents(
-        bucket_region=test_config.bucket_region,
-        cache_bucket=test_config.cache_bucket,
-        pipeline_state_prefix=test_config.pipeline_state_prefix,
-    )
-    assert set(doc_ids) == latest_docs
-
-
-def test_get_latest_ingest_documents_no_latest(
-    test_config,
-    # Setup the empty bucket
-    mock_bucket,
-):
-    with pytest.raises(
-        ValueError,
-        match="failed to find",
+    def __init__(
+        self,
+        bucket_region: str,
+        cache_bucket: str,
+        document_source_prefix: str,
+        pipeline_state_prefix: str,
+        use_new_and_updated: bool,
+        document_ids: list[DocumentImportId],
     ):
-        get_latest_ingest_documents(
-            bucket_region=test_config.bucket_region,
-            cache_bucket=test_config.cache_bucket,
-            pipeline_state_prefix=test_config.pipeline_state_prefix,
+        self.bucket_region = bucket_region
+        self.cache_bucket = cache_bucket
+        self.document_source_prefix = document_source_prefix
+        self.pipeline_state_prefix = pipeline_state_prefix
+        self.use_new_and_updated = use_new_and_updated
+        self.document_ids = document_ids
+
+    def get_bucket_paginator(self, prefix: str):
+        """Returns an s3 paginator for the pipeline cache bucket"""
+        s3 = boto3.client("s3", region_name=self.bucket_region)
+        paginator = s3.get_paginator("list_objects_v2")
+        return paginator.paginate(
+            Bucket=self.cache_bucket,
+            Prefix=prefix,
         )
+
+    def list_bucket_file_stems(self) -> list[DocumentStem]:
+        """
+        Scan configured bucket and return all file stems.
+
+        Where a stem refers to a file name without the extension. Often, this is the same as
+        the document id, but not always as we have translated documents.
+        """
+        page_iterator = self.get_bucket_paginator(self.document_source_prefix)
+        file_stems = []
+
+        for p in page_iterator:
+            if "Contents" in p:
+                for o in p["Contents"]:
+                    file_stem = Path(o["Key"]).stem
+                    file_stems.append(file_stem)
+
+        return file_stems
+
+    def determine_file_stems(
+        self,
+        use_new_and_updated: bool,
+        requested_document_ids: Optional[list[DocumentImportId]],
+        current_bucket_file_stems: list[DocumentStem],
+    ) -> list[DocumentStem]:
+        """
+        Function for identifying the file stems to process.
+
+        File stems refer to the file name without the extension. Often, this is the same as
+        the document id, but not always as we have translated documents.
+
+        Compares the requested_document_ids to what actually exists in the bucket.
+        If a document id has been requested but does not exist this will
+        raise a `ValueError`. If no document ids were requested, this will
+        instead return the `current_bucket_file_stems`.
+
+        For requested document ids we identify whether there are any translated files that
+        should also be processed by identifying their file stems as well.
+        """
+        if use_new_and_updated and requested_document_ids:
+            raise ValueError(
+                "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
+            )
+        elif use_new_and_updated:
+            requested_document_ids = self.get_latest_ingest_documents()
+        elif requested_document_ids is None:
+            current_bucket_file_stems__filtered = (
+                filter_non_english_language_file_stems(
+                    file_stems=current_bucket_file_stems
+                )
+            )
+            return current_bucket_file_stems__filtered
+
+        requested_document_stems = []
+        for doc_id in requested_document_ids:
+            document_key = os.path.join(self.document_source_prefix, f"{doc_id}.json")
+            requested_document_stems += get_file_stems_for_document_id(
+                doc_id, self.cache_bucket, document_key
+            )
+
+        missing_from_bucket = list(
+            set(requested_document_stems) - set(current_bucket_file_stems)
+        )
+        if len(missing_from_bucket) > 0:
+            raise ValueError(
+                f"Requested document_ids not found in bucket: {missing_from_bucket}"
+            )
+
+        return requested_document_stems
+
+    def get_latest_ingest_documents(self) -> list[str]:
+        """
+        Get IDs of changed documents from the latest ingest run
+
+        Retrieves the `new_and_updated_docs.json` file from the latest ingest.
+        Extracts the ids from the file, and returns them as a single list.
+        """
+        page_iterator = self.get_bucket_paginator(self.pipeline_state_prefix)
+        file_name = "new_and_updated_documents.json"
+
+        # First get all matching files, then sort them
+        matching_files = [
+            item
+            for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
+            if item is not None
+        ]
+
+        if not matching_files:
+            raise ValueError(
+                f"failed to find any `{file_name}` files in "
+                f"`{self.cache_bucket}/{self.pipeline_state_prefix}`"
+            )
+
+        # Sort by Key and get the last one
+        latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
+
+        data = download_s3_file(self.bucket_region, self.cache_bucket, latest["Key"])
+        content = json.loads(data)
+        updated = list(content["updated_documents"].keys())
+        new = [d["import_id"] for d in content["new_documents"]]
+
+        print(
+            f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}"
+        )
+        return new + updated
+
+    def remove_sabin_file_stems(
+        self, file_stems: list[DocumentStem]
+    ) -> list[DocumentStem]:
+        """
+        Remove Sabin document file stems from the list of file stems.
+
+        File stems of the Sabin source follow the below naming convention:
+        - "Sabin.document.16944.17490"
+        """
+        return [
+            stem
+            for stem in file_stems
+            if not stem.startswith(("Sabin", "sabin", "SABIN"))
+        ]
+
+    def fetch(self) -> list[DocumentStem]:
+        """Fetch file stems for a list of document IDs"""
+        current_bucket_file_stems = self.list_bucket_file_stems()
+
+        validated_file_stems = self.determine_file_stems(
+            use_new_and_updated=self.use_new_and_updated,
+            requested_document_ids=self.document_ids,
+            current_bucket_file_stems=current_bucket_file_stems,
+        )
+        filtered_file_stems = self.remove_sabin_file_stems(validated_file_stems)
+        return filtered_file_stems
 
 
 def download_s3_file(bucket_region: str, cache_bucket: str, key: str):
