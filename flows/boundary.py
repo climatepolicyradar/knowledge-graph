@@ -50,6 +50,7 @@ from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
+    Profiler,
     SlackNotify,
     get_labelled_passage_paths,
     iterate_batch,
@@ -1114,6 +1115,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     )
 
 
+@Profiler(printer=print)
 async def updates_by_s3(
     aws_env: AwsEnv,
     cache_bucket: str,
@@ -1213,6 +1215,7 @@ async def updates_by_s3(
         raise ValueError("there was at least 1 task that failed")
 
 
+@Profiler(printer=print)
 async def _update_text_block(
     semaphore: asyncio.Semaphore,
     text_block_id: TextBlockId,
@@ -1320,16 +1323,19 @@ async def run_partial_updates_of_concepts_for_document_passages(
         )
         logger.info("got document passage from Vespa generator")
 
-        start = time.perf_counter()
         text_blocks: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
         text_blocks_n = 0
-        async for passage_batch in passages_generator:
-            text_blocks.update(passage_batch)
-            text_blocks_n = len(text_blocks)
-            logger.info(
-                f"No. of text blocks in text blocks dict so far: {text_blocks_n}"
-            )
-        elapsed_time = time.perf_counter() - start
+
+        with Profiler(
+            printer=print,
+            name="getting document passages from Vespa",
+        ):
+            async for passage_batch in passages_generator:
+                text_blocks.update(passage_batch)
+                text_blocks_n = len(text_blocks)
+                logger.info(
+                    f"No. of text blocks in text blocks dict so far: {text_blocks_n}"
+                )
 
         text_blocks_size_in_bytes = sys.getsizeof(text_blocks)
         text_blocks_size_in_mb = text_blocks_size_in_bytes / (1024 * 1024)
@@ -1337,7 +1343,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
         logger.info(
             "Finished getting document passages from Vespa. Total "
             f"number of text blocks: {text_blocks_n}. "
-            f"Duration (Seconds): {elapsed_time:.2f}. "
             f"Memory size (Mb): {text_blocks_size_in_mb}. "
         )
 
@@ -1369,63 +1374,64 @@ async def run_partial_updates_of_concepts_for_document_passages(
         # This is the main process of updating each document passage
 
         logger.info("starting partial updates")
-        start = time.perf_counter()
 
         responses: list[
             tuple[VespaResponse, TextBlockId, VespaHitId] | BaseException
         ] = []
 
-        semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+        with Profiler(
+            printer=print,
+            name="partial updates",
+        ):
+            semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
 
-        tasks = []
-        for text_block_id, concepts in grouped_concepts.items():
-            if text_block_id not in text_blocks:
-                logger.error(
-                    f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+            tasks = []
+            for text_block_id, concepts in grouped_concepts.items():
+                if text_block_id not in text_blocks:
+                    logger.error(
+                        f"document passage `{text_block_id}` not found in Vespa for document `{document_import_id}`"
+                    )
+                    missing_text_block_ids_from_vespa.append(text_block_id)
+                    continue
+
+                document_passage_id = text_blocks[text_block_id][0]
+                document_passage = text_blocks[text_block_id][1]
+
+                tasks.append(
+                    _update_text_block(
+                        semaphore=semaphore,
+                        text_block_id=text_block_id,
+                        document_passage_id=document_passage_id,
+                        document_passage=document_passage,
+                        merge_serialise_concepts_cb=merge_serialise_concepts_cb,
+                        concepts=concepts,
+                        vespa_connection_pool=vespa_connection_pool,
+                    )
                 )
-                missing_text_block_ids_from_vespa.append(text_block_id)
-                continue
 
-            document_passage_id = text_blocks[text_block_id][0]
-            document_passage = text_blocks[text_block_id][1]
-
-            tasks.append(
-                _update_text_block(
-                    semaphore=semaphore,
-                    text_block_id=text_block_id,
-                    document_passage_id=document_passage_id,
-                    document_passage=document_passage,
-                    merge_serialise_concepts_cb=merge_serialise_concepts_cb,
-                    concepts=concepts,
-                    vespa_connection_pool=vespa_connection_pool,
-                )
+            start = time.perf_counter()
+            logger.info("starting gathering updates tasks")
+            tasks_results = await asyncio.gather(*tasks, return_exceptions=True)
+            responses.extend(tasks_results)
+            logger.info(
+                f"finished gathering updates tasks in {time.perf_counter() - start:.2f}s"
             )
 
-        start = time.perf_counter()
-        logger.info("starting gathering updates tasks")
-        tasks_results = await asyncio.gather(*tasks, return_exceptions=True)
-        responses.extend(tasks_results)
-        logger.info(
-            f"finished gathering updates tasks in {time.perf_counter() - start:.2f}s"
-        )
-
-        for response in responses:
-            if isinstance(response, BaseException):
-                logger.error(f"text block update for failed: {str(response)}")
-                updates_exceptions.append(response)
-            else:
-                response, text_block_id, document_passage_id = response
-
-                if not response.is_successful():
-                    response_json = json.dumps(response.get_json())
-                    logger.error(
-                        f"document passage update failed. {document_passage_id=}, {response_json=}"
-                    )
-                    responses_failures[text_block_id] = response
+            for response in responses:
+                if isinstance(response, BaseException):
+                    logger.error(f"text block update for failed: {str(response)}")
+                    updates_exceptions.append(response)
                 else:
-                    responses_successes[text_block_id] = response
+                    response, text_block_id, document_passage_id = response
 
-        logger.info(f"finished partial updates in {time.perf_counter() - start:.2f}s")
+                    if not response.is_successful():
+                        response_json = json.dumps(response.get_json())
+                        logger.error(
+                            f"document passage update failed. {document_passage_id=}, {response_json=}"
+                        )
+                        responses_failures[text_block_id] = response
+                    else:
+                        responses_successes[text_block_id] = response
 
         if missing_text_block_ids_from_vespa:
             logger.error(
@@ -1437,28 +1443,27 @@ async def run_partial_updates_of_concepts_for_document_passages(
         concepts_counts: Counter[ConceptModel] = Counter()
 
         logger.info("starting combining responses from Vespa")
-        start = time.perf_counter()
 
-        # Bring them together, since the callbacks vary in their
-        # behaviour on if it was a success or not.
-        for text_block_id, response in (
-            responses_failures | responses_successes
-        ).items():
-            try:
-                vespa_response_handler_cb(
-                    concepts_counts,
-                    grouped_concepts,
-                    response,
-                    text_block_id,
-                )
-            except ValueError as e:
-                missing_text_block_ids_from_labelled_passages.append(
-                    TextBlockId(str(e))
-                )
-
-        logger.info(
-            f"finished combining responses from Vespa in {time.perf_counter() - start:.2f}s"
-        )
+        with Profiler(
+            printer=print,
+            name="handling Vespa responses",
+        ):
+            # Bring them together, since the callbacks vary in their
+            # behaviour on if it was a success or not.
+            for text_block_id, response in (
+                responses_failures | responses_successes
+            ).items():
+                try:
+                    vespa_response_handler_cb(
+                        concepts_counts,
+                        grouped_concepts,
+                        response,
+                        text_block_id,
+                    )
+                except ValueError as e:
+                    missing_text_block_ids_from_labelled_passages.append(
+                        TextBlockId(str(e))
+                    )
 
         if missing_text_block_ids_from_labelled_passages:
             logger.error(
