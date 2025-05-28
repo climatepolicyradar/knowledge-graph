@@ -431,6 +431,36 @@ def mock_bucket_labelled_passages(
 
 
 @pytest.fixture
+def s3_prefix_inference_results() -> str:
+    """Returns the s3 prefix for the inference results."""
+    return "inference_results/2025-05-25T07:32-eta85-alchibah/"
+
+
+@pytest.fixture
+def mock_bucket_inference_results(
+    mock_s3_client,
+    mock_bucket,
+    s3_prefix_inference_results: str,
+) -> None:
+    """A version of the inference results bucket with more files"""
+    fixture_root = FIXTURE_DIR / "inference_results"
+    fixture_files = list(fixture_root.glob("**/*.json"))
+
+    keys = []
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
+        body = BytesIO(data.encode("utf-8"))
+
+        key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
+        keys.append(key)
+
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+
+@pytest.fixture
 def mock_bucket_labelled_passages_b(
     mock_s3_client,
     mock_bucket_b,
