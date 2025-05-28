@@ -1025,6 +1025,7 @@ async def run_partial_updates_of_concepts_for_batch(
     concepts_counts_prefix: str,
     partial_update_flow: Operation,
     vespa_search_adapter: VespaSearchAdapter | None = None,
+    text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
 ) -> None:
     """Run partial updates for concepts in a batch of documents."""
     logger = get_run_logger()
@@ -1059,6 +1060,7 @@ async def run_partial_updates_of_concepts_for_batch(
                 vespa_response_handler_cb=vespa_response_handler_cb,
                 concepts_counts_updater_cb=concepts_counts_updater_cb,
                 vespa_search_adapter=vespa_search_adapter,
+                text_update_task_batch_size=text_update_task_batch_size,
             )
 
             logger.info(f"processed batch documents #{documents_batch_num}")
@@ -1086,6 +1088,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
     as_deployment: bool,
     partial_update_flow: Operation,
     vespa_search_adapter: VespaSearchAdapter | None = None,
+    text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
 ) -> FlowRun | None:
     """Run partial updates for a batch of documents as a sub-flow or deployment."""
     if as_deployment:
@@ -1100,6 +1103,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
                 "cache_bucket": cache_bucket,
                 "concepts_counts_prefix": concepts_counts_prefix,
                 "partial_update_flow": partial_update_flow,
+                "text_update_task_batch_size": text_update_task_batch_size,
             },
             # Rely on the flow's own timeout
             timeout=None,
@@ -1112,6 +1116,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
         concepts_counts_prefix=concepts_counts_prefix,
         partial_update_flow=partial_update_flow,
         vespa_search_adapter=vespa_search_adapter,
+        text_update_task_batch_size=text_update_task_batch_size,
     )
 
 
@@ -1125,6 +1130,7 @@ async def updates_by_s3(
     s3_paths: list[str] | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     updates_task_batch_size: int = DEFAULT_UPDATES_TASK_BATCH_SIZE,
+    text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
     as_deployment: bool = True,
     vespa_search_adapter: VespaSearchAdapter | None = None,
 ) -> None:
@@ -1173,6 +1179,7 @@ async def updates_by_s3(
                 as_deployment=as_deployment,
                 partial_update_flow=partial_update_flow,
                 vespa_search_adapter=vespa_search_adapter,
+                text_update_task_batch_size=text_update_task_batch_size,
             )
             for documents_batch_num, documents_batch in enumerate(
                 updates_task_batch, start=1
@@ -1268,6 +1275,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
     # The final effect of recording the change in concepts counts to an artifact
     concepts_counts_updater_cb,
     vespa_search_adapter: VespaSearchAdapter | None = None,
+    text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
 ) -> Counter[ConceptModel]:
     """
     Run partial update for VespaConcepts on text blocks for a document.
@@ -1383,7 +1391,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
             printer=print,
             name="partial updates",
         ):
-            semaphore = asyncio.Semaphore(DEFAULT_TEXT_BLOCKS_BATCH_SIZE)
+            semaphore = asyncio.Semaphore(text_update_task_batch_size)
 
             tasks = []
             for text_block_id, concepts in grouped_concepts.items():
