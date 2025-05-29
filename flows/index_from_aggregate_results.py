@@ -43,9 +43,12 @@ async def index_aggregate_results_from_s3_to_vespa(
     aggregated_inference_results = json.loads(body)
 
     # TODO: Find a better solution for this
-    document_import_id = DocumentImportId(s3_uri.key.split("/")[-1].split(".")[0])
+    document_import_id = DocumentImportId(
+        s3_uri.key.split("/")[-1].replace(".json", "")
+    )
 
     for text_block_id, concepts in aggregated_inference_results.items():
+        breakpoint()
         response = await _update_text_block(
             text_block_id=text_block_id,
             document_import_id=document_import_id,
