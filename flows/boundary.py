@@ -554,12 +554,17 @@ def get_document_from_vespa(
     return document_id, document
 
 
-async def get_dataid_for_passage_from_vespa(
+# TODO: Add unit test.
+async def get_data_id_for_passage_from_vespa(
     text_block_id: TextBlockId,
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
 ) -> VespaDataId:
-    """Retrieve just the document ID for a passage in Vespa."""
+    """
+    Retrieve just the data ID for a passage in Vespa.
+
+    We select only the document id and convert the result of the query to a VespaDataId.
+    """
     logger = get_logger()
 
     logger.info(

@@ -44,7 +44,6 @@ SpecStr: TypeAlias = str
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 
 
-# TODO: Let's just use S3Path here.
 class S3Uri:
     """A URI for an S3 object."""
 
@@ -113,8 +112,11 @@ def get_all_labelled_passages_for_one_document(
     s3 = boto3.client("s3")
 
     labelled_passages = defaultdict(list)
-    # TODO: Improve this
-    assert config.cache_bucket is not None, "Cache bucket must be set in config"
+
+    if config.cache_bucket is None:
+        raise ValueError(
+            "Cache bucket must be set in config before retrieving labelled passages."
+        )
     for spec in classifier_specs:
         s3_uri = S3Uri(
             bucket=config.cache_bucket,
@@ -198,9 +200,10 @@ async def process_single_document(
         )
         vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
-        # TODO: Improve this
-        assert config.cache_bucket is not None, "Cache bucket must be set in config"
-
+        if config.cache_bucket is None:
+            raise ValueError(
+                "Cache bucket must be set in config before processing documents."
+            )
         # Write to s3
         s3_uri = S3Uri(
             bucket=config.cache_bucket,
