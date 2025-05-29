@@ -554,6 +554,46 @@ def get_document_from_vespa(
     return document_id, document
 
 
+async def get_dataid_for_passage_from_vespa(
+    text_block_id: TextBlockId,
+    document_import_id: DocumentImportId,
+    vespa_connection_pool: VespaAsync,
+) -> VespaDataId:
+    """Retrieve just the document ID for a passage in Vespa."""
+    logger = get_logger()
+
+    logger.info(
+        f"Getting document passage id from Vespa: {document_import_id}, text block: {text_block_id}"
+    )
+
+    condition = qb.QueryField("family_document_ref").contains(
+        f"id:doc_search:family_document::{document_import_id}"
+    ) & qb.QueryField("text_block_id").contains(text_block_id)
+
+    yql = qb.select("documentid").from_("document_passage").where(condition)
+
+    vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
+        yql=yql
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+    if len(vespa_query_response.hits) != 1:
+        raise ValueError(
+            f"Expected 1 document passage for text block `{text_block_id}`, got {len(vespa_query_response.hits)}"
+        )
+
+    logger.info(
+        (
+            f"Vespa search response for document: {document_import_id} "
+            f"with {len(vespa_query_response.hits)} hits"
+        )
+    )
+
+    hit = vespa_query_response.hits[0]
+    return VespaDataId(hit["id"].split("::")[-1])
+
+
 @vespa_retry()
 def get_document_passage_from_vespa(
     text_block_id: TextBlockId,

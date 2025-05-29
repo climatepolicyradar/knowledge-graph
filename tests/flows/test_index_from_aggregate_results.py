@@ -1,6 +1,9 @@
 import json
+from typing import Sequence
 
 import pytest
+from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
 from flows.aggregate_inference_results import S3Uri
@@ -64,11 +67,34 @@ async def test_index_from_aggregated_inference_results(
 
             # Assert that for each passage that the only concepts present were those from the
             # aggregated inference results.
-            print(aggregated_inference_results)
-            # for response in final_responses:
-            #     breakpoint()
-            #     passage_concepts_in_s3 = aggregated_inference_results[
-            #         response.text_block_id.value
-            #     ]
-            #     # vespa_response_concepts = response[]
-            #     assert response
+            for response in final_responses:
+                for text_block_id in response.keys():
+                    text_block_response = response[text_block_id]
+
+                    vespa_passage: VespaPassage = text_block_response[1]
+                    vespa_passage_concepts: Sequence[VespaConcept] = (
+                        vespa_passage.concepts if vespa_passage.concepts else []
+                    )
+                    # When parent concepts is empty we are loading it as None from Vespa
+                    # as opposed to an empty list.
+                    for concept in vespa_passage_concepts:
+                        if concept.parent_concepts is None:
+                            concept.parent_concepts = []
+
+                    expected_concepts_json: Sequence[dict] = (
+                        aggregated_inference_results[text_block_id]
+                    )
+                    expected_concepts: Sequence[VespaConcept] = [
+                        VespaConcept.model_validate(concept)
+                        for concept in expected_concepts_json
+                    ]
+
+                    assert len(vespa_passage_concepts) == len(expected_concepts), (
+                        f"Passage {text_block_id} has {len(vespa_passage_concepts)} "
+                        f"concepts, expected {len(expected_concepts)}."
+                    )
+                    for concept in vespa_passage_concepts:
+                        assert concept in expected_concepts, (
+                            f"Concept {concept} not found in expected concepts for passage "
+                            f"{text_block_id}."
+                        )

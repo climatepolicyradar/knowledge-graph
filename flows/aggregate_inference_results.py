@@ -44,6 +44,7 @@ SpecStr: TypeAlias = str
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 
 
+# TODO: Let's just use S3Path here.
 class S3Uri:
     """A URI for an S3 object."""
 

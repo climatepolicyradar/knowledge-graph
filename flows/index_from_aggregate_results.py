@@ -7,7 +7,7 @@ from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import DocumentImportId, S3Uri
-from flows.boundary import TextBlockId
+from flows.boundary import TextBlockId, get_dataid_for_passage_from_vespa
 
 
 async def _update_text_block(
@@ -18,12 +18,28 @@ async def _update_text_block(
 ) -> VespaResponse:
     """Update a text block in Vespa with the given concepts."""
 
-    data_id = f"{document_import_id}.{text_block_id}"
+    # FIXME: Id the data id doesn't exist here this silently fails.
+    # Found an example in the test data where the text block id is  "p_0_b_1 and the
+    # data id of the passage is:
+    #   "id:doc_search:document_passage::CCLW.executive.4934.1571.1"
+    # Meaning the passage silently didn't get updated.
+    #
+    # Is this just a thing with the local vespa instance or does this exist in
+    # prod / staging?
+    #
+    # Looking at the indexer we use the index of the text block as the data suffix.
+    # And thus for a text block with id "p_0_b_1" the data id not match.
+    # So we surely have to get the data id by querying Vespa first.
+    vespa_hit_id = await get_dataid_for_passage_from_vespa(
+        document_import_id=document_import_id,
+        text_block_id=text_block_id,
+        vespa_connection_pool=vespa_connection_pool,
+    )
 
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
         namespace="doc_search",
-        data_id=data_id,
+        data_id=vespa_hit_id,
         fields={"concepts": serialised_concepts},
     )
 
