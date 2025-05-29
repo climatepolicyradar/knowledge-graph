@@ -18,7 +18,7 @@ async def _update_text_block(
 ) -> VespaResponse:
     """Update a text block in Vespa with the given concepts."""
 
-    data_id = f"id:doc_search:document_passage::{document_import_id}.{text_block_id}"
+    data_id = f"{document_import_id}.{text_block_id}"
 
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
@@ -42,13 +42,9 @@ async def index_aggregate_results_from_s3_to_vespa(
     body = response["Body"].read().decode("utf-8")
     aggregated_inference_results = json.loads(body)
 
-    # TODO: Find a better solution for this
-    document_import_id = DocumentImportId(
-        s3_uri.key.split("/")[-1].replace(".json", "")
-    )
+    document_import_id = DocumentImportId(s3_uri.stem)
 
     for text_block_id, concepts in aggregated_inference_results.items():
-        breakpoint()
         response = await _update_text_block(
             text_block_id=text_block_id,
             document_import_id=document_import_id,

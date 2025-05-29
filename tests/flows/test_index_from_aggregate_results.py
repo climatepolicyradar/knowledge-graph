@@ -27,9 +27,8 @@ async def test_index_from_aggregated_inference_results(
             response = mock_s3_client.get_object(Bucket=mock_bucket, Key=file_key)
             body = response["Body"].read().decode("utf-8")
             aggregated_inference_results = json.loads(body)
-            document_import_id = DocumentImportId(
-                file_key.split("/")[-1].replace(".json", "")
-            )
+            s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
+            document_import_id = DocumentImportId(s3_uri.stem)
 
             # Get the original vespa passages
             passages_generator = get_document_passages_from_vespa__generator(
@@ -44,7 +43,7 @@ async def test_index_from_aggregated_inference_results(
 
             # Index the aggregated inference results from S3 to Vespa
             await index_aggregate_results_from_s3_to_vespa(
-                s3_uri=S3Uri(bucket=mock_bucket, key=file_key),
+                s3_uri=s3_uri,
                 vespa_connection_pool=vespa_connection_pool,
             )
 

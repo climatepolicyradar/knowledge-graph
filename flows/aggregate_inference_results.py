@@ -3,6 +3,7 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, TypeAlias, TypedDict
 
 import boto3
@@ -54,6 +55,11 @@ class S3Uri:
     def __str__(self) -> str:
         """Return the string representation of the S3 URI."""
         return f"{self.protocol}://{self.bucket}/{self.key}"
+
+    @property
+    def stem(self) -> str:
+        """Return the stem of the S3 URI (the key without the extension)."""
+        return Path(self.key).stem
 
 
 class DocumentFailure(TypedDict):
