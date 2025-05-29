@@ -65,6 +65,7 @@ async def test_index_from_aggregated_inference_results(
 
             # Assert that for each passage that the only concepts present were those from the
             # aggregated inference results.
+            print(aggregated_inference_results)
             # for response in final_responses:
             #     breakpoint()
             #     passage_concepts_in_s3 = aggregated_inference_results[
