@@ -1,20 +1,27 @@
 import json
-from typing import Any
+import tempfile
+from typing import Any, Final
 
 import boto3
+import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
 from prefect.logging import get_run_logger
+from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import DocumentImportId, S3Uri
 from flows.boundary import (
+    VESPA_MAX_TIMEOUT_MS,
     TextBlockId,
     VespaDataId,
     VespaHitId,
     get_document_passages_from_vespa__generator,
+    get_vespa_search_adapter_from_aws_secrets,
 )
+
+DEFAULT_INDEXER_MAX_CONNECTIONS: Final[PositiveInt] = 50
 
 
 def load_json_data_from_s3(s3_uri: S3Uri) -> dict[str, Any]:
@@ -87,4 +94,34 @@ async def index_aggregate_results_from_s3_to_vespa(
             # TODO: Collect error
             raise ValueError(
                 f"Failed to update text block {text_block_id} in Vespa: {response}"
+            )
+
+
+@flow
+async def run_indexing_from_aggregate_results(
+    s3_uri_list: list[S3Uri],
+) -> None:
+    """Index aggregated inference results from a list of S3 URIs into Vespa."""
+
+    logger = get_run_logger()
+    logger.info("Starting indexing from aggregate results...")
+
+    temp_dir = tempfile.TemporaryDirectory()
+    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+        cert_dir=temp_dir.name,
+        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+    )
+
+    async with (
+        vespa_search_adapter.client.asyncio(
+            connections=DEFAULT_INDEXER_MAX_CONNECTIONS,  # How many tasks to have running at once
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
+        ) as vespa_connection_pool
+    ):
+        for s3_uri in s3_uri_list:
+            logger.info(f"Indexing aggregated results from S3 URI: {s3_uri}")
+            await index_aggregate_results_from_s3_to_vespa(
+                s3_uri=s3_uri,
+                vespa_connection_pool=vespa_connection_pool,
             )
