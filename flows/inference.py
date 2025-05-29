@@ -1,14 +1,12 @@
 import asyncio
 import json
 import os
-from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Callable, Coroutine, Generator
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Final, Optional, TypeAlias
-from uuid import UUID
+from typing import Any, Final, Optional, TypeAlias
 
 import boto3
 import prefect.artifacts as artifacts
@@ -20,11 +18,11 @@ from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
-from prefect.task_runners import ConcurrentTaskRunner
-from pydantic import SecretStr
+from pydantic import PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
+    Profiler,
     SlackNotify,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
@@ -55,6 +53,8 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.FIGURE,
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+
+CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 
 # Example: CCLW.executive.1813.2418
 DocumentImportId: TypeAlias = str
@@ -522,7 +522,9 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
-@flow()
+@flow(
+    log_prints=True,
+)
 async def run_classifier_inference_on_batch_of_documents(
     batch: list[str],
     config_json: dict,
@@ -598,7 +600,6 @@ async def run_classifier_inference_on_batch_of_documents(
 
 @flow(
     log_prints=True,
-    task_runner=ConcurrentTaskRunner(),
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
@@ -608,6 +609,7 @@ async def classifier_inference(
     use_new_and_updated: bool = False,
     config: Optional[Config] = None,
     batch_size: int = 1000,
+    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
@@ -627,7 +629,9 @@ async def classifier_inference(
     if not config:
         config = await Config.create()
 
-    print(f"Running with config: {config}")
+    logger = get_run_logger()
+
+    logger.info(f"Running with config: {config}")
 
     current_bucket_file_stems = list_bucket_file_stems(config=config)
     validated_file_stems = determine_file_stems(
@@ -643,7 +647,7 @@ async def classifier_inference(
 
     disallow_latest_alias(classifier_specs)
 
-    print(
+    logger.info(
         f"Running with {len(filtered_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
@@ -653,42 +657,91 @@ async def classifier_inference(
         flow_name=flow_name, aws_env=config.aws_env
     )
 
-    failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
+    semaphore = asyncio.Semaphore(classifier_concurrency_limit)
 
-    for classifier_spec in classifier_specs:
-        batches = iterate_batch(filtered_file_stems, batch_size)
+    tasks = []
 
-        tasks = [
-            run_deployment(
-                name=f"{flow_name}/{deployment_name}",
-                parameters={
-                    "batch": batch,
-                    "config_json": config.to_json(),
-                    "classifier_name": classifier_spec.name,
-                    "classifier_alias": classifier_spec.alias,
-                },
-                # Rely on the flow's own timeout
-                timeout=None,
-                as_subflow=True,
+    with Profiler(
+        printer=print,
+        name="preparing tasks",
+    ):
+        tasks.extend = [
+            wait_for_semaphore(
+                semaphore,
+                run_deployment(
+                    name=f"{flow_name}/{deployment_name}",
+                    parameters={
+                        "batch": batch,
+                        "config_json": config.to_json(),
+                        "classifier_name": classifier_spec.name,
+                        "classifier_alias": classifier_spec.alias,
+                    },
+                    # Rely on the flow's own timeout, if any, to make sure it
+                    # eventually ends[1].
+                    #
+                    # [1]:
+                    # > Setting timeout to None will allow this function to
+                    # > poll indefinitely.
+                    timeout=None,
+                ),
             )
-            for batch in batches
+            for classifier_spec in classifier_specs
+            for batch in iterate_batch(filtered_file_stems, batch_size)
         ]
 
-        results: list[FlowRun] = await asyncio.gather(*tasks)
+    with Profiler(
+        printer=print,
+        name="gathering tasks",
+    ):
+        results: list[FlowRun | BaseException] = await asyncio.gather(
+            *tasks, return_exceptions=True
+        )
 
+    failures: list[FlowRun | BaseException] = []
+    successes: dict[ClassifierSpec, FlowRun] = {}
+
+    with Profiler(
+        printer=print,
+        name="processing results",
+    ):
         for result in results:
-            # We'd never expect the flow run name to be missing, but
-            # Prefect does account for that in their class.
-            name: str = result.name
-            if result.state is None:
-                failures[classifier_spec].append(name)
+            if isinstance(result, BaseException):
+                failures.append(result)
+
+                logger.error(
+                    f"failed to process batch: {str(result)}",
+                )
             else:
-                if result.state.type != StateType.COMPLETED:
-                    failures[classifier_spec].append(name)
+                if not result.state:
+                    failures.append(result)
+
+                    logger.error(
+                        f"flow run's state was unknown. Flow run name: `{result.name}`",
+                    )
+                elif result.state.type != StateType.COMPLETED:
+                    failures.append(result)
+
+                    logger.error(
+                        f"flow run's state was not completed. Flow run name: `{result.name}`",
+                    )
+                elif result.state.type == StateType.COMPLETED:
+                    classifier_spec = ClassifierSpec(
+                        name=result.parameters["classifier_name"],
+                        alias=result.parameters["classifier_alias"],
+                    )
+                    successes[classifier_spec] = result
+
+    failures_classifier_specs = set(classifier_specs) - set(successes.keys())
 
     if failures:
         raise ValueError(
-            f"some classifier specs. had failures: {', '.join(map(str, failures.keys()))}"
+            f"some classifier specs. had failures:.: {','.join(map(str, failures_classifier_specs))}"
         )
 
-    print("Finished running classifier inference.")
+
+async def wait_for_semaphore(
+    semaphore: asyncio.Semaphore,
+    fn: Callable[..., FlowRun | Coroutine[Any, Any, FlowRun]],
+) -> FlowRun | Coroutine[Any, Any, FlowRun]:
+    async with semaphore:
+        return fn()
