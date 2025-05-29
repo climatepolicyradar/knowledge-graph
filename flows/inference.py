@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Final, Optional, TypeAlias
 
 import boto3
-import prefect.artifacts as artifacts
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
+from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
@@ -431,38 +431,6 @@ def _get_labelled_passage_from_prediction(
     )
 
 
-def _name_document_run_identifiers_set(
-    documents: set[DocumentRunIdentifier],
-    status: str,
-) -> list[dict[str, str]]:
-    """Convert a set of document run identifiers for table rows."""
-    keys = ("document_id", "classifier_name", "classifier_alias", "status")
-    return [dict(zip(keys, doc + (status,))) for doc in documents]
-
-
-async def report_documents_runs(
-    queued: set[DocumentRunIdentifier],
-    completed: set[DocumentRunIdentifier],
-    aws_env: AwsEnv,
-) -> None:
-    try:
-        # Create rows for both queued and completed documents with status
-        queued_rows = _name_document_run_identifiers_set(queued, "queued")
-        completed_rows = _name_document_run_identifiers_set(completed, "completed")
-
-        # Combine both sets of rows
-        all_rows = queued_rows + completed_rows
-
-        await artifacts.create_table_artifact(
-            table=all_rows,
-            description=f"# Document Processing Status ({aws_env.value})",
-            key=f"classifier-inference-document-processing-status-{aws_env.value}",
-        )
-    except Exception:
-        # Do nothing, not even log. It'll be too noisy.
-        pass
-
-
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
@@ -739,10 +707,65 @@ async def classifier_inference(
 
     failures_classifier_specs = set(classifier_specs) - set(successes.keys())
 
+    await create_inference_summary_artifact(
+        config=config,
+        filtered_file_stems=filtered_file_stems,
+        classifier_specs=classifier_specs,
+        successes=successes,
+        failures_classifier_specs=failures_classifier_specs,
+        batch_size=batch_size,
+        classifier_concurrency_limit=classifier_concurrency_limit,
+    )
+
     if failures:
         raise ValueError(
             f"some classifier specs. had failures: {','.join(map(str, failures_classifier_specs))}"
         )
+
+
+async def create_inference_summary_artifact(
+    config: Config,
+    filtered_file_stems: list[DocumentStem],
+    classifier_specs: list[ClassifierSpec],
+    successes: dict[ClassifierSpec, FlowRun],
+    failures_classifier_specs: set[ClassifierSpec],
+    batch_size: int,
+    classifier_concurrency_limit: PositiveInt,
+) -> None:
+    """Create a table artifact with summary information about the inference run."""
+
+    # Prepare summary data for the artifact
+    total_documents = len(filtered_file_stems)
+    total_classifiers = len(classifier_specs)
+    successful_classifiers = len(successes)
+    failed_classifiers = len(failures_classifier_specs)
+
+    # Format the overview information as a string for the description
+    overview_description = f"""# Classifier Inference Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Total documents processed**: {total_documents}
+- **Total classifiers**: {total_classifiers}
+- **Successful classifiers**: {successful_classifiers}
+- **Failed classifiers**: {failed_classifiers}
+"""
+
+    # Create classifier details table
+    classifier_details = [
+        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
+        for spec in successes.keys()
+    ] + [
+        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
+        for spec in failures_classifier_specs
+    ]
+
+    # Create a single artifact with overview in description and classifier details in table
+    await create_table_artifact(
+        key=f"classifier-inference-{config.aws_env.value}",
+        table=classifier_details,
+        description=overview_description,
+    )
 
 
 async def wait_for_semaphore(
