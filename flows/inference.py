@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import json
 import os
-from collections.abc import Callable, Coroutine, Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
@@ -628,13 +628,11 @@ async def classifier_inference(
 
     semaphore = asyncio.Semaphore(classifier_concurrency_limit)
 
-    tasks = []
-
     with Profiler(
         printer=print,
         name="preparing tasks",
     ):
-        tasks.extend = [
+        tasks = [
             wait_for_semaphore(
                 semaphore,
                 run_deployment(
@@ -768,7 +766,7 @@ async def create_inference_summary_artifact(
 
 async def wait_for_semaphore(
     semaphore: asyncio.Semaphore,
-    fn: Callable[..., FlowRun | Coroutine[Any, Any, FlowRun]],
-) -> FlowRun | Coroutine[Any, Any, FlowRun]:
+    fn,
+):
     async with semaphore:
-        return fn()
+        return await fn
