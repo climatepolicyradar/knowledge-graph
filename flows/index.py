@@ -9,6 +9,7 @@ from prefect.logging import get_run_logger
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DEFAULT_DOCUMENTS_BATCH_SIZE,
+    DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
     DEFAULT_UPDATES_TASK_BATCH_SIZE,
     Operation,
     s3_paths_or_s3_prefixes,
@@ -80,6 +81,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexing_task_batch_size: int = DEFAULT_UPDATES_TASK_BATCH_SIZE,
+    text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
@@ -123,6 +125,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
         updates_task_batch_size=indexing_task_batch_size,
+        text_update_task_batch_size=text_update_task_batch_size,
         as_deployment=config.as_deployment,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
