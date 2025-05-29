@@ -52,7 +52,7 @@ async def _update_vespa_passage_concepts(
 
 
 @flow
-async def index_aggregate_results_from_s3_to_vespa(
+async def index_aggregate_inference_results_to_vespa_passages(
     s3_uri: S3Uri,
     vespa_connection_pool: VespaAsync,
 ) -> None:
@@ -98,7 +98,16 @@ async def index_aggregate_results_from_s3_to_vespa(
 
 
 @flow
-async def run_indexing_from_aggregate_results(
+async def index_aggregate_inference_results_to_vespa_families(
+    s3_uri: S3Uri,
+    vespa_connection_pool: VespaAsync,
+) -> None:
+    """Update concept counts on the family index in vespa from aggregated inference results."""
+    pass
+
+
+@flow
+async def index_aggregate_inference_results_to_vespa(
     s3_uri_list: list[S3Uri],
 ) -> None:
     """Index aggregated inference results from a list of S3 URIs into Vespa."""
@@ -120,8 +129,20 @@ async def run_indexing_from_aggregate_results(
         ) as vespa_connection_pool
     ):
         for s3_uri in s3_uri_list:
-            logger.info(f"Indexing aggregated results from S3 URI: {s3_uri}")
-            await index_aggregate_results_from_s3_to_vespa(
+            logger.info(
+                f"Indexing aggregated results from S3 URI to vespa passages: {s3_uri}"
+            )
+            await index_aggregate_inference_results_to_vespa_passages(
                 s3_uri=s3_uri,
                 vespa_connection_pool=vespa_connection_pool,
             )
+
+            logger.info(
+                "Indexing concept counts from aggregated results from S3 URI to vespa families: {s3_uri}"
+            )
+            await index_aggregate_inference_results_to_vespa_families(
+                s3_uri=s3_uri,
+                vespa_connection_pool=vespa_connection_pool,
+            )
+
+            logger.info(f"Finished indexing aggregated results from S3 URI: {s3_uri}")

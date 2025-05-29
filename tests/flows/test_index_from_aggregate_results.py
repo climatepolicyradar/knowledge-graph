@@ -11,7 +11,9 @@ from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
 )
-from flows.index_from_aggregate_results import index_aggregate_results_from_s3_to_vespa
+from flows.index_from_aggregate_results import (
+    index_aggregate_inference_results_to_vespa_passages,
+)
 
 
 @pytest.mark.asyncio
@@ -45,7 +47,7 @@ async def test_index_from_aggregated_inference_results(
                 responses.append(vespa_passages)
 
             # Index the aggregated inference results from S3 to Vespa
-            await index_aggregate_results_from_s3_to_vespa(
+            await index_aggregate_inference_results_to_vespa_passages(
                 s3_uri=s3_uri,
                 vespa_connection_pool=vespa_connection_pool,
             )
