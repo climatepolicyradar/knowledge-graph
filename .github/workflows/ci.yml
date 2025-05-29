@@ -2,8 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches:
-      - main
+    # Run on all pull requests, regardless of target branch
   push:
     branches:
       - main
