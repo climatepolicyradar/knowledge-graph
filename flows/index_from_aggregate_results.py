@@ -1,9 +1,7 @@
 import json
-import tempfile
 from typing import Any, Final
 
 import boto3
-import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
 from prefect.logging import get_run_logger
@@ -13,12 +11,10 @@ from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import DocumentImportId, S3Uri
 from flows.boundary import (
-    VESPA_MAX_TIMEOUT_MS,
     TextBlockId,
     VespaDataId,
     VespaHitId,
     get_document_passages_from_vespa__generator,
-    get_vespa_search_adapter_from_aws_secrets,
 )
 
 DEFAULT_INDEXER_MAX_CONNECTIONS: Final[PositiveInt] = 50
@@ -40,7 +36,6 @@ async def _update_vespa_passage_concepts(
 ) -> VespaResponse:
     """Update a passage in Vespa with the given concepts."""
 
-    # FIXME: If the data id doesn't exist here this silently fails.
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
         namespace="doc_search",
@@ -81,7 +76,13 @@ async def index_aggregate_results_from_s3_to_vespa(
         "Loading aggregated inference results for document import ID: %s",
         document_import_id,
     )
+    text_blocks_not_in_vespa = []
+    update_errors = []
     for text_block_id, concepts in aggregated_inference_results.items():
+        if TextBlockId(text_block_id) not in list(passages_in_vespa.keys()):
+            text_blocks_not_in_vespa.append(text_block_id)
+            continue
+
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
         vespa_data_id: VespaDataId = VespaDataId(vespa_hit_id.split("::")[-1])
 
@@ -90,43 +91,23 @@ async def index_aggregate_results_from_s3_to_vespa(
             serialised_concepts=concepts,
             vespa_connection_pool=vespa_connection_pool,
         )
+
         if not response.is_successful():
-            # TODO: Collect error
-            raise ValueError(
-                f"Failed to update text block {text_block_id} in Vespa: {response}"
-            )
+            update_errors.append((text_block_id, response.get_json()))
 
+    if text_blocks_not_in_vespa and update_errors:
+        raise ValueError(
+            f"Some text blocks were not found in Vespa: {text_blocks_not_in_vespa} "
+            f"AND some updates failed: {update_errors}"
+        )
+    elif text_blocks_not_in_vespa:
+        raise ValueError(
+            f"Some text blocks were not found in Vespa: {text_blocks_not_in_vespa}"
+        )
+    elif update_errors:
+        raise ValueError(f"Some updates to Vespa failed: {update_errors}")
 
-@flow
-async def run_indexing_from_aggregate_results(
-    s3_bucket: str,
-    aggregate_inference_results_s3_keys: list[str],
-) -> None:
-    """Index aggregated inference results from a list of S3 URIs into Vespa."""
-
-    logger = get_run_logger()
-    logger.info("Starting indexing from aggregate results...")
-
-    s3_uri_list = [
-        S3Uri(bucket=s3_bucket, key=key) for key in aggregate_inference_results_s3_keys
-    ]
-
-    temp_dir = tempfile.TemporaryDirectory()
-    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=temp_dir.name,
-        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+    logger.info(
+        "Successfully indexed all aggregated inference results for document import ID: %s",
+        document_import_id,
     )
-
-    async with (
-        vespa_search_adapter.client.asyncio(
-            connections=DEFAULT_INDEXER_MAX_CONNECTIONS,  # How many tasks to have running at once
-            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
-        ) as vespa_connection_pool
-    ):
-        for s3_uri in s3_uri_list:
-            logger.info(f"Indexing aggregated results from S3 URI: {s3_uri}")
-            await index_aggregate_results_from_s3_to_vespa(
-                s3_uri=s3_uri,
-                vespa_connection_pool=vespa_connection_pool,
-            )

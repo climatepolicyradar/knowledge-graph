@@ -1,10 +1,12 @@
 import json
 from typing import Sequence
+from unittest.mock import patch
 
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
+from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import S3Uri
 from flows.boundary import (
@@ -24,6 +26,7 @@ async def test_index_from_aggregated_inference_results(
     s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         file_keys = mock_bucket_inference_results
         for file_key in file_keys:
@@ -98,3 +101,40 @@ async def test_index_from_aggregated_inference_results(
                             f"Concept {concept} not found in expected concepts for passage "
                             f"{text_block_id}."
                         )
+
+
+@pytest.mark.asyncio
+async def test_index_from_aggregated_inference_results__error_handling(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: list[str],
+    s3_prefix_inference_results: str,
+) -> None:
+    """Test that we loaded the inference results from the mock bucket."""
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        file_keys = mock_bucket_inference_results
+        for file_key in file_keys:
+            s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
+
+            # Mock this function response _update_vespa_passage_concepts to simulate an error
+            with patch(
+                "flows.index_from_aggregate_results._update_vespa_passage_concepts"
+            ) as mock_update_vespa_passage_concepts:
+                mock_update_vespa_passage_concepts.return_value = VespaResponse(
+                    status_code=500,
+                    operation_type="update",
+                    json={"error": "Mocked error"},
+                    url="http://mocked-vespa-url",
+                )
+
+                # Index the aggregated inference results from S3 to Vespa
+                with pytest.raises(ValueError) as excinfo:
+                    await index_aggregate_results_from_s3_to_vespa(
+                        s3_uri=s3_uri,
+                        vespa_connection_pool=vespa_connection_pool,
+                    )
+
+                assert "Mocked error" in str(excinfo.value)
