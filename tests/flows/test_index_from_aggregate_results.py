@@ -13,7 +13,10 @@ from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
 )
-from flows.index_from_aggregate_results import index_aggregate_results_from_s3_to_vespa
+from flows.index_from_aggregate_results import (
+    index_aggregate_results_from_s3_to_vespa,
+    run_indexing_from_aggregate_results,
+)
 
 
 @pytest.mark.asyncio
@@ -138,3 +141,27 @@ async def test_index_from_aggregated_inference_results__error_handling(
                     )
 
                 assert "Mocked error" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_run_indexing_from_aggregate_results(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: list[str],
+    s3_prefix_inference_results: str,
+) -> None:
+    """Test that we loaded the inference results from the mock bucket."""
+
+    file_keys = mock_bucket_inference_results
+
+    # Mock the get_vespa_search_adapter_from_aws_secrets function to return local_vespa_search_adapter
+    with patch(
+        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        await run_indexing_from_aggregate_results(
+            s3_bucket=mock_bucket,
+            aggregate_inference_results_s3_keys=file_keys,
+        )
