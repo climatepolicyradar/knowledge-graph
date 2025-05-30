@@ -3,6 +3,7 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, TypeAlias, TypedDict
 
 import boto3
@@ -46,18 +47,19 @@ SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 class S3Uri:
     """A URI for an S3 object."""
 
-    def __init__(
-        self, protocol: str = "s3", bucket: str | None = None, key: str | None = None
-    ):
+    def __init__(self, bucket: str, key: str, protocol: str = "s3"):
         self.protocol = protocol
         self.bucket = bucket
         self.key = key
 
     def __str__(self) -> str:
         """Return the string representation of the S3 URI."""
-        if not self.bucket or not self.key:
-            raise ValueError("Bucket and key must be set")
         return f"{self.protocol}://{self.bucket}/{self.key}"
+
+    @property
+    def stem(self) -> str:
+        """Return the stem of the S3 URI (the key without the extension)."""
+        return Path(self.key).stem
 
 
 class DocumentFailure(TypedDict):
@@ -110,6 +112,11 @@ def get_all_labelled_passages_for_one_document(
     s3 = boto3.client("s3")
 
     labelled_passages = defaultdict(list)
+
+    if config.cache_bucket is None:
+        raise ValueError(
+            "Cache bucket must be set in config before retrieving labelled passages."
+        )
     for spec in classifier_specs:
         s3_uri = S3Uri(
             bucket=config.cache_bucket,
@@ -193,6 +200,10 @@ async def process_single_document(
         )
         vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
+        if config.cache_bucket is None:
+            raise ValueError(
+                "Cache bucket must be set in config before processing documents."
+            )
         # Write to s3
         s3_uri = S3Uri(
             bucket=config.cache_bucket,
