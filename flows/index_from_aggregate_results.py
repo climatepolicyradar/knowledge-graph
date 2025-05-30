@@ -99,12 +99,17 @@ async def index_aggregate_results_from_s3_to_vespa(
 
 @flow
 async def run_indexing_from_aggregate_results(
-    s3_uri_list: list[S3Uri],
+    s3_bucket: str,
+    aggregate_inference_results_s3_keys: list[str],
 ) -> None:
     """Index aggregated inference results from a list of S3 URIs into Vespa."""
 
     logger = get_run_logger()
     logger.info("Starting indexing from aggregate results...")
+
+    s3_uri_list = [
+        S3Uri(bucket=s3_bucket, key=key) for key in aggregate_inference_results_s3_keys
+    ]
 
     temp_dir = tempfile.TemporaryDirectory()
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
