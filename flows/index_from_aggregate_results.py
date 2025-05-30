@@ -33,7 +33,6 @@ async def _update_vespa_passage_concepts(
 ) -> VespaResponse:
     """Update a passage in Vespa with the given concepts."""
 
-    # FIXME: If the data id doesn't exist here this silently fails.
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
         namespace="doc_search",
@@ -74,7 +73,13 @@ async def index_aggregate_results_from_s3_to_vespa(
         "Loading aggregated inference results for document import ID: %s",
         document_import_id,
     )
+    text_blocks_not_in_vespa = []
+    update_errors = []
     for text_block_id, concepts in aggregated_inference_results.items():
+        if TextBlockId(text_block_id) not in list(passages_in_vespa.keys()):
+            text_blocks_not_in_vespa.append(text_block_id)
+            continue
+
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
         vespa_data_id: VespaDataId = VespaDataId(vespa_hit_id.split("::")[-1])
 
@@ -83,8 +88,23 @@ async def index_aggregate_results_from_s3_to_vespa(
             serialised_concepts=concepts,
             vespa_connection_pool=vespa_connection_pool,
         )
+
         if not response.is_successful():
-            # TODO: Collect error
-            raise ValueError(
-                f"Failed to update text block {text_block_id} in Vespa: {response}"
-            )
+            update_errors.append((text_block_id, response.get_json()))
+
+    if text_blocks_not_in_vespa and update_errors:
+        raise ValueError(
+            f"Some text blocks were not found in Vespa: {text_blocks_not_in_vespa} "
+            f"AND some updates failed: {update_errors}"
+        )
+    elif text_blocks_not_in_vespa:
+        raise ValueError(
+            f"Some text blocks were not found in Vespa: {text_blocks_not_in_vespa}"
+        )
+    elif update_errors:
+        raise ValueError(f"Some updates to Vespa failed: {update_errors}")
+
+    logger.info(
+        "Successfully indexed all aggregated inference results for document import ID: %s",
+        document_import_id,
+    )
