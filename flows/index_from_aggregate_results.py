@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 from typing import Any, Final
 
 import boto3
@@ -19,6 +20,7 @@ from flows.aggregate_inference_results import (
 )
 from flows.boundary import (
     VESPA_MAX_TIMEOUT_MS,
+    DocumentStem,
     TextBlockId,
     VespaDataId,
     VespaHitId,
@@ -37,6 +39,45 @@ def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
     response = s3.get_object(Bucket=bucket, Key=key)
     body = response["Body"].read().decode("utf-8")
     return json.loads(body)
+
+
+def get_bucket_paginator(bucket: str, prefix: str, region: str):
+    """Returns an s3 paginator for the pipeline cache bucket"""
+
+    s3 = boto3.client("s3", region_name=region)
+    paginator = s3.get_paginator("list_objects_v2")
+    return paginator.paginate(
+        Bucket=bucket,
+        Prefix=prefix,
+    )
+
+
+def list_bucket_file_stems(
+    bucket: str,
+    prefix: str,
+    region: str,
+) -> list[DocumentStem]:
+    """
+    Scan configured bucket and return all file stems.
+
+    Where a stem refers to a file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
+    """
+
+    page_iterator = get_bucket_paginator(
+        bucket=bucket,
+        prefix=prefix,
+        region=region,
+    )
+    file_stems = []
+
+    for p in page_iterator:
+        if "Contents" in p:
+            for o in p["Contents"]:
+                file_stem = Path(o["Key"]).stem
+                file_stems.append(file_stem)
+
+    return file_stems
 
 
 async def _update_vespa_passage_concepts(
@@ -137,10 +178,21 @@ async def run_indexing_from_aggregate_results(
         config = await Config.create()
 
     if not document_import_ids:
-        raise NotImplementedError(
-            "No document import IDs provided. "
-            "This flow is not designed to run without them."
+        logger.info(
+            "No document import ids provided. "
+            f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
+        document_import_ids = [
+            DocumentImportId(i)
+            for i in list_bucket_file_stems(
+                bucket=config.cache_bucket_str,
+                prefix=os.path.join(
+                    config.aggregate_inference_results_prefix, run_output_identifier
+                ),
+                region=config.bucket_region,
+            )
+        ]
+        logger.info(f"Found {len(document_import_ids)} document import ids to process.")
 
     temp_dir = tempfile.TemporaryDirectory()
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(

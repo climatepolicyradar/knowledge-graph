@@ -158,10 +158,6 @@ async def test_run_indexing_from_aggregate_results(
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ]
     run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
     config = Config(
         cache_bucket=mock_bucket,
@@ -173,7 +169,7 @@ async def test_run_indexing_from_aggregate_results(
     ):
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_import_ids=document_import_ids,
+            document_import_ids=[],  # So we test running for all documents
             config=config,
         )
 
