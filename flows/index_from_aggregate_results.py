@@ -7,7 +7,7 @@ from typing import Any, Final
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow, task
+from prefect import flow
 from prefect.logging import get_run_logger
 from pydantic import PositiveInt
 from vespa.application import VespaAsync
@@ -96,7 +96,7 @@ async def _update_vespa_passage_concepts(
     return response
 
 
-@task
+@flow
 async def index_aggregate_results_from_s3_to_vespa(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
