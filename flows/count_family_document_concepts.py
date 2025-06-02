@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -317,8 +318,8 @@ def group_documents_uris(
     timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def count_family_document_concepts(
-    classifier_specs: list[ClassifierSpec] | None = None,
-    document_ids: list[str] | None = None,
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> None:

@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
@@ -22,10 +22,13 @@ from pydantic import PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
     Profiler,
     SlackNotify,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
+    iterate_batch,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -56,10 +59,7 @@ DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 
-# Example: CCLW.executive.1813.2418
-DocumentImportId: TypeAlias = str
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
-DocumentStem: TypeAlias = str
 
 
 @dataclass()
@@ -140,7 +140,7 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
-def get_latest_ingest_documents(config: Config) -> list[str]:
+def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     """
     Get IDs of changed documents from the latest ingest run
 
@@ -178,7 +178,7 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
-    requested_document_ids: Optional[list[DocumentImportId]],
+    requested_document_ids: Optional[Sequence[DocumentImportId]],
     current_bucket_file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
     """
@@ -227,7 +227,9 @@ def determine_file_stems(
     return requested_document_stems
 
 
-def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
+def remove_sabin_file_stems(
+    file_stems: Sequence[DocumentStem],
+) -> Sequence[DocumentStem]:
     """
     Remove Sabin document file stems from the list of file stems.
 
@@ -484,15 +486,9 @@ async def run_classifier_inference_on_document(
     return None
 
 
-def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
-    """Generate batches from a list with a specified size."""
-    for i in range(0, len(data), batch_size):
-        yield data[i : i + batch_size]
-
-
 @flow(log_prints=True)
 async def run_classifier_inference_on_batch_of_documents(
-    batch: list[str],
+    batch: list[DocumentStem],
     config_json: dict,
     classifier_name: str,
     classifier_alias: str,
@@ -614,10 +610,10 @@ def group_inference_results_into_states(
     on_crashed=[SlackNotify.message],
 )
 async def classifier_inference(
-    classifier_specs: Optional[list[ClassifierSpec]] = None,
-    document_ids: Optional[list[str]] = None,
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
-    config: Optional[Config] = None,
+    config: Config | None = None,
     batch_size: int = 1000,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ):
@@ -713,8 +709,6 @@ async def classifier_inference(
         classifier_specs=classifier_specs,
         successes=successes,
         failures_classifier_specs=failures_classifier_specs,
-        batch_size=batch_size,
-        classifier_concurrency_limit=classifier_concurrency_limit,
     )
 
     if failures:
@@ -725,12 +719,10 @@ async def classifier_inference(
 
 async def create_inference_summary_artifact(
     config: Config,
-    filtered_file_stems: list[DocumentStem],
-    classifier_specs: list[ClassifierSpec],
+    filtered_file_stems: Sequence[DocumentStem],
+    classifier_specs: Sequence[ClassifierSpec],
     successes: dict[ClassifierSpec, FlowRun],
     failures_classifier_specs: set[ClassifierSpec],
-    batch_size: int,
-    classifier_concurrency_limit: PositiveInt,
 ) -> None:
     """Create a table artifact with summary information about the inference run."""
 

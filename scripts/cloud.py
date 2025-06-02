@@ -1,5 +1,5 @@
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any, Optional
 
@@ -42,7 +42,7 @@ class ClassifierSpec(BaseModel):
         return f"{self.name}:{self.alias}"
 
 
-def disallow_latest_alias(classifier_specs: list[ClassifierSpec]):
+def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
     if any(classifier_spec.alias == "latest" for classifier_spec in classifier_specs):
         raise ValueError("`latest` is not allowed")
     return None

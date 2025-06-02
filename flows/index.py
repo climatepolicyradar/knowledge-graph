@@ -1,4 +1,5 @@
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -17,6 +18,7 @@ from flows.boundary import (
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
+    DocumentImportId,
     SlackNotify,
 )
 from scripts.cloud import (
@@ -76,8 +78,8 @@ class Config:
     log_prints=True,
 )
 async def index_labelled_passages_from_s3_to_vespa(
-    classifier_specs: list[ClassifierSpec] | None = None,
-    document_ids: list[str] | None = None,
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexing_task_batch_size: int = DEFAULT_UPDATES_TASK_BATCH_SIZE,

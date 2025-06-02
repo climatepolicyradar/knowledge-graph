@@ -12,7 +12,7 @@ import sys
 import tempfile
 import time
 from collections import Counter
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Sequence
 from datetime import timedelta
 from enum import Enum
 from io import BytesIO
@@ -50,6 +50,10 @@ from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
+    DocumentImporter,
+    DocumentImportId,
+    DocumentObjectUri,
+    DocumentStem,
     Profiler,
     SlackNotify,
     get_labelled_passage_paths,
@@ -101,16 +105,6 @@ VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY: int = 1_000
 # The "parent" AKA the higher level flows that do multiple things.
 PARENT_TIMEOUT_S: int = int(timedelta(hours=4).total_seconds())
 
-# Needed to get document passages from Vespa
-# Example: CCLW.executive.1813.2418
-DocumentImportId = NewType("DocumentImportId", str)
-# Needed to load the inference results
-# Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
-DocumentObjectUri = NewType("DocumentObjectUri", str)
-# A filename without the extension
-DocumentStem = NewType("DocumentStem", str)
-# Passed to a self-sufficient flow run
-DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 # A continuation token used by vespa to enable pagination over query results
 ContinuationToken = NewType("ContinuationToken", str)
 
@@ -118,8 +112,8 @@ ContinuationToken = NewType("ContinuationToken", str)
 class S3Accessor(BaseModel):
     """Representing S3 paths and prefixes for accessing documents."""
 
-    paths: list[str] | None = None
-    prefixes: list[str] | None = None
+    paths: Sequence[str] | None = None
+    prefixes: Sequence[str] | None = None
 
     def __str__(self) -> str:
         """String representation of the S3Accessor for logging"""
@@ -227,7 +221,7 @@ def s3_object_write_text(s3_uri: str, text: str) -> None:
 
 
 def s3_obj_generator_from_s3_prefixes(
-    s3_prefixes: list[str],
+    s3_prefixes: Sequence[str],
 ) -> Generator[
     DocumentImporter,
     None,
@@ -252,14 +246,14 @@ def s3_obj_generator_from_s3_prefixes(
 
 
 def s3_obj_generator_from_s3_paths(
-    s3_paths: list[str],
+    s3_paths: Sequence[str],
 ) -> Generator[
     DocumentImporter,
     None,
     None,
 ]:
     """
-    Return a generator that yields keys from a list of S3 paths.
+    Return a generator that yields keys from a Sequence of S3 paths.
 
     We extract the key from the S3 path by removing the first two
     elements in the path.
@@ -279,8 +273,8 @@ def s3_obj_generator_from_s3_paths(
 
 
 def s3_obj_generator(
-    s3_prefixes: list[str] | None,
-    s3_paths: list[str] | None,
+    s3_prefixes: Sequence[str] | None,
+    s3_paths: Sequence[str] | None,
 ) -> Generator[
     DocumentImporter,
     None,
@@ -305,11 +299,13 @@ def s3_obj_generator(
             return s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
         case (None, None):
             raise ValueError("Either s3_prefix or s3_paths must be provided.")
+        case _:
+            raise ValueError("Invalid combination of s3_prefixes and s3_paths.")
 
 
 def s3_paths_or_s3_prefixes(
-    classifier_specs: list[ClassifierSpec] | None,
-    document_ids: list[str] | None,
+    classifier_specs: Sequence[ClassifierSpec] | None,
+    document_ids: Sequence[DocumentImportId] | None,
     cache_bucket: str,
     prefix: str,
 ) -> S3Accessor:
@@ -372,6 +368,10 @@ def s3_paths_or_s3_prefixes(
                 "namespaced by classifiers (e.g. "
                 "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
                 "v4/CCLW.legislative.10695.6015.json`)"
+            )
+        case _:
+            raise ValueError(
+                "Invalid combination of classifier_specs and document_ids."
             )
 
 
@@ -1019,7 +1019,7 @@ def op_to_fn(
     log_prints=True,
 )
 async def run_partial_updates_of_concepts_for_batch(
-    documents_batch: list[DocumentImporter],
+    documents_batch: Sequence[DocumentImporter],
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
@@ -1080,7 +1080,7 @@ async def run_partial_updates_of_concepts_for_batch(
 
 
 async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-    documents_batch: list[DocumentImporter],
+    documents_batch: Sequence[DocumentImporter],
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
