@@ -39,7 +39,6 @@ async def test_index_from_aggregated_inference_results(
             passages_generator = get_document_passages_from_vespa__generator(
                 document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
-                grouping_max=5_000,
             )
 
             initial_responses = []
@@ -49,6 +48,7 @@ async def test_index_from_aggregated_inference_results(
             # Index the aggregated inference results from S3 to Vespa
             await index_aggregate_results_from_s3_to_vespa(
                 s3_uri=s3_uri,
+                document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
 
@@ -132,6 +132,7 @@ async def test_index_from_aggregated_inference_results__error_handling(
                 with pytest.raises(ValueError) as excinfo:
                     await index_aggregate_results_from_s3_to_vespa(
                         s3_uri=s3_uri,
+                        document_import_id=DocumentImportId(s3_uri.stem),
                         vespa_connection_pool=vespa_connection_pool,
                     )
 
