@@ -1,5 +1,4 @@
-import json
-from typing import Sequence
+from typing import Any, Sequence
 from unittest.mock import patch
 
 import pytest
@@ -22,16 +21,16 @@ async def test_index_from_aggregated_inference_results(
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
     mock_bucket: str,
-    mock_bucket_inference_results: list[str],
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
     s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        for file_key in mock_bucket_inference_results:
-            response = mock_s3_client.get_object(Bucket=mock_bucket, Key=file_key)
-            body = response["Body"].read().decode("utf-8")
-            aggregated_inference_results = json.loads(body)
+        for (
+            file_key,
+            aggregated_inference_results,
+        ) in mock_bucket_inference_results.items():
             s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
             document_import_id = DocumentImportId(s3_uri.stem)
 
@@ -107,14 +106,13 @@ async def test_index_from_aggregated_inference_results__error_handling(
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
     mock_bucket: str,
-    mock_bucket_inference_results: list[str],
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
     s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        file_keys = mock_bucket_inference_results
-        for file_key in file_keys:
+        for file_key, _ in mock_bucket_inference_results.items():
             s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
 
             # Mock this function response _update_vespa_passage_concepts to simulate an error
