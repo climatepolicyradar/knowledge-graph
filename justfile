@@ -26,8 +26,8 @@ test-without-slow +OPTS="":
     poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
 
 # update the snapshots for the tests
-test-snapshot-update:
-    poetry run pytest --snapshot-update
+test-snapshot-update +OPTS="":
+    poetry run pytest --snapshot-update {{OPTS}}
 
 # run linters and code formatters on relevant files
 lint:
