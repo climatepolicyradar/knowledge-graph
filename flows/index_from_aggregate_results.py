@@ -96,6 +96,5 @@ async def index_aggregate_results_from_s3_to_vespa(
         )
 
     logger.info(
-        "Successfully indexed all aggregated inference results for document import ID: %s",
-        document_import_id,
+        f"Successfully indexed all aggregated inference results for document import ID: {document_import_id} into Vespa. Total passages updated: {len(aggregated_inference_results)}"
     )

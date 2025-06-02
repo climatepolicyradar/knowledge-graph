@@ -28,8 +28,7 @@ async def test_index_from_aggregated_inference_results(
     """Test that we loaded the inference results from the mock bucket."""
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        file_keys = mock_bucket_inference_results
-        for file_key in file_keys:
+        for file_key in mock_bucket_inference_results:
             response = mock_s3_client.get_object(Bucket=mock_bucket, Key=file_key)
             body = response["Body"].read().decode("utf-8")
             aggregated_inference_results = json.loads(body)
@@ -43,9 +42,9 @@ async def test_index_from_aggregated_inference_results(
                 grouping_max=5_000,
             )
 
-            responses = []
+            initial_responses = []
             async for vespa_passages in passages_generator:
-                responses.append(vespa_passages)
+                initial_responses.append(vespa_passages)
 
             # Index the aggregated inference results from S3 to Vespa
             await index_aggregate_results_from_s3_to_vespa(
@@ -57,7 +56,6 @@ async def test_index_from_aggregated_inference_results(
             final_passages_generator = get_document_passages_from_vespa__generator(
                 document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
-                grouping_max=5_000,
             )
 
             final_responses = []
@@ -65,8 +63,8 @@ async def test_index_from_aggregated_inference_results(
                 final_responses.append(vespa_passages)
 
             # Assert the final responses are not the same as the original responses
-            assert len(final_responses) == len(responses)
-            assert final_responses != responses
+            assert len(final_responses) == len(initial_responses)
+            assert final_responses != initial_responses
 
             # Assert that for each passage that the only concepts present were those from the
             # aggregated inference results.
