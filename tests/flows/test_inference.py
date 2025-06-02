@@ -20,7 +20,6 @@ from flows.inference import (
     download_classifier_from_wandb_to_local,
     get_latest_ingest_documents,
     group_inference_results_into_states,
-    iterate_batch,
     list_bucket_file_stems,
     load_classifier,
     load_document,
@@ -366,19 +365,6 @@ async def test_run_classifier_inference_on_document_missing(
             classifier=classifier,
         )
     assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
-
-
-@pytest.mark.parametrize(
-    "data, expected_lengths",
-    [
-        (list(range(50)), [50]),
-        (list(range(850)), [400, 400, 50]),
-        ([], [0]),
-    ],
-)
-def test_iterate_batch(data, expected_lengths):
-    for batch, expected in zip(list(iterate_batch(data)), expected_lengths):
-        assert len(batch) == expected
 
 
 @pytest.mark.parametrize(

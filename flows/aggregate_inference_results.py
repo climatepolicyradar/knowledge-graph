@@ -21,6 +21,7 @@ from flows.boundary import (
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
+    collect_unique_file_stems_under_prefix,
     iterate_batch,
 )
 from scripts.cloud import (
@@ -73,18 +74,25 @@ class DocumentFailure(TypedDict):
 class Config:
     """Configuration used across flow runs."""
 
-    cache_bucket: str | None = None
+    _cache_bucket: str | None = None
     document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
     aggregate_inference_results_prefix: str = INFERENCE_RESULTS_PREFIX
     bucket_region: str = "eu-west-1"
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
+    @property
+    def cache_bucket(self) -> str:
+        """Get the cache bucket name. Raises ValueError if not set."""
+        if self._cache_bucket is None:
+            raise ValueError("cache_bucket has not been set")
+        return self._cache_bucket
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
         config = cls()
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
+        if not config._cache_bucket:
+            config._cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
             )
 
@@ -238,8 +246,13 @@ async def aggregate_inference_results(
         config = await Config.create()
 
     if not document_ids:
-        raise NotImplementedError(
-            "No document ids provided, fallback is not supported yet"
+        print(
+            "no document ids provided, collecting all available from s3 under prefix: "
+            f"{config.document_source_prefix}"
+        )
+        document_ids = collect_unique_file_stems_under_prefix(
+            bucket_name=config.cache_bucket,
+            prefix=config.document_source_prefix,
         )
 
     run_output_identifier = build_run_output_identifier()

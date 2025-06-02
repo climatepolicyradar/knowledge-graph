@@ -1,5 +1,6 @@
 import asyncio
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -21,7 +22,7 @@ from flows.boundary import (
     updates_by_s3,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
-from flows.utils import SlackNotify, iterate_batch
+from flows.utils import DocumentImportId, SlackNotify, iterate_batch
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -79,12 +80,12 @@ class Config:
 
 
 def find_all_classifier_specs_for_latest(
-    to_deindex: list[ClassifierSpec],
-    being_maintained: list[ClassifierSpec],
+    to_deindex: Sequence[ClassifierSpec],
+    being_maintained: Sequence[ClassifierSpec],
     cache_bucket: str,
     document_source_prefix: str,
     s3_client,
-) -> tuple[list[ClassifierSpec], list[ClassifierSpec]]:
+) -> tuple[Sequence[ClassifierSpec], Sequence[ClassifierSpec]]:
     """
     For classifier spec. with a version of latest, find concrete versions.
 
@@ -200,7 +201,7 @@ def search_s3_for_aliases(
 
 @flow(timeout_seconds=TASK_TIMEOUT_S)
 async def run_cleanup_objects_for_batch(
-    documents_batch: list[DocumentImporter],
+    documents_batch: Sequence[DocumentImporter],
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
@@ -223,7 +224,7 @@ async def run_cleanup_objects_for_batch(
 
 
 async def cleanup_objects_for_batch_flow_or_deployment(
-    documents_batch: list[DocumentImporter],
+    documents_batch: Sequence[DocumentImporter],
     documents_batch_num: int,
     cache_bucket: str,
     concepts_counts_prefix: str,
@@ -269,8 +270,8 @@ async def cleanups_by_s3(
     cache_bucket: str,
     concepts_counts_prefix: str,
     as_deployment: bool,
-    s3_prefixes: list[str] | None = None,
-    s3_paths: list[str] | None = None,
+    s3_prefixes: Sequence[str] | None = None,
+    s3_paths: Sequence[str] | None = None,
 ) -> None:
     logger = get_run_logger()
 
@@ -355,8 +356,8 @@ async def cleanups_by_s3(
     timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def deindex_labelled_passages_from_s3_to_vespa(
-    classifier_specs: list[ClassifierSpec],
-    document_ids: list[str] | None = None,
+    classifier_specs: Sequence[ClassifierSpec],
+    document_ids: Sequence[DocumentImportId] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     deindexing_task_batch_size: int = DEFAULT_DEINDEXING_TASK_BATCH_SIZE,
