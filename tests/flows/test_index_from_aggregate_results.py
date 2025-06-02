@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Sequence
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import S3Uri
+from flows.aggregate_inference_results import Config, S3Uri
 from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
@@ -146,19 +147,26 @@ async def test_run_indexing_from_aggregate_results(
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
     mock_bucket: str,
-    mock_bucket_inference_results: list[str],
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
     s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    file_keys = mock_bucket_inference_results
+    document_import_ids = [
+        DocumentImportId(S3Uri(bucket=mock_bucket, key=file_key).stem)
+        for file_key in mock_bucket_inference_results.keys()
+    ]
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    config = Config(
+        cache_bucket=mock_bucket,
+    )
 
-    # Mock the get_vespa_search_adapter_from_aws_secrets function to return local_vespa_search_adapter
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
         return_value=local_vespa_search_adapter,
     ):
         await run_indexing_from_aggregate_results(
-            s3_bucket=mock_bucket,
-            aggregate_inference_results_s3_keys=file_keys,
+            run_output_identifier=run_output_identifier,
+            document_import_ids=document_import_ids,
+            config=config,
         )

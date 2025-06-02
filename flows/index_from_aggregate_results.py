@@ -1,17 +1,23 @@
 import json
+import os
 import tempfile
 from typing import Any, Final
 
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import task
+from prefect import flow, task
 from prefect.logging import get_run_logger
 from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import DocumentImportId, S3Uri
+from flows.aggregate_inference_results import (
+    Config,
+    DocumentImportId,
+    RunOutputIdentifier,
+    S3Uri,
+)
 from flows.boundary import (
     VESPA_MAX_TIMEOUT_MS,
     TextBlockId,
@@ -112,16 +118,30 @@ async def index_aggregate_results_from_s3_to_vespa(
 
 @flow
 async def run_indexing_from_aggregate_results(
-    s3_bucket: str,
-    aggregate_inference_results_s3_keys: list[str],
+    run_output_identifier: RunOutputIdentifier,
+    document_import_ids: list[DocumentImportId],
+    config: Config | None = None,
 ) -> None:
     """Index aggregated inference results from a list of S3 URIs into Vespa."""
 
     logger = get_run_logger()
-    logger.info("Starting indexing from aggregate results...")
 
-    s3_uri_list = [
-        S3Uri(bucket=s3_bucket, key=key) for key in aggregate_inference_results_s3_keys
+    if config is None:
+        config = await Config.create()
+
+    s3_uri_list: list[tuple[DocumentImportId, S3Uri]] = [
+        (
+            document_import_id,
+            S3Uri(
+                bucket=config.cache_bucket_str,
+                key=os.path.join(
+                    config.aggregate_inference_results_prefix,
+                    run_output_identifier,
+                    f"{document_import_id}.json",
+                ),
+            ),
+        )
+        for document_import_id in document_import_ids
     ]
 
     temp_dir = tempfile.TemporaryDirectory()
@@ -137,9 +157,10 @@ async def run_indexing_from_aggregate_results(
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
-        for s3_uri in s3_uri_list:
+        for document_import_id, s3_uri in s3_uri_list:
             logger.info(f"Indexing aggregated results from S3 URI: {s3_uri}")
             await index_aggregate_results_from_s3_to_vespa(
                 s3_uri=s3_uri,
+                document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
