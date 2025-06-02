@@ -374,6 +374,10 @@ async def deindex_labelled_passages_from_s3_to_vespa(
 
     The name of each file in the specified S3 path is expected to
     represent the document's import ID.
+
+    This separates classifier specs. into the primary (currently in
+    Vespa) and non-primaries. The non-primaries are cleaned-up first,
+    in S3. Then, the primaries are cleaned-up in S3 and in Vespa.
     """
     logger = get_run_logger()
 
@@ -407,6 +411,7 @@ async def deindex_labelled_passages_from_s3_to_vespa(
         f"clean-ups: {classifier_specs_cleanups}"
     )
 
+    # Firstly, the non-primary version(s)' objects to clean-up.
     s3_accessor_cleanups = s3_paths_or_s3_prefixes(
         classifier_specs=classifier_specs_cleanups,
         document_ids=document_ids,
@@ -429,6 +434,7 @@ async def deindex_labelled_passages_from_s3_to_vespa(
         as_deployment=config.as_deployment,
     )
 
+    # Secondly, the primary version object and Vespa documents to clean-up.
     s3_accessor_primaries = s3_paths_or_s3_prefixes(
         classifier_specs=classifier_specs_primaries,
         document_ids=document_ids,
