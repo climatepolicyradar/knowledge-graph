@@ -13,15 +13,16 @@ from flows.boundary import (
     TextBlockId,
     VespaDataId,
     VespaHitId,
+    get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa__generator,
 )
 
 
-def load_json_data_from_s3(s3_uri: S3Uri) -> dict[str, Any]:
+def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
     """Load JSON data from an S3 URI."""
 
     s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+    response = s3.get_object(Bucket=bucket, Key=key)
     body = response["Body"].read().decode("utf-8")
     return json.loads(body)
 
@@ -46,20 +47,18 @@ async def _update_vespa_passage_concepts(
 @flow
 async def index_aggregate_results_from_s3_to_vespa(
     s3_uri: S3Uri,
+    document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
 ) -> None:
     """Index aggregated inference results from S3 into Vespa for a document."""
 
     logger = get_run_logger()
 
-    document_import_id = DocumentImportId(s3_uri.stem)
-
     logger.info(f"Loading aggregated inference results from S3: {s3_uri}")
-    aggregated_inference_results = load_json_data_from_s3(s3_uri=s3_uri)
-
-    logger.info(
-        "Loading passages from Vespa for document import ID: %s", document_import_id
+    aggregated_inference_results = load_json_data_from_s3(
+        bucket=s3_uri.bucket, key=s3_uri.key
     )
+
     passages_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_import_id,
         vespa_connection_pool=vespa_connection_pool,
@@ -70,8 +69,7 @@ async def index_aggregate_results_from_s3_to_vespa(
         passages_in_vespa.update(passage_batch)
 
     logger.info(
-        "Loading aggregated inference results for document import ID: %s",
-        document_import_id,
+        f"Updating concepts for document import ID: {document_import_id}, found {len(passages_in_vespa)} passages in Vespa",
     )
     text_blocks_not_in_vespa = []
     update_errors = []
@@ -81,7 +79,7 @@ async def index_aggregate_results_from_s3_to_vespa(
             continue
 
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
-        vespa_data_id: VespaDataId = VespaDataId(vespa_hit_id.split("::")[-1])
+        vespa_data_id: VespaDataId = get_data_id_from_vespa_hit_id(vespa_hit_id)
 
         response = await _update_vespa_passage_concepts(
             vespa_data_id=vespa_data_id,
@@ -92,17 +90,10 @@ async def index_aggregate_results_from_s3_to_vespa(
         if not response.is_successful():
             update_errors.append((text_block_id, response.get_json()))
 
-    if text_blocks_not_in_vespa and update_errors:
+    if text_blocks_not_in_vespa or update_errors:
         raise ValueError(
-            f"Some text blocks were not found in Vespa: {text_blocks_not_in_vespa} "
-            f"AND some updates failed: {update_errors}"
+            f"Error with {document_import_id}: {text_blocks_not_in_vespa=}, {update_errors=}"
         )
-    elif text_blocks_not_in_vespa:
-        raise ValueError(
-            f"Some text blocks were not found in Vespa: {text_blocks_not_in_vespa}"
-        )
-    elif update_errors:
-        raise ValueError(f"Some updates to Vespa failed: {update_errors}")
 
     logger.info(
         "Successfully indexed all aggregated inference results for document import ID: %s",
