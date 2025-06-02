@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 from typing import Any, Final
 
 import boto3
@@ -16,10 +17,10 @@ from flows.aggregate_inference_results import (
     Config,
     DocumentImportId,
     RunOutputIdentifier,
-    S3Uri,
 )
 from flows.boundary import (
     VESPA_MAX_TIMEOUT_MS,
+    DocumentStem,
     TextBlockId,
     VespaDataId,
     VespaHitId,
@@ -38,6 +39,35 @@ def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
     response = s3.get_object(Bucket=bucket, Key=key)
     body = response["Body"].read().decode("utf-8")
     return json.loads(body)
+
+
+def get_bucket_paginator(config: Config, prefix: str):
+    """Returns an s3 paginator for the pipeline cache bucket"""
+    s3 = boto3.client("s3", region_name=config.bucket_region)
+    paginator = s3.get_paginator("list_objects_v2")
+    return paginator.paginate(
+        Bucket=config.cache_bucket_str,
+        Prefix=prefix,
+    )
+
+
+def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+    """
+    Scan configured bucket and return all file stems.
+
+    Where a stem refers to a file name without the extension. Often, this is the same as
+    the document id, but not always as we have translated documents.
+    """
+    page_iterator = get_bucket_paginator(config, config.document_source_prefix)
+    file_stems = []
+
+    for p in page_iterator:
+        if "Contents" in p:
+            for o in p["Contents"]:
+                file_stem = Path(o["Key"]).stem
+                file_stems.append(file_stem)
+
+    return file_stems
 
 
 async def _update_vespa_passage_concepts(
@@ -59,7 +89,8 @@ async def _update_vespa_passage_concepts(
 
 @task
 async def index_aggregate_results_from_s3_to_vespa(
-    s3_uri: S3Uri,
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
 ) -> None:
@@ -67,9 +98,16 @@ async def index_aggregate_results_from_s3_to_vespa(
 
     logger = get_run_logger()
 
-    logger.info(f"Loading aggregated inference results from S3: {s3_uri}")
+    aggregated_results_key = os.path.join(
+        config.aggregate_inference_results_prefix,
+        run_output_identifier,
+        f"{document_import_id}.json",
+    )
+    logger.info(
+        f"Loading aggregated inference results from S3: {aggregated_results_key}"
+    )
     aggregated_inference_results = load_json_data_from_s3(
-        bucket=s3_uri.bucket, key=s3_uri.key
+        bucket=config.cache_bucket_str, key=aggregated_results_key
     )
 
     passages_generator = get_document_passages_from_vespa__generator(
@@ -129,20 +167,14 @@ async def run_indexing_from_aggregate_results(
     if config is None:
         config = await Config.create()
 
-    s3_uri_list: list[tuple[DocumentImportId, S3Uri]] = [
-        (
-            document_import_id,
-            S3Uri(
-                bucket=config.cache_bucket_str,
-                key=os.path.join(
-                    config.aggregate_inference_results_prefix,
-                    run_output_identifier,
-                    f"{document_import_id}.json",
-                ),
-            ),
+    if not document_import_ids:
+        logger.info(
+            "No document import ids provided. "
+            "Running on all documents under run_output_identifier."
         )
-        for document_import_id in document_import_ids
-    ]
+        document_import_ids = [
+            DocumentImportId(i) for i in list_bucket_file_stems(config)
+        ]
 
     temp_dir = tempfile.TemporaryDirectory()
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
@@ -157,10 +189,13 @@ async def run_indexing_from_aggregate_results(
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
-        for document_import_id, s3_uri in s3_uri_list:
-            logger.info(f"Indexing aggregated results from S3 URI: {s3_uri}")
+        for document_import_id in document_import_ids:
+            logger.info(
+                f"Indexing aggregated results for document: {document_import_id}"
+            )
             await index_aggregate_results_from_s3_to_vespa(
-                s3_uri=s3_uri,
+                config=config,
+                run_output_identifier=run_output_identifier,
                 document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
             )

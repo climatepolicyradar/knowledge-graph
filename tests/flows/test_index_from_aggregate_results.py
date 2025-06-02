@@ -30,6 +30,8 @@ async def test_index_from_aggregated_inference_results(
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for (
             file_key,
@@ -50,7 +52,8 @@ async def test_index_from_aggregated_inference_results(
 
             # Index the aggregated inference results from S3 to Vespa
             await index_aggregate_results_from_s3_to_vespa(
-                s3_uri=s3_uri,
+                config=Config(cache_bucket=mock_bucket),
+                run_output_identifier=run_output_identifier,
                 document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
@@ -115,6 +118,8 @@ async def test_index_from_aggregated_inference_results__error_handling(
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for file_key, _ in mock_bucket_inference_results.items():
             s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
@@ -133,7 +138,8 @@ async def test_index_from_aggregated_inference_results__error_handling(
                 # Index the aggregated inference results from S3 to Vespa
                 with pytest.raises(ValueError) as excinfo:
                     await index_aggregate_results_from_s3_to_vespa(
-                        s3_uri=s3_uri,
+                        run_output_identifier=run_output_identifier,
+                        config=Config(cache_bucket=mock_bucket),
                         document_import_id=DocumentImportId(s3_uri.stem),
                         vespa_connection_pool=vespa_connection_pool,
                     )
