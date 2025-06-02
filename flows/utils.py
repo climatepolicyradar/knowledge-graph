@@ -176,6 +176,21 @@ def get_file_stems_for_document_id(
     return stems
 
 
+def collect_unique_file_stems_under_prefix(
+    bucket_name: str,
+    prefix: str,
+) -> list[DocumentImportId]:
+    """Collect all unique file stems under a prefix."""
+    s3 = boto3.client("s3")
+    paginator = s3.get_paginator("list_objects_v2")
+    file_stems = []
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                file_stems.append(Path(obj["Key"]).stem)
+    return list(set(file_stems))
+
+
 def get_labelled_passage_paths(
     document_ids: Sequence[DocumentImportId],
     classifier_specs: Sequence[ClassifierSpec],
