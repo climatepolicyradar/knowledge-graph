@@ -3,6 +3,7 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, TypeAlias, TypedDict
 
 import boto3
@@ -46,18 +47,19 @@ SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 class S3Uri:
     """A URI for an S3 object."""
 
-    def __init__(
-        self, protocol: str = "s3", bucket: str | None = None, key: str | None = None
-    ):
+    def __init__(self, bucket: str, key: str, protocol: str = "s3"):
         self.protocol = protocol
         self.bucket = bucket
         self.key = key
 
     def __str__(self) -> str:
         """Return the string representation of the S3 URI."""
-        if not self.bucket or not self.key:
-            raise ValueError("Bucket and key must be set")
         return f"{self.protocol}://{self.bucket}/{self.key}"
+
+    @property
+    def stem(self) -> str:
+        """Return the stem of the S3 URI (the key without the extension)."""
+        return Path(self.key).stem
 
 
 class DocumentFailure(TypedDict):
@@ -88,6 +90,15 @@ class Config:
 
         return config
 
+    @property
+    def cache_bucket_str(self) -> str:
+        """Return the cache bucket, raising an error if not set."""
+        if not self.cache_bucket:
+            raise ValueError(
+                "Cache bucket is not set in config, consider calling the `create` method first."
+            )
+        return self.cache_bucket
+
 
 def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""
@@ -110,9 +121,10 @@ def get_all_labelled_passages_for_one_document(
     s3 = boto3.client("s3")
 
     labelled_passages = defaultdict(list)
+
     for spec in classifier_specs:
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.document_source_prefix,
                 spec.name,
@@ -195,7 +207,7 @@ async def process_single_document(
 
         # Write to s3
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.aggregate_inference_results_prefix,
                 run_output_identifier,
