@@ -51,14 +51,23 @@ def get_bucket_paginator(config: Config, prefix: str):
     )
 
 
-def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+def list_bucket_file_stems(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
 
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    page_iterator = get_bucket_paginator(config, config.document_source_prefix)
+    page_iterator = get_bucket_paginator(
+        config,
+        os.path.join(
+            config.document_source_prefix,
+            run_output_identifier,
+        ),
+    )
     file_stems = []
 
     for p in page_iterator:
@@ -173,7 +182,8 @@ async def run_indexing_from_aggregate_results(
             "Running on all documents under run_output_identifier."
         )
         document_import_ids = [
-            DocumentImportId(i) for i in list_bucket_file_stems(config)
+            DocumentImportId(i)
+            for i in list_bucket_file_stems(config, run_output_identifier)
         ]
 
     temp_dir = tempfile.TemporaryDirectory()
