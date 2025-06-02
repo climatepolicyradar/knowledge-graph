@@ -90,6 +90,15 @@ class Config:
 
         return config
 
+    @property
+    def cache_bucket_str(self) -> str:
+        """Return the cache bucket, raising an error if not set."""
+        if not self.cache_bucket:
+            raise ValueError(
+                "Cache bucket is not set in config, consider calling the `create` method first."
+            )
+        return self.cache_bucket
+
 
 def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""
@@ -113,13 +122,9 @@ def get_all_labelled_passages_for_one_document(
 
     labelled_passages = defaultdict(list)
 
-    if config.cache_bucket is None:
-        raise ValueError(
-            "Cache bucket must be set in config before retrieving labelled passages."
-        )
     for spec in classifier_specs:
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.document_source_prefix,
                 spec.name,
@@ -200,13 +205,9 @@ async def process_single_document(
         )
         vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
-        if config.cache_bucket is None:
-            raise ValueError(
-                "Cache bucket must be set in config before processing documents."
-            )
         # Write to s3
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.aggregate_inference_results_prefix,
                 run_output_identifier,

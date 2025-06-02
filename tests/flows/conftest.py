@@ -441,25 +441,26 @@ def mock_bucket_inference_results(
     mock_s3_client,
     mock_bucket,
     s3_prefix_inference_results: str,
-) -> list[str]:
+) -> dict[str, dict[str, Any]]:
     """A version of the inference results bucket with more files"""
+
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = list(fixture_root.glob("**/*.json"))
 
-    keys = []
+    inference_results = {}
     for file_path in fixture_files:
         with open(file_path) as f:
             data = f.read()
         body = BytesIO(data.encode("utf-8"))
 
         key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
-        keys.append(key)
+        inference_results[key] = json.loads(data)
 
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
 
-    return keys
+    return inference_results
 
 
 @pytest.fixture
