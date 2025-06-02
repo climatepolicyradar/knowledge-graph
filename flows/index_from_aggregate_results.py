@@ -3,7 +3,7 @@ from typing import Any
 
 import boto3
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow
+from prefect import task
 from prefect.logging import get_run_logger
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
@@ -44,7 +44,7 @@ async def _update_vespa_passage_concepts(
     return response
 
 
-@flow
+@task
 async def index_aggregate_results_from_s3_to_vespa(
     s3_uri: S3Uri,
     document_import_id: DocumentImportId,
@@ -69,7 +69,8 @@ async def index_aggregate_results_from_s3_to_vespa(
         passages_in_vespa.update(passage_batch)
 
     logger.info(
-        f"Updating concepts for document import ID: {document_import_id}, found {len(passages_in_vespa)} passages in Vespa",
+        f"Updating concepts for document import ID: {document_import_id}, "
+        f"found {len(passages_in_vespa)} passages in Vespa",
     )
     text_blocks_not_in_vespa = []
     update_errors = []
@@ -96,5 +97,7 @@ async def index_aggregate_results_from_s3_to_vespa(
         )
 
     logger.info(
-        f"Successfully indexed all aggregated inference results for document import ID: {document_import_id} into Vespa. Total passages updated: {len(aggregated_inference_results)}"
+        "Successfully indexed all aggregated inference results for document import ID: "
+        f"{document_import_id} into Vespa. "
+        f"Total passages updated: {len(aggregated_inference_results)}"
     )
