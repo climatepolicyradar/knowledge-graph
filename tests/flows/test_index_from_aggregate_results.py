@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Sequence
 from unittest.mock import patch
 
@@ -7,12 +8,15 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import S3Uri
+from flows.aggregate_inference_results import Config, S3Uri
 from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
 )
-from flows.index_from_aggregate_results import index_aggregate_results_from_s3_to_vespa
+from flows.index_from_aggregate_results import (
+    index_aggregate_results_from_s3_to_vespa,
+    run_indexing_from_aggregate_results,
+)
 
 
 @pytest.mark.asyncio
@@ -25,6 +29,8 @@ async def test_index_from_aggregated_inference_results(
     s3_prefix_inference_results: str,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
+
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for (
@@ -46,7 +52,8 @@ async def test_index_from_aggregated_inference_results(
 
             # Index the aggregated inference results from S3 to Vespa
             await index_aggregate_results_from_s3_to_vespa(
-                s3_uri=s3_uri,
+                config=Config(cache_bucket=mock_bucket),
+                run_output_identifier=run_output_identifier,
                 document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
@@ -111,6 +118,8 @@ async def test_index_from_aggregated_inference_results__error_handling(
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for file_key, _ in mock_bucket_inference_results.items():
             s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
@@ -129,9 +138,91 @@ async def test_index_from_aggregated_inference_results__error_handling(
                 # Index the aggregated inference results from S3 to Vespa
                 with pytest.raises(ValueError) as excinfo:
                     await index_aggregate_results_from_s3_to_vespa(
-                        s3_uri=s3_uri,
+                        run_output_identifier=run_output_identifier,
+                        config=Config(cache_bucket=mock_bucket),
                         document_import_id=DocumentImportId(s3_uri.stem),
                         vespa_connection_pool=vespa_connection_pool,
                     )
 
                 assert "Mocked error" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_run_indexing_from_aggregate_results(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    s3_prefix_inference_results: str,
+) -> None:
+    """Test that we loaded the inference results from the mock bucket."""
+
+    document_import_ids = [
+        DocumentImportId(Path(file_key).stem)
+        for file_key in mock_bucket_inference_results.keys()
+    ]
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    config = Config(
+        cache_bucket=mock_bucket,
+    )
+
+    with patch(
+        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        await run_indexing_from_aggregate_results(
+            run_output_identifier=run_output_identifier,
+            document_import_ids=document_import_ids,
+            config=config,
+        )
+
+        # Verify that the final data in vespa matches the expected results
+        async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+            for file_key in mock_bucket_inference_results.keys():
+                doc_id = DocumentImportId(Path(file_key).stem)
+
+                passages_generator = get_document_passages_from_vespa__generator(
+                    document_import_id=doc_id,
+                    vespa_connection_pool=vespa_connection_pool,
+                )
+
+                # Get all indexed passages for this document
+                final_passages = {}
+                async for vespa_passages in passages_generator:
+                    final_passages.update(vespa_passages)
+
+                # Find the corresponding file for this document ID
+                expected_concepts = mock_bucket_inference_results[file_key]
+
+                # Assert all text blocks were indexed with their concepts
+                assert set(final_passages.keys()) == set(expected_concepts.keys()), (
+                    f"Text blocks in Vespa don't match expected text blocks for document {doc_id}"
+                )
+
+                # Check each passage has the correct concepts
+                for text_block_id, (_, vespa_passage) in final_passages.items():
+                    vespa_passage_concepts = vespa_passage.concepts or []
+                    # When parent concepts is empty we are loading it as None from Vespa
+                    # as opposed to an empty list.
+                    for concept in vespa_passage_concepts:
+                        if concept.parent_concepts is None:
+                            concept.parent_concepts = []
+
+                    passage_expected_concepts = [
+                        VespaConcept.model_validate(c)
+                        for c in expected_concepts[text_block_id]
+                    ]
+
+                    assert len(vespa_passage_concepts) == len(
+                        passage_expected_concepts
+                    ), (
+                        f"Passage {text_block_id} has {len(vespa_passage_concepts)} concepts, "
+                        f"expected {len(passage_expected_concepts)}"
+                    )
+
+                    for concept in vespa_passage_concepts:
+                        assert concept in passage_expected_concepts, (
+                            f"Concept {concept} not found in expected concepts for passage "
+                            f"{text_block_id}."
+                        )

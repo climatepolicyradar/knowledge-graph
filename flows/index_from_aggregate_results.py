@@ -1,21 +1,33 @@
 import json
-from typing import Any
+import os
+import tempfile
+from typing import Any, Final
 
 import boto3
+import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import task
+from prefect import flow
 from prefect.logging import get_run_logger
+from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import DocumentImportId, S3Uri
+from flows.aggregate_inference_results import (
+    Config,
+    DocumentImportId,
+    RunOutputIdentifier,
+)
 from flows.boundary import (
+    VESPA_MAX_TIMEOUT_MS,
     TextBlockId,
     VespaDataId,
     VespaHitId,
     get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa__generator,
+    get_vespa_search_adapter_from_aws_secrets,
 )
+
+DEFAULT_INDEXER_MAX_CONNECTIONS: Final[PositiveInt] = 50
 
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
@@ -44,9 +56,10 @@ async def _update_vespa_passage_concepts(
     return response
 
 
-@task
+@flow
 async def index_aggregate_results_from_s3_to_vespa(
-    s3_uri: S3Uri,
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
 ) -> None:
@@ -54,9 +67,16 @@ async def index_aggregate_results_from_s3_to_vespa(
 
     logger = get_run_logger()
 
-    logger.info(f"Loading aggregated inference results from S3: {s3_uri}")
+    aggregated_results_key = os.path.join(
+        config.aggregate_inference_results_prefix,
+        run_output_identifier,
+        f"{document_import_id}.json",
+    )
+    logger.info(
+        f"Loading aggregated inference results from S3: {aggregated_results_key}"
+    )
     aggregated_inference_results = load_json_data_from_s3(
-        bucket=s3_uri.bucket, key=s3_uri.key
+        bucket=config.cache_bucket_str, key=aggregated_results_key
     )
 
     passages_generator = get_document_passages_from_vespa__generator(
@@ -101,3 +121,47 @@ async def index_aggregate_results_from_s3_to_vespa(
         f"{document_import_id} into Vespa. "
         f"Total passages updated: {len(aggregated_inference_results)}"
     )
+
+
+@flow
+async def run_indexing_from_aggregate_results(
+    run_output_identifier: RunOutputIdentifier,
+    document_import_ids: list[DocumentImportId],
+    config: Config | None = None,
+) -> None:
+    """Index aggregated inference results from a list of S3 URIs into Vespa."""
+
+    logger = get_run_logger()
+
+    if config is None:
+        config = await Config.create()
+
+    if not document_import_ids:
+        raise NotImplementedError(
+            "No document import IDs provided. "
+            "This flow is not designed to run without them."
+        )
+
+    temp_dir = tempfile.TemporaryDirectory()
+    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+        cert_dir=temp_dir.name,
+        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+    )
+
+    async with (
+        vespa_search_adapter.client.asyncio(
+            connections=DEFAULT_INDEXER_MAX_CONNECTIONS,  # How many tasks to have running at once
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
+        ) as vespa_connection_pool
+    ):
+        for document_import_id in document_import_ids:
+            logger.info(
+                f"Indexing aggregated results for document: {document_import_id}"
+            )
+            await index_aggregate_results_from_s3_to_vespa(
+                config=config,
+                run_output_identifier=run_output_identifier,
+                document_import_id=document_import_id,
+                vespa_connection_pool=vespa_connection_pool,
+            )

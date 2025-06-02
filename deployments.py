@@ -28,6 +28,9 @@ from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
 )
+from flows.index_from_aggregate_results import (
+    run_indexing_from_aggregate_results,
+)
 from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
@@ -138,6 +141,11 @@ create_deployment(
 create_deployment(
     flow=index_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in S3 into Vespa",
+)
+
+create_deployment(
+    flow=run_indexing_from_aggregate_results,
+    description="Index aggregated inference results from S3 into Vespa",
 )
 
 # De-index
