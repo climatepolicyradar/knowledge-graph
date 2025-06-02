@@ -153,7 +153,7 @@ async def test_run_indexing_from_aggregate_results(
     """Test that we loaded the inference results from the mock bucket."""
 
     document_import_ids = [
-        DocumentImportId(S3Uri(bucket=mock_bucket, key=file_key).stem)
+        DocumentImportId(Path(file_key).stem)
         for file_key in mock_bucket_inference_results.keys()
     ]
     run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
@@ -170,3 +170,53 @@ async def test_run_indexing_from_aggregate_results(
             document_import_ids=document_import_ids,
             config=config,
         )
+
+        # Verify that the final data in vespa matches the expected results
+        async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+            for file_key in mock_bucket_inference_results.keys():
+                doc_id = DocumentImportId(Path(file_key).stem)
+
+                passages_generator = get_document_passages_from_vespa__generator(
+                    document_import_id=doc_id,
+                    vespa_connection_pool=vespa_connection_pool,
+                )
+
+                # Get all indexed passages for this document
+                final_passages = {}
+                async for vespa_passages in passages_generator:
+                    final_passages.update(vespa_passages)
+
+                # Find the corresponding file for this document ID
+                expected_concepts = mock_bucket_inference_results[file_key]
+
+                # Assert all text blocks were indexed with their concepts
+                assert set(final_passages.keys()) == set(expected_concepts.keys()), (
+                    f"Text blocks in Vespa don't match expected text blocks for document {doc_id}"
+                )
+
+                # Check each passage has the correct concepts
+                for text_block_id, (_, vespa_passage) in final_passages.items():
+                    vespa_passage_concepts = vespa_passage.concepts or []
+                    # When parent concepts is empty we are loading it as None from Vespa
+                    # as opposed to an empty list.
+                    for concept in vespa_passage_concepts:
+                        if concept.parent_concepts is None:
+                            concept.parent_concepts = []
+
+                    passage_expected_concepts = [
+                        VespaConcept.model_validate(c)
+                        for c in expected_concepts[text_block_id]
+                    ]
+
+                    assert len(vespa_passage_concepts) == len(
+                        passage_expected_concepts
+                    ), (
+                        f"Passage {text_block_id} has {len(vespa_passage_concepts)} concepts, "
+                        f"expected {len(passage_expected_concepts)}"
+                    )
+
+                    for concept in vespa_passage_concepts:
+                        assert concept in passage_expected_concepts, (
+                            f"Concept {concept} not found in expected concepts for passage "
+                            f"{text_block_id}."
+                        )
