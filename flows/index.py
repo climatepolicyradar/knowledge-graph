@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
@@ -8,6 +9,7 @@ from prefect.logging import get_run_logger
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
     DEFAULT_DOCUMENTS_BATCH_SIZE,
+    DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
     DEFAULT_UPDATES_TASK_BATCH_SIZE,
     Operation,
     s3_paths_or_s3_prefixes,
@@ -20,9 +22,13 @@ from flows.utils import (
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
+    disallow_latest_alias,
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=10).total_seconds())
 
 
 @dataclass()
@@ -66,6 +72,8 @@ class Config:
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=None,
+    log_prints=True,
 )
 async def index_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec] | None = None,
@@ -73,6 +81,7 @@ async def index_labelled_passages_from_s3_to_vespa(
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexing_task_batch_size: int = DEFAULT_UPDATES_TASK_BATCH_SIZE,
+    text_update_task_batch_size: int = DEFAULT_TEXT_BLOCKS_BATCH_SIZE,
 ) -> None:
     """
     Asynchronously index concepts from S3 into Vespa.
@@ -82,23 +91,23 @@ async def index_labelled_passages_from_s3_to_vespa(
     file in the specified S3 path is expected to represent the
     document's import ID.
     """
-    logger = get_run_logger()
-
     if not config:
-        logger.info("no config provided, creating one")
+        print("no config provided, creating one")
 
         config = await Config.create()
     else:
-        logger.info("config provided")
+        print("config provided")
     assert config.cache_bucket
 
-    logger.info(f"running with config: {config}")
+    print(f"running with config: {config}")
 
     if classifier_specs is None:
-        logger.info("no classifier specs. passed in, loading from file")
+        print("no classifier specs. passed in, loading from file")
         classifier_specs = parse_spec_file(config.aws_env)
 
-    logger.info(f"running with classifier specs: {classifier_specs}")
+    disallow_latest_alias(classifier_specs)
+
+    print(f"running with classifier specs: {classifier_specs}")
 
     s3_accessor = s3_paths_or_s3_prefixes(
         classifier_specs,
@@ -107,7 +116,7 @@ async def index_labelled_passages_from_s3_to_vespa(
         config.document_source_prefix,
     )
 
-    logger.info(f"s3_prefixes: {s3_accessor.prefixes}, s3_paths: {s3_accessor.paths}")
+    print(f"Running on: {s3_accessor}")
 
     await updates_by_s3(
         aws_env=config.aws_env,
@@ -116,7 +125,9 @@ async def index_labelled_passages_from_s3_to_vespa(
         s3_paths=s3_accessor.paths,
         batch_size=batch_size,
         updates_task_batch_size=indexing_task_batch_size,
+        text_update_task_batch_size=text_update_task_batch_size,
         as_deployment=config.as_deployment,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
+        vespa_search_adapter=config.vespa_search_adapter,
     )

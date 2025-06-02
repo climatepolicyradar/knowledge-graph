@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "knowledge_graph"
-version = "0.1.5"
+version = "0.4.2"
 description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
@@ -14,18 +14,15 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
-httpx = "^0.26.0"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
 neomodel = "^5.3.3"
-typer = "0.9.4"
 rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 more-itertools = "^10.3.0"
 argilla = ">=2.5"
-prefect = "2.16.8"
-griffe = "0.48.0"
+griffe = "1.5.7"
 cpr-sdk = "^1.17.0"
 wandb = "^0.18.3"
 boto3 = "^1.35.31"
@@ -34,34 +31,24 @@ pyyaml = "^6.0.2"
 nltk = "^3.9.1"
 datasets = "^2.18.0"
 boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
-prefect-slack = "0.2.1"
-async-typer = "^0.1.8"
+typer = "0.15.1"
 schedule = "^1.2.2"
 awscli = "^1.37.24"
+prefect = {extras = ["slack"], version = "^3.3.1"}
+pydantic-ai = "^0.0.53"
+httpx = "^0.28.1"
+tenacity = "^9.1.2"
 
 [tool.poetry.group.transformers]
 optional = true
 
 [tool.poetry.group.transformers.dependencies]
-# Torch CPU versions: https://download.pytorch.org/whl/torch/
-torch = [
-  # Mac x86_64
-  # Pinned to 2.2.2 because pytorch stopped supported intel-macs after 2.2.2: https://github.com/pytorch/pytorch/issues/114602
-  { markers = "sys_platform == 'darwin' and platform_machine == 'x86_64'", url = "https://download.pytorch.org/whl/cpu/torch-2.2.2-cp310-none-macosx_10_9_x86_64.whl" },
-  # Mac arm64
-  { markers = "sys_platform == 'darwin' and platform_machine == 'arm64'", url = "https://download.pytorch.org/whl/cpu/torch-2.4.1-cp310-none-macosx_11_0_arm64.whl" },
-  # Linux
-  { markers = "sys_platform != 'darwin' and platform_machine != 'x86_64'", version = "2.4.1", source = "pytorch" }
-]
+torch = {version = "2.4.1+cpu", source = "pytorch"}
 sentence-transformers = "^3.1.1"
-transformers = "^4.48.1"
+transformers = {extras = ["torch"], version = "^4.51.3"}
+scikit-learn = "^1.6.1"
+accelerate = "^1.6.0"
 
-
-[tool.poetry.group.llm]
-optional = true
-
-[tool.poetry.group.llm.dependencies]
-anthropic = "^0.39.0"
 
 [[tool.poetry.source]]
 name = "pytorch"
@@ -95,7 +82,6 @@ pytest-asyncio = "^0.24.0"
 pulumi = "^3.145.0"
 pulumi-aws = "^6.66.2"
 jinja2 = "^3.1.4"
-typer = "^0.9.4"
 
 
 [tool.pytest.ini_options]
@@ -105,7 +91,8 @@ env = [
   "WIKIBASE_PASSWORD=test_password",
   "WIKIBASE_URL=https://test.test.test"
 ]
-markers = ["vespa", "flaky_on_ci", "transformers"]
+markers = ["vespa", "flaky_on_ci", "transformers", "slow"]
+asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
 requires = ["poetry-core"]

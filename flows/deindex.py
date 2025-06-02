@@ -1,12 +1,13 @@
 import asyncio
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 
 import boto3
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 
 import scripts.update_classifier_spec
@@ -30,8 +31,13 @@ from scripts.cloud import (
 )
 from src.identifiers import WikibaseID
 
-DEFAULT_DOCUMENTS_BATCH_SIZE = 500
-DEFAULT_DEINDEXING_TASK_BATCH_SIZE = 20
+DEFAULT_DOCUMENTS_BATCH_SIZE = 250
+DEFAULT_DEINDEXING_TASK_BATCH_SIZE = 10
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
+# A singular task doing one thing
+TASK_TIMEOUT_S: int = int(timedelta(minutes=30).total_seconds())
 
 
 @dataclass()
@@ -90,8 +96,6 @@ def find_all_classifier_specs_for_latest(
     Example:
     `Q200:latest` is passed, and in our artifacts we have versions
     `v3`, `v4`, and `v7`. `v7` is otherwise the latest AKA primary version.
-
-    We'd
 
     [1] In S3 for labelled passages and concepts counts and the
     corollaries in Vespa.
@@ -194,7 +198,7 @@ def search_s3_for_aliases(
     return list(aliases)
 
 
-@flow
+@flow(timeout_seconds=TASK_TIMEOUT_S)
 async def run_cleanup_objects_for_batch(
     documents_batch: list[DocumentImporter],
     documents_batch_num: int,
@@ -237,7 +241,7 @@ async def cleanup_objects_for_batch_flow_or_deployment(
         flow_name = function_to_flow_name(run_cleanup_objects_for_batch)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        flow_run: FlowRun = await run_deployment(
+        return await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "documents_batch": documents_batch,
@@ -245,10 +249,9 @@ async def cleanup_objects_for_batch_flow_or_deployment(
                 "cache_bucket": cache_bucket,
                 "concepts_counts_prefix": concepts_counts_prefix,
             },
-            timeout=3600,
+            # Rely on the flow's own timeout
+            timeout=None,
         )
-
-        return flow_run
 
     return await run_cleanup_objects_for_batch(
         documents_batch=documents_batch,
@@ -258,7 +261,7 @@ async def cleanup_objects_for_batch_flow_or_deployment(
     )
 
 
-@flow
+@flow(timeout_seconds=PARENT_TIMEOUT_S)
 async def cleanups_by_s3(
     batch_size: int,
     cleanups_task_batch_size: int,
@@ -349,6 +352,7 @@ async def cleanups_by_s3(
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def deindex_labelled_passages_from_s3_to_vespa(
     classifier_specs: list[ClassifierSpec],
@@ -446,4 +450,5 @@ async def deindex_labelled_passages_from_s3_to_vespa(
         as_deployment=config.as_deployment,
         cache_bucket=config.cache_bucket,
         concepts_counts_prefix=config.concepts_counts_prefix,
+        vespa_search_adapter=config.vespa_search_adapter,
     )

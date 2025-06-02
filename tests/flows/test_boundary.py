@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -6,26 +7,43 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.logging import disable_run_logger
+from vespa.exceptions import VespaError
+from vespa.io import VespaQueryResponse
+from vespa.package import Document, Schema
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    DEFAULT_DOCUMENTS_BATCH_SIZE,
+    VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
+    VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
+    TextBlockId,
+    _update_text_block,
     convert_labelled_passage_to_concepts,
+    get_continuation_tokens_from_query_response,
     get_data_id_from_vespa_hit_id,
+    get_document_passage_from_vespa,
     get_document_passages_from_vespa,
+    get_document_passages_from_vespa__generator,
     get_parent_concepts_from_concept,
+    get_text_block_id_from_vespa_data_id,
+    get_vespa_passages_from_query_response,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
+    remove_concepts_from_existing_vespa_concepts,
     s3_obj_generator,
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
+    update_concepts_on_existing_vespa_concepts,
     updates_by_s3,
 )
 from flows.index import Config
@@ -43,7 +61,7 @@ DATA_ID_PATTERN = re.compile(r"[a-zA-Z]+.[a-zA-Z]+.\d+.\d+.\d+")
 
 
 def test_get_data_id_from_vespa_hit_id() -> None:
-    """Test that we can extract the data ID from a vespa hit id."""
+    """Test that we can extract the data ID from a Vespa hit ID."""
     assert (
         DATA_ID_PATTERN.match(
             get_data_id_from_vespa_hit_id(
@@ -52,6 +70,22 @@ def test_get_data_id_from_vespa_hit_id() -> None:
         )
         is not None
     )
+
+
+def test_get_text_block_id_from_vespa_data_id():
+    assert (
+        get_text_block_id_from_vespa_data_id("CCLW.executive.10014.4470.1273") == "1273"
+    )
+
+
+def test_get_text_block_id_from_vespa_data_id_raises():
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "received 6 splits, when expecting 5: ['CCLW', 'executive', '10014', '4470', '1273', '777']"
+        ),
+    ):
+        get_text_block_id_from_vespa_data_id("CCLW.executive.10014.4470.1273.777")
 
 
 def test_vespa_search_adapter_from_aws_secrets(
@@ -142,11 +176,10 @@ def test_convert_labelled_passges_to_concepts(
     assert all([isinstance(concept, VespaConcept) for concept in concepts])
 
 
-def test_convert_labelled_passges_to_concepts_raises_error(
+def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
     example_labelled_passages: list[LabelledPassage],
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Test that we correctly log errors when a Span has no concept ID or timestamps."""
+    """Test that we ignore a Span has no concept ID or timestamps."""
     # Add a span without concept_id
     example_labelled_passages[0].spans.append(
         Span(
@@ -163,18 +196,13 @@ def test_convert_labelled_passges_to_concepts_raises_error(
             text="Test text.",
             start_index=0,
             end_index=8,
-            concept_id="Q123",
+            concept_id=WikibaseID("Q123"),
             labellers=[],
             timestamps=[],  # Empty timestamps
         )
     )
 
     concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
-
-    # Check that appropriate error messages were logged
-    error_messages = [r.message for r in caplog.records if r.levelname == "ERROR"]
-    assert any("span concept ID is missing" in msg for msg in error_messages)
-    assert any("span timestamps are missing" in msg for msg in error_messages)
 
     # Verify that the problematic spans were skipped but valid one was processed
     assert len(concepts) == 1
@@ -365,18 +393,50 @@ def test_s3_obj_generator_valid_cases(
 
 
 @pytest.mark.vespa
-def test_get_document_passages_from_vespa(
+def test_get_document_passage_from_vespa(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    """Test that we can retrieve a passage for a document in vespa."""
+
+    # Test that we retrieve no passages for a document that doesn't exist
+    with pytest.raises(
+        ValueError, match="Expected 1 document passage for text block `00001`, got 0"
+    ):
+        get_document_passage_from_vespa(
+            text_block_id="00001",  # This text block doesn't exist
+            document_import_id="test.executive.1.1",  # This document doesn't exist
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+    # Test that we can retrieve all the passages for a document that does exist
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id="1457",
+        document_import_id="CCLW.executive.10014.4470",
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    assert isinstance(document_passage, VespaPassage)
+    assert isinstance(document_passage_id, str)
+    assert DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(document_passage_id)
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_get_some_document_passages_from_vespa(
     local_vespa_search_adapter: VespaSearchAdapter,
     document_passages_test_data_file_path: str,
     vespa_app,
 ) -> None:
-    """Test that we can retrieve all the passages for a document in vespa."""
+    """Test that we can retrieve some of the passages for a document in vespa."""
 
     # Test that we retrieve no passages for a document that doesn't exist
-    document_passages = get_document_passages_from_vespa(
-        document_import_id="test.executive.1.1",
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            text_blocks_ids=["test_33"],
+            document_import_id="test.executive.1.1",
+            vespa_connection_pool=vespa_connection_pool,
+        )
 
     assert document_passages == []
 
@@ -386,19 +446,22 @@ def test_get_document_passages_from_vespa(
     with open(document_passages_test_data_file_path) as f:
         document_passage_test_data = json.load(f)
 
-    family_document_passages_count_expected = sum(
-        1
+    text_blocks_ids: list[TextBlockId] = [
+        doc["fields"]["text_block_id"]
         for doc in document_passage_test_data
         if doc["fields"]["family_document_ref"]
         == f"id:doc_search:family_document::{document_import_id}"
-    )
+    ]
 
-    document_passages = get_document_passages_from_vespa(
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
+    family_document_passages_count_expected = len(text_blocks_ids)
 
-    assert len(document_passages) > 0
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=text_blocks_ids,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
     assert len(document_passages) == family_document_passages_count_expected
     assert all(
         [
@@ -410,6 +473,97 @@ def test_get_document_passages_from_vespa(
             for passage_id, passage in document_passages
         ]
     )
+
+    # Test that we can retrieve only some of the passages for a document that does exist
+    less_expected = 5
+    family_document_passages_count_expected = (
+        family_document_passages_count_expected - less_expected
+    )
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=text_blocks_ids[less_expected:],
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+    assert len(document_passages) == family_document_passages_count_expected
+    assert all(
+        [
+            (
+                type(passage) is VespaPassage
+                and type(passage_id) is str
+                and bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
+            )
+            for passage_id, passage in document_passages[less_expected:]
+        ]
+    )
+
+    # Test that we can construct a query with the configured total text blocks for use
+    # in the equivalent operator part of the query.
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        _ = await get_document_passages_from_vespa(
+            document_import_id="test.executive.1.1",
+            text_blocks_ids=["test_33"] * VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_all_get_document_passages_from_vespa(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    document_passages_test_data_file_path: str,
+    vespa_app,
+) -> None:
+    """Test that we can retrieve all the passages for a document in Vespa."""
+    document_import_id = "CCLW.executive.10014.4470"
+
+    with open(document_passages_test_data_file_path) as f:
+        document_passage_test_data = json.load(f)
+
+    text_blocks_ids: list[TextBlockId] = [
+        doc["fields"]["text_block_id"]
+        for doc in document_passage_test_data
+        if doc["fields"]["family_document_ref"]
+        == f"id:doc_search:family_document::{document_import_id}"
+    ]
+
+    family_document_passages_count_expected = len(text_blocks_ids)
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        document_passages = await get_document_passages_from_vespa(
+            document_import_id=document_import_id,
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+    assert len(document_passages) == family_document_passages_count_expected
+    assert all(
+        [
+            (
+                type(passage) is VespaPassage
+                and type(passage_id) is str
+                and bool(DOCUMENT_PASSAGE_ID_PATTERN.fullmatch(passage_id))
+            )
+            for passage_id, passage in document_passages
+        ]
+    )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_get_document_passages_from_vespa_over_limit(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    with pytest.raises(ValueError, match="50001 text block IDs exceeds 50000"):
+        async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+            _ = await get_document_passages_from_vespa(
+                text_blocks_ids=["test_33"] * (VESPA_MAX_LIMIT + 1),
+                document_import_id="test.executive.1.1",
+                vespa_connection_pool=vespa_connection_pool,
+            )
 
 
 @pytest.mark.asyncio
@@ -443,6 +597,7 @@ async def test_updates_by_s3_with_s3_paths(
         as_deployment=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+        vespa_search_adapter=local_vespa_search_adapter,
     )
 
     final_passages_response = local_vespa_search_adapter.client.query(
@@ -454,7 +609,48 @@ async def test_updates_by_s3_with_s3_paths(
 
     assert initial_concepts_count < final_concepts_count
     # Original + fixture (.tests/flows/fixtures/*.json)
-    assert final_concepts_count == 3933
+    assert final_concepts_count == 3935
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_updates_by_s3_with_s3_prefixes(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    """We can successfully index labelled passages from S3 into Vespa."""
+    initial_passages_response = local_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    initial_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
+    )
+
+    await updates_by_s3(
+        partial_update_flow=Operation.INDEX,
+        aws_env=AwsEnv.sandbox,
+        s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
+        s3_paths=None,
+        as_deployment=False,
+        cache_bucket=mock_bucket,
+        concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    final_passages_response = local_vespa_search_adapter.client.query(
+        yql="select * from document_passage where true"
+    )
+    final_concepts_count = sum(
+        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
+    )
+
+    assert initial_concepts_count < final_concepts_count
+    # Original + fixture (.tests/flows/fixtures/*.json)
+    assert final_concepts_count == 3935
 
 
 @pytest.mark.asyncio
@@ -491,6 +687,40 @@ async def test_updates_by_s3_task_failure(
             as_deployment=False,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+async def test_updates_by_s3_task_unexpected_result(
+    mock_bucket,
+    mock_bucket_labelled_passages,
+    s3_prefix_labelled_passages,
+    labelled_passage_fixture_files,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+) -> None:
+    """Test that index_by_s3 handles unexpected results gracefully."""
+    with (
+        patch(
+            "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
+            # Force a value that's not a valid type of result
+            return_value=0,
+        ),
+        pytest.raises(ValueError, match="there was at least 1 task that failed"),
+    ):
+        await updates_by_s3(
+            partial_update_flow=Operation.INDEX,
+            aws_env=AwsEnv.sandbox,
+            s3_prefixes=[
+                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
+            ],
+            s3_paths=None,
+            as_deployment=False,
+            cache_bucket=mock_bucket,
+            concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            vespa_search_adapter=local_vespa_search_adapter,
         )
 
 
@@ -818,3 +1048,214 @@ def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
             },
         )
     ]
+
+
+def test_get_continuation_tokens_from_query_response(
+    mock_vespa_query_response: VespaQueryResponse,
+    mock_vespa_query_response_no_continuation_token: VespaQueryResponse,
+) -> None:
+    """Test that we can get the next continuation tokens from a vespa response."""
+
+    continuation_tokens = get_continuation_tokens_from_query_response(
+        mock_vespa_query_response
+    )
+    assert continuation_tokens == ["BGAAABEDBJGBC"]
+
+    continuation_tokens = get_continuation_tokens_from_query_response(
+        mock_vespa_query_response_no_continuation_token
+    )
+    assert continuation_tokens is None
+
+
+def test_get_vespa_passages_from_query_response(
+    mock_vespa_query_response: VespaQueryResponse,
+) -> None:
+    """Test that we can get the passages from a vespa response."""
+
+    passages = get_vespa_passages_from_query_response(mock_vespa_query_response)
+    assert len(passages) == 1
+    assert isinstance(passages, dict)
+
+    passage = list(passages.values())[0]
+    assert isinstance(passage[0], str)
+    assert isinstance(passage[1], VespaPassage)
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_get_document_passages_from_vespa__generator(
+    document_passages_test_data_file_path: str,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    vespa_lower_max_hit_limit: int,
+    vespa_lower_max_hit_limit_query_profile_name: str,
+):
+    """Test that we can successfully utilise pagination with continuation tokens."""
+
+    grouping_max = 10
+    document_import_id = "CCLW.executive.10014.4470"
+
+    with open(document_passages_test_data_file_path) as f:
+        document_passage_test_data = json.load(f)
+
+    document_passages_count = len(
+        [
+            i["fields"]["family_document_ref"]
+            for i in document_passage_test_data
+            if document_import_id in i["fields"]["family_document_ref"]
+        ]
+    )
+
+    assert document_passages_count > vespa_lower_max_hit_limit, (
+        "the fixture has insufficient document passages to validate the test case"
+    )
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        passages_generator = get_document_passages_from_vespa__generator(
+            document_import_id=document_import_id,
+            vespa_connection_pool=vespa_connection_pool,
+            grouping_max=grouping_max,
+            query_profile=vespa_lower_max_hit_limit_query_profile_name,
+        )
+
+        responses = []
+        async for vespa_passages in passages_generator:
+            responses.append(vespa_passages)
+
+        assert len(responses) > 1  # Validate that we did paginate
+        for vespa_passages in responses:
+            assert isinstance(vespa_passages, dict)
+            assert 0 <= len(vespa_passages) <= grouping_max
+            for passage in vespa_passages.items():
+                assert isinstance(passage[1][0], str)
+                assert isinstance(passage[1][1], VespaPassage)
+
+    assert (
+        sum(len(vespa_passages) for vespa_passages in responses)
+        == document_passages_count
+    )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_lower_max_hits_query_profile(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_lower_max_hit_limit: int,
+    vespa_lower_max_hit_limit_query_profile_name: str,
+) -> None:
+    """Test that we can successfully use the lower_max_hits query profile."""
+
+    hits_within_limit = int(vespa_lower_max_hit_limit / 2)
+    hits_beyond_limit = int(vespa_lower_max_hit_limit * 2)
+
+    query: qb.Query = (
+        qb.select("*")  # type: ignore
+        .from_(
+            Schema(name="document_passage", document=Document()),
+        )
+        .where(True)
+    )
+
+    # Confirm that we don't raise below limits
+    _: VespaQueryResponse = local_vespa_search_adapter.client.query(
+        yql=query,
+        queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+        hits=hits_within_limit,
+    )
+
+    # Confirm that we raise above limits
+    with pytest.raises(VespaError) as excinfo:
+        local_vespa_search_adapter.client.query(
+            yql=query,
+            queryProfile=vespa_lower_max_hit_limit_query_profile_name,
+            hits=hits_beyond_limit,
+        )
+
+    error_info = excinfo.value.args[0][0]
+    assert error_info["code"] == 3
+    assert error_info["summary"] == "Illegal query"
+    assert f"{hits_beyond_limit} hits requested" in error_info["message"]
+    assert "configured limit" in error_info["message"]
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test__update_text_block__update(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    example_vespa_concepts,
+) -> None:
+    text_block_id = TextBlockId("1457")
+    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
+
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id=text_block_id,
+        document_import_id=document_import_id,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        (
+            vespa_response,
+            text_block_id_response,
+            document_import_id_response,
+        ) = await _update_text_block(
+            semaphore=semaphore,
+            text_block_id=text_block_id,
+            document_passage_id=document_passage_id,
+            document_passage=document_passage,
+            merge_serialise_concepts_cb=update_concepts_on_existing_vespa_concepts,
+            concepts=example_vespa_concepts,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+        assert text_block_id == text_block_id_response
+        assert (
+            "id:doc_search:document_passage::CCLW.executive.10014.4470.1457"
+            == document_import_id_response
+        )
+        assert vespa_response.is_successful()
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test__update_text_block__remove(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    example_vespa_concepts,
+) -> None:
+    text_block_id = TextBlockId("1457")
+    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
+
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id=text_block_id,
+        document_import_id=document_import_id,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        (
+            vespa_response,
+            text_block_id_response,
+            document_import_id_response,
+        ) = await _update_text_block(
+            semaphore=semaphore,
+            text_block_id=text_block_id,
+            document_passage_id=document_passage_id,
+            document_passage=document_passage,
+            merge_serialise_concepts_cb=remove_concepts_from_existing_vespa_concepts,
+            concepts=example_vespa_concepts,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+        assert text_block_id == text_block_id_response
+        assert (
+            "id:doc_search:document_passage::CCLW.executive.10014.4470.1457"
+            == document_import_id_response
+        )
+        assert vespa_response.is_successful()

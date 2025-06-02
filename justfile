@@ -17,9 +17,13 @@ install +OPTS="":
 test +OPTS="":
     poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}}
 
-# test the project, excluding tests that rely on a local vespa instance
+# test the project, excluding tests that rely on a local Vespa instance
 test-without-vespa +OPTS="":
     poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
+
+# test the project, excluding slow tests
+test-without-slow +OPTS="":
+    poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
 
 # update the snapshots for the tests
 test-snapshot-update:
@@ -150,3 +154,21 @@ serve-static-site tool:
 # Generate a static site
 generate-static-site tool:
     poetry run python -m static_sites.{{tool}}
+
+# Deploy (Get, train & deploy) new models to primary for the given AWS environment.
+deploy-classifiers aws_env ids:
+    #!/bin/bash
+    set -e
+
+    # Convert the ids argument to a list of --wikibase-id arguments
+    ids_args=""
+    for id in {{ids}}; do
+      ids_args="$ids_args --wikibase-id $id"
+    done
+
+    poetry run python scripts/deploy.py new \
+        --to-aws-env {{aws_env}} \
+        $ids_args \
+        --get \
+        --train \
+        --promote

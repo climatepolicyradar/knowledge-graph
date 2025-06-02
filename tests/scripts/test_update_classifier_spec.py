@@ -10,7 +10,8 @@ from scripts.cloud import AwsEnv, ClassifierSpec
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
     is_concept_model,
-    is_latest_model_in_env,
+    model_artifact_is_primary,
+    model_seen_in_env,
     parse_spec_file,
     read_spec_file,
     sort_specs,
@@ -38,6 +39,7 @@ def mock_wandb_api():
             mock_artifact = Mock()
             mock_artifact.name = f"{model_data['name']}:v1"
             mock_artifact.metadata = {"aws_env": model_data["env"]}
+            mock_artifact.aliases = ["latest", "sandbox"]
 
             mock_collection = Mock()
             mock_collection.name = model_data["name"]
@@ -76,8 +78,8 @@ def test_is_latest_model_in_env():
         ClassifierSpec(name="Q22", alias="v1"),
         ClassifierSpec(name="Q11", alias="v2"),
     ]
-    assert not is_latest_model_in_env(classifier_specs, model_name="Q11")
-    assert is_latest_model_in_env(classifier_specs, model_name="Q33")
+    assert model_seen_in_env(classifier_specs, model_name="Q11")
+    assert not model_seen_in_env(classifier_specs, model_name="Q33")
 
 
 def test_get_all_available_classifiers(mock_wandb_api):
@@ -160,6 +162,7 @@ def test_sort_specs():
     unsorted_specs = [
         ClassifierSpec(name="Q123", alias="v4"),
         ClassifierSpec(name="Q789", alias="v1"),
+        ClassifierSpec(name="Q1023", alias="v2"),
         ClassifierSpec(name="Q456", alias="v30"),
         ClassifierSpec(name="Q999", alias="v3"),
         ClassifierSpec(name="Q111", alias="v3"),
@@ -171,4 +174,16 @@ def test_sort_specs():
         ClassifierSpec(name="Q456", alias="v30"),
         ClassifierSpec(name="Q789", alias="v1"),
         ClassifierSpec(name="Q999", alias="v3"),
+        ClassifierSpec(name="Q1023", alias="v2"),
     ]
+
+
+@pytest.mark.parametrize(
+    "aliases,aws_env,expected",
+    [
+        ([AwsEnv.sandbox.value, "latest"], AwsEnv.sandbox, True),
+        ([], AwsEnv.staging, False),
+    ],
+)
+def test_model_artifact_is_primary(aliases, aws_env, expected):
+    assert model_artifact_is_primary(aliases=aliases, aws_env=aws_env) == expected

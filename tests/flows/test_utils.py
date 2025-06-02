@@ -1,4 +1,6 @@
 import os
+import re
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -8,6 +10,7 @@ import pytest
 from flows.utils import (
     SlackNotify,
     file_name_from_path,
+    filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
@@ -29,8 +32,8 @@ def test_file_name_from_path(path, expected):
     assert file_name_from_path(path) == expected
 
 
-def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
-    SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
+async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
+    await SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
     mock_SlackWebhook, mock_prefect_slack_block = mock_prefect_slack_webhook
 
     # `.load`
@@ -42,10 +45,9 @@ def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
     mock_prefect_slack_block.notify.assert_called_once()
     kwargs = mock_prefect_slack_block.notify.call_args.kwargs
     message = kwargs.get("body", "")
-    assert message == (
-        "Flow run TestFlow/TestFlowRun observed in state `Completed` at "
-        "2025-01-28T12:00:00+00:00. For environment: sandbox. Flow run URL: "
-        "None/flow-runs/flow-run/test-flow-run-id. State message: message"
+    assert re.match(
+        r"Flow run TestFlow/TestFlowRun observed in state `Completed` at 2025-01-28T12:00:00\+00:00\. For environment: sandbox\. Flow run URL: http://127\.0\.0\.1:\d+/flow-runs/flow-run/test-flow-run-id\. State message: message",
+        message,
     )
 
 
@@ -167,3 +169,56 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
             f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )
+
+
+def test_filter_non_english_file_stems() -> None:
+    """Test that we can successfully filter out non-English file stems."""
+
+    # Test we can filter out non-English file stems
+    file_stems = [
+        "AF.document.002MMUCR.n0000",
+        "AF.document.AFRDG00038.n0000_translated_en",
+        "AF.document.AFRDG00038.n0000",
+        "CCLW.document.i00001313.n0000",
+        "CCLW.executive.10491.5394",
+        "CCLW.executive.rtl_98.rtl_338",
+        "CCLW.executive.rtl_98.rtl_338_translated_en",
+        "CCLW.legislative.1046.0",
+        "CPR.document.i00000918.n0000",
+        "GCF.document.FP018_13290.6302",
+        "GEF.document.2480.n0000_translated_en",
+        "GEF.document.2480.n0000",
+        "OEP.document.i00000157.n0000",
+        "UNFCCC.document.i00000546.n0000",
+        "UNFCCC.non-party.1243.0",
+    ]
+
+    filtered_file_stems = filter_non_english_language_file_stems(file_stems=file_stems)
+
+    assert filtered_file_stems == [
+        "AF.document.002MMUCR.n0000",
+        "AF.document.AFRDG00038.n0000_translated_en",
+        "CCLW.document.i00001313.n0000",
+        "CCLW.executive.10491.5394",
+        "CCLW.executive.rtl_98.rtl_338_translated_en",
+        "CCLW.legislative.1046.0",
+        "CPR.document.i00000918.n0000",
+        "GCF.document.FP018_13290.6302",
+        "GEF.document.2480.n0000_translated_en",
+        "OEP.document.i00000157.n0000",
+        "UNFCCC.document.i00000546.n0000",
+        "UNFCCC.non-party.1243.0",
+    ]
+
+    # Test that we can filter quickly even on very long lists
+    file_stems = []
+    for i in list(range(7_000)):
+        file_stems.append(f"AF.document.{i}.n0000")
+        if i % 2 == 0:
+            file_stems.append(f"AF.document.{i}.n0000_translated_en")
+
+    start_time = time.time()
+    _ = filter_non_english_language_file_stems(file_stems=file_stems)
+    end_time = time.time()
+
+    assert end_time - start_time < 1, "Filtering took too long"

@@ -1,15 +1,16 @@
 import asyncio
 import json
 import os
+import tempfile
 from collections import Counter, defaultdict
-from collections.abc import Awaitable
 from dataclasses import dataclass
+from datetime import timedelta
 
 from cpr_sdk.s3 import _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow, get_run_logger
 from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments.deployments import run_deployment
+from prefect.deployments import run_deployment
 from vespa.io import VespaResponse
 
 from flows.boundary import (
@@ -18,7 +19,7 @@ from flows.boundary import (
     DocumentImportId,
     DocumentObjectUri,
     S3Accessor,
-    get_vespa_search_adapter,
+    get_vespa_search_adapter_from_aws_secrets,
     s3_obj_generator,
     s3_paths_or_s3_prefixes,
 )
@@ -26,6 +27,7 @@ from flows.utils import SlackNotify, iterate_batch
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
+    disallow_latest_alias,
     function_to_flow_name,
     generate_deployment_name,
     get_prefect_job_variable,
@@ -34,6 +36,11 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.concept import Concept
 from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=2).total_seconds())
+# A singular task doing one thing
+TASK_TIMEOUT_S: int = int(timedelta(minutes=30).total_seconds())
 
 DEFAULT_BATCH_SIZE = 50
 
@@ -141,6 +148,7 @@ async def load_parse_concepts_counts(
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=TASK_TIMEOUT_S,
 )
 async def load_update_document_concepts_counts(
     document_import_id: DocumentImportId,
@@ -182,7 +190,7 @@ async def load_update_document_concepts_counts(
         )
 
         for i, result in enumerate(results):
-            current_document_import_id: DocumentImportId = batch[i]
+            current_document_import_id = DocumentImportId(batch[i])
 
             if isinstance(result, Exception):
                 logger.error(
@@ -196,7 +204,14 @@ async def load_update_document_concepts_counts(
 
             logger.info(f"processed batch document object URIs #{batch_num}")
 
-    cm, vespa_search_adapter = get_vespa_search_adapter(vespa_search_adapter)
+    if vespa_search_adapter is None:
+        temp_dir = tempfile.TemporaryDirectory()
+
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+            cert_dir=temp_dir.name,
+            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        )
 
     # Continue on, even if there were failures, as that's accounted for when
     # calculating the concepts' counts.
@@ -207,12 +222,14 @@ async def load_update_document_concepts_counts(
         for concept, count in concepts_counts.items()
     }
 
-    with cm:
-        await partial_update_family_document_concepts_counts(
-            document_import_id,
-            concepts_counts_with_names,
-            vespa_search_adapter,
-        )
+    logger.info(
+        f"Updating: {document_import_id}, in vespa with: {concepts_counts_with_names=}"
+    )
+    await partial_update_family_document_concepts_counts(
+        document_import_id,
+        concepts_counts_with_names,
+        vespa_search_adapter,
+    )
 
     # Now, we finally do a little bit of worrying about
     # failures, so they aren't invisible.
@@ -223,30 +240,31 @@ async def load_update_document_concepts_counts(
     return concepts_counts_with_names
 
 
-def load_update_document_concepts_counts_as(
+async def load_update_document_concepts_counts_as(
     document_import_id: DocumentImportId,
     document_object_uris: list[DocumentObjectUri],
     batch_size: int,
     vespa_search_adapter: VespaSearchAdapter | None,
     aws_env: AwsEnv,
     as_deployment: bool,
-) -> Awaitable[dict[str, int]]:
+) -> FlowRun | dict[str, int]:
     """Run load document concepts either as a subflow or directly."""
     if as_deployment:
         flow_name = function_to_flow_name(load_update_document_concepts_counts)
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
 
-        return run_deployment(
+        return await run_deployment(
             name=f"{flow_name}/{deployment_name}",
             parameters={
                 "document_import_id": document_import_id,
                 "document_object_uris": document_object_uris,
                 "batch_size": batch_size,
             },
-            timeout=1200,
+            # Rely on the flow's own timeout
+            timeout=None,
         )
     else:
-        return load_update_document_concepts_counts(
+        return await load_update_document_concepts_counts(
             document_import_id,
             document_object_uris,
             batch_size,
@@ -274,15 +292,19 @@ def group_documents_uris(
     documents_by_id: dict[DocumentImportId, list[DocumentObjectUri]] = defaultdict(list)
 
     # Group documents by their ID
-    for document_import_id, document_object_uri in documents_generator:
+    for stem, uri in documents_generator:
+        # Convert DocumentStem to DocumentImportId
+        document_import_id = DocumentImportId(stem)
         # Check if URI ends with {document_import_id}.json
         expected_suffix = f"{document_import_id}.json"
 
-        if not document_object_uri.endswith(expected_suffix):
+        if not uri.endswith(expected_suffix):
             # If not, append it
-            document_object_uri = (
-                document_object_uri.rstrip("/") + "/" + expected_suffix
+            document_object_uri = DocumentObjectUri(
+                uri.rstrip("/") + "/" + expected_suffix
             )
+        else:
+            document_object_uri = uri
 
         documents_by_id[document_import_id].append(document_object_uri)
 
@@ -292,6 +314,7 @@ def group_documents_uris(
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
+    timeout_seconds=PARENT_TIMEOUT_S,
 )
 async def count_family_document_concepts(
     classifier_specs: list[ClassifierSpec] | None = None,
@@ -314,6 +337,8 @@ async def count_family_document_concepts(
     if classifier_specs is None:
         logger.info("no classifier specs. passed in, loading from file")
         classifier_specs = parse_spec_file(config.aws_env)
+
+    disallow_latest_alias(classifier_specs)
 
     logger.info(f"running with classifier specs.: {classifier_specs}")
 
@@ -378,7 +403,7 @@ async def count_family_document_concepts(
 
             if isinstance(result, FlowRun):
                 flow_run: FlowRun = result
-                if flow_run.state.type != StateType.COMPLETED:
+                if flow_run.state is None or flow_run.state.type != StateType.COMPLETED:
                     has_failures = True
 
             logger.info(f"processed batch documents #{documents_batch_num}")

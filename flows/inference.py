@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 from collections.abc import Generator
 from dataclasses import dataclass
+from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, TypeAlias
@@ -23,10 +24,15 @@ from prefect.task_runners import ConcurrentTaskRunner
 from pydantic import SecretStr
 from wandb.sdk.wandb_run import Run
 
-from flows.utils import SlackNotify, get_file_stems_for_document_id
+from flows.utils import (
+    SlackNotify,
+    filter_non_english_language_file_stems,
+    get_file_stems_for_document_id,
+)
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
+    disallow_latest_alias,
     function_to_flow_name,
     generate_deployment_name,
     get_prefect_job_variable,
@@ -34,7 +40,12 @@ from scripts.cloud import (
 from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
-from src.span import DateTimeEncoder, Span
+from src.span import Span
+
+# The "parent" AKA the higher level flows that do multiple things
+PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
+# A singular task doing one thing
+TASK_TIMEOUT_S: int = int(timedelta(minutes=60).total_seconds())
 
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
@@ -191,7 +202,10 @@ def determine_file_stems(
     elif use_new_and_updated:
         requested_document_ids = get_latest_ingest_documents(config)
     elif requested_document_ids is None:
-        return current_bucket_file_stems
+        current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
+            file_stems=current_bucket_file_stems
+        )
+        return current_bucket_file_stems__filtered
 
     assert config.cache_bucket
 
@@ -213,8 +227,20 @@ def determine_file_stems(
     return requested_document_stems
 
 
+def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
+    """
+    Remove Sabin document file stems from the list of file stems.
+
+    File stems of the Sabin source follow the below naming convention:
+    - "Sabin.document.16944.17490"
+    """
+    return [
+        stem for stem in file_stems if not stem.startswith(("Sabin", "sabin", "SABIN"))
+    ]
+
+
 def download_classifier_from_wandb_to_local(
-    run: Run, config: Config, classifier_name: str, alias: str = "latest"
+    run: Run, config: Config, classifier_name: str, alias: str
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -300,10 +326,8 @@ def document_passages(
 
 
 def serialise_labels(labels: list[LabelledPassage]) -> BytesIO:
-    data = [label.model_dump() for label in labels]
-
-    # Use the datetime encoder from the span module when dumping to JSON
-    return BytesIO(json.dumps(data, cls=DateTimeEncoder).encode("utf-8"))
+    data = [label.model_dump_json() for label in labels]
+    return BytesIO(json.dumps(data).encode("utf-8"))
 
 
 def store_labels(
@@ -333,12 +357,58 @@ def store_labels(
     )
 
 
+def batch_text_block_inference(
+    classifier: Classifier,
+    all_text: list[str],
+    all_block_ids: list[str],
+    batch_size: int = 10,
+) -> list[LabelledPassage]:
+    """Runs inference and batches the text blocks"""
+
+    outputs = []
+    for batch_idx in range(0, len(all_text), batch_size):
+        text_batch = all_text[batch_idx : batch_idx + batch_size]
+        block_ids = all_block_ids[batch_idx : batch_idx + batch_size]
+
+        outputs.extend(
+            _text_block_inference_for_single_batch(
+                classifier=classifier, text_batch=text_batch, block_ids=block_ids
+            )
+        )
+    return outputs
+
+
+def _text_block_inference_for_single_batch(
+    classifier: Classifier, text_batch: list[str], block_ids: list[str]
+) -> list[LabelledPassage]:
+    """Runs predict on a batch of blocks."""
+    spans: list[list[Span]] = classifier.predict_batch(text_batch)
+
+    labelled_passages = [
+        _get_labelled_passage_from_prediction(classifier, spans, block_id, text)
+        for spans, block_id, text in zip(spans, block_ids, text_batch)
+    ]
+
+    return labelled_passages
+
+
 def text_block_inference(
     classifier: Classifier, block_id: str, text: str
 ) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
 
+    labelled_passage = _get_labelled_passage_from_prediction(
+        classifier, spans, block_id, text
+    )
+
+    return labelled_passage
+
+
+def _get_labelled_passage_from_prediction(
+    classifier: Classifier, spans: list[Span], block_id: str, text: str
+) -> LabelledPassage:
+    """Creates the LabelledPassage from the list of spans output by the classifier"""
     # If there were no inference results, don't include the concept
     if not spans:
         metadata = {}
@@ -353,14 +423,12 @@ def text_block_inference(
 
         metadata = {"concept": concept}
 
-    labelled_passage = LabelledPassage(
+    return LabelledPassage(
         id=block_id,
         text=text,
         spans=spans,
         metadata=metadata,
     )
-
-    return labelled_passage
 
 
 def _name_document_run_identifiers_set(
@@ -407,9 +475,26 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
+    # Handle documents with no text and no language
+    if (
+        not document.languages
+        and document.pdf_data is None
+        and document.html_data is None
+    ):
+        store_labels(
+            config=config,
+            labels=[],
+            file_stem=file_stem,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
+
+        return None
+
+    # Raise on non-English documents
     if document.languages != ["en"]:
         raise ValueError(
-            f"Cannot run inference on {file_stem} as it has non-english language: "
+            f"Cannot run inference on {file_stem} as it has non-English language: "
             f"{document.languages}"
         )
 
@@ -437,7 +522,7 @@ def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
         yield data[i : i + batch_size]
 
 
-@flow
+@flow()
 async def run_classifier_inference_on_batch_of_documents(
     batch: list[str],
     config_json: dict,
@@ -460,8 +545,8 @@ async def run_classifier_inference_on_batch_of_documents(
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess]
-    run = wandb.init(
+    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+    run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",
     )
@@ -551,12 +636,15 @@ async def classifier_inference(
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
     )
+    filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
+    disallow_latest_alias(classifier_specs)
+
     print(
-        f"Running with {len(validated_file_stems)} documents and "
+        f"Running with {len(filtered_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -568,7 +656,7 @@ async def classifier_inference(
     failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
 
     for classifier_spec in classifier_specs:
-        batches = iterate_batch(validated_file_stems, batch_size)
+        batches = iterate_batch(filtered_file_stems, batch_size)
 
         tasks = [
             run_deployment(
@@ -579,7 +667,8 @@ async def classifier_inference(
                     "classifier_name": classifier_spec.name,
                     "classifier_alias": classifier_spec.alias,
                 },
-                timeout=1200,
+                # Rely on the flow's own timeout
+                timeout=None,
                 as_subflow=True,
             )
             for batch in batches

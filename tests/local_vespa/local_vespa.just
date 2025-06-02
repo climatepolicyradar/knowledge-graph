@@ -28,9 +28,15 @@ vespa_deploy_schema:
 # Feeds some test data into local Vespa instance
 vespa_feed_data:
 	vespa config set target local
-	vespa feed tests/local_vespa/test_documents/search_weights.json
-	vespa feed tests/local_vespa/test_documents/family_document.json
-	vespa feed tests/local_vespa/test_documents/document_passage.json
+	vespa feed --target local tests/local_vespa/test_documents/search_weights.json
+	vespa feed --target local tests/local_vespa/test_documents/family_document.json
+	vespa feed --target local tests/local_vespa/test_documents/document_passage.json
+
+# Feeds some large test data into local Vespa instance
+vespa_feed_large_data:
+	vespa config set target local
+	vespa feed --target local tests/local_vespa/test_documents/family_document_UNFCCC.party.309.0.json
+	vespa feed --target local tests/local_vespa/test_documents/document_passage_UNFCCC.party.309.0.json
 
 # Deletes some test data into local Vespa instance
 #
@@ -40,9 +46,14 @@ vespa_delete_data:
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/family_document/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/document_passage/docid?selection=true&cluster=family-document-passage"
 
+
+copy_query_profiles_to_appn_pkg:
+	cp -r tests/local_vespa/additional_query_profiles/* tests/local_vespa/test_app/search/query-profiles/
+
 # Set up a local instance of vespa
 vespa_dev_setup:
     just vespa_confirm_cli_installed
+    just copy_query_profiles_to_appn_pkg
     just vespa_dev_start
     just vespa_healthy
     just vespa_deploy_schema

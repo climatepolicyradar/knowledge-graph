@@ -1,6 +1,9 @@
 import hashlib
 import re
+from enum import Enum
 from functools import total_ordering
+
+from pydantic import BaseModel, Field
 
 
 @total_ordering
@@ -22,6 +25,8 @@ class WikibaseID(str):
 
     def __eq__(self, other) -> bool:
         """Check if two Wikibase IDs are equal"""
+        if isinstance(other, str):
+            other = WikibaseID(other)
         if not isinstance(other, WikibaseID):
             return NotImplemented
         return self.numeric == other.numeric
@@ -46,6 +51,37 @@ class WikibaseID(str):
         """Create a new instance of WikibaseID after validation"""
         validated_value = cls._validate(value)
         return str.__new__(cls, validated_value)
+
+
+class VespaSchema(Enum):
+    """Schema definitions' names for Vespa"""
+
+    FamilyDocument = "family_document"
+    DocumentPassage = "document_passage"
+
+
+class VespaID(BaseModel):
+    """Base class for a Vespa schema ID"""
+
+    prefix: str = Field(description="TODO", frozen=True, default="id:doc_search")
+    kind: VespaSchema = Field(description="TODO")
+    id: str = Field(description="TODO")
+
+    def __str__(self) -> str:
+        """String representation of a Vespa ID, ready to be used with Vespa queries"""
+        return f"{self.prefix}:{self.kind.value}::{self.id}"
+
+
+class FamilyDocumentID(VespaID):
+    """An ID for a family document in Vespa"""
+
+    kind: VespaSchema = Field(default=VespaSchema.FamilyDocument, exclude=True)
+
+
+class DocumentPassageID(VespaID):
+    """An ID for a document passage in Vespa"""
+
+    kind: VespaSchema = Field(default=VespaSchema.DocumentPassage, exclude=True)
 
 
 def deterministic_hash(*args) -> int:

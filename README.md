@@ -94,3 +94,7 @@ We've built our knowledge graph by running a set of classifiers over our giant c
 In the short-term, identifying where each concept is mentioned in our documents makes it easier for interested users of CPR's tools to jump straight to the relevant sections of our documents.
 
 In the longer term, we expect the graph to be a useful artefact in its own right. By analysing the structured web of relationships between climate policy concepts and the documents that mention them, we should be able to identify emerging topics and high-leverage areas for policy intervention.
+
+## Testing
+
+Make sure you have [Git LFS](https://git-lfs.com) installed if you want to run all the tests.

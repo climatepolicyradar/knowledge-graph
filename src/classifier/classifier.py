@@ -41,11 +41,22 @@ class Classifier(ABC):
                 f"{expected}, not {self.concept.wikibase_id}"
             )
 
-    def fit(self) -> "Classifier":
+    def fit(self, **kwargs) -> "Classifier":
         """
         Train the classifier on the data in the concept.
 
-        :return Classifier: The trained classifier
+        This is a template method, which subclasses can override to implement their
+        specific training logic. The base class is a no-op, allowing subclasses to
+        optionally implement it, only when training is needed. Keeping the template
+        method here provides a consistent interface across all classifiers while
+        allowing flexibility in implementation.
+
+        Args:
+            **kwargs: Training configuration parameters. The specific parameters
+                required will depend on the classifier implementation.
+
+        Returns:
+            Classifier: The trained classifier
         """
         return self
 
@@ -113,7 +124,7 @@ class Classifier(ABC):
             pickle.dump(self, f)
 
     @classmethod
-    def load(cls, path: Union[str, Path]) -> "Classifier":
+    def load(cls, path: Union[str, Path], model_to_cuda: bool = False) -> "Classifier":
         """
         Load a classifier from a file.
 
@@ -123,4 +134,9 @@ class Classifier(ABC):
         with open(path, "rb") as f:
             classifier = pickle.load(f)
         assert isinstance(classifier, Classifier)
+        if model_to_cuda and hasattr(classifier, "pipeline"):
+            classifier.pipeline.model.to("cuda:0")  # type: ignore
+            import torch
+
+            classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier

@@ -1,10 +1,12 @@
 import json
 import os
 import subprocess
+import xml.etree.ElementTree as ET
+from collections.abc import Generator
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import boto3
@@ -24,8 +26,9 @@ from prefect import Flow, State
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from vespa.application import Vespa
+from vespa.io import VespaQueryResponse
 
-from flows.boundary import get_vespa_search_adapter_from_aws_secrets
+from flows.aggregate_inference_results import Config as AggregateInferenceResultsConfig
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -56,6 +59,14 @@ def test_wikibase_to_s3_config():
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
         trigger_deindexing=False,
+    )
+
+
+@pytest.fixture()
+def test_aggregate_config():
+    yield AggregateInferenceResultsConfig(
+        cache_bucket="test_bucket",
+        aws_env=AwsEnv("sandbox"),
     )
 
 
@@ -127,7 +138,36 @@ def vespa_app(
         capture_output=True,
         text=True,
         check=True,
+        timeout=600,  # Seconds
+    )
+
+    yield app  # This is where the test function will be executed
+
+    # Teardown
+    print("\nTearing down Vespa connection...")
+    subprocess.run(
+        ["just", "vespa_delete_data"],
+        capture_output=True,
+        text=True,
+        check=True,
         timeout=60,  # Seconds
+    )
+
+
+@pytest.fixture(scope="function")
+def vespa_large_app(
+    mock_vespa_credentials,
+):
+    # Connection
+    print("\nSetting up Vespa connection...")
+    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
+
+    subprocess.run(
+        ["just", "vespa_feed_large_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=600,  # Seconds
     )
 
     yield app  # This is where the test function will be executed
@@ -146,13 +186,18 @@ def vespa_app(
 @pytest.fixture
 def local_vespa_search_adapter(
     create_vespa_params, mock_vespa_credentials, tmp_path
-) -> VespaSearchAdapter:
-    """VespaSearchAdapter instantiated from mocked ssm params."""
-    adapter = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=str(tmp_path),
-        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+) -> Generator[VespaSearchAdapter, None, None]:
+    """VespaSearchAdapter instantiated from mocked SSM params."""
+    instance_url = "http://localhost:8080"
+    adapter = VespaSearchAdapter(
+        instance_url=instance_url,
     )
+
+    # We can't currently optionally use certs with our search adapter.
+    #
+    # Instead, overwrite it here.
+    adapter.client = Vespa(url=instance_url, cert=None)
+
     try:
         adapter.client.get_application_status()
     except ConnectionError:
@@ -386,6 +431,34 @@ def mock_bucket_labelled_passages(
 
 
 @pytest.fixture
+def s3_prefix_inference_results() -> str:
+    """Returns the s3 prefix for the inference results."""
+    return "inference_results/2025-05-25T07:32-eta85-alchibah/"
+
+
+@pytest.fixture
+def mock_bucket_inference_results(
+    mock_s3_client,
+    mock_bucket,
+    s3_prefix_inference_results: str,
+) -> None:
+    """A version of the inference results bucket with more files"""
+    fixture_root = FIXTURE_DIR / "inference_results"
+    fixture_files = list(fixture_root.glob("**/*.json"))
+
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
+        body = BytesIO(data.encode("utf-8"))
+
+        key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
+
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+
+@pytest.fixture
 def mock_bucket_labelled_passages_b(
     mock_s3_client,
     mock_bucket_b,
@@ -400,6 +473,31 @@ def mock_bucket_labelled_passages_b(
         mock_s3_client.put_object(
             Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
         )
+
+
+@pytest.fixture
+def mock_bucket_labelled_passages_large(
+    mock_s3_client,
+    mock_bucket,
+) -> None:
+    """A version of the labelled_passage bucket with more files"""
+    fixture_root = FIXTURE_DIR / "labelled_passages"
+    fixture_files = list(fixture_root.glob("**/*.json"))
+
+    keys = []
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
+        body = BytesIO(data.encode("utf-8"))
+
+        key = "labelled_passages/" + str(file_path.relative_to(fixture_root))
+        keys.append(key)
+
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+    return (keys, mock_bucket, mock_s3_client)
 
 
 @pytest.fixture
@@ -547,3 +645,73 @@ def mock_bucket_concepts_counts(
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
+
+
+def mock_grouped_text_block_vespa_query_response_json() -> dict:
+    """Mock Vespa query response JSON"""
+
+    with open(
+        "tests/flows/fixtures/query_responses/grouped_text_block_by_family_document_ref.json"
+    ) as f:
+        data = json.load(f)
+
+    return data
+
+
+@pytest.fixture
+def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryResponse:
+    """Mock Vespa query response"""
+
+    return VespaQueryResponse(
+        json=mock_grouped_text_block_vespa_query_response_json(),
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+
+@pytest.fixture
+def mock_vespa_query_response_no_continuation_token(
+    mock_vespa_credentials: dict,
+) -> VespaQueryResponse:
+    """Mock Vespa query response with no hits"""
+
+    json_data = mock_grouped_text_block_vespa_query_response_json()
+    json_data["root"]["children"][0]["children"][0]["continuation"] = {
+        "prev": "BGAAABEBCBC"
+    }
+
+    return VespaQueryResponse(
+        json=json_data,
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit_query_profile_name() -> str:
+    """The name of the query profile to use for the lower max hits limit."""
+    return "lower_max_hits"
+
+
+@pytest.fixture
+def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str) -> int:
+    """Mock Vespa max hit limit"""
+
+    tree = ET.parse(
+        "tests/local_vespa/additional_query_profiles/"
+        f"{vespa_lower_max_hit_limit_query_profile_name}.xml"
+    )
+    root = tree.getroot()
+
+    lower_max_hits_limit = None
+    for field in root.findall("field"):
+        name = field.get("name")
+        if name == "maxHits":
+            lower_max_hits_limit = field.text
+            break
+
+    if not lower_max_hits_limit:
+        raise ValueError("Lower max hits limit not found in XML file.")
+    return int(lower_max_hits_limit)

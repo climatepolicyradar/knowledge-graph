@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Callable
 
-from src.classifier import Classifier
+from src.classifier.classifier import Classifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.span import Span
@@ -48,8 +48,7 @@ class BaseTargetClassifier(Classifier, ABC):
         self.pipeline: Callable = pipeline(
             "text-classification",
             model=AutoModelForSequenceClassification.from_pretrained(
-                self.model_name,
-                revision=self.commit_hash,
+                self.model_name, revision=self.commit_hash
             ),
             tokenizer=AutoTokenizer.from_pretrained(
                 self.model_name,
@@ -90,7 +89,7 @@ class BaseTargetClassifier(Classifier, ABC):
         """Predict whether the supplied texts contain targets."""
 
         predictions: list[list[dict]] = self.pipeline(
-            texts, padding=True, truncation=True, return_all_scores=True
+            texts, padding=True, truncation=True, top_k=None
         )
 
         results = []
@@ -110,7 +109,7 @@ class BaseTargetClassifier(Classifier, ABC):
             results.append(text_results)
         return results
 
-    def fit(self) -> "BaseTargetClassifier":
+    def fit(self, **kwargs) -> "BaseTargetClassifier":
         """Targets classifiers cannot be trained directly."""
         warnings.warn(
             "Targets classifiers in the knowledge graph are based on the pre-trained "

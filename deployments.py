@@ -7,15 +7,18 @@ See: https://docs-2.prefect.io/latest/concepts/deployments/
 
 import importlib.metadata
 import os
-from typing import Any, Optional
+from typing import Any
 
 from prefect.blocks.system import JSON
-from prefect.client.schemas.schedules import CronSchedule
-from prefect.deployments.runner import DeploymentImage
+from prefect.client.schemas.actions import DeploymentScheduleCreate
+from prefect.client.schemas.schedules import construct_schedule
+from prefect.deployments.schedules import create_deployment_schedule_create
+from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 
 import flows.boundary as boundary
 import flows.deindex as deindex
+from flows.aggregate_inference_results import aggregate_inference_results
 from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
@@ -41,14 +44,22 @@ DEFAULT_FLOW_VARIABLES = {
 
 
 def get_schedule_for_env(
-    aws_env: AwsEnv, env_schedules: Optional[dict[AwsEnv, str]]
-) -> Optional[CronSchedule]:
+    aws_env: AwsEnv, env_schedules: dict[AwsEnv, str] | None
+) -> list[DeploymentScheduleCreate] | None:
     """Creates a cron schedule from a env schedule mapping"""
     if not env_schedules:
         return None
 
     if env_schedules.get(aws_env):
-        return CronSchedule(cron=env_schedules.get(aws_env), timezone="Europe/London")
+        return [
+            create_deployment_schedule_create(
+                construct_schedule(
+                    cron=env_schedules.get(aws_env),
+                    timezone="Europe/London",
+                ),
+                active=True,
+            )
+        ]
     else:
         return None
 
@@ -57,7 +68,7 @@ def create_deployment(
     flow: Flow,
     description: str,
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
-    env_schedules: Optional[dict[AwsEnv, str]] = None,
+    env_schedules: dict[AwsEnv, str] | None = None,
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
@@ -76,7 +87,7 @@ def create_deployment(
         generate_deployment_name(flow_name, aws_env),
         work_pool_name=f"mvp-{aws_env}-ecs",
         version=version,
-        image=DeploymentImage(
+        image=DockerImage(
             name=image_name,
             tag=version,
             dockerfile="Dockerfile",
@@ -85,7 +96,7 @@ def create_deployment(
         job_variables=job_variables,
         tags=[f"repo:{docker_repository}", f"awsenv:{aws_env}"],
         description=description,
-        schedule=schedule,
+        schedules=schedule,
         build=False,
         push=False,
     )
@@ -103,6 +114,13 @@ create_deployment(
     description="Run concept classifier inference on a batch of documents",
 )
 
+# Aggregate inference results
+
+create_deployment(
+    flow=aggregate_inference_results,
+    description="Aggregate inference results",
+)
+
 # Boundary
 
 create_deployment(
@@ -113,7 +131,7 @@ create_deployment(
 # Index
 
 create_deployment(
-    flow=boundary.run_partial_updates_of_concepts_for_document_passages__update,
+    flow=boundary.run_partial_updates_of_concepts_for_document_passages,
     description="Co-ordinate updating inference results for concepts in Vespa",
 )
 
@@ -127,11 +145,6 @@ create_deployment(
 create_deployment(
     flow=deindex.run_cleanup_objects_for_batch,
     description="Clean-up a concept's versions for a document",
-)
-
-create_deployment(
-    flow=boundary.run_partial_updates_of_concepts_for_document_passages__remove,
-    description="Co-ordinate removing inference results for concepts in Vespa",
 )
 
 create_deployment(

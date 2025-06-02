@@ -1,20 +1,27 @@
+import functools
+import inspect
 import os
 import re
+import time
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import TypeAlias, TypeVar
+from typing import Callable, TypeAlias, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+from typing_extensions import Self
 
 from scripts.cloud import ClassifierSpec
 
 # Example: CCLW.executive.1813.2418
 DocumentImportId: TypeAlias = str
 DocumentStem: TypeAlias = str
+
+DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
 
 
 def file_name_from_path(path: str) -> str:
@@ -41,7 +48,7 @@ class SlackNotify:
     slack_block_name = f"slack-webhook-{slack_channel_name}-prefect-mvp-{environment}"
 
     @classmethod
-    def message(cls, flow, flow_run, state):
+    async def message(cls, flow, flow_run, state):
         """
         Send a notification to a Slack channel about the state of a Prefect flow run.
 
@@ -53,6 +60,9 @@ class SlackNotify:
             pass
         ```
         """
+
+        if cls.environment != "prod":
+            return None
 
         ui_url = cls.FLOW_RUN_URL.format(
             prefect_base_url=PREFECT_UI_URL.value(), flow_run=flow_run
@@ -66,10 +76,16 @@ class SlackNotify:
         )
 
         slack = SlackWebhook.load(cls.slack_block_name)
-        slack.notify(body=msg)
+        if inspect.isawaitable(slack):
+            slack = await slack
+        result = slack.notify(body=msg)
+        if inspect.isawaitable(result):
+            _ = await result
+
+        return None
 
 
-def remove_translated_suffix(file_name: str) -> str:
+def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
     """
     Remove the suffix from a file name that indicates it has been translated.
 
@@ -235,3 +251,77 @@ def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
     _ = s3.put_object(
         Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
     )
+
+
+def is_file_stem_for_english_language_document(
+    file_stem: DocumentStem,
+    file_stems: list[DocumentStem],
+    english_translation_suffix: str = "_translated_en",
+) -> bool:
+    """
+    Check if a file stem is in English language.
+
+    - If the file stem has the translated_en suffix then we can infer that it's english.
+    - If there's a translated version of the document in the list, we can infer that it's
+        not english.
+    """
+    if english_translation_suffix in file_stem:
+        return True
+    if file_stem + english_translation_suffix in file_stems:
+        return False
+    return True
+
+
+def filter_non_english_language_file_stems(
+    file_stems: list[DocumentStem],
+) -> list[DocumentStem]:
+    """Filter out file stems that are for non-English language documents."""
+    return list(
+        filter(
+            lambda f: is_file_stem_for_english_language_document(f, file_stems),
+            file_stems,
+        )
+    )
+
+
+@dataclass
+class Profiler:
+    """Context manager for profiling and printing the duration."""
+
+    printer: Callable[[str], None] | None = None
+    name: str | None = None
+    # Set this so it's not `None` later on
+    start_time: float = field(init=False, default_factory=time.perf_counter)
+    end_time: float | None = field(init=False, default=None)
+    duration: float | None = field(init=False, default=None)
+
+    def __enter__(self) -> Self:
+        """Start the timer."""
+        self.start_time = time.perf_counter()  # Reset it now
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        """Stop the timer and conditionally print the duration."""
+        self.end_time = time.perf_counter()
+        self.duration = self.end_time - self.start_time
+
+        if self.printer:
+            self.printer(
+                (
+                    f"{self.name + ' ' if self.name else ''}done "
+                    f"in: {self.duration:.2f} seconds"
+                )
+            )
+
+    def __call__(self, func):
+        """Enable usage as a decorator."""
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Use function name as name, if none provided
+            profiler_name = self.name or func.__name__
+            with Profiler(printer=self.printer, name=profiler_name):
+                result = func(*args, **kwargs)
+            return result
+
+        return wrapper
