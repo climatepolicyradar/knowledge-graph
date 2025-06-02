@@ -25,13 +25,12 @@ from flows.boundary import (
     DocumentObjectUri,
     Operation,
     TextBlockId,
-    VespaDataId,
     VespaHitId,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
     op_to_fn,
     remove_concepts_from_existing_vespa_concepts,
-    remove_feed_result_callback,
+    remove_result_callback,
     run_partial_updates_of_concepts_for_document_passages,
     s3_paths_or_s3_prefixes,
     serialise_concepts_counts,
@@ -1193,7 +1192,7 @@ def put_empty_document_artifact(
             [],
             [],
             [],
-            "classifier spec. name='Q400' alias='v6' was not found in the maintained list",
+            "classifier spec. Q400:v6 was not found in the maintained list",
         ),
         (
             [
@@ -1205,7 +1204,7 @@ def put_empty_document_artifact(
             ],
             [],
             [],
-            "already have name='Q400' alias='v6' as a primary",
+            "already have Q400:v6 as a primary",
         ),
     ],
 )
@@ -1411,8 +1410,7 @@ async def test_cleanups_by_s3(
     mock_s3_client.head_object(Bucket=mock_bucket, Key=key)
 
 
-def test_remove_feed_result_callback():
-    failures: list[VespaResponse] = []
+def test_remove_result_callback():
     concepts_counts: Counter[ConceptModel] = Counter()
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
         "18593": [
@@ -1437,15 +1435,14 @@ def test_remove_feed_result_callback():
         url="test-url",
         operation_type="update",
     )
-    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+    text_block_id: TextBlockId = "18593"
 
     assert (
-        remove_feed_result_callback(
-            failures=failures,
+        remove_result_callback(
             concepts_counts=concepts_counts,
             grouped_concepts=grouped_concepts,
             response=response,
-            data_id=data_id,
+            text_block_id=text_block_id,
         )
         is None
     )
@@ -1453,11 +1450,9 @@ def test_remove_feed_result_callback():
     assert concepts_counts == Counter(
         {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 0}
     )
-    assert failures == []
 
 
-def test_remove_feed_result_callback_not_successful_response():
-    failures: list[VespaResponse] = []
+def test_remove_result_callback_not_successful_response():
     concepts_counts: Counter[ConceptModel] = Counter()
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
         "18593": [
@@ -1482,15 +1477,14 @@ def test_remove_feed_result_callback_not_successful_response():
         url="test-url",
         operation_type="update",
     )
-    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+    text_block_id: TextBlockId = "18593"
 
     assert (
-        remove_feed_result_callback(
-            failures=failures,
+        remove_result_callback(
             concepts_counts=concepts_counts,
             grouped_concepts=grouped_concepts,
             response=response,
-            data_id=data_id,
+            text_block_id=text_block_id,
         )
         is None
     )
@@ -1498,4 +1492,3 @@ def test_remove_feed_result_callback_not_successful_response():
     assert concepts_counts == Counter(
         {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 1}
     )
-    assert failures == [response]

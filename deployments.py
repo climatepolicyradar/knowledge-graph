@@ -18,6 +18,7 @@ from prefect.flows import Flow
 
 import flows.boundary as boundary
 import flows.deindex as deindex
+from flows.aggregate_inference_results import aggregate_inference_results
 from flows.count_family_document_concepts import (
     count_family_document_concepts,
     load_update_document_concepts_counts,
@@ -111,6 +112,13 @@ create_deployment(
 create_deployment(
     flow=run_classifier_inference_on_batch_of_documents,
     description="Run concept classifier inference on a batch of documents",
+)
+
+# Aggregate inference results
+
+create_deployment(
+    flow=aggregate_inference_results,
+    description="Aggregate inference results",
 )
 
 # Boundary

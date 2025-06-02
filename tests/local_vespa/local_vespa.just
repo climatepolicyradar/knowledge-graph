@@ -28,9 +28,15 @@ vespa_deploy_schema:
 # Feeds some test data into local Vespa instance
 vespa_feed_data:
 	vespa config set target local
-	vespa feed tests/local_vespa/test_documents/search_weights.json
-	vespa feed tests/local_vespa/test_documents/family_document.json
-	vespa feed tests/local_vespa/test_documents/document_passage.json
+	vespa feed --target local tests/local_vespa/test_documents/search_weights.json
+	vespa feed --target local tests/local_vespa/test_documents/family_document.json
+	vespa feed --target local tests/local_vespa/test_documents/document_passage.json
+
+# Feeds some large test data into local Vespa instance
+vespa_feed_large_data:
+	vespa config set target local
+	vespa feed --target local tests/local_vespa/test_documents/family_document_UNFCCC.party.309.0.json
+	vespa feed --target local tests/local_vespa/test_documents/document_passage_UNFCCC.party.309.0.json
 
 # Deletes some test data into local Vespa instance
 #

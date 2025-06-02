@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "knowledge_graph"
-version = "0.2.1"
+version = "0.4.2"
 description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
@@ -91,7 +91,7 @@ env = [
   "WIKIBASE_PASSWORD=test_password",
   "WIKIBASE_URL=https://test.test.test"
 ]
-markers = ["vespa", "flaky_on_ci", "transformers"]
+markers = ["vespa", "flaky_on_ci", "transformers", "slow"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]

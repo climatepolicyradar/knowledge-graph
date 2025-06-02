@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -17,12 +18,15 @@ from vespa.package import Document, Schema
 
 from flows.boundary import (
     CONCEPTS_COUNTS_PREFIX_DEFAULT,
+    DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
     DocumentImporter,
+    DocumentImportId,
     DocumentObjectUri,
     Operation,
     TextBlockId,
+    _update_text_block,
     convert_labelled_passage_to_concepts,
     get_continuation_tokens_from_query_response,
     get_data_id_from_vespa_hit_id,
@@ -34,10 +38,12 @@ from flows.boundary import (
     get_vespa_passages_from_query_response,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
+    remove_concepts_from_existing_vespa_concepts,
     s3_obj_generator,
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
+    update_concepts_on_existing_vespa_concepts,
     updates_by_s3,
 )
 from flows.index import Config
@@ -1171,3 +1177,85 @@ async def test_lower_max_hits_query_profile(
     assert error_info["summary"] == "Illegal query"
     assert f"{hits_beyond_limit} hits requested" in error_info["message"]
     assert "configured limit" in error_info["message"]
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test__update_text_block__update(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    example_vespa_concepts,
+) -> None:
+    text_block_id = TextBlockId("1457")
+    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
+
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id=text_block_id,
+        document_import_id=document_import_id,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        (
+            vespa_response,
+            text_block_id_response,
+            document_import_id_response,
+        ) = await _update_text_block(
+            semaphore=semaphore,
+            text_block_id=text_block_id,
+            document_passage_id=document_passage_id,
+            document_passage=document_passage,
+            merge_serialise_concepts_cb=update_concepts_on_existing_vespa_concepts,
+            concepts=example_vespa_concepts,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+        assert text_block_id == text_block_id_response
+        assert (
+            "id:doc_search:document_passage::CCLW.executive.10014.4470.1457"
+            == document_import_id_response
+        )
+        assert vespa_response.is_successful()
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test__update_text_block__remove(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    example_vespa_concepts,
+) -> None:
+    text_block_id = TextBlockId("1457")
+    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
+
+    document_passage_id, document_passage = get_document_passage_from_vespa(
+        text_block_id=text_block_id,
+        document_import_id=document_import_id,
+        vespa_search_adapter=local_vespa_search_adapter,
+    )
+
+    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        (
+            vespa_response,
+            text_block_id_response,
+            document_import_id_response,
+        ) = await _update_text_block(
+            semaphore=semaphore,
+            text_block_id=text_block_id,
+            document_passage_id=document_passage_id,
+            document_passage=document_passage,
+            merge_serialise_concepts_cb=remove_concepts_from_existing_vespa_concepts,
+            concepts=example_vespa_concepts,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+
+        assert text_block_id == text_block_id_response
+        assert (
+            "id:doc_search:document_passage::CCLW.executive.10014.4470.1457"
+            == document_import_id_response
+        )
+        assert vespa_response.is_successful()

@@ -1,15 +1,19 @@
+import functools
 import inspect
 import os
 import re
+import time
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import TypeAlias, TypeVar
+from typing import Callable, TypeAlias, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+from typing_extensions import Self
 
 from scripts.cloud import ClassifierSpec
 
@@ -278,3 +282,46 @@ def filter_non_english_language_file_stems(
             file_stems,
         )
     )
+
+
+@dataclass
+class Profiler:
+    """Context manager for profiling and printing the duration."""
+
+    printer: Callable[[str], None] | None = None
+    name: str | None = None
+    # Set this so it's not `None` later on
+    start_time: float = field(init=False, default_factory=time.perf_counter)
+    end_time: float | None = field(init=False, default=None)
+    duration: float | None = field(init=False, default=None)
+
+    def __enter__(self) -> Self:
+        """Start the timer."""
+        self.start_time = time.perf_counter()  # Reset it now
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback) -> None:
+        """Stop the timer and conditionally print the duration."""
+        self.end_time = time.perf_counter()
+        self.duration = self.end_time - self.start_time
+
+        if self.printer:
+            self.printer(
+                (
+                    f"{self.name + ' ' if self.name else ''}done "
+                    f"in: {self.duration:.2f} seconds"
+                )
+            )
+
+    def __call__(self, func):
+        """Enable usage as a decorator."""
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Use function name as name, if none provided
+            profiler_name = self.name or func.__name__
+            with Profiler(printer=self.printer, name=profiler_name):
+                result = func(*args, **kwargs)
+            return result
+
+        return wrapper

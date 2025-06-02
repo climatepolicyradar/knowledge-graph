@@ -2,6 +2,7 @@ import json
 from collections import Counter
 from datetime import datetime
 from functools import partial
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -15,14 +16,17 @@ from vespa.io import VespaResponse
 
 from flows.boundary import (
     ConceptModel,
+    DocumentImporter,
+    DocumentImportId,
+    DocumentObjectUri,
+    DocumentStem,
     Operation,
     TextBlockId,
-    VespaDataId,
     get_document_passages_from_vespa,
     op_to_fn,
     run_partial_updates_of_concepts_for_document_passages,
     update_concepts_on_existing_vespa_concepts,
-    update_feed_result_callback,
+    update_result_callback,
     update_s3_with_update_concepts_counts,
 )
 from flows.index import (
@@ -32,7 +36,8 @@ from flows.index import (
 )
 from scripts.cloud import ClassifierSpec
 from src.identifiers import WikibaseID
-from src.models.labelled_passage import LabelledPassage
+from src.labelled_passage import LabelledPassage
+from tests.flows.conftest import load_fixture
 
 
 @pytest.mark.asyncio
@@ -57,8 +62,10 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         # Confirm that the example concepts are not in the document passages
         initial_passages = await get_document_passages_from_vespa(
-            document_import_id=document_import_id,
-            text_blocks_ids=["1570", "1273", "1052"],
+            document_import_id=DocumentImportId(document_import_id),
+            text_blocks_ids=list(
+                map(lambda t: TextBlockId(t), ["1570", "1273", "1052"])
+            ),
             vespa_connection_pool=vespa_connection_pool,
         )
 
@@ -287,7 +294,12 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     assert (
         test_counts
         == await run_partial_updates_of_concepts_for_document_passages.fn(
-            document_importer=(document_import_id, document_object_uri),
+            document_importer=DocumentImporter(
+                (
+                    DocumentStem(document_import_id),
+                    DocumentObjectUri(document_object_uri),
+                )
+            ),
             vespa_search_adapter=local_vespa_search_adapter,
             cache_bucket=mock_bucket,
             concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -298,7 +310,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     )
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         updated_passages = await get_document_passages_from_vespa(
-            document_import_id=document_import_id,
+            document_import_id=DocumentImportId(document_import_id),
             text_blocks_ids=None,
             vespa_connection_pool=vespa_connection_pool,
         )
@@ -317,6 +329,105 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
     result = mock_s3_client.get_object(
         Bucket=mock_bucket,
         Key="concepts_counts/Q788/v4/CCLW.executive.10014.4470.json",
+    )
+    assert test_counts_serialised == json.loads(result["Body"].read().decode("utf-8"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.vespa
+@pytest.mark.slow
+async def test_run_partial_updates_of_concepts_for_document_passages_for_large_document(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    vespa_app,
+    vespa_large_app,
+    mock_bucket,
+    mock_s3_client,
+) -> None:
+    """Test that we can run partial updates of concepts for document passages."""
+    document_import_id = "UNFCCC.party.309.0"
+    document_object_uri = f"s3://{mock_bucket}/labelled_passages/Q218/v4/UNFCCC.party.309.0_translated_en.json"
+
+    # Setup S3
+    file_name = "labelled_passages/Q218/v4/UNFCCC.party.309.0_translated_en.json"
+    data = load_fixture(file_name)
+    body = BytesIO(data.encode("utf-8"))
+    key = "labelled_passages/Q218/v4/UNFCCC.party.309.0_translated_en.json"
+    mock_s3_client.put_object(
+        Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+    )
+
+    # Make sure the expected document passages are in Vespa
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        # Confirm that the example concepts are not in the document passages
+        initial_passages = await get_document_passages_from_vespa(
+            document_import_id=DocumentImportId(document_import_id),
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+        assert len(initial_passages) == 50_000
+    initial_concepts = [
+        concept
+        for _, passage in initial_passages
+        if passage.concepts
+        for concept in passage.concepts
+    ]
+    assert len(initial_concepts) == 0
+
+    # Confirm that we can add the example concepts to the document passages
+    #
+    # The model names should be different. It's to do with bad fixture setup by us.
+    test_counts = Counter(
+        {
+            ConceptModel(
+                wikibase_id=WikibaseID("Q218"),
+                model_name='RulesBasedClassifier("greenhouse gas")',
+            ): 29,
+        }
+    )
+
+    (
+        merge_serialise_concepts_cb,
+        vespa_response_handler_cb,
+        concepts_counts_updater_cb,
+    ) = op_to_fn(Operation.INDEX)
+
+    assert (
+        test_counts
+        == await run_partial_updates_of_concepts_for_document_passages.fn(
+            document_importer=DocumentImporter(
+                (
+                    DocumentStem(document_import_id),
+                    DocumentObjectUri(document_object_uri),
+                )
+            ),
+            vespa_search_adapter=local_vespa_search_adapter,
+            cache_bucket=mock_bucket,
+            concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
+            merge_serialise_concepts_cb=merge_serialise_concepts_cb,
+            vespa_response_handler_cb=vespa_response_handler_cb,
+            concepts_counts_updater_cb=concepts_counts_updater_cb,
+        )
+    )
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        updated_passages = await get_document_passages_from_vespa(
+            document_import_id=DocumentImportId(document_import_id),
+            text_blocks_ids=None,
+            vespa_connection_pool=vespa_connection_pool,
+        )
+    updated_concepts = [
+        concept
+        for _, passage in updated_passages
+        if passage.concepts
+        for concept in passage.concepts
+    ]
+
+    assert len(updated_concepts) == 29
+
+    test_counts_serialised = {str(k): v for k, v in test_counts.items()}
+
+    result = mock_s3_client.get_object(
+        Bucket=mock_bucket,
+        Key="concepts_counts/Q218/v4/UNFCCC.party.309.0_translated_en.json",
     )
     assert test_counts_serialised == json.loads(result["Body"].read().decode("utf-8"))
 
@@ -513,11 +624,10 @@ def test_update_concepts_on_existing_vespa_concepts(
         assert concept.model_dump(mode="json") in updated_passage_concepts
 
 
-def test_update_feed_result_callback():
-    failures: list[VespaResponse] = []
+def test_update_result_callback():
     concepts_counts: Counter[ConceptModel] = Counter()
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
-        "18593": [
+        TextBlockId("18593"): [
             VespaConcept(
                 id="Q100",
                 name="sectors",
@@ -539,15 +649,14 @@ def test_update_feed_result_callback():
         url="test-url",
         operation_type="update",
     )
-    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+    text_block_id = TextBlockId("18593")
 
     assert (
-        update_feed_result_callback(
-            failures=failures,
+        update_result_callback(
             concepts_counts=concepts_counts,
             grouped_concepts=grouped_concepts,
             response=response,
-            data_id=data_id,
+            text_block_id=text_block_id,
         )
         is None
     )
@@ -555,11 +664,9 @@ def test_update_feed_result_callback():
     assert concepts_counts == Counter(
         {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 1}
     )
-    assert failures == []
 
 
-def test_update_feed_result_callback_not_successful_response():
-    failures: list[VespaResponse] = []
+def test_update_result_callback_not_successful_response():
     concepts_counts: Counter[ConceptModel] = Counter()
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {}
     response: VespaResponse = VespaResponse(
@@ -568,21 +675,19 @@ def test_update_feed_result_callback_not_successful_response():
         url="test-url",
         operation_type="update",
     )
-    data_id: VespaDataId = "UNFCCC.party.1062.0.18593"
+    text_block_id = TextBlockId("18593")
 
     assert (
-        update_feed_result_callback(
-            failures=failures,
+        update_result_callback(
             concepts_counts=concepts_counts,
             grouped_concepts=grouped_concepts,
             response=response,
-            data_id=data_id,
+            text_block_id=text_block_id,
         )
         is None
     )
 
     assert concepts_counts == Counter()
-    assert failures == [response]
 
 
 @pytest.mark.asyncio
@@ -594,7 +699,12 @@ async def test_update_s3_with_update_concepts_counts(
     document_object_uri = (
         f"s3://{mock_bucket}/labelled_passages/Q787/v4/{document_import_id}.json"
     )
-    document_importer = (document_import_id, document_object_uri)
+    document_importer = DocumentImporter(
+        (
+            DocumentStem(document_import_id),
+            DocumentObjectUri(document_object_uri),
+        )
+    )
     concepts_counter = Counter(
         {
             ConceptModel(

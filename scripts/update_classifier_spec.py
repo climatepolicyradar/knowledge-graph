@@ -50,7 +50,7 @@ def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
 
 def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     """Save a classifier spec YAML"""
-    serialised_data = list(map(lambda spec: f"{spec.name}:{spec.alias}", data))
+    serialised_data = list(map(lambda spec: str(spec), data))
     with open(file_path, "w") as file:
         yaml.dump(serialised_data, file, explicit_start=True)
 

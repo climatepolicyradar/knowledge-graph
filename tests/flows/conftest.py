@@ -28,6 +28,7 @@ from requests.exceptions import ConnectionError
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
+from flows.aggregate_inference_results import Config as AggregateInferenceResultsConfig
 from flows.inference import Config as InferenceConfig
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -58,6 +59,14 @@ def test_wikibase_to_s3_config():
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
         trigger_deindexing=False,
+    )
+
+
+@pytest.fixture()
+def test_aggregate_config():
+    yield AggregateInferenceResultsConfig(
+        cache_bucket="test_bucket",
+        aws_env=AwsEnv("sandbox"),
     )
 
 
@@ -126,6 +135,35 @@ def vespa_app(
 
     subprocess.run(
         ["just", "vespa_feed_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=600,  # Seconds
+    )
+
+    yield app  # This is where the test function will be executed
+
+    # Teardown
+    print("\nTearing down Vespa connection...")
+    subprocess.run(
+        ["just", "vespa_delete_data"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=60,  # Seconds
+    )
+
+
+@pytest.fixture(scope="function")
+def vespa_large_app(
+    mock_vespa_credentials,
+):
+    # Connection
+    print("\nSetting up Vespa connection...")
+    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
+
+    subprocess.run(
+        ["just", "vespa_feed_large_data"],
         capture_output=True,
         text=True,
         check=True,
@@ -393,6 +431,34 @@ def mock_bucket_labelled_passages(
 
 
 @pytest.fixture
+def s3_prefix_inference_results() -> str:
+    """Returns the s3 prefix for the inference results."""
+    return "inference_results/2025-05-25T07:32-eta85-alchibah/"
+
+
+@pytest.fixture
+def mock_bucket_inference_results(
+    mock_s3_client,
+    mock_bucket,
+    s3_prefix_inference_results: str,
+) -> None:
+    """A version of the inference results bucket with more files"""
+    fixture_root = FIXTURE_DIR / "inference_results"
+    fixture_files = list(fixture_root.glob("**/*.json"))
+
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
+        body = BytesIO(data.encode("utf-8"))
+
+        key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
+
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+
+@pytest.fixture
 def mock_bucket_labelled_passages_b(
     mock_s3_client,
     mock_bucket_b,
@@ -407,6 +473,31 @@ def mock_bucket_labelled_passages_b(
         mock_s3_client.put_object(
             Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
         )
+
+
+@pytest.fixture
+def mock_bucket_labelled_passages_large(
+    mock_s3_client,
+    mock_bucket,
+) -> None:
+    """A version of the labelled_passage bucket with more files"""
+    fixture_root = FIXTURE_DIR / "labelled_passages"
+    fixture_files = list(fixture_root.glob("**/*.json"))
+
+    keys = []
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
+        body = BytesIO(data.encode("utf-8"))
+
+        key = "labelled_passages/" + str(file_path.relative_to(fixture_root))
+        keys.append(key)
+
+        mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+
+    return (keys, mock_bucket, mock_s3_client)
 
 
 @pytest.fixture
