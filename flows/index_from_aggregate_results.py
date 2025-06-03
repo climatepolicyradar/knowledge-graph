@@ -21,6 +21,7 @@ from flows.aggregate_inference_results import (
     RunOutputIdentifier,
 )
 from flows.boundary import (
+    DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_TIMEOUT_MS,
     TextBlockId,
     VespaDataId,
@@ -37,8 +38,10 @@ from flows.inference import (
 )
 from flows.utils import SlackNotify, iterate_batch
 
-DEFAULT_INDEXER_MAX_CONNECTIONS: Final[PositiveInt] = 50
-INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
+# How many connections to Vespa to use for indexing.
+DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
+# How many indexer deployments to run concurrently.
+DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
 
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
@@ -166,7 +169,7 @@ async def index_aggregate_results_for_batch_of_documents(
 
     async with (
         vespa_search_adapter.client.asyncio(
-            connections=DEFAULT_INDEXER_MAX_CONNECTIONS,  # How many tasks to have running at once
+            connections=DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,  # How many tasks to have running at once
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
@@ -212,8 +215,8 @@ async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
     document_import_ids: list[DocumentImportId],
     config: Config | None = None,
-    batch_size: int = 10,  # TODO: Check
-    indexer_concurrency_limit: PositiveInt = INDEXER_CONCURRENCY_LIMIT,
+    batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
+    indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
 ) -> None:
     """Index aggregated inference results from a list of S3 URIs into Vespa."""
 

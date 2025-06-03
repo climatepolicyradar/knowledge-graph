@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypeAlias, TypedDict
 
@@ -107,17 +107,11 @@ class Config:
             )
         return self.cache_bucket
 
-    def to_json(self) -> str:
-        """Convert the Config instance to a JSON string."""
-        return json.dumps(
-            {
-                "cache_bucket": self._cache_bucket,
-                "document_source_prefix": self.document_source_prefix,
-                "aggregate_inference_results_prefix": self.aggregate_inference_results_prefix,
-                "bucket_region": self.bucket_region,
-                "aws_env": self.aws_env.value,
-            }
-        )
+    def to_json(self) -> dict[str, Any]:
+        """Convert the Config instance to a dictionary, handling complex types."""
+        result = asdict(self)
+        result["aws_env"] = self.aws_env.value  # serialize AwsEnv manually
+        return result
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
