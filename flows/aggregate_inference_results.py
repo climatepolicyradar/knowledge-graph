@@ -19,11 +19,10 @@ from flows.boundary import (
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, wait_for_semaphore
 from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
-    iterate_batch,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -269,7 +268,7 @@ async def create_aggregate_inference_summary_artifact(
 async def aggregate_inference_results(
     document_ids: list[DocumentImportId],
     config: Config | None = None,
-    max_concurrent_tasks: int = 10,
+    max_concurrent_tasks: int = 5,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
@@ -294,13 +293,18 @@ async def aggregate_inference_results(
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
 
+    semaphore = asyncio.Semaphore(max_concurrent_tasks)
+
     # Create tasks for each document
     tasks = [
-        process_single_document(
-            document_id,
-            classifier_specs,
-            config,
-            run_output_identifier,
+        wait_for_semaphore(
+            semaphore,
+            process_single_document(
+                document_id,
+                classifier_specs,
+                config,
+                run_output_identifier,
+            ),
         )
         for document_id in document_ids
     ]
@@ -309,16 +313,13 @@ async def aggregate_inference_results(
     failures: list[DocumentFailure] = []
     successes: list[DocumentImportId] = []
 
-    for batch in iterate_batch(tasks, max_concurrent_tasks):
-        results = await asyncio.gather(*batch)
+    results = await asyncio.gather(*tasks)
 
-        for document_id, error in results:
-            if not error:
-                successes.append(document_id)
-            else:
-                failures.append(
-                    DocumentFailure(document_id=document_id, exception=error)
-                )
+    for document_id, error in results:
+        if not error:
+            successes.append(document_id)
+        else:
+            failures.append(DocumentFailure(document_id=document_id, exception=error))
 
     # Results
     print(
