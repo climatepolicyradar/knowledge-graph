@@ -8,7 +8,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import S3Uri
+from flows.aggregate_inference_results import RunOutputIdentifier, S3Uri
 from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
@@ -244,11 +244,14 @@ async def test_run_indexing_from_aggregate_results__failure(
 ) -> None:
     """Test that we handled the exception correctly during passage indexing."""
 
+    NON_EXISTENT_ID = DocumentImportId("non_existent_document")
     document_import_ids = [
         DocumentImportId(Path(file_key).stem)
         for file_key in mock_bucket_inference_results.keys()
-    ] + [DocumentImportId("non_existent_document")]
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    ] + [NON_EXISTENT_ID]
+
+    run_output_identifier_str = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
