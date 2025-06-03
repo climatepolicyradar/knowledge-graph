@@ -2,12 +2,14 @@ import asyncio
 import json
 import os
 import tempfile
+from collections import Counter
+from dataclasses import dataclass
 from typing import Any, Final
 
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
@@ -19,8 +21,10 @@ from vespa.io import VespaResponse
 from flows.aggregate_inference_results import (
     Config,
     RunOutputIdentifier,
+    SerialisedVespaConcept,
 )
 from flows.boundary import (
+    CONCEPT_COUNT_SEPARATOR,
     DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_TIMEOUT_MS,
     DocumentImportId,
@@ -34,6 +38,7 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
+from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     Profiler,
     SlackNotify,
@@ -106,34 +111,38 @@ async def create_aggregate_indexing_summary_artifact(
     )
 
 
-@flow
-async def index_aggregate_results_from_s3_to_vespa(
+# As of 2025-06-03, the Concept from the cpr_sdk isn't hashable
+@dataclass(frozen=True)
+class SimpleConcept:
+    id: str
+    name: str
+
+
+@flow(log_prints=True)
+async def index_document_passages(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
-) -> None:
-    """Index aggregated inference results from S3 into Vespa for a document."""
-
-    logger = get_run_logger()
+) -> tuple[Counter[SimpleConcept], list[Result[None, Error]]]:
+    """Index aggregated inference results from S3 into Vespa document passages."""
 
     aggregated_results_key = os.path.join(
         config.aggregate_inference_results_prefix,
         run_output_identifier,
         f"{document_stem}.json",
     )
-    logger.info(
-        f"Loading aggregated inference results from S3: {aggregated_results_key}"
-    )
 
-    aggregated_inference_results = load_json_data_from_s3(
-        bucket=config.cache_bucket_str, key=aggregated_results_key
+    print(f"Loading aggregated inference results from S3: {aggregated_results_key}")
+
+    aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = (
+        load_json_data_from_s3(
+            bucket=config.cache_bucket_str, key=aggregated_results_key
+        )
     )
 
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
-    logger.info(
-        f"Querying Vespa for passages related to document import ID: {document_id}"
-    )
+    print(f"Querying Vespa for passages related to document import ID: {document_id}")
 
     passages_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_id,
@@ -144,15 +153,23 @@ async def index_aggregate_results_from_s3_to_vespa(
     async for passage_batch in passages_generator:
         passages_in_vespa.update(passage_batch)
 
-    logger.info(
+    print(
         f"Updating concepts for document import ID: {document_id}, "
         f"found {len(passages_in_vespa)} passages in Vespa",
     )
-    text_blocks_not_in_vespa = []
-    update_errors = []
-    for text_block_id, concepts in aggregated_inference_results.items():
+
+    successes: list[Result[None, Error]] = []
+    failures: list[Result[None, Error]] = []
+    concepts_counts: Counter[SimpleConcept] = Counter()
+
+    for text_block_id, serialised_concepts in aggregated_inference_results.items():
         if TextBlockId(text_block_id) not in list(passages_in_vespa.keys()):
-            text_blocks_not_in_vespa.append(text_block_id)
+            error = Error(
+                msg="text block not found in Vespa",
+                metadata={"text_block_id": TextBlockId(text_block_id)},
+            )
+            failures.append(Err(error))
+            print(error)
             continue
 
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
@@ -160,26 +177,68 @@ async def index_aggregate_results_from_s3_to_vespa(
 
         response = await _update_vespa_passage_concepts(
             vespa_data_id=vespa_data_id,
-            serialised_concepts=concepts,
+            serialised_concepts=serialised_concepts,
             vespa_connection_pool=vespa_connection_pool,
         )
 
         if not response.is_successful():
-            update_errors.append((text_block_id, response.get_json()))
+            error = Error(
+                msg="Vespa update failed",
+                metadata={
+                    "text_block_id": TextBlockId(text_block_id),
+                    "json": response.get_json(),
+                },
+            )
+            failures.append(Err(error))
+            print(error)
+            continue
 
-    if text_blocks_not_in_vespa or update_errors:
-        raise ValueError(
-            f"Error with {document_id}: {text_blocks_not_in_vespa=}, {update_errors=}"
-        )
+        concepts = [
+            SimpleConcept(id=concept["id"], name=concept["name"])
+            for concept in serialised_concepts
+        ]
+        concepts_counts.update(concepts)
 
-    logger.info(
-        "Successfully indexed all aggregated inference results for document import ID: "
-        f"{document_id} into Vespa. "
-        f"Total passages updated: {len(aggregated_inference_results)}"
+    print(f"{len(failures)} failures, {len(successes)} successes")
+
+    return concepts_counts, failures
+
+
+@task
+async def index_family_document(
+    document_import_id: DocumentImportId,
+    vespa_connection_pool: VespaAsync,
+    concepts_counts: Counter[SimpleConcept],
+) -> Result[None, Error]:
+    """
+    Index document concept counts in Vespa via partial update.
+    """
+    concepts_counts_with_names = {
+        f"{concept.id}{CONCEPT_COUNT_SEPARATOR}{concept.name}": count
+        for concept, count in concepts_counts.items()
+    }
+
+    response: VespaResponse = await vespa_connection_pool.update_data(
+        schema="family_document",
+        namespace="doc_search",
+        data_id=document_import_id,
+        fields={
+            "concept_counts": concepts_counts_with_names
+        },  # Note the schema is misnamed in Vespa
     )
 
+    if not response.is_successful():
+        return Err(
+            Error(
+                msg="Vespa update failed",
+                metadata={"json": response.get_json()},
+            )
+        )
 
-@flow
+    return Ok(None)
+
+
+@flow(log_prints=True)
 async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
@@ -188,7 +247,7 @@ async def index_aggregate_results_for_batch_of_documents(
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
 ) -> None:
-    """Index aggregated inference results from a list of S3 URIs into Vespa."""
+    """Index aggregated inference results into Vespa for family documents and document passages."""
 
     logger = get_run_logger()
 
@@ -210,43 +269,55 @@ async def index_aggregate_results_for_batch_of_documents(
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
     )
 
+    results_document_passages: dict[
+        DocumentStem, tuple[Counter[SimpleConcept], list[Result[None, Error]]]
+    ] = {}
+    results_family_documents: dict[DocumentStem, Result[None, Error]] = {}
+
+    has_failures = False
+
     async with (
         vespa_search_adapter.client.asyncio(
             connections=indexer_max_vespa_connections,  # How many tasks to have running at once
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
-        tasks = [
-            index_aggregate_results_from_s3_to_vespa(
+        for document_stem in document_stems:
+            logger.info(f"Indexing aggregated results for document: {document_stem}")
+            concepts_counts, failures = await index_document_passages(
                 config=config,
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
             )
-            for document_stem in document_stems
-        ]
+            if failures:
+                has_failures = True
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            results_document_passages[document_stem] = (concepts_counts, failures)
 
-        failures: list[Exception] = []
-
-        for result in results:
-            if isinstance(result, Exception):
-                logger.exception(f"Failed to process document: {result}")
-                failures.append(result)
-            elif result is None:
-                continue
-            else:
-                raise ValueError(
-                    f"Unexpected type of result. Type: `{type(result)}`, value: `{result}`"
-                )
-
-        if len(failures) > 0:
-            raise ValueError(
-                f"Failed to process {len(failures)}/{len(results)} documents"
+            document_id: DocumentImportId = remove_translated_suffix(document_stem)
+            result: Result[None, Error] = await index_family_document(
+                document_import_id=document_id,
+                vespa_connection_pool=vespa_connection_pool,
+                concepts_counts=concepts_counts,
             )
 
-        return None
+            match result:
+                case Ok(_):
+                    print(
+                        f"indexing family document {document_stem} "
+                        f"succeeded: {concepts_counts}"
+                    )
+                case Err(error):
+                    has_failures = True
+                    print(f"indexing family document {document_stem} failed: {error}")
+
+            results_family_documents[document_stem] = result
+
+    # TODO: Create report artifact
+
+    if has_failures:
+        raise ValueError("some tasks failed, check the report artifact and logs")
 
 
 @flow(
