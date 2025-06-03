@@ -172,7 +172,7 @@ async def test_run_indexing_from_aggregate_results(
     ):
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_import_ids=[],  # So we test running for all documents
+            document_import_ids=None,  # So we test running for all documents
             config=test_aggregate_config,
         )
 

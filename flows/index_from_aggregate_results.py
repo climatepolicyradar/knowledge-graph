@@ -1,7 +1,7 @@
 import json
 import os
 import tempfile
-from typing import Any, Final
+from typing import Any, Final, Sequence
 
 import boto3
 import httpx
@@ -127,7 +127,7 @@ async def index_aggregate_results_from_s3_to_vespa(
 @flow
 async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
-    document_import_ids: list[DocumentImportId],
+    document_import_ids: Sequence[DocumentImportId] | None = None,
     config: Config | None = None,
 ) -> None:
     """Index aggregated inference results from a list of S3 URIs into Vespa."""
