@@ -81,28 +81,19 @@
                   Description
                 </p>
               </th>
-              <th
-                class="p-4 border-b border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-gray-700 w-32"
-              >
-                <p
-                  class="block text-sm font-normal leading-none text-slate-500 dark:text-slate-400"
-                >
-                  Classifier{{ 's' if total_count != 1 }}
-                </p>
-              </th>
             </tr>
           </thead>
           <tbody class="text-sm">
-            {% for concept in concepts|sort(attribute='id') %}
+            {% for concept in concepts|sort(attribute='wikibase_id') %}
             <tr
               class="hover:bg-slate-50 dark:hover:bg-gray-700 cursor-pointer"
-              onclick="window.location='{{ concept.id }}/index.html'"
+              onclick="window.location='{{ concept.wikibase_id }}/index.html'"
             >
               <td
                 class="p-4 border-b border-slate-200 dark:border-slate-600 py-5"
               >
                 <p class="text-slate-800 dark:text-slate-200 break-words">
-                  {{ concept.str }}
+                  {{ concept.preferred_label }}
                 </p>
               </td>
               <td
@@ -110,14 +101,6 @@
               >
                 <p class="text-slate-500 dark:text-slate-400 break-words">
                   {{ concept.description }}
-                </p>
-              </td>
-              <td
-                class="p-4 border-b border-slate-200 dark:border-slate-600 py-5"
-              >
-                <p class="text-slate-500 dark:text-slate-400">
-                  {{ concept.n_classifiers }} classifier{{ 's' if
-                  concept.n_classifiers != 1 }}
                 </p>
               </td>
             </tr>

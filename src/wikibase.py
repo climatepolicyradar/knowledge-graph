@@ -476,7 +476,7 @@ class WikibaseSession:
                         preferred_label=preferred_label,
                         alternative_labels=alternative_labels,
                         description=description,
-                        wikibase_id=wikibase_id,
+                        wikibase_id=WikibaseID(wikibase_id),
                     )
 
                     if "claims" in entity and entity["claims"] != []:
