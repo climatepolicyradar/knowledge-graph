@@ -8,7 +8,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import S3Uri
+from flows.aggregate_inference_results import RunOutputIdentifier, S3Uri
 from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
@@ -27,12 +27,13 @@ async def test_index_from_aggregated_inference_results(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for (
@@ -117,12 +118,13 @@ async def test_index_from_aggregated_inference_results__error_handling(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for file_key, _ in mock_bucket_inference_results.items():
@@ -159,16 +161,14 @@ async def test_run_indexing_from_aggregate_results(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ]
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
@@ -176,7 +176,7 @@ async def test_run_indexing_from_aggregate_results(
     ):
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_import_ids=document_import_ids,
+            document_import_ids=aggregate_inference_results_import_ids,
             config=test_aggregate_config,
         )
 
@@ -229,3 +229,40 @@ async def test_run_indexing_from_aggregate_results(
                             f"Concept {concept} not found in expected concepts for passage "
                             f"{text_block_id}."
                         )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_run_indexing_from_aggregate_results__failure(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
+    mock_run_output_identifier_str: str,
+    s3_prefix_inference_results: str,
+    test_aggregate_config,
+) -> None:
+    """Test that we handled the exception correctly during passage indexing."""
+
+    NON_EXISTENT_ID = DocumentImportId("non_existent_document")
+    document_import_ids = aggregate_inference_results_import_ids + [NON_EXISTENT_ID]
+
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
+
+    with patch(
+        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        # Index the aggregated inference results from S3 to Vespa
+        with pytest.raises(ValueError) as excinfo:
+            await run_indexing_from_aggregate_results(
+                run_output_identifier=run_output_identifier,
+                config=test_aggregate_config,
+                document_import_ids=document_import_ids,
+            )
+
+        assert f"Failed to process 1/{len(document_import_ids)} documents" in str(
+            excinfo.value
+        )

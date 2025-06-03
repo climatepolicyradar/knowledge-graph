@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import tempfile
@@ -75,6 +76,7 @@ async def index_aggregate_results_from_s3_to_vespa(
     logger.info(
         f"Loading aggregated inference results from S3: {aggregated_results_key}"
     )
+
     aggregated_inference_results = load_json_data_from_s3(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
@@ -155,13 +157,34 @@ async def run_indexing_from_aggregate_results(
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
-        for document_import_id in document_import_ids:
-            logger.info(
-                f"Indexing aggregated results for document: {document_import_id}"
-            )
-            await index_aggregate_results_from_s3_to_vespa(
+        tasks = [
+            index_aggregate_results_from_s3_to_vespa(
                 config=config,
                 run_output_identifier=run_output_identifier,
                 document_import_id=document_import_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
+            for document_import_id in document_import_ids
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        failures: list[Exception] = []
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.exception(f"Failed to process document: {result}")
+                failures.append(result)
+            elif result is None:
+                continue
+            else:
+                raise ValueError(
+                    f"Unexpected type of result. Type: `{type(result)}`, value: `{result}`"
+                )
+
+        if len(failures) > 0:
+            raise ValueError(
+                f"Failed to process {len(failures)}/{len(results)} documents"
+            )
+
+        return None
