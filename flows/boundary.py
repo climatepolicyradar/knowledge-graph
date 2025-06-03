@@ -221,6 +221,16 @@ def s3_object_write_text(s3_uri: str, text: str) -> None:
     s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
 
 
+def s3_copy_file(source, target) -> None:
+    """Copy a file from one S3 location to another."""
+    s3 = boto3.client("s3")
+    s3.copy_object(
+        Bucket=source.bucket,
+        CopySource=source.uri,
+        Key=target.key,
+    )
+
+
 def s3_obj_generator_from_s3_prefixes(
     s3_prefixes: Sequence[str],
 ) -> Generator[

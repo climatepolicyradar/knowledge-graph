@@ -200,6 +200,7 @@ def test_validate_passages_are_same_except_concepts():
 async def test_process_single_document__success(
     mock_bucket_labelled_passages_large, test_aggregate_config
 ):
+    _, bucket, s3_client = mock_bucket_labelled_passages_large
     document_id = "CCLW.executive.10061.4515"
     classifier_specs = [
         ClassifierSpec(name="Q218", alias="v5"),
@@ -218,6 +219,26 @@ async def test_process_single_document__success(
                 test_aggregate_config,
                 "run_output_identifier",
             )
+
+        # Check that the file is in the run_output_identifier prefix with head object
+        response = s3_client.head_object(
+            Bucket=bucket,
+            Key=os.path.join(
+                test_aggregate_config.aggregate_inference_results_prefix,
+                "run_output_identifier",
+                f"{document_id}.json",
+            ),
+        )
+        # Check that the file is in the latest prefix with head object
+        response = s3_client.head_object(
+            Bucket=bucket,
+            Key=os.path.join(
+                test_aggregate_config.aggregate_inference_results_prefix,
+                "latest",
+                f"{document_id}.json",
+            ),
+        )
+        assert response["ContentLength"] > 0
 
 
 @pytest.mark.asyncio

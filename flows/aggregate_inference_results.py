@@ -18,6 +18,7 @@ from flows.boundary import (
     DocumentImportId,
     TextBlockId,
     convert_labelled_passage_to_concepts,
+    s3_copy_file,
     s3_object_write_text,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
@@ -58,6 +59,11 @@ class S3Uri:
     def __str__(self) -> str:
         """Return the string representation of the S3 URI."""
         return f"{self.protocol}://{self.bucket}/{self.key}"
+
+    @property
+    def uri(self) -> str:
+        """Return the string representation of the S3 URI."""
+        return os.path.join(self.bucket, self.key)
 
     @property
     def stem(self) -> str:
@@ -144,7 +150,7 @@ def get_all_labelled_passages_for_one_document(
 
     for spec in classifier_specs:
         s3_uri = S3Uri(
-            bucket=config.cache_bucket_str,
+            bucket=config.cache_bucket,
             key=os.path.join(
                 config.document_source_prefix,
                 spec.name,
@@ -230,7 +236,7 @@ async def process_single_document(
 
         # Write to s3
         s3_uri = S3Uri(
-            bucket=config.cache_bucket_str,
+            bucket=config.cache_bucket,
             key=os.path.join(
                 config.aggregate_inference_results_prefix,
                 run_output_identifier,
@@ -238,6 +244,19 @@ async def process_single_document(
             ),
         )
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
+
+        # Duplicate to latest
+        s3_copy_file(
+            source=s3_uri,
+            target=S3Uri(
+                bucket=config.cache_bucket,
+                key=os.path.join(
+                    config.aggregate_inference_results_prefix,
+                    "latest",
+                    f"{document_id}.json",
+                ),
+            ),
+        )
         return document_id
     except ClientError as e:
         print(e.response)
