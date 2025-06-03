@@ -10,7 +10,7 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.client.schemas.objects import FlowRun
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import S3Uri
+from flows.aggregate_inference_results import RunOutputIdentifier, S3Uri
 from flows.boundary import (
     DocumentImportId,
     get_document_passages_from_vespa__generator,
@@ -272,24 +272,17 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_run_indexing_from_aggregate_results(
-    vespa_app,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    mock_s3_client,
-    mock_bucket: str,
-    mock_bucket_inference_results: dict[str, dict[str, Any]],
-    s3_prefix_inference_results: str,
+async def test_run_indexing_from_aggregate_results__invokes_subdeployments_correctly(
     test_aggregate_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
-
     document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ] + [DocumentImportId("non_existent_document")]
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+        DocumentImportId("cclw.executive.1.1"),
+        DocumentImportId("cclw.executive.1.2"),
+        DocumentImportId("cclw.executive.1.3"),
+    ]
+    run_output_identifier = RunOutputIdentifier("123-456")
 
-    # Assert that we invoke the sub flows/deployments with the correct parameters
     with patch(
         "flows.index_from_aggregate_results.run_deployment"
     ) as mock_run_deployment:
@@ -303,6 +296,7 @@ async def test_run_indexing_from_aggregate_results(
 
         mock_run_deployment.side_effect = mock_awaitable
 
+        # Run indexing
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
             document_import_ids=document_import_ids,
@@ -310,13 +304,37 @@ async def test_run_indexing_from_aggregate_results(
             batch_size=1,
         )
 
+        # Assert that the run_deployment was called the expected params
         assert mock_run_deployment.call_count == len(document_import_ids)
         for call in mock_run_deployment.call_args_list:
-            call_params = call._get_call_arguments()[1]["parameters"]
+            call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
             assert len(call_params["document_import_ids"]) == 1
             assert call_params["document_import_ids"][0] in document_import_ids
             assert call_params["config_json"] == test_aggregate_config.to_json()
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_run_indexing_from_aggregate_results__handles_failures(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    s3_prefix_inference_results: str,
+    test_aggregate_config,
+) -> None:
+    """Test that run passage level indexing correctly from aggregated restuls."""
+
+    NON_EXISTENT_ID = DocumentImportId("non_existent_document")
+    document_import_ids = [
+        DocumentImportId(Path(file_key).stem)
+        for file_key in mock_bucket_inference_results.keys()
+    ] + [NON_EXISTENT_ID]
+
+    run_output_identifier_str = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(run_output_identifier_str)
 
     # Assert that the indexing runs correctly when called as sub deployments and that we
     # continue on failure of one of the documents.
