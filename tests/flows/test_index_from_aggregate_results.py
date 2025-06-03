@@ -14,8 +14,8 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
 )
 from flows.index_from_aggregate_results import (
+    index_aggregate_results_for_batch_of_documents,
     index_aggregate_results_from_s3_to_vespa,
-    run_indexing_from_aggregate_results,
 )
 
 
@@ -153,7 +153,7 @@ async def test_index_from_aggregated_inference_results__error_handling(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_run_indexing_from_aggregate_results(
+async def test_index_aggregate_results_for_batch_of_documents(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
@@ -174,10 +174,10 @@ async def test_run_indexing_from_aggregate_results(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
         return_value=local_vespa_search_adapter,
     ):
-        await run_indexing_from_aggregate_results(
+        await index_aggregate_results_for_batch_of_documents(
             run_output_identifier=run_output_identifier,
             document_import_ids=document_import_ids,
-            config=test_aggregate_config,
+            config_json=test_aggregate_config.to_json(),
         )
 
         # Verify that the final data in vespa matches the expected results
@@ -233,7 +233,7 @@ async def test_run_indexing_from_aggregate_results(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_run_indexing_from_aggregate_results__failure(
+async def test_index_aggregate_results_for_batch_of_documents__failure(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
@@ -256,9 +256,9 @@ async def test_run_indexing_from_aggregate_results__failure(
     ):
         # Index the aggregated inference results from S3 to Vespa
         with pytest.raises(ValueError) as excinfo:
-            await run_indexing_from_aggregate_results(
+            await index_aggregate_results_for_batch_of_documents(
                 run_output_identifier=run_output_identifier,
-                config=test_aggregate_config,
+                config_json=test_aggregate_config.to_json(),
                 document_import_ids=document_import_ids,
             )
 

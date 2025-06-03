@@ -29,7 +29,7 @@ from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
 )
 from flows.index_from_aggregate_results import (
-    run_indexing_from_aggregate_results,
+    index_aggregate_results_for_batch_of_documents,
 )
 from flows.inference import (
     classifier_inference,
@@ -144,7 +144,7 @@ create_deployment(
 )
 
 create_deployment(
-    flow=run_indexing_from_aggregate_results,
+    flow=index_aggregate_results_for_batch_of_documents,
     description="Index aggregated inference results from S3 into Vespa",
 )
 

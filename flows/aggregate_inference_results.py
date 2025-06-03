@@ -107,6 +107,18 @@ class Config:
             )
         return self.cache_bucket
 
+    def to_json(self) -> str:
+        """Convert the Config instance to a JSON string."""
+        return json.dumps(
+            {
+                "cache_bucket": self._cache_bucket,
+                "document_source_prefix": self.document_source_prefix,
+                "aggregate_inference_results_prefix": self.aggregate_inference_results_prefix,
+                "bucket_region": self.bucket_region,
+                "aws_env": self.aws_env.value,
+            }
+        )
+
 
 def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""

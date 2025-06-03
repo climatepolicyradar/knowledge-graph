@@ -8,6 +8,8 @@ import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
+from prefect.client.schemas.objects import FlowRun
+from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from pydantic import PositiveInt
 from vespa.application import VespaAsync
@@ -23,12 +25,20 @@ from flows.boundary import (
     TextBlockId,
     VespaDataId,
     VespaHitId,
+    function_to_flow_name,
+    generate_deployment_name,
     get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
+from flows.inference import (
+    Profiler,
+    wait_for_semaphore,
+)
+from flows.utils import SlackNotify, iterate_batch
 
 DEFAULT_INDEXER_MAX_CONNECTIONS: Final[PositiveInt] = 50
+INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
 
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
@@ -125,17 +135,21 @@ async def index_aggregate_results_from_s3_to_vespa(
 
 
 @flow
-async def run_indexing_from_aggregate_results(
+async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_import_ids: list[DocumentImportId],
-    config: Config | None = None,
+    config_json: dict,
 ) -> None:
     """Index aggregated inference results from a list of S3 URIs into Vespa."""
 
     logger = get_run_logger()
 
-    if config is None:
-        config = await Config.create()
+    config = Config(**config_json)
+    logger.info(
+        f"Running indexing for batch with config: {config}, "
+        f"run_output_identifier: {run_output_identifier},  "
+        f"no. of documents: {len(document_import_ids)}"
+    )
 
     if not document_import_ids:
         raise NotImplementedError(
@@ -187,3 +201,87 @@ async def run_indexing_from_aggregate_results(
             )
 
         return None
+
+
+@flow(
+    log_prints=True,
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
+async def run_indexing_from_aggregate_results(
+    run_output_identifier: RunOutputIdentifier,
+    document_import_ids: list[DocumentImportId],
+    config: Config | None = None,
+    batch_size: int = 10,  # TODO: Check
+    indexer_concurrency_limit: PositiveInt = INDEXER_CONCURRENCY_LIMIT,
+) -> None:
+    """Index aggregated inference results from a list of S3 URIs into Vespa."""
+
+    logger = get_run_logger()
+
+    if config is None:
+        config = await Config.create()
+
+    logger.info(f"Running indexing with config: {config}")
+
+    if not document_import_ids:
+        raise NotImplementedError(
+            "No document import IDs provided. "
+            "This flow is not designed to run without them."
+        )
+
+    flow_name = function_to_flow_name(index_aggregate_results_for_batch_of_documents)
+    deployment_name = generate_deployment_name(
+        flow_name=flow_name, aws_env=config.aws_env
+    )
+
+    semaphore = asyncio.Semaphore(indexer_concurrency_limit)
+
+    with Profiler(
+        printer=print,
+        name="preparing tasks",
+    ):
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                run_deployment(
+                    name=f"{flow_name}/{deployment_name}",
+                    parameters={
+                        "document_import_ids": batch,
+                        "config_json": config.to_json(),
+                        "run_output_identifier": run_output_identifier,
+                    },
+                    # Rely on the flow's own timeout, if any, to make sure it
+                    # eventually ends[1].
+                    #
+                    # [1]:
+                    # > Setting timeout to None will allow this function to
+                    # > poll indefinitely.
+                    timeout=None,
+                ),
+            )
+            for batch in iterate_batch(document_import_ids, batch_size)
+        ]
+
+    with Profiler(
+        printer=print,
+        name="gathering tasks",
+    ):
+        results: list[FlowRun | BaseException] = await asyncio.gather(
+            *tasks, return_exceptions=True
+        )
+
+    failures = []
+    successes = []
+    for result in results:
+        if isinstance(result, BaseException):
+            failures.append(result)
+        else:
+            successes.append(result)
+
+    if failures:
+        raise ValueError(
+            "Some documents were processed in batches that had an unknown "
+            f"number of failures: import ids in batches with failures: {len(failures)}, "
+            f"import ids in batches with successes: {len(successes)}."
+        )
