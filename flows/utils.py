@@ -93,6 +93,29 @@ class SlackNotify:
         return None
 
 
+class S3Uri:
+    """A URI for an S3 object."""
+
+    def __init__(self, bucket: str, key: str, protocol: str = "s3"):
+        self.protocol = protocol
+        self.bucket = bucket
+        self.key = key
+
+    def __str__(self) -> str:
+        """Return the string representation of the S3 URI."""
+        return f"{self.protocol}://{self.bucket}/{self.key}"
+
+    @property
+    def uri(self) -> str:
+        """Return the string representation of the S3 URI."""
+        return os.path.join(self.bucket, self.key)
+
+    @property
+    def stem(self) -> str:
+        """Return the stem of the S3 URI (the key without the extension)."""
+        return Path(self.key).stem
+
+
 def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
     """
     Remove the suffix from a file name that indicates it has been translated.

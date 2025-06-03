@@ -3,7 +3,6 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any, TypeAlias
 
 import boto3
@@ -23,6 +22,7 @@ from flows.boundary import (
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
+    S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     wait_for_semaphore,
@@ -46,29 +46,6 @@ SpecStr: TypeAlias = str
 
 # A serialised vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
-
-
-class S3Uri:
-    """A URI for an S3 object."""
-
-    def __init__(self, bucket: str, key: str, protocol: str = "s3"):
-        self.protocol = protocol
-        self.bucket = bucket
-        self.key = key
-
-    def __str__(self) -> str:
-        """Return the string representation of the S3 URI."""
-        return f"{self.protocol}://{self.bucket}/{self.key}"
-
-    @property
-    def uri(self) -> str:
-        """Return the string representation of the S3 URI."""
-        return os.path.join(self.bucket, self.key)
-
-    @property
-    def stem(self) -> str:
-        """Return the stem of the S3 URI (the key without the extension)."""
-        return Path(self.key).stem
 
 
 class AggregationFailure(Exception):
