@@ -4,7 +4,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeAlias, TypedDict
+from typing import Any, TypeAlias
 
 import boto3
 from prefect import flow, task
@@ -63,11 +63,12 @@ class S3Uri:
         return Path(self.key).stem
 
 
-class DocumentFailure(TypedDict):
+class DocumentFailure(Exception):
     """A document failure."""
 
-    document_id: DocumentImportId
-    exception: Exception
+    def __init__(self, document_id: DocumentImportId, exception: Exception):
+        self.document_id = document_id
+        self.exception = exception
 
 
 @dataclass()
@@ -205,7 +206,7 @@ async def process_single_document(
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-) -> tuple[DocumentImportId, Exception | None]:
+) -> DocumentImportId | DocumentFailure:
     """Process a single document and return its status."""
     try:
         all_labelled_passages = get_all_labelled_passages_for_one_document(
@@ -223,9 +224,9 @@ async def process_single_document(
             ),
         )
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
-        return document_id, None
+        return document_id
     except Exception as e:
-        return document_id, e
+        return DocumentFailure(document_id=document_id, exception=e)
 
 
 async def create_aggregate_inference_summary_artifact(
@@ -245,8 +246,8 @@ async def create_aggregate_inference_summary_artifact(
 
     details = [
         {
-            "Failed document ID": failure["document_id"],
-            "Exception": str(failure["exception"]),
+            "Failed document ID": failure.document_id,
+            "Exception": str(failure.exception),
         }
         for failure in failures
     ]
@@ -315,16 +316,11 @@ async def aggregate_inference_results(
 
     results = await asyncio.gather(*tasks)
 
-    for document_id, error in results:
-        if not error:
-            successes.append(document_id)
+    for result in results:
+        if isinstance(result, DocumentFailure):
+            failures.append(result)
         else:
-            failures.append(DocumentFailure(document_id=document_id, exception=error))
-
-    # Results
-    print(
-        f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}/{len(document_ids)}"
-    )
+            successes.append(result)
 
     await create_aggregate_inference_summary_artifact(
         config=config,
