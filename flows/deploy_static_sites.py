@@ -64,6 +64,7 @@ def deploy_static_sites():
     names = {
         "concept_librarian": "cpr-knowledge-graph-concept-librarian",
         "labelling_librarian": "cpr-knowledge-graph-labelling-librarian",
+        "vibe_check": "cpr-knowledge-graph-vibe-check",
     }
     for app_name, bucket_name in names.items():
         generate_static_site(app_name)
