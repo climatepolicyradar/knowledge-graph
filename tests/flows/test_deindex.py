@@ -17,7 +17,6 @@ from cpr_sdk.s3 import S3_PATTERN, _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.io import VespaResponse
 
-import flows.count_family_document_concepts as count_family_document_concepts
 from flows.boundary import (
     ConceptModel,
     DocumentImporter,
@@ -52,7 +51,6 @@ from flows.deindex import (
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, serialise_labels
 from flows.utils import _s3_object_write_bytes, _s3_object_write_text
 from scripts.cloud import AwsEnv, ClassifierSpec
-from src.concept import Concept
 from src.exceptions import PartialUpdateError
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -795,12 +793,6 @@ async def test_run_partial_updates_of_concepts_for_document_passages(
             Key=key,
         )
 
-    assert Counter(
-        {Concept(preferred_label="forestry sector", wikibase_id=WikibaseID("Q787")): 1}
-    ) == await count_family_document_concepts.load_parse_concepts_counts(
-        concepts_counts_keep_uri
-    )
-
     # Vespa state after:
     _hit_id, passage_remove_1_post = get_document_passage_from_vespa(
         text_block_id=labelled_passages_remove[0].id,
@@ -1111,12 +1103,6 @@ async def test_deindex_labelled_passages_from_s3_to_vespa(
             Bucket=mock_bucket,
             Key=key,
         )
-
-    assert Counter(
-        {Concept(preferred_label="forestry sector", wikibase_id=WikibaseID("Q787")): 1}
-    ) == await count_family_document_concepts.load_parse_concepts_counts(
-        concepts_counts_keep_uri
-    )
 
     # Vespa state after:
     _hit_id, passage_remove_1_post = get_document_passage_from_vespa(

@@ -19,10 +19,6 @@ from prefect.flows import Flow
 import flows.boundary as boundary
 import flows.deindex as deindex
 from flows.aggregate_inference_results import aggregate_inference_results
-from flows.count_family_document_concepts import (
-    count_family_document_concepts,
-    load_update_document_concepts_counts,
-)
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import (
@@ -168,18 +164,6 @@ create_deployment(
 create_deployment(
     flow=deindex.deindex_labelled_passages_from_s3_to_vespa,
     description="Run partial updates of labelled passages stored in S3 into Vespa",
-)
-
-# Concepts counting
-
-create_deployment(
-    flow=count_family_document_concepts,
-    description="Update family documents in Vespa to include concepts' counts from S3",
-)
-
-create_deployment(
-    flow=load_update_document_concepts_counts,
-    description="Update 1 family document in Vespa to include concepts' counts from S3",
 )
 
 # Wikibase
