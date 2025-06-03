@@ -164,16 +164,13 @@ async def test_index_aggregate_results_for_batch_of_documents(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ]
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
@@ -182,8 +179,8 @@ async def test_index_aggregate_results_for_batch_of_documents(
     ):
         await index_aggregate_results_for_batch_of_documents(
             run_output_identifier=run_output_identifier,
-            document_import_ids=document_import_ids,
-            config_json=test_aggregate_config.to_json(),
+            document_import_ids=aggregate_inference_results_import_ids,
+            config=test_aggregate_config.to_json(),
         )
 
         # Verify that the final data in vespa matches the expected results
@@ -245,6 +242,7 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
@@ -252,10 +250,7 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
     """Test that we handled the exception correctly during passage indexing."""
 
     NON_EXISTENT_ID = DocumentImportId("non_existent_document")
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ] + [NON_EXISTENT_ID]
+    document_import_ids = aggregate_inference_results_import_ids + [NON_EXISTENT_ID]
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
