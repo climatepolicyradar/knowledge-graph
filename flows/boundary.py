@@ -1294,7 +1294,7 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
     logger.info("converting labelled passages to Vespa concepts")
     grouped_concepts: dict[TextBlockId, list[VespaConcept]] = {
-        TextBlockId(labelled_passage.id): convert_labelled_passage_to_concepts(
+        TextBlockId(labelled_passage.id): convert_labelled_passage_to_concepts(  # pyright: ignore
             labelled_passage
         )
         for labelled_passage in document_labelled_passages
