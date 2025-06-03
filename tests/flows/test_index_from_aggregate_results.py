@@ -316,6 +316,7 @@ async def test_run_indexing_from_aggregate_results(
             assert call_params["run_output_identifier"] == run_output_identifier
             assert len(call_params["document_import_ids"]) == 1
             assert call_params["document_import_ids"][0] in document_import_ids
+            assert call_params["config_json"] == test_aggregate_config.to_json()
 
     # Assert that the indexing runs correctly when called as sub deployments and that we
     # continue on failure of one of the documents.
