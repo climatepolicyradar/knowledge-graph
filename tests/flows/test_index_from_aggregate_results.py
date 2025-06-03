@@ -30,12 +30,13 @@ async def test_index_from_aggregated_inference_results(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for (
@@ -120,12 +121,13 @@ async def test_index_from_aggregated_inference_results__error_handling(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for file_key, _ in mock_bucket_inference_results.items():
@@ -162,6 +164,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
@@ -171,7 +174,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
         DocumentImportId(Path(file_key).stem)
         for file_key in mock_bucket_inference_results.keys()
     ]
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
@@ -242,6 +245,7 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
@@ -253,8 +257,7 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
         for file_key in mock_bucket_inference_results.keys()
     ] + [NON_EXISTENT_ID]
 
-    run_output_identifier_str = Path(next(iter(mock_bucket_inference_results))).parts[1]
-    run_output_identifier = RunOutputIdentifier(run_output_identifier_str)
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",

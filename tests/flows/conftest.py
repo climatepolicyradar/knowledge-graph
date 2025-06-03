@@ -431,9 +431,17 @@ def mock_bucket_labelled_passages(
 
 
 @pytest.fixture
-def s3_prefix_inference_results() -> str:
+def mock_run_output_identifier_str() -> str:
+    """Returns the identifier for the run output."""
+
+    return "2025-05-25T07:32-eta85-alchibah"
+
+
+@pytest.fixture
+def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
     """Returns the s3 prefix for the inference results."""
-    return "inference_results/2025-05-25T07:32-eta85-alchibah/"
+
+    return f"inference_results/{mock_run_output_identifier_str}/"
 
 
 @pytest.fixture
