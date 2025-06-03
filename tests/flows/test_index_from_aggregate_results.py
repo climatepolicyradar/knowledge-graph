@@ -180,7 +180,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
         await index_aggregate_results_for_batch_of_documents(
             run_output_identifier=run_output_identifier,
             document_import_ids=aggregate_inference_results_import_ids,
-            config=test_aggregate_config.to_json(),
+            config_json=test_aggregate_config.to_json(),
         )
 
         # Verify that the final data in vespa matches the expected results

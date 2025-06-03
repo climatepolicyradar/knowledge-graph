@@ -20,10 +20,11 @@ from flows.boundary import (
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, wait_for_semaphore
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    wait_for_semaphore,
 )
 from scripts.cloud import (
     AwsEnv,

@@ -32,11 +32,8 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
-from flows.inference import (
-    Profiler,
-    wait_for_semaphore,
-)
-from flows.utils import SlackNotify, iterate_batch
+from flows.inference import Profiler
+from flows.utils import SlackNotify, iterate_batch, wait_for_semaphore
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
