@@ -433,6 +433,7 @@ async def test_run_partial_updates_of_concepts_for_document_passages_for_large_d
 
 
 @pytest.mark.asyncio
+@pytest.mark.vespa
 async def test_index_labelled_passages_from_s3_to_vespa_doesnt_allow_latest(
     mock_bucket,
     mock_bucket_labelled_passages,
