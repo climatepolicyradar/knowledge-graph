@@ -271,6 +271,7 @@ async def run_indexing_from_aggregate_results(
             *tasks, return_exceptions=True
         )
 
+    # TODO: Replace with a prefect artifact.
     failures = []
     successes = []
     for result in results:
@@ -281,7 +282,5 @@ async def run_indexing_from_aggregate_results(
 
     if failures:
         raise ValueError(
-            "Some documents were processed in batches that had an unknown "
-            f"number of failures: import ids in batches with failures: {len(failures)}, "
-            f"import ids in batches with successes: {len(successes)}."
+            f"Some batches of documents had failures: {len(failures)}/{len(results)} failed."
         )
