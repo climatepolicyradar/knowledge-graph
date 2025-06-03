@@ -3,10 +3,12 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, TypeAlias, TypedDict
+from pathlib import Path
+from typing import Any, TypeAlias
 
 import boto3
 from prefect import flow, task
+from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ConcurrentTaskRunner
@@ -17,10 +19,10 @@ from flows.boundary import (
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, wait_for_semaphore
 from flows.utils import (
     SlackNotify,
-    iterate_batch,
+    collect_unique_file_stems_under_prefix,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -46,47 +48,65 @@ SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 class S3Uri:
     """A URI for an S3 object."""
 
-    def __init__(
-        self, protocol: str = "s3", bucket: str | None = None, key: str | None = None
-    ):
+    def __init__(self, bucket: str, key: str, protocol: str = "s3"):
         self.protocol = protocol
         self.bucket = bucket
         self.key = key
 
     def __str__(self) -> str:
         """Return the string representation of the S3 URI."""
-        if not self.bucket or not self.key:
-            raise ValueError("Bucket and key must be set")
         return f"{self.protocol}://{self.bucket}/{self.key}"
 
+    @property
+    def stem(self) -> str:
+        """Return the stem of the S3 URI (the key without the extension)."""
+        return Path(self.key).stem
 
-class DocumentFailure(TypedDict):
+
+class DocumentFailure(Exception):
     """A document failure."""
 
-    document_id: DocumentImportId
-    exception: Exception
+    def __init__(self, document_id: DocumentImportId, exception: Exception):
+        self.document_id = document_id
+        self.exception = exception
 
 
 @dataclass()
 class Config:
     """Configuration used across flow runs."""
 
-    cache_bucket: str | None = None
+    _cache_bucket: str | None = None
     document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
     aggregate_inference_results_prefix: str = INFERENCE_RESULTS_PREFIX
     bucket_region: str = "eu-west-1"
     aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
 
+    @property
+    def cache_bucket(self) -> str:
+        """Get the cache bucket name. Raises ValueError if not set."""
+        if self._cache_bucket is None:
+            raise ValueError("cache_bucket has not been set")
+        return self._cache_bucket
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
         config = cls()
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
+        if not config._cache_bucket:
+            config._cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
             )
 
         return config
+
+    @property
+    def cache_bucket_str(self) -> str:
+        """Return the cache bucket, raising an error if not set."""
+        if not self.cache_bucket:
+            raise ValueError(
+                "Cache bucket is not set in config, consider calling the `create` method first."
+            )
+        return self.cache_bucket
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
@@ -110,9 +130,10 @@ def get_all_labelled_passages_for_one_document(
     s3 = boto3.client("s3")
 
     labelled_passages = defaultdict(list)
+
     for spec in classifier_specs:
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.document_source_prefix,
                 spec.name,
@@ -185,7 +206,7 @@ async def process_single_document(
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-) -> tuple[DocumentImportId, Exception | None]:
+) -> DocumentImportId | DocumentFailure:
     """Process a single document and return its status."""
     try:
         all_labelled_passages = get_all_labelled_passages_for_one_document(
@@ -195,7 +216,7 @@ async def process_single_document(
 
         # Write to s3
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.aggregate_inference_results_prefix,
                 run_output_identifier,
@@ -203,9 +224,39 @@ async def process_single_document(
             ),
         )
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
-        return document_id, None
+        return document_id
     except Exception as e:
-        return document_id, e
+        return DocumentFailure(document_id=document_id, exception=e)
+
+
+async def create_aggregate_inference_summary_artifact(
+    config: Config,
+    document_ids: list[DocumentImportId],
+    failures: list[DocumentFailure],
+) -> None:
+    """Create a summary artifact of the aggregated inference results."""
+
+    overview_description = f"""# Aggregate Inference Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Documents processed**: {len(document_ids)}
+- **Failed documents**: {len(failures)}/{len(document_ids)}
+"""
+
+    details = [
+        {
+            "Failed document ID": failure.document_id,
+            "Exception": str(failure.exception),
+        }
+        for failure in failures
+    ]
+
+    await create_table_artifact(
+        key=f"aggregate-inference-{config.aws_env.value}",
+        table=details,
+        description=overview_description,
+    )
 
 
 @flow(
@@ -218,7 +269,7 @@ async def process_single_document(
 async def aggregate_inference_results(
     document_ids: list[DocumentImportId],
     config: Config | None = None,
-    max_concurrent_tasks: int = 10,
+    max_concurrent_tasks: int = 5,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
@@ -226,8 +277,13 @@ async def aggregate_inference_results(
         config = await Config.create()
 
     if not document_ids:
-        raise NotImplementedError(
-            "No document ids provided, fallback is not supported yet"
+        print(
+            "no document ids provided, collecting all available from s3 under prefix: "
+            f"{config.document_source_prefix}"
+        )
+        document_ids = collect_unique_file_stems_under_prefix(
+            bucket_name=config.cache_bucket,
+            prefix=config.document_source_prefix,
         )
 
     run_output_identifier = build_run_output_identifier()
@@ -238,13 +294,18 @@ async def aggregate_inference_results(
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
 
+    semaphore = asyncio.Semaphore(max_concurrent_tasks)
+
     # Create tasks for each document
     tasks = [
-        process_single_document(
-            document_id,
-            classifier_specs,
-            config,
-            run_output_identifier,
+        wait_for_semaphore(
+            semaphore,
+            process_single_document(
+                document_id,
+                classifier_specs,
+                config,
+                run_output_identifier,
+            ),
         )
         for document_id in document_ids
     ]
@@ -253,24 +314,21 @@ async def aggregate_inference_results(
     failures: list[DocumentFailure] = []
     successes: list[DocumentImportId] = []
 
-    for batch in iterate_batch(tasks, max_concurrent_tasks):
-        results = await asyncio.gather(*batch)
+    results = await asyncio.gather(*tasks)
 
-        for document_id, error in results:
-            if not error:
-                successes.append(document_id)
-            else:
-                failures.append(
-                    DocumentFailure(document_id=document_id, exception=error)
-                )
+    for result in results:
+        if isinstance(result, DocumentFailure):
+            failures.append(result)
+        else:
+            successes.append(result)
 
-    # Results
-    print(
-        f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}/{len(document_ids)}"
+    await create_aggregate_inference_summary_artifact(
+        config=config,
+        document_ids=document_ids,
+        failures=failures,
     )
 
     if failures:
-        print(f"Failures: {failures}")
         raise ValueError(
             f"Saw {len(failures)} failures when aggregating inference results"
         )

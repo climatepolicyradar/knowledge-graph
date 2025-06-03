@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
 import typer
-import yaml
+import yaml  # pyright: ignore[reportMissingModuleSource]
 from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage
 from cpr_sdk.search_adaptors import VespaSearchAdapter

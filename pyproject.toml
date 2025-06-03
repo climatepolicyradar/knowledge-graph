@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "knowledge_graph"
-version = "0.4.2"
+version = "0.4.4"
 description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
@@ -38,6 +38,7 @@ prefect = {extras = ["slack"], version = "^3.3.1"}
 pydantic-ai = "^0.0.53"
 httpx = "^0.28.1"
 tenacity = "^9.1.2"
+requests = "^2.32.3"
 
 [tool.poetry.group.transformers]
 optional = true

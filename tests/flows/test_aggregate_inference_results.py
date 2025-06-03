@@ -7,11 +7,12 @@ from unittest.mock import patch
 
 import pydantic
 import pytest
-from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
+from prefect.artifacts import Artifact
 
 from flows.aggregate_inference_results import (
+    DocumentFailure,
     aggregate_inference_results,
     build_run_output_identifier,
     combine_labelled_passages,
@@ -104,6 +105,39 @@ async def test_aggregate_inference_results(
                 f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
             )
 
+            summary_artifact = await Artifact.get("aggregate-inference-sandbox")
+            assert summary_artifact and summary_artifact.description
+            assert summary_artifact.data == "[]"
+
+
+@pytest.mark.asyncio
+async def test_aggregate_inference_results__with_failures(
+    mock_bucket_labelled_passages_large, test_aggregate_config
+):
+    expect_failure_ids = ["Some.Made.Up.Document.ID", "Another.One.That.Should.Fail"]
+    document_ids = ["CCLW.executive.10061.4515"] + expect_failure_ids
+
+    with tempfile.TemporaryDirectory() as spec_dir:
+        # Write the concept specs to a YAML file
+        temp_spec_dir = Path(spec_dir)
+        classifier_specs = [
+            ClassifierSpec(name="Q123", alias="v4"),
+            ClassifierSpec(name="Q223", alias="v3"),
+        ]
+        spec_file = temp_spec_dir / "sandbox.yaml"
+        write_spec_file(spec_file, classifier_specs)
+
+        with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
+            with pytest.raises(ValueError):
+                await aggregate_inference_results(document_ids, test_aggregate_config)
+
+            summary_artifact = await Artifact.get("aggregate-inference-sandbox")
+            assert summary_artifact and summary_artifact.description
+            failured_ids = [
+                f["Failed document ID"] for f in json.loads(summary_artifact.data)
+            ]
+            assert set(failured_ids) == set(expect_failure_ids)
+
 
 def test_build_run_output_prefix():
     @flow()
@@ -176,7 +210,7 @@ async def test_process_single_document__success(
         write_spec_file(spec_file, classifier_specs)
 
         with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
-            assert (document_id, None) == await process_single_document(
+            assert document_id == await process_single_document(
                 document_id,
                 classifier_specs,
                 test_aggregate_config,
@@ -202,16 +236,16 @@ async def test_process_single_document__failure(
         write_spec_file(spec_file, classifier_specs)
 
         with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
-            document_id, error = await process_single_document(
+            result = await process_single_document(
                 document_id,
                 classifier_specs,
                 test_aggregate_config,
                 "run_output_identifier",
             )
-            assert isinstance(error, ClientError)
-            code = error.response["Error"]["Code"]
+            assert isinstance(result, DocumentFailure)
+            code = result.exception.response["Error"]["Code"]
             assert code == "NoSuchKey"
-            key = error.response["Error"]["Key"]
+            key = result.exception.response["Error"]["Key"]
             assert (
                 key
                 == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"

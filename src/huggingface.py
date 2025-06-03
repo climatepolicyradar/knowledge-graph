@@ -2,6 +2,8 @@ import os
 from typing import Optional
 
 from datasets import Dataset, load_dataset
+from huggingface_hub import add_collection_item
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from src.models.labelled_passage import LabelledPassage
 from src.span import Span
@@ -64,6 +66,19 @@ class HuggingfaceSession:
             metadata=row["metadata"],
         )
 
+    def add_dataset_to_collection(
+        self, dataset_name: str, collection_slug: str
+    ) -> None:
+        """Adds the dataset to a collection"""
+        add_collection_item(
+            collection_slug=f"{self.organisation}/{collection_slug}",
+            item_id=dataset_name,
+            exists_ok=True,
+            item_type="dataset",
+            token=self.token,
+        )
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(3))
     def push(self, dataset_name: str, labelled_passages: list[LabelledPassage]) -> None:
         """Pushes the dataset to the hub"""
         dataset = Dataset.from_dict(

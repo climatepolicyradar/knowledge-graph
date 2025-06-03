@@ -1,33 +1,34 @@
 import asyncio
 import json
 import os
-from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Final, Optional, TypeAlias
-from uuid import UUID
 
 import boto3
-import prefect.artifacts as artifacts
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
+from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
-from prefect.task_runners import ConcurrentTaskRunner
-from pydantic import SecretStr
+from pydantic import PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    Profiler,
     SlackNotify,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
+    iterate_batch,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -56,10 +57,9 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 }
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
-# Example: CCLW.executive.1813.2418
-DocumentImportId: TypeAlias = str
+CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
+
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
-DocumentStem: TypeAlias = str
 
 
 @dataclass()
@@ -140,7 +140,7 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
-def get_latest_ingest_documents(config: Config) -> list[str]:
+def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     """
     Get IDs of changed documents from the latest ingest run
 
@@ -178,7 +178,7 @@ def get_latest_ingest_documents(config: Config) -> list[str]:
 def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
-    requested_document_ids: Optional[list[DocumentImportId]],
+    requested_document_ids: Optional[Sequence[DocumentImportId]],
     current_bucket_file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
     """
@@ -227,7 +227,9 @@ def determine_file_stems(
     return requested_document_stems
 
 
-def remove_sabin_file_stems(file_stems: list[DocumentStem]) -> list[DocumentStem]:
+def remove_sabin_file_stems(
+    file_stems: Sequence[DocumentStem],
+) -> Sequence[DocumentStem]:
     """
     Remove Sabin document file stems from the list of file stems.
 
@@ -431,38 +433,6 @@ def _get_labelled_passage_from_prediction(
     )
 
 
-def _name_document_run_identifiers_set(
-    documents: set[DocumentRunIdentifier],
-    status: str,
-) -> list[dict[str, str]]:
-    """Convert a set of document run identifiers for table rows."""
-    keys = ("document_id", "classifier_name", "classifier_alias", "status")
-    return [dict(zip(keys, doc + (status,))) for doc in documents]
-
-
-async def report_documents_runs(
-    queued: set[DocumentRunIdentifier],
-    completed: set[DocumentRunIdentifier],
-    aws_env: AwsEnv,
-) -> None:
-    try:
-        # Create rows for both queued and completed documents with status
-        queued_rows = _name_document_run_identifiers_set(queued, "queued")
-        completed_rows = _name_document_run_identifiers_set(completed, "completed")
-
-        # Combine both sets of rows
-        all_rows = queued_rows + completed_rows
-
-        await artifacts.create_table_artifact(
-            table=all_rows,
-            description=f"# Document Processing Status ({aws_env.value})",
-            key=f"classifier-inference-document-processing-status-{aws_env.value}",
-        )
-    except Exception:
-        # Do nothing, not even log. It'll be too noisy.
-        pass
-
-
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
@@ -516,15 +486,9 @@ async def run_classifier_inference_on_document(
     return None
 
 
-def iterate_batch(data: list[str], batch_size: int = 400) -> Generator:
-    """Generate batches from a list with a specified size."""
-    for i in range(0, len(data), batch_size):
-        yield data[i : i + batch_size]
-
-
-@flow()
+@flow(log_prints=True)
 async def run_classifier_inference_on_batch_of_documents(
-    batch: list[str],
+    batch: list[DocumentStem],
     config_json: dict,
     classifier_name: str,
     classifier_alias: str,
@@ -596,18 +560,62 @@ async def run_classifier_inference_on_batch_of_documents(
     return None
 
 
+@Profiler(
+    printer=print,
+    name="processing results",
+)
+def group_inference_results_into_states(
+    results: list[FlowRun | BaseException],
+) -> tuple[
+    list[FlowRun | BaseException],
+    dict[ClassifierSpec, FlowRun],
+]:
+    """Group results of sub-runs into the different states of success and failure."""
+    failures: list[FlowRun | BaseException] = []
+    successes: dict[ClassifierSpec, FlowRun] = {}
+
+    for result in results:
+        if isinstance(result, BaseException):
+            failures.append(result)
+
+            print(
+                f"failed to process batch: {str(result)}",
+            )
+        else:
+            if not result.state:
+                failures.append(result)
+
+                print(
+                    f"flow run's state was unknown. Flow run name: `{result.name}`",
+                )
+            elif result.state.type != StateType.COMPLETED:
+                failures.append(result)
+
+                print(
+                    f"flow run's state was not completed. Flow run name: `{result.name}`",
+                )
+            elif result.state.type == StateType.COMPLETED:
+                classifier_spec = ClassifierSpec(
+                    name=result.parameters["classifier_name"],
+                    alias=result.parameters["classifier_alias"],
+                )
+                successes[classifier_spec] = result
+
+    return failures, successes
+
+
 @flow(
     log_prints=True,
-    task_runner=ConcurrentTaskRunner(),
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
 async def classifier_inference(
-    classifier_specs: Optional[list[ClassifierSpec]] = None,
-    document_ids: Optional[list[str]] = None,
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
-    config: Optional[Config] = None,
+    config: Config | None = None,
     batch_size: int = 1000,
+    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ):
     """
     Flow to run inference on documents within a bucket prefix.
@@ -653,42 +661,108 @@ async def classifier_inference(
         flow_name=flow_name, aws_env=config.aws_env
     )
 
-    failures: dict[ClassifierSpec, list[str | UUID]] = defaultdict(list)
+    semaphore = asyncio.Semaphore(classifier_concurrency_limit)
 
-    for classifier_spec in classifier_specs:
-        batches = iterate_batch(filtered_file_stems, batch_size)
-
+    with Profiler(
+        printer=print,
+        name="preparing tasks",
+    ):
         tasks = [
-            run_deployment(
-                name=f"{flow_name}/{deployment_name}",
-                parameters={
-                    "batch": batch,
-                    "config_json": config.to_json(),
-                    "classifier_name": classifier_spec.name,
-                    "classifier_alias": classifier_spec.alias,
-                },
-                # Rely on the flow's own timeout
-                timeout=None,
-                as_subflow=True,
+            wait_for_semaphore(
+                semaphore,
+                run_deployment(
+                    name=f"{flow_name}/{deployment_name}",
+                    parameters={
+                        "batch": batch,
+                        "config_json": config.to_json(),
+                        "classifier_name": classifier_spec.name,
+                        "classifier_alias": classifier_spec.alias,
+                    },
+                    # Rely on the flow's own timeout, if any, to make sure it
+                    # eventually ends[1].
+                    #
+                    # [1]:
+                    # > Setting timeout to None will allow this function to
+                    # > poll indefinitely.
+                    timeout=None,
+                ),
             )
-            for batch in batches
+            for classifier_spec in classifier_specs
+            for batch in iterate_batch(filtered_file_stems, batch_size)
         ]
 
-        results: list[FlowRun] = await asyncio.gather(*tasks)
+    with Profiler(
+        printer=print,
+        name="gathering tasks",
+    ):
+        results: list[FlowRun | BaseException] = await asyncio.gather(
+            *tasks, return_exceptions=True
+        )
 
-        for result in results:
-            # We'd never expect the flow run name to be missing, but
-            # Prefect does account for that in their class.
-            name: str = result.name
-            if result.state is None:
-                failures[classifier_spec].append(name)
-            else:
-                if result.state.type != StateType.COMPLETED:
-                    failures[classifier_spec].append(name)
+    failures, successes = group_inference_results_into_states(results)
+
+    failures_classifier_specs = set(classifier_specs) - set(successes.keys())
+
+    await create_inference_summary_artifact(
+        config=config,
+        filtered_file_stems=filtered_file_stems,
+        classifier_specs=classifier_specs,
+        successes=successes,
+        failures_classifier_specs=failures_classifier_specs,
+    )
 
     if failures:
         raise ValueError(
-            f"some classifier specs. had failures: {', '.join(map(str, failures.keys()))}"
+            f"some classifier specs. had failures: {','.join(map(str, failures_classifier_specs))}"
         )
 
-    print("Finished running classifier inference.")
+
+async def create_inference_summary_artifact(
+    config: Config,
+    filtered_file_stems: Sequence[DocumentStem],
+    classifier_specs: Sequence[ClassifierSpec],
+    successes: dict[ClassifierSpec, FlowRun],
+    failures_classifier_specs: set[ClassifierSpec],
+) -> None:
+    """Create a table artifact with summary information about the inference run."""
+
+    # Prepare summary data for the artifact
+    total_documents = len(filtered_file_stems)
+    total_classifiers = len(classifier_specs)
+    successful_classifiers = len(successes)
+    failed_classifiers = len(failures_classifier_specs)
+
+    # Format the overview information as a string for the description
+    overview_description = f"""# Classifier Inference Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Total documents processed**: {total_documents}
+- **Total classifiers**: {total_classifiers}
+- **Successful classifiers**: {successful_classifiers}
+- **Failed classifiers**: {failed_classifiers}
+"""
+
+    # Create classifier details table
+    classifier_details = [
+        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
+        for spec in successes.keys()
+    ] + [
+        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
+        for spec in failures_classifier_specs
+    ]
+
+    # Create a single artifact with overview in description and classifier details in table
+    await create_table_artifact(
+        key=f"classifier-inference-{config.aws_env.value}",
+        table=classifier_details,
+        description=overview_description,
+    )
+
+
+async def wait_for_semaphore(
+    semaphore: asyncio.Semaphore,
+    fn,
+):
+    async with semaphore:
+        return await fn

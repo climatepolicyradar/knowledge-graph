@@ -3,11 +3,11 @@ import inspect
 import os
 import re
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Callable, TypeAlias, TypeVar
+from typing import Callable, NewType, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
@@ -17,9 +17,16 @@ from typing_extensions import Self
 
 from scripts.cloud import ClassifierSpec
 
+# Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
-DocumentImportId: TypeAlias = str
-DocumentStem: TypeAlias = str
+DocumentImportId = NewType("DocumentImportId", str)
+# Needed to load the inference results
+# Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
+DocumentObjectUri = NewType("DocumentObjectUri", str)
+# A filename without the extension
+DocumentStem = NewType("DocumentStem", str)
+# Passed to a self-sufficient flow run
+DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
 
@@ -93,18 +100,18 @@ def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
 
     E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
     """
-    return re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name)
+    return DocumentImportId(re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name))
 
 
 T = TypeVar("T")
 
 
 def iterate_batch(
-    data: list[T] | Generator[T, None, None],
+    data: Sequence[T] | Generator[T, None, None],
     batch_size: int,
-) -> Generator[list[T], None, None]:
+) -> Generator[Sequence[T], None, None]:
     """Generate batches from a list or generator with a specified size."""
-    if isinstance(data, list):
+    if isinstance(data, Sequence):
         # For lists, we can use list slicing
         for i in range(0, len(data), batch_size):
             yield data[i : i + batch_size]
@@ -169,9 +176,24 @@ def get_file_stems_for_document_id(
     return stems
 
 
+def collect_unique_file_stems_under_prefix(
+    bucket_name: str,
+    prefix: str,
+) -> list[DocumentImportId]:
+    """Collect all unique file stems under a prefix."""
+    s3 = boto3.client("s3")
+    paginator = s3.get_paginator("list_objects_v2")
+    file_stems = []
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            if obj["Key"].endswith(".json"):
+                file_stems.append(Path(obj["Key"]).stem)
+    return list(set(file_stems))
+
+
 def get_labelled_passage_paths(
-    document_ids: list[DocumentImportId],
-    classifier_specs: list[ClassifierSpec],
+    document_ids: Sequence[DocumentImportId],
+    classifier_specs: Sequence[ClassifierSpec],
     cache_bucket: str,
     labelled_passages_prefix: str,
 ) -> list[str]:
