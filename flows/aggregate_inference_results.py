@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, TypeAlias
 
 import boto3
+from botocore.exceptions import ClientError
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
@@ -63,12 +64,15 @@ class S3Uri:
         return Path(self.key).stem
 
 
-class DocumentFailure(Exception):
+class AggregationFailure(Exception):
     """A document failure."""
 
-    def __init__(self, document_id: DocumentImportId, exception: Exception):
+    def __init__(
+        self, document_id: DocumentImportId, exception: Exception, context: str
+    ):
         self.document_id = document_id
         self.exception = exception
+        self.context = context
 
 
 @dataclass()
@@ -206,7 +210,7 @@ async def process_single_document(
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-) -> DocumentImportId | DocumentFailure:
+) -> DocumentImportId | AggregationFailure:
     """Process a single document and return its status."""
     try:
         all_labelled_passages = get_all_labelled_passages_for_one_document(
@@ -225,14 +229,20 @@ async def process_single_document(
         )
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
         return document_id
+    except ClientError as e:
+        raise AggregationFailure(
+            document_id=document_id, exception=e, context=e.response
+        )
     except Exception as e:
-        return DocumentFailure(document_id=document_id, exception=e)
+        raise AggregationFailure(
+            document_id=document_id, exception=e, context="Unknown error"
+        )
 
 
 async def create_aggregate_inference_summary_artifact(
     config: Config,
     document_ids: list[DocumentImportId],
-    failures: list[DocumentFailure],
+    failures: list[AggregationFailure],
 ) -> None:
     """Create a summary artifact of the aggregated inference results."""
 
@@ -248,6 +258,7 @@ async def create_aggregate_inference_summary_artifact(
         {
             "Failed document ID": failure.document_id,
             "Exception": str(failure.exception),
+            "Context": failure.context,
         }
         for failure in failures
     ]
@@ -310,17 +321,18 @@ async def aggregate_inference_results(
         for document_id in document_ids
     ]
 
-    # Process documents in batches to control concurrency
-    failures: list[DocumentFailure] = []
+    failures: list[AggregationFailure] = []
     successes: list[DocumentImportId] = []
 
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
     for result in results:
-        if isinstance(result, DocumentFailure):
+        if isinstance(result, AggregationFailure):
             failures.append(result)
+        elif isinstance(result, str):
+            successes.append(DocumentImportId(result))
         else:
-            successes.append(result)
+            raise ValueError(f"Unknown result type: {type(result)}")
 
     await create_aggregate_inference_summary_artifact(
         config=config,

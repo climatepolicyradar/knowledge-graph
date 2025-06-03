@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -12,7 +13,7 @@ from prefect import flow
 from prefect.artifacts import Artifact
 
 from flows.aggregate_inference_results import (
-    DocumentFailure,
+    AggregationFailure,
     aggregate_inference_results,
     build_run_output_identifier,
     combine_labelled_passages,
@@ -133,10 +134,11 @@ async def test_aggregate_inference_results__with_failures(
 
             summary_artifact = await Artifact.get("aggregate-inference-sandbox")
             assert summary_artifact and summary_artifact.description
-            failured_ids = [
-                f["Failed document ID"] for f in json.loads(summary_artifact.data)
-            ]
+            artifact_data = json.loads(summary_artifact.data)
+            failured_ids = [f["Failed document ID"] for f in artifact_data]
             assert set(failured_ids) == set(expect_failure_ids)
+            assert artifact_data[0]["Context"]["Error"]["Code"] == "NoSuchKey"
+            assert artifact_data[1]["Context"]["Error"]["Code"] == "NoSuchKey"
 
 
 def test_build_run_output_prefix():
@@ -236,16 +238,19 @@ async def test_process_single_document__failure(
         write_spec_file(spec_file, classifier_specs)
 
         with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
-            result = await process_single_document(
-                document_id,
-                classifier_specs,
-                test_aggregate_config,
-                "run_output_identifier",
+            result = await asyncio.gather(
+                process_single_document(
+                    document_id,
+                    classifier_specs,
+                    test_aggregate_config,
+                    "run_output_identifier",
+                ),
+                return_exceptions=True,
             )
-            assert isinstance(result, DocumentFailure)
-            code = result.exception.response["Error"]["Code"]
+            assert isinstance(result[0], AggregationFailure)
+            code = result[0].exception.response["Error"]["Code"]
             assert code == "NoSuchKey"
-            key = result.exception.response["Error"]["Key"]
+            key = result[0].exception.response["Error"]["Key"]
             assert (
                 key
                 == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"
