@@ -624,18 +624,18 @@ extras = ["regex"]
 
 [[package]]
 name = "boto3"
-version = "1.38.10"
+version = "1.38.21"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main", "dev"]
 files = [
-    {file = "boto3-1.38.10-py3-none-any.whl", hash = "sha256:26113a47d549bc3c46dbf56c8ab74f272c3da55df23e2c460fcf3c6c64d54dce"},
-    {file = "boto3-1.38.10.tar.gz", hash = "sha256:af4c78a3faa1a56cbaeb9e06cd5580772138be519fc6e740b81db586d5d1910c"},
+    {file = "boto3-1.38.21-py3-none-any.whl", hash = "sha256:37e4b6b7f77f4cc476ea82eb76a502a289bb750eee96f7d07ec9bcec6592191a"},
+    {file = "boto3-1.38.21.tar.gz", hash = "sha256:417d0328fd3394ffb1c1f400d4277d45b0b86f48d2f088a02306474969344a47"},
 ]
 
 [package.dependencies]
-botocore = ">=1.38.10,<1.39.0"
+botocore = ">=1.38.21,<1.39.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.12.0,<0.13.0"
 
@@ -644,14 +644,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "boto3-stubs"
-version = "1.38.27"
-description = "Type annotations for boto3 1.38.27 generated with mypy-boto3-builder 8.11.0"
+version = "1.38.28"
+description = "Type annotations for boto3 1.38.28 generated with mypy-boto3-builder 8.11.0"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "boto3_stubs-1.38.27-py3-none-any.whl", hash = "sha256:87e6c47b76173df91f55387a91fd1f382f130821e4492e14748fe49d46598bc5"},
-    {file = "boto3_stubs-1.38.27.tar.gz", hash = "sha256:8a45f32b83d29ec3db28b37ea68ea5f179b141863211497ef92ba18e2a896aec"},
+    {file = "boto3_stubs-1.38.28-py3-none-any.whl", hash = "sha256:accd8c0943a8d960c5c2d4a7aa661fd43e842893e76adf1b5b163c02f4f62537"},
+    {file = "boto3_stubs-1.38.28.tar.gz", hash = "sha256:fae8e009ea4d810b77e49d88247183b5d8d153bf268ebde8b4abdf58a701802f"},
 ]
 
 [package.dependencies]
@@ -708,7 +708,7 @@ bedrock-data-automation-runtime = ["mypy-boto3-bedrock-data-automation-runtime (
 bedrock-runtime = ["mypy-boto3-bedrock-runtime (>=1.38.0,<1.39.0)"]
 billing = ["mypy-boto3-billing (>=1.38.0,<1.39.0)"]
 billingconductor = ["mypy-boto3-billingconductor (>=1.38.0,<1.39.0)"]
-boto3 = ["boto3 (==1.38.27)"]
+boto3 = ["boto3 (==1.38.28)"]
 braket = ["mypy-boto3-braket (>=1.38.0,<1.39.0)"]
 budgets = ["mypy-boto3-budgets (>=1.38.0,<1.39.0)"]
 ce = ["mypy-boto3-ce (>=1.38.0,<1.39.0)"]
@@ -1959,14 +1959,14 @@ tests = ["asttokens (>=2.1.0)", "coverage", "coverage-enable-subprocess", "ipyth
 
 [[package]]
 name = "fasta2a"
-version = "0.2.12"
+version = "0.2.13"
 description = "Convert an AI Agent into a A2A server! ✨"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "fasta2a-0.2.12-py3-none-any.whl", hash = "sha256:e68739c7ce8cb501fc2d003bd0b239f53f7ed55533d612019117fa312cfe9f2b"},
-    {file = "fasta2a-0.2.12.tar.gz", hash = "sha256:abf1a9bb191f101faa8aceb84ae2ead4f20abe16aebc23a60a878f6f23f9e15e"},
+    {file = "fasta2a-0.2.13-py3-none-any.whl", hash = "sha256:c7bfcc3f7fab85e7ccfc7ae81d0a4081f777fb6b81136d12147ef722449e9c8a"},
+    {file = "fasta2a-0.2.13.tar.gz", hash = "sha256:780ba3d7e6385df7104c3e3175ce3ff229f3d123123019c94191f45900dc9aab"},
 ]
 
 [package.dependencies]
@@ -2747,14 +2747,14 @@ files = [
 
 [[package]]
 name = "hypothesis"
-version = "6.133.0"
+version = "6.133.2"
 description = "A library for property-based testing"
 optional = false
 python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "hypothesis-6.133.0-py3-none-any.whl", hash = "sha256:f8f92858d8abe17e98dd58a82e07c35105b337f533a487d52b2971a946777765"},
-    {file = "hypothesis-6.133.0.tar.gz", hash = "sha256:ee23f20b8a4276d4be234ceed1d3f5a186c9f84766e71ac478fc225c7ad43ffb"},
+    {file = "hypothesis-6.133.2-py3-none-any.whl", hash = "sha256:b8099fd6385f45432da1ab80698f94f6e463be0f5a54faf8fdb38824e55156ae"},
+    {file = "hypothesis-6.133.2.tar.gz", hash = "sha256:7b378d3cefbb3507925d46e5875a6e75ef60f66bf7d3b8d71ad94b5b1805835a"},
 ]
 
 [package.dependencies]
@@ -5400,33 +5400,33 @@ timezone = ["tzdata ; python_version >= \"3.9\" and platform_system == \"Windows
 
 [[package]]
 name = "pydantic-ai"
-version = "0.2.12"
+version = "0.2.13"
 description = "Agent Framework / shim to use Pydantic with LLMs"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pydantic_ai-0.2.12-py3-none-any.whl", hash = "sha256:bd5b54b38be95abfc357ce7842ff2a8a003094ce0fa9cf7fb239911edd3dea89"},
-    {file = "pydantic_ai-0.2.12.tar.gz", hash = "sha256:1307357851b46a63620515fd4cae399f3dc2ee4f01a3781350d5c08c9dbf5dd4"},
+    {file = "pydantic_ai-0.2.13-py3-none-any.whl", hash = "sha256:81f560282083ad259d3357976889a03e03d8d28cd6d0b1ab90d1261e571992ab"},
+    {file = "pydantic_ai-0.2.13.tar.gz", hash = "sha256:4974fb311966c410a340b31f5311ad518047086eacf3e5eb00d13b245766ebb2"},
 ]
 
 [package.dependencies]
-pydantic-ai-slim = {version = "0.2.12", extras = ["a2a", "anthropic", "bedrock", "cli", "cohere", "evals", "google", "groq", "mcp", "mistral", "openai", "vertexai"]}
+pydantic-ai-slim = {version = "0.2.13", extras = ["a2a", "anthropic", "bedrock", "cli", "cohere", "evals", "google", "groq", "mcp", "mistral", "openai", "vertexai"]}
 
 [package.extras]
-examples = ["pydantic-ai-examples (==0.2.12)"]
+examples = ["pydantic-ai-examples (==0.2.13)"]
 logfire = ["logfire (>=3.11.0)"]
 
 [[package]]
 name = "pydantic-ai-slim"
-version = "0.2.12"
+version = "0.2.13"
 description = "Agent Framework / shim to use Pydantic with LLMs, slim package"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pydantic_ai_slim-0.2.12-py3-none-any.whl", hash = "sha256:d5de8fa538767a0124c630a1f40e372f7f5b3e25d94fa2156551e2b5a1a7abae"},
-    {file = "pydantic_ai_slim-0.2.12.tar.gz", hash = "sha256:27cd77c5085b579c48d5ed5bda9305bce191851e89942e06952852e7900ccf4c"},
+    {file = "pydantic_ai_slim-0.2.13-py3-none-any.whl", hash = "sha256:d1809dad97039625e66336a4dbe8c8150900a78dfc1c23927e3abf9f135776c2"},
+    {file = "pydantic_ai_slim-0.2.13.tar.gz", hash = "sha256:48fc95e47923e1c12ceb949f40c3dacb71a6ce66084f65fc1002c392aab52064"},
 ]
 
 [package.dependencies]
@@ -5436,7 +5436,7 @@ boto3 = {version = ">=1.35.74", optional = true, markers = "extra == \"bedrock\"
 cohere = {version = ">=5.13.11", optional = true, markers = "platform_system != \"Emscripten\" and extra == \"cohere\""}
 eval-type-backport = ">=0.2.0"
 exceptiongroup = {version = "*", markers = "python_version < \"3.11\""}
-fasta2a = {version = "0.2.12", optional = true, markers = "extra == \"a2a\""}
+fasta2a = {version = "0.2.13", optional = true, markers = "extra == \"a2a\""}
 google-auth = {version = ">=2.36.0", optional = true, markers = "extra == \"vertexai\""}
 google-genai = {version = ">=1.15.0", optional = true, markers = "extra == \"google\""}
 griffe = ">=1.3.2"
@@ -5448,20 +5448,20 @@ openai = {version = ">=1.75.0", optional = true, markers = "extra == \"openai\""
 opentelemetry-api = ">=1.28.0"
 prompt-toolkit = {version = ">=3", optional = true, markers = "extra == \"cli\""}
 pydantic = ">=2.10"
-pydantic-evals = {version = "0.2.12", optional = true, markers = "extra == \"evals\""}
-pydantic-graph = "0.2.12"
+pydantic-evals = {version = "0.2.13", optional = true, markers = "extra == \"evals\""}
+pydantic-graph = "0.2.13"
 requests = {version = ">=2.32.2", optional = true, markers = "extra == \"vertexai\""}
 rich = {version = ">=13", optional = true, markers = "extra == \"cli\""}
 typing-inspection = ">=0.4.0"
 
 [package.extras]
-a2a = ["fasta2a (==0.2.12)"]
+a2a = ["fasta2a (==0.2.13)"]
 anthropic = ["anthropic (>=0.52.0)"]
 bedrock = ["boto3 (>=1.35.74)"]
 cli = ["argcomplete (>=3.5.0)", "prompt-toolkit (>=3)", "rich (>=13)"]
 cohere = ["cohere (>=5.13.11) ; platform_system != \"Emscripten\""]
 duckduckgo = ["duckduckgo-search (>=7.0.0)"]
-evals = ["pydantic-evals (==0.2.12)"]
+evals = ["pydantic-evals (==0.2.13)"]
 google = ["google-genai (>=1.15.0)"]
 groq = ["groq (>=0.15.0)"]
 logfire = ["logfire (>=3.11.0)"]
@@ -5585,14 +5585,14 @@ typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
 [[package]]
 name = "pydantic-evals"
-version = "0.2.12"
+version = "0.2.13"
 description = "Framework for evaluating stochastic code execution, especially code making use of LLMs"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pydantic_evals-0.2.12-py3-none-any.whl", hash = "sha256:d044c444a35706f4eeb1e59e8a84a4a23c037c7805ea9bc0cd76e9ceffd4b1a9"},
-    {file = "pydantic_evals-0.2.12.tar.gz", hash = "sha256:6a594313672f63dad8f366b79de95dbfb9b70c986f3180778e96664bab0b4c46"},
+    {file = "pydantic_evals-0.2.13-py3-none-any.whl", hash = "sha256:f7838595b4e50eca21b967285d4ad18eb72cb0c7bd8bf45f9490a27c05b513d2"},
+    {file = "pydantic_evals-0.2.13.tar.gz", hash = "sha256:240c7472543fab1a11a2b5a209f9b1ad50a55734570e865942b15f609dc180ef"},
 ]
 
 [package.dependencies]
@@ -5600,7 +5600,7 @@ anyio = ">=0"
 eval-type-backport = {version = ">=0", markers = "python_version < \"3.11\""}
 logfire-api = ">=1.2.0"
 pydantic = ">=2.10"
-pydantic-ai-slim = "0.2.12"
+pydantic-ai-slim = "0.2.13"
 pyyaml = ">=6.0.2"
 rich = ">=13.9.4"
 
@@ -5633,14 +5633,14 @@ semver = ["semver (>=3.0.2)"]
 
 [[package]]
 name = "pydantic-graph"
-version = "0.2.12"
+version = "0.2.13"
 description = "Graph and state machine library"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pydantic_graph-0.2.12-py3-none-any.whl", hash = "sha256:de85b094d6e70c0e1913d530889a34fac8820c1c369d42e1025c40ac77b05bdd"},
-    {file = "pydantic_graph-0.2.12.tar.gz", hash = "sha256:3966d138fce5eb3cd56c0b3779464199fb191f6f28447af4c8ec618f77b4b9be"},
+    {file = "pydantic_graph-0.2.13-py3-none-any.whl", hash = "sha256:1a31ad91dc3296d1d974b8ec2c77812139f5078e9f148ad3e9dcfc6d4ba52379"},
+    {file = "pydantic_graph-0.2.13.tar.gz", hash = "sha256:fc6e3133ea77aa746b8b3af947eb7ae625ec638cb01cbd78e13b56cc001bba5e"},
 ]
 
 [package.dependencies]
@@ -5743,26 +5743,27 @@ files = [
 
 [[package]]
 name = "pytest"
-version = "8.3.5"
+version = "8.4.0"
 description = "pytest: simple powerful testing with Python"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 groups = ["dev"]
 files = [
-    {file = "pytest-8.3.5-py3-none-any.whl", hash = "sha256:c69214aa47deac29fad6c2a4f590b9c4a9fdb16a403176fe154b79c0b4d4d820"},
-    {file = "pytest-8.3.5.tar.gz", hash = "sha256:f4efe70cc14e511565ac476b57c279e12a855b11f48f212af1080ef2263d3845"},
+    {file = "pytest-8.4.0-py3-none-any.whl", hash = "sha256:f40f825768ad76c0977cbacdf1fd37c6f7a468e460ea6a0636078f8972d4517e"},
+    {file = "pytest-8.4.0.tar.gz", hash = "sha256:14d920b48472ea0dbf68e45b96cd1ffda4705f33307dcc86c676c1b5104838a6"},
 ]
 
 [package.dependencies]
-colorama = {version = "*", markers = "sys_platform == \"win32\""}
-exceptiongroup = {version = ">=1.0.0rc8", markers = "python_version < \"3.11\""}
-iniconfig = "*"
-packaging = "*"
+colorama = {version = ">=0.4", markers = "sys_platform == \"win32\""}
+exceptiongroup = {version = ">=1", markers = "python_version < \"3.11\""}
+iniconfig = ">=1"
+packaging = ">=20"
 pluggy = ">=1.5,<2"
+pygments = ">=2.7.2"
 tomli = {version = ">=1", markers = "python_version < \"3.11\""}
 
 [package.extras]
-dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
+dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
 
 [[package]]
 name = "pytest-asyncio"
@@ -7594,7 +7595,6 @@ files = [
     {file = "torch-2.7.0+cpu-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:a845b6f3bda3c40f736847dede95d8bfec81fb7e11458cd25973ba13542cf1f6"},
     {file = "torch-2.7.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:64123c05615e27368c7a7816f6e39c6d219998693beabde0b0b9cedf91b5ed8b"},
     {file = "torch-2.7.0+cpu-cp312-cp312-win_amd64.whl", hash = "sha256:69e25c973bdd7ea24b0fa9f9792114950afaeb8f819e5723819b923f50989175"},
-    {file = "torch-2.7.0+cpu-cp312-cp312-win_arm64.whl", hash = "sha256:1d7a6f33868276770a657beec7f77c7726b4da9d0739eff1b3ae64cc9a09d8e3"},
     {file = "torch-2.7.0+cpu-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:addf9107939522ffb3b60d2900fee838a77dbe098e2643e01164f46f8612f9c0"},
     {file = "torch-2.7.0+cpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:3b09aa2c8d30fa567a8d13270fbf9af7ee472fdfafbc7dfdc87c607bf46001f7"},
     {file = "torch-2.7.0+cpu-cp313-cp313-win_amd64.whl", hash = "sha256:99ca8f4cb53484c45bb668657069c17139c07367ea20ddef2c0ce8412f42da2f"},
@@ -8747,4 +8747,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.11"
-content-hash = "70545b8df0401633c952516934e5b36be513db02940fb538dbd07294b670b6b7"
+content-hash = "d5ec5053379fd0989165a6171180706df9b66cfc92871df12100f37089d06986"
