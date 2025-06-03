@@ -4,10 +4,11 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeAlias, TypedDict
+from typing import Any, TypeAlias
 
 import boto3
 from prefect import flow, task
+from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ConcurrentTaskRunner
@@ -18,11 +19,10 @@ from flows.boundary import (
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, wait_for_semaphore
 from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
-    iterate_batch,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -63,11 +63,12 @@ class S3Uri:
         return Path(self.key).stem
 
 
-class DocumentFailure(TypedDict):
+class DocumentFailure(Exception):
     """A document failure."""
 
-    document_id: DocumentImportId
-    exception: Exception
+    def __init__(self, document_id: DocumentImportId, exception: Exception):
+        self.document_id = document_id
+        self.exception = exception
 
 
 @dataclass()
@@ -205,7 +206,7 @@ async def process_single_document(
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-) -> tuple[DocumentImportId, Exception | None]:
+) -> DocumentImportId | DocumentFailure:
     """Process a single document and return its status."""
     try:
         all_labelled_passages = get_all_labelled_passages_for_one_document(
@@ -223,9 +224,39 @@ async def process_single_document(
             ),
         )
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
-        return document_id, None
+        return document_id
     except Exception as e:
-        return document_id, e
+        return DocumentFailure(document_id=document_id, exception=e)
+
+
+async def create_aggregate_inference_summary_artifact(
+    config: Config,
+    document_ids: list[DocumentImportId],
+    failures: list[DocumentFailure],
+) -> None:
+    """Create a summary artifact of the aggregated inference results."""
+
+    overview_description = f"""# Aggregate Inference Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Documents processed**: {len(document_ids)}
+- **Failed documents**: {len(failures)}/{len(document_ids)}
+"""
+
+    details = [
+        {
+            "Failed document ID": failure.document_id,
+            "Exception": str(failure.exception),
+        }
+        for failure in failures
+    ]
+
+    await create_table_artifact(
+        key=f"aggregate-inference-{config.aws_env.value}",
+        table=details,
+        description=overview_description,
+    )
 
 
 @flow(
@@ -238,7 +269,7 @@ async def process_single_document(
 async def aggregate_inference_results(
     document_ids: list[DocumentImportId],
     config: Config | None = None,
-    max_concurrent_tasks: int = 10,
+    max_concurrent_tasks: int = 5,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
@@ -263,13 +294,18 @@ async def aggregate_inference_results(
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
 
+    semaphore = asyncio.Semaphore(max_concurrent_tasks)
+
     # Create tasks for each document
     tasks = [
-        process_single_document(
-            document_id,
-            classifier_specs,
-            config,
-            run_output_identifier,
+        wait_for_semaphore(
+            semaphore,
+            process_single_document(
+                document_id,
+                classifier_specs,
+                config,
+                run_output_identifier,
+            ),
         )
         for document_id in document_ids
     ]
@@ -278,24 +314,21 @@ async def aggregate_inference_results(
     failures: list[DocumentFailure] = []
     successes: list[DocumentImportId] = []
 
-    for batch in iterate_batch(tasks, max_concurrent_tasks):
-        results = await asyncio.gather(*batch)
+    results = await asyncio.gather(*tasks)
 
-        for document_id, error in results:
-            if not error:
-                successes.append(document_id)
-            else:
-                failures.append(
-                    DocumentFailure(document_id=document_id, exception=error)
-                )
+    for result in results:
+        if isinstance(result, DocumentFailure):
+            failures.append(result)
+        else:
+            successes.append(result)
 
-    # Results
-    print(
-        f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}/{len(document_ids)}"
+    await create_aggregate_inference_summary_artifact(
+        config=config,
+        document_ids=document_ids,
+        failures=failures,
     )
 
     if failures:
-        print(f"Failures: {failures}")
         raise ValueError(
             f"Saw {len(failures)} failures when aggregating inference results"
         )
