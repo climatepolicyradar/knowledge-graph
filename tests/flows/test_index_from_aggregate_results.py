@@ -7,6 +7,7 @@ import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
+from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from vespa.io import VespaResponse
 
@@ -357,3 +358,40 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
                 f"Some batches of documents had failures: 1/{len(document_import_ids)} failed."
                 in str(excinfo.value)
             )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_index_aggregate_results_creates_artifact(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    s3_prefix_inference_results: str,
+    test_aggregate_config,
+) -> None:
+    """Test that we created a report artifact."""
+
+    document_import_ids = [
+        DocumentImportId(Path(file_key).stem)
+        for file_key in mock_bucket_inference_results.keys()
+    ]
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+
+    with patch(
+        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        await index_aggregate_results_for_batch_of_documents(
+            run_output_identifier=run_output_identifier,
+            document_import_ids=document_import_ids,
+            config_json=test_aggregate_config.to_json(),
+        )
+
+        summary_artifact = await Artifact.get("Aggregate Indexing Summary")
+        assert summary_artifact and summary_artifact.description
+        assert (
+            summary_artifact.description
+            == "Summary of the passages indexing run to update concept counts."
+        )
