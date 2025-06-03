@@ -161,16 +161,13 @@ async def test_run_indexing_from_aggregate_results(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ]
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
@@ -179,7 +176,7 @@ async def test_run_indexing_from_aggregate_results(
     ):
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_import_ids=document_import_ids,
+            document_import_ids=aggregate_inference_results_import_ids,
             config=test_aggregate_config,
         )
 
@@ -242,6 +239,7 @@ async def test_run_indexing_from_aggregate_results__failure(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
@@ -249,10 +247,7 @@ async def test_run_indexing_from_aggregate_results__failure(
     """Test that we handled the exception correctly during passage indexing."""
 
     NON_EXISTENT_ID = DocumentImportId("non_existent_document")
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ] + [NON_EXISTENT_ID]
+    document_import_ids = aggregate_inference_results_import_ids + [NON_EXISTENT_ID]
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
