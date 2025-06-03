@@ -8,6 +8,7 @@ from typing import Any, TypeAlias, TypedDict
 
 import boto3
 from prefect import flow, task
+from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ConcurrentTaskRunner
@@ -228,6 +229,36 @@ async def process_single_document(
         return document_id, e
 
 
+async def create_aggregate_inference_summary_artifact(
+    config: Config,
+    document_ids: list[DocumentImportId],
+    failures: list[DocumentFailure],
+) -> None:
+    """Create a summary artifact of the aggregated inference results."""
+
+    overview_description = f"""# Aggregate Inference Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Documents processed**: {len(document_ids)}
+- **Failed documents**: {len(failures)}/{len(document_ids)}
+"""
+
+    details = [
+        {
+            "Failed document ID": failure["document_id"],
+            "Exception": str(failure["exception"]),
+        }
+        for failure in failures
+    ]
+
+    await create_table_artifact(
+        key=f"aggregate-inference-{config.aws_env.value}",
+        table=details,
+        description=overview_description,
+    )
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -294,8 +325,13 @@ async def aggregate_inference_results(
         f"Successes: {len(successes)}/{len(document_ids)}, failures: {len(failures)}/{len(document_ids)}"
     )
 
+    await create_aggregate_inference_summary_artifact(
+        config=config,
+        document_ids=document_ids,
+        failures=failures,
+    )
+
     if failures:
-        print(f"Failures: {failures}")
         raise ValueError(
             f"Saw {len(failures)} failures when aggregating inference results"
         )

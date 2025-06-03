@@ -10,6 +10,7 @@ import pytest
 from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
+from prefect.artifacts import Artifact
 
 from flows.aggregate_inference_results import (
     aggregate_inference_results,
@@ -103,6 +104,10 @@ async def test_aggregate_inference_results(
             assert len(all_collected_ids) == COUNT, (
                 f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
             )
+
+            summary_artifact = await Artifact.get("aggregate-inference-sandbox")
+            assert summary_artifact and summary_artifact.description
+            assert summary_artifact.data == "[]"
 
 
 def test_build_run_output_prefix():
