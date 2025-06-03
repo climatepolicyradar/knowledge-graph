@@ -76,6 +76,7 @@ async def index_aggregate_results_from_s3_to_vespa(
     logger.info(
         f"Loading aggregated inference results from S3: {aggregated_results_key}"
     )
+
     aggregated_inference_results = load_json_data_from_s3(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
