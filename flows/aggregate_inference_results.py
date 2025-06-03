@@ -285,7 +285,7 @@ async def create_aggregate_inference_summary_artifact(
     task_runner=ConcurrentTaskRunner(),
 )
 async def aggregate_inference_results(
-    document_ids: list[DocumentImportId],
+    document_ids: None | list[DocumentImportId] = None,
     config: Config | None = None,
     max_concurrent_tasks: int = 5,
 ) -> RunOutputIdentifier:
