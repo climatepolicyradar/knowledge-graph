@@ -146,6 +146,7 @@ create_deployment(
 create_deployment(
     flow=index_aggregate_results_for_batch_of_documents,
     description="Index aggregated inference results from S3 into Vespa",
+    flow_variables={"memory": MEGABYTES_PER_GIGABYTE * 64},
 )
 
 # De-index
