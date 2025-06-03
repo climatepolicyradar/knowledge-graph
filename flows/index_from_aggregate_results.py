@@ -2,12 +2,14 @@ import asyncio
 import json
 import os
 import tempfile
-from typing import Any, Final
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable, Final
 
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
+from prefect.artifacts import create_markdown_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
@@ -17,6 +19,7 @@ from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import (
     Config,
+    DocumentFailure,
     DocumentImportId,
     RunOutputIdentifier,
 )
@@ -68,6 +71,37 @@ async def _update_vespa_passage_concepts(
     )
 
     return response
+
+
+async def create_aggregate_indexing_summary_artifact(
+    config: Config,
+    document_import_ids: list[DocumentImportId],
+    successes: list[DocumentImportId],
+    failures: list[DocumentImportId],
+) -> None:
+    """Create a table artifact with summary information about the indexing run."""
+
+    # Prepare summary data for the artifact
+    total_documents = len(document_import_ids)
+    successful_document_batches_count = len(successes)
+    failed_document_batches_count = len(failures)
+
+    # Format the overview information as a string for the description
+    indexing_report = f"""# Aggregate Indexing Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Total documents processed**: {total_documents}
+- **Successful Batches**: {successful_document_batches_count}
+- **Failed Batches**: {failed_document_batches_count}
+"""
+
+    # Create classifier details table
+    create_markdown_artifact(
+        key="Aggregate Indexing Summary",
+        description="Summary of the passages indexing run to update concept counts.",
+        markdown=indexing_report,
+    )
 
 
 @flow
@@ -173,8 +207,36 @@ async def index_aggregate_results_for_batch_of_documents(
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
         ) as vespa_connection_pool
     ):
+
+        @dataclass
+        class TaskResult:
+            success: bool
+            params: dict[str, Any]
+            result: Any | None = None
+            exception: Exception | None = None
+
+        async def wrap_task_with_params(
+            coro_fn: Callable[..., Awaitable[Any]], **params
+        ) -> TaskResult:
+            """Wrap a coroutine function to handle exceptions and return structured results."""
+
+            try:
+                result = await coro_fn(**params)
+                return TaskResult(
+                    success=True,
+                    result=result,
+                    params=params,
+                )
+            except Exception as e:
+                return TaskResult(
+                    success=False,
+                    exception=e,
+                    params=params,
+                )
+
         tasks = [
-            index_aggregate_results_from_s3_to_vespa(
+            wrap_task_with_params(
+                coro_fn=index_aggregate_results_from_s3_to_vespa,
                 config=config,
                 run_output_identifier=run_output_identifier,
                 document_import_id=document_import_id,
@@ -183,19 +245,18 @@ async def index_aggregate_results_for_batch_of_documents(
             for document_import_id in document_import_ids
         ]
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks)
 
-        failures: list[Exception] = []
+        failures: list[DocumentFailure] = []
 
         for result in results:
-            if isinstance(result, Exception):
-                logger.exception(f"Failed to process document: {result}")
-                failures.append(result)
-            elif result is None:
-                continue
-            else:
-                raise ValueError(
-                    f"Unexpected type of result. Type: `{type(result)}`, value: `{result}`"
+            if not result.success:
+                logger.exception(f"Failed to process document: {result.exception}")
+                failures.append(
+                    DocumentFailure(
+                        document_id=result.params["document_import_id"],
+                        exception=result.exception,  # type: ignore
+                    )
                 )
 
         if len(failures) > 0:
@@ -274,7 +335,6 @@ async def run_indexing_from_aggregate_results(
             *tasks, return_exceptions=True
         )
 
-    # TODO: Replace with a prefect artifact.
     failures = []
     successes = []
     for result in results:
@@ -282,6 +342,13 @@ async def run_indexing_from_aggregate_results(
             failures.append(result)
         else:
             successes.append(result)
+
+    await create_aggregate_indexing_summary_artifact(
+        config=config,
+        document_import_ids=document_import_ids,
+        successes=successes,
+        failures=failures,
+    )
 
     if failures:
         raise ValueError(
