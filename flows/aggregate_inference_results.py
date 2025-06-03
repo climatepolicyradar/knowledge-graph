@@ -223,6 +223,9 @@ async def process_single_document(
         all_labelled_passages = get_all_labelled_passages_for_one_document(
             document_id, classifier_specs, config
         )
+        print(
+            f"Combining {len(all_labelled_passages)} labelled passages for {document_id}"
+        )
         vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
         # Write to s3
@@ -237,6 +240,7 @@ async def process_single_document(
         s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
         return document_id
     except ClientError as e:
+        print(e.response)
         raise AggregationFailure(
             document_id=document_id, exception=e, context=e.response
         )
