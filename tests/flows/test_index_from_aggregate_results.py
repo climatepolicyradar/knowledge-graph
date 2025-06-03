@@ -229,3 +229,39 @@ async def test_run_indexing_from_aggregate_results(
                             f"Concept {concept} not found in expected concepts for passage "
                             f"{text_block_id}."
                         )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_run_indexing_from_aggregate_results__failure(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    mock_bucket: str,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    s3_prefix_inference_results: str,
+    test_aggregate_config,
+) -> None:
+    """Test that we handled the exception correctly during passage indexing."""
+
+    document_import_ids = [
+        DocumentImportId(Path(file_key).stem)
+        for file_key in mock_bucket_inference_results.keys()
+    ] + [DocumentImportId("non_existent_document")]
+    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+
+    with patch(
+        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        # Index the aggregated inference results from S3 to Vespa
+        with pytest.raises(ValueError) as excinfo:
+            await run_indexing_from_aggregate_results(
+                run_output_identifier=run_output_identifier,
+                config=test_aggregate_config,
+                document_import_ids=document_import_ids,
+            )
+
+        assert f"Failed to process 1/{len(document_import_ids)} documents" in str(
+            excinfo.value
+        )
