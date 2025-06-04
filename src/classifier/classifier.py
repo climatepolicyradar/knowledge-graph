@@ -9,6 +9,24 @@ from src.span import Span
 from src.version import Version
 
 
+class RenameUnpickler(pickle.Unpickler):
+    """
+    WARNING: This is a mega-heck to work around the fact that classifiers are pickled with custom objects
+
+    When we pickle a classifier, it'll also pickle the labelled passages on it, hardcoding the path
+    to the class definition. Since I've refactored the LabelledPassage code into the `src/models/`
+    folder, this broke all the classifier pickles, and I've had to implement this unpickler to
+    fix them.
+    """
+
+    def find_class(self, module, name):
+        renamed_module = module
+        if module == "src.labelled_passage":
+            renamed_module = "src.models.labelled_passage"
+
+        return super(RenameUnpickler, self).find_class(renamed_module, name)
+
+
 class Classifier(ABC):
     """Abstract class for all classifier types."""
 
@@ -132,7 +150,7 @@ class Classifier(ABC):
         :return Classifier: The loaded classifier
         """
         with open(path, "rb") as f:
-            classifier = pickle.load(f)
+            classifier = RenameUnpickler(f).load()
         assert isinstance(classifier, Classifier)
         if model_to_cuda and hasattr(classifier, "pipeline"):
             classifier.pipeline.model.to("cuda:0")  # type: ignore
