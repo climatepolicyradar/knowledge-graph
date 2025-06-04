@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_index_from_aggregated_inference_results__error_handling
+# name: test_index_document_passages__error_handling
   list([
     Err(_error=Error(msg='Vespa update failed', metadata={'text_block_id': '197', 'json': {'error': 'Mocked error'}})),
     Err(_error=Error(msg='Vespa update failed', metadata={'text_block_id': '267', 'json': {'error': 'Mocked error'}})),
@@ -138,7 +138,7 @@
     Err(_error=Error(msg='Vespa update failed', metadata={'text_block_id': 'p_6_b_1', 'json': {'error': 'Mocked error'}})),
   ])
 # ---
-# name: test_index_from_aggregated_inference_results__error_handling.1
+# name: test_index_document_passages__error_handling.1
   list([
     Err(_error=Error(msg='Vespa update failed', metadata={'text_block_id': '1457', 'json': {'error': 'Mocked error'}})),
     Err(_error=Error(msg='Vespa update failed', metadata={'text_block_id': '1273', 'json': {'error': 'Mocked error'}})),

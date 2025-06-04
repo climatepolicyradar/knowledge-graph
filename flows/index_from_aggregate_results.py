@@ -40,6 +40,7 @@ from flows.boundary import (
 )
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
+    AsyncProfiler,
     Profiler,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
@@ -75,6 +76,8 @@ async def _update_vespa_passage_concepts(
         schema="document_passage",
         namespace="doc_search",
         data_id=vespa_data_id,
+        # Don't create an empty document for non-existent documents
+        create=False,
         fields={"concepts": serialised_concepts},
     )
 
@@ -222,10 +225,14 @@ async def index_family_document(
         for concept, count in concepts_counts.items()
     }
 
+    print(f"serialised concepts counts: {concepts_counts_with_names}")
+
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="family_document",
         namespace="doc_search",
         data_id=document_id,
+        # Don't create an empty document for non-existent documents
+        create=False,
         fields={
             "concept_counts": concepts_counts_with_names
         },  # Note the schema is misnamed in Vespa
@@ -293,10 +300,59 @@ async def create_indexing_summary_artifact(
 
 
 @flow(log_prints=True)
+async def index_all(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+    document_stem: DocumentStem,
+    vespa_connection_pool: VespaAsync,
+) -> Result[None, list[Error]]:
+    """Indexes all (document passages and family documents) data."""
+    results = await index_document_passages(
+        config=config,
+        run_output_identifier=run_output_identifier,
+        document_stem=document_stem,
+        vespa_connection_pool=vespa_connection_pool,
+    )
+
+    print("finished indexing document passages")
+
+    simple_concepts: list[SimpleConcept] = []
+    errors: list[Error] = []
+    for result in results:
+        match result:
+            case Ok(val):
+                simple_concepts.extend(val)
+            case Err(err):
+                print(err)
+                errors.append(err)
+
+    print(f"simple counts n: {len(simple_concepts)}")
+
+    document_id: DocumentImportId = remove_translated_suffix(document_stem)
+    result = await index_family_document(
+        document_id=document_id,
+        vespa_connection_pool=vespa_connection_pool,
+        simple_concepts=simple_concepts,
+    )
+
+    match result:
+        case Ok(_):
+            print(f"indexing family document {document_stem} succeeded")
+        case Err(err):
+            errors.append(err)
+            print(f"indexing family document {document_stem} failed: {err}")
+
+    if errors:
+        return Err(errors)
+    else:
+        return Ok(None)
+
+
+@flow(log_prints=True)
 async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
-    config_json: dict,
+    config_json: dict[str, Any],
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
@@ -332,49 +388,65 @@ async def index_aggregate_results_for_batch_of_documents(
         vespa_search_adapter.client.asyncio(
             connections=indexer_max_vespa_connections,  # How many tasks to have running at once
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
-        ) as vespa_connection_pool
+        ) as vespa_connection_pool,
+        AsyncProfiler(
+            printer=print,
+            name="indexing all",
+        ),
     ):
-        for document_stem in document_stems:
-            logger.info(f"Indexing aggregated results for document: {document_stem}")
 
-            results = await index_document_passages(
-                config=config,
-                run_output_identifier=run_output_identifier,
-                document_stem=document_stem,
-                vespa_connection_pool=vespa_connection_pool,
+        async def return_with_document_stem(document_stem, fn):
+            try:
+                result = await fn
+                return (document_stem, result)
+            except Exception as e:
+                return (document_stem, e)
+
+        semaphore = asyncio.Semaphore(indexer_max_vespa_connections)
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                return_with_document_stem(
+                    document_stem,
+                    index_all(
+                        config=config,
+                        run_output_identifier=run_output_identifier,
+                        document_stem=document_stem,
+                        vespa_connection_pool=vespa_connection_pool,
+                    ),
+                ),
             )
+            for document_stem in document_stems
+        ]
 
-            print("finished indexing document passages")
+        results: list[
+            tuple[
+                DocumentStem,
+                Result[None, list[Error]] | BaseException,
+            ]
+        ] = await asyncio.gather(
+            *tasks,
+            # Normally this is True, but since there's the wrapper
+            # function to ensure that the document ID is always
+            # included, which captures exceptions, it can be False
+            # here.
+            return_exceptions=False,
+        )
 
-            simple_concepts: list[SimpleConcept] = []
-            errors: list[Error] = []
-            for result in results:
-                match result:
-                    case Ok(val):
-                        simple_concepts.extend(val)
-                    case Err(err):
-                        print(err)
-                        errors.append(err)
-
-            document_id: DocumentImportId = remove_translated_suffix(document_stem)
-            result = await index_family_document(
-                document_id=document_id,
-                vespa_connection_pool=vespa_connection_pool,
-                simple_concepts=simple_concepts,
-            )
-
-            match result:
-                case Ok(_):
-                    print(f"indexing family document {document_stem} succeeded")
-                case Err(err):
-                    errors.append(err)
-                    print(f"indexing family document {document_stem} failed: {err}")
-
+        for document_stem, result in results:
             # Conditionally set it, so the length of the presence of
             # keys can be used as an indicator of the overall presence
             # of ≥ 1 error.
-            if errors:
-                errors_per_document[document_stem] = errors
+            if isinstance(result, BaseException):
+                errors_per_document[document_stem] = [
+                    Error(msg=str(result), metadata={})
+                ]
+            else:
+                match result:
+                    case Ok(_):
+                        pass
+                    case Err(errors):
+                        errors_per_document[document_stem] = errors
 
     await create_indexing_summary_artifact(
         config=config,
@@ -384,7 +456,9 @@ async def index_aggregate_results_for_batch_of_documents(
     )
 
     if errors_per_document:
-        raise ValueError("some tasks failed, check the report artifact and logs")
+        raise ValueError(
+            f"Failed to process {len(errors_per_document)}/{len(document_stems)} documents"
+        )
 
 
 @flow(
