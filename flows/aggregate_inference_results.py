@@ -24,7 +24,6 @@ from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
-    remove_translated_suffix,
     wait_for_semaphore,
 )
 from scripts.cloud import (
@@ -300,14 +299,10 @@ async def aggregate_inference_results(
             "no document ids provided, collecting all available from s3 under prefix: "
             f"{config.document_source_prefix}"
         )
-        collected_document_stems = collect_unique_file_stems_under_prefix(
+        document_ids = collect_unique_file_stems_under_prefix(
             bucket_name=config.cache_bucket,
             prefix=config.document_source_prefix,
         )
-        collected_document_ids: list[DocumentImportId] = [
-            remove_translated_suffix(stem) for stem in collected_document_stems
-        ]
-        document_ids = collected_document_ids
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = parse_spec_file(config.aws_env)

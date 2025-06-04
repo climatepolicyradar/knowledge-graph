@@ -180,7 +180,7 @@ def get_file_stems_for_document_id(
 def collect_unique_file_stems_under_prefix(
     bucket_name: str,
     prefix: str,
-) -> list[DocumentStem]:
+) -> list[DocumentImportId]:
     """Collect all unique file stems under a prefix."""
     s3 = boto3.client("s3")
     paginator = s3.get_paginator("list_objects_v2")
