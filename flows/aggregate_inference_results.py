@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypeAlias
 
@@ -20,10 +20,11 @@ from flows.boundary import (
     convert_labelled_passage_to_concepts,
     s3_object_write_text,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT, wait_for_semaphore
+from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    wait_for_semaphore,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -111,6 +112,12 @@ class Config:
                 "Cache bucket is not set in config, consider calling the `create` method first."
             )
         return self.cache_bucket
+
+    def to_json(self) -> dict[str, Any]:
+        """Convert the Config instance to a dictionary, handling complex types."""
+        result = asdict(self)
+        result["aws_env"] = self.aws_env.value  # serialize AwsEnv manually
+        return result
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
