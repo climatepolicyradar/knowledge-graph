@@ -22,20 +22,20 @@ rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 more-itertools = "^10.3.0"
 argilla = ">=2.5"
-griffe = "1.5.7"
+griffe = "1.7.3"
 cpr-sdk = "1.19.1"
-wandb = "^0.18.3"
+wandb = "^0.20.0"
 boto3 = "^1.35.31"
-pyvespa = "^0.54.0"
+pyvespa = "^0.55.0"
 pyyaml = "^6.0.2"
 nltk = "^3.9.1"
-datasets = "^2.18.0"
-boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
-typer = "0.15.1"
+datasets = "^3.6.0"
+boto3-stubs = {extras = ["s3"], version = "^1.38.29"}
+typer = "0.15.4"
 schedule = "^1.2.2"
-awscli = "^1.37.24"
+awscli = "^1.40.20"
 prefect = {extras = ["slack"], version = "^3.3.1"}
-pydantic-ai = "^0.0.53"
+pydantic-ai = "^0.2.14"
 httpx = "^0.28.1"
 tenacity = "^9.1.2"
 requests = "^2.32.3"
@@ -44,11 +44,11 @@ requests = "^2.32.3"
 optional = true
 
 [tool.poetry.group.transformers.dependencies]
-torch = {version = "2.4.1+cpu", source = "pytorch"}
-sentence-transformers = "^3.1.1"
+torch = {version = "2.7.1+cpu", source = "pytorch"}
+sentence-transformers = "^4.1.0"
 transformers = {extras = ["torch"], version = "^4.51.3"}
 scikit-learn = "^1.6.1"
-accelerate = "^1.6.0"
+accelerate = "^1.7.0"
 
 
 [[tool.poetry.source]]
@@ -71,15 +71,15 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-parser.git", tag = "v0.4.3" }
-pytest = "^8.3.2"
-hypothesis = "^6.112.2"
-mkdocs-material = "^9.5.39"
-pre-commit = "^3.8.0"
+pytest = "^8.4.0"
+hypothesis = "^6.135.0"
+mkdocs-material = "^9.6.14"
+pre-commit = "^4.2.0"
 boto3 = "^1.35.32"
 syrupy = "^4.7.1"
-moto = {extras = ["s3"], version = "^5.0.16"}
+moto = {extras = ["s3"], version = "^5.1.5"}
 pytest-env = "^1.1.5"
-pytest-asyncio = "^0.24.0"
+pytest-asyncio = "^0.26.0"
 pulumi = "^3.145.0"
 pulumi-aws = "^6.66.2"
 jinja2 = "^3.1.4"
