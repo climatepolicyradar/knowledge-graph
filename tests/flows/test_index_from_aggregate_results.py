@@ -15,19 +15,23 @@ from flows.aggregate_inference_results import RunOutputIdentifier
 from flows.boundary import (
     DocumentImportId,
     DocumentStem,
+    get_document_from_vespa,
     get_document_passages_from_vespa__generator,
 )
 from flows.index_from_aggregate_results import (
+    SimpleConcept,
     index_aggregate_results_for_batch_of_documents,
-    index_aggregate_results_from_s3_to_vespa,
+    index_document_passages,
+    index_family_document,
     run_indexing_from_aggregate_results,
 )
+from flows.result import is_err, is_ok, unwrap_err
 from flows.utils import remove_translated_suffix
 
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_from_aggregated_inference_results(
+async def test_index_document_passages(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
@@ -60,7 +64,7 @@ async def test_index_from_aggregated_inference_results(
                 initial_responses.append(vespa_passages)
 
             # Index the aggregated inference results from S3 to Vespa
-            await index_aggregate_results_from_s3_to_vespa(
+            await index_document_passages(
                 config=test_aggregate_config,
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
@@ -118,7 +122,7 @@ async def test_index_from_aggregated_inference_results(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_from_aggregated_inference_results__error_handling(
+async def test_index_document_passages__error_handling(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
@@ -127,6 +131,7 @@ async def test_index_from_aggregated_inference_results__error_handling(
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
+    snapshot,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
@@ -148,15 +153,12 @@ async def test_index_from_aggregated_inference_results__error_handling(
                 )
 
                 # Index the aggregated inference results from S3 to Vespa
-                with pytest.raises(ValueError) as excinfo:
-                    await index_aggregate_results_from_s3_to_vespa(
-                        run_output_identifier=run_output_identifier,
-                        config=test_aggregate_config,
-                        document_stem=document_stem,
-                        vespa_connection_pool=vespa_connection_pool,
-                    )
-
-                assert "Mocked error" in str(excinfo.value)
+                assert snapshot == await index_document_passages(
+                    run_output_identifier=run_output_identifier,
+                    config=test_aggregate_config,
+                    document_stem=document_stem,
+                    vespa_connection_pool=vespa_connection_pool,
+                )
 
 
 @pytest.mark.vespa
@@ -237,6 +239,39 @@ async def test_index_aggregate_results_for_batch_of_documents(
                             f"{text_block_id}."
                         )
 
+                # Verify that concept_counts were updated on family_document in Vespa
+                # Get the family document from Vespa
+                _vespa_hit_id, vespa_document = get_document_from_vespa(
+                    document_import_id=document_id,
+                    vespa_search_adapter=local_vespa_search_adapter,
+                )
+
+                # Verify that concept_counts field exists and is not None/empty
+                assert vespa_document.concept_counts is not None, (
+                    f"concept_counts should not be None for document {document_id}"
+                )
+                assert len(vespa_document.concept_counts) > 0, (
+                    f"concept_counts should not be empty for document {document_id}"
+                )
+
+                # Verify that concept_counts contains expected concept IDs from the aggregate results
+                # Get all unique concept IDs from the expected results
+                expected_concept_ids = set()
+                for passage_concepts in expected_concepts.values():
+                    for concept_data in passage_concepts:
+                        expected_concept_ids.add(concept_data["id"])
+
+                # Extract concept IDs from concept_counts keys (format: "Q123:concept_name")
+                actual_concept_ids = {
+                    key.split(":")[0] for key in vespa_document.concept_counts.keys()
+                }
+
+                # Check that concept_counts contains exactly the expected concept IDs
+                assert expected_concept_ids == actual_concept_ids, (
+                    f"Expected concept IDs {expected_concept_ids} do not match concept_counts "
+                    f"for document {document_id}. Actual concept IDs: {actual_concept_ids}"
+                )
+
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
@@ -253,8 +288,8 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
 ) -> None:
     """Test that we handled the exception correctly during passage indexing."""
 
-    NON_EXISTENT_STEM = DocumentStem("non_existent_document")
-    document_stems = aggregate_inference_results_document_stems + [NON_EXISTENT_STEM]
+    non_existent_stem = DocumentStem("non_existent_document")
+    document_stems = aggregate_inference_results_document_stems + [non_existent_stem]
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
@@ -365,8 +400,8 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
 
-    NON_EXISTENT_STEM = DocumentStem("non_existent_document")
-    document_stems = aggregate_inference_results_document_stems + [NON_EXISTENT_STEM]
+    non_existent_stem = DocumentStem("non_existent_document")
+    document_stems = aggregate_inference_results_document_stems + [non_existent_stem]
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
@@ -396,3 +431,113 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
                 summary_artifact.description
                 == "Summary of the passages indexing run to update concept counts."
             )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_index_family_document(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    aggregate_inference_results_document_stems: list[DocumentStem],
+) -> None:
+    """Test that index_family_document correctly updates concept counts in Vespa."""
+
+    # Use the first document stem from our test data
+    document_stem = aggregate_inference_results_document_stems[0]
+    document_id: DocumentImportId = remove_translated_suffix(document_stem)
+
+    # Create some test concepts
+    test_concepts = [
+        SimpleConcept(id="Q123", name="Climate Change"),
+        SimpleConcept(id="Q456", name="Carbon Emissions"),
+        SimpleConcept(id="Q123", name="Climate Change"),  # Duplicate to test counting
+        SimpleConcept(id="Q789", name="Renewable Energy"),
+    ]
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        # Get the initial state of the family document
+        initial_vespa_hit_id, initial_vespa_document = get_document_from_vespa(
+            document_import_id=document_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        # Index the concepts
+        result = await index_family_document(
+            document_id=document_id,
+            vespa_connection_pool=vespa_connection_pool,
+            simple_concepts=test_concepts,
+        )
+
+        # Assert the operation was successful
+        assert is_ok(result), f"Expected Ok result, got {result}"
+
+        # Get the updated family document from Vespa
+        final_vespa_hit_id, final_vespa_document = get_document_from_vespa(
+            document_import_id=document_id,
+            vespa_search_adapter=local_vespa_search_adapter,
+        )
+
+        # Verify that concept_counts field exists and is not None/empty
+        assert final_vespa_document.concept_counts is not None, (
+            f"concept_counts should not be None for document {document_id}"
+        )
+        assert len(final_vespa_document.concept_counts) > 0, (
+            f"concept_counts should not be empty for document {document_id}"
+        )
+
+        # Verify the concept counts are correct
+        expected_concept_counts = {
+            "Q123:Climate Change": 2,  # Appears twice
+            "Q456:Carbon Emissions": 1,
+            "Q789:Renewable Energy": 1,
+        }
+
+        assert final_vespa_document.concept_counts == expected_concept_counts, (
+            f"Expected concept_counts {expected_concept_counts}, "
+            f"got {final_vespa_document.concept_counts}"
+        )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_index_family_document__failure(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    aggregate_inference_results_document_stems: list[DocumentStem],
+) -> None:
+    """Test that index_family_document correctly handles Vespa update failures."""
+
+    # Use the first document stem from our test data
+    document_stem = aggregate_inference_results_document_stems[0]
+    document_id: DocumentImportId = remove_translated_suffix(document_stem)
+
+    # Create some test concepts
+    test_concepts = [
+        SimpleConcept(id="Q123", name="Climate Change"),
+        SimpleConcept(id="Q456", name="Carbon Emissions"),
+    ]
+
+    # Mock the update_data method at the module level to avoid Prefect serialization issues
+    with patch("vespa.application.VespaAsync.update_data") as mock_update_data:
+        mock_update_data.return_value = VespaResponse(
+            status_code=500,
+            operation_type="update",
+            json={"error": "Internal server error"},
+            url="http://mocked-vespa-url",
+        )
+
+        async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+            # Index the concepts
+            result = await index_family_document(
+                document_id=document_id,
+                vespa_connection_pool=vespa_connection_pool,
+                simple_concepts=test_concepts,
+            )
+
+            # Assert the operation failed
+            assert is_err(result), f"Expected Err result, got {result}"
+
+            error = unwrap_err(result)
+            assert error.msg == "Vespa update failed"
+            assert "json" in error.metadata
+            assert error.metadata["json"] == {"error": "Internal server error"}

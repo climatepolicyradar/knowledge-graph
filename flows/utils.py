@@ -337,17 +337,62 @@ class Profiler:
             )
 
     def __call__(self, func):
-        """Enable usage as a decorator."""
+        """Enable usage as a decorator for synchronous functions."""
+        if asyncio.iscoroutinefunction(func):
+            raise TypeError("Use AsyncProfiler for async functions")
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            # Use function name as name, if none provided
             profiler_name = self.name or func.__name__
             with Profiler(printer=self.printer, name=profiler_name):
                 result = func(*args, **kwargs)
             return result
 
         return wrapper
+
+
+@dataclass
+class AsyncProfiler:
+    """Async context manager for profiling and printing the duration."""
+
+    printer: Callable[[str], None] | None = None
+    name: str | None = None
+    # Set this so it's not `None` later on
+    start_time: float = field(init=False, default_factory=time.perf_counter)
+    end_time: float | None = field(init=False, default=None)
+    duration: float | None = field(init=False, default=None)
+
+    async def __aenter__(self) -> Self:
+        """Start the timer for async context."""
+        self.start_time = time.perf_counter()
+        return self
+
+    async def __aexit__(self, _exc_type, _exc_value, _traceback) -> None:
+        """Stop the timer and conditionally print the duration for async context."""
+        self.end_time = time.perf_counter()
+        self.duration = self.end_time - self.start_time
+
+        if self.printer:
+            self.printer(
+                (
+                    f"{self.name + ' ' if self.name else ''}done "
+                    f"in: {self.duration:.2f} seconds"
+                )
+            )
+
+    def __call__(self, func):
+        """Enable usage as a decorator for asynchronous functions."""
+        if not asyncio.iscoroutinefunction(func):
+            raise TypeError("Use Profiler for sync functions")
+
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            profiler_name = self.name or func.__name__
+            async with AsyncProfiler(printer=self.printer, name=profiler_name):
+                result = await func(*args, **kwargs)
+            return result
+
+        return async_wrapper
 
 
 async def wait_for_semaphore(
