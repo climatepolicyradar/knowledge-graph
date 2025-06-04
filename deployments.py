@@ -122,6 +122,10 @@ create_deployment(
 create_deployment(
     flow=aggregate_inference_results,
     description="Aggregate inference results",
+    flow_variables={
+        "cpu": MEGABYTES_PER_GIGABYTE * 16,
+        "memory": MEGABYTES_PER_GIGABYTE * 64,
+    },
 )
 
 # Boundary
@@ -146,7 +150,6 @@ create_deployment(
 create_deployment(
     flow=run_indexing_from_aggregate_results,
     description="Index aggregated inference results from S3 into Vespa",
-    flow_variables={"memory": MEGABYTES_PER_GIGABYTE * 64},
 )
 
 # De-index
