@@ -93,18 +93,18 @@ async def test_aggregate_inference_results(
                                 f"Unable to deserialise concept: {concept} with error: {e}"
                             )
 
-                assert (
-                    len(collected_ids_for_document) > 0
-                ), f"No concepts found for document: {document_id}"
+                assert len(collected_ids_for_document) > 0, (
+                    f"No concepts found for document: {document_id}"
+                )
                 all_collected_ids.extend(collected_ids_for_document)
 
-            assert set(all_collected_ids) == set(
-                wikibase_ids
-            ), f"Outputted: {set(all_collected_ids)} which doesnt match those in the specs: {set(wikibase_ids)}"
+            assert set(all_collected_ids) == set(wikibase_ids), (
+                f"Outputted: {set(all_collected_ids)} which doesnt match those in the specs: {set(wikibase_ids)}"
+            )
             COUNT = 329
-            assert (
-                len(all_collected_ids) == COUNT
-            ), f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
+            assert len(all_collected_ids) == COUNT, (
+                f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
+            )
 
             summary_artifact = await Artifact.get("aggregate-inference-sandbox")
             assert summary_artifact and summary_artifact.description
