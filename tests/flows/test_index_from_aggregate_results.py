@@ -180,7 +180,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
     ):
         await index_aggregate_results_for_batch_of_documents(
             run_output_identifier=run_output_identifier,
-            document_ids=None,  # So we test running for all documents
+            document_ids=aggregate_inference_results_import_ids,
             config_json=test_aggregate_config.to_json(),
         )
 
@@ -302,6 +302,26 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
             document_ids=document_ids,
+            config=test_aggregate_config,
+            batch_size=1,
+        )
+
+        # Assert that the run_deployment was called the expected params
+        assert mock_run_deployment.call_count == len(document_ids)
+        for call in mock_run_deployment.call_args_list:
+            call_params = call.kwargs["parameters"]
+            assert call_params["run_output_identifier"] == run_output_identifier
+            assert len(call_params["document_ids"]) == 1
+            assert call_params["document_ids"][0] in document_ids
+            assert call_params["config_json"] == test_aggregate_config.to_json()
+
+        # Reset the mock_run_deployment call count
+        mock_run_deployment.reset_mock()
+
+        # Run indexing with no document_ids specified, which should run for all documents
+        await run_indexing_from_aggregate_results(
+            run_output_identifier=run_output_identifier,
+            document_ids=None,  # So we test running for all documents,
             config=test_aggregate_config,
             batch_size=1,
         )
