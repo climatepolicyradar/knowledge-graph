@@ -20,6 +20,7 @@ class RenameUnpickler(pickle.Unpickler):
     """
 
     def find_class(self, module, name):
+        """Uses the override of this method to rename the module paths that were changed."""
         renamed_module = module
         if module == "src.labelled_passage":
             renamed_module = "src.models.labelled_passage"
