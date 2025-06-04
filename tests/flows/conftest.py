@@ -30,7 +30,7 @@ from vespa.io import VespaQueryResponse
 
 from flows.aggregate_inference_results import Config as AggregateInferenceResultsConfig
 from flows.inference import Config as InferenceConfig
-from flows.utils import DocumentImportId
+from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
 from src.concept import Concept
@@ -433,12 +433,12 @@ def mock_bucket_labelled_passages(
 
 
 @pytest.fixture
-def aggregate_inference_results_import_ids() -> list[DocumentImportId]:
+def aggregate_inference_results_document_stems() -> list[DocumentStem]:
     """Returns the list of aggregate inference results file stems."""
 
     return [
-        DocumentImportId("CCLW.executive.4934.1571"),
-        DocumentImportId("CCLW.executive.10014.4470"),
+        DocumentStem("CCLW.executive.4934.1571"),
+        DocumentStem("CCLW.executive.10014.4470_translated_en"),
     ]
 
 
@@ -461,14 +461,14 @@ def mock_bucket_inference_results(
     mock_s3_client,
     mock_bucket,
     s3_prefix_inference_results: str,
-    aggregate_inference_results_import_ids: list[DocumentImportId],
+    aggregate_inference_results_document_stems: list[DocumentStem],
 ) -> dict[str, dict[str, Any]]:
     """A version of the inference results bucket with more files"""
 
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = [
-        fixture_root / f"{import_id}.json"
-        for import_id in aggregate_inference_results_import_ids
+        fixture_root / f"{document_stem}.json"
+        for document_stem in aggregate_inference_results_document_stems
     ]
 
     inference_results = {}

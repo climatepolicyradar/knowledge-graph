@@ -19,6 +19,8 @@ class WikibaseID(str):
 
     def __lt__(self, other) -> bool:
         """Compare two Wikibase IDs numerically"""
+        if isinstance(other, str):
+            other = WikibaseID(other)
         if not isinstance(other, WikibaseID):
             return NotImplemented
         return self.numeric < other.numeric
@@ -32,8 +34,8 @@ class WikibaseID(str):
         return self.numeric == other.numeric
 
     def __hash__(self) -> int:
-        """Hash a Wikibase ID"""
-        return hash(self.numeric)
+        """Hash a Wikibase ID consistently with string representation"""
+        return hash(str(self))
 
     @classmethod
     def _validate(cls, value: str, field=None) -> str:

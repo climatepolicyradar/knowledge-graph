@@ -11,9 +11,10 @@ from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import RunOutputIdentifier, S3Uri
+from flows.aggregate_inference_results import RunOutputIdentifier
 from flows.boundary import (
     DocumentImportId,
+    DocumentStem,
     get_document_passages_from_vespa__generator,
 )
 from flows.index_from_aggregate_results import (
@@ -21,6 +22,7 @@ from flows.index_from_aggregate_results import (
     index_aggregate_results_from_s3_to_vespa,
     run_indexing_from_aggregate_results,
 )
+from flows.utils import remove_translated_suffix
 
 
 @pytest.mark.vespa
@@ -44,12 +46,12 @@ async def test_index_from_aggregated_inference_results(
             file_key,
             aggregated_inference_results,
         ) in mock_bucket_inference_results.items():
-            s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
-            document_import_id = DocumentImportId(s3_uri.stem)
+            document_stem = DocumentStem(Path(file_key).stem)
+            document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
             # Get the original vespa passages
             passages_generator = get_document_passages_from_vespa__generator(
-                document_import_id=document_import_id,
+                document_import_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
 
@@ -61,13 +63,13 @@ async def test_index_from_aggregated_inference_results(
             await index_aggregate_results_from_s3_to_vespa(
                 config=test_aggregate_config,
                 run_output_identifier=run_output_identifier,
-                document_import_id=document_import_id,
+                document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
             )
 
             # Get the final vespa passages
             final_passages_generator = get_document_passages_from_vespa__generator(
-                document_import_id=document_import_id,
+                document_import_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
             )
 
@@ -132,7 +134,7 @@ async def test_index_from_aggregated_inference_results__error_handling(
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for file_key, _ in mock_bucket_inference_results.items():
-            s3_uri = S3Uri(bucket=mock_bucket, key=file_key)
+            document_stem = DocumentStem(Path(file_key).stem)
 
             # Mock this function response _update_vespa_passage_concepts to simulate an error
             with patch(
@@ -150,7 +152,7 @@ async def test_index_from_aggregated_inference_results__error_handling(
                     await index_aggregate_results_from_s3_to_vespa(
                         run_output_identifier=run_output_identifier,
                         config=test_aggregate_config,
-                        document_import_id=DocumentImportId(s3_uri.stem),
+                        document_stem=document_stem,
                         vespa_connection_pool=vespa_connection_pool,
                     )
 
@@ -165,7 +167,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
-    aggregate_inference_results_import_ids: list[DocumentImportId],
+    aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
@@ -180,17 +182,18 @@ async def test_index_aggregate_results_for_batch_of_documents(
     ):
         await index_aggregate_results_for_batch_of_documents(
             run_output_identifier=run_output_identifier,
-            document_ids=aggregate_inference_results_import_ids,
+            document_stems=aggregate_inference_results_document_stems,
             config_json=test_aggregate_config.to_json(),
         )
 
         # Verify that the final data in vespa matches the expected results
         async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
             for file_key in mock_bucket_inference_results.keys():
-                doc_id = DocumentImportId(Path(file_key).stem)
+                document_stem = DocumentStem(Path(file_key).stem)
+                document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
                 passages_generator = get_document_passages_from_vespa__generator(
-                    document_import_id=doc_id,
+                    document_import_id=document_id,
                     vespa_connection_pool=vespa_connection_pool,
                 )
 
@@ -204,7 +207,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
 
                 # Assert all text blocks were indexed with their concepts
                 assert set(final_passages.keys()) == set(expected_concepts.keys()), (
-                    f"Text blocks in Vespa don't match expected text blocks for document {doc_id}"
+                    f"Text blocks in Vespa don't match expected text blocks for document {document_id}"
                 )
 
                 # Check each passage has the correct concepts
@@ -243,15 +246,15 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
-    aggregate_inference_results_import_ids: list[DocumentImportId],
+    aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we handled the exception correctly during passage indexing."""
 
-    NON_EXISTENT_ID = DocumentImportId("non_existent_document")
-    document_ids = aggregate_inference_results_import_ids + [NON_EXISTENT_ID]
+    NON_EXISTENT_STEM = DocumentStem("non_existent_document")
+    document_stems = aggregate_inference_results_document_stems + [NON_EXISTENT_STEM]
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
@@ -264,10 +267,10 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
             await index_aggregate_results_for_batch_of_documents(
                 run_output_identifier=run_output_identifier,
                 config_json=test_aggregate_config.to_json(),
-                document_ids=document_ids,
+                document_stems=document_stems,
             )
 
-        assert f"Failed to process 1/{len(document_ids)} documents" in str(
+        assert f"Failed to process 1/{len(document_stems)} documents" in str(
             excinfo.value
         )
 
@@ -275,15 +278,16 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
 @pytest.mark.vespa
 @pytest.mark.asyncio
 async def test_run_indexing_from_aggregate_results__invokes_subdeployments_correctly(
+    vespa_app,
+    mock_s3_client,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_document_stems: list[DocumentStem],
+    mock_run_output_identifier_str: str,
     test_aggregate_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
-    document_ids = [
-        DocumentImportId("cclw.executive.1.1"),
-        DocumentImportId("cclw.executive.1.2"),
-        DocumentImportId("cclw.executive.1.3"),
-    ]
-    run_output_identifier = RunOutputIdentifier("123-456")
+
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.run_deployment"
@@ -301,18 +305,48 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         # Run indexing
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_ids=document_ids,
+            document_stems=aggregate_inference_results_document_stems,
             config=test_aggregate_config,
             batch_size=1,
         )
 
         # Assert that the run_deployment was called the expected params
-        assert mock_run_deployment.call_count == len(document_ids)
+        assert mock_run_deployment.call_count == len(
+            aggregate_inference_results_document_stems
+        )
         for call in mock_run_deployment.call_args_list:
             call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
-            assert len(call_params["document_ids"]) == 1
-            assert call_params["document_ids"][0] in document_ids
+            assert len(call_params["document_stems"]) == 1
+            assert (
+                call_params["document_stems"][0]
+                in aggregate_inference_results_document_stems
+            )
+            assert call_params["config_json"] == test_aggregate_config.to_json()
+
+        # Reset the mock_run_deployment call count
+        mock_run_deployment.reset_mock()
+
+        # Run indexing with no document_ids specified, which should run for all documents
+        await run_indexing_from_aggregate_results(
+            run_output_identifier=run_output_identifier,
+            document_stems=None,
+            config=test_aggregate_config,
+            batch_size=1,
+        )
+
+        # Assert that the run_deployment was called the expected params
+        assert mock_run_deployment.call_count == len(
+            aggregate_inference_results_document_stems
+        )
+        for call in mock_run_deployment.call_args_list:
+            call_params = call.kwargs["parameters"]
+            assert call_params["run_output_identifier"] == run_output_identifier
+            assert len(call_params["document_stems"]) == 1
+            assert (
+                call_params["document_stems"][0]
+                in aggregate_inference_results_document_stems
+            )
             assert call_params["config_json"] == test_aggregate_config.to_json()
 
 
@@ -324,19 +358,17 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
+    aggregate_inference_results_document_stems: list[DocumentStem],
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
 
-    NON_EXISTENT_ID = DocumentImportId("non_existent_document")
-    document_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ] + [NON_EXISTENT_ID]
+    NON_EXISTENT_STEM = DocumentStem("non_existent_document")
+    document_stems = aggregate_inference_results_document_stems + [NON_EXISTENT_STEM]
 
-    run_output_identifier_str = Path(next(iter(mock_bucket_inference_results))).parts[1]
-    run_output_identifier = RunOutputIdentifier(run_output_identifier_str)
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     # Assert that the indexing runs correctly when called as sub deployments and that we
     # continue on failure of one of the documents.
@@ -347,13 +379,13 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
         with pytest.raises(ValueError) as excinfo:
             await run_indexing_from_aggregate_results(
                 run_output_identifier=run_output_identifier,
-                document_ids=document_ids,
+                document_stems=document_stems,
                 config=test_aggregate_config,
                 batch_size=1,
             )
 
             assert (
-                f"Some batches of documents had failures: 1/{len(document_ids)} failed."
+                f"Some batches of documents had failures: 1/{len(document_stems)} failed."
                 in str(excinfo.value)
             )
 
