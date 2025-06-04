@@ -37,6 +37,7 @@ from flows.boundary import (
 from flows.utils import (
     Profiler,
     SlackNotify,
+    collect_unique_file_stems_under_prefix,
     iterate_batch,
     remove_translated_suffix,
     wait_for_semaphore,
@@ -202,6 +203,12 @@ async def index_aggregate_results_for_batch_of_documents(
             "No document stems provided. This flow is not designed to run without them."
         )
 
+    config = Config(**config_json)
+    logger.info(
+        f"Running indexing for batch with config: {config}, "
+        f"no. of documents: {len(document_stems)}"
+    )
+
     temp_dir = tempfile.TemporaryDirectory()
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
         cert_dir=temp_dir.name,
@@ -255,7 +262,7 @@ async def index_aggregate_results_for_batch_of_documents(
 )
 async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
-    document_stems: list[DocumentStem],
+    document_stems: list[DocumentStem] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
@@ -273,9 +280,19 @@ async def run_indexing_from_aggregate_results(
     logger.info(f"Running indexing with config: {config}")
 
     if not document_stems:
-        raise NotImplementedError(
-            "No document stems provided. This flow is not designed to run without them."
+        logger.info(
+            f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
+        collected_document_stems: list[DocumentStem] = (
+            collect_unique_file_stems_under_prefix(  #  type: ignore[call-arg]
+                bucket_name=config.cache_bucket_str,
+                prefix=os.path.join(
+                    config.aggregate_inference_results_prefix, run_output_identifier
+                ),
+            )
+        )
+        document_stems = collected_document_stems
+        logger.info(f"Found {len(document_stems)} document import ids to process.")
 
     flow_name = function_to_flow_name(index_aggregate_results_for_batch_of_documents)
     deployment_name = generate_deployment_name(
