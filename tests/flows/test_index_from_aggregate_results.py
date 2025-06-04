@@ -7,6 +7,7 @@ import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
+from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from vespa.io import VespaResponse
 
@@ -354,4 +355,12 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
             assert (
                 f"Some batches of documents had failures: 1/{len(document_ids)} failed."
                 in str(excinfo.value)
+            )
+
+            # Assert that the summary artifact was created
+            summary_artifact = await Artifact.get("Aggregate Indexing Summary")
+            assert summary_artifact and summary_artifact.description
+            assert (
+                summary_artifact.description
+                == "Summary of the passages indexing run to update concept counts."
             )

@@ -8,6 +8,7 @@ import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
+from prefect.artifacts import create_markdown_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
@@ -64,6 +65,37 @@ async def _update_vespa_passage_concepts(
     )
 
     return response
+
+
+async def create_aggregate_indexing_summary_artifact(
+    config: Config,
+    document_ids: list[DocumentImportId],
+    successes: list[DocumentImportId],
+    failures: list[DocumentImportId],
+) -> None:
+    """Create a table artifact with summary information about the indexing run."""
+
+    # Prepare summary data for the artifact
+    total_documents = len(document_ids)
+    successful_document_batches_count = len(successes)
+    failed_document_batches_count = len(failures)
+
+    # Format the overview information as a string for the description
+    indexing_report = f"""# Aggregate Indexing Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Total documents processed**: {total_documents}
+- **Successful Batches**: {successful_document_batches_count}
+- **Failed Batches**: {failed_document_batches_count}
+"""
+
+    # Create classifier details table
+    create_markdown_artifact(
+        key="Aggregate Indexing Summary",
+        description="Summary of the passages indexing run to update concept counts.",
+        markdown=indexing_report,
+    )
 
 
 @flow
@@ -277,7 +309,6 @@ async def run_indexing_from_aggregate_results(
             *tasks, return_exceptions=True
         )
 
-    # TODO: Replace with a prefect artifact.
     failures = []
     successes = []
     for result in results:
@@ -285,6 +316,13 @@ async def run_indexing_from_aggregate_results(
             failures.append(result)
         else:
             successes.append(result)
+
+    await create_aggregate_indexing_summary_artifact(
+        config=config,
+        document_ids=document_ids,
+        successes=successes,
+        failures=failures,
+    )
 
     if failures:
         raise ValueError(
