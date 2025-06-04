@@ -31,12 +31,13 @@ async def test_index_from_aggregated_inference_results(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for (
@@ -121,12 +122,13 @@ async def test_index_from_aggregated_inference_results__error_handling(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for file_key, _ in mock_bucket_inference_results.items():
@@ -163,16 +165,14 @@ async def test_index_aggregate_results_for_batch_of_documents(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ]
-    run_output_identifier = Path(next(iter(mock_bucket_inference_results))).parts[1]
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
@@ -180,7 +180,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
     ):
         await index_aggregate_results_for_batch_of_documents(
             run_output_identifier=run_output_identifier,
-            document_import_ids=document_import_ids,
+            document_ids=aggregate_inference_results_import_ids,
             config_json=test_aggregate_config.to_json(),
         )
 
@@ -243,19 +243,17 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
     mock_s3_client,
     mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
+    mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_aggregate_config,
 ) -> None:
     """Test that we handled the exception correctly during passage indexing."""
 
     NON_EXISTENT_ID = DocumentImportId("non_existent_document")
-    document_import_ids = [
-        DocumentImportId(Path(file_key).stem)
-        for file_key in mock_bucket_inference_results.keys()
-    ] + [NON_EXISTENT_ID]
+    document_ids = aggregate_inference_results_import_ids + [NON_EXISTENT_ID]
 
-    run_output_identifier_str = Path(next(iter(mock_bucket_inference_results))).parts[1]
-    run_output_identifier = RunOutputIdentifier(run_output_identifier_str)
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
@@ -266,10 +264,10 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
             await index_aggregate_results_for_batch_of_documents(
                 run_output_identifier=run_output_identifier,
                 config_json=test_aggregate_config.to_json(),
-                document_import_ids=document_import_ids,
+                document_ids=document_ids,
             )
 
-        assert f"Failed to process 1/{len(document_import_ids)} documents" in str(
+        assert f"Failed to process 1/{len(document_ids)} documents" in str(
             excinfo.value
         )
 
@@ -280,7 +278,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
     test_aggregate_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
-    document_import_ids = [
+    document_ids = [
         DocumentImportId("cclw.executive.1.1"),
         DocumentImportId("cclw.executive.1.2"),
         DocumentImportId("cclw.executive.1.3"),
@@ -303,18 +301,18 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         # Run indexing
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_import_ids=document_import_ids,
+            document_ids=document_ids,
             config=test_aggregate_config,
             batch_size=1,
         )
 
         # Assert that the run_deployment was called the expected params
-        assert mock_run_deployment.call_count == len(document_import_ids)
+        assert mock_run_deployment.call_count == len(document_ids)
         for call in mock_run_deployment.call_args_list:
             call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
-            assert len(call_params["document_import_ids"]) == 1
-            assert call_params["document_import_ids"][0] in document_import_ids
+            assert len(call_params["document_ids"]) == 1
+            assert call_params["document_ids"][0] in document_ids
             assert call_params["config_json"] == test_aggregate_config.to_json()
 
 
@@ -332,7 +330,7 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
     """Test that run passage level indexing correctly from aggregated restuls."""
 
     NON_EXISTENT_ID = DocumentImportId("non_existent_document")
-    document_import_ids = [
+    document_ids = [
         DocumentImportId(Path(file_key).stem)
         for file_key in mock_bucket_inference_results.keys()
     ] + [NON_EXISTENT_ID]
@@ -349,13 +347,13 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
         with pytest.raises(ValueError) as excinfo:
             await run_indexing_from_aggregate_results(
                 run_output_identifier=run_output_identifier,
-                document_import_ids=document_import_ids,
+                document_ids=document_ids,
                 config=test_aggregate_config,
                 batch_size=1,
             )
 
             assert (
-                f"Some batches of documents had failures: 1/{len(document_import_ids)} failed."
+                f"Some batches of documents had failures: 1/{len(document_ids)} failed."
                 in str(excinfo.value)
             )
 
