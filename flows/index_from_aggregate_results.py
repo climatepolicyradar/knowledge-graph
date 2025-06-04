@@ -18,12 +18,13 @@ from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import (
     Config,
-    DocumentImportId,
     RunOutputIdentifier,
 )
 from flows.boundary import (
     DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_TIMEOUT_MS,
+    DocumentImportId,
+    DocumentStem,
     TextBlockId,
     VespaDataId,
     VespaHitId,
@@ -33,7 +34,13 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
-from flows.utils import Profiler, SlackNotify, iterate_batch, wait_for_semaphore
+from flows.utils import (
+    Profiler,
+    SlackNotify,
+    iterate_batch,
+    remove_translated_suffix,
+    wait_for_semaphore,
+)
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
@@ -67,16 +74,17 @@ async def _update_vespa_passage_concepts(
     return response
 
 
+# TODO: I'm not sure these type hints are correct.
 async def create_aggregate_indexing_summary_artifact(
     config: Config,
-    document_ids: list[DocumentImportId],
-    successes: list[DocumentImportId],
-    failures: list[DocumentImportId],
+    document_stems: list[DocumentStem],
+    successes: list[DocumentStem],
+    failures: list[DocumentStem],
 ) -> None:
-    """Create a table artifact with summary information about the indexing run."""
+    """Create a markdown report artifact with summary information about the indexing run."""
 
     # Prepare summary data for the artifact
-    total_documents = len(document_ids)
+    total_documents = len(document_stems)
     successful_document_batches_count = len(successes)
     failed_document_batches_count = len(failures)
 
@@ -102,7 +110,7 @@ async def create_aggregate_indexing_summary_artifact(
 async def index_aggregate_results_from_s3_to_vespa(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-    document_import_id: DocumentImportId,
+    document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
 ) -> None:
     """Index aggregated inference results from S3 into Vespa for a document."""
@@ -112,7 +120,7 @@ async def index_aggregate_results_from_s3_to_vespa(
     aggregated_results_key = os.path.join(
         config.aggregate_inference_results_prefix,
         run_output_identifier,
-        f"{document_import_id}.json",
+        f"{document_stem}.json",
     )
     logger.info(
         f"Loading aggregated inference results from S3: {aggregated_results_key}"
@@ -122,8 +130,13 @@ async def index_aggregate_results_from_s3_to_vespa(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
 
+    document_id = DocumentImportId(remove_translated_suffix(document_stem))
+    logger.info(
+        f"Querying Vespa for passages related to document import ID: {document_id}"
+    )
+
     passages_generator = get_document_passages_from_vespa__generator(
-        document_import_id=document_import_id,
+        document_import_id=document_id,
         vespa_connection_pool=vespa_connection_pool,
     )
 
@@ -132,7 +145,7 @@ async def index_aggregate_results_from_s3_to_vespa(
         passages_in_vespa.update(passage_batch)
 
     logger.info(
-        f"Updating concepts for document import ID: {document_import_id}, "
+        f"Updating concepts for document import ID: {document_id}, "
         f"found {len(passages_in_vespa)} passages in Vespa",
     )
     text_blocks_not_in_vespa = []
@@ -156,12 +169,12 @@ async def index_aggregate_results_from_s3_to_vespa(
 
     if text_blocks_not_in_vespa or update_errors:
         raise ValueError(
-            f"Error with {document_import_id}: {text_blocks_not_in_vespa=}, {update_errors=}"
+            f"Error with {document_id}: {text_blocks_not_in_vespa=}, {update_errors=}"
         )
 
     logger.info(
         "Successfully indexed all aggregated inference results for document import ID: "
-        f"{document_import_id} into Vespa. "
+        f"{document_id} into Vespa. "
         f"Total passages updated: {len(aggregated_inference_results)}"
     )
 
@@ -169,7 +182,7 @@ async def index_aggregate_results_from_s3_to_vespa(
 @flow
 async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
-    document_ids: list[DocumentImportId],
+    document_stems: list[DocumentStem],
     config_json: dict,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
@@ -182,13 +195,12 @@ async def index_aggregate_results_for_batch_of_documents(
     config = Config(**config_json)
     logger.info(
         f"Running indexing for batch with config: {config}, "
-        f"no. of documents: {len(document_ids)}"
+        f"no. of documents: {len(document_stems)}"
     )
 
-    if not document_ids:
+    if not document_stems:
         raise NotImplementedError(
-            "No document import IDs provided. "
-            "This flow is not designed to run without them."
+            "No document stems provided. This flow is not designed to run without them."
         )
 
     temp_dir = tempfile.TemporaryDirectory()
@@ -208,10 +220,10 @@ async def index_aggregate_results_for_batch_of_documents(
             index_aggregate_results_from_s3_to_vespa(
                 config=config,
                 run_output_identifier=run_output_identifier,
-                document_import_id=document_import_id,
+                document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
             )
-            for document_import_id in document_ids
+            for document_stem in document_stems
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -244,7 +256,7 @@ async def index_aggregate_results_for_batch_of_documents(
 )
 async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
-    document_ids: list[DocumentImportId],
+    document_stems: list[DocumentStem],
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
@@ -261,10 +273,9 @@ async def run_indexing_from_aggregate_results(
 
     logger.info(f"Running indexing with config: {config}")
 
-    if not document_ids:
+    if not document_stems:
         raise NotImplementedError(
-            "No document import IDs provided. "
-            "This flow is not designed to run without them."
+            "No document stems provided. This flow is not designed to run without them."
         )
 
     flow_name = function_to_flow_name(index_aggregate_results_for_batch_of_documents)
@@ -284,7 +295,7 @@ async def run_indexing_from_aggregate_results(
                 run_deployment(
                     name=f"{flow_name}/{deployment_name}",
                     parameters={
-                        "document_ids": batch,
+                        "document_stems": batch,
                         "config_json": config.to_json(),
                         "run_output_identifier": run_output_identifier,
                         "indexer_max_vespa_connections": indexer_max_vespa_connections,
@@ -298,7 +309,7 @@ async def run_indexing_from_aggregate_results(
                     timeout=None,
                 ),
             )
-            for batch in iterate_batch(document_ids, batch_size)
+            for batch in iterate_batch(document_stems, batch_size)
         ]
 
     with Profiler(
@@ -319,7 +330,7 @@ async def run_indexing_from_aggregate_results(
 
     await create_aggregate_indexing_summary_artifact(
         config=config,
-        document_ids=document_ids,
+        document_stems=document_stems,
         successes=successes,
         failures=failures,
     )
