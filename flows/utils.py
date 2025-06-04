@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import inspect
 import os
@@ -179,7 +180,7 @@ def get_file_stems_for_document_id(
 def collect_unique_file_stems_under_prefix(
     bucket_name: str,
     prefix: str,
-) -> list[DocumentImportId]:
+) -> list[DocumentStem]:
     """Collect all unique file stems under a prefix."""
     s3 = boto3.client("s3")
     paginator = s3.get_paginator("list_objects_v2")
@@ -347,3 +348,11 @@ class Profiler:
             return result
 
         return wrapper
+
+
+async def wait_for_semaphore(
+    semaphore: asyncio.Semaphore,
+    fn,
+):
+    async with semaphore:
+        return await fn

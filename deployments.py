@@ -29,6 +29,7 @@ from flows.index import (
     index_labelled_passages_from_s3_to_vespa,
 )
 from flows.index_from_aggregate_results import (
+    index_aggregate_results_for_batch_of_documents,
     run_indexing_from_aggregate_results,
 )
 from flows.inference import (
@@ -122,6 +123,10 @@ create_deployment(
 create_deployment(
     flow=aggregate_inference_results,
     description="Aggregate inference results",
+    flow_variables={
+        "cpu": MEGABYTES_PER_GIGABYTE * 16,
+        "memory": MEGABYTES_PER_GIGABYTE * 64,
+    },
 )
 
 # Boundary
@@ -144,8 +149,14 @@ create_deployment(
 )
 
 create_deployment(
+    flow=index_aggregate_results_for_batch_of_documents,
+    description="Run passage indexing for a batch of documents from s3 to Vespa",
+    flow_variables={"memory": MEGABYTES_PER_GIGABYTE * 64},
+)
+
+create_deployment(
     flow=run_indexing_from_aggregate_results,
-    description="Index aggregated inference results from S3 into Vespa",
+    description="Run passage indexing for documents from s3 to Vespa",
 )
 
 # De-index

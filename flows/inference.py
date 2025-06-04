@@ -29,6 +29,7 @@ from flows.utils import (
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     iterate_batch,
+    wait_for_semaphore,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -758,11 +759,3 @@ async def create_inference_summary_artifact(
         table=classifier_details,
         description=overview_description,
     )
-
-
-async def wait_for_semaphore(
-    semaphore: asyncio.Semaphore,
-    fn,
-):
-    async with semaphore:
-        return await fn
