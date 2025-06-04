@@ -305,9 +305,7 @@ async def aggregate_inference_results(
             prefix=config.document_source_prefix,
         )
         collected_document_ids: list[DocumentImportId] = [
-            remove_translated_suffix(stem)
-            for stem in collected_document_stems
-            if stem.endswith(".json")
+            remove_translated_suffix(stem) for stem in collected_document_stems
         ]
         document_ids = collected_document_ids
 
