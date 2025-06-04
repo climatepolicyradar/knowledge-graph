@@ -32,7 +32,7 @@ from scripts.cloud import (
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"

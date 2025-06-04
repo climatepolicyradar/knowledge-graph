@@ -67,7 +67,7 @@ predicted_spans = extreme_weather_classifier.predict("This is a passage of text 
 Our `LabelledPassage` objects combine a passage of text with the spans that mention a particular concept. They can contain multiple spans, referring to multiple concepts, each labelled through a different method.
 
 ```python
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 
 labelled_passage = LabelledPassage(
     text="This is a passage of text about extreme weather",
