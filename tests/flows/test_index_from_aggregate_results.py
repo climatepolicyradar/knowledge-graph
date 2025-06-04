@@ -317,9 +317,9 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         for call in mock_run_deployment.call_args_list:
             call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
-            assert len(call_params["document_ids"]) == 1
+            assert len(call_params["document_stems"]) == 1
             assert (
-                call_params["document_ids"][0]
+                call_params["document_stems"][0]
                 in aggregate_inference_results_document_stems
             )
             assert call_params["config_json"] == test_aggregate_config.to_json()
@@ -342,9 +342,9 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         for call in mock_run_deployment.call_args_list:
             call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
-            assert len(call_params["document_ids"]) == 1
+            assert len(call_params["document_stems"]) == 1
             assert (
-                call_params["document_ids"][0]
+                call_params["document_stems"][0]
                 in aggregate_inference_results_document_stems
             )
             assert call_params["config_json"] == test_aggregate_config.to_json()
