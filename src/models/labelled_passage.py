@@ -13,9 +13,7 @@ from src.span import Span, merge_overlapping_spans
 class LabelledPassage(Passage):
     """Represents a passage of text which has been labelled by an annotator"""
 
-    id: Optional[str] = Field(
-        default=None, title="ID", description="The unique identifier of the passage"
-    )
+    id: str = Field(..., title="ID", description="The unique identifier of the passage")
     text: str = Field(..., title="Text", description="The text of the passage")
     spans: list[Span] = Field(
         default_factory=list,
