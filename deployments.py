@@ -151,7 +151,6 @@ create_deployment(
 create_deployment(
     flow=index_aggregate_results_for_batch_of_documents,
     description="Run passage indexing for a batch of documents from s3 to Vespa",
-    flow_variables={"memory": MEGABYTES_PER_GIGABYTE * 64},
 )
 
 create_deployment(
