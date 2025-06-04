@@ -50,6 +50,7 @@ from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
 from flows.utils import (
+    AsyncProfiler,
     DocumentImporter,
     DocumentImportId,
     DocumentObjectUri,
@@ -1124,7 +1125,7 @@ async def run_partial_updates_of_concepts_for_batch_flow_or_deployment(
         )
 
 
-@Profiler(printer=print)
+@AsyncProfiler(printer=print)
 async def updates_by_s3(
     aws_env: AwsEnv,
     cache_bucket: str,
@@ -1223,7 +1224,7 @@ async def updates_by_s3(
         raise ValueError("there was at least 1 task that failed")
 
 
-@Profiler(printer=print)
+@AsyncProfiler(printer=print)
 async def _update_text_block(
     semaphore: asyncio.Semaphore,
     text_block_id: TextBlockId,
