@@ -269,7 +269,6 @@ async def run_indexing_from_aggregate_results(
 
     if not document_ids:
         logger.info(
-            "No document import ids provided. "
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
         document_import_ids = [
