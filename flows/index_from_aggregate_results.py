@@ -9,8 +9,8 @@ from typing import Any, Final
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow, task
-from prefect.artifacts import create_markdown_artifact
+from prefect import flow
+from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
@@ -47,6 +47,7 @@ from flows.utils import (
     remove_translated_suffix,
     wait_for_semaphore,
 )
+from scripts.cloud import AwsEnv
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
@@ -86,7 +87,7 @@ async def create_aggregate_indexing_summary_artifact(
     successes: list[FlowRun | BaseException],
     failures: list[FlowRun | BaseException],
 ) -> None:
-    """Create a markdown report artifact with summary information about the indexing run."""
+    """Create an artifact with summary information about the indexing run."""
 
     # Prepare summary data for the artifact
     total_documents = len(document_stems)
@@ -111,9 +112,14 @@ async def create_aggregate_indexing_summary_artifact(
     )
 
 
-# As of 2025-06-03, the Concept from the cpr_sdk isn't hashable
 @dataclass(frozen=True)
 class SimpleConcept:
+    """
+    A simple, hashable concept.
+
+    As of 2025-06-03, the Concept from the cpr_sdk isn't hashable.
+    """
+
     id: str
     name: str
 
@@ -124,7 +130,7 @@ async def index_document_passages(
     run_output_identifier: RunOutputIdentifier,
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
-) -> tuple[Counter[SimpleConcept], list[Result[None, Error]]]:
+) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
 
     aggregated_results_key = os.path.join(
@@ -135,11 +141,12 @@ async def index_document_passages(
 
     print(f"Loading aggregated inference results from S3: {aggregated_results_key}")
 
-    aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = (
-        load_json_data_from_s3(
-            bucket=config.cache_bucket_str, key=aggregated_results_key
-        )
+    raw_data = load_json_data_from_s3(
+        bucket=config.cache_bucket_str, key=aggregated_results_key
     )
+    aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
+        TextBlockId(k): v for k, v in raw_data.items()
+    }
 
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
     print(f"Querying Vespa for passages related to document import ID: {document_id}")
@@ -158,9 +165,7 @@ async def index_document_passages(
         f"found {len(passages_in_vespa)} passages in Vespa",
     )
 
-    successes: list[Result[None, Error]] = []
-    failures: list[Result[None, Error]] = []
-    concepts_counts: Counter[SimpleConcept] = Counter()
+    results: list[Result[list[SimpleConcept], Error]] = []
 
     for text_block_id, serialised_concepts in aggregated_inference_results.items():
         if TextBlockId(text_block_id) not in list(passages_in_vespa.keys()):
@@ -168,8 +173,7 @@ async def index_document_passages(
                 msg="text block not found in Vespa",
                 metadata={"text_block_id": TextBlockId(text_block_id)},
             )
-            failures.append(Err(error))
-            print(error)
+            results.append(Err(error))
             continue
 
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
@@ -189,30 +193,30 @@ async def index_document_passages(
                     "json": response.get_json(),
                 },
             )
-            failures.append(Err(error))
-            print(error)
+            results.append(Err(error))
             continue
 
-        concepts = [
-            SimpleConcept(id=concept["id"], name=concept["name"])
-            for concept in serialised_concepts
-        ]
-        concepts_counts.update(concepts)
+        results.append(
+            Ok(
+                [
+                    SimpleConcept(id=concept["id"], name=concept["name"])
+                    for concept in serialised_concepts
+                ]
+            )
+        )
 
-    print(f"{len(failures)} failures, {len(successes)} successes")
-
-    return concepts_counts, failures
+    return results
 
 
-@task
+@flow
 async def index_family_document(
-    document_import_id: DocumentImportId,
+    document_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
-    concepts_counts: Counter[SimpleConcept],
+    simple_concepts: list[SimpleConcept],
 ) -> Result[None, Error]:
-    """
-    Index document concept counts in Vespa via partial update.
-    """
+    """Index document concept counts in Vespa via partial update."""
+    concepts_counts: Counter[SimpleConcept] = Counter(simple_concepts)
+
     concepts_counts_with_names = {
         f"{concept.id}{CONCEPT_COUNT_SEPARATOR}{concept.name}": count
         for concept, count in concepts_counts.items()
@@ -221,7 +225,7 @@ async def index_family_document(
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="family_document",
         namespace="doc_search",
-        data_id=document_import_id,
+        data_id=document_id,
         fields={
             "concept_counts": concepts_counts_with_names
         },  # Note the schema is misnamed in Vespa
@@ -236,6 +240,56 @@ async def index_family_document(
         )
 
     return Ok(None)
+
+
+async def create_indexing_summary_artifact(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+    documents_stems: list[DocumentStem],
+    errors_per_document: dict[DocumentStem, list[Error]],
+) -> None:
+    """Create a markdown report artifact with summary information about the indexing run."""
+
+    # Prepare summary data for the artifact
+    total_documents = len(documents_stems)
+    failed_documents = len(errors_per_document)
+    successful_documents = total_documents - failed_documents
+    total_errors = sum(len(errors) for errors in errors_per_document.values())
+
+    # Format the overview information as a string for the description
+    overview_description = f"""# Indexing from Aggregate Results Summary
+
+## Overview
+- **Run Output Identifier**: {run_output_identifier}
+- **Environment**: {config.aws_env.value}
+- **Total documents processed**: {total_documents}
+- **Successful documents**: {successful_documents}
+- **Failed documents**: {failed_documents}
+- **Total errors**: {total_errors}
+"""
+
+    # Create document details table
+    document_details = []
+    for document_id in documents_stems:
+        errors = errors_per_document.get(document_id, [])
+        status = "✗" if errors else "✓"
+        error_messages = (
+            "; ".join([str(error.msg) for error in errors]) if errors else "N/A"
+        )
+        document_details.append(
+            {
+                "Family document ID": document_id,
+                "Status": status,
+                "Errors": error_messages,
+            }
+        )
+
+    # Create a single artifact with overview in description and document details in table
+    await create_table_artifact(
+        key=f"indexing-aggregate-results-{config.aws_env.value}",
+        table=document_details,
+        description=overview_description,
+    )
 
 
 @flow(log_prints=True)
@@ -256,7 +310,10 @@ async def index_aggregate_results_for_batch_of_documents(
             "No document stems provided. This flow is not designed to run without them."
         )
 
+    # This doesn't correctly parse the values into the dataclass.
     config = Config(**config_json)
+    config.aws_env = AwsEnv(config.aws_env)
+
     logger.info(
         f"Running indexing for batch with config: {config}, "
         f"no. of documents: {len(document_stems)}"
@@ -269,12 +326,7 @@ async def index_aggregate_results_for_batch_of_documents(
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
     )
 
-    results_document_passages: dict[
-        DocumentStem, tuple[Counter[SimpleConcept], list[Result[None, Error]]]
-    ] = {}
-    results_family_documents: dict[DocumentStem, Result[None, Error]] = {}
-
-    has_failures = False
+    errors_per_document: dict[DocumentStem, list[Error]] = {}
 
     async with (
         vespa_search_adapter.client.asyncio(
@@ -284,39 +336,54 @@ async def index_aggregate_results_for_batch_of_documents(
     ):
         for document_stem in document_stems:
             logger.info(f"Indexing aggregated results for document: {document_stem}")
-            concepts_counts, failures = await index_document_passages(
+
+            results = await index_document_passages(
                 config=config,
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
             )
-            if failures:
-                has_failures = True
 
-            results_document_passages[document_stem] = (concepts_counts, failures)
+            print("finished indexing document passages")
+
+            simple_concepts: list[SimpleConcept] = []
+            errors: list[Error] = []
+            for result in results:
+                match result:
+                    case Ok(val):
+                        simple_concepts.extend(val)
+                    case Err(err):
+                        print(err)
+                        errors.append(err)
 
             document_id: DocumentImportId = remove_translated_suffix(document_stem)
-            result: Result[None, Error] = await index_family_document(
-                document_import_id=document_id,
+            result = await index_family_document(
+                document_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
-                concepts_counts=concepts_counts,
+                simple_concepts=simple_concepts,
             )
 
             match result:
                 case Ok(_):
-                    print(
-                        f"indexing family document {document_stem} "
-                        f"succeeded: {concepts_counts}"
-                    )
-                case Err(error):
-                    has_failures = True
-                    print(f"indexing family document {document_stem} failed: {error}")
+                    print(f"indexing family document {document_stem} succeeded")
+                case Err(err):
+                    errors.append(err)
+                    print(f"indexing family document {document_stem} failed: {err}")
 
-            results_family_documents[document_stem] = result
+            # Conditionally set it, so the length of the presence of
+            # keys can be used as an indicator of the overall presence
+            # of ≥ 1 error.
+            if errors:
+                errors_per_document[document_stem] = errors
 
-    # TODO: Create report artifact
+    await create_indexing_summary_artifact(
+        config=config,
+        run_output_identifier=run_output_identifier,
+        documents_stems=document_stems,
+        errors_per_document=errors_per_document,
+    )
 
-    if has_failures:
+    if errors_per_document:
         raise ValueError("some tasks failed, check the report artifact and logs")
 
 
