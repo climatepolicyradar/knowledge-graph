@@ -123,6 +123,10 @@ create_deployment(
 create_deployment(
     flow=aggregate_inference_results,
     description="Aggregate inference results",
+    flow_variables={
+        "cpu": MEGABYTES_PER_GIGABYTE * 16,
+        "memory": MEGABYTES_PER_GIGABYTE * 64,
+    },
 )
 
 # Boundary
