@@ -67,7 +67,7 @@ def test_wikibase_to_s3_config():
 def test_aggregate_config():
     yield AggregateInferenceResultsConfig(
         _cache_bucket="test_bucket",
-        aws_env=AwsEnv("sandbox"),
+        aws_env=AwsEnv.sandbox,
     )
 
 
