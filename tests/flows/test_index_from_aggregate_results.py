@@ -321,7 +321,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         # Run indexing with no document_ids specified, which should run for all documents
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_ids=None,  # So we test running for all documents,
+            document_ids=None,
             config=test_aggregate_config,
             batch_size=1,
         )
