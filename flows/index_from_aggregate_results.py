@@ -106,7 +106,10 @@ async def create_aggregate_indexing_summary_artifact(
     )
 
 
-@flow
+@flow(
+    retries=2,
+    retry_delay_seconds=5,
+)
 async def index_aggregate_results_from_s3_to_vespa(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
