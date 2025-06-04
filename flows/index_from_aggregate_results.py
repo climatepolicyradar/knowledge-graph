@@ -273,7 +273,7 @@ async def run_indexing_from_aggregate_results(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
         document_import_ids: list[DocumentImportId] = [
-            remove_translated_suffix(i)
+            remove_translated_suffix(i)  # type: ignore[arg-type]
             for i in collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
                 prefix=os.path.join(
