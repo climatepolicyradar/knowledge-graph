@@ -33,7 +33,14 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
-from flows.utils import Profiler, SlackNotify, iterate_batch, wait_for_semaphore
+from flows.utils import (
+    Profiler,
+    SlackNotify,
+    collect_unique_file_stems_under_prefix,
+    iterate_batch,
+    remove_translated_suffix,
+    wait_for_semaphore,
+)
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
@@ -169,8 +176,8 @@ async def index_aggregate_results_from_s3_to_vespa(
 @flow
 async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
-    document_ids: list[DocumentImportId],
     config_json: dict,
+    document_ids: list[DocumentImportId] | None = None,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
@@ -179,17 +186,17 @@ async def index_aggregate_results_for_batch_of_documents(
 
     logger = get_run_logger()
 
-    config = Config(**config_json)
-    logger.info(
-        f"Running indexing for batch with config: {config}, "
-        f"no. of documents: {len(document_ids)}"
-    )
-
     if not document_ids:
         raise NotImplementedError(
             "No document import IDs provided. "
             "This flow is not designed to run without them."
         )
+
+    config = Config(**config_json)
+    logger.info(
+        f"Running indexing for batch with config: {config}, "
+        f"no. of documents: {len(document_ids)}"
+    )
 
     temp_dir = tempfile.TemporaryDirectory()
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
@@ -244,7 +251,7 @@ async def index_aggregate_results_for_batch_of_documents(
 )
 async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
-    document_ids: list[DocumentImportId],
+    document_ids: list[DocumentImportId] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
@@ -262,10 +269,20 @@ async def run_indexing_from_aggregate_results(
     logger.info(f"Running indexing with config: {config}")
 
     if not document_ids:
-        raise NotImplementedError(
-            "No document import IDs provided. "
-            "This flow is not designed to run without them."
+        logger.info(
+            f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
+        collected_document_ids: list[DocumentImportId] = [
+            remove_translated_suffix(i)  # type: ignore[arg-type]
+            for i in collect_unique_file_stems_under_prefix(
+                bucket_name=config.cache_bucket_str,
+                prefix=os.path.join(
+                    config.aggregate_inference_results_prefix, run_output_identifier
+                ),
+            )
+        ]
+        document_ids = collected_document_ids
+        logger.info(f"Found {len(document_ids)} document import ids to process.")
 
     flow_name = function_to_flow_name(index_aggregate_results_for_batch_of_documents)
     deployment_name = generate_deployment_name(
