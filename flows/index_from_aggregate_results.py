@@ -38,6 +38,7 @@ from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,
+    remove_translated_suffix,
     wait_for_semaphore,
 )
 
@@ -271,8 +272,8 @@ async def run_indexing_from_aggregate_results(
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
-        document_import_ids = [
-            DocumentImportId(i)
+        document_import_ids: list[DocumentImportId] = [
+            remove_translated_suffix(i)
             for i in collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
                 prefix=os.path.join(
