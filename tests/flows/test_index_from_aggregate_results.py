@@ -276,9 +276,7 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
 @pytest.mark.asyncio
 async def test_run_indexing_from_aggregate_results__invokes_subdeployments_correctly(
     vespa_app,
-    # local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
-    # mock_bucket: str,
     mock_bucket_inference_results: dict[str, dict[str, Any]],
     aggregate_inference_results_import_ids: list[DocumentImportId],
     mock_run_output_identifier_str: str,
