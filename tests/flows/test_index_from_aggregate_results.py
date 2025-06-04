@@ -275,15 +275,18 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
 @pytest.mark.vespa
 @pytest.mark.asyncio
 async def test_run_indexing_from_aggregate_results__invokes_subdeployments_correctly(
+    vespa_app,
+    # local_vespa_search_adapter: VespaSearchAdapter,
+    mock_s3_client,
+    # mock_bucket: str,
+    mock_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_import_ids: list[DocumentImportId],
+    mock_run_output_identifier_str: str,
     test_aggregate_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
-    document_ids = [
-        DocumentImportId("cclw.executive.1.1"),
-        DocumentImportId("cclw.executive.1.2"),
-        DocumentImportId("cclw.executive.1.3"),
-    ]
-    run_output_identifier = RunOutputIdentifier("123-456")
+
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
         "flows.index_from_aggregate_results.run_deployment"
@@ -301,18 +304,22 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         # Run indexing
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            document_ids=document_ids,
+            document_ids=aggregate_inference_results_import_ids,
             config=test_aggregate_config,
             batch_size=1,
         )
 
         # Assert that the run_deployment was called the expected params
-        assert mock_run_deployment.call_count == len(document_ids)
+        assert mock_run_deployment.call_count == len(
+            aggregate_inference_results_import_ids
+        )
         for call in mock_run_deployment.call_args_list:
             call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
             assert len(call_params["document_ids"]) == 1
-            assert call_params["document_ids"][0] in document_ids
+            assert (
+                call_params["document_ids"][0] in aggregate_inference_results_import_ids
+            )
             assert call_params["config_json"] == test_aggregate_config.to_json()
 
         # Reset the mock_run_deployment call count
@@ -327,12 +334,16 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         )
 
         # Assert that the run_deployment was called the expected params
-        assert mock_run_deployment.call_count == len(document_ids)
+        assert mock_run_deployment.call_count == len(
+            aggregate_inference_results_import_ids
+        )
         for call in mock_run_deployment.call_args_list:
             call_params = call.kwargs["parameters"]
             assert call_params["run_output_identifier"] == run_output_identifier
             assert len(call_params["document_ids"]) == 1
-            assert call_params["document_ids"][0] in document_ids
+            assert (
+                call_params["document_ids"][0] in aggregate_inference_results_import_ids
+            )
             assert call_params["config_json"] == test_aggregate_config.to_json()
 
 
