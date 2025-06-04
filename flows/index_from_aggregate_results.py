@@ -192,12 +192,6 @@ async def index_aggregate_results_for_batch_of_documents(
 
     logger = get_run_logger()
 
-    config = Config(**config_json)
-    logger.info(
-        f"Running indexing for batch with config: {config}, "
-        f"no. of documents: {len(document_stems)}"
-    )
-
     if not document_stems:
         raise NotImplementedError(
             "No document stems provided. This flow is not designed to run without them."
