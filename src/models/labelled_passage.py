@@ -1,6 +1,5 @@
 import html
 import re
-from typing import Optional
 
 from argilla import Argilla, Record, Response
 from pydantic import Field, model_validator
