@@ -354,7 +354,7 @@ def test_update_s3_with_some_successes(
         )
     ) == [
         '{"id":"lp1","text":"once upon a time","source":null,"spans":[{"text":"upon","start_index":0,"end_index":1,"concept_id":"Q456","labellers":[],"timestamps":[],"confidence":null,"id":"bpp4juku","labelled_text":"u"}],"metadata":{}}',
-        '{"id":"lp2","text":"lorem ipsum","spans":[],"metadata":{}}',
+        '{"id":"lp2","text":"lorem ipsum",,"source":null,"spans":[],"metadata":{}}',
     ]
     assert json.loads(
         _s3_object_read_text(
@@ -499,7 +499,7 @@ async def test_update_s3_with_latest_concepts_counts_some_success(
         )
     ) == [
         '{"id":"lp1","text":"once upon a time","source":null,"spans":[{"text":"once","start_index":0,"end_index":1,"concept_id":"Q123","labellers":[],"timestamps":[],"confidence":null,"id":"z55va9eh","labelled_text":"o"}],"metadata":{}}',
-        '{"id":"lp2","text":"lorem ipsum","spans":[],"metadata":{}}',
+        '{"id":"lp2","text":"lorem ipsum","source":null,"spans":[],"metadata":{}}',
     ]
     assert json.loads(
         _s3_object_read_text(
