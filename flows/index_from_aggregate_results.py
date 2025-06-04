@@ -38,7 +38,6 @@ from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,
-    remove_translated_suffix,
     wait_for_semaphore,
 )
 
@@ -193,20 +192,10 @@ async def index_aggregate_results_for_batch_of_documents(
     )
 
     if not document_ids:
-        logger.info(
-            "No document import ids provided. "
-            f"Running on all documents under run_output_identifier: {run_output_identifier}"
+        raise NotImplementedError(
+            "No document import IDs provided. "
+            "This flow is not designed to run without them."
         )
-        document_import_ids: list[DocumentImportId] = [
-            remove_translated_suffix(i)
-            for i in collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket_str,
-                prefix=os.path.join(
-                    config.aggregate_inference_results_prefix, run_output_identifier
-                ),
-            )
-        ]
-        logger.info(f"Found {len(document_import_ids)} document import ids to process.")
 
     temp_dir = tempfile.TemporaryDirectory()
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
