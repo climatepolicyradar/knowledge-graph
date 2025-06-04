@@ -74,12 +74,11 @@ async def _update_vespa_passage_concepts(
     return response
 
 
-# TODO: I'm not sure these type hints are correct.
 async def create_aggregate_indexing_summary_artifact(
     config: Config,
     document_stems: list[DocumentStem],
-    successes: list[DocumentStem],
-    failures: list[DocumentStem],
+    successes: list[FlowRun | BaseException],
+    failures: list[FlowRun | BaseException],
 ) -> None:
     """Create a markdown report artifact with summary information about the indexing run."""
 
@@ -130,7 +129,7 @@ async def index_aggregate_results_from_s3_to_vespa(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
 
-    document_id = DocumentImportId(remove_translated_suffix(document_stem))
+    document_id: DocumentImportId = remove_translated_suffix(document_stem)
     logger.info(
         f"Querying Vespa for passages related to document import ID: {document_id}"
     )
