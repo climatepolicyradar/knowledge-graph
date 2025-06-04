@@ -28,8 +28,9 @@ class Source(BaseModel):
 class Passage(BaseModel):
     """Raw passage object"""
 
+    id: str = Field(..., title="ID", description="The unique identifier of the passage")
     text: str
-    source: Optional[Source] = Field(default=None)
+    source: Optional[Source] = Field(default=None, repr=False)
 
 
 class SyntheticPassageWithConfidence(BaseModel):

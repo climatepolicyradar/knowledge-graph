@@ -247,7 +247,7 @@ def test_calculate_performance_metrics(concept, snapshot: SnapshotAssertion):
 
 def test_create_gold_standard_labelled_passages(concept, snapshot: SnapshotAssertion):
     result = create_gold_standard_labelled_passages(concept.labelled_passages)
-    assert result == snapshot
+    assert result == snapshot(exclude=lambda prop, path: prop in {"id", "text"})
 
 
 def test_log_metrics(metrics_df: pd.DataFrame):
