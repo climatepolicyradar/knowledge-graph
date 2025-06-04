@@ -69,14 +69,14 @@ async def _update_vespa_passage_concepts(
 
 async def create_aggregate_indexing_summary_artifact(
     config: Config,
-    document_import_ids: list[DocumentImportId],
+    document_ids: list[DocumentImportId],
     successes: list[DocumentImportId],
     failures: list[DocumentImportId],
 ) -> None:
     """Create a table artifact with summary information about the indexing run."""
 
     # Prepare summary data for the artifact
-    total_documents = len(document_import_ids)
+    total_documents = len(document_ids)
     successful_document_batches_count = len(successes)
     failed_document_batches_count = len(failures)
 
@@ -319,7 +319,7 @@ async def run_indexing_from_aggregate_results(
 
     await create_aggregate_indexing_summary_artifact(
         config=config,
-        document_import_ids=document_import_ids,
+        document_ids=document_ids,
         successes=successes,
         failures=failures,
     )
