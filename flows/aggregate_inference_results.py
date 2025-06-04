@@ -76,7 +76,7 @@ class AggregationFailure(Exception):
         self.context = context
 
 
-@dataclass()
+@dataclass
 class Config:
     """Configuration used across flow runs."""
 
