@@ -1,3 +1,4 @@
+import asyncio
 import functools
 import inspect
 import os
@@ -347,3 +348,11 @@ class Profiler:
             return result
 
         return wrapper
+
+
+async def wait_for_semaphore(
+    semaphore: asyncio.Semaphore,
+    fn,
+):
+    async with semaphore:
+        return await fn

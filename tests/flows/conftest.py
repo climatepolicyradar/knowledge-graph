@@ -30,6 +30,7 @@ from vespa.io import VespaQueryResponse
 
 from flows.aggregate_inference_results import Config as AggregateInferenceResultsConfig
 from flows.inference import Config as InferenceConfig
+from flows.utils import DocumentImportId
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
 from src.concept import Concept
@@ -401,6 +402,7 @@ def s3_prefix_labelled_passages() -> str:
 @pytest.fixture()
 def labelled_passage_fixture_ids() -> list[str]:
     """Returns the list of concept fixture files."""
+
     return [
         "CCLW.executive.10014.4470",
         "CCLW.executive.4934.1571",
@@ -431,9 +433,27 @@ def mock_bucket_labelled_passages(
 
 
 @pytest.fixture
-def s3_prefix_inference_results() -> str:
+def aggregate_inference_results_import_ids() -> list[DocumentImportId]:
+    """Returns the list of aggregate inference results file stems."""
+
+    return [
+        DocumentImportId("CCLW.executive.4934.1571"),
+        DocumentImportId("CCLW.executive.10014.4470"),
+    ]
+
+
+@pytest.fixture
+def mock_run_output_identifier_str() -> str:
+    """Returns the identifier for the run output."""
+
+    return "2025-05-25T07:32-eta85-alchibah"
+
+
+@pytest.fixture
+def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
     """Returns the s3 prefix for the inference results."""
-    return "inference_results/2025-05-25T07:32-eta85-alchibah/"
+
+    return f"inference_results/{mock_run_output_identifier_str}/"
 
 
 @pytest.fixture
@@ -441,11 +461,15 @@ def mock_bucket_inference_results(
     mock_s3_client,
     mock_bucket,
     s3_prefix_inference_results: str,
+    aggregate_inference_results_import_ids: list[DocumentImportId],
 ) -> dict[str, dict[str, Any]]:
     """A version of the inference results bucket with more files"""
 
     fixture_root = FIXTURE_DIR / "inference_results"
-    fixture_files = list(fixture_root.glob("**/*.json"))
+    fixture_files = [
+        fixture_root / f"{import_id}.json"
+        for import_id in aggregate_inference_results_import_ids
+    ]
 
     inference_results = {}
     for file_path in fixture_files:
