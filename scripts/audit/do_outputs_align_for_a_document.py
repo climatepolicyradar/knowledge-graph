@@ -18,9 +18,9 @@ from vespa.application import Vespa
 from vespa.exceptions import VespaError
 
 from flows.boundary import (
-    DocumentImportId,
     get_document_passages_from_vespa__generator,
 )
+from flows.utils import DocumentStem, remove_translated_suffix
 from scripts.cloud import AwsEnv
 
 app = typer.Typer()
@@ -61,11 +61,11 @@ class Profiler:
             typer.secho(f"> Done in: {self.duration:.2f} seconds", fg="white", dim=True)
 
 
-def get_document_from_vespa(client: Vespa, document_id: str) -> VespaDocument:
+def get_document_from_vespa(client: Vespa, document_id: DocumentStem) -> VespaDocument:
     response = client.get_data(
         namespace="doc_search",
         schema="family_document",
-        data_id=document_id,
+        data_id=remove_translated_suffix(document_id),
     )
 
     if not response.is_successful():
@@ -75,12 +75,12 @@ def get_document_from_vespa(client: Vespa, document_id: str) -> VespaDocument:
 
 
 async def get_passages_from_vespa(
-    vespa: Vespa, document_id: str, max_workers: int
+    vespa: Vespa, document_id: DocumentStem, max_workers: int
 ) -> list[Passage]:
     passages = []
     async with vespa.asyncio(connections=max_workers) as vespa_connection_pool:
         async for batch in get_document_passages_from_vespa__generator(
-            document_import_id=DocumentImportId(document_id),
+            document_import_id=remove_translated_suffix(document_id),
             vespa_connection_pool=vespa_connection_pool,
         ):
             batch_passages = [p[1] for p in batch.values()]
@@ -153,7 +153,7 @@ def count_concepts_in_s3_labelled_passages(
 
 
 def get_s3_count_for_one_spec(
-    bucket_name: str, spec: str, document_id: str
+    bucket_name: str, spec: str, document_id: DocumentStem
 ) -> list[str]:
     classifier_id, spec_version = spec.split(":")
     s3_path = build_s3_path(classifier_id, spec_version, document_id)
@@ -173,7 +173,7 @@ def numeric_ordering(wikibase_id: str) -> int:
 
 
 def get_s3_concept_counts(
-    specs: list[str], bucket_name: str, document_id: str, max_workers: int
+    specs: list[str], bucket_name: str, document_id: DocumentStem, max_workers: int
 ) -> dict:
     all_s3_concept_counts = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -198,7 +198,7 @@ def get_s3_concept_counts(
 
 
 def count_s3_aggregated_concepts(
-    bucket_name: str, document_id: str, aggregator_run_identifier: str
+    bucket_name: str, document_id: DocumentStem, aggregator_run_identifier: str
 ) -> dict:
     s3_path = os.path.join(
         AGGREGATED_RESULTS_PREFIX, aggregator_run_identifier, f"{document_id}.json"
@@ -294,8 +294,9 @@ def highlight_spans(passage: Passage) -> str:
 
 @app.command()
 def main(
-    document_id: str = typer.Argument(
-        help="the document id of the document to show spans for"
+    document_id: DocumentStem = typer.Argument(
+        parser=lambda x: DocumentStem(x),
+        help="the document id of the document to show spans for",
     ),
     aws_env: AwsEnv = typer.Argument(
         help="Which aws environment to look for results in. Determines which spec file"
