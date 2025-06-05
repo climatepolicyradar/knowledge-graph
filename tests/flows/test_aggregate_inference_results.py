@@ -23,7 +23,7 @@ from flows.aggregate_inference_results import (
 )
 from scripts.cloud import ClassifierSpec
 from scripts.update_classifier_spec import write_spec_file
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 

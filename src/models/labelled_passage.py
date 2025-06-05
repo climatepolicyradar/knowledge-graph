@@ -2,13 +2,14 @@ import html
 import re
 
 from argilla import Argilla, Record, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
 from src.identifiers import generate_identifier
+from src.models.passage import Passage
 from src.span import Span, merge_overlapping_spans
 
 
-class LabelledPassage(BaseModel):
+class LabelledPassage(Passage):
     """Represents a passage of text which has been labelled by an annotator"""
 
     id: str = Field(..., title="ID", description="The unique identifier of the passage")
@@ -26,9 +27,12 @@ class LabelledPassage(BaseModel):
         repr=False,
     )
 
-    def __init__(self, text: str, spans: list[Span], **kwargs):
-        id = kwargs.pop("id", generate_identifier(text))
-        super().__init__(text=text, spans=spans, id=id, **kwargs)
+    @model_validator(mode="before")
+    def ensure_id(cls, values: dict) -> dict:
+        """Ensure that the ID is set"""
+        if "id" not in values or values["id"] is None:
+            values["id"] = generate_identifier(values["text"])
+        return values
 
     @model_validator(mode="after")
     def check_whether_spans_are_within_text(self):

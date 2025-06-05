@@ -14,7 +14,7 @@ from scripts.config import processed_data_dir, root_dir
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession
 
 load_dotenv()

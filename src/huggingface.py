@@ -5,7 +5,7 @@ from datasets import Dataset, load_dataset
 from huggingface_hub import add_collection_item
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 
@@ -46,6 +46,16 @@ class HuggingfaceSession:
             df.apply(lambda x: self._labelled_passage_from_row(x), axis=1)  # type: ignore
         )
         return labelled_passages
+
+    def stream(self, dataset_name: str) -> Dataset:
+        """Streams the dataset from the hub"""
+        dataset = load_dataset(
+            f"{self.organisation}/{dataset_name}",
+            token=self.token,
+            split="train",
+            streaming=True,
+        )
+        return dataset  # type: ignore
 
     @staticmethod
     def _labelled_passage_from_row(row: dict) -> LabelledPassage:

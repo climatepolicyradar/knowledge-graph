@@ -14,7 +14,7 @@ from transformers import (
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 
 
@@ -73,7 +73,9 @@ class BertBasedClassifier(Classifier):
         """Predict whether the supplied text contains an instance of the concept."""
         return self.predict_batch([text])[0]
 
-    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+    def predict_batch(
+        self, texts: list[str], threshold: float = 0.5
+    ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
         self.model.eval()
 
@@ -93,6 +95,7 @@ class BertBasedClassifier(Classifier):
                     end_index=len(text),
                     labellers=[str(self)],
                     timestamps=[datetime.now()],
+                    confidence=prediction["score"],
                 )
                 text_results.append(span)
             results.append(text_results)

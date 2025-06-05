@@ -50,7 +50,7 @@ from flows.index import Config
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from src.models.labelled_passage import LabelledPassage
 from src.span import Span
 from tests.flows.conftest import load_fixture
 
