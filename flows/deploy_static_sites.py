@@ -16,12 +16,13 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 
 
-@task
+@task(log_prints=True)
 def setup_environment():
     """Set up required environment variables from SSM parameters."""
+    print("Setting up environment variables from SSM parameters...")
 
     os.environ["ARGILLA_API_URL"] = get_aws_ssm_param("/Argilla/APIURL")
-    os.environ["ARGILLA_API_KEY"] = get_aws_ssm_param("/Argilla/APIKey")
+    os.environ["ARGILLA_API_KEY"] = get_aws_ssm_param("/Argilla/Owner/APIKey")
 
     os.environ["WIKIBASE_PASSWORD"] = get_aws_ssm_param(
         "/Wikibase/Cloud/ServiceAccount/Password"
@@ -30,18 +31,22 @@ def setup_environment():
         "/Wikibase/Cloud/ServiceAccount/Username"
     )
     os.environ["WIKIBASE_URL"] = get_aws_ssm_param("/Wikibase/Cloud/URL")
+    print("Environment variables set.")
 
 
-@task
+@task(log_prints=True)
 def generate_static_site(app_name: str):
     """Generate the static site by running the generator module directly."""
+    print(f"Generating static site for {app_name}...")
     module = importlib.import_module(f"static_sites.{app_name}.__main__")
     module.main()
+    print(f"Static site generation complete for {app_name}.")
 
 
-@task
+@task(log_prints=True)
 def sync_to_s3(app_name: str, bucket_name: str):
     """Sync the generated static site to S3."""
+    print(f"Syncing {app_name} to S3 bucket {bucket_name}...")
     subprocess.run(
         [
             "aws",
@@ -53,22 +58,57 @@ def sync_to_s3(app_name: str, bucket_name: str):
         ],
         check=True,
     )
+    print(f"Sync complete for {app_name} to S3 bucket {bucket_name}.")
 
 
-@flow
+@flow(log_prints=True)
+def deploy_one_site_pipeline(app_name: str, bucket_name: str):
+    """Generates and deploys a single static site."""
+    print(f"Starting deployment pipeline for {app_name} to bucket {bucket_name}.")
+
+    try:
+        gen_future = generate_static_site(app_name)
+        sync_to_s3(app_name, bucket_name, wait_for=[gen_future])  # type: ignore
+        print(f"Deployment tasks for {app_name} completed.")
+    except Exception as e:
+        print(f"Error in deployment pipeline for {app_name}: {e}")
+        raise
+
+
+@flow(log_prints=True)
 def deploy_static_sites():
-    """Flow to deploy all our static sites."""
-    # Set up environment variables first
-    setup_environment()
+    """Flow to deploy all our static sites in parallel."""
+    print("Starting deployment of all static sites.")
 
-    names = {
-        "concept_librarian": "cpr-knowledge-graph-concept-librarian",
-        "labelling_librarian": "cpr-knowledge-graph-labelling-librarian",
-        "vibe_check": "cpr-knowledge-graph-vibe-check",
-    }
-    for app_name, bucket_name in names.items():
-        generate_static_site(app_name)
-        sync_to_s3(app_name, bucket_name)
+    sites_to_deploy = [
+        {
+            "app_name": "concept_librarian",
+            "bucket_name": "cpr-knowledge-graph-concept-librarian",
+        },
+        {
+            "app_name": "labelling_librarian",
+            "bucket_name": "cpr-knowledge-graph-labelling-librarian",
+        },
+        {"app_name": "vibe_check", "bucket_name": "cpr-knowledge-graph-vibe-check"},
+    ]
+
+    setup_env_future = setup_environment()
+
+    active_deployments = []
+    for site in sites_to_deploy:
+        print(f"Initiating deployment for {site['app_name']}.")
+        deployment_future = deploy_one_site_pipeline(
+            app_name=site["app_name"],
+            bucket_name=site["bucket_name"],
+            wait_for=[setup_env_future],  # type: ignore
+        )
+        active_deployments.append(deployment_future)
+
+    print(
+        f"All {len(sites_to_deploy)} site deployment pipelines initiated. Main flow will wait for their completion."
+    )
+
+    print("All static site deployment pipelines have concluded.")
 
 
 if __name__ == "__main__":
