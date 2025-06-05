@@ -647,10 +647,13 @@ def get_vespa_passages_from_query_response(
             print(f"Skipping passage with no 'text_block_id': {fields}")
             continue
 
-        text_block_id = TextBlockId(passage["fields"]["text_block_id"])
+        text_block_id = TextBlockId(text_block_id)
+        passage_id = VespaHitId(passage.get("id"))
+        vespa_pasage = VespaPassage.model_validate(fields)
+
         vespa_passages[text_block_id] = (
-            passage["id"],
-            VespaPassage.model_validate(passage["fields"]),
+            passage_id,
+            vespa_pasage,
         )
 
     return vespa_passages
