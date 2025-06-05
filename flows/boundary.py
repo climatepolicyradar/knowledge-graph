@@ -634,13 +634,24 @@ def get_vespa_passages_from_query_response(
         dig(passage_root, "children", 0, "children", 0)
         for passage_root in passages_root
     ]
-    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {
-        passage["fields"]["text_block_id"]: (
+
+    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
+    for passage in passage_hits:
+        fields = passage.get("fields")
+        if not fields:
+            print(f"Skipping passage with no 'fields': {passage}")
+            continue
+
+        text_block_id = fields.get("text_block_id")
+        if not text_block_id:
+            print(f"Skipping passage with no 'text_block_id': {fields}")
+            continue
+
+        text_block_id = TextBlockId(passage["fields"]["text_block_id"])
+        vespa_passages[text_block_id] = (
             passage["id"],
             VespaPassage.model_validate(passage["fields"]),
         )
-        for passage in passage_hits
-    }
 
     return vespa_passages
 
