@@ -2,14 +2,14 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.cloud import AwsEnv
-from scripts.do_classifier_specs_have_results import (
+from scripts.audit.do_classifier_specs_have_results import (
     Result,
     check_classifier_specs,
     check_single_spec,
     collect_file_names,
     write_result,
 )
+from scripts.cloud import AwsEnv
 
 # the flows conftest wouldn't be in scope here (yet?) but it does have what we need
 from tests.flows.conftest import *  # noqa: F403
