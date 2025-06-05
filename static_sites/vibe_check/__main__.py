@@ -187,6 +187,10 @@ def main():
         console.log(f'📄 Generated predictions page for "{concept}"')
 
     console.log(f"✅ Successfully generated static site in {dist_dir}", style="green")
+
+    # save the sample dataset to the dist directory
+    sample_passages.to_feather(dist_dir / "passages_dataset.feather")
+
     console.log(
         "🚀 You can now run the site locally using `just serve-static-site vibe_check`",
         style="green",
