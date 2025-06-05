@@ -155,7 +155,7 @@ async def index_document_passages(
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
     print(f"Querying Vespa for passages related to document import ID: {document_id}")
 
-    @vespa_retry(max_attempts=2)
+    @vespa_retry(max_attempts=2, exception_types=(ValueError,))
     async def unpack_async_generator(
         async_generator: Callable[..., AsyncGenerator[dict[Any, Any], None]],
         **kwargs: Any,
