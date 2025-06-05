@@ -11,7 +11,7 @@ import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.client.schemas.objects import FlowRun
+from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from pydantic import PositiveInt
@@ -547,8 +547,20 @@ async def run_indexing_from_aggregate_results(
     for result in results:
         if isinstance(result, BaseException):
             failures.append(result)
-        else:
+        elif not result.state:
+            failures.append(result)
+
+            print(
+                f"flow run's state was unknown. Flow run name: `{result.name}`",
+            )
+        elif result.state.type == StateType.COMPLETED:
             successes.append(result)
+        else:
+            failures.append(result)
+
+            print(
+                f"flow run's state was not completed. Flow run name: `{result.name}`",
+            )
 
     await create_aggregate_indexing_summary_artifact(
         config=config,

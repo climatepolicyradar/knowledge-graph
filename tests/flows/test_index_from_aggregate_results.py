@@ -9,6 +9,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
+from prefect.states import Completed
 from vespa.io import VespaResponse
 
 from flows.aggregate_inference_results import RunOutputIdentifier
@@ -333,7 +334,11 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
         async def mock_awaitable(*args, **kwargs):
             nonlocal flow_run_counter
             flow_run_counter += 1
-            return FlowRun(flow_id=uuid.uuid4(), name=f"mock-run-{flow_run_counter}")
+            return FlowRun(
+                flow_id=uuid.uuid4(),
+                name=f"mock-run-{flow_run_counter}",
+                state=Completed(),
+            )
 
         mock_run_deployment.side_effect = mock_awaitable
 
