@@ -117,26 +117,6 @@
                                         ]
                                     }
                                 ]
-                            },
-                            {
-                                "id": "group:string:986",
-                                "relevance": 0.0017429193899782135,
-                                "value": "986",
-                                "children": [
-                                    {
-                                        "id": "hitlist:hits",
-                                        "relevance": 1.0,
-                                        "label": "hits",
-                                        "children": [
-                                            {
-                                                "id": "id:doc_search:document_passage::CCLW.executive.10014.4470.986",
-                                                "relevance": 0.0017429193899782135,
-                                                "source": "family-document-passage",
-                                                "fields_malformed": {}
-                                            }
-                                        ]
-                                    }
-                                ]
                             }
                         ]
                     }
