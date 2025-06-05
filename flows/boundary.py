@@ -639,20 +639,18 @@ def get_vespa_passages_from_query_response(
     for passage in passage_hits:
         fields = passage.get("fields")
         if not fields:
-            sample_size = min(5, len(passage_hits))
             error = (
                 f"Vespa passage with no 'fields': {passage}, "
-                f"sample of {sample_size} passage hits: {passage_hits[:sample_size]}"
+                f"sample of passage hits: {passage_hits[:5]}"
             )
             print(error)
             raise ValueError(error)
 
         text_block_id = fields.get("text_block_id")
         if not text_block_id:
-            sample_size = min(5, len(passage_hits))
             error = (
                 f"Vespa passage with no 'text_block_id' in passage: {passage}, "
-                f"sample of {sample_size} passage hits: {passage_hits[:sample_size]}"
+                f"sample of passage hits: {passage_hits[:5]}"
             )
             print(error)
             raise ValueError(error)
