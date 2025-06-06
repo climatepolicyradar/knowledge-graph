@@ -16,6 +16,7 @@ from flows.aggregate_inference_results import (
     AggregationFailure,
     aggregate_inference_results,
     build_run_output_identifier,
+    collect_stems_by_specs,
     combine_labelled_passages,
     get_all_labelled_passages_for_one_document,
     process_single_document,
@@ -344,3 +345,18 @@ def test_combine_labelled_passages(concept):
     labelled_passages["Q218:v5"][0].text = "Different text"
     with pytest.raises(ValueError):
         combine_labelled_passages(labelled_passages)
+
+
+def test_collect_stems_by_specs(
+    mock_classifier_specs, mock_bucket_labelled_passages_large, test_aggregate_config
+):
+    stems = collect_stems_by_specs(test_aggregate_config)
+    assert set(stems) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )

@@ -316,6 +316,22 @@ async def create_aggregate_inference_summary_artifact(
     )
 
 
+def collect_stems_by_specs(config: Config) -> list[DocumentImportId]:
+    """Collect the stems for the given specs."""
+    document_ids = []
+    specs = parse_spec_file(config.aws_env)
+    for spec in specs:
+        prefix = os.path.join(config.document_source_prefix, spec.name, spec.alias)
+        document_ids.extend(
+            collect_unique_file_stems_under_prefix(
+                bucket_name=config.cache_bucket,
+                prefix=prefix,
+            )
+        )
+
+    return list(set(document_ids))
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -339,10 +355,7 @@ async def aggregate_inference_results(
             "no document ids provided, collecting all available from s3 under prefix: "
             f"{config.document_source_prefix}"
         )
-        document_ids = collect_unique_file_stems_under_prefix(
-            bucket_name=config.cache_bucket,
-            prefix=config.document_source_prefix,
-        )
+        document_ids = collect_stems_by_specs(config)
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = parse_spec_file(config.aws_env)
