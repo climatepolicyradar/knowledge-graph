@@ -222,7 +222,7 @@ def s3_object_write_text(s3_uri: str, text: str) -> None:
     s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
 
 
-def s3_copy_file(source: S3Uri, target: S3Uri) -> None:
+async def s3_copy_file(source: S3Uri, target: S3Uri) -> None:
     """Copy a file from one S3 location to another."""
     s3 = boto3.client("s3")
     s3.copy_object(

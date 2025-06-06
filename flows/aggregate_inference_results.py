@@ -220,10 +220,12 @@ async def process_single_document(
                 f"{document_id}.json",
             ),
         )
-        s3_object_write_text(str(s3_uri), json.dumps(vespa_concepts))
+        await asyncio.to_thread(
+            s3_object_write_text, str(s3_uri), json.dumps(vespa_concepts)
+        )
 
         # Duplicate to latest
-        s3_copy_file(
+        await s3_copy_file(
             source=s3_uri,
             target=S3Uri(
                 bucket=config.cache_bucket,
