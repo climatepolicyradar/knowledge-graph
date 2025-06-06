@@ -156,7 +156,8 @@ def test_build_run_output_prefix():
     assert "None" not in prefix
 
 
-def test_get_all_labelled_passages_for_one_document(
+@pytest.mark.asyncio
+async def test_get_all_labelled_passages_for_one_document(
     mock_bucket_labelled_passages_large, test_aggregate_config
 ):
     document_id = "CCLW.executive.10061.4515"
@@ -165,7 +166,7 @@ def test_get_all_labelled_passages_for_one_document(
         ClassifierSpec(name="Q767", alias="v3"),
         ClassifierSpec(name="Q1286", alias="v3"),
     ]
-    labelled_passages = get_all_labelled_passages_for_one_document(
+    labelled_passages = await get_all_labelled_passages_for_one_document(
         document_id, classifier_specs, test_aggregate_config
     )
     assert len(labelled_passages) == len(classifier_specs)

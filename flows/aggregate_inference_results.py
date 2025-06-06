@@ -115,7 +115,7 @@ def build_run_output_identifier() -> RunOutputIdentifier:
     return f"{start_time}-{run_name}"
 
 
-def get_all_labelled_passages_for_one_document(
+async def get_all_labelled_passages_for_one_document(
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
     config: Config,
@@ -203,7 +203,7 @@ async def process_single_document(
 ) -> DocumentImportId | AggregationFailure:
     """Process a single document and return its status."""
     try:
-        all_labelled_passages = get_all_labelled_passages_for_one_document(
+        all_labelled_passages = await get_all_labelled_passages_for_one_document(
             document_id, classifier_specs, config
         )
         print(
