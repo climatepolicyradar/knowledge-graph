@@ -310,7 +310,7 @@ def main(
         )
     ),
     aggregator_run_identifier: str = typer.Option(
-        default=None,
+        default="latest",
         help="The identifier of the aggregator run to use",
     ),
     print_vespa_passages: bool = typer.Option(

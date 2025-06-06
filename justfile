@@ -188,7 +188,7 @@ audit-inference-prod bucket_name="${PROD_CACHE_BUCKET:-}":
 # Do concepts for a doc align across sources - staging
 # Set STAGING_CACHE_BUCKET in `.env`, or pass as argument:
 # `just audit-doc-staging CCLW.executive.10491.5392 2025-06-03T16:35-eta4-esgaroth-ring`
-audit-doc-staging document_id aggregator_run_identifier bucket_name="${STAGING_CACHE_BUCKET:-}":
+audit-doc-staging document_id aggregator_run_identifier="latest" bucket_name="${STAGING_CACHE_BUCKET:-}":
     poetry run python scripts/audit/do_outputs_align_for_a_document.py \
         {{document_id}} staging {{bucket_name}} \
         --aggregator-run-identifier {{aggregator_run_identifier}}
@@ -196,7 +196,7 @@ audit-doc-staging document_id aggregator_run_identifier bucket_name="${STAGING_C
 # Do concepts for a doc align across sources - prod
 # Set PROD_CACHE_BUCKET in `.env`, or pass as argument:
 # `just audit-doc-prod CCLW.document.i00001242.n0000 2025-06-03T16:35-eta4-esgaroth-ring`
-audit-doc-prod document_id aggregator_run_identifier bucket_name="${PROD_CACHE_BUCKET:-}":
+audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PROD_CACHE_BUCKET:-}":
     poetry run python scripts/audit/do_outputs_align_for_a_document.py \
         {{document_id}} prod {{bucket_name}} \
         --aggregator-run-identifier {{aggregator_run_identifier}}
