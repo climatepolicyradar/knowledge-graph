@@ -1069,6 +1069,7 @@ def test_get_continuation_tokens_from_query_response(
 
 def test_get_vespa_passages_from_query_response(
     mock_vespa_query_response: VespaQueryResponse,
+    mock_vespa_query_response_with_malformed_group: VespaQueryResponse,
 ) -> None:
     """Test that we can get the passages from a vespa response."""
 
@@ -1079,6 +1080,11 @@ def test_get_vespa_passages_from_query_response(
     passage = list(passages.values())[0]
     assert isinstance(passage[0], str)
     assert isinstance(passage[1], VespaPassage)
+
+    with pytest.raises(ValueError, match="Vespa passage with no 'fields': "):
+        get_vespa_passages_from_query_response(
+            mock_vespa_query_response_with_malformed_group
+        )
 
 
 @pytest.mark.vespa

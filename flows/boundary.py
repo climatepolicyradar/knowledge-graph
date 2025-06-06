@@ -645,13 +645,35 @@ def get_vespa_passages_from_query_response(
         dig(passage_root, "children", 0, "children", 0)
         for passage_root in passages_root
     ]
-    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {
-        passage["fields"]["text_block_id"]: (
-            passage["id"],
-            VespaPassage.model_validate(passage["fields"]),
+
+    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
+    for passage in passage_hits:
+        fields = passage.get("fields")
+        if not fields:
+            error = (
+                f"Vespa passage with no 'fields': {passage}, "
+                f"sample of passage hits: {passage_hits[:5]}"
+            )
+            print(error)
+            raise ValueError(error)
+
+        text_block_id = fields.get("text_block_id")
+        if not text_block_id:
+            error = (
+                f"Vespa passage with no 'text_block_id' in passage: {passage}, "
+                f"sample of passage hits: {passage_hits[:5]}"
+            )
+            print(error)
+            raise ValueError(error)
+
+        text_block_id = TextBlockId(text_block_id)
+        passage_id = VespaHitId(passage.get("id"))
+        vespa_pasage = VespaPassage.model_validate(fields)
+
+        vespa_passages[text_block_id] = (
+            passage_id,
+            vespa_pasage,
         )
-        for passage in passage_hits
-    }
 
     return vespa_passages
 
