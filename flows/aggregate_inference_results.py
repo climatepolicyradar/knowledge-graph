@@ -3,7 +3,7 @@ import json
 import os
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from typing import Any, TypeAlias
+from typing import Any, Sequence, TypeAlias
 
 import boto3
 from botocore.exceptions import ClientError
@@ -25,6 +25,7 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    iterate_batch,
     wait_for_semaphore,
 )
 from scripts.cloud import (
@@ -194,7 +195,6 @@ def combine_labelled_passages(
     return combined_passages
 
 
-@task()
 async def process_single_document(
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
@@ -246,9 +246,46 @@ async def process_single_document(
         )
 
 
+@task()
+async def process_n_documents(
+    document_ids_batch: Sequence[DocumentImportId],
+    classifier_specs: list[ClassifierSpec],
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> list[DocumentImportId | AggregationFailure | BaseException]:
+    """Process a batch of documents."""
+    return await asyncio.gather(
+        *(
+            process_single_document(
+                document_id, classifier_specs, config, run_output_identifier
+            )
+            for document_id in document_ids_batch
+        ),
+        return_exceptions=True,
+    )
+
+
+def handle_results(
+    batched_results: Sequence[Sequence[DocumentImportId | AggregationFailure]],
+) -> tuple[list[DocumentImportId], list[AggregationFailure]]:
+    success_ids: list[DocumentImportId] = []
+    failures: list[AggregationFailure] = []
+
+    for batch in batched_results:
+        for result in batch:
+            if isinstance(result, AggregationFailure):
+                failures.append(result)
+            elif isinstance(result, str):
+                success_ids.append(DocumentImportId(result))
+            else:
+                raise ValueError(f"Unknown result type: {type(result)}")
+
+    return success_ids, failures
+
+
 async def create_aggregate_inference_summary_artifact(
     config: Config,
-    document_ids: list[DocumentImportId],
+    success_ids: list[DocumentImportId],
     failures: list[AggregationFailure],
 ) -> None:
     """Create a summary artifact of the aggregated inference results."""
@@ -257,8 +294,8 @@ async def create_aggregate_inference_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Documents processed**: {len(document_ids)}
-- **Failed documents**: {len(failures)}/{len(document_ids)}
+- **Documents processed**: {len(success_ids)}
+- **Failed documents**: {len(failures)}/{len(success_ids)}
 """
 
     details = [
@@ -287,7 +324,8 @@ async def create_aggregate_inference_summary_artifact(
 async def aggregate_inference_results(
     document_ids: None | list[DocumentImportId] = None,
     config: Config | None = None,
-    max_concurrent_tasks: int = 5,
+    max_concurrent_tasks: int = 10,
+    batch_size: int = 10,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
@@ -318,32 +356,22 @@ async def aggregate_inference_results(
     tasks = [
         wait_for_semaphore(
             semaphore,
-            process_single_document(
-                document_id,
+            process_n_documents(
+                document_ids_batch,
                 classifier_specs,
                 config,
                 run_output_identifier,
             ),
         )
-        for document_id in document_ids
+        for document_ids_batch in iterate_batch(document_ids, batch_size=batch_size)
     ]
 
-    failures: list[AggregationFailure] = []
-    successes: list[DocumentImportId] = []
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    for result in results:
-        if isinstance(result, AggregationFailure):
-            failures.append(result)
-        elif isinstance(result, str):
-            successes.append(DocumentImportId(result))
-        else:
-            raise ValueError(f"Unknown result type: {type(result)}")
+    batched_results = await asyncio.gather(*tasks)
+    success_ids, failures = handle_results(batched_results)
 
     await create_aggregate_inference_summary_artifact(
         config=config,
-        document_ids=document_ids,
+        success_ids=success_ids,
         failures=failures,
     )
 
