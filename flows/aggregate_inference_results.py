@@ -165,6 +165,7 @@ def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) 
 
 @task()
 async def process_single_document(
+    session: aioboto3.Session,
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
     config: Config,
@@ -172,7 +173,6 @@ async def process_single_document(
 ) -> DocumentImportId | AggregationFailure:
     """Process a single document and return its status."""
     try:
-        session = aioboto3.Session(region_name="eu-west-1")
         async with session.client("s3") as s3:
             print("Fetching labelled passages for", document_id)
 
@@ -256,10 +256,15 @@ async def process_n_documents(
     run_output_identifier: RunOutputIdentifier,
 ) -> list[DocumentImportId | AggregationFailure | BaseException]:
     """Process a batch of documents."""
+    session = aioboto3.Session(region_name=config.bucket_region)
     return await asyncio.gather(
         *(
             process_single_document(
-                document_id, classifier_specs, config, run_output_identifier
+                session,
+                document_id,
+                classifier_specs,
+                config,
+                run_output_identifier,
             )
             for document_id in document_ids_batch
         ),

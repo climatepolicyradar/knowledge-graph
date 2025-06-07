@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import aioboto3
 import pydantic
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -200,7 +201,9 @@ async def test_process_single_document__success(
     _, classifier_specs = mock_classifier_specs
     document_id = "CCLW.executive.10061.4515"
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     assert document_id == await process_single_document(
+        session,
         document_id,
         classifier_specs,
         test_aggregate_config,
@@ -239,8 +242,10 @@ async def test_process_single_document__client_error(
     classifier_specs.append(ClassifierSpec(name="Q9999999999", alias="v99"))
     write_spec_file(spec_file_path, classifier_specs)
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
         process_single_document(
+            session,
             document_id,
             classifier_specs,
             test_aggregate_config,
@@ -277,8 +282,10 @@ async def test_process_single_document__value_error(
         Body=json.dumps(new_data),
     )
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
         process_single_document(
+            session,
             document_id,
             classifier_specs,
             test_aggregate_config,
