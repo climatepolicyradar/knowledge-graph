@@ -5,20 +5,21 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass
 from typing import Any, Sequence, TypeAlias
 
-import boto3
+import aioboto3
 from botocore.exceptions import ClientError
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ConcurrentTaskRunner
+from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
     DocumentImportId,
     TextBlockId,
     convert_labelled_passage_to_concepts,
     s3_copy_file,
-    s3_object_write_text,
+    s3_object_write_text_async,
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
@@ -117,13 +118,12 @@ def build_run_output_identifier() -> RunOutputIdentifier:
 
 
 async def get_all_labelled_passages_for_one_document(
+    s3: S3Client,
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
     config: Config,
 ) -> dict[SpecStr, list[LabelledPassage]]:
     """Get the labelled passages from s3."""
-    s3 = boto3.client("s3")
-
     labelled_passages = defaultdict(list)
 
     for spec in classifier_specs:
@@ -136,10 +136,11 @@ async def get_all_labelled_passages_for_one_document(
                 f"{document_id}.json",
             ),
         )
-        response = s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
-        body = response["Body"].read().decode("utf-8")
+        response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        body = await response["Body"].read()
         spec_doc = [
-            LabelledPassage.model_validate_json(passage) for passage in json.loads(body)
+            LabelledPassage.model_validate_json(passage)
+            for passage in json.loads(body.decode("utf-8"))
         ]
         labelled_passages[str(spec)].extend(spec_doc)
 
@@ -204,40 +205,41 @@ async def process_single_document(
 ) -> DocumentImportId | AggregationFailure:
     """Process a single document and return its status."""
     try:
-        all_labelled_passages = await get_all_labelled_passages_for_one_document(
-            document_id, classifier_specs, config
-        )
-        print(
-            f"Combining {len(all_labelled_passages)} labelled passages for {document_id}"
-        )
-        vespa_concepts = combine_labelled_passages(all_labelled_passages)
+        session = aioboto3.Session(region_name="eu-west-1")
+        async with session.client("s3") as s3:
+            all_labelled_passages = await get_all_labelled_passages_for_one_document(
+                s3, document_id, classifier_specs, config
+            )
+            print(
+                f"Combining {len(all_labelled_passages)} labelled passages for {document_id}"
+            )
+            vespa_concepts = combine_labelled_passages(all_labelled_passages)
 
-        # Write to s3
-        s3_uri = S3Uri(
-            bucket=config.cache_bucket,
-            key=os.path.join(
-                config.aggregate_inference_results_prefix,
-                run_output_identifier,
-                f"{document_id}.json",
-            ),
-        )
-        await asyncio.to_thread(
-            s3_object_write_text, str(s3_uri), json.dumps(vespa_concepts)
-        )
-
-        # Duplicate to latest
-        await s3_copy_file(
-            source=s3_uri,
-            target=S3Uri(
+            # Write to s3
+            s3_uri = S3Uri(
                 bucket=config.cache_bucket,
                 key=os.path.join(
                     config.aggregate_inference_results_prefix,
-                    "latest",
+                    run_output_identifier,
                     f"{document_id}.json",
                 ),
-            ),
-        )
-        return document_id
+            )
+            await s3_object_write_text_async(s3, s3_uri, json.dumps(vespa_concepts))
+
+            # Duplicate to latest
+            await s3_copy_file(
+                s3,
+                source=s3_uri,
+                target=S3Uri(
+                    bucket=config.cache_bucket,
+                    key=os.path.join(
+                        config.aggregate_inference_results_prefix,
+                        "latest",
+                        f"{document_id}.json",
+                    ),
+                ),
+            )
+            return document_id
     except ClientError as e:
         print(e.response)
         raise AggregationFailure(

@@ -43,6 +43,7 @@ from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_logger
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
+from types_aiobotocore_s3.client import S3Client
 from vespa.application import VespaAsync
 from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse, VespaResponse
@@ -222,10 +223,20 @@ def s3_object_write_text(s3_uri: str, text: str) -> None:
     s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
 
 
-async def s3_copy_file(source: S3Uri, target: S3Uri) -> None:
+async def s3_object_write_text_async(s3: S3Client, s3_uri: S3Uri, text: str) -> None:
+    """Put an object in S3, async."""
+    body = BytesIO(text.encode("utf-8"))
+    await s3.put_object(
+        Bucket=s3_uri.bucket,
+        Key=s3_uri.key,
+        Body=body,
+        ContentType="application/json",
+    )
+
+
+async def s3_copy_file(s3: S3Client, source: S3Uri, target: S3Uri) -> None:
     """Copy a file from one S3 location to another."""
-    s3 = boto3.client("s3")
-    s3.copy_object(
+    await s3.copy_object(
         Bucket=source.bucket,
         CopySource=source.uri,
         Key=target.key,

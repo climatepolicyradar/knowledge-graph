@@ -39,6 +39,9 @@ pydantic-ai = "^0.0.53"
 httpx = "^0.28.1"
 tenacity = "^9.1.2"
 requests = "^2.32.3"
+aioboto3 = "^14.3.0"
+types-aioboto3 = {extras = ["s3"], version = "^14.3.0"}
+pytest-aioboto3 = "^0.6.0"
 
 [tool.poetry.group.transformers]
 optional = true

@@ -51,7 +51,7 @@ def mock_classifier_specs():
 async def test_aggregate_inference_results(
     mock_bucket_labelled_passages_large, test_aggregate_config, mock_classifier_specs
 ):
-    _, bucket, s3_client = mock_bucket_labelled_passages_large
+    _, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
 
     document_ids = [
@@ -75,10 +75,10 @@ async def test_aggregate_inference_results(
             f"{document_id}.json",
         )
         try:
-            response = s3_client.get_object(Bucket=bucket, Key=s3_path)
-            data = response["Body"].read().decode("utf-8")
-            data = json.loads(data)
-        except s3_client.exceptions.NoSuchKey:
+            response = await s3_async_client.get_object(Bucket=bucket, Key=s3_path)
+            data = await response["Body"].read()
+            data = json.loads(data.decode("utf-8"))
+        except s3_async_client.exceptions.NoSuchKey:
             pytest.fail(f"Unable to find output file: {s3_path}")
         except json.JSONDecodeError:
             pytest.fail(f"Unable to deserialise output for: {document_id}")
@@ -154,6 +154,7 @@ def test_build_run_output_prefix():
 async def test_get_all_labelled_passages_for_one_document(
     mock_bucket_labelled_passages_large, test_aggregate_config
 ):
+    _, _, s3_async_client = mock_bucket_labelled_passages_large
     document_id = "CCLW.executive.10061.4515"
     classifier_specs = [
         ClassifierSpec(name="Q218", alias="v5"),
@@ -161,7 +162,7 @@ async def test_get_all_labelled_passages_for_one_document(
         ClassifierSpec(name="Q1286", alias="v3"),
     ]
     labelled_passages = await get_all_labelled_passages_for_one_document(
-        document_id, classifier_specs, test_aggregate_config
+        s3_async_client, document_id, classifier_specs, test_aggregate_config
     )
     assert len(labelled_passages) == len(classifier_specs)
 
@@ -195,7 +196,7 @@ def test_validate_passages_are_same_except_concepts():
 async def test_process_single_document__success(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
-    _, bucket, s3_client = mock_bucket_labelled_passages_large
+    _, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
     document_id = "CCLW.executive.10061.4515"
 
@@ -207,7 +208,7 @@ async def test_process_single_document__success(
     )
 
     # Check that the file is in the run_output_identifier prefix with head object
-    response = s3_client.head_object(
+    response = await s3_async_client.head_object(
         Bucket=bucket,
         Key=os.path.join(
             test_aggregate_config.aggregate_inference_results_prefix,
@@ -215,8 +216,10 @@ async def test_process_single_document__success(
             f"{document_id}.json",
         ),
     )
+    assert response["ContentLength"] > 0
+
     # Check that the file is in the latest prefix with head object
-    response = s3_client.head_object(
+    response = await s3_async_client.head_object(
         Bucket=bucket,
         Key=os.path.join(
             test_aggregate_config.aggregate_inference_results_prefix,
