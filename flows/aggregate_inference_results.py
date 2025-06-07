@@ -342,8 +342,8 @@ def collect_stems_by_specs(config: Config) -> list[DocumentImportId]:
 async def aggregate_inference_results(
     document_ids: None | list[DocumentImportId] = None,
     config: Config | None = None,
-    max_concurrent_tasks: int = 10,
-    batch_size: int = 10,
+    max_concurrent_tasks: int = 20,
+    batch_size: int = 5,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
