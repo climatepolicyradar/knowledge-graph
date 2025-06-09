@@ -4,7 +4,7 @@ import os
 import tempfile
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Callable, Final
+from typing import Any, Final
 
 import boto3
 import httpx
@@ -37,7 +37,6 @@ from flows.boundary import (
     get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
-    vespa_retry,
 )
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
@@ -155,24 +154,14 @@ async def index_document_passages(
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
     print(f"Querying Vespa for passages related to document import ID: {document_id}")
 
-    @vespa_retry(max_attempts=2, exception_types=(ValueError,))
-    async def unpack_async_generator(
-        async_generator: Callable[..., AsyncGenerator[dict[Any, Any], None]],
-        **kwargs: Any,
-    ) -> dict[Any, Any]:
-        """Unpack an async generator into a dictionary."""
-        items: dict[Any, Any] = {}
-        async for item in async_generator(**kwargs):
-            items.update(item)
-        return items
-
-    passages_in_vespa: dict[
-        TextBlockId, tuple[VespaHitId, VespaPassage]
-    ] = await unpack_async_generator(
-        async_generator=get_document_passages_from_vespa__generator,
+    passages_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_id,
         vespa_connection_pool=vespa_connection_pool,
     )
+
+    passages_in_vespa: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
+    async for passage_batch in passages_generator:
+        passages_in_vespa.update(passage_batch)
 
     print(
         f"Updating concepts for document import ID: {document_id}, "

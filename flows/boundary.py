@@ -667,6 +667,33 @@ def get_vespa_passages_from_query_response(
     return vespa_passages
 
 
+@vespa_retry(
+    max_attempts=2,
+    exception_types=(
+        ValueError,
+        QueryError,
+    ),
+)
+async def make_query_and_extract_passages(
+    vespa_connection_pool: VespaAsync,
+    query: qb.Query,
+    query_profile: str,
+) -> tuple[VespaQueryResponse, dict[TextBlockId, tuple[VespaHitId, VespaPassage]]]:
+    """Make the query and extract the passages."""
+
+    vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
+        yql=query,
+        queryProfile=query_profile,
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+
+    return vespa_query_response, get_vespa_passages_from_query_response(
+        vespa_query_response
+    )
+
+
 async def get_document_passages_from_vespa__generator(
     document_import_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
@@ -718,15 +745,11 @@ async def get_document_passages_from_vespa__generator(
             .groupby(grouping, continuations=tokens)
         )
 
-        vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
-            yql=query,
-            queryProfile=query_profile,
+        vespa_query_response, vespa_passages = await make_query_and_extract_passages(
+            vespa_connection_pool=vespa_connection_pool,
+            query=query,
+            query_profile=query_profile,
         )
-
-        if not vespa_query_response.is_successful():
-            raise QueryError(vespa_query_response.get_status_code())
-
-        vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
 
         if vespa_passages:
             yield vespa_passages
