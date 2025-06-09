@@ -2,15 +2,17 @@ import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
+import aioboto3
 import boto3
 import pytest
+import pytest_asyncio
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.parser_models import (
     BaseParserOutput,
@@ -25,6 +27,7 @@ from moto import mock_aws
 from prefect import Flow, State
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
+from types_aiobotocore_s3.client import S3Client
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
@@ -84,6 +87,16 @@ def mock_aws_creds():
 def mock_s3_client(mock_aws_creds) -> Generator:
     with mock_aws():
         yield boto3.client("s3")
+
+
+@pytest_asyncio.fixture
+async def mock_s3_async_client(
+    mock_aws_creds, moto_patch_session
+) -> AsyncGenerator[S3Client, None]:
+    with mock_aws():
+        session = aioboto3.Session(region_name="eu-west-1")
+        async with session.client("s3") as client:
+            yield client
 
 
 @pytest.fixture(scope="function")
@@ -208,6 +221,27 @@ def local_vespa_search_adapter(
         )
 
     yield adapter
+
+
+@pytest_asyncio.fixture()
+async def mock_async_bucket(
+    mock_aws_creds, mock_s3_async_client, test_config
+) -> AsyncGenerator[tuple[str, S3Client], None]:
+    await mock_s3_async_client.create_bucket(
+        Bucket=test_config.cache_bucket,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield test_config.cache_bucket, mock_s3_async_client
+
+    # Teardown
+    response = await mock_s3_async_client.list_objects_v2(
+        Bucket=test_config.cache_bucket
+    )
+    for obj in response.get("Contents", []):
+        await mock_s3_async_client.delete_object(
+            Bucket=test_config.cache_bucket, Key=obj["Key"]
+        )
+    await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
 
 
 @pytest.fixture
@@ -504,12 +538,12 @@ def mock_bucket_labelled_passages_b(
         )
 
 
-@pytest.fixture
-def mock_bucket_labelled_passages_large(
-    mock_s3_client,
-    mock_bucket,
+@pytest_asyncio.fixture
+async def mock_bucket_labelled_passages_large(
+    mock_async_bucket,
 ) -> None:
     """A version of the labelled_passage bucket with more files"""
+    bucket, mock_s3_async_client = mock_async_bucket
     fixture_root = FIXTURE_DIR / "labelled_passages"
     fixture_files = list(fixture_root.glob("**/*.json"))
 
@@ -522,11 +556,11 @@ def mock_bucket_labelled_passages_large(
         key = "labelled_passages/" + str(file_path.relative_to(fixture_root))
         keys.append(key)
 
-        mock_s3_client.put_object(
-            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        await mock_s3_async_client.put_object(
+            Bucket=bucket, Key=key, Body=body, ContentType="application/json"
         )
 
-    return (keys, mock_bucket, mock_s3_client)
+    return (keys, bucket, mock_s3_async_client)
 
 
 @pytest.fixture

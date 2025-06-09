@@ -18,9 +18,9 @@ from vespa.application import Vespa
 from vespa.exceptions import VespaError
 
 from flows.boundary import (
-    DocumentImportId,
     get_document_passages_from_vespa__generator,
 )
+from flows.utils import DocumentStem, remove_translated_suffix
 from scripts.cloud import AwsEnv
 
 app = typer.Typer()
@@ -61,11 +61,11 @@ class Profiler:
             typer.secho(f"> Done in: {self.duration:.2f} seconds", fg="white", dim=True)
 
 
-def get_document_from_vespa(client: Vespa, document_id: str) -> VespaDocument:
+def get_document_from_vespa(client: Vespa, document_id: DocumentStem) -> VespaDocument:
     response = client.get_data(
         namespace="doc_search",
         schema="family_document",
-        data_id=document_id,
+        data_id=remove_translated_suffix(document_id),
     )
 
     if not response.is_successful():
@@ -75,12 +75,12 @@ def get_document_from_vespa(client: Vespa, document_id: str) -> VespaDocument:
 
 
 async def get_passages_from_vespa(
-    vespa: Vespa, document_id: str, max_workers: int
+    vespa: Vespa, document_id: DocumentStem, max_workers: int
 ) -> list[Passage]:
     passages = []
     async with vespa.asyncio(connections=max_workers) as vespa_connection_pool:
         async for batch in get_document_passages_from_vespa__generator(
-            document_import_id=DocumentImportId(document_id),
+            document_import_id=remove_translated_suffix(document_id),
             vespa_connection_pool=vespa_connection_pool,
         ):
             batch_passages = [p[1] for p in batch.values()]
@@ -88,14 +88,27 @@ async def get_passages_from_vespa(
     return passages
 
 
-def count_passage_concepts(passages: list[Passage]) -> dict:
+def count_passage_concepts(
+    passages: list[Passage],
+) -> tuple[dict[str, int], dict[str, int]]:
+    passages_with_concepts = []
     all_concepts = []
     for passage in passages:
         if passage.concepts:
-            all_concepts.extend(
-                [f"{concept.id}:{concept.name}" for concept in passage.concepts]
-            )
-    return {concept: count for concept, count in Counter(all_concepts).items()}
+            passage_concepts = [
+                f"{concept.id}:{concept.name}" for concept in passage.concepts
+            ]
+            all_concepts.extend(passage_concepts)  # Count all concepts per passage
+            passages_with_concepts.extend(
+                list(set(passage_concepts))
+            )  # Only count once per passage
+
+    span_count = {concept: count for concept, count in Counter(all_concepts).items()}
+    passage_count = {
+        concept: count for concept, count in Counter(passages_with_concepts).items()
+    }
+
+    return span_count, passage_count
 
 
 def determine_version_from_spec(specs, id_from_vespa):
@@ -153,7 +166,7 @@ def count_concepts_in_s3_labelled_passages(
 
 
 def get_s3_count_for_one_spec(
-    bucket_name: str, spec: str, document_id: str
+    bucket_name: str, spec: str, document_id: DocumentStem
 ) -> list[str]:
     classifier_id, spec_version = spec.split(":")
     s3_path = build_s3_path(classifier_id, spec_version, document_id)
@@ -173,7 +186,7 @@ def numeric_ordering(wikibase_id: str) -> int:
 
 
 def get_s3_concept_counts(
-    specs: list[str], bucket_name: str, document_id: str, max_workers: int
+    specs: list[str], bucket_name: str, document_id: DocumentStem, max_workers: int
 ) -> dict:
     all_s3_concept_counts = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -198,7 +211,7 @@ def get_s3_concept_counts(
 
 
 def count_s3_aggregated_concepts(
-    bucket_name: str, document_id: str, aggregator_run_identifier: str
+    bucket_name: str, document_id: DocumentStem, aggregator_run_identifier: str
 ) -> dict:
     s3_path = os.path.join(
         AGGREGATED_RESULTS_PREFIX, aggregator_run_identifier, f"{document_id}.json"
@@ -222,7 +235,8 @@ def count_s3_aggregated_concepts(
 def create_results_table(
     doc: VespaDocument,
     s3_concept_counts: dict,
-    passage_concept_counts: dict,
+    span_counts: dict,
+    passage_counts: dict,
     aggregated_concepts: None | dict[str, int],
 ) -> Table:
     table = Table(title="Concept Counts")
@@ -230,16 +244,19 @@ def create_results_table(
         "Concept", justify="left", style="cyan"
     )  # The name an ID of the concept
     table.add_column(
-        "Inference Count", justify="right", style="green"
+        "S3 Inference Count", justify="right", style="green"
     )  # Count of that concept in the raw s3 inference output
     table.add_column(
-        "Aggregated", justify="right", style="green"
+        "S3 Aggregated", justify="right", style="green"
     )  # Count of that concept in the s3 aggregated output
     table.add_column(
-        "Passage Count", justify="right", style="green"
-    )  # Count of that concept in vespa on passages
+        "Vespa Spans", justify="right", style="green"
+    )  # Count of that concept in vespa across passages
     table.add_column(
-        "Document Count", justify="right", style="green"
+        "Vespa Passages", justify="left", style="magenta"
+    )  # Count of the passages that concept appears on
+    table.add_column(
+        "Vespa Document", justify="right", style="green"
     )  # Count from concepts_counts in the vespa document
     table.add_column(
         "Aligned", justify="right", style="magenta"
@@ -248,18 +265,19 @@ def create_results_table(
     # TODO: Use classifier specs
     for concept, count in s3_concept_counts.items():
         document_count = doc.concept_counts.get(concept, 0) if doc.concept_counts else 0
-        passage_count = passage_concept_counts.get(concept, 0)
-
+        passage_count = passage_counts.get(concept, 0)
+        span_count = span_counts.get(concept, 0)
         if aggregated_concepts:
             aggregated_count = aggregated_concepts.get(concept, 0)
-            aligned = count == aggregated_count == document_count == passage_count
+            aligned = count == aggregated_count == document_count == span_count
         else:
             aggregated_count = "/"
-            aligned = count == document_count == passage_count
+            aligned = count == document_count == span_count
         table.add_row(
             concept,
             str(count),
             str(aggregated_count),
+            str(span_count),
             str(passage_count),
             str(document_count),
             "✅" if aligned else "❌",
@@ -294,8 +312,9 @@ def highlight_spans(passage: Passage) -> str:
 
 @app.command()
 def main(
-    document_id: str = typer.Argument(
-        help="the document id of the document to show spans for"
+    document_id: DocumentStem = typer.Argument(
+        parser=lambda x: DocumentStem(x),
+        help="the document id of the document to show spans for",
     ),
     aws_env: AwsEnv = typer.Argument(
         help="Which aws environment to look for results in. Determines which spec file"
@@ -309,7 +328,7 @@ def main(
         )
     ),
     aggregator_run_identifier: str = typer.Option(
-        default=None,
+        default="latest",
         help="The identifier of the aggregator run to use",
     ),
     print_vespa_passages: bool = typer.Option(
@@ -345,7 +364,7 @@ def main(
             )
         console.print(table)
 
-    passage_concept_counts = count_passage_concepts(passages)
+    span_counts, passage_counts = count_passage_concepts(passages)
 
     typer.secho("Collecting data from s3 inference output files", fg="green")
     specs = load_specs(YAML_FILES_MAP[aws_env])
@@ -363,7 +382,7 @@ def main(
 
     # Output in a table
     table = create_results_table(
-        doc, s3_concept_counts, passage_concept_counts, s3_aggregated_concepts
+        doc, s3_concept_counts, span_counts, passage_counts, s3_aggregated_concepts
     )
     typer.secho(
         f"Spans found for {document_id}, across {len(passages):,} passages:", fg="green"

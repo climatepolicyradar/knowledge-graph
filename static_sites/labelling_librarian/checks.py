@@ -8,12 +8,13 @@ from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
 from scripts.evaluate import create_gold_standard_labelled_passages
-from src.argilla_v2 import client, dataset_to_labelled_passages
+from src.argilla_v2 import ArgillaSession
 from src.labelled_passage import LabelledPassage
 from src.metrics import count_span_level_metrics
 from src.span import Span
 
 DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
+argilla_session = ArgillaSession()
 
 
 def dataset_to_labelled_passages_with_cache(
@@ -24,7 +25,7 @@ def dataset_to_labelled_passages_with_cache(
     if dataset_name in DATASET_CACHE:
         return DATASET_CACHE[dataset_name]
 
-    labelled_passages = dataset_to_labelled_passages(dataset)
+    labelled_passages = argilla_session.dataset_to_labelled_passages(dataset)
     merged_passages = create_gold_standard_labelled_passages(labelled_passages)
 
     DATASET_CACHE[dataset_name] = merged_passages
@@ -144,7 +145,7 @@ def check_whether_dataset_has_a_high_discard_ratio(
 
 @lru_cache(maxsize=64)
 def _get_username_from_id(user_id: str) -> str:
-    user = client.users(id=user_id)
+    user = argilla_session.client.users(id=user_id)
     assert isinstance(user, User)
     return user.username
 
