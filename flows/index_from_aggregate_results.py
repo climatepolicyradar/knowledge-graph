@@ -39,7 +39,7 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
-from flows.result import Err, Error, Ok, Result, unwrap_err
+from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     AsyncProfiler,
     Profiler,
@@ -130,7 +130,6 @@ class SimpleConcept:
     name: str
 
 
-@flow(log_prints=True)
 async def index_document_passages(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
@@ -214,7 +213,6 @@ async def index_document_passages(
     return results
 
 
-@flow
 async def index_family_document(
     document_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
@@ -302,14 +300,6 @@ async def create_indexing_summary_artifact(
     )
 
 
-class ResultException(Exception):
-    """A generic exception that wraps a result."""
-
-    def __init__(self, result: Result[None, list[Error]]):
-        self.result = result
-        super().__init__("error result was raised")
-
-
 @flow(log_prints=True)
 async def index_all(
     config: Config,
@@ -354,15 +344,10 @@ async def index_all(
             errors.append(err)
             print(f"indexing family document {document_stem} failed: {err}")
 
-    # Prefect currently only allows an exception or a string, and not
-    # arbitrary data, in a failed state[1]. To get around that, wrap
-    # the result as an error in an exception.
-    #
-    # [1]: https://github.com/PrefectHQ/prefect/blob/main/src/prefect/states.py#L445-L467
     if errors:
-        raise ResultException(Err(errors))
-    else:
-        return Ok(None)
+        return Err(errors)
+
+    return Ok(None)
 
 
 @flow(log_prints=True)
@@ -442,7 +427,7 @@ async def index_aggregate_results_for_batch_of_documents(
         results: list[
             tuple[
                 DocumentStem,
-                Result[None, list[Error]] | BaseException,
+                Result[None, list[Error]] | Exception,
             ]
         ] = await asyncio.gather(
             *tasks,
@@ -457,11 +442,7 @@ async def index_aggregate_results_for_batch_of_documents(
             # Conditionally set it, so the length of the presence of
             # keys can be used as an indicator of the overall presence
             # of ≥ 1 error.
-            if isinstance(result, ResultException):
-                # Due to the allowance of Prefect for what data can be
-                # in a failed state, get the result out of it.
-                errors_per_document[document_stem] = unwrap_err(result.result)
-            elif isinstance(result, BaseException):
+            if isinstance(result, Exception):
                 errors_per_document[document_stem] = [
                     Error(msg=str(result), metadata={})
                 ]
