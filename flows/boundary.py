@@ -161,6 +161,9 @@ def vespa_retry(
         before_sleep=lambda retry_state: print(
             f"Retrying after error. Attempt {retry_state.attempt_number} of {max_attempts}"
         ),
+        after=tenacity.after_log(
+            logger=logging.getLogger(f"{__name__}.vespa_retry"), log_level=logging.INFO
+        ),
         reraise=True,
     )
 
@@ -639,21 +642,17 @@ def get_vespa_passages_from_query_response(
     for passage in passage_hits:
         fields = passage.get("fields")
         if not fields:
-            error = (
+            raise ValueError(
                 f"Vespa passage with no 'fields': {passage}, "
                 f"sample of passage hits: {passage_hits[:5]}"
             )
-            print(error)
-            raise ValueError(error)
 
         text_block_id = fields.get("text_block_id")
         if not text_block_id:
-            error = (
+            raise ValueError(
                 f"Vespa passage with no 'text_block_id' in passage: {passage}, "
                 f"sample of passage hits: {passage_hits[:5]}"
             )
-            print(error)
-            raise ValueError(error)
 
         text_block_id = TextBlockId(text_block_id)
         passage_id = VespaHitId(passage.get("id"))
