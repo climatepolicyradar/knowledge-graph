@@ -163,6 +163,9 @@ def vespa_retry(
         before_sleep=lambda retry_state: print(
             f"Retrying after error. Attempt {retry_state.attempt_number} of {max_attempts}"
         ),
+        after=tenacity.after_log(
+            logger=logging.getLogger(f"{__name__}.vespa_retry"), log_level=logging.INFO
+        ),
         reraise=True,
     )
 
@@ -656,15 +659,60 @@ def get_vespa_passages_from_query_response(
         dig(passage_root, "children", 0, "children", 0)
         for passage_root in passages_root
     ]
-    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {
-        passage["fields"]["text_block_id"]: (
-            passage["id"],
-            VespaPassage.model_validate(passage["fields"]),
+
+    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
+    for passage in passage_hits:
+        fields = passage.get("fields")
+        if not fields:
+            raise ValueError(
+                f"Vespa passage with no 'fields': {passage}, "
+                f"sample of passage hits: {passage_hits[:5]}"
+            )
+
+        text_block_id = fields.get("text_block_id")
+        if not text_block_id:
+            raise ValueError(
+                f"Vespa passage with no 'text_block_id' in passage: {passage}, "
+                f"sample of passage hits: {passage_hits[:5]}"
+            )
+
+        text_block_id = TextBlockId(text_block_id)
+        passage_id = VespaHitId(passage.get("id"))
+        vespa_pasage = VespaPassage.model_validate(fields)
+
+        vespa_passages[text_block_id] = (
+            passage_id,
+            vespa_pasage,
         )
-        for passage in passage_hits
-    }
 
     return vespa_passages
+
+
+@vespa_retry(
+    max_attempts=2,
+    exception_types=(
+        ValueError,
+        QueryError,
+    ),
+)
+async def make_query_and_extract_passages(
+    vespa_connection_pool: VespaAsync,
+    query: qb.Query,
+    query_profile: str,
+) -> tuple[VespaQueryResponse, dict[TextBlockId, tuple[VespaHitId, VespaPassage]]]:
+    """Make the query and extract the passages."""
+
+    vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
+        yql=query,
+        queryProfile=query_profile,
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+
+    return vespa_query_response, get_vespa_passages_from_query_response(
+        vespa_query_response
+    )
 
 
 async def get_document_passages_from_vespa__generator(
@@ -718,15 +766,11 @@ async def get_document_passages_from_vespa__generator(
             .groupby(grouping, continuations=tokens)
         )
 
-        vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
-            yql=query,
-            queryProfile=query_profile,
+        vespa_query_response, vespa_passages = await make_query_and_extract_passages(
+            vespa_connection_pool=vespa_connection_pool,
+            query=query,
+            query_profile=query_profile,
         )
-
-        if not vespa_query_response.is_successful():
-            raise QueryError(vespa_query_response.get_status_code())
-
-        vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
 
         if vespa_passages:
             yield vespa_passages

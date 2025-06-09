@@ -734,6 +734,51 @@ def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryRespons
 
 
 @pytest.fixture
+def mock_vespa_query_response_with_malformed_group(
+    mock_vespa_credentials: dict,
+) -> VespaQueryResponse:
+    """Mock Vespa query response with a malformed group"""
+
+    group_with_malformed_hit = {
+        "id": "group:string:986",
+        "relevance": 0.0017429193899782135,
+        "value": "986",
+        "children": [
+            {
+                "id": "hitlist:hits",
+                "relevance": 1.0,
+                "label": "hits",
+                "children": [
+                    {
+                        "id": "id:doc_search:document_passage::CCLW.executive.10014.4470.986",
+                        "relevance": 0.0017429193899782135,
+                        "source": "family-document-passage",
+                        "fields_malformed": {},
+                    }
+                ],
+            }
+        ],
+    }
+
+    response_with_malformed_group_json = (
+        mock_grouped_text_block_vespa_query_response_json()
+    )
+
+    response_with_malformed_group_json["root"]["children"][0]["children"][0][
+        "children"
+    ] += [group_with_malformed_hit]
+
+    vespa_query_response_with_malformed_group = VespaQueryResponse(
+        json=response_with_malformed_group_json,
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+    return vespa_query_response_with_malformed_group
+
+
+@pytest.fixture
 def mock_vespa_query_response_no_continuation_token(
     mock_vespa_credentials: dict,
 ) -> VespaQueryResponse:
