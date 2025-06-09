@@ -21,9 +21,6 @@ import flows.deindex as deindex
 from flows.aggregate_inference_results import aggregate_inference_results
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
-from flows.index import (
-    index_labelled_passages_from_s3_to_vespa,
-)
 from flows.index_from_aggregate_results import (
     index_aggregate_results_for_batch_of_documents,
     run_indexing_from_aggregate_results,
@@ -137,11 +134,6 @@ create_deployment(
 create_deployment(
     flow=boundary.run_partial_updates_of_concepts_for_document_passages,
     description="Co-ordinate updating inference results for concepts in Vespa",
-)
-
-create_deployment(
-    flow=index_labelled_passages_from_s3_to_vespa,
-    description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 
 create_deployment(

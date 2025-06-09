@@ -145,7 +145,6 @@ VespaDataId = NewType("VespaDataId", str)
 class Operation(Enum):
     """The kind of operation to take as far as creates, removes, and updates."""
 
-    INDEX = "index"
     DEINDEX = "deindex"
 
 
@@ -1064,12 +1063,6 @@ def op_to_fn(
 ]:
     """Get the appropriate functions to implement an operation"""
     match operation:
-        case Operation.INDEX:
-            return (
-                update_concepts_on_existing_vespa_concepts,
-                update_result_callback,
-                update_s3_with_update_concepts_counts,
-            )
         case Operation.DEINDEX:
             return (
                 remove_concepts_from_existing_vespa_concepts,
@@ -1206,10 +1199,10 @@ async def updates_by_s3(
     vespa_search_adapter: VespaSearchAdapter | None = None,
 ) -> None:
     """
-    Asynchronously update (de-)index concepts from S3 files into Vespa.
+    Asynchronously update de-index concepts from S3 files into Vespa.
 
     This function retrieves concept documents from files stored in an S3 path and
-    (de-)indexes them in a Vespa instance. The name of each file in the specified S3 path is
+    de-indexes them in a Vespa instance. The name of each file in the specified S3 path is
     expected to represent the document's import ID.
 
     When `s3_prefix` is provided, the function will use all files within that S3
@@ -1596,105 +1589,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
         # All Vespa updating has finished, return the final concepts' counts
         return concepts_counts
-
-
-# Index -------------------------------------------------------------------------
-
-
-def update_result_callback(
-    concepts_counts: Counter[ConceptModel],
-    grouped_concepts: dict[TextBlockId, list[VespaConcept]],
-    response: VespaResponse,
-    text_block_id: TextBlockId,
-) -> None:
-    if not response.is_successful():
-        # Nothing to count, since it failed
-        return
-
-    # Update concepts counts
-    try:
-        concepts = grouped_concepts[text_block_id]
-    except KeyError:
-        # Add context to the error. Only sample the first 10, since
-        # there could be > 50,000. The intent is to get an idea of the
-        # keys values' themselves, since we already know this key is
-        # missing.
-        raise ValueError(text_block_id)
-
-    # Example:
-    #
-    # ..
-    # "labellers": [
-    #   "KeywordClassifier(\"professional services sector\")"
-    # ],
-    # ...
-    concepts_models = [
-        ConceptModel(wikibase_id=WikibaseID(concept.id), model_name=concept.model)
-        for concept in concepts
-    ]
-
-    concepts_counts.update(concepts_models)
-
-
-async def update_s3_with_update_concepts_counts(
-    document_importer: DocumentImporter,
-    concepts_counts: Counter[ConceptModel],
-    cache_bucket: str,
-    concepts_counts_prefix: str,
-    document_labelled_passages: list[LabelledPassage],
-) -> None:
-    s3_uri = Path(document_importer[1])
-    # Get all parts after the prefix (e.g. "Q787/v4/CCLW.executive.1813.2418.json")
-    key_parts = "/".join(s3_uri.parts[3:])  # Skip s3:/bucket/labelled_passages/
-
-    # Create new path with concepts_counts_prefix
-    concepts_counts_uri = f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
-
-    serialised_concepts_counts = json.dumps(
-        {str(k): v for k, v in concepts_counts.items()}
-    )
-
-    # Write to S3
-    print(f"Updating concepts counts s3 file for: {concepts_counts_uri}")
-    s3_object_write_text(
-        s3_uri=concepts_counts_uri,
-        text=serialised_concepts_counts,
-    )
-
-    return None
-
-
-def update_concepts_on_existing_vespa_concepts(
-    passage: VespaPassage,
-    concepts: list[VespaConcept],
-) -> list[dict[str, Any]]:
-    """
-    Update a passage's concepts with the new concepts.
-
-    During the update we remove all the old concepts related to a model. This is as it
-    was decided that holding out dated concepts/spans on the passage in Vespa for a
-    model is not useful.
-
-    It is also, not possible to duplicate a Concept object in the concepts array as we
-    are removing all instances where the model is the same.
-    """
-    if not passage.concepts:
-        return [concept.model_dump(mode="json") for concept in concepts]
-
-    new_concept_models = {concept.model for concept in concepts}
-
-    existing_concepts_to_keep = [
-        concept
-        for concept in passage.concepts
-        if concept.model not in new_concept_models
-    ]
-
-    updated_concepts = existing_concepts_to_keep + concepts
-
-    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
-
-
-# De-index ----------------------------------------------------------------------
 
 
 def remove_result_callback(
