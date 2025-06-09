@@ -43,10 +43,9 @@ from flows.boundary import (
     s3_obj_generator_from_s3_paths,
     s3_obj_generator_from_s3_prefixes,
     s3_paths_or_s3_prefixes,
-    update_concepts_on_existing_vespa_concepts,
     updates_by_s3,
 )
-from flows.index import Config
+from flows.deindex import Config
 from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -575,6 +574,8 @@ async def test_updates_by_s3_with_s3_paths(
     labelled_passage_fixture_files,
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
+    s3_prefix_mock_bucket_labelled_passages,
+    labelled_passage_fixture_ids,
 ) -> None:
     """We can successfully index labelled passages from S3 into Vespa."""
     initial_passages_response = local_vespa_search_adapter.client.query(
@@ -584,16 +585,16 @@ async def test_updates_by_s3_with_s3_paths(
         len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
     )
 
-    s3_paths = [
-        f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{doc_file}"
-        for doc_file in labelled_passage_fixture_files
-    ]
-
     await updates_by_s3(
-        partial_update_flow=Operation.INDEX,
+        partial_update_flow=Operation.DEINDEX,
         aws_env=AwsEnv.sandbox,
         s3_prefixes=None,
-        s3_paths=s3_paths,
+        s3_paths=[
+            os.path.join(
+                s3_prefix_mock_bucket_labelled_passages,
+                f"{labelled_passage_fixture_ids[0]}.json",
+            )
+        ],
         as_deployment=False,
         cache_bucket=mock_bucket,
         concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
@@ -607,9 +608,7 @@ async def test_updates_by_s3_with_s3_paths(
         len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
     )
 
-    assert initial_concepts_count < final_concepts_count
-    # Original + fixture (.tests/flows/fixtures/*.json)
-    assert final_concepts_count == 3935
+    assert initial_concepts_count == final_concepts_count
 
 
 @pytest.mark.asyncio
@@ -621,6 +620,8 @@ async def test_updates_by_s3_with_s3_prefixes(
     labelled_passage_fixture_files,
     local_vespa_search_adapter: VespaSearchAdapter,
     vespa_app,
+    s3_prefix_mock_bucket_labelled_passages,
+    labelled_passage_fixture_ids,
 ) -> None:
     """We can successfully index labelled passages from S3 into Vespa."""
     initial_passages_response = local_vespa_search_adapter.client.query(
@@ -631,9 +632,11 @@ async def test_updates_by_s3_with_s3_prefixes(
     )
 
     await updates_by_s3(
-        partial_update_flow=Operation.INDEX,
+        partial_update_flow=Operation.DEINDEX,
         aws_env=AwsEnv.sandbox,
-        s3_prefixes=[os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)],
+        s3_prefixes=[
+            s3_prefix_mock_bucket_labelled_passages,
+        ],
         s3_paths=None,
         as_deployment=False,
         cache_bucket=mock_bucket,
@@ -648,9 +651,7 @@ async def test_updates_by_s3_with_s3_prefixes(
         len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
     )
 
-    assert initial_concepts_count < final_concepts_count
-    # Original + fixture (.tests/flows/fixtures/*.json)
-    assert final_concepts_count == 3935
+    assert initial_concepts_count == final_concepts_count
 
 
 @pytest.mark.asyncio
@@ -678,7 +679,7 @@ async def test_updates_by_s3_task_failure(
         pytest.raises(ValueError, match="there was at least 1 task that failed"),
     ):
         await updates_by_s3(
-            partial_update_flow=Operation.INDEX,
+            partial_update_flow=Operation.DEINDEX,
             aws_env=AwsEnv.sandbox,
             s3_prefixes=[
                 os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
@@ -711,7 +712,7 @@ async def test_updates_by_s3_task_unexpected_result(
         pytest.raises(ValueError, match="there was at least 1 task that failed"),
     ):
         await updates_by_s3(
-            partial_update_flow=Operation.INDEX,
+            partial_update_flow=Operation.DEINDEX,
             aws_env=AwsEnv.sandbox,
             s3_prefixes=[
                 os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
@@ -1213,7 +1214,7 @@ async def test__update_text_block__update(
             text_block_id=text_block_id,
             document_passage_id=document_passage_id,
             document_passage=document_passage,
-            merge_serialise_concepts_cb=update_concepts_on_existing_vespa_concepts,
+            merge_serialise_concepts_cb=remove_concepts_from_existing_vespa_concepts,
             concepts=example_vespa_concepts,
             vespa_connection_pool=vespa_connection_pool,
         )
