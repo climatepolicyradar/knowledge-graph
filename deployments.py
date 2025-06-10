@@ -163,12 +163,14 @@ create_deployment(
 create_deployment(
     flow=wikibase_to_s3,
     description="Upload concepts from Wikibase to S3",
-    env_schedules={
-        AwsEnv.production: "0 9 * * TUE,THU",
-        AwsEnv.staging: "0 15 2 * *",
-        AwsEnv.sandbox: "0 15 1 * *",
-        # AwsEnv.labs: "0 15 3 * *",
-    },
+    # Temporarily disabled for stability
+    #     env_schedules={
+    #         AwsEnv.production: "0 9 * * TUE,THU",
+    #         AwsEnv.staging: "0 15 2 * *",
+    #         AwsEnv.sandbox: "0 15 1 * *",
+    #         # Not needed in labs
+    #         # AwsEnv.labs: "0 15 3 * *",
+    #     },
 )
 
 # Deploy static sites
