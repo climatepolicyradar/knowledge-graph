@@ -1,3 +1,22 @@
+"""
+Do S3 Prefix Docs Have Passages in Vespa
+
+=================================================
+
+A script to check whether the passages for documents in a given S3 prefix
+are present in a Vespa database. It compares the number of passages in S3 with those
+in Vespa and generates a report of any discrepancies.
+
+See an example run command below:
+python -m scripts.audit.do_s3_prefix_docs_have_passages_in_vespa
+    "cpr-staging-data-pipeline-cache"
+    "indexer_input"
+    "~./.vespa/climate-policy-radar.navigator_dev.default"
+    "missing_passages.csv"
+    50
+    200
+"""
+
 import asyncio
 import os
 from dataclasses import dataclass
@@ -12,7 +31,7 @@ from vespa.application import VespaAsync
 
 from flows.boundary import TextBlockId, get_document_passages_from_vespa__generator
 from flows.index_from_aggregate_results import load_json_data_from_s3
-from flows.utils import DocumentImportId, wait_for_semaphore
+from flows.utils import DocumentImportId, iterate_batch, wait_for_semaphore
 from scripts.audit.do_classifier_specs_have_results import collect_file_names
 
 app = typer.Typer()
@@ -39,8 +58,6 @@ def document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
         key=s3_key,
     )
 
-    # It might be overkill to parse the data into the model but we can rely on the
-    # text blocks property to count.
     parser_output = ParserOutput.model_validate(data)
 
     return len(parser_output.text_blocks)
@@ -49,7 +66,7 @@ def document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
 async def document_passages_in_vespa(
     document_id: DocumentImportId, vespa_connection_pool: VespaAsync
 ) -> int:
-    """Check what data we have in vespa relating to a document id."""
+    """Check how many passages we have in vespa relating to a document id."""
 
     passages_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_id,
@@ -69,12 +86,12 @@ async def check_document_passages(
     s3_prefix: str,
     vespa_connection_pool: VespaAsync,
 ) -> Result:
-    # No. of passages in s3 object
+    """Check if the number of passages in S3 matches those in Vespa for a document."""
+
     s3_passages_count: int = document_passages_in_s3(
         bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, f"{document_id}.json")
     )
 
-    # No. of passages in vespa
     vespa_passages_count: int = await document_passages_in_vespa(
         document_id=document_id, vespa_connection_pool=vespa_connection_pool
     )
@@ -98,7 +115,7 @@ def coro(f):
 
 @app.command()
 @coro
-async def check_s3_prefix_documents_match_vespa(
+async def check_passages(
     bucket_name: str = typer.Argument(
         help=(
             "Name of the s3 bucket, should be the root without protocol or prefix"
@@ -106,11 +123,24 @@ async def check_s3_prefix_documents_match_vespa(
         )
     ),
     s3_prefix: str = typer.Argument(
-        help="The S3 prefix to check for documents, e.g., 'indexer_input"
+        default="indexer_input",
+        help="The S3 prefix to check for documents, e.g., 'indexer_input",
     ),
     vespa_cert_directory: str = typer.Argument(
         default=None,
         help="Directory containing Vespa certificates for secure connection",
+    ),
+    report_file_path: str = typer.Argument(
+        default="missing_passages.csv",
+        help="Path to save the report of missing passages",
+    ),
+    max_concurrent_tasks: int = typer.Argument(
+        default=10,
+        help="Maximum number of concurrent tasks to run when checking documents",
+    ),
+    batch_size: int = typer.Argument(
+        default=500,
+        help="Size of each batch of document ids to process concurrently",
     ),
 ) -> None:
     """
@@ -134,58 +164,56 @@ async def check_s3_prefix_documents_match_vespa(
         )
         typer.echo(f"Found {len(document_ids)} document ids in s3 prefix {s3_prefix}")
 
-        typer.echo("Checking s3 against state in vespa for each document id...")
-        missing_passage_documents = []
+        batches = iterate_batch(list(document_ids), batch_size=batch_size)
 
-        # TODO: Add as a param with default
-        semaphore = asyncio.Semaphore(50)
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                check_document_passages(
-                    document_id=document_id,
-                    bucket_name=bucket_name,
-                    s3_prefix=s3_prefix,
-                    vespa_connection_pool=vespa_connection_pool,
-                ),
+        for i, batch in enumerate(batches):
+            typer.echo(
+                f"Checking s3 against state in vespa for each document id in batch {i}..."
             )
-            for document_id in document_ids
-        ]
-        results: list[Result | BaseException] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
-        for result in results:
-            if isinstance(result, BaseException):
-                typer.echo(f"Error processing document: {result}")
-                continue
-            if result.passages_mismatch:
-                typer.echo(
-                    f"Document {result.document_id} has a mismatch: "
-                    f"{result.passages_count_in_s3} passages in S3, "
-                    f"{result.passages_count_in_vespa} passages in Vespa."
+            missing_passage_documents = []
+
+            semaphore = asyncio.Semaphore(max_concurrent_tasks)
+            tasks = [
+                wait_for_semaphore(
+                    semaphore,
+                    check_document_passages(
+                        document_id=document_id,
+                        bucket_name=bucket_name,
+                        s3_prefix=s3_prefix,
+                        vespa_connection_pool=vespa_connection_pool,
+                    ),
                 )
-                missing_passage_documents.append(result)
-        typer.echo(
-            f"Found {len(missing_passage_documents)} documents with mismatching passages."
-        )
-
-        # Convert results to DataFrame
-        missing_df = pd.DataFrame(
-            [
-                {
-                    "document_id": result.document_id,
-                    "passages_count_in_s3": result.passages_count_in_s3,
-                    "passages_count_in_vespa": result.passages_count_in_vespa,
-                    "passages_mismatch": result.passages_mismatch,
-                }
-                for result in missing_passage_documents
+                for document_id in batch
             ]
-        )
+            results: list[Result | BaseException] = await asyncio.gather(
+                *tasks, return_exceptions=True
+            )
+            for result in results:
+                if isinstance(result, BaseException):
+                    typer.echo(f"Error processing document: {result}")
+                    continue
+                if result.passages_mismatch:
+                    missing_passage_documents.append(result)
+            typer.echo(
+                f"Found {len(missing_passage_documents)} documents with mismatching passages in batch {i}."
+            )
 
-        # Write to CSV
-        csv_path = "missing_passages.csv"
-        missing_df.to_csv(csv_path, index=False)
-        typer.echo(f"Results written to {csv_path}")
+            missing_df = pd.DataFrame(
+                [
+                    {
+                        "document_id": result.document_id,
+                        "passages_count_in_s3": result.passages_count_in_s3,
+                        "passages_count_in_vespa": result.passages_count_in_vespa,
+                        "passages_mismatch": result.passages_mismatch,
+                    }
+                    for result in missing_passage_documents
+                ]
+            )
+            stem_root = Path(report_file_path).stem
+            missing_df.to_csv(
+                Path(report_file_path).with_name(stem_root + f"_batch_{i}"), index=False
+            )
+            typer.echo(f"Results written to {report_file_path}")
 
 
 if __name__ == "__main__":
