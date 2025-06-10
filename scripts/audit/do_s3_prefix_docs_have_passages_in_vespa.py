@@ -55,6 +55,7 @@ class Result:
     """Result of checking a single document in s3 against vespa."""
 
     document_id: DocumentImportId
+    document_file_name: str
     passages_mismatch: bool
     passages_count_in_vespa: int
     passages_count_in_s3: int
@@ -82,10 +83,10 @@ def check_document_passages(
     """Check if the number of passages in S3 matches those in Vespa for a document."""
 
     document_id: DocumentImportId = document[0]
-    document_stem: DocumentStem = document[1]
+    document_file_name: str = document[1]
 
     s3_passages_count: int = document_passages_in_s3(
-        bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, f"{document_stem}.json")
+        bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, document_file_name)
     )
 
     # TODO: Think whether default is right here.
@@ -93,6 +94,7 @@ def check_document_passages(
 
     return Result(
         document_id=document_id,
+        document_file_name=document_file_name,
         passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
         passages_count_in_vespa=vespa_passage_count_for_document,
         passages_count_in_s3=s3_passages_count,
@@ -198,14 +200,16 @@ async def check_passages(
     typer.echo(f"Found {len(vespa_passage_counts)} documents with passages in Vespa.")
 
     typer.echo("Retrieving file names from s3...")
-    s3_file_names: list[str] = collect_file_names(bucket_name, s3_prefix)
+    s3_file_names: list[str] = [
+        f for f in collect_file_names(bucket_name, s3_prefix) if f.endswith(".json")
+    ]
     typer.echo(f"Found {len(s3_file_names)} file names in s3 prefix {s3_prefix}")
 
     typer.echo("Constructing document ids from file names...")
-    s3_document_ids: list[tuple[DocumentImportId, DocumentStem]] = list(
+    s3_document_ids: list[tuple[DocumentImportId, str]] = list(
         (
-            DocumentImportId(Path(remove_translated_suffix(DocumentStem(file))).stem),
-            DocumentStem(file),
+            DocumentImportId(remove_translated_suffix(DocumentStem(Path(file).stem))),
+            file,
         )
         for file in s3_file_names
         if file.endswith(".json")
@@ -216,11 +220,11 @@ async def check_passages(
 
     s3_document_ids_not_in_vespa = []
     s3_document_ids_in_vespa = []
-    for doc_id, stem in s3_document_ids:
+    for doc_id, doc_file_name in s3_document_ids:
         if doc_id in vespa_passage_counts:
-            s3_document_ids_in_vespa.append((doc_id, stem))
+            s3_document_ids_in_vespa.append((doc_id, doc_file_name))
         else:
-            s3_document_ids_not_in_vespa.append((doc_id, stem))
+            s3_document_ids_not_in_vespa.append((doc_id, doc_file_name))
 
     if s3_document_ids_not_in_vespa:
         typer.echo(
@@ -228,28 +232,24 @@ async def check_passages(
             f"{s3_prefix} that are not in Vespa. These will be skipped."
         )
         missing_in_vespa_data = [
-            {"document_id": str(doc_id), "document_stem": stem}
-            for doc_id, stem in s3_document_ids_not_in_vespa
+            {"document_id": str(doc_id), "document_file_name": doc_file_name}
+            for doc_id, doc_file_name in s3_document_ids_not_in_vespa
         ]
         # TODO: Make name comfigurable or add to report
         with open("missing_in_vespa.json", "w") as f:
             json.dump(missing_in_vespa_data, f, indent=2)
-
-    # TEMP
-    s3_document_ids_in_vespa = s3_document_ids_in_vespa[:100]
-    # TEMP
 
     missing_passage_documents = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
                 check_document_passages,
-                doc_id,
+                document,
                 bucket_name,
                 s3_prefix,
                 vespa_passage_counts,
-            ): doc_id
-            for doc_id, _ in s3_document_ids_in_vespa
+            ): document
+            for document in s3_document_ids_in_vespa
         }
 
         for future in as_completed(futures.keys()):
@@ -262,6 +262,7 @@ async def check_passages(
         [
             {
                 "document_id": result.document_id,
+                "document_file_name": result.document_file_name,
                 "passages_count_in_s3": result.passages_count_in_s3,
                 "passages_count_in_vespa": result.passages_count_in_vespa,
                 "passages_mismatch": result.passages_mismatch,
