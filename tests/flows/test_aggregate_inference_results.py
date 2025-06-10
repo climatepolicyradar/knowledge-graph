@@ -1,11 +1,11 @@
 import asyncio
-import datetime
 import json
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import aioboto3
 import pydantic
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -17,7 +17,6 @@ from flows.aggregate_inference_results import (
     aggregate_inference_results,
     build_run_output_identifier,
     collect_stems_by_specs,
-    combine_labelled_passages,
     get_all_labelled_passages_for_one_document,
     process_single_document,
     validate_passages_are_same_except_concepts,
@@ -161,10 +160,12 @@ async def test_get_all_labelled_passages_for_one_document(
         ClassifierSpec(name="Q767", alias="v3"),
         ClassifierSpec(name="Q1286", alias="v3"),
     ]
-    labelled_passages = await get_all_labelled_passages_for_one_document(
+    all_labelled_passages = []
+    async for spec, labelled_passages in get_all_labelled_passages_for_one_document(
         s3_async_client, document_id, classifier_specs, test_aggregate_config
-    )
-    assert len(labelled_passages) == len(classifier_specs)
+    ):
+        all_labelled_passages.append(labelled_passages)
+    assert len(all_labelled_passages) == len(classifier_specs)
 
 
 def test_validate_passages_are_same_except_concepts():
@@ -200,7 +201,9 @@ async def test_process_single_document__success(
     _, classifier_specs = mock_classifier_specs
     document_id = "CCLW.executive.10061.4515"
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     assert document_id == await process_single_document(
+        session,
         document_id,
         classifier_specs,
         test_aggregate_config,
@@ -231,7 +234,7 @@ async def test_process_single_document__success(
 
 
 @pytest.mark.asyncio
-async def test_process_single_document__failure(
+async def test_process_single_document__client_error(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
     document_id = "CCLW.executive.10061.4515"
@@ -239,8 +242,10 @@ async def test_process_single_document__failure(
     classifier_specs.append(ClassifierSpec(name="Q9999999999", alias="v99"))
     write_spec_file(spec_file_path, classifier_specs)
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
         process_single_document(
+            session,
             document_id,
             classifier_specs,
             test_aggregate_config,
@@ -248,6 +253,7 @@ async def test_process_single_document__failure(
         ),
         return_exceptions=True,
     )
+    assert len(result) == 1
     assert isinstance(result[0], AggregationFailure)
     code = result[0].exception.response["Error"]["Code"]
     assert code == "NoSuchKey"
@@ -255,99 +261,51 @@ async def test_process_single_document__failure(
     assert key == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"
 
 
-def test_combine_labelled_passages(concept):
-    base_span = Span(
-        text="The",
-        start_index=0,
-        end_index=3,
-        concept_id=None,
-        labellers=['KeywordClassifier("greenhouse gas")'],
-        timestamps=[datetime.datetime(2025, 2, 24, 18, 42, 12, 677997)],
+@pytest.mark.asyncio
+async def test_process_single_document__value_error(
+    mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
+):
+    keys, bucket, s3_async_client = mock_bucket_labelled_passages_large
+    _, classifier_specs = mock_classifier_specs
+
+    document_id = "CCLW.executive.10061.4515"
+
+    # Replace the doc with a broken  one
+    new_data = [
+        '{"id":"b1","text":"Some words","spans":[],"metadata":{}}',
+        '{"id":"b2","text":"But not enough words","spans":[],"metadata":{}}',
+    ]
+    key = [k for k in keys if "CCLW.executive.10061.4515" in k][0]
+    await s3_async_client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=json.dumps(new_data),
     )
 
-    Q218_concept = concept.model_copy(update={"id": "Q218"})
-    Q218_span = base_span.model_copy(update={"concept_id": "Q218"})
-
-    Q767_concept = concept.model_copy(update={"id": "Q767"})
-    Q767_span = base_span.model_copy(update={"concept_id": "Q767"})
-
-    Q1286_concept = concept.model_copy(update={"id": "Q1286"})
-    Q1286_span = base_span.model_copy(update={"concept_id": "Q1286"})
-
-    labelled_passages = {
-        "Q218:v5": [
-            LabelledPassage(
-                id="b0",
-                text="The",
-                spans=[Q218_span, Q218_span],
-                metadata={"concept": Q218_concept},
-            ),
-            LabelledPassage(
-                id="b1", text="The", spans=[], metadata={"concept": Q218_concept}
-            ),
-            LabelledPassage(
-                id="b2", text="The", spans=[], metadata={"concept": Q218_concept}
-            ),
-        ],
-        "Q767:v3": [
-            LabelledPassage(
-                id="b0",
-                text="The",
-                spans=[Q767_span],
-                metadata={"concept": Q767_concept},
-            ),
-            LabelledPassage(
-                id="b1",
-                text="The",
-                spans=[Q767_span],
-                metadata={"concept": Q767_concept},
-            ),
-            LabelledPassage(
-                id="b2", text="The", spans=[], metadata={"concept": Q767_concept}
-            ),
-        ],
-        "Q1286:v3": [
-            LabelledPassage(
-                id="b0",
-                text="The",
-                spans=[Q1286_span],
-                metadata={"concept": Q1286_concept},
-            ),
-            LabelledPassage(
-                id="b1",
-                text="The",
-                spans=[Q1286_span],
-                metadata={"concept": Q1286_concept},
-            ),
-            LabelledPassage(
-                id="b2",
-                text="The",
-                spans=[Q1286_span, Q1286_span, Q1286_span],
-                metadata={"concept": Q1286_concept},
-            ),
-        ],
-    }
-
-    # Happy case
-    combined_labelled_passages = combine_labelled_passages(labelled_passages)
-    assert len(combined_labelled_passages) == 3
-    assert len(combined_labelled_passages["b0"]) == 4
-    assert len(combined_labelled_passages["b1"]) == 2
-    assert len(combined_labelled_passages["b2"]) == 3
-
-    # different length lists
-    labelled_passages["Q218:v5"].append(
-        LabelledPassage(
-            id="b3", text="The", spans=[Q218_span], metadata={"concept": Q218_concept}
-        )
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
+    result = await asyncio.gather(
+        process_single_document(
+            session,
+            document_id,
+            classifier_specs,
+            test_aggregate_config,
+            "run_output_identifier",
+        ),
+        return_exceptions=True,
     )
-    with pytest.raises(ValueError):
-        combine_labelled_passages(labelled_passages)
-
-    # passage mismatch
-    labelled_passages["Q218:v5"][0].text = "Different text"
-    with pytest.raises(ValueError):
-        combine_labelled_passages(labelled_passages)
+    assert len(result) == 1
+    assert isinstance(result[0], AggregationFailure)
+    assert isinstance(result[0].exception, ValueError)
+    assert (
+        result[0]
+        .exception.args[0]
+        .startswith("The number of passages diverge when appending")
+    )
+    assert (
+        result[0]
+        .exception.args[0]
+        .endswith("len(labelled_passages)=2 != len(concepts_for_vespa)=27")
+    )
 
 
 def test_collect_stems_by_specs(

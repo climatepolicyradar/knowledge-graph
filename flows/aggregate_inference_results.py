@@ -1,9 +1,8 @@
 import asyncio
 import json
 import os
-from collections import defaultdict
 from dataclasses import asdict, dataclass
-from typing import Any, Sequence, TypeAlias
+from typing import Any, AsyncGenerator, Sequence, TypeAlias
 
 import aioboto3
 from botocore.exceptions import ClientError
@@ -122,9 +121,8 @@ async def get_all_labelled_passages_for_one_document(
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
     config: Config,
-) -> dict[SpecStr, list[LabelledPassage]]:
+) -> AsyncGenerator[tuple[ClassifierSpec, list[LabelledPassage]], None]:
     """Get the labelled passages from s3."""
-    labelled_passages = defaultdict(list)
 
     for spec in classifier_specs:
         s3_uri = S3Uri(
@@ -138,13 +136,11 @@ async def get_all_labelled_passages_for_one_document(
         )
         response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
         body = await response["Body"].read()
-        spec_doc = [
+        labelled_passages = [
             LabelledPassage.model_validate_json(passage)
             for passage in json.loads(body.decode("utf-8"))
         ]
-        labelled_passages[str(spec)].extend(spec_doc)
-
-    return labelled_passages
+        yield spec, labelled_passages
 
 
 def check_all_values_are_the_same(values: list[Any]) -> bool:
@@ -167,37 +163,9 @@ def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) 
             )
 
 
-def combine_labelled_passages(
-    labelled_passages: dict[SpecStr, list[LabelledPassage]],
-) -> dict[TextBlockId, SerialisedVespaConcept]:
-    """Combine the labelled passages across the different classifier specs."""
-    labelled_passages_lists = list(labelled_passages.values())
-    if not check_all_values_are_the_same([len(lpl) for lpl in labelled_passages_lists]):
-        raise ValueError(
-            f"The length of the labelled passages are not the same across classifier "
-            f"outputs: {labelled_passages.keys()}"
-        )
-
-    combined_passages = {}
-    for passages in zip(*labelled_passages_lists):
-        validate_passages_are_same_except_concepts(passages)
-        passage_id = passages[0].id
-
-        all_vespa_concepts = []
-        for passage in passages:
-            vespa_concepts = convert_labelled_passage_to_concepts(passage)
-            serialised_vespa_concepts = [
-                vc.model_dump(mode="json") for vc in vespa_concepts
-            ]
-            all_vespa_concepts.extend(serialised_vespa_concepts)
-
-        combined_passages[passage_id] = all_vespa_concepts
-
-    return combined_passages
-
-
 @task()
 async def process_single_document(
+    session: aioboto3.Session,
     document_id: DocumentImportId,
     classifier_specs: list[ClassifierSpec],
     config: Config,
@@ -205,15 +173,46 @@ async def process_single_document(
 ) -> DocumentImportId | AggregationFailure:
     """Process a single document and return its status."""
     try:
-        session = aioboto3.Session(region_name="eu-west-1")
         async with session.client("s3") as s3:
-            all_labelled_passages = await get_all_labelled_passages_for_one_document(
+            print("Fetching labelled passages for", document_id)
+
+            concepts_for_vespa: dict[TextBlockId, SerialisedVespaConcept] = {}
+            async for (
+                spec,
+                labelled_passages,
+            ) in get_all_labelled_passages_for_one_document(
                 s3, document_id, classifier_specs, config
-            )
-            print(
-                f"Combining {len(all_labelled_passages)} labelled passages for {document_id}"
-            )
-            vespa_concepts = combine_labelled_passages(all_labelled_passages)
+            ):
+                # `concepts_for_vespa`` starts empty so Validation not needed initially
+                if not concepts_for_vespa:
+                    for passage in labelled_passages:
+                        concepts_for_vespa[TextBlockId(passage.id)] = [
+                            vc.model_dump(mode="json")
+                            for vc in convert_labelled_passage_to_concepts(passage)
+                        ]
+                    continue
+
+                if len(labelled_passages) != len(concepts_for_vespa.keys()):
+                    raise ValueError(
+                        f"The number of passages diverge when appending {spec}: "
+                        f"{len(labelled_passages)=} != {len(concepts_for_vespa)=}"
+                    )
+
+                for passage, text_block_id in zip(
+                    labelled_passages, concepts_for_vespa.keys()
+                ):
+                    if passage.id != text_block_id:
+                        raise ValueError(
+                            f"The text_block id diverges for {spec} when compared with what has been collected so far:"
+                            f"{passage.id=} != {text_block_id=}"
+                        )
+                    serialised_concepts = [
+                        vc.model_dump(mode="json")
+                        for vc in convert_labelled_passage_to_concepts(passage)
+                    ]
+                    concepts_for_vespa[TextBlockId(passage.id)].extend(
+                        serialised_concepts
+                    )
 
             # Write to s3
             s3_uri = S3Uri(
@@ -224,7 +223,7 @@ async def process_single_document(
                     f"{document_id}.json",
                 ),
             )
-            await s3_object_write_text_async(s3, s3_uri, json.dumps(vespa_concepts))
+            await s3_object_write_text_async(s3, s3_uri, json.dumps(concepts_for_vespa))
 
             # Duplicate to latest
             await s3_copy_file(
@@ -246,9 +245,7 @@ async def process_single_document(
             document_id=document_id, exception=e, context=e.response
         )
     except Exception as e:
-        raise AggregationFailure(
-            document_id=document_id, exception=e, context="Unknown error"
-        )
+        raise AggregationFailure(document_id=document_id, exception=e, context=repr(e))
 
 
 @task()
@@ -259,10 +256,15 @@ async def process_n_documents(
     run_output_identifier: RunOutputIdentifier,
 ) -> list[DocumentImportId | AggregationFailure | BaseException]:
     """Process a batch of documents."""
+    session = aioboto3.Session(region_name=config.bucket_region)
     return await asyncio.gather(
         *(
             process_single_document(
-                document_id, classifier_specs, config, run_output_identifier
+                session,
+                document_id,
+                classifier_specs,
+                config,
+                run_output_identifier,
             )
             for document_id in document_ids_batch
         ),
@@ -345,8 +347,8 @@ def collect_stems_by_specs(config: Config) -> list[DocumentImportId]:
 async def aggregate_inference_results(
     document_ids: None | list[DocumentImportId] = None,
     config: Config | None = None,
-    max_concurrent_tasks: int = 10,
-    batch_size: int = 10,
+    max_concurrent_tasks: int = 20,
+    batch_size: int = 5,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
