@@ -8,6 +8,12 @@ are present in a Vespa database. It compares the number of passages in S3 with t
 in Vespa and generates a report of any discrepancies.
 
 See an example run command below:
+
+Set your environment variables for VESPA_INSTANCE_URL and authenticate your AWS CLI
+before running the script. If providing the `vespa_cert_directory` argument,
+ensure it points to the directory containing your Vespa certificates. These must be
+named key.pem and cert.pem.
+
 python -m scripts.audit.do_s3_prefix_docs_have_passages_in_vespa
     "cpr-staging-data-pipeline-cache"
     "indexer_input"
@@ -19,6 +25,7 @@ python -m scripts.audit.do_s3_prefix_docs_have_passages_in_vespa
 
 import asyncio
 import os
+import time
 from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
@@ -151,11 +158,20 @@ async def check_passages(
     authenticated against.
     """
 
+    typer.echo(
+        f"Running with the following parameters:\n"
+        f"Bucket Name: {bucket_name}\n"
+        f"S3 Prefix: {s3_prefix}\n"
+        f"Vespa Cert Directory: {vespa_cert_directory}\n"
+        f"Report File Path: {report_file_path}\n"
+        f"Max Concurrent Tasks: {max_concurrent_tasks}\n"
+        f"Batch Size: {batch_size}\n"
+    )
+
     vespa = VespaSearchAdapter(
         instance_url=VESPA_INSTANCE_URL, cert_directory=vespa_cert_directory
     )
     async with vespa.client.asyncio() as vespa_connection_pool:
-        typer.echo(f"Getting document ids from {bucket_name}/{s3_prefix}")
         file_names: list[str] = collect_file_names(bucket_name, s3_prefix)
         document_ids: set[DocumentImportId] = set(
             DocumentImportId(Path(file).stem)
@@ -167,6 +183,7 @@ async def check_passages(
         batches = iterate_batch(list(document_ids), batch_size=batch_size)
 
         for i, batch in enumerate(batches):
+            start_time = time.time()
             typer.echo(
                 f"Checking s3 against state in vespa for each document id in batch {i}..."
             )
@@ -214,6 +231,11 @@ async def check_passages(
                 Path(report_file_path).with_name(stem_root + f"_batch_{i}"), index=False
             )
             typer.echo(f"Results written to {report_file_path}")
+            elapsed_time = time.time() - start_time
+            typer.echo(
+                f"Batch {i} completed in {elapsed_time:.2f} seconds. "
+                f"Processed {len(batch)} documents."
+            )
 
 
 if __name__ == "__main__":
