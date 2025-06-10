@@ -12,9 +12,8 @@ from vespa.application import VespaAsync
 
 from flows.boundary import TextBlockId, get_document_passages_from_vespa__generator
 from flows.index_from_aggregate_results import load_json_data_from_s3
-from flows.utils import DocumentImportId
+from flows.utils import DocumentImportId, wait_for_semaphore
 from scripts.audit.do_classifier_specs_have_results import collect_file_names
-from scripts.cloud import AwsEnv
 
 app = typer.Typer()
 
@@ -100,11 +99,6 @@ def coro(f):
 @app.command()
 @coro
 async def check_s3_prefix_documents_match_vespa(
-    aws_env: AwsEnv = typer.Argument(
-        help="Which aws environment to look for results in. Determines which spec file"
-        "to use",
-        default=AwsEnv.sandbox,
-    ),
     bucket_name: str = typer.Argument(
         help=(
             "Name of the s3 bucket, should be the root without protocol or prefix"
@@ -119,13 +113,19 @@ async def check_s3_prefix_documents_match_vespa(
         help="Directory containing Vespa certificates for secure connection",
     ),
 ) -> None:
-    """Compare documents in an s3 prefix against the relating data in the vespa database."""
+    """
+    Compare documents in an s3 prefix against the relating data in the vespa database.
+
+    The environent to run against (prod, sandbox, etc.) is determined by the vespa
+    instance url that is set as well as the aws environment that your terminal is
+    authenticated against.
+    """
 
     vespa = VespaSearchAdapter(
         instance_url=VESPA_INSTANCE_URL, cert_directory=vespa_cert_directory
     )
     async with vespa.client.asyncio() as vespa_connection_pool:
-        typer.echo(f"Getting document ids from {aws_env} {bucket_name}/{s3_prefix}")
+        typer.echo(f"Getting document ids from {bucket_name}/{s3_prefix}")
         file_names: list[str] = collect_file_names(bucket_name, s3_prefix)
         document_ids: set[DocumentImportId] = set(
             DocumentImportId(Path(file).stem)
@@ -136,24 +136,39 @@ async def check_s3_prefix_documents_match_vespa(
 
         typer.echo("Checking s3 against state in vespa for each document id...")
         missing_passage_documents = []
-        for document_id in document_ids:
-            result = await check_document_passages(
-                document_id=document_id,
-                bucket_name=bucket_name,
-                s3_prefix=s3_prefix,
-                vespa_connection_pool=vespa_connection_pool,
+
+        # TODO: Add as a param with default
+        semaphore = asyncio.Semaphore(50)
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                check_document_passages(
+                    document_id=document_id,
+                    bucket_name=bucket_name,
+                    s3_prefix=s3_prefix,
+                    vespa_connection_pool=vespa_connection_pool,
+                ),
             )
+            for document_id in document_ids
+        ]
+        results: list[Result | BaseException] = await asyncio.gather(
+            *tasks, return_exceptions=True
+        )
+        for result in results:
+            if isinstance(result, BaseException):
+                typer.echo(f"Error processing document: {result}")
+                continue
             if result.passages_mismatch:
                 typer.echo(
-                    f"Document {document_id} has a mismatch: "
+                    f"Document {result.document_id} has a mismatch: "
                     f"{result.passages_count_in_s3} passages in S3, "
                     f"{result.passages_count_in_vespa} passages in Vespa."
                 )
                 missing_passage_documents.append(result)
-
         typer.echo(
-            f"Found {len(missing_passage_documents)} documents with no passages in Vespa."
+            f"Found {len(missing_passage_documents)} documents with mismatching passages."
         )
+
         # Convert results to DataFrame
         missing_df = pd.DataFrame(
             [
