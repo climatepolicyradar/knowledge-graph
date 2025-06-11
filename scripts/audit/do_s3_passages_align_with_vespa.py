@@ -1,5 +1,5 @@
 """
-Do Pasages for Documents in S3 Match Passages in Vespa
+Do Passages for Documents in S3 Match Passages in Vespa
 
 =================================================
 
@@ -39,9 +39,7 @@ from tenacity import Retrying, stop_after_attempt
 from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
-from flows.boundary import (
-    DocumentStem,
-)
+from flows.boundary import DocumentStem
 from flows.index_from_aggregate_results import load_json_data_from_s3
 from flows.utils import (
     DocumentImportId,
@@ -147,11 +145,12 @@ def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId
         "children",
     )
 
-    vespa_passage_counts: dict[DocumentImportId, int] = {
-        DocumentImportId(hit["value"]): hit["fields"]["count()"]
-        for hit in vespa_group_hits
-        if hit["value"] != ""
-    }
+    vespa_passage_counts: dict[DocumentImportId, int] = {}
+    for hit in vespa_group_hits:
+        if hit["value"] != "":
+            document_id = DocumentImportId(hit["value"])
+            count = hit["fields"]["count()"]
+            vespa_passage_counts[document_id] = count
 
     return vespa_passage_counts
 
