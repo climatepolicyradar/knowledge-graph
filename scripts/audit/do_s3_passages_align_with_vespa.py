@@ -7,31 +7,36 @@ A script to check whether the passages for documents in a given S3 prefix
 are present in a Vespa database. It compares the number of passages in S3 with those
 in Vespa and generates a report of any discrepancies.
 
+We retrieve all the passage counts relating to document ids in vespa via a query,
+we then identify the passage count in each s3 object relating to the document and create
+a result after comparing the two.
+
 Set your environment variables for VESPA_INSTANCE_URL and authenticate your AWS CLI
 before running the script. If providing the `vespa_cert_directory` argument,
 ensure it points to the directory containing your Vespa certificates. These must be
 named key.pem and cert.pem.
 
-python -m scripts.audit.do_s3_prefix_docs_have_passages_in_vespa 
+python -m scripts.audit.do_s3_passages_align_with_vespa
    "cpr-staging-data-pipeline-cache" \
    "indexer_input" \
    "~./.vespa/climate-policy-radar.navigator_dev.default"
 """
 
-import asyncio
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from functools import wraps
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import typer
+import vespa.querybuilder as qb
 from cpr_sdk.parser_models import ParserOutput
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.utils import dig
+from vespa.package import Document, Schema
+from vespa.querybuilder import Grouping as G
 
 from flows.boundary import (
     DocumentStem,
@@ -89,16 +94,6 @@ def check_document_passages(
         s3_passages_count: int = document_passages_in_s3(
             bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, document_file_name)
         )
-
-        vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
-
-        return Result(
-            document_id=document_id,
-            document_file_name=document_file_name,
-            passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
-            passages_count_in_vespa=vespa_passage_count_for_document,
-            passages_count_in_s3=s3_passages_count,
-        )
     except Exception as e:
         typer.echo(
             f"Failed to load document {document_id} from S3: {e}. "
@@ -113,6 +108,16 @@ def check_document_passages(
             failed_to_load=True,
         )
 
+    vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
+
+    return Result(
+        document_id=document_id,
+        document_file_name=document_file_name,
+        passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
+        passages_count_in_vespa=vespa_passage_count_for_document,
+        passages_count_in_s3=s3_passages_count,
+    )
+
 
 def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId, int]:
     """
@@ -122,13 +127,19 @@ def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId
     grouping.
     """
 
-    # TODO: Update to the vespa query builder
-    vespa_query_response = vespa.client.query(
-        yql=(
-            "select * from document_passage where true limit 0 "
-            "| all(group(document_import_id) each(output(count())))"
+    grouping = G.all(G.group("document_import_id"), G.each(G.output(G.count())))
+
+    query: qb.Query = (
+        qb.select("*")  # pyright: ignore[reportAttributeAccessIssue]
+        .from_(
+            Schema(name="document_passage", document=Document()),
         )
+        .where(True)
+        .set_limit(0)
+        .group_by(grouping)
     )
+
+    vespa_query_response = vespa.client.query(yql=query)
 
     vespa_group_hits: list[dict[str, Any]] = dig(
         vespa_query_response.get_json(),
@@ -149,18 +160,8 @@ def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId
     return vespa_passage_counts
 
 
-def coro(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(f(*args, **kwargs))
-
-    return wrapper
-
-
 @app.command()
-@coro
-async def check_passages(
+def check_passages(
     bucket_name: str = typer.Argument(
         help=(
             "Name of the s3 bucket, should be the root without protocol or prefix"
@@ -228,7 +229,7 @@ async def check_passages(
         if file.endswith(".json")
     )
     typer.echo(
-        f"Constructed {len(s3_document_ids)} document ids from {len(s3_file_names)} file names."
+        f"Constructed {len(s3_document_ids)} doc ids from {len(s3_file_names)} file names."
     )
 
     missing_passage_documents = []
@@ -269,7 +270,8 @@ async def check_passages(
     elapsed_time = time.time() - start_time
     typer.echo(
         f"Completed in {elapsed_time:.2f} seconds. "
-        f"Found {len(missing_passage_documents)} documents with mismatched passages or failed to load."
+        f"Found {len(missing_passage_documents)} documents with mismatched passages "
+        "or that failed to load."
     )
 
 
