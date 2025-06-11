@@ -35,6 +35,7 @@ import vespa.querybuilder as qb
 from cpr_sdk.parser_models import ParserOutput
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.utils import dig
+from tenacity import Retrying, stop_after_attempt
 from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
@@ -89,24 +90,22 @@ def check_document_passages(
 
     document_id: DocumentImportId = document[0]
     document_file_name: str = document[1]
+    failed_to_load: bool = False
+    s3_passages_count: int = 0
 
     try:
-        s3_passages_count: int = document_passages_in_s3(
-            bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, document_file_name)
-        )
+        for attempt in Retrying(stop=stop_after_attempt(3)):
+            with attempt:
+                s3_passages_count: int = document_passages_in_s3(
+                    bucket_name=bucket_name,
+                    s3_key=os.path.join(s3_prefix, document_file_name),
+                )
     except Exception as e:
         typer.echo(
             f"Failed to load document {document_id} from S3: {e}. "
             f"Skipping this document."
         )
-        return Result(
-            document_id=document_id,
-            document_file_name=document_file_name,
-            passages_mismatch=False,
-            passages_count_in_vespa=0,
-            passages_count_in_s3=0,
-            failed_to_load=True,
-        )
+        failed_to_load = True
 
     vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
 
@@ -116,6 +115,7 @@ def check_document_passages(
         passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
         passages_count_in_vespa=vespa_passage_count_for_document,
         passages_count_in_s3=s3_passages_count,
+        failed_to_load=failed_to_load,
     )
 
 
@@ -136,7 +136,7 @@ def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId
         )
         .where(True)
         .set_limit(0)
-        .group_by(grouping)
+        .groupby(grouping)
     )
 
     vespa_query_response = vespa.client.query(yql=query)
@@ -226,7 +226,6 @@ def check_passages(
             file,
         )
         for file in s3_file_names
-        if file.endswith(".json")
     )
     typer.echo(
         f"Constructed {len(s3_document_ids)} doc ids from {len(s3_file_names)} file names."
