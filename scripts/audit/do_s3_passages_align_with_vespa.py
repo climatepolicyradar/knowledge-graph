@@ -81,44 +81,41 @@ def document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
 
 
 def check_document_passages(
-    document: tuple[DocumentImportId, str],
+    document_id: DocumentImportId,
+    document_file_name: str,
     bucket_name: str,
     s3_prefix: str,
     vespa_passage_counts: dict[DocumentImportId, int],
 ) -> Result:
-    """Check if the number of passages in S3 matches those in Vespa for a document."""
+    """Check if the number of passages in S3 matches those in Vespa."""
 
-    document_id: DocumentImportId = document[0]
-    document_file_name: str = document[1]
     failed_to_load: bool = False
-    s3_passages_count: int = 0
+    s3_passage_count: int = 0
 
     try:
         for attempt in Retrying(stop=stop_after_attempt(3)):
             with attempt:
-                s3_passages_count: int = document_passages_in_s3(
+                s3_passage_count: int = document_passages_in_s3(
                     bucket_name=bucket_name,
                     s3_key=os.path.join(s3_prefix, document_file_name),
                 )
     except Exception as e:
-        typer.echo(
-            f"Failed to load document {document_id} from S3: {e}. "
-            f"Skipping this document."
-        )
+        typer.echo(f"Failed to load document {document_id} from S3: {e}.")
         failed_to_load = True
 
-    vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
+    vespa_passage_count: int = vespa_passage_counts.get(document_id, 0)
 
     return Result(
         document_id=document_id,
         document_file_name=document_file_name,
-        passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
-        passages_count_in_vespa=vespa_passage_count_for_document,
-        passages_count_in_s3=s3_passages_count,
+        passages_mismatch=(vespa_passage_count != s3_passage_count),
+        passages_count_in_vespa=vespa_passage_count,
+        passages_count_in_s3=s3_passage_count,
         failed_to_load=failed_to_load,
     )
 
 
+# TODO: Add a test for this function
 def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId, int]:
     """
     Get the number of passages for each document in Vespa.
@@ -202,7 +199,6 @@ def check_passages(
         f"Vespa Cert Directory: {vespa_cert_directory}\n"
         f"Report File Path: {report_file_path}\n"
         f"Max workers: {max_workers}\n"
-        f"Start Time: {start_time}\n"
     )
 
     typer.echo("Retrieving passage counts from vespa...")
@@ -239,12 +235,13 @@ def check_passages(
         futures = {
             executor.submit(
                 check_document_passages,
-                document,
+                document_id,
+                document_file_name,
                 bucket_name,
                 s3_prefix,
                 vespa_passage_counts,
-            ): document
-            for document in s3_document_ids
+            ): document_id
+            for document_id, document_file_name in s3_document_ids
         }
 
         for future in as_completed(futures.keys()):
