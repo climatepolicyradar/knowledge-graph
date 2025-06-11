@@ -230,8 +230,11 @@ def check_passages(
     typer.echo(
         f"Constructed {len(s3_document_ids)} doc ids from {len(s3_file_names)} file names."
     )
-
     missing_passage_documents = []
+    total_documents = len(s3_document_ids)
+    completed = 0
+
+    typer.echo(f"Checking passages for {len(s3_document_ids)} documents...")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
@@ -245,9 +248,17 @@ def check_passages(
         }
 
         for future in as_completed(futures.keys()):
+            completed += 1
+            if completed % 100 == 0 or completed == total_documents:
+                typer.echo(
+                    f"Progress: {completed}/{total_documents} documents checked "
+                    f"({(completed / total_documents) * 100:.1f}%)"
+                )
+
             result = future.result()
             if result.passages_mismatch or result.failed_to_load:
                 missing_passage_documents.append(result)
+    typer.echo(f"Completed checking all {total_documents} documents.")
 
     typer.echo("Writing results to CSV...")
     missing_df = pd.DataFrame(
