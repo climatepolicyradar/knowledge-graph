@@ -14,9 +14,8 @@ from prefect.client.schemas.responses import DeploymentResponse
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
-from flows.index import index_labelled_passages_from_s3_to_vespa
 from flows.inference import classifier_inference
-from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
+from scripts.cloud import PROJECT_NAME, AwsEnv
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -215,20 +214,6 @@ async def main() -> None:
         enabled=False,
         aws_env=aws_env,
         ignore=[AwsEnv.labs],
-    )
-
-    await a_triggers_b(
-        a_flow_name=classifier_inference.name,
-        a_deployment_name=generate_deployment_name(classifier_inference.name, aws_env),
-        b_flow_name=index_labelled_passages_from_s3_to_vespa.name,
-        b_deployment_name=generate_deployment_name(
-            index_labelled_passages_from_s3_to_vespa.name, aws_env
-        ),
-        b_parameters={},
-        enabled=False,
-        description="Start concept store indexing with classifiers.",
-        aws_env=aws_env,
-        ignore=[],
     )
 
 

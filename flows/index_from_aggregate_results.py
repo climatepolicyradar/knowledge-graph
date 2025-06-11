@@ -113,9 +113,8 @@ async def create_aggregate_indexing_summary_artifact(
 - **Failed Batches**: {failed_document_batches_count}
 """
 
-    # Create classifier details table
-    create_markdown_artifact(
-        key="Aggregate Indexing Summary",
+    await create_markdown_artifact(
+        key=f"indexing-aggregate-results-summary-{config.aws_env.value}",
         description="Summary of the passages indexing run to update concept counts.",
         markdown=indexing_report,
     )
@@ -290,7 +289,7 @@ async def index_family_document(
     return Ok(None)
 
 
-async def create_indexing_summary_artifact(
+async def create_indexing_batch_summary_artifact(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
     documents_stems: list[DocumentStem],
@@ -486,7 +485,7 @@ async def index_aggregate_results_for_batch_of_documents(
                     case Err(errors):
                         errors_per_document[document_stem] = errors
 
-    await create_indexing_summary_artifact(
+    await create_indexing_batch_summary_artifact(
         config=config,
         run_output_identifier=run_output_identifier,
         documents_stems=document_stems,
