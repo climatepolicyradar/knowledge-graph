@@ -52,7 +52,7 @@ from scripts.audit.do_classifier_specs_have_results import collect_file_names
 app = typer.Typer()
 
 
-VESPA_INSTANCE_URL = os.environ["VESPA_INSTANCE_URL"]
+VESPA_INSTANCE_URL = os.environ.get("VESPA_INSTANCE_URL", None)
 
 
 @dataclass
@@ -115,7 +115,6 @@ def check_document_passages(
     )
 
 
-# TODO: Add a test for this function
 def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId, int]:
     """
     Get the number of passages for each document in Vespa.
@@ -189,6 +188,12 @@ def check_passages(
     instance url that is set as well as the aws environment that your terminal is
     authenticated against.
     """
+
+    if not VESPA_INSTANCE_URL:
+        typer.echo(
+            "Please set the VESPA_INSTANCE_URL environment variable to the Vespa instance URL."
+        )
+        raise typer.Exit(code=1)
 
     start_time = time.time()
 
