@@ -59,6 +59,7 @@ class Result:
     passages_mismatch: bool
     passages_count_in_vespa: int
     passages_count_in_s3: int
+    failed_to_load: bool = False
 
 
 def document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
@@ -85,20 +86,34 @@ def check_document_passages(
     document_id: DocumentImportId = document[0]
     document_file_name: str = document[1]
 
-    s3_passages_count: int = document_passages_in_s3(
-        bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, document_file_name)
-    )
+    try:
+        s3_passages_count: int = document_passages_in_s3(
+            bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, document_file_name)
+        )
 
-    # TODO: Think whether default is right here.
-    vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
+        # TODO: Think whether default is right here.
+        vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
 
-    return Result(
-        document_id=document_id,
-        document_file_name=document_file_name,
-        passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
-        passages_count_in_vespa=vespa_passage_count_for_document,
-        passages_count_in_s3=s3_passages_count,
-    )
+        return Result(
+            document_id=document_id,
+            document_file_name=document_file_name,
+            passages_mismatch=(vespa_passage_count_for_document != s3_passages_count),
+            passages_count_in_vespa=vespa_passage_count_for_document,
+            passages_count_in_s3=s3_passages_count,
+        )
+    except Exception as e:
+        typer.echo(
+            f"Failed to load document {document_id} from S3: {e}. "
+            f"Skipping this document."
+        )
+        return Result(
+            document_id=document_id,
+            document_file_name=document_file_name,
+            passages_mismatch=False,
+            passages_count_in_vespa=0,
+            passages_count_in_s3=0,
+            failed_to_load=True,
+        )
 
 
 def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId, int]:
@@ -254,7 +269,7 @@ async def check_passages(
 
         for future in as_completed(futures.keys()):
             result = future.result()
-            if result.passages_mismatch:
+            if result.passages_mismatch or result.failed_to_load:
                 missing_passage_documents.append(result)
 
     typer.echo("Writing results to CSV...")
@@ -266,6 +281,7 @@ async def check_passages(
                 "passages_count_in_s3": result.passages_count_in_s3,
                 "passages_count_in_vespa": result.passages_count_in_vespa,
                 "passages_mismatch": result.passages_mismatch,
+                "failed_to_load": result.failed_to_load,
             }
             for result in missing_passage_documents
         ]
@@ -276,7 +292,7 @@ async def check_passages(
     elapsed_time = time.time() - start_time
     typer.echo(
         f"Completed in {elapsed_time:.2f} seconds. "
-        f"Found {len(missing_passage_documents)} documents with mismatched passages."
+        f"Found {len(missing_passage_documents)} documents with mismatched passages or failed to load."
     )
 
 
