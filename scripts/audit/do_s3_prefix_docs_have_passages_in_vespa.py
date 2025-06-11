@@ -19,7 +19,6 @@ python -m scripts.audit.do_s3_prefix_docs_have_passages_in_vespa
 """
 
 import asyncio
-import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -76,7 +75,7 @@ def document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
 
 
 def check_document_passages(
-    document: tuple[DocumentImportId, DocumentStem],
+    document: tuple[DocumentImportId, str],
     bucket_name: str,
     s3_prefix: str,
     vespa_passage_counts: dict[DocumentImportId, int],
@@ -91,7 +90,6 @@ def check_document_passages(
             bucket_name=bucket_name, s3_key=os.path.join(s3_prefix, document_file_name)
         )
 
-        # TODO: Think whether default is right here.
         vespa_passage_count_for_document: int = vespa_passage_counts.get(document_id, 0)
 
         return Result(
@@ -233,27 +231,6 @@ async def check_passages(
         f"Constructed {len(s3_document_ids)} document ids from {len(s3_file_names)} file names."
     )
 
-    s3_document_ids_not_in_vespa = []
-    s3_document_ids_in_vespa = []
-    for doc_id, doc_file_name in s3_document_ids:
-        if doc_id in vespa_passage_counts:
-            s3_document_ids_in_vespa.append((doc_id, doc_file_name))
-        else:
-            s3_document_ids_not_in_vespa.append((doc_id, doc_file_name))
-
-    if s3_document_ids_not_in_vespa:
-        typer.echo(
-            f"Found {len(s3_document_ids_not_in_vespa)} document ids in s3 prefix "
-            f"{s3_prefix} that are not in Vespa. These will be skipped."
-        )
-        missing_in_vespa_data = [
-            {"document_id": str(doc_id), "document_file_name": doc_file_name}
-            for doc_id, doc_file_name in s3_document_ids_not_in_vespa
-        ]
-        # TODO: Make name comfigurable or add to report
-        with open("missing_in_vespa.json", "w") as f:
-            json.dump(missing_in_vespa_data, f, indent=2)
-
     missing_passage_documents = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
@@ -264,7 +241,7 @@ async def check_passages(
                 s3_prefix,
                 vespa_passage_counts,
             ): document
-            for document in s3_document_ids_in_vespa
+            for document in s3_document_ids
         }
 
         for future in as_completed(futures.keys()):
