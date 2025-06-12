@@ -176,7 +176,7 @@ def check_passages(
     ),
     max_workers: int = typer.Argument(
         default=10,
-        help="Maximum number of concurrent tasks to run",
+        help="The maximum number of threads that can be used",
     ),
 ) -> None:
     """
