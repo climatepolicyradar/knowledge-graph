@@ -4,11 +4,12 @@ Do Passages for Documents in S3 Match Passages in Vespa
 =================================================
 
 A script to check whether the passages for documents in a given S3 prefix
-are present in a Vespa database. It compares the number of passages in S3 with those
+are present in a Vespa database. The default S3 prefix is the "indexer_input".
+It compares the number of passages in S3 with those
 in Vespa and generates a report of any discrepancies.
 
-We retrieve all the passage counts relating to document ids in vespa via a query,
-we then identify the passage count in each s3 object relating to the document and create
+We retrieve all the passage counts relating to document IDs in Vespa via a query,
+we then identify the passage count in each S3 object relating to the document and create
 a result after comparing the two.
 
 Set your environment variables for VESPA_INSTANCE_URL and authenticate your AWS CLI
@@ -16,10 +17,8 @@ before running the script. If providing the `vespa_cert_directory` argument,
 ensure it points to the directory containing your Vespa certificates. These must be
 named key.pem and cert.pem.
 
-python -m scripts.audit.do_s3_passages_align_with_vespa
-   "cpr-staging-data-pipeline-cache" \
-   "indexer_input" \
-   "~./.vespa/climate-policy-radar.navigator_dev.default"
+just audit-s3-vespa-alignment cpr-staging-data-pipeline-cache indexer_input
+    "~./.vespa/climate-policy-radar.navigator_dev.default"
 """
 
 import os
@@ -62,10 +61,10 @@ class Result:
     passages_mismatch: bool
     passages_count_in_vespa: int
     passages_count_in_s3: int
-    failed_to_load: bool = False
+    failed: bool = False
 
 
-def document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
+def count_document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
     """Check how many passages we have in s3 relating to a document id."""
 
     data = load_json_data_from_s3(
@@ -87,19 +86,19 @@ def check_document_passages(
 ) -> Result:
     """Check if the number of passages in S3 matches those in Vespa."""
 
-    failed_to_load: bool = False
+    failed: bool = False
     s3_passage_count: int = 0
 
     try:
         for attempt in Retrying(stop=stop_after_attempt(3)):
             with attempt:
-                s3_passage_count: int = document_passages_in_s3(
+                s3_passage_count: int = count_document_passages_in_s3(
                     bucket_name=bucket_name,
                     s3_key=os.path.join(s3_prefix, document_file_name),
                 )
     except Exception as e:
         typer.echo(f"Failed to load document {document_id} from S3: {e}.")
-        failed_to_load = True
+        failed = True
 
     vespa_passage_count: int = vespa_passage_counts.get(document_id, 0)
 
@@ -109,7 +108,7 @@ def check_document_passages(
         passages_mismatch=(vespa_passage_count != s3_passage_count),
         passages_count_in_vespa=vespa_passage_count,
         passages_count_in_s3=s3_passage_count,
-        failed_to_load=failed_to_load,
+        failed=failed,
     )
 
 
@@ -177,13 +176,13 @@ def check_passages(
     ),
     max_workers: int = typer.Argument(
         default=10,
-        help="MMaximum number of concurrent tasks to run",
+        help="Maximum number of concurrent tasks to run",
     ),
 ) -> None:
     """
     Compare documents in an s3 prefix against the relating data in the vespa database.
 
-    The environent to run against (prod, sandbox, etc.) is determined by the vespa
+    The environment to run against (prod, sandbox, etc.) is determined by the vespa
     instance url that is set as well as the aws environment that your terminal is
     authenticated against.
     """
@@ -257,7 +256,7 @@ def check_passages(
                 )
 
             result = future.result()
-            if result.passages_mismatch or result.failed_to_load:
+            if result.passages_mismatch or result.failed:
                 missing_passage_documents.append(result)
     typer.echo(f"Completed checking all {total_documents} documents.")
 
@@ -270,7 +269,7 @@ def check_passages(
                 "passages_count_in_s3": result.passages_count_in_s3,
                 "passages_count_in_vespa": result.passages_count_in_vespa,
                 "passages_mismatch": result.passages_mismatch,
-                "failed_to_load": result.failed_to_load,
+                "failed": result.failed,
             }
             for result in missing_passage_documents
         ]
@@ -282,7 +281,7 @@ def check_passages(
     typer.echo(
         f"Completed in {elapsed_time:.2f} seconds. "
         f"Found {len(missing_passage_documents)} documents with mismatched passages "
-        "or that failed to load."
+        "or that failed."
     )
 
 
