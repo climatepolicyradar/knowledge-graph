@@ -182,3 +182,6 @@ tests/local_wikibase/config/*
 
 # The query profile location once copied into the application package
 tests/local_vespa/test_app/search/query-profiles/lower_max_hits.xml
+
+# Output report created by the scripts/audit/do_s3_passages_align_with_vespa.py audit script
+missing_passages.csv
