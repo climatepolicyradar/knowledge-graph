@@ -18,7 +18,7 @@ from flows.aggregate_inference_results import (
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
-    process_single_document,
+    process_document,
     validate_passages_are_same_except_concepts,
 )
 from flows.utils import DocumentImportId
@@ -203,9 +203,9 @@ async def test_process_single_document__success(
     document_id = "CCLW.executive.10061.4515"
 
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
-    assert document_id == await process_single_document(
-        session,
+    assert document_id == await process_document.fn(
         document_id,
+        session,
         classifier_specs,
         test_aggregate_config,
         "run_output_identifier",
@@ -245,9 +245,9 @@ async def test_process_single_document__client_error(
 
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
-        process_single_document(
-            session,
+        process_document.fn(
             document_id,
+            session,
             classifier_specs,
             test_aggregate_config,
             "run_output_identifier",
@@ -285,9 +285,9 @@ async def test_process_single_document__value_error(
 
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
-        process_single_document.fn(
-            session,
+        process_document.fn(
             document_id,
+            session,
             classifier_specs,
             test_aggregate_config,
             "run_output_identifier",

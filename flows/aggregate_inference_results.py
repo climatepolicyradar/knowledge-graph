@@ -1,9 +1,9 @@
-import asyncio
 import json
 import os
+from collections.abc import AsyncGenerator, Sequence
 from dataclasses import asdict, dataclass
 from functools import partial
-from typing import Any, AsyncGenerator, Sequence, TypeAlias
+from typing import Any, TypeAlias
 
 import aioboto3
 import prefect.tasks as tasks
@@ -12,7 +12,8 @@ from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
-from prefect.task_runners import ConcurrentTaskRunner
+from prefect.task_runners import ThreadPoolTaskRunner
+from prefect.utilities.names import generate_slug
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -27,8 +28,6 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
-    iterate_batch,
-    wait_for_semaphore,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -182,12 +181,21 @@ def task_input_hash(
     )
 
 
+def task_run_name(parameters: dict[str, Any]) -> str:
+    document_id = parameters.get("document_id", "unknown")
+    slug = generate_slug(2)
+    return f"aggregate-single-document-{document_id}-{slug}"
+
+
 @task(
     cache_key_fn=partial(task_input_hash, ["session"]),
+    task_run_name=task_run_name,
+    retries=1,
+    persist_result=False,
 )
-async def process_single_document(
-    session: aioboto3.Session,
+async def process_document(
     document_id: DocumentImportId,
+    session: aioboto3.Session,
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
@@ -269,44 +277,19 @@ async def process_single_document(
         raise AggregationFailure(document_id=document_id, exception=e, context=repr(e))
 
 
-@task()
-async def process_n_documents(
-    document_ids_batch: Sequence[DocumentImportId],
-    classifier_specs: list[ClassifierSpec],
-    config: Config,
-    run_output_identifier: RunOutputIdentifier,
-) -> list[DocumentImportId | AggregationFailure | BaseException]:
-    """Process a batch of documents."""
-    session = aioboto3.Session(region_name=config.bucket_region)
-    return await asyncio.gather(
-        *(
-            process_single_document(
-                session,
-                document_id,
-                classifier_specs,
-                config,
-                run_output_identifier,
-            )
-            for document_id in document_ids_batch
-        ),
-        return_exceptions=True,
-    )
-
-
 def handle_results(
-    batched_results: Sequence[Sequence[DocumentImportId | AggregationFailure]],
+    results: Sequence[DocumentImportId | AggregationFailure],
 ) -> tuple[list[DocumentImportId], list[AggregationFailure]]:
     success_ids: list[DocumentImportId] = []
     failures: list[AggregationFailure] = []
 
-    for batch in batched_results:
-        for result in batch:
-            if isinstance(result, AggregationFailure):
-                failures.append(result)
-            elif isinstance(result, str):
-                success_ids.append(DocumentImportId(result))
-            else:
-                raise ValueError(f"Unknown result type: {type(result)}")
+    for result in results:
+        if isinstance(result, AggregationFailure):
+            failures.append(result)
+        elif isinstance(result, str):
+            success_ids.append(DocumentImportId(result))
+        else:
+            raise ValueError(f"Unknown result type: {type(result)}")
 
     return success_ids, failures
 
@@ -363,13 +346,11 @@ def collect_stems_by_specs(config: Config) -> list[DocumentImportId]:
     on_crashed=[SlackNotify.message],
     timeout_seconds=None,
     log_prints=True,
-    task_runner=ConcurrentTaskRunner(),
+    task_runner=ThreadPoolTaskRunner(max_workers=20),
 )
 async def aggregate_inference_results(
     document_ids: None | list[DocumentImportId] = None,
     config: Config | None = None,
-    max_concurrent_tasks: int = 20,
-    batch_size: int = 5,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
@@ -391,25 +372,23 @@ async def aggregate_inference_results(
         f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )
 
-    semaphore = asyncio.Semaphore(max_concurrent_tasks)
+    session = aioboto3.Session(region_name=config.bucket_region)
 
-    # Create tasks for each document
-    tasks = [
-        wait_for_semaphore(
-            semaphore,
-            process_n_documents(
-                document_ids_batch,
-                classifier_specs,
-                config,
-                run_output_identifier,
-            ),
-        )
-        for document_ids_batch in iterate_batch(document_ids, batch_size=batch_size)
-    ]
+    futures = process_document.map(  # pyright: ignore[reportFunctionMemberAccess]
+        document_ids,
+        session=session,
+        classifier_specs=[classifier_specs] * len(document_ids),
+        config=config,
+        run_output_identifier=run_output_identifier,
+    )
 
-    batched_results = await asyncio.gather(*tasks)
-    success_ids, failures = handle_results(batched_results)
+    print("getting results")
+    results = futures.result(raise_on_failure=False)
 
+    print("handling results")
+    success_ids, failures = handle_results(results)
+
+    print("creating summary artifact")
     await create_aggregate_inference_summary_artifact(
         config=config,
         success_ids=success_ids,
