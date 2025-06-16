@@ -50,6 +50,7 @@ app = typer.Typer()
 
 
 VESPA_INSTANCE_URL = os.environ.get("VESPA_INSTANCE_URL", None)
+BLOCKS_FILTERED_IN_INDEXER = ["Table", "Figure"]
 
 
 @dataclass
@@ -64,8 +65,13 @@ class Result:
     failed: bool = False
 
 
-def count_document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
-    """Check how many passages we have in s3 relating to a document id."""
+def get_filtered_passage_count_from_s3(bucket_name: str, s3_key: str) -> int:
+    """
+    Check how many passages we have in s3 relating to a document id.
+
+    This document handles filtering of text blocks that we don't expect to be indexed
+    so that we can make a fair comparison with the Vespa database.
+    """
 
     data = load_json_data_from_s3(
         bucket=bucket_name,
@@ -74,7 +80,13 @@ def count_document_passages_in_s3(bucket_name: str, s3_key: str) -> int:
 
     parser_output = ParserOutput.model_validate(data)
 
-    return len(parser_output.text_blocks)
+    filtered_text_blocks = [
+        block
+        for block in parser_output.text_blocks
+        if block.type not in BLOCKS_FILTERED_IN_INDEXER
+    ]
+
+    return len(filtered_text_blocks)
 
 
 def check_document_passages(
@@ -92,7 +104,7 @@ def check_document_passages(
     try:
         for attempt in Retrying(stop=stop_after_attempt(3)):
             with attempt:
-                s3_passage_count: int = count_document_passages_in_s3(
+                s3_passage_count: int = get_filtered_passage_count_from_s3(
                     bucket_name=bucket_name,
                     s3_key=os.path.join(s3_prefix, document_file_name),
                 )
