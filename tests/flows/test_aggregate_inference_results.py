@@ -21,6 +21,7 @@ from flows.aggregate_inference_results import (
     process_single_document,
     validate_passages_are_same_except_concepts,
 )
+from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
 from scripts.update_classifier_spec import write_spec_file
 from src.labelled_passage import LabelledPassage
@@ -268,7 +269,7 @@ async def test_process_single_document__value_error(
     keys, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
 
-    document_id = "CCLW.executive.10061.4515"
+    document_id = DocumentImportId("CCLW.executive.10061.4515")
 
     # Replace the doc with a broken  one
     new_data = [
@@ -284,7 +285,7 @@ async def test_process_single_document__value_error(
 
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
-        process_single_document(
+        process_single_document.fn(
             session,
             document_id,
             classifier_specs,
