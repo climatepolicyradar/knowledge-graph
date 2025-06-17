@@ -18,7 +18,7 @@ ensure it points to the directory containing your Vespa certificates. These must
 named key.pem and cert.pem.
 
 just audit-s3-vespa-alignment cpr-staging-data-pipeline-cache indexer_input
-    "~./.vespa/climate-policy-radar.navigator_dev.default"
+    "~/.vespa/climate-policy-radar.navigator_dev.default"
 """
 
 import os
