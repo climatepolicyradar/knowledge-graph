@@ -124,7 +124,10 @@ def check_document_passages(
     )
 
 
-def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId, int]:
+def get_vespa_passage_counts(
+    vespa: VespaSearchAdapter,
+    grouping_precision: int = 100_000,
+) -> dict[DocumentImportId, int]:
     """
     Get the number of passages for each document in Vespa.
 
@@ -132,7 +135,11 @@ def get_vespa_passage_counts(vespa: VespaSearchAdapter) -> dict[DocumentImportId
     grouping.
     """
 
-    grouping = G.all(G.group("document_import_id"), G.each(G.output(G.count())))
+    grouping = G.all(
+        G.group("document_import_id"),
+        G.precision(grouping_precision),
+        G.each(G.output(G.count())),
+    )
 
     query: qb.Query = (
         qb.select("*")  # pyright: ignore[reportAttributeAccessIssue]
