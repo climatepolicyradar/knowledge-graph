@@ -304,7 +304,7 @@ async def test_run_classifier_inference_on_document(
 
     assert "Cannot run inference on" in str(exc_info.value)
 
-    # Run the function on a html document with has_valid_text=False
+    # Run the function on a HTML document with has_valid_text=False
     document_stem = "HTML.document.0.1"
     with patch("flows.inference.load_document") as mock_load_document:
         html_document_invalid_text = BaseParserOutput(
@@ -345,10 +345,8 @@ async def test_run_classifier_inference_on_document(
 
         assert result is None
 
-        # Assert that we did not store any labels
+        # Load the stored labels from s3
         expected_key = f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
-
-        # Verify the content of the stored labels
         s3 = boto3.client("s3", region_name=test_config.bucket_region)
         response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
         data = json.loads(response["Body"].read().decode("utf-8"))
