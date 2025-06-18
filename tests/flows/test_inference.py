@@ -1,12 +1,13 @@
 import json
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 from uuid import UUID
 
 import boto3
 import pytest
 from botocore.client import ClientError
-from cpr_sdk.parser_models import BlockType
+from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.testing.utilities import prefect_test_harness
 
@@ -291,11 +292,11 @@ async def test_run_classifier_inference_on_document(
     )
 
     # Run the function on a document with no language
-    document_id = Path(mock_bucket_documents[1]).stem
+    document_stem = Path(mock_bucket_documents[1]).stem
     with pytest.raises(ValueError) as exc_info:
         result = await run_classifier_inference_on_document(
             config=test_config,
-            file_stem=document_id,
+            file_stem=DocumentStem(document_stem),
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
             classifier=classifier,
@@ -303,11 +304,63 @@ async def test_run_classifier_inference_on_document(
 
     assert "Cannot run inference on" in str(exc_info.value)
 
+    # Run the function on a html document with has_valid_text=False
+    document_stem = "HTML.document.0.1"
+    with patch("flows.inference.load_document") as mock_load_document:
+        html_document_invalid_text = BaseParserOutput(
+            document_id=document_stem,
+            document_metadata={},
+            document_name="test document",
+            document_description="test description",
+            document_source_url=None,
+            document_cdn_object=None,
+            document_content_type="text/html",
+            document_md5_sum=None,
+            document_slug=document_stem,
+            languages=None,
+            translated=False,
+            html_data=HTMLData(
+                has_valid_text=False,
+                text_blocks=[
+                    HTMLTextBlock(
+                        text=["This is an invalid text block."],
+                        text_block_id="0",
+                        type=BlockType.TEXT,
+                    )
+                ],
+            ),
+            pdf_data=None,
+            pipeline_metadata={},
+        )
+
+        mock_load_document.return_value = html_document_invalid_text
+
+        result = await run_classifier_inference_on_document(
+            config=test_config,
+            file_stem=DocumentStem(document_stem),
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+            classifier=classifier,
+        )
+
+        assert result is None
+
+        # Assert that we did not store any labels
+        expected_key = f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
+
+        # Verify the content of the stored labels
+        s3 = boto3.client("s3", region_name=test_config.bucket_region)
+        response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
+        data = json.loads(response["Body"].read().decode("utf-8"))
+
+        # Verify we stored NO labels
+        assert len(data) == 0
+
     # Run the function on a document with english language
-    document_id = Path(mock_bucket_documents[0]).stem
+    document_stem = Path(mock_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
         config=test_config,
-        file_stem=document_id,
+        file_stem=DocumentStem(document_stem),
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
         classifier=classifier,
@@ -318,7 +371,7 @@ async def test_run_classifier_inference_on_document(
     # Verify that labels were stored in S3
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
     expected_key = (
-        f"labelled_passages/{classifier_name}/{classifier_alias}/{document_id}.json"
+        f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
     )
     assert expected_key in labels
 
