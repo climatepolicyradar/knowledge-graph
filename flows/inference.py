@@ -446,12 +446,17 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
-    # Handle documents with no text and no language
-    if (
+    # Don't run inference on documents that have no text or languages as well as html
+    # documents with no valid text.
+    no_text_and_no_languages: bool = (
         not document.languages
         and document.pdf_data is None
         and document.html_data is None
-    ):
+    )
+    html_and_invalid_text: bool = (
+        document.html_data is not None and not document.html_data.has_valid_text
+    )
+    if no_text_and_no_languages or html_and_invalid_text:
         store_labels(
             config=config,
             labels=[],
