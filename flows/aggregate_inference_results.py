@@ -2,9 +2,11 @@ import asyncio
 import json
 import os
 from dataclasses import asdict, dataclass
+from functools import partial
 from typing import Any, AsyncGenerator, Sequence, TypeAlias
 
 import aioboto3
+import prefect.tasks as tasks
 from botocore.exceptions import ClientError
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
@@ -163,7 +165,26 @@ def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) 
             )
 
 
-@task()
+def task_input_hash(
+    remove: Sequence[str],
+    context: tasks.TaskRunContext,
+    arguments: dict[str, Any],
+) -> str | None:
+    """
+    Remove arguments from a task's input.
+
+    Sometimes we don't want to, or can't, serialise them.
+    """
+
+    return tasks.task_input_hash(
+        context,
+        {k: v for k, v in arguments.items() if k not in remove},
+    )
+
+
+@task(
+    cache_key_fn=partial(task_input_hash, ["session"]),
+)
 async def process_single_document(
     session: aioboto3.Session,
     document_id: DocumentImportId,
