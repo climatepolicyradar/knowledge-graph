@@ -41,6 +41,7 @@ DocumentStem = NewType("DocumentStem", str)
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+ENGLISH_TRANSLATION_SUFFIX: str = "_translated_en"
 
 
 def file_name_from_path(path: str) -> str:
@@ -310,7 +311,7 @@ def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
 def is_file_stem_for_english_language_document(
     file_stem: DocumentStem,
     file_stems: list[DocumentStem],
-    english_translation_suffix: str = "_translated_en",
+    english_translation_suffix: str = ENGLISH_TRANSLATION_SUFFIX,
 ) -> bool:
     """
     Check if a file stem is in English language.
