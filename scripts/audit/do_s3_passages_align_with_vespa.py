@@ -26,12 +26,12 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pandas as pd
 import typer
 import vespa.querybuilder as qb
-from cpr_sdk.parser_models import ParserOutput
+from cpr_sdk.parser_models import BlockType, ParserOutput
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.utils import dig
 from tenacity import Retrying, stop_after_attempt
@@ -50,7 +50,10 @@ app = typer.Typer()
 
 
 VESPA_INSTANCE_URL = os.environ.get("VESPA_INSTANCE_URL", None)
-BLOCKS_FILTERED_IN_INDEXER = ["Table", "Figure"]
+BLOCKS_FILTERED_IN_INDEXER: Final[set[BlockType]] = {
+    BlockType.TABLE,
+    BlockType.FIGURE,
+}
 
 
 @dataclass
@@ -71,6 +74,8 @@ def get_filtered_passage_count_from_s3(bucket_name: str, s3_key: str) -> int:
 
     This document handles filtering of text blocks that we don't expect to be indexed
     so that we can make a fair comparison with the Vespa database.
+
+    This includes text blocks of a certain block type as well as invalid HTML documents.
     """
 
     data = load_json_data_from_s3(
@@ -79,6 +84,13 @@ def get_filtered_passage_count_from_s3(bucket_name: str, s3_key: str) -> int:
     )
 
     parser_output = ParserOutput.model_validate(data)
+
+    # We don't index html documents with no valid text into vespa.
+    if (
+        parser_output.html_data is not None
+        and not parser_output.html_data.has_valid_text
+    ):
+        return 0
 
     filtered_text_blocks = [
         block
