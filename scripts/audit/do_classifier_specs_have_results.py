@@ -34,10 +34,16 @@ class Result:
     file_names: list[str] = field(default_factory=list)
 
 
-def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
+def collect_file_names(
+    bucket_name: str, prefix: str, profile_name: str | None = None
+) -> list[str]:
     """Collect the names of all files under a given prefix in an s3 bucket."""
 
-    s3 = boto3.client("s3")
+    if profile_name:
+        session = boto3.Session(profile_name=profile_name)
+    else:
+        session = boto3.Session()
+    s3 = session.client("s3")
     paginator = s3.get_paginator("list_objects_v2")
     file_names = []
     for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
