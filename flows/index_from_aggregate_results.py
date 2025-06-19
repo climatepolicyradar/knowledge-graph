@@ -5,7 +5,7 @@ import tempfile
 from collections import Counter
 from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import Any, Final, TypeVar
+from typing import Any, Final
 
 import boto3
 import httpx
@@ -47,6 +47,7 @@ from flows.utils import (
     collect_unique_file_stems_under_prefix,
     iterate_batch,
     remove_translated_suffix,
+    return_with_id,
     wait_for_semaphore,
 )
 from scripts.cloud import AwsEnv
@@ -57,9 +58,6 @@ DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
 DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
 # How many document passages to index concurrently per document
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
-
-T = TypeVar("T")
-U = TypeVar("U")
 
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
@@ -496,17 +494,6 @@ async def index_aggregate_results_for_batch_of_documents(
         raise ValueError(
             f"Failed to process {len(errors_per_document)}/{len(document_stems)} documents"
         )
-
-
-async def return_with_id(
-    id: U,
-    fn: Awaitable[T | Exception],
-) -> tuple[U, T | Exception]:
-    try:
-        result = await fn
-        return (id, result)
-    except Exception as e:
-        return (id, e)
 
 
 @flow(

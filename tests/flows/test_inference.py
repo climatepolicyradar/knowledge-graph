@@ -25,6 +25,7 @@ from flows.inference import (
     load_classifier,
     load_document,
     remove_sabin_file_stems,
+    run_classifier_inference_on_batch_of_documents,
     run_classifier_inference_on_document,
     store_labels,
     text_block_inference,
@@ -483,3 +484,199 @@ def test_group_inference_results_into_states(snapshot):
             ),
         ]
     )
+
+
+@pytest.mark.asyncio
+async def test_run_classifier_inference_on_batch_of_documents(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    snapshot,
+):
+    """Test successful batch processing of documents."""
+    mock_wandb_init, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+
+    # Prepare test data - use only the PDF document which has languages field
+    batch = [Path(mock_bucket_documents[0]).stem]  # PDF.document.0.1 has languages
+    classifier_name = "Q788"
+    classifier_alias = "v7"
+    config_json = {
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
+    }
+
+    # Should not raise any exceptions for successful processing
+    await run_classifier_inference_on_batch_of_documents(
+        batch=batch,
+        config_json=config_json,
+        classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
+    )
+
+    # Verify W&B was initialized
+    mock_wandb_init.assert_called_once_with(
+        entity=test_config.wandb_entity,
+        job_type="concept_inference",
+    )
+
+    # Verify that a batch inference artifact was created
+    from prefect.client.orchestration import get_client
+
+    async with get_client() as client:
+        artifacts = await client.read_artifacts()
+        batch_artifacts = [a for a in artifacts if a.key and "batch-inference" in a.key]
+        assert len(batch_artifacts) > 0, (
+            "Expected at least one batch-inference artifact to be created"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        batch_artifacts.sort(key=lambda x: x.created, reverse=True)
+        artifact = batch_artifacts[0]  # Most recently created
+
+        assert artifact.description is not None, "Artifact should have a description"
+        assert hasattr(artifact, "data"), "Artifact should have data"
+
+        assert snapshot == artifact.data
+
+    # Verify that inference outputs were stored in S3
+    s3 = boto3.client("s3", region_name=test_config.bucket_region)
+    expected_key = (
+        f"labelled_passages/{classifier_name}/{classifier_alias}/{batch[0]}.json"
+    )
+
+    # Check that the S3 object exists
+    response = s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
+    assert response["ContentLength"] > 0, (
+        f"Expected S3 object {expected_key} to have content"
+    )
+
+    # Verify the content of the stored labels
+    response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
+    data = json.loads(response["Body"].read().decode("utf-8"))
+
+    # Verify we have at least one label for successful processing
+    assert len(data) > 0, "Expected at least one labelled passage"
+
+
+@pytest.mark.asyncio
+async def test_run_classifier_inference_on_batch_of_documents_with_failures(
+    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+):
+    """Test batch processing with some document failures."""
+    mock_wandb_init, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+
+    # Use non-existent document IDs to trigger failures
+    batch = ["NonExistent.doc.1", "AnotherMissing.doc.2"]
+    classifier_name = "Q788"
+    classifier_alias = "v8"
+    config_json = {
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
+    }
+
+    # Should raise ValueError due to failed documents
+    with pytest.raises(ValueError, match=r"Failed to process 2/2 documents"):
+        await run_classifier_inference_on_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
+
+    # Even with failures, an artifact should be created to track the failures
+    from prefect.client.orchestration import get_client
+
+    async with get_client() as client:
+        artifacts = await client.read_artifacts()
+        batch_artifacts = [a for a in artifacts if a.key and "batch-inference" in a.key]
+        assert len(batch_artifacts) > 0, (
+            "Expected artifact to be created even with failures"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        batch_artifacts.sort(key=lambda x: x.created, reverse=True)
+        artifact = batch_artifacts[0]  # Most recently created
+
+        assert artifact.description is not None, (
+            "Failure artifact should have a description"
+        )
+
+        # Verify failure artifact data using snapshot
+        assert snapshot == artifact.data
+
+    # For failed documents, no S3 files should be created since the documents don't exist
+    # The failure happens before store_labels is called
+    s3 = boto3.client("s3", region_name=test_config.bucket_region)
+
+    # Check that no labels were stored for the non-existent documents
+    for doc_stem in batch:
+        expected_key = (
+            f"labelled_passages/{classifier_name}/{classifier_alias}/{doc_stem}.json"
+        )
+        with pytest.raises(ClientError) as exc_info:
+            s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
+        assert exc_info.value.response["Error"]["Code"] == "404"
+
+
+@pytest.mark.asyncio
+async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
+    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+):
+    """Test batch processing with empty batch."""
+    mock_wandb_init, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+
+    batch = []
+    classifier_name = "Q788"
+    classifier_alias = "v12"
+    config_json = {
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
+    }
+
+    # Should complete successfully with empty batch
+    await run_classifier_inference_on_batch_of_documents(
+        batch=batch,
+        config_json=config_json,
+        classifier_name=classifier_name,
+        classifier_alias=classifier_alias,
+    )
+
+    # Verify W&B was still initialized
+    mock_wandb_init.assert_called_once()
+
+    # Verify artifact creation even for empty batch
+    from prefect.client.orchestration import get_client
+
+    async with get_client() as client:
+        artifacts = await client.read_artifacts()
+        batch_artifacts = [a for a in artifacts if a.key and "batch-inference" in a.key]
+        assert len(batch_artifacts) > 0, (
+            "Expected artifact to be created even for empty batch"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        batch_artifacts.sort(key=lambda x: x.created, reverse=True)
+        artifact = batch_artifacts[0]  # Most recently created
+
+        # Verify empty batch artifact data using snapshot
+        assert snapshot == artifact.data
+
+    # For empty batch, no S3 files should be created since there are no documents to process
+    # Since batch is empty, we don't need to check any specific files - there should be none created
