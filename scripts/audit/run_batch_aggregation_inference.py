@@ -53,7 +53,6 @@ async def run_all_async() -> None:
                     "batch_size": 5,
                     "document_ids": list(batch),
                     "config": None,
-                    "config": None,
                 },
                 # Rely on the flow's own timeout
                 timeout=None,
