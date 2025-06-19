@@ -1,7 +1,8 @@
 import asyncio
 from asyncio import gather
-from typing import Annotated
+from typing import Annotated, Optional
 
+import llm
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
@@ -59,8 +60,90 @@ Instructions:
 """
 
 
-class LLMClassifier(Classifier):
+class BaseLLMClassifier(Classifier):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
+
+    def __init__(
+        self,
+        concept: Concept,
+        model_name: Annotated[
+            str,
+            Field(
+                description=(
+                    "The name of the model to use. See https://ai.pydantic.dev/models/ "
+                    "for a list of available models and the necessary environment "
+                    "variables needed to run each."
+                ),
+            ),
+        ] = "gemini-1.5-flash-002",
+        system_prompt_template: Annotated[
+            str,
+            Field(
+                description=(
+                    "The unformatted system prompt for the LLM, with values in {}. "
+                    "Should be able to be populated with {concept_description} and "
+                    "{examples} parameters."
+                ),
+            ),
+        ] = DEFAULT_SYSTEM_PROMPT,
+        random_seed: Annotated[
+            Optional[int],
+            Field(
+                description=(
+                    "Random seed for the classifier. "
+                    "Used for reproducibility and the ability to spawn multiple "
+                    "distinguishable classifiers at the same time"
+                )
+            ),
+        ] = 42,
+    ):
+        super().__init__(concept)
+        self.concept = concept
+        self.model_name = model_name
+        self.system_prompt_template = system_prompt_template
+        self.random_seed = random_seed
+
+        assert "{concept_description}" in system_prompt_template, (
+            "System prompt must contain {concept_description}"
+        )
+
+        self.system_prompt = system_prompt_template.format(
+            concept_description=self.concept.to_markdown()
+        )
+
+    def __hash__(self) -> int:
+        """Overrides the default hash function, to enrich the hash with metadata"""
+
+        return deterministic_hash(
+            [
+                self.name,
+                self.concept.__hash__(),
+                self.version if self.version else None,
+                self.model_name,
+                self.system_prompt_template,
+                self.random_seed,
+            ]
+        )
+
+    def __repr__(self):
+        """Return a string representation of the classifier."""
+        return f'{self.name}("{self.concept.preferred_label}", model_name="{self.model_name}", id={self.id})'
+
+    def _validate_response(self, input_text: str, response: str) -> None:
+        """Make sure the output text does not augment the input text in unexpected ways"""
+        input_sanitised = LabelledPassage.sanitise(input_text)
+        output_sanitised = LabelledPassage.sanitise(
+            # remove the concept tags from the LLM output
+            response.replace("<concept>", "").replace("</concept>", "")
+        )
+        if input_sanitised != output_sanitised:
+            raise LLMOutputMismatchError(
+                input_text=input_sanitised, output_text=output_sanitised
+            )
+
+
+class LLMClassifier(BaseLLMClassifier):
+    """A classifier which uses a third-party LLM to identify concept mentions in text"""
 
     def __init__(
         self,
@@ -96,43 +179,17 @@ class LLMClassifier(Classifier):
             ),
         ] = 42,
     ):
-        super().__init__(concept)
-        self.concept = concept
-        self.model_name = model_name
-        self.system_prompt_template = system_prompt_template
-
-        assert "{concept_description}" in system_prompt_template, (
-            "System prompt must contain {concept_description}"
+        super().__init__(
+            concept=concept,
+            model_name=model_name,
+            system_prompt_template=system_prompt_template,
+            random_seed=random_seed,
         )
-
-        self.system_prompt = system_prompt_template.format(
-            concept_description=self.concept.to_markdown()
-        )
-
         self.agent = Agent(
             self.model_name,
             system_prompt=self.system_prompt,
             result_type=LLMResponse,
         )
-
-        self.random_seed = random_seed
-
-    def __hash__(self) -> int:
-        """Overrides the default hash function, to enrich the hash with metadata"""
-        return deterministic_hash(
-            [
-                self.name,
-                self.concept.__hash__(),
-                self.version if self.version else None,
-                self.model_name,
-                self.system_prompt_template,
-                self.random_seed,
-            ]
-        )
-
-    def __repr__(self):
-        """Return a string representation of the classifier."""
-        return f'{self.name}({self.concept.preferred_label}, model_name="{self.model_name}", id={self.id})'
 
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""
@@ -151,24 +208,12 @@ class LLMClassifier(Classifier):
             result_type=LLMResponse,
         )
 
-    def _validate_response(self, input_text: str, response: LLMResponse) -> None:
-        """Make sure the output text does not augment the input text in unexpected ways"""
-        input_sanitised = LabelledPassage.sanitise(input_text)
-        output_sanitised = LabelledPassage.sanitise(
-            # remove the concept tags from the LLM output
-            response.marked_up_text.replace("<concept>", "").replace("</concept>", "")
-        )
-        if input_sanitised != output_sanitised:
-            raise LLMOutputMismatchError(
-                input_text=input_sanitised, output_text=output_sanitised
-            )
-
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
         response: AgentRunResult[LLMResponse] = self.agent.run_sync(
             text, model_settings=ModelSettings(seed=self.random_seed)
         )
-        self._validate_response(input_text=text, response=response.data)
+        self._validate_response(input_text=text, response=response.data.marked_up_text)
         return Span.from_xml(
             xml=response.data.marked_up_text,
             concept_id=self.concept.wikibase_id,
@@ -208,7 +253,9 @@ class LLMClassifier(Classifier):
 
         for text, response in zip(texts, responses):
             try:
-                self._validate_response(input_text=text, response=response.data)
+                self._validate_response(
+                    input_text=text, response=response.data.marked_up_text
+                )
 
                 # str(self) includes the id now, as this is important in distinguishing between different instances
                 # of the same classifier + config, when comparing spans with each other
@@ -235,3 +282,72 @@ class LLMClassifier(Classifier):
                 batch_spans.append([])
 
         return batch_spans
+
+
+class LocalLLMClassifier(BaseLLMClassifier):
+    """
+    A classifier which uses a local LLM to identify concept mentions in text
+
+    Currently assumes that you're running on apple silicon,
+    via https://github.com/simonw/llm-mlx/
+    For the time being, this class is untested on other platforms!
+    """
+
+    def __init__(
+        self,
+        concept: Concept,
+        model_name: Annotated[
+            str,
+            Field(
+                description=(
+                    "The name of the model to use. "
+                    "See https://github.com/simonw/llm-mlx for a list of options."
+                ),
+            ),
+        ] = "mlx-community/Llama-3.2-3B-Instruct-4bit",
+        system_prompt_template: Annotated[
+            str,
+            Field(
+                description=(
+                    "The unformatted system prompt for the LLM, with values in {}. "
+                    "Should be able to be populated with {concept_description} and "
+                    "{examples} parameters."
+                ),
+            ),
+        ] = DEFAULT_SYSTEM_PROMPT,
+        random_seed: Annotated[
+            int,
+            Field(
+                description=(
+                    "Random seed for the classifier. "
+                    "Used for reproducibility and the ability to spawn multiple "
+                    "distinguishable classifiers at the same time"
+                )
+            ),
+        ] = 42,
+    ):
+        super().__init__(
+            concept=concept,
+            model_name=model_name,
+            system_prompt_template=system_prompt_template,
+            random_seed=random_seed,
+        )
+        self.model = llm.get_model(model_name)
+
+    def predict(self, text: str) -> list[Span]:
+        """Predict whether the supplied text contains an instance of the concept."""
+        response = self.model.prompt(
+            f"Here is the passage of text which you should mark up with <concept> tags:\n\n{text}",
+            system=self.system_prompt,
+        ).text()
+
+        self._validate_response(input_text=text, response=response)
+        return Span.from_xml(
+            xml=response,
+            concept_id=self.concept.wikibase_id,
+            labellers=[str(self)],
+        )
+
+    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+        """Predict whether the supplied texts contain instances of the concept."""
+        return [self.predict(text) for text in texts]

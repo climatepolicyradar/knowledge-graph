@@ -2,7 +2,7 @@ import importlib
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.llm import LLMClassifier
+from src.classifier.large_language_model import LLMClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
