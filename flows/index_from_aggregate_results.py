@@ -15,6 +15,7 @@ from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
+from prefect.utilities.names import generate_slug
 from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
@@ -337,7 +338,22 @@ async def create_indexing_batch_summary_artifact(
     )
 
 
-@flow(log_prints=True)
+def flow_run_name(parameters: dict[str, Any]) -> str:
+    slug = generate_slug(2)
+
+    # Prefer this flow actually running, even if a change in the
+    # params hasn't been reflected in this function.
+    match parameters.get("document_stem"):
+        case document_stem if isinstance(document_stem, str):
+            return f"{document_stem}-{slug}"
+        case _:
+            return slug
+
+
+@flow(
+    log_prints=True,
+    flow_run_name=flow_run_name,
+)
 async def index_all(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
