@@ -199,7 +199,7 @@ async def process_document(
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-) -> DocumentImportId | AggregationFailure:
+) -> DocumentImportId:
     """Process a single document and return its status."""
     try:
         async with session.client("s3") as s3:
@@ -269,7 +269,7 @@ async def process_document(
             )
             return document_id
     except ClientError as e:
-        print(e.response)
+        print(f"ClientError: {e.response}")
         raise AggregationFailure(
             document_id=document_id, exception=e, context=e.response
         )
