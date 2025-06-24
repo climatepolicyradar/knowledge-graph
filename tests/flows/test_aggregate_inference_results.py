@@ -14,9 +14,9 @@ from prefect.artifacts import Artifact
 
 from flows.aggregate_inference_results import (
     AggregationFailure,
-    aggregate_inference_results,
     build_run_output_identifier,
     collect_stems_by_specs,
+    do_aggregate,
     get_all_labelled_passages_for_one_document,
     process_document,
     validate_passages_are_same_except_concepts,
@@ -48,7 +48,7 @@ def mock_classifier_specs():
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results(
+async def test_do_aggregate(
     mock_bucket_labelled_passages_large, test_aggregate_config, mock_classifier_specs
 ):
     _, bucket, s3_async_client = mock_bucket_labelled_passages_large
@@ -61,9 +61,7 @@ async def test_aggregate_inference_results(
         "UNFCCC.party.492.0",
     ]
 
-    run_reference = await aggregate_inference_results(
-        document_ids, test_aggregate_config
-    )
+    run_reference = await do_aggregate(document_ids, test_aggregate_config)
 
     all_collected_ids = []
     collected_ids_for_document = []
@@ -117,14 +115,14 @@ async def test_aggregate_inference_results(
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results__with_failures(
+async def test_do_aggregate__with_failures(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
     expect_failure_ids = ["Some.Made.Up.Document.ID", "Another.One.That.Should.Fail"]
     document_ids = ["CCLW.executive.10061.4515"] + expect_failure_ids
 
     with pytest.raises(ValueError):
-        await aggregate_inference_results(document_ids, test_aggregate_config)
+        await do_aggregate(document_ids, test_aggregate_config)
 
     summary_artifact = await Artifact.get("aggregate-inference-sandbox")
     assert summary_artifact and summary_artifact.description
