@@ -18,7 +18,10 @@ from prefect.flows import Flow
 
 import flows.boundary as boundary
 import flows.deindex as deindex
-from flows.aggregate_inference_results import aggregate_inference_results
+from flows.aggregate_inference_results import (
+    aggregate_inference_results,
+    aggregate_inference_results_batch,
+)
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index_from_aggregate_results import (
@@ -114,12 +117,17 @@ create_deployment(
 # Aggregate inference results
 
 create_deployment(
-    flow=aggregate_inference_results,
-    description="Aggregate inference results",
+    flow=aggregate_inference_results_batch,
+    description="Aggregate inference results for a batch of documents",
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 16,
         "memory": MEGABYTES_PER_GIGABYTE * 64,
     },
+)
+
+create_deployment(
+    flow=aggregate_inference_results,
+    description="Aggregate inference results, through coordinating batches of documents",
 )
 
 # Boundary
@@ -138,12 +146,12 @@ create_deployment(
 
 create_deployment(
     flow=index_aggregate_results_for_batch_of_documents,
-    description="Run passage indexing for a batch of documents from s3 to Vespa",
+    description="Run passage indexing for a batch of documents from S3 to Vespa",
 )
 
 create_deployment(
     flow=run_indexing_from_aggregate_results,
-    description="Run passage indexing for documents from s3 to Vespa",
+    description="Run passage indexing for documents from S3 to Vespa",
 )
 
 # De-index

@@ -14,7 +14,7 @@ from prefect.artifacts import Artifact
 
 from flows.aggregate_inference_results import (
     AggregationFailure,
-    aggregate_inference_results,
+    aggregate_inference_results_batch,
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
@@ -48,7 +48,7 @@ def mock_classifier_specs():
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results(
+async def test_aggregate_inference_results_batch(
     mock_bucket_labelled_passages_large, test_aggregate_config, mock_classifier_specs
 ):
     _, bucket, s3_async_client = mock_bucket_labelled_passages_large
@@ -61,8 +61,11 @@ async def test_aggregate_inference_results(
         "UNFCCC.party.492.0",
     ]
 
-    run_reference = await aggregate_inference_results(
-        document_ids, test_aggregate_config
+    run_reference = await aggregate_inference_results_batch(
+        document_ids=document_ids,
+        config_json=test_aggregate_config.model_dump(),
+        classifier_specs=classifier_specs,
+        run_output_identifier="test-run",
     )
 
     all_collected_ids = []
@@ -117,14 +120,20 @@ async def test_aggregate_inference_results(
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results__with_failures(
+async def test_aggregate_inference_results_batch__with_failures(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
+    _, classifier_specs = mock_classifier_specs
     expect_failure_ids = ["Some.Made.Up.Document.ID", "Another.One.That.Should.Fail"]
     document_ids = ["CCLW.executive.10061.4515"] + expect_failure_ids
 
     with pytest.raises(ValueError):
-        await aggregate_inference_results(document_ids, test_aggregate_config)
+        await aggregate_inference_results_batch(
+            document_ids=document_ids,
+            config_json=test_aggregate_config.model_dump(),
+            classifier_specs=classifier_specs,
+            run_output_identifier="test-run",
+        )
 
     summary_artifact = await Artifact.get("aggregate-inference-sandbox")
     assert summary_artifact and summary_artifact.description

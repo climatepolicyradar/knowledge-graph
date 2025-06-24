@@ -4,17 +4,17 @@ import os
 import random
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow, task
+from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments import run_deployment
+from prefect.client.schemas.objects import FlowRun
+from prefect.deployments import run_deployment  # noqa: F401
 from prefect.logging import get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
@@ -36,18 +36,16 @@ from flows.boundary import (
     TextBlockId,
     VespaDataId,
     VespaHitId,
-    function_to_flow_name,
-    generate_deployment_name,
     get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
-    Profiler,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,
+    map_as_sub_flow,
     remove_translated_suffix,
     return_with_id,
     wait_for_semaphore,
@@ -133,9 +131,9 @@ async def _update_vespa_passage_concepts(
 
 async def create_aggregate_indexing_summary_artifact(
     config: Config,
-    document_stems: list[DocumentStem],
-    successes: list[FlowRun | BaseException],
-    failures: list[FlowRun | BaseException],
+    document_stems: Sequence[DocumentStem],
+    successes: Sequence[None],
+    failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
 
@@ -532,7 +530,7 @@ async def index_aggregate_results_for_batch_of_documents(
         )
 
     # This doesn't correctly parse the values into the dataclass.
-    config = Config(**config_json)
+    config = Config.model_validate(config_json)
     config.aws_env = AwsEnv(config.aws_env)
 
     logger.info(
@@ -543,9 +541,9 @@ async def index_aggregate_results_for_batch_of_documents(
     print("getting futures")
     futures = index_all.map(  # pyright: ignore[reportFunctionMemberAccess] document_ids,
         document_stems,
-        config=config,
-        run_output_identifier=run_output_identifier,
-        indexer_max_vespa_connections=indexer_max_vespa_connections,
+        config=unmapped(config),
+        run_output_identifier=unmapped(run_output_identifier),
+        indexer_max_vespa_connections=unmapped(indexer_max_vespa_connections),
     )
 
     print("getting results")
@@ -612,67 +610,23 @@ async def run_indexing_from_aggregate_results(
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")
 
-    flow_name = function_to_flow_name(index_aggregate_results_for_batch_of_documents)
-    deployment_name = generate_deployment_name(
-        flow_name=flow_name, aws_env=config.aws_env
+    batches = iterate_batch(document_stems, batch_size)
+
+    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
+        return {
+            "document_stems": batch,
+            "config_json": config.model_dump(),
+            "run_output_identifier": run_output_identifier,
+            "indexer_max_vespa_connections": indexer_max_vespa_connections,
+        }
+
+    successes, failures = await map_as_sub_flow(
+        fn=index_aggregate_results_for_batch_of_documents,
+        aws_env=config.aws_env,
+        counter=indexer_concurrency_limit,
+        batches=batches,
+        parameters=parameters,
     )
-
-    semaphore = asyncio.Semaphore(indexer_concurrency_limit)
-
-    with Profiler(
-        printer=print,
-        name="preparing tasks",
-    ):
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                run_deployment(
-                    name=f"{flow_name}/{deployment_name}",
-                    parameters={
-                        "document_stems": batch,
-                        "config_json": config.to_json(),
-                        "run_output_identifier": run_output_identifier,
-                        "indexer_max_vespa_connections": indexer_max_vespa_connections,
-                    },
-                    # Rely on the flow's own timeout, if any, to make sure it
-                    # eventually ends[1].
-                    #
-                    # [1]:
-                    # > Setting timeout to None will allow this function to
-                    # > poll indefinitely.
-                    timeout=None,
-                ),
-            )
-            for batch in iterate_batch(document_stems, batch_size)
-        ]
-
-    with Profiler(
-        printer=print,
-        name="gathering tasks",
-    ):
-        results: list[FlowRun | BaseException] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
-
-    failures = []
-    successes = []
-    for result in results:
-        if isinstance(result, BaseException):
-            failures.append(result)
-        elif not result.state:
-            failures.append(result)
-
-            print(
-                f"flow run's state was unknown. Flow run name: `{result.name}`",
-            )
-        elif result.state.type == StateType.COMPLETED:
-            successes.append(result)
-        else:
-            failures.append(result)
-
-            print(
-                f"flow run's state was not completed. Flow run name: `{result.name}`",
-            )
 
     await create_aggregate_indexing_summary_artifact(
         config=config,
@@ -683,5 +637,5 @@ async def run_indexing_from_aggregate_results(
 
     if failures:
         raise ValueError(
-            f"Some batches of documents had failures: {len(failures)}/{len(results)} failed."
+            f"Some batches of documents had failures: {len(failures)}/{len(successes) + len(failures)} failed."
         )
