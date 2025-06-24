@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "knowledge_graph"
-version = "0.6.6"
+version = "0.6.7"
 description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"

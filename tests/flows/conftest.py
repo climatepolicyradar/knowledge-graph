@@ -70,7 +70,7 @@ def test_wikibase_to_s3_config():
 @pytest.fixture
 def test_aggregate_config():
     yield AggregateInferenceResultsConfig(
-        _cache_bucket="test_bucket",
+        cache_bucket="test_bucket",
         aws_env=AwsEnv.sandbox,
     )
 

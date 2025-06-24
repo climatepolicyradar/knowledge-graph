@@ -8,15 +8,23 @@ from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Callable, NewType, TypeVar
+from typing import Any, Callable, NewType, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
+from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.deployments import run_deployment
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
+from pydantic import PositiveInt
 from typing_extensions import Self
 
-from scripts.cloud import ClassifierSpec
+from scripts.cloud import (
+    AwsEnv,
+    ClassifierSpec,
+    function_to_flow_name,
+    generate_deployment_name,
+)
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -422,6 +430,7 @@ async def wait_for_semaphore(
     semaphore: asyncio.Semaphore,
     fn,
 ):
+    """Block waiting for a semaphore and then execute the function"""
     async with semaphore:
         return await fn
 
@@ -430,8 +439,80 @@ async def return_with_id(
     id: U,
     fn: Awaitable[T | Exception],
 ) -> tuple[U, T | Exception]:
+    """Wrap a function execution's return value as a tuple with an identifier"""
     try:
         result = await fn
         return (id, result)
     except Exception as e:
         return (id, e)
+
+
+async def map_as_sub_flow(
+    fn: Callable[..., Awaitable[U]],
+    aws_env: AwsEnv,
+    counter: PositiveInt,
+    batches: Generator[Sequence[T], None, None],
+    parameters: Callable[[Sequence[T]], dict[str, Any]],
+) -> tuple[Sequence[U], Sequence[BaseException | FlowRun]]:
+    """
+    Map over an iterable, running the function as a sub-flow.
+
+    The concurrency is limited to a semaphore with a counter.
+
+    The results are grouped by success and failure, based on if an
+    exception was returned or a flow run didn't complete, or some
+    value was returned.
+
+    The sub-flows are waited on until they complete, with no
+    timeout.
+    """
+    flow_name = function_to_flow_name(fn)
+    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+    semaphore = asyncio.Semaphore(counter)
+
+    tasks = [
+        wait_for_semaphore(
+            semaphore,
+            run_deployment(
+                name=f"{flow_name}/{deployment_name}",
+                parameters=parameters(batch),
+                # Rely on the flow's own timeout, if any, to make sure it
+                # eventually ends[1].
+                #
+                # [1]:
+                # > Setting timeout to None will allow this function to
+                # > poll indefinitely.
+                timeout=None,
+            ),
+        )
+        for batch in batches
+    ]
+
+    results: Sequence[FlowRun | BaseException] = await asyncio.gather(
+        *tasks,
+        return_exceptions=True,
+    )
+
+    successes: list[U] = []
+    failures: list[BaseException | FlowRun] = []
+    for result in results:
+        if isinstance(result, BaseException):
+            failures.append(result)
+        elif isinstance(result, FlowRun):
+            if result.state and result.state.type == StateType.COMPLETED:
+                # For completed flows, extract the actual return value
+                try:
+                    flow_result: U = result.state.result(
+                        #  Doing it this way, makes it easier to rely
+                        # on the type system, instead of doing `False`
+                        # and then allowing for a union of types in
+                        # the return.
+                        raise_on_failure=True,
+                    )
+                    successes.append(flow_result)
+                except Exception as e:
+                    failures.append(e)
+            else:
+                failures.append(result)
+
+    return successes, failures
