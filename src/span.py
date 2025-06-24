@@ -2,9 +2,9 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
+from src.identifiers import Identifier, WikibaseID
 
 
 class Span(BaseModel):
@@ -49,10 +49,10 @@ class Span(BaseModel):
 
         json_encoders = {datetime: lambda dt: dt.isoformat()}
 
-    @computed_field
-    def id(self) -> str:
+    @property
+    def id(self) -> Identifier:
         """Return the unique identifier for the span."""
-        return generate_identifier(
+        return Identifier.generate(
             self.text,
             self.start_index,
             self.end_index,
@@ -84,7 +84,7 @@ class Span(BaseModel):
                 )
         return self
 
-    @computed_field
+    @property
     def labelled_text(self) -> str:
         """The span's labelled substring"""
         return self.text[self.start_index : self.end_index]
@@ -94,15 +94,8 @@ class Span(BaseModel):
         return self.end_index - self.start_index
 
     def __hash__(self) -> int:
-        """Return a unique hash for the span."""
-        return deterministic_hash(
-            [
-                self.text,
-                self.start_index,
-                self.end_index,
-                self.concept_id,
-            ]
-        )
+        """Return a hash for the span."""
+        return hash(self.id)
 
     def __eq__(self, other: object) -> bool:
         """Check whether two spans are equal."""
