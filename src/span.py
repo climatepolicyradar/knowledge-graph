@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from src.identifiers import Identifier, WikibaseID
 
@@ -49,6 +49,7 @@ class Span(BaseModel):
 
         json_encoders = {datetime: lambda dt: dt.isoformat()}
 
+    @computed_field
     @property
     def id(self) -> Identifier:
         """Return the unique identifier for the span."""
@@ -84,6 +85,7 @@ class Span(BaseModel):
                 )
         return self
 
+    @computed_field
     @property
     def labelled_text(self) -> str:
         """The span's labelled substring"""
