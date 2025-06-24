@@ -4,11 +4,23 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
+from src.identifiers import Identifier, WikibaseID
 from tests.common_strategies import wikibase_id_strategy
 
 invalid_wikibase_id_strategy = st.text().filter(
     lambda x: not x.startswith("Q") or not x[1:].isdigit() or x == "Q0"
+)
+
+valid_identifier_string_strategy = st.text(
+    alphabet=Identifier.valid_characters, min_size=8, max_size=8
+)
+
+invalid_identifier_string_strategy = st.text().filter(
+    lambda x: not Identifier.pattern.fullmatch(x)
+)
+
+identifiable_data_strategy = st.lists(
+    st.one_of(st.text(), st.integers(), st.floats()), min_size=1, max_size=5
 )
 
 
@@ -53,9 +65,9 @@ def test_whether_wikibase_ids_are_sorted_numerically():
     st.lists(st.text(min_size=10, max_size=100)),
 )
 def test_whether_identifier_generation_is_deterministic(input_strings):
-    identifiers = [generate_identifier(input_string) for input_string in input_strings]
+    identifiers = [Identifier.generate(input_string) for input_string in input_strings]
     assert identifiers == [
-        generate_identifier(input_string) for input_string in input_strings
+        Identifier.generate(input_string) for input_string in input_strings
     ]
 
 
@@ -63,7 +75,7 @@ def test_whether_identifier_generation_is_deterministic(input_strings):
     st.sets(st.text(min_size=10, max_size=100)),
 )
 def test_whether_identifiers_are_unique_for_unique_input_strings(input_strings):
-    identifiers = [generate_identifier(input_string) for input_string in input_strings]
+    identifiers = [Identifier.generate(input_string) for input_string in input_strings]
     assert len(identifiers) == len(set(identifiers))
 
 
@@ -79,15 +91,64 @@ def test_whether_default_python_hash_is_consistent_across_distinct_python_proces
     assert hash_a != hash_b, "Hashes should be different across Python processes"
 
 
-def test_whether_deterministic_hash_is_consistent_across_distinct_python_processes():
+def test_whether_identifier_generation_is_consistent_across_distinct_python_processes():
     """Deterministic hashes should be the same from python session to python session"""
-    # Get hash from current process
-    hash_a = deterministic_hash("test")
+    # Get id from current process
+    id_a = Identifier.generate("test")
 
-    # Get hash from a separate Python process
-    cmd = "python3 -c \"from src.identifiers import deterministic_hash; print(deterministic_hash('test'))\""
-    hash_b = int(subprocess.check_output(cmd, shell=True).decode().strip())
+    # Get id from a separate Python process
+    cmd = "python3 -c \"from src.identifiers import Identifier; print(Identifier.generate('test'))\""
+    id_b = subprocess.check_output(cmd, shell=True).decode().strip()
 
-    assert hash_a == hash_b, (
+    assert id_a == id_b, (
         "Deterministic hashes should be identical across Python processes"
     )
+
+
+@given(valid_identifier_string_strategy)
+def test_whether_creating_an_identifier_with_valid_string_data_succeeds(value):
+    """Test that Identifier can be created from a valid pre-existing ID string."""
+    identifier = Identifier(value)
+    assert isinstance(identifier, Identifier)
+    assert str(identifier) == value
+
+
+@given(invalid_identifier_string_strategy)
+def test_whether_creating_an_identifier_with_invalid_string_data_raises_value_error(
+    value,
+):
+    """Test that Identifier raises ValueError for invalid pre-existing ID strings."""
+    with pytest.raises(ValueError):
+        Identifier(value)
+
+
+@given(
+    st.one_of(
+        st.integers(),
+        st.floats(),
+        st.lists(st.text()),
+        st.dictionaries(st.text(), st.text()),
+    )
+)
+def test_whether_creating_an_identifier_with_non_string_data_raises_type_error(value):
+    """Test that Identifier raises TypeError if a non-string is passed to the constructor."""
+    with pytest.raises(TypeError):
+        Identifier(value)
+
+
+@given(identifiable_data_strategy)
+def test_whether_generated_identifiers_have_correct_properties(args):
+    """Test that generated identifiers have correct length and character set."""
+    identifier = Identifier.generate(*args)
+    assert isinstance(identifier, Identifier)
+    assert len(identifier) == 8
+    assert all(char in Identifier.valid_characters for char in identifier)
+    assert Identifier.pattern.fullmatch(identifier), (
+        f"Generated ID '{identifier}' does not match pattern."
+    )
+
+
+def test_whether_identifier_generate_requires_args():
+    """Test that Identifier.generate() raises TypeError if no arguments are provided."""
+    with pytest.raises(TypeError):
+        Identifier.generate()
