@@ -69,6 +69,12 @@ class Fault(Exception):
     msg: str
     metadata: dict[str, Any] | None
 
+    def __str__(self) -> str:
+        """Return a string representation"""
+        if self.metadata is None:
+            return self.msg
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"
+
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
     """Load JSON data from an S3 URI."""
@@ -187,6 +193,7 @@ async def index_document_passages(
     raw_data = load_json_data_from_s3(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
+    print(f"Loaded aggregated inference results from S3: {aggregated_results_key}")
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
     }
@@ -394,7 +401,7 @@ async def create_indexing_batch_summary_artifact(
     for document_id in documents_stems:
         fault = fault_per_document.get(document_id)
         status = "✗" if fault else "✓"
-        error_messages = fault.msg if fault else "N/A"
+        error_messages = str(fault) if fault else "N/A"
         document_details.append(
             {
                 "Family document ID": document_id,
@@ -549,7 +556,7 @@ async def index_aggregate_results_for_batch_of_documents(
 
     for result in results:
         if isinstance(result, Fault):
-            fault_per_document[result.metadata.get("document_id")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
+            fault_per_document[result.metadata.get("document_stem")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
 
     print("creating summary artifact")
     await create_indexing_batch_summary_artifact(

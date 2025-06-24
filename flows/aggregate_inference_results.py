@@ -60,6 +60,10 @@ class AggregationFailure(Exception):
         self.exception = exception
         self.context = context
 
+    def __str__(self) -> str:
+        """Return a string representation"""
+        return f"{self.document_id} | exception: {str(self.exception)} | context: {self.context}"
+
 
 @dataclass()
 class Config:
