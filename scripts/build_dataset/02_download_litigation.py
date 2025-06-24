@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.progress import track
 
 from scripts.config import raw_data_dir
-from src.identifiers import generate_identifier
+from src.identifiers import Identifier
 
 console = Console()
 
@@ -80,7 +80,7 @@ console.print(
 
 # Add an identifier to each document
 sampled_litigation_df["id"] = sampled_litigation_df.apply(
-    lambda x: generate_identifier(x["Title"], x["Document file"]), axis=1
+    lambda x: Identifier.generate(x["Title"], x["Document file"]), axis=1
 )
 
 # Save the litigation documents as a json file
