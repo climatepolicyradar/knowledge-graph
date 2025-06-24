@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import gather
+import json
 from typing import Annotated, Optional
 
 import llm
@@ -69,11 +69,7 @@ class BaseLLMClassifier(Classifier):
         model_name: Annotated[
             str,
             Field(
-                description=(
-                    "The name of the model to use. See https://ai.pydantic.dev/models/ "
-                    "for a list of available models and the necessary environment "
-                    "variables needed to run each."
-                ),
+                description=("The name of the model to use"),
             ),
         ] = "gemini-1.5-flash-002",
         system_prompt_template: Annotated[
@@ -90,12 +86,12 @@ class BaseLLMClassifier(Classifier):
             Optional[int],
             Field(
                 description=(
-                    "Random seed for the classifier. "
-                    "Used for reproducibility and the ability to spawn multiple "
-                    "distinguishable classifiers at the same time"
+                    "Random seed for the classifier. Used for reproducibility and the "
+                    "ability to spawn multiple distinguishable classifiers at the same "
+                    "time"
                 )
             ),
-        ] = 42,
+        ] = None,
     ):
         super().__init__(concept)
         self.concept = concept
@@ -127,7 +123,14 @@ class BaseLLMClassifier(Classifier):
 
     def __repr__(self):
         """Return a string representation of the classifier."""
-        return f'{self.name}("{self.concept.preferred_label}", model_name="{self.model_name}", id={self.id})'
+        values: dict[str, str | int | None] = {
+            "model_name": self.model_name,
+            "id": self.id,
+        }
+        if self.random_seed:
+            values["random_seed"] = self.random_seed
+        values_string = json.dumps(values)[1:-1].replace(": ", "=")
+        return f'{self.name}("{self.concept.preferred_label}", {values_string})'
 
     def _validate_response(self, input_text: str, response: str) -> None:
         """Make sure the output text does not augment the input text in unexpected ways"""
@@ -230,7 +233,7 @@ class LLMClassifier(BaseLLMClassifier):
                 )
                 for text in texts
             ]
-            return await gather(*async_responses)
+            return await asyncio.gather(*async_responses)
 
         # Create a single event loop for all batches
         try:
@@ -288,9 +291,10 @@ class LocalLLMClassifier(BaseLLMClassifier):
     """
     A classifier which uses a local LLM to identify concept mentions in text
 
-    Currently assumes that you're running on apple silicon,
-    via https://github.com/simonw/llm-mlx/
-    For the time being, this class is untested on other platforms!
+    This classifier uses https://github.com/simonw/llm-mlx/, based on the assumption
+    that the model is being run on on apple silicon chip. Until we need it to run on
+    other chips, this model is untested on other platforms and performance will probably
+    be poor!
     """
 
     def __init__(
@@ -332,15 +336,22 @@ class LocalLLMClassifier(BaseLLMClassifier):
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
         )
-        self.model = llm.get_model(model_name)
+        try:
+            self.model = llm.get_model(model_name)
+        except llm.UnknownModelError as e:
+            raise ValueError(
+                "It looks like you've used an invalid/missing model name. Are you sure "
+                f"that `{model_name}` is correct? Try running `llm mlx download-model "
+                f"{model_name}` to download it, before running again."
+            ) from e
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
         response = self.model.prompt(
-            f"Here is the passage of text which you should mark up with <concept> tags:\n\n{text}",
+            text,
             system=self.system_prompt,
+            # schema=LLMResponse,  # this line can be uncommented for models which support the schema param
         ).text()
-
         self._validate_response(input_text=text, response=response)
         return Span.from_xml(
             xml=response,
