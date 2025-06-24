@@ -1,19 +1,23 @@
+import asyncio
 import json
 import os
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from dataclasses import asdict, dataclass
 from functools import partial
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypeVar
 
 import aioboto3
 import prefect.tasks as tasks
 from botocore.exceptions import ClientError
 from prefect import flow, task
 from prefect.artifacts import create_table_artifact
+from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.context import get_run_context
+from prefect.deployments import run_deployment
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
+from pydantic import PositiveInt
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -28,14 +32,21 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    iterate_batch,
+    wait_for_semaphore,
 )
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
+    function_to_flow_name,
+    generate_deployment_name,
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
 from src.labelled_passage import LabelledPassage
+
+T = TypeVar("T")
+R = TypeVar("R")
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
@@ -65,6 +76,7 @@ class AggregationFailure(Exception):
         return f"{self.document_id} | exception: {str(self.exception)} | context: {self.context}"
 
 
+# TODO: Refactor as Pydantic class so it can be be (de-)serialised
 @dataclass()
 class Config:
     """Configuration used across flow runs."""
@@ -345,37 +357,67 @@ def collect_stems_by_specs(config: Config) -> list[DocumentImportId]:
     return list(set(document_ids))
 
 
+async def do_batch(
+    fn: Callable[..., ...],
+    aws_env: AwsEnv,
+    counter: PositiveInt,
+    batches: Generator[Sequence[T], None, None],
+    parameters: Callable[[Sequence[T]], dict[str, Any]],
+) -> tuple[list[Any], list[Any]]:
+    flow_name = function_to_flow_name(fn)
+    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+    semaphore = asyncio.Semaphore(counter)
+
+    tasks = [
+        wait_for_semaphore(
+            semaphore,
+            run_deployment(
+                name=f"{flow_name}/{deployment_name}",
+                parameters=parameters(batch),
+                # Rely on the flow's own timeout, if any, to make sure it
+                # eventually ends[1].
+                #
+                # [1]:
+                # > Setting timeout to None will allow this function to
+                # > poll indefinitely.
+                timeout=None,
+            ),
+        )
+        for batch in batches
+    ]
+
+    results: list[FlowRun | BaseException] = await asyncio.gather(
+        *tasks,
+        return_exceptions=True,
+    )
+
+    failures = []
+    successes = []
+    for result in results:
+        if isinstance(result, BaseException):
+            failures.append(result)
+        elif not result.state:
+            failures.append(result)
+        elif result.state.type == StateType.COMPLETED:
+            successes.append(result)
+        else:
+            failures.append(result)
+
+    return successes, failures
+
+
 @flow(
-    on_failure=[SlackNotify.message],
-    on_crashed=[SlackNotify.message],
     timeout_seconds=None,
     log_prints=True,
     task_runner=ThreadPoolTaskRunner(max_workers=20),
 )
-async def aggregate_inference_results(
-    document_ids: None | list[DocumentImportId] = None,
-    config: Config | None = None,
-) -> RunOutputIdentifier:
+async def do_aggregate(
+    document_ids: Sequence[DocumentImportId],
+    config: Config,
+    classifier_specs,
+    run_output_identifier,
+):
     """Aggregate the inference results for the given document ids."""
-    if not config:
-        print("no config provided, creating one")
-        config = await Config.create()
-
-    if not document_ids:
-        print(
-            "no document ids provided, collecting all available from s3 under prefix: "
-            f"{config.document_source_prefix}"
-        )
-        document_ids = collect_stems_by_specs(config)
-
-    run_output_identifier = build_run_output_identifier()
-    classifier_specs = parse_spec_file(config.aws_env)
-
-    print(
-        f"Aggregating inference results for {len(document_ids)} documents, using "
-        f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
-    )
-
     session = aioboto3.Session(region_name=config.bucket_region)
 
     futures = process_document.map(  # pyright: ignore[reportFunctionMemberAccess]
@@ -403,5 +445,58 @@ async def aggregate_inference_results(
         raise ValueError(
             f"Saw {len(failures)} failures when aggregating inference results"
         )
+
+    # TODO: Return something informative for artifact
+    # There already is an artifact for this flow though
+
+
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+    timeout_seconds=None,
+    log_prints=True,
+)
+async def aggregate_inference_results(
+    document_ids: None | list[DocumentImportId] = None,
+    config: Config | None = None,
+) -> RunOutputIdentifier:
+    """Aggregate the inference results for the given document ids."""
+    if not config:
+        print("no config provided, creating one")
+        config = await Config.create()
+
+    if not document_ids:
+        print(
+            "no document ids provided, collecting all available from s3 under prefix: "
+            f"{config.document_source_prefix}"
+        )
+        document_ids = collect_stems_by_specs(config)
+
+    run_output_identifier = build_run_output_identifier()
+    classifier_specs = parse_spec_file(config.aws_env)
+
+    print(
+        f"Aggregating inference results for {len(document_ids)} documents, using "
+        f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
+    )
+
+    batches = iterate_batch(document_ids, 1_000)
+
+    parameters = lambda batch: {
+        "document_ids": batch,
+        "config": config,
+        "classififer_specs": classifier_specs,
+        "run_output_identifier": run_output_identifier,
+    }
+
+    _successes, _failures = await do_batch(
+        fn=do_aggregate,
+        aws_env=config.aws_env,
+        counter=10,
+        batches=batches,
+        parameters=parameters,
+    )
+
+    # TODO:
 
     return run_output_identifier
