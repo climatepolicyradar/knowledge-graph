@@ -12,6 +12,10 @@ class Version:
         """Create a new instance of Version after validation."""
         self.value = self._validate(value)
 
+    def __hash__(self):
+        """Return a hash of the Version."""
+        return hash(self.value)
+
     @classmethod
     def _validate(cls, value: str) -> int:
         if value == "latest":
