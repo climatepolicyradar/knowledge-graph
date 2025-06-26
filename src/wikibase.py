@@ -14,14 +14,13 @@ from src.exceptions import ConceptNotFoundError, RevisionNotFoundError
 from src.identifiers import WikibaseID
 
 logger = getLogger(__name__)
-
 dotenv.load_dotenv()
 
 
 class WikibaseSession:
     """A session for interacting with Wikibase"""
 
-    session = httpx.Client()
+    session = httpx.Client(timeout=30)
 
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID", "P1")
     subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID", "P2")

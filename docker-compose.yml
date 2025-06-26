@@ -1,7 +1,11 @@
-version: "3.8"
+x-common-variables: &common-variables
+  ARGILLA_HOME_PATH: /var/lib/argilla
+  ARGILLA_ELASTICSEARCH: http://elasticsearch:9200
+  ARGILLA_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/argilla
+  ARGILLA_REDIS_URL: redis://redis:6379/0
 
 services:
-  neo4j:
+ neo4j:
     image: neo4j:5.24.1
     volumes:
       - type: bind
@@ -19,38 +23,93 @@ services:
       - NEO4J_PLUGINS=["graph-data-science", "apoc"]
       - NEO4J_dbms_security_procedures_whitelist=gds.*, apoc.*
       - NEO4J_dbms_security_procedures_unrestricted=gds.*, apoc.*
-      
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.5.3
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - cluster.routing.allocation.disk.threshold_enabled=false
-      - xpack.security.enabled=false
-    ports:
-      - 9200:9200
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+      - NEO4J_server_memory_pagecache_size=8g
+      - NEO4J_server_memory_heap_initial__size=4g
+      - NEO4J_server_memory_heap_max__size=4g
+      - NEO4J_db_transaction_timeout=0
+      - NEO4J_db_memory_transaction_total_max=8g
+      - NEO4J_db_memory_transaction_max=4g
+    deploy:
+      resources:
+        limits:
+          memory: 14g
+        reservations:
+          memory: 8g
 
   argilla:
-    # loosely adapted from
-    # https://github.com/argilla-io/argilla/blob/a88c81879d7088413912e6c368eee8ae77e840a9/docker/docker-compose.yaml
-    image: argilla/argilla-server:v1.26.1
-    container_name: argilla
+    image: argilla/argilla-server:latest
     restart: unless-stopped
     ports:
-      - 6900:6900
+      - "6900:6900"
     environment:
-      ARGILLA_HOME_PATH: /var/lib/argilla
-      ARGILLA_ELASTICSEARCH: http://elasticsearch:9200
-    env_file:
-      - .env
-    depends_on:
-      - elasticsearch
+      <<: *common-variables
+      USERNAME: argilla
+      PASSWORD: 12345678
+      API_KEY: argilla.apikey
+      WORKSPACE: default
+
+    networks:
+      - argilla
     volumes:
-      - argilla_data:/var/lib/argilla
+      - argilladata:/var/lib/argilla
+    depends_on:
+      - postgres
+      - elasticsearch
+      - redis
+
+  worker:
+    image: argilla/argilla-server:latest
+    environment:
+      <<: *common-variables
+      BACKGROUND_NUM_WORKERS: 2
+    networks:
+      - argilla
+    depends_on:
+      - postgres
+      - elasticsearch
+      - redis
+    command: sh -c 'python -m argilla_server worker --num-workers $${BACKGROUND_NUM_WORKERS}'
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: argilla
+    networks:
+      - argilla
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m -XX:UseSVE=0
+      - CLI_JAVA_OPTS=-XX:UseSVE=0
+      - node.name=elasticsearch
+      - cluster.name=es-argilla-local
+      - discovery.type=single-node
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - argilla
+    volumes:
+      - elasticdata:/usr/share/elasticsearch/data/
+
+  redis:
+    image: redis
+    networks:
+      - argilla
+
+networks:
+  argilla:
+    driver: bridge
 
 volumes:
-  elasticsearch_data:
-  argilla_data:
+  argilladata:
+  elasticdata:
+  postgresdata:

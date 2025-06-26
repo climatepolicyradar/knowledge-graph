@@ -4,7 +4,7 @@ import inspect
 import os
 import re
 import time
-from collections.abc import Generator, Sequence
+from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
@@ -17,6 +17,9 @@ from prefect_slack.credentials import SlackWebhook
 from typing_extensions import Self
 
 from scripts.cloud import ClassifierSpec
+
+T = TypeVar("T")
+U = TypeVar("U")
 
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
@@ -125,9 +128,6 @@ def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
     E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
     """
     return DocumentImportId(re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name))
-
-
-T = TypeVar("T")
 
 
 def iterate_batch(
@@ -424,3 +424,14 @@ async def wait_for_semaphore(
 ):
     async with semaphore:
         return await fn
+
+
+async def return_with_id(
+    id: U,
+    fn: Awaitable[T | Exception],
+) -> tuple[U, T | Exception]:
+    try:
+        result = await fn
+        return (id, result)
+    except Exception as e:
+        return (id, e)

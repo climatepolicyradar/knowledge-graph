@@ -145,7 +145,6 @@ VespaDataId = NewType("VespaDataId", str)
 class Operation(Enum):
     """The kind of operation to take as far as creates, removes, and updates."""
 
-    INDEX = "index"
     DEINDEX = "deindex"
 
 
@@ -162,6 +161,9 @@ def vespa_retry(
         wait=tenacity.wait_fixed(wait_seconds),
         before_sleep=lambda retry_state: print(
             f"Retrying after error. Attempt {retry_state.attempt_number} of {max_attempts}"
+        ),
+        after=tenacity.after_log(
+            logger=logging.getLogger(f"{__name__}.vespa_retry"), log_level=logging.INFO
         ),
         reraise=True,
     )
@@ -656,15 +658,60 @@ def get_vespa_passages_from_query_response(
         dig(passage_root, "children", 0, "children", 0)
         for passage_root in passages_root
     ]
-    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {
-        passage["fields"]["text_block_id"]: (
-            passage["id"],
-            VespaPassage.model_validate(passage["fields"]),
+
+    vespa_passages: dict[TextBlockId, tuple[VespaHitId, VespaPassage]] = {}
+    for passage in passage_hits:
+        fields = passage.get("fields")
+        if not fields:
+            raise ValueError(
+                f"Vespa passage with no 'fields': {passage}, "
+                f"sample of passage hits: {passage_hits[:5]}"
+            )
+
+        text_block_id = fields.get("text_block_id")
+        if not text_block_id:
+            raise ValueError(
+                f"Vespa passage with no 'text_block_id' in passage: {passage}, "
+                f"sample of passage hits: {passage_hits[:5]}"
+            )
+
+        text_block_id = TextBlockId(text_block_id)
+        passage_id = VespaHitId(passage.get("id"))
+        vespa_pasage = VespaPassage.model_validate(fields)
+
+        vespa_passages[text_block_id] = (
+            passage_id,
+            vespa_pasage,
         )
-        for passage in passage_hits
-    }
 
     return vespa_passages
+
+
+@vespa_retry(
+    max_attempts=2,
+    exception_types=(
+        ValueError,
+        QueryError,
+    ),
+)
+async def make_query_and_extract_passages(
+    vespa_connection_pool: VespaAsync,
+    query: qb.Query,
+    query_profile: str,
+) -> tuple[VespaQueryResponse, dict[TextBlockId, tuple[VespaHitId, VespaPassage]]]:
+    """Make the query and extract the passages."""
+
+    vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
+        yql=query,
+        queryProfile=query_profile,
+    )
+
+    if not vespa_query_response.is_successful():
+        raise QueryError(vespa_query_response.get_status_code())
+
+    return vespa_query_response, get_vespa_passages_from_query_response(
+        vespa_query_response
+    )
 
 
 async def get_document_passages_from_vespa__generator(
@@ -718,15 +765,11 @@ async def get_document_passages_from_vespa__generator(
             .groupby(grouping, continuations=tokens)
         )
 
-        vespa_query_response: VespaQueryResponse = await vespa_connection_pool.query(
-            yql=query,
-            queryProfile=query_profile,
+        vespa_query_response, vespa_passages = await make_query_and_extract_passages(
+            vespa_connection_pool=vespa_connection_pool,
+            query=query,
+            query_profile=query_profile,
         )
-
-        if not vespa_query_response.is_successful():
-            raise QueryError(vespa_query_response.get_status_code())
-
-        vespa_passages = get_vespa_passages_from_query_response(vespa_query_response)
 
         if vespa_passages:
             yield vespa_passages
@@ -1020,12 +1063,6 @@ def op_to_fn(
 ]:
     """Get the appropriate functions to implement an operation"""
     match operation:
-        case Operation.INDEX:
-            return (
-                update_concepts_on_existing_vespa_concepts,
-                update_result_callback,
-                update_s3_with_update_concepts_counts,
-            )
         case Operation.DEINDEX:
             return (
                 remove_concepts_from_existing_vespa_concepts,
@@ -1162,10 +1199,10 @@ async def updates_by_s3(
     vespa_search_adapter: VespaSearchAdapter | None = None,
 ) -> None:
     """
-    Asynchronously update (de-)index concepts from S3 files into Vespa.
+    Asynchronously update de-index concepts from S3 files into Vespa.
 
     This function retrieves concept documents from files stored in an S3 path and
-    (de-)indexes them in a Vespa instance. The name of each file in the specified S3 path is
+    de-indexes them in a Vespa instance. The name of each file in the specified S3 path is
     expected to represent the document's import ID.
 
     When `s3_prefix` is provided, the function will use all files within that S3
@@ -1552,105 +1589,6 @@ async def run_partial_updates_of_concepts_for_document_passages(
 
         # All Vespa updating has finished, return the final concepts' counts
         return concepts_counts
-
-
-# Index -------------------------------------------------------------------------
-
-
-def update_result_callback(
-    concepts_counts: Counter[ConceptModel],
-    grouped_concepts: dict[TextBlockId, list[VespaConcept]],
-    response: VespaResponse,
-    text_block_id: TextBlockId,
-) -> None:
-    if not response.is_successful():
-        # Nothing to count, since it failed
-        return
-
-    # Update concepts counts
-    try:
-        concepts = grouped_concepts[text_block_id]
-    except KeyError:
-        # Add context to the error. Only sample the first 10, since
-        # there could be > 50,000. The intent is to get an idea of the
-        # keys values' themselves, since we already know this key is
-        # missing.
-        raise ValueError(text_block_id)
-
-    # Example:
-    #
-    # ..
-    # "labellers": [
-    #   "KeywordClassifier(\"professional services sector\")"
-    # ],
-    # ...
-    concepts_models = [
-        ConceptModel(wikibase_id=WikibaseID(concept.id), model_name=concept.model)
-        for concept in concepts
-    ]
-
-    concepts_counts.update(concepts_models)
-
-
-async def update_s3_with_update_concepts_counts(
-    document_importer: DocumentImporter,
-    concepts_counts: Counter[ConceptModel],
-    cache_bucket: str,
-    concepts_counts_prefix: str,
-    document_labelled_passages: list[LabelledPassage],
-) -> None:
-    s3_uri = Path(document_importer[1])
-    # Get all parts after the prefix (e.g. "Q787/v4/CCLW.executive.1813.2418.json")
-    key_parts = "/".join(s3_uri.parts[3:])  # Skip s3:/bucket/labelled_passages/
-
-    # Create new path with concepts_counts_prefix
-    concepts_counts_uri = f"s3://{cache_bucket}/{concepts_counts_prefix}/{key_parts}"
-
-    serialised_concepts_counts = json.dumps(
-        {str(k): v for k, v in concepts_counts.items()}
-    )
-
-    # Write to S3
-    print(f"Updating concepts counts s3 file for: {concepts_counts_uri}")
-    s3_object_write_text(
-        s3_uri=concepts_counts_uri,
-        text=serialised_concepts_counts,
-    )
-
-    return None
-
-
-def update_concepts_on_existing_vespa_concepts(
-    passage: VespaPassage,
-    concepts: list[VespaConcept],
-) -> list[dict[str, Any]]:
-    """
-    Update a passage's concepts with the new concepts.
-
-    During the update we remove all the old concepts related to a model. This is as it
-    was decided that holding out dated concepts/spans on the passage in Vespa for a
-    model is not useful.
-
-    It is also, not possible to duplicate a Concept object in the concepts array as we
-    are removing all instances where the model is the same.
-    """
-    if not passage.concepts:
-        return [concept.model_dump(mode="json") for concept in concepts]
-
-    new_concept_models = {concept.model for concept in concepts}
-
-    existing_concepts_to_keep = [
-        concept
-        for concept in passage.concepts
-        if concept.model not in new_concept_models
-    ]
-
-    updated_concepts = existing_concepts_to_keep + concepts
-
-    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]
-
-
-# De-index ----------------------------------------------------------------------
 
 
 def remove_result_callback(

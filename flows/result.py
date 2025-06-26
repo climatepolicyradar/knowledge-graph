@@ -97,4 +97,4 @@ class Error:
     """A simple and generic error with optional, helpful metadata"""
 
     msg: str
-    metadata: dict[Any, Any] | None
+    metadata: dict[str, Any] | None

@@ -3,14 +3,14 @@ import json
 from typing import Annotated, Optional
 
 import llm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.settings import ModelSettings
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
-from src.identifiers import deterministic_hash
+from src.identifiers import Identifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -107,19 +107,22 @@ class BaseLLMClassifier(Classifier):
             concept_description=self.concept.to_markdown()
         )
 
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Return a neat human-readable identifier for the classifier."""
+        return Identifier.generate(
+            self.name,
+            self.concept.__hash__(),
+            self.version if self.version else None,
+            self.model_name,
+            self.system_prompt_template,
+            self.random_seed,
+        )
+
     def __hash__(self) -> int:
         """Overrides the default hash function, to enrich the hash with metadata"""
-
-        return deterministic_hash(
-            [
-                self.name,
-                self.concept.__hash__(),
-                self.version if self.version else None,
-                self.model_name,
-                self.system_prompt_template,
-                self.random_seed,
-            ]
-        )
+        return hash(self.id)
 
     def __repr__(self):
         """Return a string representation of the classifier."""
@@ -160,7 +163,7 @@ class LLMClassifier(BaseLLMClassifier):
                     "variables needed to run each."
                 ),
             ),
-        ] = "gemini-1.5-flash-002",
+        ] = "gemini-2.0-flash",
         system_prompt_template: Annotated[
             str,
             Field(
@@ -193,6 +196,8 @@ class LLMClassifier(BaseLLMClassifier):
             system_prompt=self.system_prompt,
             result_type=LLMResponse,
         )
+
+        self.random_seed = random_seed
 
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""

@@ -86,33 +86,74 @@ class DocumentPassageID(VespaID):
     kind: VespaSchema = Field(default=VespaSchema.DocumentPassage, exclude=True)
 
 
-def deterministic_hash(*args) -> int:
+class Identifier(str):
     """
-    Generate a deterministic hash of the input data using SHA-256.
+    A unique ID for a resource, comprised of 8 unambiguous lowercase and numeric characters.
 
-    Hashes should be consistent across different runs of a program.
+    IDs are generated deterministically from input data, and look something like:
+    ["2sgknw32", "gg7h2j2s", ...]
+
+    With a set of 31 possible characters and 8 spaces in the ID, there's a total of
+    31^8 = 852,891,037,441 available values in the space. This should be more than
+    enough for most use cases!
+
+    Usage:
+      To generate an ID: `my_id = Identifier.generate("some", "data")`
+      To cast/validate a string: `my_id = Identifier("abcdef12")` (raises ValueError if invalid)
     """
-    input_string = "".join([str(arg) for arg in args])
-    return int.from_bytes(
-        hashlib.sha256(input_string.encode()).digest()[:8], byteorder="big"
-    )
 
-
-def generate_identifier(*args) -> str:
-    """
-    Generates a neat identifier using eight unambiguous lowercase and numeric characters
-
-    The resulting identifiers look something like this: ["2sgknw32", "gg7h2j2s", ...]
-
-    With a set of 31 possible characters and 8 positions, this function is able to
-    generate 31^8 = 852,891,037,441 unique identifiers. This should be more than enough
-    for most use cases!
-
-    :param args: an arbitrary set of data to be hashed
-    :return str: a unique identifier based on the input string
-    """
     # the following list of characters excludes "i", "l", "1", "o", "0" to minimise
-    # ambiguity when reading the identifiers
-    characters = "abcdefghjkmnpqrstuvwxyz23456789"
-    hashed_data = hashlib.sha256("".join([str(arg) for arg in args]).encode()).digest()
-    return "".join(characters[b % len(characters)] for b in hashed_data[:8])
+    # ambiguity when people read the identifiers at a glance
+    valid_characters = "abcdefghjkmnpqrstuvwxyz23456789"
+
+    # Pattern needs to be defined using the literal string for valid_characters
+    # as class attributes are resolved at class creation time.
+    pattern = re.compile(rf"^[{valid_characters}]{{8}}$")
+
+    @classmethod
+    def generate(cls, *args) -> "Identifier":
+        """Generates a new Identifier from the supplied data."""
+        if not args:
+            raise TypeError(
+                f"{cls.__name__}.generate() requires at least one argument."
+            )
+        stringified_args = ""
+        for arg in args:
+            if isinstance(arg, BaseModel):
+                stringified_args += arg.model_dump_json()
+            else:
+                stringified_args += str(arg)
+        hashed_data = hashlib.sha256(stringified_args.encode()).digest()
+        identifier = "".join(
+            cls.valid_characters[b % len(cls.valid_characters)]
+            for b in hashed_data[:8]  # Use first 8 bytes of hash
+        )
+        return cls(identifier)
+
+    @classmethod
+    def _validate(cls, value: str) -> str:
+        """Validate that the Identifier string is in the correct format"""
+        if not isinstance(value, str):
+            raise TypeError(
+                f"{cls.__name__} value must be a string, received {type(value).__name__}"
+            )
+        if not cls.pattern.match(value):
+            raise ValueError(
+                f"'{value}' is not a valid {cls.__name__}. Must be 8 characters from "
+                f"the set '{cls.valid_characters}' (pattern: r'{cls.pattern.pattern}')."
+            )
+        return value
+
+    def __new__(cls, value_to_become_identifier: str) -> "Identifier":
+        """
+        Create a new Identifier from a string, after validation.
+
+        To generate an Identifier from arbitrary data, use `Identifier.generate(*args)`.
+        """
+        validated_value = cls._validate(value_to_become_identifier)
+        return str.__new__(cls, validated_value)
+
+    @classmethod
+    def __get_validators__(cls):
+        """Return a generator of validators for Pydantic compatibility."""
+        yield cls._validate

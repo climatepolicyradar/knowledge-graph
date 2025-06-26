@@ -1,19 +1,23 @@
 import asyncio
 import json
 import os
+import random
 import tempfile
 from collections import Counter
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Any, Final
 
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
+from prefect.task_runners import ThreadPoolTaskRunner
+from prefect.utilities.names import generate_slug
 from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
@@ -40,20 +44,36 @@ from flows.boundary import (
 )
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
-    AsyncProfiler,
     Profiler,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,
     remove_translated_suffix,
+    return_with_id,
     wait_for_semaphore,
 )
 from scripts.cloud import AwsEnv
 
 # How many connections to Vespa to use for indexing.
-DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 50
+DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
 # How many indexer deployments to run concurrently.
-DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
+DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
+# How many document passages to index concurrently per document
+INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
+
+
+@dataclass
+class Fault(Exception):
+    """A simple and generic exception with optional, helpful metadata"""
+
+    msg: str
+    metadata: dict[str, Any] | None
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        if self.metadata is None:
+            return self.msg
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"
 
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
@@ -72,14 +92,41 @@ async def _update_vespa_passage_concepts(
 ) -> VespaResponse:
     """Update a passage in Vespa with the given concepts."""
 
+    path = vespa_connection_pool.app.get_document_v1_path(
+        id=vespa_data_id,
+        schema="document_passage",
+        namespace="doc_search",
+        group=None,
+    )
+    fields = {"concepts": serialised_concepts}
+
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
         namespace="doc_search",
         data_id=vespa_data_id,
         # Don't create an empty document for non-existent documents
         create=False,
-        fields={"concepts": serialised_concepts},
+        fields=fields,
     )
+
+    # Currently, this function isn't aware of which index number it is
+    # out of all the document passages for a family document. There
+    # may be over 50,000 document passages. With these 2 constraints,
+    # randomly sample from a pseudo-random distribution and
+    # conditionally print this extra info.
+    if random.random() < 0.33:
+        print(f"update data at path {path} with fields {fields}")
+
+    if not response.is_successful():
+        # Account for when Vespa fails to include the body
+        try:
+            # `get_json` returns a Dict[1].
+            #
+            # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
+            json_s = json.dumps(response.get_json())
+            print(f"Vespa update failed: {json_s}")
+        except Exception as e:
+            print(f"failed to get JSON from Vespa response: {e}")
 
     return response
 
@@ -107,9 +154,8 @@ async def create_aggregate_indexing_summary_artifact(
 - **Failed Batches**: {failed_document_batches_count}
 """
 
-    # Create classifier details table
-    create_markdown_artifact(
-        key="Aggregate Indexing Summary",
+    await create_markdown_artifact(
+        key=f"indexing-aggregate-results-summary-{config.aws_env.value}",
         description="Summary of the passages indexing run to update concept counts.",
         markdown=indexing_report,
     )
@@ -127,12 +173,12 @@ class SimpleConcept:
     name: str
 
 
-@flow(log_prints=True)
 async def index_document_passages(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
+    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
 ) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
 
@@ -147,6 +193,7 @@ async def index_document_passages(
     raw_data = load_json_data_from_s3(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
+    print(f"Loaded aggregated inference results from S3: {aggregated_results_key}")
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
     }
@@ -170,6 +217,8 @@ async def index_document_passages(
 
     results: list[Result[list[SimpleConcept], Error]] = []
 
+    semaphore = asyncio.Semaphore(indexer_document_passages_concurrency_limit)
+    tasks: list[Awaitable[tuple[TextBlockId, VespaResponse | Exception]]] = []
     for text_block_id, serialised_concepts in aggregated_inference_results.items():
         if TextBlockId(text_block_id) not in list(passages_in_vespa.keys()):
             error = Error(
@@ -182,36 +231,79 @@ async def index_document_passages(
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
         vespa_data_id: VespaDataId = get_data_id_from_vespa_hit_id(vespa_hit_id)
 
-        response = await _update_vespa_passage_concepts(
-            vespa_data_id=vespa_data_id,
-            serialised_concepts=serialised_concepts,
-            vespa_connection_pool=vespa_connection_pool,
+        tasks.append(
+            wait_for_semaphore(
+                semaphore,
+                return_with_id(
+                    text_block_id,
+                    _update_vespa_passage_concepts(
+                        vespa_data_id=vespa_data_id,
+                        serialised_concepts=serialised_concepts,
+                        vespa_connection_pool=vespa_connection_pool,
+                    ),
+                ),
+            )
         )
 
-        if not response.is_successful():
+    responses: list[
+        tuple[
+            TextBlockId,
+            VespaResponse | Exception,
+        ]
+    ] = await asyncio.gather(
+        *tasks,
+        # Normally this is True, but since there's the wrapper
+        # function to ensure that the ID is always included, which
+        # captures exceptions, it can be False here.
+        return_exceptions=False,
+    )
+
+    for text_block_id, response in responses:
+        if isinstance(response, Exception):
             error = Error(
                 msg="Vespa update failed",
                 metadata={
-                    "text_block_id": TextBlockId(text_block_id),
-                    "json": response.get_json(),
+                    "text_block_id": text_block_id,
+                    "exception": str(response),
                 },
             )
             results.append(Err(error))
-            continue
+        else:
+            if not response.is_successful():
+                # Account for when Vespa fails to include the body
+                try:
+                    # `get_json` returns a Dict[1].
+                    #
+                    # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
+                    json = response.get_json()
+                except Exception as e:
+                    print(f"failed to get JSON from Vespa response: {e}")
+                    json = None
 
-        results.append(
-            Ok(
-                [
-                    SimpleConcept(id=concept["id"], name=concept["name"])
-                    for concept in serialised_concepts
-                ]
+                error = Error(
+                    msg="Vespa update failed",
+                    metadata={
+                        "text_block_id": text_block_id,
+                        "json": json,
+                    },
+                )
+                results.append(Err(error))
+                continue
+
+            serialised_concepts = aggregated_inference_results[text_block_id]
+
+            results.append(
+                Ok(
+                    [
+                        SimpleConcept(id=concept["id"], name=concept["name"])
+                        for concept in serialised_concepts
+                    ]
+                )
             )
-        )
 
     return results
 
 
-@flow
 async def index_family_document(
     document_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
@@ -227,18 +319,31 @@ async def index_family_document(
 
     print(f"serialised concepts counts: {concepts_counts_with_names}")
 
+    path = vespa_connection_pool.app.get_document_v1_path(
+        id=document_id,
+        schema="family_document",
+        namespace="doc_search",
+        group=None,
+    )
+    # NB: The schema is misnamed in Vespa
+    fields = {"concept_counts": concepts_counts_with_names}
+    print(f"update data at path {path} with fields {fields}")
+
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="family_document",
         namespace="doc_search",
         data_id=document_id,
         # Don't create an empty document for non-existent documents
         create=False,
-        fields={
-            "concept_counts": concepts_counts_with_names
-        },  # Note the schema is misnamed in Vespa
+        fields=fields,
     )
 
     if not response.is_successful():
+        # `get_json` returns a Dict[1].
+        #
+        # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
+        print(f"Vespa update failed: {json.dumps(response.get_json())}")
+
         return Err(
             Error(
                 msg="Vespa update failed",
@@ -249,22 +354,39 @@ async def index_family_document(
     return Ok(None)
 
 
-async def create_indexing_summary_artifact(
+async def create_indexing_batch_summary_artifact(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
     documents_stems: list[DocumentStem],
-    errors_per_document: dict[DocumentStem, list[Error]],
+    fault_per_document: dict[DocumentStem, Fault],
 ) -> None:
     """Create a markdown report artifact with summary information about the indexing run."""
 
     # Prepare summary data for the artifact
     total_documents = len(documents_stems)
-    failed_documents = len(errors_per_document)
+    failed_documents = len(fault_per_document)
     successful_documents = total_documents - failed_documents
-    total_errors = sum(len(errors) for errors in errors_per_document.values())
+    # Count total errors across all documents (each fault may contain
+    # multiple errors or just 1 exception).
+    total_errors = sum(
+        (
+            len(
+                fault.metadata.get(  # pyright: ignore[reportOptionalMemberAccess]
+                    "errors", []
+                )
+            )
+            if isinstance(
+                fault.metadata.get("errors"),  # pyright: ignore[reportOptionalMemberAccess]
+                list,
+            )
+            else 1
+        )
+        for fault in fault_per_document.values()
+    )
 
     # Format the overview information as a string for the description
-    overview_description = f"""# Indexing from Aggregate Results Summary
+    overview_description = f"""# Indexing from Aggregate Results
+    Summary
 
 ## Overview
 - **Run Output Identifier**: {run_output_identifier}
@@ -272,17 +394,14 @@ async def create_indexing_summary_artifact(
 - **Total documents processed**: {total_documents}
 - **Successful documents**: {successful_documents}
 - **Failed documents**: {failed_documents}
-- **Total errors**: {total_errors}
-"""
+- **Total errors**: {total_errors}"""
 
     # Create document details table
     document_details = []
     for document_id in documents_stems:
-        errors = errors_per_document.get(document_id, [])
-        status = "✗" if errors else "✓"
-        error_messages = (
-            "; ".join([str(error.msg) for error in errors]) if errors else "N/A"
-        )
+        fault = fault_per_document.get(document_id)
+        status = "✗" if fault else "✓"
+        error_messages = str(fault) if fault else "N/A"
         document_details.append(
             {
                 "Family document ID": document_id,
@@ -299,56 +418,102 @@ async def create_indexing_summary_artifact(
     )
 
 
-@flow(log_prints=True)
+def task_run_name(parameters: dict[str, Any]) -> str:
+    slug = generate_slug(2)
+
+    # Prefer this flow actually running, even if a change in the
+    # params hasn't been reflected in this function.
+    match parameters.get("document_stem"):
+        case document_stem if isinstance(document_stem, str):
+            return f"{document_stem}-{slug}"
+        case _:
+            return slug
+
+
+@task(
+    log_prints=True,
+    task_run_name=task_run_name,
+)
 async def index_all(
+    document_stem: DocumentStem,
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-    document_stem: DocumentStem,
-    vespa_connection_pool: VespaAsync,
-) -> Result[None, list[Error]]:
+    indexer_max_vespa_connections: PositiveInt,
+) -> DocumentStem:
     """Indexes all (document passages and family documents) data."""
-    results = await index_document_passages(
-        config=config,
-        run_output_identifier=run_output_identifier,
-        document_stem=document_stem,
-        vespa_connection_pool=vespa_connection_pool,
-    )
+    try:
+        # Create Vespa connection inside the task to avoid serialization issues
+        temp_dir = tempfile.TemporaryDirectory()
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+            cert_dir=temp_dir.name,
+            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+        )
 
-    print("finished indexing document passages")
+        async with vespa_search_adapter.client.asyncio(
+            connections=indexer_max_vespa_connections,
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),
+        ) as vespa_connection_pool:
+            results = await index_document_passages(
+                config=config,
+                run_output_identifier=run_output_identifier,
+                document_stem=document_stem,
+                vespa_connection_pool=vespa_connection_pool,
+                indexer_document_passages_concurrency_limit=indexer_max_vespa_connections,
+            )
 
-    simple_concepts: list[SimpleConcept] = []
-    errors: list[Error] = []
-    for result in results:
-        match result:
-            case Ok(val):
-                simple_concepts.extend(val)
-            case Err(err):
-                print(err)
-                errors.append(err)
+            print("finished indexing document passages")
 
-    print(f"simple counts n: {len(simple_concepts)}")
+            simple_concepts: list[SimpleConcept] = []
+            errors: list[Error] = []
+            for result in results:
+                match result:
+                    case Ok(val):
+                        simple_concepts.extend(val)
+                    case Err(err):
+                        errors.append(err)
+                        print(f"indexing document passage failed: {err}")
 
-    document_id: DocumentImportId = remove_translated_suffix(document_stem)
-    result = await index_family_document(
-        document_id=document_id,
-        vespa_connection_pool=vespa_connection_pool,
-        simple_concepts=simple_concepts,
-    )
+            print(f"simple counts: {simple_concepts}")
 
-    match result:
-        case Ok(_):
-            print(f"indexing family document {document_stem} succeeded")
-        case Err(err):
-            errors.append(err)
-            print(f"indexing family document {document_stem} failed: {err}")
+            document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
-    if errors:
-        return Err(errors)
-    else:
-        return Ok(None)
+            result = await index_family_document(
+                document_id=document_id,
+                vespa_connection_pool=vespa_connection_pool,
+                simple_concepts=simple_concepts,
+            )
+
+            match result:
+                case Ok(_):
+                    print(f"indexing family document {document_stem} succeeded")
+                case Err(err):
+                    errors.append(err)
+                    print(f"indexing family document {document_stem} failed: {err}")
+
+            if errors:
+                raise Fault(
+                    msg="Failed to index document passages or family document",
+                    metadata={"document_stem": document_stem, "errors": errors},
+                )
+
+        return document_stem
+    except Exception as e:
+        raise Fault(
+            msg="Unexpected exception during document indexing",
+            metadata={
+                "document_stem": document_stem,
+                "exception": e,
+                "context": repr(e),
+            },
+        )
 
 
-@flow(log_prints=True)
+@flow(
+    log_prints=True,
+    timeout_seconds=None,
+    task_runner=ThreadPoolTaskRunner(max_workers=10),
+)
 async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
@@ -375,89 +540,35 @@ async def index_aggregate_results_for_batch_of_documents(
         f"no. of documents: {len(document_stems)}"
     )
 
-    temp_dir = tempfile.TemporaryDirectory()
-    vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=temp_dir.name,
-        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+    print("getting futures")
+    futures = index_all.map(  # pyright: ignore[reportFunctionMemberAccess] document_ids,
+        document_stems,
+        config=config,
+        run_output_identifier=run_output_identifier,
+        indexer_max_vespa_connections=indexer_max_vespa_connections,
     )
 
-    errors_per_document: dict[DocumentStem, list[Error]] = {}
+    print("getting results")
+    results = futures.result(raise_on_failure=False)
 
-    async with (
-        vespa_search_adapter.client.asyncio(
-            connections=indexer_max_vespa_connections,  # How many tasks to have running at once
-            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),  # Seconds
-        ) as vespa_connection_pool,
-        AsyncProfiler(
-            printer=print,
-            name="indexing all",
-        ),
-    ):
+    print("handling results")
+    fault_per_document: dict[DocumentStem, Fault] = {}
 
-        async def return_with_document_stem(document_stem, fn):
-            try:
-                result = await fn
-                return (document_stem, result)
-            except Exception as e:
-                return (document_stem, e)
+    for result in results:
+        if isinstance(result, Fault):
+            fault_per_document[result.metadata.get("document_stem")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
 
-        semaphore = asyncio.Semaphore(indexer_max_vespa_connections)
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with_document_stem(
-                    document_stem,
-                    index_all(
-                        config=config,
-                        run_output_identifier=run_output_identifier,
-                        document_stem=document_stem,
-                        vespa_connection_pool=vespa_connection_pool,
-                    ),
-                ),
-            )
-            for document_stem in document_stems
-        ]
-
-        results: list[
-            tuple[
-                DocumentStem,
-                Result[None, list[Error]] | BaseException,
-            ]
-        ] = await asyncio.gather(
-            *tasks,
-            # Normally this is True, but since there's the wrapper
-            # function to ensure that the document ID is always
-            # included, which captures exceptions, it can be False
-            # here.
-            return_exceptions=False,
-        )
-
-        for document_stem, result in results:
-            # Conditionally set it, so the length of the presence of
-            # keys can be used as an indicator of the overall presence
-            # of ≥ 1 error.
-            if isinstance(result, BaseException):
-                errors_per_document[document_stem] = [
-                    Error(msg=str(result), metadata={})
-                ]
-            else:
-                match result:
-                    case Ok(_):
-                        pass
-                    case Err(errors):
-                        errors_per_document[document_stem] = errors
-
-    await create_indexing_summary_artifact(
+    print("creating summary artifact")
+    await create_indexing_batch_summary_artifact(
         config=config,
         run_output_identifier=run_output_identifier,
         documents_stems=document_stems,
-        errors_per_document=errors_per_document,
+        fault_per_document=fault_per_document,
     )
 
-    if errors_per_document:
+    if fault_per_document:
         raise ValueError(
-            f"Failed to process {len(errors_per_document)}/{len(document_stems)} documents"
+            f"Failed to process {len(fault_per_document)}/{len(document_stems)} documents"
         )
 
 
@@ -472,6 +583,7 @@ async def run_indexing_from_aggregate_results(
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
+    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
