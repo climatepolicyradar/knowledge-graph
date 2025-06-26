@@ -42,8 +42,6 @@ requests = "^2.32.3"
 aioboto3 = "^14.3.0"
 types-aioboto3 = {extras = ["s3"], version = "^14.3.0"}
 pytest-aioboto3 = "^0.6.0"
-llm-mlx = "^0.4"
-llm = "^0.26"
 
 [tool.poetry.group.transformers]
 optional = true
@@ -54,6 +52,8 @@ sentence-transformers = "^3.1.1"
 transformers = {extras = ["torch"], version = "^4.51.3"}
 scikit-learn = "^1.6.1"
 accelerate = "^1.6.0"
+llm-mlx = "^0.4"
+llm = "^0.26"
 
 
 [[tool.poetry.source]]
