@@ -6,7 +6,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from src.classifier.classifier import Classifier
-from src.classifier.llm import LLMOutputMismatchError
+from src.classifier.large_language_model import LLMOutputMismatchError
 from src.concept import Concept
 from src.span import Span, jaccard_similarity
 
