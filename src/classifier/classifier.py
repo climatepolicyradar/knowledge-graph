@@ -153,10 +153,6 @@ class ZeroShotClassifier:
     https://en.wikipedia.org/wiki/Zero-shot_learning
     """
 
-    pass
-
 
 class ClassifierForWhichInferenceNeedsToRunOnAGPU:
     """A classifier for which inference needs to run on a GPU."""
-
-    pass
