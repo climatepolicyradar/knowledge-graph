@@ -9,7 +9,7 @@ from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
-from src.identifiers import WikibaseID, generate_identifier
+from src.identifiers import Identifier, WikibaseID
 from src.span import Span
 from tests.common_strategies import concept_label_strategy, concept_strategy
 
@@ -265,7 +265,7 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
     classifier = classifier_class(concept)
-    assert classifier.id == generate_identifier(classifier.__hash__())
+    assert classifier.id == Identifier.generate(classifier.name, classifier.concept)
     assert classifier == classifier_class(concept)
 
 

@@ -121,7 +121,7 @@ def main():
 
     # for username in usernames:
     #     try:
-    #         password = generate_identifier(username)
+    #         password = Identifier.generate(username)
     #         _ = rg_v1.User.create(
     #             username=username,
     #             password=password,
