@@ -3,7 +3,7 @@ from typing import Optional
 
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
-from src.identifiers import deterministic_hash
+from src.identifiers import Identifier
 from src.span import Span
 
 
@@ -46,17 +46,19 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             f'{self.name}("{self.concept.preferred_label}", threshold={self.threshold})'
         )
 
-    def __hash__(self):
+    @property
+    def id(self) -> Identifier:
         """Return a hash of the classifier."""
-        return deterministic_hash(
-            [
-                self.name,
-                self.concept.__hash__(),
-                str(self.embedding_model),
-                self.threshold,
-                self.version if self.version else None,
-            ]
+        return Identifier.generate(
+            self.name,
+            self.concept,
+            self.embedding_model,
+            self.threshold,
         )
+
+    def __hash__(self) -> int:
+        """Return a hash of the classifier."""
+        return hash(self.id)
 
     def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """

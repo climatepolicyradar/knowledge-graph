@@ -9,7 +9,7 @@ from pydantic_ai.settings import ModelSettings
 
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
-from src.identifiers import deterministic_hash
+from src.identifiers import Identifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -74,7 +74,7 @@ class LLMClassifier(Classifier, ZeroShotClassifier):
                     "variables needed to run each."
                 ),
             ),
-        ] = "gemini-1.5-flash-002",
+        ] = "gemini-2.0-flash",
         system_prompt_template: Annotated[
             str,
             Field(
@@ -117,18 +117,21 @@ class LLMClassifier(Classifier, ZeroShotClassifier):
 
         self.random_seed = random_seed
 
-    def __hash__(self) -> int:
+    @property
+    def id(self) -> Identifier:
         """Overrides the default hash function, to enrich the hash with metadata"""
-        return deterministic_hash(
-            [
-                self.name,
-                self.concept.__hash__(),
-                self.version if self.version else None,
-                self.model_name,
-                self.system_prompt_template,
-                self.random_seed,
-            ]
+        return Identifier.generate(
+            self.name,
+            self.concept.__hash__(),
+            self.version if self.version else None,
+            self.model_name,
+            self.system_prompt_template,
+            self.random_seed,
         )
+
+    def __hash__(self) -> int:
+        """Return a hash of the classifier."""
+        return hash(self.id)
 
     def __repr__(self):
         """Return a string representation of the classifier."""

@@ -17,7 +17,7 @@ from rich.progress import track
 
 from scripts.config import interim_data_dir, processed_data_dir, raw_data_dir
 from src.geography import geography_string_to_iso
-from src.identifiers import generate_identifier
+from src.identifiers import Identifier
 
 console = Console()
 
@@ -33,7 +33,7 @@ litigation_df["Jurisdictions"] = litigation_df["Jurisdictions"].str.split(">").s
 
 # Add an identifier to each document
 litigation_df["id"] = litigation_df.apply(
-    lambda x: generate_identifier(x["Title"], x["Document file"]),
+    lambda x: Identifier.generate(x["Title"], x["Document file"]),
     axis=1,
 )
 litigation_df.set_index("id", inplace=True)

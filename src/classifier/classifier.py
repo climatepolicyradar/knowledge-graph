@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, Sequence, Union
 
 from src.concept import Concept
-from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
+from src.identifiers import Identifier, WikibaseID
 from src.span import Span
 from src.version import Version
 
@@ -88,31 +88,20 @@ class Classifier(ABC):
         """Return the name of the classifier."""
         return self.__class__.__name__
 
-    def __hash__(self):
-        """
-        Return a deterministic hash of the classifier using SHA-256.
-
-        The hash is based on:
-        1. The classifier's class name
-        2. The concept's core data in a deterministically ordered format
-        3. The version if it exists
-        """
-        return deterministic_hash(
-            [
-                self.name,
-                self.concept.__hash__(),
-                self.version if self.version else None,
-            ]
-        )
-
     def __eq__(self, other):
         """Return whether two classifiers are equal."""
-        return self.__hash__() == other.__hash__()
+        if not isinstance(other, Classifier):
+            return False
+        return self.id == other.id
 
     @property
-    def id(self):
+    def id(self) -> Identifier:
         """Return a neat human-readable identifier for the classifier."""
-        return generate_identifier(self.__hash__())
+        return Identifier.generate(self.name, self.concept)
+
+    def __hash__(self) -> int:
+        """Return a hash for the classifier."""
+        return hash(self.id)
 
     def save(self, path: Union[str, Path]):
         """
