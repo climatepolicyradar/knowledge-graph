@@ -12,13 +12,16 @@ from transformers import (
     pipeline,
 )
 
-from src.classifier.classifier import Classifier
+from src.classifier.classifier import (
+    Classifier,
+    ClassifierForWhichInferenceNeedsToRunOnAGPU,
+)
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-class BertBasedClassifier(Classifier):
+class BertBasedClassifier(Classifier, ClassifierForWhichInferenceNeedsToRunOnAGPU):
     """
     Classifier that uses a fine-tuned transformer model to identify concepts in text.
 

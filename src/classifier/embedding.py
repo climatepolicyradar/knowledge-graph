@@ -1,13 +1,13 @@
 from datetime import datetime
 from typing import Optional
 
-from src.classifier.classifier import Classifier
+from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
 from src.identifiers import deterministic_hash
 from src.span import Span
 
 
-class EmbeddingClassifier(Classifier):
+class EmbeddingClassifier(Classifier, ZeroShotClassifier):
     """
     A classifier that uses an embedding model to identify concepts in text.
 
