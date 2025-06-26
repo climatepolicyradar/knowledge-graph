@@ -140,3 +140,23 @@ class Classifier(ABC):
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
+
+
+class ZeroShotClassifier:
+    """
+    A classifier which can make predictions without training.
+
+    In other words, zero-shot models can make predictions based only on the concept
+    object, without seeing any examples of the concept appearing in real passages of
+    text.
+
+    https://en.wikipedia.org/wiki/Zero-shot_learning
+    """
+
+    pass
+
+
+class ClassifierForWhichInferenceNeedsToRunOnAGPU:
+    """A classifier for which inference needs to run on a GPU."""
+
+    pass
