@@ -11,7 +11,7 @@ from neomodel.sync_.cardinality import One, ZeroOrMore
 class DocumentNode(StructuredNode):
     """Neo4j node representing a document."""
 
-    title = StringProperty(required=True)
+    title = StringProperty()
     document_id = StringProperty(required=True, unique_index=True)
     passages = RelationshipTo("PassageNode", "HAS_PASSAGE")
 
@@ -19,7 +19,8 @@ class DocumentNode(StructuredNode):
 class PassageNode(StructuredNode):
     """Neo4j node representing a labelled passage of text."""
 
-    text = StringProperty(required=True)
+    document_passage_id = StringProperty(required=True, unique_index=True)
+    text = StringProperty()
     concepts = RelationshipTo("ConceptNode", "MENTIONS_CONCEPT", cardinality=ZeroOrMore)
     source_document = RelationshipFrom("DocumentNode", "HAS_PASSAGE", cardinality=One)  # type: ignore
 
