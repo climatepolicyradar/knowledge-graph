@@ -1,10 +1,10 @@
-from src.classifier.classifier import Classifier
+from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.concept import Concept
 from src.span import Span
 
 
-class RulesBasedClassifier(Classifier):
+class RulesBasedClassifier(Classifier, ZeroShotClassifier):
     """
     Classifier uses keyword matching to find instances of a concept in text.
 

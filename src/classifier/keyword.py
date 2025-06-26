@@ -1,11 +1,12 @@
 import re
 from datetime import datetime
 
-from src.classifier.classifier import Classifier, Span
+from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
+from src.span import Span
 
 
-class KeywordClassifier(Classifier):
+class KeywordClassifier(Classifier, ZeroShotClassifier):
     """
     Classifier uses keyword matching to find instances of a concept in text.
 
