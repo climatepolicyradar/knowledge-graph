@@ -2,7 +2,6 @@ import importlib
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.large_language_model import LLMClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -32,6 +31,9 @@ def __getattr__(name):
     ):
         module = importlib.import_module(".targets", __package__)
         return getattr(module, name)
+    elif name in ("BaseLLMClassifier", "LLMClassifier", "LocalLLMClassifier"):
+        module = importlib.import_module(".large_language_model", __package__)
+        return getattr(module, name)
     else:
         return globals()[name]
 
@@ -47,6 +49,7 @@ __all__ = [
     "TargetClassifier",  # type: ignore
     "BertBasedClassifier",  # type: ignore
     "LLMClassifier",  # type: ignore
+    "LocalLLMClassifier",  # type: ignore
 ]
 
 
