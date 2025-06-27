@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from typing import Annotated, Optional
 
 import llm
@@ -7,8 +8,10 @@ from pydantic import BaseModel, Field, computed_field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.settings import ModelSettings
+from typing_extensions import Self
 
 from src.classifier.classifier import Classifier
+from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import Identifier
 from src.labelled_passage import LabelledPassage
@@ -60,7 +63,7 @@ Instructions:
 """
 
 
-class BaseLLMClassifier(Classifier):
+class BaseLLMClassifier(Classifier, UncertaintyMixin):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
     def __init__(
@@ -71,7 +74,7 @@ class BaseLLMClassifier(Classifier):
             Field(
                 description=("The name of the model to use"),
             ),
-        ] = "gemini-1.5-flash-002",
+        ],
         system_prompt_template: Annotated[
             str,
             Field(
@@ -91,7 +94,7 @@ class BaseLLMClassifier(Classifier):
                     "time"
                 )
             ),
-        ] = None,
+        ] = 42,
     ):
         super().__init__(concept)
         self.concept = concept
@@ -113,7 +116,7 @@ class BaseLLMClassifier(Classifier):
         """Return a neat human-readable identifier for the classifier."""
         return Identifier.generate(
             self.name,
-            self.concept.__hash__(),
+            self.concept,
             self.version if self.version else None,
             self.model_name,
             self.system_prompt_template,
@@ -146,6 +149,15 @@ class BaseLLMClassifier(Classifier):
             raise LLMOutputMismatchError(
                 input_text=input_sanitised, output_text=output_sanitised
             )
+
+    def get_variant_sub_classifier(self) -> Self:
+        """Get a variant of the classifier, using a different random seed."""
+        return type(self)(
+            concept=self.concept,
+            model_name=self.model_name,
+            system_prompt_template=self.system_prompt_template,
+            random_seed=random.randint(0, 1000000),
+        )
 
 
 class LLMClassifier(BaseLLMClassifier):
@@ -273,15 +285,9 @@ class LLMClassifier(BaseLLMClassifier):
                     labellers=[str(self)],
                 )
 
-                # We validate that the sanitised versions of input and output text are
-                # identical, but that doesn't guarantee that the un-sanitised responses
-                # match the input! For example, whitespace differences are deliberately
-                # ignored by the sanitisation step.
-                # To guard against the possibility of the LLM corrupting the input in
-                # subtle ways that the sanitisation step misses, we replace the text
-                # in the output spans with the original input text
                 batch_spans.append(
                     [
+                        # Use the original input texts for the output spans
                         span.model_copy(update={"text": text}, deep=True)
                         for span in spans
                     ]
@@ -363,7 +369,3 @@ class LocalLLMClassifier(BaseLLMClassifier):
             concept_id=self.concept.wikibase_id,
             labellers=[str(self)],
         )
-
-    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
-        """Predict whether the supplied texts contain instances of the concept."""
-        return [self.predict(text) for text in texts]
