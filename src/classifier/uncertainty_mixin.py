@@ -1,13 +1,35 @@
-from abc import abstractmethod
-from typing import TYPE_CHECKING
+from typing import Literal, Protocol
 
 from more_itertools import pairwise
-from typing_extensions import Self
 
 from src.span import Span, jaccard_similarity_for_span_lists
 
-if TYPE_CHECKING:
-    pass
+
+class HasUncertaintyMethods(Protocol):
+    """Protocol for the uncertainty calculation methods provided by UncertaintyMixin."""
+
+    def _calculate_combined_uncertainty(
+        self, predictions: list[list[Span]]
+    ) -> "Uncertainty": ...  # noqa: D102
+    def _calculate_passage_uncertainty(
+        self, predictions: list[list[Span]]
+    ) -> "Uncertainty": ...  # noqa: D102
+    def _calculate_span_uncertainty(
+        self, positive_predictions: list[list[Span]]
+    ) -> "Uncertainty": ...  # noqa: D102
+
+
+class SupportsUncertainty(Protocol):
+    """Protocol for classes that support uncertainty estimation."""
+
+    def get_variant_sub_classifier(self) -> "SupportsUncertainty": ...  # noqa: D102
+    def predict(self, text: str) -> list[Span]: ...  # noqa: D102
+
+
+class UncertaintyCapableClassifier(
+    SupportsUncertainty, HasUncertaintyMethods, Protocol
+):
+    """Protocol combining classifier methods and uncertainty calculation methods."""
 
 
 class Uncertainty(float):
@@ -29,49 +51,68 @@ class UncertaintyMixin:
     """
     Mixin class providing shared uncertainty calculation logic.
 
-    This mixin can be used by any classifier that implements get_variant_sub_classifier()
-    to provide consistent uncertainty calculation across different classifier types.
+    This mixin should be used with classes that implement:
+    - get_variant_sub_classifier() method for creating variants
+    - predict() method for making predictions
+
+    For type checking, classes using this mixin should be declared as:
+        class MyClassifier(Classifier, UncertaintyMixin):
+            # ... implementation
+
+    The type system enforces that predict_with_uncertainty() can only be called
+    on objects that implement both the classifier interface and the uncertainty methods.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not hasattr(self, "get_variant_sub_classifier"):
-            raise NotImplementedError(
-                f"{self.__class__.__name__} must have implemented the "
-                "get_variant_sub_classifier() method in order to use the uncertainty "
-                "estimation mixin."
-            )
-
-    @abstractmethod
-    def get_variant_sub_classifier(self) -> "Self":
-        """Get a variant of the classifier. Must be implemented by subclasses."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def predict(self, text: str) -> list[Span]:
-        """Predict spans in the given text. Must be implemented by subclasses."""
-        raise NotImplementedError
-
     def predict_with_uncertainty(
-        self, text: str, num_samples: int = 10
+        self: UncertaintyCapableClassifier,
+        text: str,
+        num_samples: int = 10,
+        method: Literal["combined", "passage", "span"] = "combined",
     ) -> tuple[list[list[Span]], Uncertainty]:
-        """Predict with uncertainty estimation using multiple sampling runs."""
+        """
+        Predict with uncertainty estimation using multiple sampling runs.
+
+        Args:
+            text: The text to predict spans for
+            num_samples: The number of sampling runs to perform
+            method: The method to use to calculate uncertainty. Must be one of
+                span: calculate uncertainty from span overlap consistency in positive predictions
+                passage: calculate uncertainty from binary predictions (concept present/absent)
+                combined: calculate uncertainty using contributions from both span and binary calculations
+
+        Returns:
+            A tuple (predictions, uncertainty) where:
+            - predictions: List of span predictions from each sampling run
+            - uncertainty: Uncertainty score between 0 (certain) and 1 (uncertain)
+        """
+
+        match method:
+            case "combined":
+                uncertainty_calculator = self._calculate_combined_uncertainty
+            case "passage":
+                uncertainty_calculator = self._calculate_passage_uncertainty
+            case "span":
+                uncertainty_calculator = self._calculate_span_uncertainty
+            case _:
+                raise ValueError(f"Invalid uncertainty method: {method}")
+
         predictions = []
         for _ in range(num_samples):
             sub_classifier = self.get_variant_sub_classifier()
             prediction = sub_classifier.predict(text)
             predictions.append(prediction)
-        return predictions, self.calculate_prediction_uncertainty(predictions)
 
-    def calculate_prediction_uncertainty(
+        return predictions, uncertainty_calculator(predictions)
+
+    def _calculate_combined_uncertainty(
         self, predictions: list[list[Span]]
     ) -> Uncertainty:
         """
-        Calculate uncertainty score from multiple predictions using a comprehensive approach.
+        Calculate uncertainty score from multiple predictions.
 
         This method combines binary prediction consistency (concept present/absent) with
         span overlap consistency for positive predictions to provide a robust uncertainty
-        measure that works well across different types of concepts and text lengths.
+        measure.
 
         Args:
             predictions: List of span predictions from multiple sampling runs
@@ -81,10 +122,10 @@ class UncertaintyMixin:
         """
         if not predictions:
             # If we have no predictions, we are certain that the concept is not present
-            return Uncertainty(1.0)
+            return Uncertainty(0.0)
 
         # Calculate binary prediction consistency (concept present/absent)
-        binary_uncertainty = self._calculate_binary_uncertainty(predictions)
+        binary_uncertainty = self._calculate_passage_uncertainty(predictions)
 
         # If all predictions are negative, uncertainty is based only on binary consistency
         positive_predictions = [spans for spans in predictions if spans]
@@ -92,9 +133,7 @@ class UncertaintyMixin:
             return binary_uncertainty
 
         # For positive predictions, calculate span overlap consistency
-        overlap_uncertainty = self._calculate_span_overlap_uncertainty(
-            positive_predictions
-        )
+        overlap_uncertainty = self._calculate_span_uncertainty(positive_predictions)
 
         # Combine binary and overlap uncertainty
         binary_weight = 0.7  # binary uncertainty weighted more heavily
@@ -109,7 +148,7 @@ class UncertaintyMixin:
 
         return Uncertainty(combined_uncertainty)
 
-    def _calculate_binary_uncertainty(
+    def _calculate_passage_uncertainty(
         self, predictions: list[list[Span]]
     ) -> Uncertainty:
         """
@@ -136,7 +175,7 @@ class UncertaintyMixin:
 
         return Uncertainty(uncertainty)
 
-    def _calculate_span_overlap_uncertainty(
+    def _calculate_span_uncertainty(
         self, positive_predictions: list[list[Span]]
     ) -> Uncertainty:
         """
@@ -148,12 +187,10 @@ class UncertaintyMixin:
         multiple disjoint spans.
 
         Args:
-            positive_predictions: List of non-empty span predictions. Each element
-                                  should be a list of spans from one prediction run.
+            positive_predictions: List of non-empty span predictions from multiple sampling runs
 
         Returns:
-            Uncertainty score between 0 (low uncertainty/high agreement) and 1
-            (high uncertainty/low agreement).
+            Uncertainty score between 0 (low uncertainty/high agreement) and 1 (high uncertainty/low agreement)
         """
         if len(positive_predictions) < 2:
             return Uncertainty(0.0)
