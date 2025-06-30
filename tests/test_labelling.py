@@ -65,7 +65,7 @@ def test_combine_datasets():
     }
 
     with patch(
-        "tests.test_argilla_v2.DatasetRecordsIterator._list",
+        "tests.test_labelling.DatasetRecordsIterator._list",
         lambda self: records[self.__dataset.name],
     ):
         argilla = ArgillaSession()
