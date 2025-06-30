@@ -3,7 +3,7 @@ FROM prefecthq/prefect:3.3.7-python3.10
 RUN pip install --upgrade pip
 RUN pip install "poetry==1.8.3"
 
-WORKDIR /opt/prefect/knowledge-graph
+WORKDIR /opt/prefect
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
 # Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and stderr streams are sent straight to terminal (e.g. your container log) without being first buffered and that you can see the output of your application (e.g. django logs) in real time.

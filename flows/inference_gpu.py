@@ -102,7 +102,7 @@ _ = run_classifier_inference_on_a_gpu__coiled_spike.deploy(
         tag=version,
         dockerfile="Dockerfile",
     ),
-    job_variables=job_variables,
+    # job_variables=job_variables,
     tags=[f"repo:{docker_repository}", f"awsenv:{sandbox_aws_env}"],
     description="Run concept classifier inference on a GPU for a batch of documents",
     build=False,
