@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Optional, TypeAlias
+from typing import Final, Optional, TypeAlias
 
 import boto3
 import coiled
@@ -867,9 +867,9 @@ def text_inference(text: str, classifier: Classifier) -> list[Span]:
 @flow(log_prints=True)
 async def run_classifier_inference_on_a_gpu__coiled_spike(
     batch: list[str],
-    config_json: dict[str, Any],
     classifier_name: str,
     classifier_alias: str,
+    config: Config | None = None,
 ) -> list[tuple[str, list[Span]]]:
     """
     Run classifier inference on a batch of documents.
@@ -878,6 +878,11 @@ async def run_classifier_inference_on_a_gpu__coiled_spike(
     docker containers.
     """
     logger = get_run_logger()
+
+    if not config:
+        config = await Config.create()
+
+    config_json = config.to_json()
 
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
