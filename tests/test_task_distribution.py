@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from src.argilla_v2 import ArgillaSession
+from src.labelling import ArgillaSession
 
 session = ArgillaSession()
 

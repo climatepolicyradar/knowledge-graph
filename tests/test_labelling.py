@@ -5,7 +5,7 @@ import pytest
 from argilla import Dataset, Record, Settings, SpanQuestion, TextField, TextQuestion
 from dotenv import find_dotenv, load_dotenv
 
-from src.argilla_v2 import ArgillaSession
+from src.labelling import ArgillaSession
 
 load_dotenv(find_dotenv())
 

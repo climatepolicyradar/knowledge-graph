@@ -8,8 +8,8 @@ from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
 from scripts.evaluate import create_gold_standard_labelled_passages
-from src.argilla_v2 import ArgillaSession
 from src.labelled_passage import LabelledPassage
+from src.labelling import ArgillaSession
 from src.metrics import count_span_level_metrics
 from src.span import Span
 

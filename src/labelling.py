@@ -4,8 +4,8 @@ from datetime import datetime
 from itertools import cycle
 from typing import Generator, Optional
 
-import argilla as rg
 from argilla import (
+    Argilla,
     Dataset,
     FloatMetadataProperty,
     Record,
@@ -27,7 +27,7 @@ class ArgillaSession:
     """A session for interacting with Argilla"""
 
     def __init__(self, api_key: Optional[str] = None, api_url: Optional[str] = None):
-        self.client = rg.Argilla(
+        self.client = Argilla(
             api_key=api_key or os.getenv("ARGILLA_API_KEY"),
             api_url=api_url or os.getenv("ARGILLA_API_URL"),
         )

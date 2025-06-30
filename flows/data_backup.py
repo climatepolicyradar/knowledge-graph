@@ -7,8 +7,8 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from requests import exceptions
 
-from src.argilla_v2 import ArgillaSession
 from src.huggingface import HuggingfaceSession
+from src.labelling import ArgillaSession
 
 logger = getLogger(__name__)
 
