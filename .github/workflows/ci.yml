@@ -23,7 +23,7 @@ jobs:
 
       - name: Install poetry
         shell: bash
-        run: pipx install poetry==1.8.2
+        run: pipx install poetry
 
       - name: Install just
         run: pipx install rust-just
@@ -52,7 +52,7 @@ jobs:
 
       - name: Install poetry
         shell: bash
-        run: pipx install poetry==1.8.2
+        run: pipx install poetry
 
       - name: Install just
         run: pipx install rust-just
