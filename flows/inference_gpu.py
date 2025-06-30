@@ -2,15 +2,16 @@ import os
 from pathlib import Path
 
 import coiled
-import wandb
 from prefect import flow, task
 from prefect.logging import get_run_logger
 from pydantic import SecretStr
 
+import wandb
+
 # Set the aws env to sandbox
 os.environ["AWS_ENV"] = "sandbox"
 
-from flows.inference import Config, load_classifier
+from flows.inference import Config
 from src.classifier import Classifier
 from src.span import Span
 
@@ -49,8 +50,8 @@ async def run_classifier_inference_on_a_gpu__coiled_spike(
     )
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
-
     assert config.wandb_api_key
+
     _ = wandb.login(key=config.wandb_api_key.get_secret_value())
     run = wandb.init(
         entity=config.wandb_entity,
@@ -60,12 +61,13 @@ async def run_classifier_inference_on_a_gpu__coiled_spike(
     logger.info(
         f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
     )
-    classifier = await load_classifier(
-        run,
-        config,
-        classifier_name,
-        classifier_alias,
+    artifact = run.use_artifact(
+        f"climatepolicyradar/{classifier_name}/TargetClassifier:{classifier_alias}",
+        type="model",
     )
+    artifact_dir = artifact.download()
+    classifier = Classifier.load(os.path.join(artifact_dir / "model.pickle"))
+
     logger.info(
         f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"
     )
