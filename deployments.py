@@ -27,6 +27,7 @@ from flows.index_from_aggregate_results import (
 )
 from flows.inference import (
     classifier_inference,
+    run_classifier_inference_on_a_gpu__coiled_spike,
     run_classifier_inference_on_batch_of_documents,
 )
 from flows.wikibase_to_s3 import wikibase_to_s3
@@ -109,6 +110,11 @@ create_deployment(
 create_deployment(
     flow=run_classifier_inference_on_batch_of_documents,
     description="Run concept classifier inference on a batch of documents",
+)
+
+create_deployment(
+    flow=run_classifier_inference_on_a_gpu__coiled_spike,
+    description="Run concept classifier inference on a GPU for a batch of documents",
 )
 
 # Aggregate inference results

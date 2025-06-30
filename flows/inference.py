@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Final, Optional, TypeAlias
+from typing import Any, Final, Optional, TypeAlias
 
 import boto3
+import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
@@ -854,3 +855,62 @@ async def create_inference_summary_artifact(
         table=classifier_details,
         description=overview_description,
     )
+
+
+@task(log_prints=True)
+@coiled.function(memory="16 GiB", gpu=True)
+def text_inference(text: str, classifier: Classifier) -> list[Span]:
+    """Run classifier inference on a single text passage."""
+    return classifier.predict(text)
+
+
+@flow(log_prints=True)
+async def run_classifier_inference_on_a_gpu__coiled_spike(
+    batch: list[str],
+    config_json: dict[str, Any],
+    classifier_name: str,
+    classifier_alias: str,
+) -> list[tuple[str, list[Span]]]:
+    """
+    Run classifier inference on a batch of documents.
+
+    This reflects the unit of work that should be run in one of many paralellised
+    docker containers.
+    """
+    logger = get_run_logger()
+
+    config_json["wandb_api_key"] = (
+        SecretStr(config_json["wandb_api_key"])
+        if config_json["wandb_api_key"]
+        else None
+    )
+    config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
+    config = Config(**config_json)
+
+    assert config.wandb_api_key
+    _ = wandb.login(key=config.wandb_api_key.get_secret_value())
+    run = wandb.init(
+        entity=config.wandb_entity,
+        job_type="concept_inference",
+    )
+
+    logger.info(
+        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"
+    )
+    classifier = await load_classifier(
+        run,
+        config,
+        classifier_name,
+        classifier_alias,
+    )
+    logger.info(
+        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"
+    )
+
+    results: list[tuple[str, list[Span]]] = []
+    for idx, text in enumerate(batch):
+        spans: list[Span] = text_inference(text, classifier) or []
+        print(f"Passage {idx}: '{text}' -> {spans}")
+        results.append((text, spans))
+
+    return results
