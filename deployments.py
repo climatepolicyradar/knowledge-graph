@@ -29,6 +29,7 @@ from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
 )
+from flows.inference_gpu import run_classifier_inference_on_a_gpu__coiled_spike
 from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -110,6 +111,36 @@ create_deployment(
     flow=run_classifier_inference_on_batch_of_documents,
     description="Run concept classifier inference on a batch of documents",
 )
+
+# Coiled inference deployment (for testing)
+sandbox_aws_env = AwsEnv("sandbox")
+docker_registry = os.environ["DOCKER_REGISTRY"]
+docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
+version = importlib.metadata.version(PROJECT_NAME)
+image_name = os.path.join(docker_registry, docker_repository)
+default_variables = JSON.load(
+    f"default-job-variables-prefect-mvp-{sandbox_aws_env}"
+).value
+job_variables = {**default_variables, **{}}
+
+_ = run_classifier_inference_on_a_gpu__coiled_spike.deploy(
+    generate_deployment_name(
+        run_classifier_inference_on_a_gpu__coiled_spike.name, sandbox_aws_env
+    ),
+    work_pool_name="example-coiled-pool",
+    version=version,
+    image=DockerImage(
+        name=image_name,
+        tag=version,
+        dockerfile="Dockerfile",
+    ),
+    # job_variables=job_variables,
+    tags=[f"repo:{docker_repository}", f"awsenv:{sandbox_aws_env}"],
+    description="Run concept classifier inference on a GPU for a batch of documents",
+    build=False,
+    push=False,
+)
+
 
 # Aggregate inference results
 
