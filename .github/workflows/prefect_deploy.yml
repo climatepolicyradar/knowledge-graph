@@ -86,4 +86,5 @@ jobs:
           PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
         run: |
            poetry run python -m deployments
+           poetry run python -m flows.inference_gpu
            poetry run python -m automations
