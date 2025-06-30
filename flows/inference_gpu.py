@@ -10,6 +10,9 @@ from prefect.docker.docker_image import DockerImage
 from prefect.logging import get_run_logger
 from pydantic import SecretStr
 
+# Set the aws env to sandbox
+os.environ["AWS_ENV"] = "sandbox"
+
 from flows.inference import Config, load_classifier
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 from src.classifier import Classifier
