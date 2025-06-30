@@ -66,7 +66,7 @@ async def run_classifier_inference_on_a_gpu__coiled_spike(
         type="model",
     )
     artifact_dir = artifact.download()
-    classifier = Classifier.load(os.path.join(artifact_dir / "model.pickle"))
+    classifier = Classifier.load(os.path.join(artifact_dir, "model.pickle"))
 
     logger.info(
         f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"
