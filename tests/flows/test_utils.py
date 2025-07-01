@@ -3,6 +3,7 @@ import re
 import time
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import boto3
 import pytest
@@ -33,13 +34,21 @@ def test_file_name_from_path(path, expected):
     assert file_name_from_path(path) == expected
 
 
+@pytest.mark.asyncio
 async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
-    await SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
+    with (
+        patch.object(SlackNotify, "environment", "prod"),
+        patch.object(
+            SlackNotify, "slack_block_name", "slack-webhook-platform-prefect-mvp-prod"
+        ),
+    ):
+        await SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
+
     mock_SlackWebhook, mock_prefect_slack_block = mock_prefect_slack_webhook
 
     # `.load`
     mock_SlackWebhook.load.assert_called_once_with(
-        "slack-webhook-platform-prefect-mvp-sandbox"
+        "slack-webhook-platform-prefect-mvp-prod"
     )
 
     # `.notify`
@@ -47,7 +56,7 @@ async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
     kwargs = mock_prefect_slack_block.notify.call_args.kwargs
     message = kwargs.get("body", "")
     assert re.match(
-        r"Flow run TestFlow/TestFlowRun observed in state `Completed` at 2025-01-28T12:00:00\+00:00\. For environment: sandbox\. Flow run URL: http://127\.0\.0\.1:\d+/flow-runs/flow-run/test-flow-run-id\. State message: message",
+        r"Flow run TestFlow/TestFlowRun observed in state `Completed` at 2025-01-28T12:00:00\+00:00\. For environment: prod\. Flow run URL: http://127\.0\.0\.1:\d+/flow-runs/flow-run/test-flow-run-id\. State message: message",
         message,
     )
 
