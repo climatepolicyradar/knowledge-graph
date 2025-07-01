@@ -96,7 +96,9 @@ async def mock_s3_async_client(
 ) -> AsyncGenerator[S3Client, None]:
     with mock_aws():
         session = aioboto3.Session(region_name="eu-west-1")
-        config = BotoCoreConfig(read_timeout=60, connect_timeout=60)
+        config = BotoCoreConfig(
+            read_timeout=60, connect_timeout=60, retries={"max_attempts": 3}
+        )
         async with session.client("s3", config=config) as client:
             yield client
 
@@ -236,14 +238,25 @@ async def mock_async_bucket(
     yield test_config.cache_bucket, mock_s3_async_client
 
     # Teardown
-    response = await mock_s3_async_client.list_objects_v2(
-        Bucket=test_config.cache_bucket
-    )
-    for obj in response.get("Contents", []):
-        await mock_s3_async_client.delete_object(
-            Bucket=test_config.cache_bucket, Key=obj["Key"]
+    try:
+        response = await mock_s3_async_client.list_objects_v2(
+            Bucket=test_config.cache_bucket
         )
-    await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
+        for obj in response.get("Contents", []):
+            try:
+                await mock_s3_async_client.delete_object(
+                    Bucket=test_config.cache_bucket, Key=obj["Key"]
+                )
+            except Exception as e:
+                print(
+                    f"Warning: Failed to delete object {obj['Key']} during teardown: {e}"
+                )
+
+        await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
+    except Exception as e:
+        print(
+            f"Warning: Failed to clean up bucket {test_config.cache_bucket} during teardown: {e}"
+        )
 
 
 @pytest.fixture
