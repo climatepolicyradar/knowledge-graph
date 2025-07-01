@@ -129,3 +129,24 @@ class Classifier(ABC):
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
+
+
+class ZeroShotClassifier(ABC):
+    """
+    A mixin which identifies classifiers that can make predictions without training.
+
+    Zero-shot classifiers can make predictions based only on a concept object, without
+    seeing any examples of the concept appearing in real passages of text. Zero-shot
+    classifiers do not require calling .fit() before running .predict().
+
+    See: https://en.wikipedia.org/wiki/Zero-shot_learning
+    """
+
+
+class GPUBoundClassifier(ABC):
+    """
+    A mixin which identifies classifiers which should run on GPU hardware.
+
+    GPU-bound classifiers should ideally run on GPU hardware during both training and
+    inference.
+    """

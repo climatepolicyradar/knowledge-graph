@@ -8,7 +8,7 @@ from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.settings import ModelSettings
 
-from src.classifier.classifier import Classifier
+from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
 from src.identifiers import Identifier
 from src.labelled_passage import LabelledPassage
@@ -60,7 +60,7 @@ Instructions:
 """
 
 
-class BaseLLMClassifier(Classifier):
+class BaseLLMClassifier(Classifier, ZeroShotClassifier):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
     def __init__(
