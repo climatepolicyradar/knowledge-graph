@@ -1,7 +1,5 @@
 import re
 
-from src.identifiers import deterministic_hash
-
 
 class Version:
     """A version as mandated by W&B."""
@@ -13,6 +11,10 @@ class Version:
     def __init__(self, value: str):
         """Create a new instance of Version after validation."""
         self.value = self._validate(value)
+
+    def __hash__(self):
+        """Return a hash of the Version."""
+        return hash(self.value)
 
     @classmethod
     def _validate(cls, value: str) -> int:
@@ -54,10 +56,6 @@ class Version:
         if isinstance(other, Version):
             return self.value < other.value
         return str(self) < other
-
-    def __hash__(self):
-        """Return a hash value for the Version."""
-        return deterministic_hash(self.value)
 
     def increment(self) -> "Version":
         """Increment the version number by 1."""

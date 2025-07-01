@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, Sequence, Union
 
 from src.concept import Concept
-from src.identifiers import WikibaseID, deterministic_hash, generate_identifier
+from src.identifiers import Identifier, WikibaseID
 from src.span import Span
 from src.version import Version
 
@@ -88,31 +88,20 @@ class Classifier(ABC):
         """Return the name of the classifier."""
         return self.__class__.__name__
 
-    def __hash__(self):
-        """
-        Return a deterministic hash of the classifier using SHA-256.
-
-        The hash is based on:
-        1. The classifier's class name
-        2. The concept's core data in a deterministically ordered format
-        3. The version if it exists
-        """
-        return deterministic_hash(
-            [
-                self.name,
-                self.concept.__hash__(),
-                self.version if self.version else None,
-            ]
-        )
-
     def __eq__(self, other):
         """Return whether two classifiers are equal."""
-        return self.__hash__() == other.__hash__()
+        if not isinstance(other, Classifier):
+            return False
+        return self.id == other.id
 
     @property
-    def id(self):
+    def id(self) -> Identifier:
         """Return a neat human-readable identifier for the classifier."""
-        return generate_identifier(self.__hash__())
+        return Identifier.generate(self.name, self.concept)
+
+    def __hash__(self) -> int:
+        """Return a hash for the classifier."""
+        return hash(self.id)
 
     def save(self, path: Union[str, Path]):
         """
@@ -140,3 +129,24 @@ class Classifier(ABC):
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
+
+
+class ZeroShotClassifier(ABC):
+    """
+    A mixin which identifies classifiers that can make predictions without training.
+
+    Zero-shot classifiers can make predictions based only on a concept object, without
+    seeing any examples of the concept appearing in real passages of text. Zero-shot
+    classifiers do not require calling .fit() before running .predict().
+
+    See: https://en.wikipedia.org/wiki/Zero-shot_learning
+    """
+
+
+class GPUBoundClassifier(ABC):
+    """
+    A mixin which identifies classifiers which should run on GPU hardware.
+
+    GPU-bound classifiers should ideally run on GPU hardware during both training and
+    inference.
+    """

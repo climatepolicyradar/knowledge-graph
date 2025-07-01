@@ -21,9 +21,6 @@ import flows.deindex as deindex
 from flows.aggregate_inference_results import aggregate_inference_results
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
-from flows.index import (
-    index_labelled_passages_from_s3_to_vespa,
-)
 from flows.index_from_aggregate_results import (
     index_aggregate_results_for_batch_of_documents,
     run_indexing_from_aggregate_results,
@@ -140,11 +137,6 @@ create_deployment(
 )
 
 create_deployment(
-    flow=index_labelled_passages_from_s3_to_vespa,
-    description="Run partial updates of labelled passages stored in S3 into Vespa",
-)
-
-create_deployment(
     flow=index_aggregate_results_for_batch_of_documents,
     description="Run passage indexing for a batch of documents from s3 to Vespa",
 )
@@ -171,12 +163,14 @@ create_deployment(
 create_deployment(
     flow=wikibase_to_s3,
     description="Upload concepts from Wikibase to S3",
-    env_schedules={
-        AwsEnv.production: "0 9 * * TUE,THU",
-        AwsEnv.staging: "0 15 2 * *",
-        AwsEnv.sandbox: "0 15 1 * *",
-        # AwsEnv.labs: "0 15 3 * *",
-    },
+    # Temporarily disabled for stability
+    #     env_schedules={
+    #         AwsEnv.production: "0 9 * * TUE,THU",
+    #         AwsEnv.staging: "0 15 2 * *",
+    #         AwsEnv.sandbox: "0 15 1 * *",
+    #         # Not needed in labs
+    #         # AwsEnv.labs: "0 15 3 * *",
+    #     },
 )
 
 # Deploy static sites

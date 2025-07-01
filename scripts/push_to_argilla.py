@@ -9,10 +9,10 @@ from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 
 from scripts.config import concept_dir, processed_data_dir
-from src.argilla_v2 import ArgillaSession
 from src.concept import Concept
-from src.identifiers import WikibaseID, generate_identifier
+from src.identifiers import Identifier, WikibaseID
 from src.labelled_passage import LabelledPassage
+from src.labelling import ArgillaSession
 
 tqdm.pandas()
 
@@ -90,7 +90,7 @@ def main(
 
     for username in usernames:
         try:
-            password = generate_identifier(username)
+            password = Identifier.generate(username)
             user = rg.User(
                 id=uuid.uuid4(),
                 username=username,

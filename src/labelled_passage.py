@@ -4,7 +4,7 @@ import re
 from argilla import Argilla, Record, Response
 from pydantic import BaseModel, Field, model_validator
 
-from src.identifiers import generate_identifier
+from src.identifiers import Identifier
 from src.span import Span, merge_overlapping_spans
 
 
@@ -27,7 +27,7 @@ class LabelledPassage(BaseModel):
     )
 
     def __init__(self, text: str, spans: list[Span], **kwargs):
-        id = kwargs.pop("id", generate_identifier(text))
+        id = kwargs.pop("id", Identifier.generate(text))
         super().__init__(text=text, spans=spans, id=id, **kwargs)
 
     @model_validator(mode="after")

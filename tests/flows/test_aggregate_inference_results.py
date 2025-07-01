@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import aioboto3
 import pydantic
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -17,9 +18,10 @@ from flows.aggregate_inference_results import (
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
-    process_single_document,
+    process_document,
     validate_passages_are_same_except_concepts,
 )
+from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
 from scripts.update_classifier_spec import write_spec_file
 from src.labelled_passage import LabelledPassage
@@ -200,8 +202,10 @@ async def test_process_single_document__success(
     _, classifier_specs = mock_classifier_specs
     document_id = "CCLW.executive.10061.4515"
 
-    assert document_id == await process_single_document(
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
+    assert document_id == await process_document.fn(
         document_id,
+        session,
         classifier_specs,
         test_aggregate_config,
         "run_output_identifier",
@@ -239,9 +243,11 @@ async def test_process_single_document__client_error(
     classifier_specs.append(ClassifierSpec(name="Q9999999999", alias="v99"))
     write_spec_file(spec_file_path, classifier_specs)
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
-        process_single_document(
+        process_document.fn(
             document_id,
+            session,
             classifier_specs,
             test_aggregate_config,
             "run_output_identifier",
@@ -263,7 +269,7 @@ async def test_process_single_document__value_error(
     keys, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
 
-    document_id = "CCLW.executive.10061.4515"
+    document_id = DocumentImportId("CCLW.executive.10061.4515")
 
     # Replace the doc with a broken  one
     new_data = [
@@ -277,9 +283,11 @@ async def test_process_single_document__value_error(
         Body=json.dumps(new_data),
     )
 
+    session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
-        process_single_document(
+        process_document.fn(
             document_id,
+            session,
             classifier_specs,
             test_aggregate_config,
             "run_output_identifier",

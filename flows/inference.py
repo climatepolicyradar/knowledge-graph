@@ -16,8 +16,10 @@ from prefect import flow
 from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
+from prefect.context import get_run_context
 from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
+from prefect.utilities.names import generate_slug
 from pydantic import PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
 
@@ -29,6 +31,7 @@ from flows.utils import (
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     iterate_batch,
+    return_with_id,
     wait_for_semaphore,
 )
 from scripts.cloud import (
@@ -446,12 +449,17 @@ async def run_classifier_inference_on_document(
     document = load_document(config, file_stem)
     print(f"Loaded document with file stem {file_stem}")
 
-    # Handle documents with no text and no language
-    if (
+    # Don't run inference on documents that have no text or languages as well as HTML
+    # documents with no valid text.
+    no_text_and_no_languages: bool = (
         not document.languages
         and document.pdf_data is None
         and document.html_data is None
-    ):
+    )
+    html_and_invalid_text: bool = (
+        document.html_data is not None and not document.html_data.has_valid_text
+    )
+    if no_text_and_no_languages or html_and_invalid_text:
         store_labels(
             config=config,
             labels=[],
@@ -485,6 +493,66 @@ async def run_classifier_inference_on_document(
     )
 
     return None
+
+
+async def create_inference_on_batch_summary_artifact(
+    successes: list[DocumentStem],
+    failures: list[tuple[DocumentStem, Exception]],
+    unknown_failures: list[BaseException],
+    flow_run_name: str | None,
+):
+    """Create an artifact with a summary about a batch inference run."""
+
+    total_documents = len(successes) + len(failures) + len(unknown_failures)
+    successful_documents = len(successes)
+    failed_documents = len(failures)
+    unknown_failures_count = len(unknown_failures)
+
+    overview_description = f"""# Batch Inference Summary
+
+## Overview
+- **Flow Run**: {flow_run_name or "Unknown"}
+- **Total documents processed**: {total_documents}
+- **Successful documents**: {successful_documents}
+- **Failed documents**: {failed_documents}
+- **Unknown failures**: {unknown_failures_count}
+"""
+
+    document_details = (
+        [
+            {
+                "Document stem": document_stem,
+                "Status": "✓",
+                "Exception": "N/A",
+            }
+            for document_stem in successes
+        ]
+        + [
+            {
+                "Document stem": document_stem,
+                "Status": "✗",
+                "Exception": str(exc),
+            }
+            for document_stem, exc in failures
+        ]
+        + [
+            {
+                "Document stem": "Unknown",
+                "Status": "✗",
+                "Exception": str(exc),
+            }
+            for exc in unknown_failures
+        ]
+    )
+
+    if not flow_run_name:
+        flow_run_name = f"unknown-{generate_slug(2)}"
+
+    await create_table_artifact(
+        key=f"batch-inference-{flow_run_name}",
+        table=document_details,
+        description=overview_description,
+    )
 
 
 @flow(log_prints=True)
@@ -530,33 +598,60 @@ async def run_classifier_inference_on_batch_of_documents(
     )
 
     tasks = [
-        run_classifier_inference_on_document(
-            config=config,
-            file_stem=file_stem,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-            classifier=classifier,
+        return_with_id(
+            file_stem,
+            run_classifier_inference_on_document(
+                config=config,
+                file_stem=file_stem,
+                classifier_name=classifier_name,
+                classifier_alias=classifier_alias,
+                classifier=classifier,
+            ),
         )
         for file_stem in batch
     ]
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    results: list[
+        tuple[DocumentStem, Exception | None] | BaseException
+    ] = await asyncio.gather(*tasks, return_exceptions=True)
 
-    failures: list[Exception] = []
+    successes: list[DocumentStem] = []
+    failures: list[tuple[DocumentStem, Exception]] = []
+    # We really don't expect these, since there's a try/catch handler
+    # in `return_with_id`. It is technically possible though, for
+    # there to be what I'm calling here an _unknown_ failure.
+    unknown_failures: list[BaseException] = []
 
     for result in results:
-        if isinstance(result, Exception):
-            logger.exception(f"Failed to process document: {result}")
-            failures.append(result)
-        elif result is None:
-            continue
+        if isinstance(result, BaseException):
+            unknown_failures.append(result)
         else:
-            raise ValueError(
-                f"Unexpected type of result. Type: `{type(result)}`, value: `{result}`"
-            )
+            document_stem, value = result
+            if isinstance(value, Exception):
+                logger.exception(f"Failed to process document {document_stem}: {value}")
+                failures.append((document_stem, value))
+            else:
+                successes.append(document_stem)
+
+    # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
+    run_context = get_run_context()
+    flow_run_name: str | None
+    if run_context:
+        flow_run_name = str(run_context.flow_run.name)
+    else:
+        flow_run_name = None
+
+    await create_inference_on_batch_summary_artifact(
+        successes,
+        failures,
+        unknown_failures,
+        flow_run_name,
+    )
 
     if len(failures) > 0:
-        raise ValueError(f"Failed to process {len(failures)}/{len(results)} documents")
+        raise ValueError(
+            f"Failed to process {len(failures) + len(unknown_failures)}/{len(results)} documents"
+        )
 
     return None
 
@@ -725,7 +820,7 @@ async def create_inference_summary_artifact(
     successes: dict[ClassifierSpec, FlowRun],
     failures_classifier_specs: set[ClassifierSpec],
 ) -> None:
-    """Create a table artifact with summary information about the inference run."""
+    """Create an artifact with a summary about the inference run."""
 
     # Prepare summary data for the artifact
     total_documents = len(filtered_file_stems)

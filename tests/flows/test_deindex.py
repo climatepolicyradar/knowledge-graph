@@ -33,7 +33,6 @@ from flows.boundary import (
     run_partial_updates_of_concepts_for_document_passages,
     s3_paths_or_s3_prefixes,
     serialise_concepts_counts,
-    update_concepts_on_existing_vespa_concepts,
     update_s3_with_all_successes,
     update_s3_with_latest_concepts_counts,
     update_s3_with_some_successes,
@@ -1478,3 +1477,34 @@ def test_remove_result_callback_not_successful_response():
     assert concepts_counts == Counter(
         {ConceptModel(wikibase_id=WikibaseID("Q100"), model_name="sectors_model"): 1}
     )
+
+
+# A helper function that was previously apart of indexing
+def update_concepts_on_existing_vespa_concepts(
+    passage: VespaPassage,
+    concepts: list[VespaConcept],
+) -> list[dict[str, Any]]:
+    """
+    Update a passage's concepts with the new concepts.
+
+    During the update we remove all the old concepts related to a model. This is as it
+    was decided that holding out dated concepts/spans on the passage in Vespa for a
+    model is not useful.
+
+    It is also, not possible to duplicate a Concept object in the concepts array as we
+    are removing all instances where the model is the same.
+    """
+    if not passage.concepts:
+        return [concept.model_dump(mode="json") for concept in concepts]
+
+    new_concept_models = {concept.model for concept in concepts}
+
+    existing_concepts_to_keep = [
+        concept
+        for concept in passage.concepts
+        if concept.model not in new_concept_models
+    ]
+
+    updated_concepts = existing_concepts_to_keep + concepts
+
+    return [concept_.model_dump(mode="json") for concept_ in updated_concepts]

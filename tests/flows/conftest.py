@@ -13,6 +13,7 @@ import aioboto3
 import boto3
 import pytest
 import pytest_asyncio
+from botocore.config import Config as BotoCoreConfig
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.parser_models import (
     BaseParserOutput,
@@ -43,7 +44,7 @@ from src.labelled_passage import LabelledPassage
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
-@pytest.fixture()
+@pytest.fixture
 def test_config():
     yield InferenceConfig(
         cache_bucket="test_bucket",
@@ -54,7 +55,7 @@ def test_config():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def test_wikibase_to_s3_config():
     yield WikibaseToS3Config(
         cdn_bucket_name="test_bucket",
@@ -66,7 +67,7 @@ def test_wikibase_to_s3_config():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def test_aggregate_config():
     yield AggregateInferenceResultsConfig(
         _cache_bucket="test_bucket",
@@ -95,7 +96,10 @@ async def mock_s3_async_client(
 ) -> AsyncGenerator[S3Client, None]:
     with mock_aws():
         session = aioboto3.Session(region_name="eu-west-1")
-        async with session.client("s3") as client:
+        config = BotoCoreConfig(
+            read_timeout=60, connect_timeout=60, retries={"max_attempts": 3}
+        )
+        async with session.client("s3", config=config) as client:
             yield client
 
 
@@ -106,7 +110,7 @@ def mock_ssm_client(mock_aws_creds) -> Generator:
         yield boto3.client("ssm", region_name="eu-west-1")
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_vespa_credentials() -> dict[str, str]:
     """Mocked vespa credentials."""
     return {
@@ -223,7 +227,7 @@ def local_vespa_search_adapter(
     yield adapter
 
 
-@pytest_asyncio.fixture()
+@pytest_asyncio.fixture
 async def mock_async_bucket(
     mock_aws_creds, mock_s3_async_client, test_config
 ) -> AsyncGenerator[tuple[str, S3Client], None]:
@@ -234,14 +238,25 @@ async def mock_async_bucket(
     yield test_config.cache_bucket, mock_s3_async_client
 
     # Teardown
-    response = await mock_s3_async_client.list_objects_v2(
-        Bucket=test_config.cache_bucket
-    )
-    for obj in response.get("Contents", []):
-        await mock_s3_async_client.delete_object(
-            Bucket=test_config.cache_bucket, Key=obj["Key"]
+    try:
+        response = await mock_s3_async_client.list_objects_v2(
+            Bucket=test_config.cache_bucket
         )
-    await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
+        for obj in response.get("Contents", []):
+            try:
+                await mock_s3_async_client.delete_object(
+                    Bucket=test_config.cache_bucket, Key=obj["Key"]
+                )
+            except Exception as e:
+                print(
+                    f"Warning: Failed to delete object {obj['Key']} during teardown: {e}"
+                )
+
+        await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
+    except Exception as e:
+        print(
+            f"Warning: Failed to clean up bucket {test_config.cache_bucket} during teardown: {e}"
+        )
 
 
 @pytest.fixture
@@ -433,7 +448,7 @@ def s3_prefix_labelled_passages() -> str:
     return "labelled_passages/Q788/v4"
 
 
-@pytest.fixture()
+@pytest.fixture
 def labelled_passage_fixture_ids() -> list[str]:
     """Returns the list of concept fixture files."""
 
@@ -443,7 +458,7 @@ def labelled_passage_fixture_ids() -> list[str]:
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def labelled_passage_fixture_files(labelled_passage_fixture_ids) -> list[str]:
     """Returns the list of concept fixture files."""
     return [f"{doc_id}.json" for doc_id in labelled_passage_fixture_ids]
@@ -731,6 +746,51 @@ def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryRespons
         url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
         request_body={},
     )
+
+
+@pytest.fixture
+def mock_vespa_query_response_with_malformed_group(
+    mock_vespa_credentials: dict,
+) -> VespaQueryResponse:
+    """Mock Vespa query response with a malformed group"""
+
+    group_with_malformed_hit = {
+        "id": "group:string:986",
+        "relevance": 0.0017429193899782135,
+        "value": "986",
+        "children": [
+            {
+                "id": "hitlist:hits",
+                "relevance": 1.0,
+                "label": "hits",
+                "children": [
+                    {
+                        "id": "id:doc_search:document_passage::CCLW.executive.10014.4470.986",
+                        "relevance": 0.0017429193899782135,
+                        "source": "family-document-passage",
+                        "fields_malformed": {},
+                    }
+                ],
+            }
+        ],
+    }
+
+    response_with_malformed_group_json = (
+        mock_grouped_text_block_vespa_query_response_json()
+    )
+
+    response_with_malformed_group_json["root"]["children"][0]["children"][0][
+        "children"
+    ] += [group_with_malformed_hit]
+
+    vespa_query_response_with_malformed_group = VespaQueryResponse(
+        json=response_with_malformed_group_json,
+        status_code=200,
+        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
+        request_body={},
+    )
+
+    return vespa_query_response_with_malformed_group
 
 
 @pytest.fixture

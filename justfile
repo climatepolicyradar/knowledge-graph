@@ -200,3 +200,8 @@ audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PRO
     poetry run python scripts/audit/do_outputs_align_for_a_document.py \
         {{document_id}} prod {{bucket_name}} \
         --aggregator-run-identifier {{aggregator_run_identifier}}
+
+
+# Check if passages in S3 align with Vespa
+audit-s3-vespa-alignment +OPTS="":
+    poetry run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}
