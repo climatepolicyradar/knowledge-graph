@@ -100,9 +100,9 @@ async def main() -> None:
                     "run_output_identifier": "latest",
                     "document_stems": list(batch),
                     "config": None,
-                    "indexer_concurrency_limit": 10,
-                    "indexer_max_vespa_connections": 50,
-                    "batch_size": 50,
+                    "indexer_concurrency_limit": 5,
+                    "indexer_max_vespa_connections": 25,
+                    "batch_size": 25,
                 },
                 # Rely on the flow's own timeout
                 timeout=None,
