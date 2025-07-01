@@ -1,10 +1,6 @@
 """Tests for isinstance behaviour of classifier mixins."""
 
-from src.classifier.classifier import (
-    Classifier,
-    ClassifierForWhichInferenceNeedsToRunOnAGPU,
-    ZeroShotClassifier,
-)
+from src.classifier.classifier import Classifier, GPUBoundClassifier, ZeroShotClassifier
 from src.concept import Concept
 from src.span import Span
 
@@ -21,7 +17,7 @@ class DummyZeroShotClassifier(DummyClassifier, ZeroShotClassifier):
     """A dummy zero-shot classifier."""
 
 
-class DummyGpuClassifier(DummyClassifier, ClassifierForWhichInferenceNeedsToRunOnAGPU):
+class DummyGpuClassifier(DummyClassifier, GPUBoundClassifier):
     """A dummy GPU classifier."""
 
 
@@ -43,10 +39,10 @@ def test_isinstance_for_a_non_zero_shot_classifier():
 def test_isinstance_for_a_gpu_classifier():
     """Test that a GPU classifier is an instance of the GPU marker class."""
     classifier = DummyGpuClassifier(concept)
-    assert isinstance(classifier, ClassifierForWhichInferenceNeedsToRunOnAGPU)
+    assert isinstance(classifier, GPUBoundClassifier)
 
 
 def test_isinstance_for_a_non_gpu_classifier():
     """Test that a non-GPU classifier is not an instance of the GPU marker class."""
     classifier = DummyClassifier(concept)
-    assert not isinstance(classifier, ClassifierForWhichInferenceNeedsToRunOnAGPU)
+    assert not isinstance(classifier, GPUBoundClassifier)

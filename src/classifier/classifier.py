@@ -131,17 +131,22 @@ class Classifier(ABC):
         return classifier
 
 
-class ZeroShotClassifier:
+class ZeroShotClassifier(ABC):
     """
-    A classifier which can make predictions without training.
+    A mixin which identifies classifiers that can make predictions without training.
 
-    In other words, zero-shot models can make predictions based only on the concept
-    object, without seeing any examples of the concept appearing in real passages of
-    text.
+    Zero-shot classifiers can make predictions based only on a concept object, without
+    seeing any examples of the concept appearing in real passages of text. Zero-shot
+    classifiers do not require calling .fit() before running .predict().
 
-    https://en.wikipedia.org/wiki/Zero-shot_learning
+    See: https://en.wikipedia.org/wiki/Zero-shot_learning
     """
 
 
-class ClassifierForWhichInferenceNeedsToRunOnAGPU:
-    """A classifier for which inference needs to run on a GPU."""
+class GPUBoundClassifier(ABC):
+    """
+    A mixin which identifies classifiers which should run on GPU hardware.
+
+    GPU-bound classifiers should ideally run on GPU hardware during both training and
+    inference.
+    """
