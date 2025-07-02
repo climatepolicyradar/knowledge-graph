@@ -97,6 +97,7 @@ distribution = aws.cloudfront.Distribution(
         aws.cloudfront.DistributionOriginArgs(
             domain_name=bucket.bucket_regional_domain_name,
             origin_id=bucket.bucket,
+            origin_path="/dist",
             s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
                 origin_access_identity=cloudfront_oai.cloudfront_access_identity_path,
             ),
