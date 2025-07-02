@@ -1,4 +1,5 @@
 import json
+from functools import partial
 
 from neomodel import db
 from rich.console import Console
@@ -8,6 +9,7 @@ from rich.progress import (
     TaskProgressColumn,
     TextColumn,
     TimeRemainingColumn,
+    track,
 )
 
 from scripts.config import processed_data_dir
@@ -43,136 +45,136 @@ with console.status("Connecting to wikibase..."):
 console.log("Connected to Wikibase")
 
 
-# limit = None
-# with console.status(f"Fetching {limit or 'all'} concepts from Wikibase..."):
-#     all_concepts = wikibase.get_concepts(limit=limit)
-# console.log(f"Fetched {len(all_concepts)} concepts from Wikibase")
+limit = None
+with console.status(f"Fetching {limit or 'all'} concepts from Wikibase..."):
+    all_concepts = wikibase.get_concepts(limit=limit)
+console.log(f"Fetched {len(all_concepts)} concepts from Wikibase")
 
 
-# def process_in_batches_with_progress(items, batch_size, description, process_fn):
-#     with Progress(
-#         TextColumn("[bold blue]{task.description}"),
-#         BarColumn(),
-#         TaskProgressColumn(),
-#         TextColumn("({task.completed}/{task.total})"),
-#         TimeRemainingColumn(),
-#         console=console,
-#     ) as progress:
-#         task = progress.add_task(description, total=len(items))
-#         for i in range(0, len(items), batch_size):
-#             batch = items[i : i + batch_size]
-#             process_fn(batch)
-#             progress.update(task, advance=len(batch))
+def process_in_batches_with_progress(items, batch_size, description, process_fn):
+    with Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("({task.completed}/{task.total})"),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(description, total=len(items))
+        for i in range(0, len(items), batch_size):
+            batch = items[i : i + batch_size]
+            process_fn(batch)
+            progress.update(task, advance=len(batch))
 
 
-# def create_concept_nodes(batch):
-#     db.cypher_query(
-#         """
-#         UNWIND $batch AS concept
-#         MERGE (c:ConceptNode {wikibase_id: concept.wikibase_id})
-#         SET c.preferred_label = concept.preferred_label
-#         """,
-#         {"batch": batch},
-#     )
+def create_concept_nodes(batch):
+    db.cypher_query(
+        """
+        UNWIND $batch AS concept
+        MERGE (c:ConceptNode {wikibase_id: concept.wikibase_id})
+        SET c.preferred_label = concept.preferred_label
+        """,
+        {"batch": batch},
+    )
 
 
-# concepts_data = [
-#     {"wikibase_id": c.wikibase_id, "preferred_label": c.preferred_label}
-#     for c in all_concepts
-# ]
-# process_in_batches_with_progress(
-#     concepts_data, CONCEPT_BATCH_SIZE, "Creating concept nodes", create_concept_nodes
-# )
-# console.log(f"Created {len(all_concepts)} concept nodes in Neo4j")
+concepts_data = [
+    {"wikibase_id": c.wikibase_id, "preferred_label": c.preferred_label}
+    for c in all_concepts
+]
+process_in_batches_with_progress(
+    concepts_data, CONCEPT_BATCH_SIZE, "Creating concept nodes", create_concept_nodes
+)
+console.log(f"Created {len(all_concepts)} concept nodes in Neo4j")
 
 
-# all_known_ids = {c.wikibase_id for c in all_concepts}
-# newly_discovered_ids = set()
+all_known_ids = {c.wikibase_id for c in all_concepts}
+newly_discovered_ids = set()
 
-# for concept in track(all_concepts, description="Preparing concept relationships..."):
-#     for related_id in concept.related_concepts:
-#         if related_id not in all_known_ids:
-#             newly_discovered_ids.add(related_id)
-#     for parent_id in concept.subconcept_of:
-#         if parent_id not in all_known_ids:
-#             newly_discovered_ids.add(parent_id)
-#     for child_id in concept.has_subconcept:
-#         if child_id not in all_known_ids:
-#             newly_discovered_ids.add(child_id)
+for concept in track(all_concepts, description="Preparing concept relationships..."):
+    for related_id in concept.related_concepts:
+        if related_id not in all_known_ids:
+            newly_discovered_ids.add(related_id)
+    for parent_id in concept.subconcept_of:
+        if parent_id not in all_known_ids:
+            newly_discovered_ids.add(parent_id)
+    for child_id in concept.has_subconcept:
+        if child_id not in all_known_ids:
+            newly_discovered_ids.add(child_id)
 
-# # Create any missing concept nodes
-# if newly_discovered_ids:
-#     missing_concepts = [{"wikibase_id": id} for id in newly_discovered_ids]
+# Create any missing concept nodes
+if newly_discovered_ids:
+    missing_concepts = [{"wikibase_id": id} for id in newly_discovered_ids]
 
-#     def create_missing_concept_nodes(batch):
-#         db.cypher_query(
-#             """
-#             UNWIND $batch AS concept
-#             MERGE (c:ConceptNode {wikibase_id: concept.wikibase_id})
-#             """,
-#             {"batch": batch},
-#         )
+    def create_missing_concept_nodes(batch):
+        db.cypher_query(
+            """
+            UNWIND $batch AS concept
+            MERGE (c:ConceptNode {wikibase_id: concept.wikibase_id})
+            """,
+            {"batch": batch},
+        )
 
-#     process_in_batches_with_progress(
-#         missing_concepts,
-#         CONCEPT_BATCH_SIZE,
-#         f"Creating {len(missing_concepts)} missing concept nodes",
-#         create_missing_concept_nodes,
-#     )
-#     console.log(f"Created {len(missing_concepts)} missing concept nodes.")
-#     all_known_ids.update(newly_discovered_ids)
+    process_in_batches_with_progress(
+        missing_concepts,
+        CONCEPT_BATCH_SIZE,
+        f"Creating {len(missing_concepts)} missing concept nodes",
+        create_missing_concept_nodes,
+    )
+    console.log(f"Created {len(missing_concepts)} missing concept nodes.")
+    all_known_ids.update(newly_discovered_ids)
 
 
-# all_relationships = {"related_to": [], "subconcept_of": [], "has_subconcept": []}
-# for concept in track(all_concepts, description="Preparing relationships..."):
-#     for related_id in concept.related_concepts:
-#         all_relationships["related_to"].append(
-#             {"from_id": concept.wikibase_id, "to_id": related_id}
-#         )
-#     for parent_id in concept.subconcept_of:
-#         all_relationships["subconcept_of"].append(
-#             {"from_id": concept.wikibase_id, "to_id": parent_id}
-#         )
-#     for child_id in concept.has_subconcept:
-#         all_relationships["has_subconcept"].append(
-#             {"from_id": concept.wikibase_id, "to_id": child_id}
-#         )
+all_relationships = {"related_to": [], "subconcept_of": [], "has_subconcept": []}
+for concept in track(all_concepts, description="Preparing relationships..."):
+    for related_id in concept.related_concepts:
+        all_relationships["related_to"].append(
+            {"from_id": concept.wikibase_id, "to_id": related_id}
+        )
+    for parent_id in concept.subconcept_of:
+        all_relationships["subconcept_of"].append(
+            {"from_id": concept.wikibase_id, "to_id": parent_id}
+        )
+    for child_id in concept.has_subconcept:
+        all_relationships["has_subconcept"].append(
+            {"from_id": concept.wikibase_id, "to_id": child_id}
+        )
 
-# rel_queries = {
-#     "related_to": """
-#         UNWIND $batch AS rel
-#         MATCH (from:ConceptNode {wikibase_id: rel.from_id})
-#         MATCH (to:ConceptNode {wikibase_id: rel.to_id})
-#         MERGE (from)-[:RELATED_TO]->(to)
-#     """,
-#     "subconcept_of": """
-#         UNWIND $batch AS rel
-#         MATCH (from:ConceptNode {wikibase_id: rel.from_id})
-#         MATCH (to:ConceptNode {wikibase_id: rel.to_id})
-#         MERGE (from)-[:SUBCONCEPT_OF]->(to)
-#     """,
-#     "has_subconcept": """
-#         UNWIND $batch AS rel
-#         MATCH (from:ConceptNode {wikibase_id: rel.from_id})
-#         MATCH (to:ConceptNode {wikibase_id: rel.to_id})
-#         MERGE (to)-[:SUBCONCEPT_OF]->(from)
-#     """,
-# }
+rel_queries = {
+    "related_to": """
+        UNWIND $batch AS rel
+        MATCH (from:ConceptNode {wikibase_id: rel.from_id})
+        MATCH (to:ConceptNode {wikibase_id: rel.to_id})
+        MERGE (from)-[:RELATED_TO]->(to)
+    """,
+    "subconcept_of": """
+        UNWIND $batch AS rel
+        MATCH (from:ConceptNode {wikibase_id: rel.from_id})
+        MATCH (to:ConceptNode {wikibase_id: rel.to_id})
+        MERGE (from)-[:SUBCONCEPT_OF]->(to)
+    """,
+    "has_subconcept": """
+        UNWIND $batch AS rel
+        MATCH (from:ConceptNode {wikibase_id: rel.from_id})
+        MATCH (to:ConceptNode {wikibase_id: rel.to_id})
+        MERGE (to)-[:SUBCONCEPT_OF]->(from)
+    """,
+}
 
 
 def create_relationships(rel_type, query, batch):
     db.cypher_query(query, {"batch": batch})
 
 
-# for rel_type, relationships in all_relationships.items():
-#     if relationships:
-#         process_in_batches_with_progress(
-#             relationships,
-#             CONCEPT_BATCH_SIZE,
-#             f"Creating {rel_type} relationships",
-#             partial(create_relationships, rel_type, rel_queries[rel_type]),
-#         )
-# console.log("Finished creating concept graph")
+for rel_type, relationships in all_relationships.items():
+    if relationships:
+        process_in_batches_with_progress(
+            relationships,
+            CONCEPT_BATCH_SIZE,
+            f"Creating {rel_type} relationships",
+            partial(create_relationships, rel_type, rel_queries[rel_type]),
+        )
+console.log("Finished creating concept graph")
 
 
 document_paths = list((processed_data_dir / "aggregated").glob("*.json"))
