@@ -427,6 +427,9 @@ async def aggregate_inference_results_batch(
     log_prints=True,
 )
 async def aggregate_inference_results(
+    # FIXME: This is the wrong parameter. We should be passing in stems.
+    #  If we provided AF.document.002MMUCR.n0000 as the document id but the file stem
+    # was AF.document.002MMUCR.n0000_translated_en; we would not find it.
     document_ids: None | list[DocumentImportId] = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
@@ -442,6 +445,7 @@ async def aggregate_inference_results(
             "no document ids provided, collecting all available from s3 under prefix: "
             f"{config.document_source_prefix}"
         )
+        # FIXME: These are file stems not document ids.
         document_ids = collect_stems_by_specs(config)
 
     run_output_identifier = build_run_output_identifier()
