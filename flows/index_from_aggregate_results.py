@@ -581,6 +581,7 @@ async def run_indexing_from_aggregate_results(
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
+    # TODO: This is not used anywhere.
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
@@ -599,6 +600,7 @@ async def run_indexing_from_aggregate_results(
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
+        # TODO: We're not using stems and ids correctly here.
         collected_document_stems: list[DocumentStem] = (
             collect_unique_file_stems_under_prefix(  #  type: ignore[call-arg]
                 bucket_name=config.cache_bucket_str,
