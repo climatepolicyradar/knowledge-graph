@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Final, Optional, TypeAlias
 
 import boto3
+import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -20,8 +21,8 @@ from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.utilities.names import generate_slug
 from pydantic import PositiveInt, SecretStr
+from wandb.sdk.wandb_run import Run
 
-import wandb
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -45,7 +46,6 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
-from wandb.sdk.wandb_run import Run
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
