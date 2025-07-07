@@ -19,6 +19,7 @@ from flows.boundary import (
 from flows.index_from_aggregate_results import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
+    INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     run_indexing_from_aggregate_results,
 )
 from flows.inference import CLASSIFIER_CONCURRENCY_LIMIT, classifier_inference
@@ -66,6 +67,9 @@ class OrchestrateFullPipelineConfig(BaseModel):
 
     indexing_batch_size: int = INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT
+    indexer_document_passages_concurrency_limit: PositiveInt = (
+        INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT
+    )
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     )
@@ -195,6 +199,7 @@ async def orchestrate_full_pipeline(
             config=config.aggregation_config,
             batch_size=config.indexing_batch_size,
             indexer_concurrency_limit=config.indexer_concurrency_limit,
+            indexer_document_passages_concurrency_limit=config.indexer_document_passages_concurrency_limit,
             indexer_max_vespa_connections=config.indexer_max_vespa_connections,
         )
         logger.info("Indexing complete.")
