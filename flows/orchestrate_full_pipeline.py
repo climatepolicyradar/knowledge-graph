@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from prefect import flow, get_run_logger
-from pydantic import BaseModel, PositiveInt, field_validator, model_validator
+from pydantic import BaseModel, PositiveInt, model_validator
 
 from flows.aggregate_inference_results import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
@@ -51,13 +51,13 @@ class OrchestrateFullPipelineConfig(BaseModel):
     inference_classifier_specs: Sequence[ClassifierSpec] | None = None
     inference_document_ids: Sequence[DocumentImportId] | None = None
     inference_use_new_and_updated: bool = False
-    inference_config: InferenceConfig | None = None
+    inference_config: InferenceConfig
     inference_batch_size: int = 1000
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT
 
     # Aggregation Params
 
-    aggregation_config: AggregationConfig | None = None
+    aggregation_config: AggregationConfig
     aggregation_n_documents_in_batch: PositiveInt = (
         AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH
     )
@@ -74,26 +74,6 @@ class OrchestrateFullPipelineConfig(BaseModel):
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     )
 
-    @field_validator("inference_config", mode="before")
-    @classmethod
-    async def set_inference_config_if_none(
-        cls, v: InferenceConfig | None
-    ) -> InferenceConfig:
-        """Set the inference config if it is not provided."""
-        if v is None:
-            return await InferenceConfig.create()
-        return v
-
-    @field_validator("aggregation_config", mode="before")
-    @classmethod
-    async def set_aggregation_config_if_none(
-        cls, v: AggregationConfig | None
-    ) -> AggregationConfig:
-        """Set the aggregation config if it is not provided."""
-        if v is None:
-            return await AggregationConfig.create()
-        return v
-
     @model_validator(mode="after")
     def check_sub_config_fields_match(self) -> "OrchestrateFullPipelineConfig":
         """
@@ -103,9 +83,6 @@ class OrchestrateFullPipelineConfig(BaseModel):
         This is as they have fields that should match and we want to catch this before
         we run the flows.
         """
-
-        if self.aggregation_config is None or self.inference_config is None:
-            raise ValueError("Sub config fields are not set.")
 
         if (
             self.aggregation_config.cache_bucket_str
@@ -125,6 +102,7 @@ class OrchestrateFullPipelineConfig(BaseModel):
             raise ValueError("Bucket region mismatch")
         if self.aggregation_config.aws_env != self.inference_config.aws_env:
             raise ValueError("AWS environment mismatch")
+
         return self
 
 
@@ -157,8 +135,24 @@ async def orchestrate_full_pipeline(
     logger = get_run_logger()
 
     if not config:
-        logger.info("No config provided, creating one...")
-        config = OrchestrateFullPipelineConfig()
+        logger.info(
+            "No config provided, creating default OrchestrateFullPipelineConfig..."
+        )
+        aggregation_config = await AggregationConfig.create()
+        inference_config = await InferenceConfig.create()
+        config = OrchestrateFullPipelineConfig(
+            aggregation_config=aggregation_config,
+            inference_config=inference_config,
+        )
+    else:
+        if not config.aggregation_config:
+            logger.info("No aggregation config provided, creating default...")
+            aggregation_config = await AggregationConfig.create()
+            config.aggregation_config = aggregation_config
+        if not config.inference_config:
+            logger.info("No inference config provided, creating default...")
+            inference_config = await InferenceConfig.create()
+            config.inference_config = inference_config
 
     logger.info(f"Orchestrating full pipeline with config: {config}")
 
@@ -210,6 +204,7 @@ async def orchestrate_full_pipeline(
 
 # TODO: Add run artifact.
 #   What needs to be in this one as we have the child artifacts?
+#       document_stem count, run_output_identifier etc. these are already captured.
 # TODO: Add tests.
 #   What to mock and what to let run?
 # TODO: Add docs.
