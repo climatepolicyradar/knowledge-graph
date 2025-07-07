@@ -436,6 +436,7 @@ async def index_all(
     document_stem: DocumentStem,
     config: Config,
     run_output_identifier: RunOutputIdentifier,
+    indexer_document_passages_concurrency_limit: PositiveInt,
     indexer_max_vespa_connections: PositiveInt,
 ) -> DocumentStem:
     """Indexes all (document passages and family documents) data."""
@@ -457,7 +458,7 @@ async def index_all(
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
-                indexer_document_passages_concurrency_limit=indexer_max_vespa_connections,
+                indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
             )
 
             print("finished indexing document passages")
@@ -516,6 +517,7 @@ async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
     config_json: dict[str, Any],
+    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
@@ -543,6 +545,9 @@ async def index_aggregate_results_for_batch_of_documents(
         document_stems,
         config=unmapped(config),
         run_output_identifier=unmapped(run_output_identifier),
+        indexer_document_passages_concurrency_limit=unmapped(
+            indexer_document_passages_concurrency_limit
+        ),
         indexer_max_vespa_connections=unmapped(indexer_max_vespa_connections),
     )
 
@@ -587,7 +592,35 @@ async def run_indexing_from_aggregate_results(
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
 ) -> None:
-    """Index aggregated inference results from a list of S3 URIs into Vespa."""
+    """
+    Index aggregated inference results from a list of S3 URIs into Vespa.
+
+    Parameters:
+    ----------
+    run_output_identifier : str
+        The identifier for an aggregation run. This also represents the S3 sub
+        prefix that the aggregated results are saved to.
+
+    document_stems : list[str]
+        The list of document stems to index.
+
+    config : AggregationConfig
+        The configuration for the indexing.
+
+    batch_size : int
+        The size of the batch to index within each sub deployment.
+
+    indexer_concurrency_limit : int
+        The maximum number of indexing flows to run concurrently. This represents
+        the number of ECS tasks that are run concurrently.
+
+    indexer_document_passages_concurrency_limit : int
+        The maximum number of document passages to index concurrently within each
+        indexing flow.
+
+    indexer_max_vespa_connections : int
+        The maximum number of Vespa connections to use within each indexing flow.
+    """
 
     logger = get_run_logger()
 
@@ -618,6 +651,7 @@ async def run_indexing_from_aggregate_results(
             "document_stems": batch,
             "config_json": config.model_dump(),
             "run_output_identifier": run_output_identifier,
+            "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
         }
 
