@@ -107,7 +107,9 @@ class OrchestrateFullPipelineConfig(BaseModel):
             self.aggregation_config.cache_bucket_str
             != self.inference_config.cache_bucket
         ):
-            raise ValueError("Cache bucket mismatch")
+            raise ValueError(
+                f"Cache bucket mismatch: {self.aggregation_config.cache_bucket_str} != {self.inference_config.cache_bucket}"
+            )
         if (
             self.aggregation_config.document_source_prefix
             != self.inference_config.document_source_prefix
