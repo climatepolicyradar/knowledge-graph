@@ -138,10 +138,6 @@ async def get_all_labelled_passages_for_one_document(
                 config.document_source_prefix,
                 spec.name,
                 spec.alias,
-                # TODO: This is a document stem.
-                #   The labelled_passages s3 prefix contains files with a _translated
-                #   suffix. Inference also identifies stems and persists this when
-                #   saving inference results.
                 f"{document_stem}.json",
             ),
         )
@@ -324,7 +320,7 @@ async def create_aggregate_inference_summary_artifact(
 
     details = [
         {
-            "Failed document ID": failure.document_stem,
+            "Failed document Stem": failure.document_stem,
             "Exception": str(failure.exception),
             "Context": failure.context,
         }
