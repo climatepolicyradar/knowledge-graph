@@ -9,6 +9,7 @@ import boto3
 import pytest
 
 from flows.utils import (
+    DocumentStem,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
@@ -168,10 +169,10 @@ def test_collect_file_stems_under_prefix(test_config, mock_bucket) -> None:
 
     assert set(file_stems) == set(
         [
-            "CCLW.executive.1.1",
-            "CCLW.executive.2.2",
-            "CCLW.executive.2.2_translated_en",
-            "CCLW.executive.3.3",
+            DocumentStem("CCLW.executive.1.1"),
+            DocumentStem("CCLW.executive.2.2"),
+            DocumentStem("CCLW.executive.2.2_translated_en"),
+            DocumentStem("CCLW.executive.3.3"),
         ]
     )
 
