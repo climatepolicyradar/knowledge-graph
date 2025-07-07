@@ -32,6 +32,7 @@ from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
 )
+from flows.orchestrate_full_pipeline import orchestrate_full_pipeline
 from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -166,6 +167,12 @@ create_deployment(
     description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 
+# Orchestrate full pipeline
+
+create_deployment(
+    flow=orchestrate_full_pipeline,
+    description="Orchestrate the full Knowledge Graph Pipeline",
+)
 # Wikibase
 
 create_deployment(
