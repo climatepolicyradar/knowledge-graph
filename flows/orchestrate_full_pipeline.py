@@ -112,14 +112,11 @@ class OrchestrateFullPipelineConfig(BaseModel):
             )
         if (
             self.aggregation_config.document_source_prefix
-            != self.inference_config.document_source_prefix
-        ):
-            raise ValueError("Document source prefix mismatch")
-        if (
-            self.aggregation_config.document_source_prefix
             != self.inference_config.document_target_prefix
         ):
-            raise ValueError("Document target prefix mismatch")
+            raise ValueError(
+                "Inference target prefix does not match aggregation source prefix"
+            )
         if self.aggregation_config.bucket_region != self.inference_config.bucket_region:
             raise ValueError("Bucket region mismatch")
         if self.aggregation_config.aws_env != self.inference_config.aws_env:
