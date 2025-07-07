@@ -148,6 +148,9 @@ async def orchestrate_full_pipeline(
     Aggregation then returns a unique run identifier which we use as a parameter within
     the indexing step. Thus, we index all documents from within the aggregation run
     directory.
+
+    Indexing includes both passage level concept indexing as well as
+    family level indexing of concept counts.
     """
 
     logger = get_run_logger()
