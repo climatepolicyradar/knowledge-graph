@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from prefect import flow, get_run_logger
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, PositiveInt, field_validator, model_validator
 
 from flows.aggregate_inference_results import (
     DEFAULT_N_DOCUMENTS_IN_BATCH,
@@ -24,11 +24,23 @@ from scripts.cloud import ClassifierSpec
 
 
 class OrchestrateFullPipelineConfig(BaseModel):
-    # TODO: Add documentation on params.
-    """Configuration for the full pipeline orchestration."""
+    """
+    Configuration for the full pipeline orchestration.
+
+    We expose the listed parameters such that we can configure the
+    sub pipelines.
+
+    If config is not provided for the inference and aggregation sub pipelines then we
+    create these with default values. We could have let the sub pipelines create the
+    config objects but it's preferred creating here and validating before starting the
+    run so we can check that the configs are correct and so we don't for
+    example run inference for 2hrs and then fail at aggregation config instantiation etc.
+
+    The aggregation and indexing configs are duplicates so we only expose the aggregation
+    config.
+    """
 
     # Inference Params
-    # ---------------
 
     classifier_specs: Sequence[ClassifierSpec] | None = None
     document_ids: Sequence[DocumentImportId] | None = None
@@ -38,46 +50,78 @@ class OrchestrateFullPipelineConfig(BaseModel):
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT
 
     # Aggregation Params
-    # ------------------
 
-    # Duplicate
-    # document_ids: None | list[DocumentImportId] = None,
     aggregation_config: AggregationConfig | None = None
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH
     n_batches: PositiveInt = 5
 
     # Indexing Params
-    # ---------------
-
-    # We get this from the aggregation run but it can also be set in config...
-    # In this instance I'd say we don't want to expose it, if someone wants to run
-    # indexing on a different run they can just use the indexing flow.
-    # run_output_identifier: RunOutputIdentifier
-
-    # Returned from inference.
-    # document_stems: list[DocumentStem] | None = None
-
-    # Duplicate of aggregation_config.
-    # indexing_config: AggregationConfig | None = None
 
     indexing_batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT
-
-    # Not used in the flow
-    # indexer_document_passages_concurrency_limit: PositiveInt = (
-    #   INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT
-    # )
-
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     )
+
+    @field_validator("inference_config", mode="before")
+    @classmethod
+    async def set_inference_config_if_none(
+        cls, v: InferenceConfig | None
+    ) -> InferenceConfig:
+        """Set the inference config if it is not provided."""
+        if v is None:
+            return await InferenceConfig.create()
+        return v
+
+    @field_validator("aggregation_config", mode="before")
+    @classmethod
+    async def set_aggregation_config_if_none(
+        cls, v: AggregationConfig | None
+    ) -> AggregationConfig:
+        """Set the aggregation config if it is not provided."""
+        if v is None:
+            return await AggregationConfig.create()
+        return v
+
+    @model_validator(mode="after")
+    def check_sub_config_fields_match(self) -> "OrchestrateFullPipelineConfig":
+        """
+        Check that the sub config fields match.
+
+        This is a post instantiation check to ensure that the sub config fields match.
+        This is as they have fields that should match and we want to catch this before
+        we run the flows.
+        """
+
+        if self.aggregation_config is None or self.inference_config is None:
+            raise ValueError("Sub config fields are not set.")
+
+        if (
+            self.aggregation_config.cache_bucket_str
+            != self.inference_config.cache_bucket
+        ):
+            raise ValueError("Cache bucket mismatch")
+        if (
+            self.aggregation_config.document_source_prefix
+            != self.inference_config.document_source_prefix
+        ):
+            raise ValueError("Document source prefix mismatch")
+        if (
+            self.aggregation_config.document_source_prefix
+            != self.inference_config.document_target_prefix
+        ):
+            raise ValueError("Document target prefix mismatch")
+        if self.aggregation_config.bucket_region != self.inference_config.bucket_region:
+            raise ValueError("Bucket region mismatch")
+        if self.aggregation_config.aws_env != self.inference_config.aws_env:
+            raise ValueError("AWS environment mismatch")
+        return self
 
 
 @flow(log_prints=True)
 async def orchestrate_full_pipeline(
     config: OrchestrateFullPipelineConfig | None = None,
 ):
-    # TODO: Add documentation on params.
     """
     Orchestrate the full KG pipeline.
 
@@ -85,6 +129,16 @@ async def orchestrate_full_pipeline(
     1. Inference
     2. Aggregation
     3. Indexing
+
+    We run inference either on all documents or based upon the configured document ids
+    and use_new_and_updated flag. This step identifies the document stems to process.
+
+    We return the document stems that inference ran on and use this as a parameter
+    within the aggregation step.
+
+    Aggregation then returns a unique run identifier which we use as a parameter within
+    the indexing step. Thus, we index all documents from within the aggregation run
+    directory.
     """
 
     logger = get_run_logger()
@@ -92,13 +146,6 @@ async def orchestrate_full_pipeline(
     if not config:
         logger.info("No config provided, creating one...")
         config = OrchestrateFullPipelineConfig()
-
-    # TODO: Any checking of the two config objects for inference and aggregation?
-    # For example, do we want to assert that the buckets and regions are correct?
-    # Variables that should match:
-    # cache_bucket, bucket_region, aws_env
-    # This could be a post instantiation check on the OrchestrateFullPipelineConfig
-    # object.
 
     logger.info(f"Orchestrating full pipeline with config: {config}")
 
@@ -136,10 +183,6 @@ async def orchestrate_full_pipeline(
         logger.info("Starting indexing...")
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            # If we run aggregation and store results under this unique prefix then we
-            #   should just index everything from within this sub directory as this
-            #   should match the document_stems?
-            # document_stems=document_stems,
             config=config.aggregation_config,
             batch_size=config.indexing_batch_size,
             indexer_concurrency_limit=config.indexer_concurrency_limit,
