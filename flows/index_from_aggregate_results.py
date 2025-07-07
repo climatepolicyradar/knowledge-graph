@@ -602,7 +602,7 @@ async def run_indexing_from_aggregate_results(
         )
         # TODO: We're not using stems and ids correctly here.
         collected_document_stems: list[DocumentStem] = (
-            collect_unique_file_stems_under_prefix(  #  type: ignore[call-arg]
+            collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
                 prefix=os.path.join(
                     config.aggregate_inference_results_prefix, run_output_identifier
