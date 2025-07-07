@@ -53,6 +53,7 @@ class OrchestrateFullPipelineConfig(BaseModel):
     # run_output_identifier: RunOutputIdentifier
     # TODO: How to pass these in as we take import ids elsewhere?
     document_stems: list[DocumentStem] | None = None
+    # TODO: Is this just a duplicte of aggregation_config? Would it ever differ?
     indexing_config: AggregationConfig | None = None
     indexing_batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT
