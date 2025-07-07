@@ -4,12 +4,18 @@ from prefect import flow, get_run_logger
 from pydantic import BaseModel, PositiveInt, field_validator, model_validator
 
 from flows.aggregate_inference_results import (
-    DEFAULT_N_DOCUMENTS_IN_BATCH,
+    DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
+)
+from flows.aggregate_inference_results import (
+    Config as AggregationConfig,
+)
+from flows.aggregate_inference_results import (
     RunOutputIdentifier,
     aggregate_inference_results,
 )
-from flows.aggregate_inference_results import Config as AggregationConfig
-from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
+from flows.boundary import (
+    DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
+)
 from flows.index_from_aggregate_results import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
@@ -20,31 +26,30 @@ from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
 
-# TODO: Update imports to import constants with clearer naming.
-
 
 class OrchestrateFullPipelineConfig(BaseModel):
     """
-    Configuration for the full pipeline orchestration.
+    Configuration for the full knowledge graph pipeline orchestration.
 
     We expose the listed parameters such that we can configure the
     sub pipelines.
 
-    If config is not provided for the inference and aggregation sub pipelines then we
-    create these with default values. We could have let the sub pipelines create the
-    config objects but it's preferred creating here and validating before starting the
-    run so we can check that the configs are correct and so we don't for
-    example run inference for 2hrs and then fail at aggregation config instantiation etc.
+    - If config is not provided for the inference and aggregation sub pipelines then we
+      create these with default values. We could have let the sub pipelines create the
+      config objects but it's preferred creating first and validating before starting the
+      run so we can check that the configs are correct and so we don't for
+      example run inference for OOM hrs and then fail at config instantiation and
+      validation.
 
-    The aggregation and indexing configs are duplicates so we only expose the aggregation
-    config.
+    - The aggregation and indexing configs are the same so we only expose the aggregation
+      config.
     """
 
     # Inference Params
 
-    classifier_specs: Sequence[ClassifierSpec] | None = None
-    document_ids: Sequence[DocumentImportId] | None = None
-    use_new_and_updated: bool = False
+    inference_classifier_specs: Sequence[ClassifierSpec] | None = None
+    inference_document_ids: Sequence[DocumentImportId] | None = None
+    inference_use_new_and_updated: bool = False
     inference_config: InferenceConfig | None = None
     inference_batch_size: int = 1000
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT
@@ -52,12 +57,14 @@ class OrchestrateFullPipelineConfig(BaseModel):
     # Aggregation Params
 
     aggregation_config: AggregationConfig | None = None
-    n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH
-    n_batches: PositiveInt = 5
+    aggregation_n_documents_in_batch: PositiveInt = (
+        AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH
+    )
+    aggregation_n_batches: PositiveInt = 5
 
     # Indexing Params
 
-    indexing_batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE
+    indexing_batch_size: int = INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
@@ -152,9 +159,9 @@ async def orchestrate_full_pipeline(
     try:
         logger.info("Starting inference...")
         document_stems = await classifier_inference(
-            classifier_specs=config.classifier_specs,
-            document_ids=config.document_ids,
-            use_new_and_updated=config.use_new_and_updated,
+            classifier_specs=config.inference_classifier_specs,
+            document_ids=config.inference_document_ids,
+            use_new_and_updated=config.inference_use_new_and_updated,
             config=config.inference_config,
             batch_size=config.inference_batch_size,
             classifier_concurrency_limit=config.inference_classifier_concurrency_limit,
@@ -169,8 +176,8 @@ async def orchestrate_full_pipeline(
         run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(
             document_stems=document_stems,
             config=config.aggregation_config,
-            n_documents_in_batch=config.n_documents_in_batch,
-            n_batches=config.n_batches,
+            n_documents_in_batch=config.aggregation_n_documents_in_batch,
+            n_batches=config.aggregation_n_batches,
         )
         logger.info(
             f"Aggregation complete. Run output identifier: {run_output_identifier}"
