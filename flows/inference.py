@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Final, Optional, TypeAlias
 
 import boto3
-import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
@@ -21,8 +20,8 @@ from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.utilities.names import generate_slug
 from pydantic import PositiveInt, SecretStr
-from wandb.sdk.wandb_run import Run
 
+import wandb
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -46,6 +45,7 @@ from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from wandb.sdk.wandb_run import Run
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
@@ -712,7 +712,7 @@ async def classifier_inference(
     config: Config | None = None,
     batch_size: int = 1000,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-):
+) -> Sequence[DocumentStem]:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -811,6 +811,12 @@ async def classifier_inference(
         raise ValueError(
             f"some classifier specs. had failures: {','.join(map(str, failures_classifier_specs))}"
         )
+
+    # TOO: Not all these had successes's though...
+    #   Alternatively we'd have to get the successful document_stem's from the params of
+    #   successful batch results post asyncio.gather.
+    # TODO: Add a test for this return state.
+    return filtered_file_stems
 
 
 async def create_inference_summary_artifact(
