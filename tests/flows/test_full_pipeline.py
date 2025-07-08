@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from prefect.client.schemas.objects import State, StateType
 
 from flows.aggregate_inference_results import (
     DEFAULT_N_BATCHES,
@@ -150,11 +151,17 @@ async def test_full_pipeline_no_config_provided(
         # Setup mocks
         mock_inference_create.return_value = test_config
         mock_aggregate_create.return_value = test_aggregate_config
-        mock_inference.return_value = aggregate_inference_results_document_stems
-        mock_aggregate.return_value = RunOutputIdentifier(
-            mock_run_output_identifier_str
+
+        mock_inference.return_value = State(
+            type=StateType.COMPLETED, data=aggregate_inference_results_document_stems
         )
-        mock_indexing.return_value = None
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=RunOutputIdentifier(mock_run_output_identifier_str),
+        )
+        mock_indexing.return_value = State(
+            type=StateType.COMPLETED, data={"message": "Indexing complete."}
+        )
 
         # Run the flow
         await full_pipeline()
@@ -216,11 +223,16 @@ async def test_full_pipeline_with_full_config(
         ) as mock_indexing,
     ):
         # Setup mocks
-        mock_inference.return_value = aggregate_inference_results_document_stems
-        mock_aggregate.return_value = RunOutputIdentifier(
-            mock_run_output_identifier_str
+        mock_inference.return_value = State(
+            type=StateType.COMPLETED, data=aggregate_inference_results_document_stems
         )
-        mock_indexing.return_value = None
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=RunOutputIdentifier(mock_run_output_identifier_str),
+        )
+        mock_indexing.return_value = State(
+            type=StateType.COMPLETED, data={"message": "Indexing complete."}
+        )
 
         # Run the flow
         await full_pipeline(
@@ -253,6 +265,7 @@ async def test_full_pipeline_with_full_config(
             config=test_config,
             batch_size=500,
             classifier_concurrency_limit=5,
+            return_state=True,
         )
 
         mock_aggregate.assert_called_once_with(
@@ -260,6 +273,7 @@ async def test_full_pipeline_with_full_config(
             config=test_aggregate_config,
             n_documents_in_batch=50,
             n_batches=3,
+            return_state=True,
         )
 
         mock_indexing.assert_called_once_with(
@@ -269,4 +283,5 @@ async def test_full_pipeline_with_full_config(
             indexer_concurrency_limit=2,
             indexer_document_passages_concurrency_limit=4,
             indexer_max_vespa_connections=8,
+            return_state=True,
         )

@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from prefect import flow, get_run_logger
+from prefect import State, flow, get_run_logger
 from pydantic import PositiveInt
 
 from flows.aggregate_inference_results import (
@@ -28,7 +28,7 @@ from flows.inference import (
     classifier_inference,
 )
 from flows.inference import Config as InferenceConfig
-from flows.utils import DocumentImportId
+from flows.utils import DocumentImportId, DocumentStem
 from scripts.cloud import ClassifierSpec
 
 
@@ -72,6 +72,7 @@ def validate_aggregation_inference_configs(
         )
 
 
+# pyright: reportCallIssue=false, reportGeneralTypeIssues=false
 @flow(log_prints=True)
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
@@ -135,19 +136,25 @@ async def full_pipeline(
         + f"inference config: {inference_config}"
     )
 
-    try:
-        document_stems = await classifier_inference(
-            classifier_specs=classifier_specs,
-            document_ids=document_ids,
-            use_new_and_updated=inference_use_new_and_updated,
-            config=inference_config,
-            batch_size=inference_batch_size,
-            classifier_concurrency_limit=inference_classifier_concurrency_limit,
-        )
-        logger.info(f"Inference complete. Document stems count: {len(document_stems)}")
-    except Exception as e:
-        logger.error(f"Inference failed: {e}")
-        raise
+    classifier_inference_run: State = await classifier_inference(
+        classifier_specs=classifier_specs,
+        document_ids=document_ids,
+        use_new_and_updated=inference_use_new_and_updated,
+        config=inference_config,
+        batch_size=inference_batch_size,
+        classifier_concurrency_limit=inference_classifier_concurrency_limit,
+        return_state=True,
+    )
+    classifier_inference_result: (
+        Sequence[DocumentStem] | Exception
+    ) = await classifier_inference_run.result(raise_on_failure=False)
+
+    if isinstance(classifier_inference_result, Exception):
+        logger.error("Inference failed.")
+        raise classifier_inference_result
+    logger.info(
+        f"Inference complete. Document stems count: {len(classifier_inference_result)}"
+    )
 
     # TODO: Update run_classifier_inference_on_batch_of_documents to return a result with
     # the document stems that were successfully processed. Then update classifier_inference
@@ -156,29 +163,36 @@ async def full_pipeline(
     # Currently using filtered_file_stems as the input to the aggregation step, some of
     # these may not have inference results due to failures and thus we expect further
     # failures in the aggregation step.
-    try:
-        run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(
-            document_stems=document_stems,
-            config=aggregation_config,
-            n_documents_in_batch=aggregation_n_documents_in_batch,
-            n_batches=aggregation_n_batches,
-        )
-        logger.info(
-            f"Aggregation complete. Run output identifier: {run_output_identifier}"
-        )
-    except Exception as e:
-        logger.error(f"Aggregation failed: {e}")
-        raise
 
-    try:
-        await run_indexing_from_aggregate_results(
-            run_output_identifier=run_output_identifier,
-            config=aggregation_config,
-            batch_size=indexing_batch_size,
-            indexer_concurrency_limit=indexer_concurrency_limit,
-            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
-            indexer_max_vespa_connections=indexer_max_vespa_connections,
-        )
-    except Exception as e:
-        logger.error(f"Indexing failed: {e}")
-        raise
+    aggregation_run: State = await aggregate_inference_results(
+        document_stems=classifier_inference_result,
+        config=aggregation_config,
+        n_documents_in_batch=aggregation_n_documents_in_batch,
+        n_batches=aggregation_n_batches,
+        return_state=True,
+    )
+    aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
+        raise_on_failure=False
+    )
+
+    if isinstance(aggregation_result, Exception):
+        logger.error("Aggregation failed.")
+        raise aggregation_result
+    logger.info(f"Aggregation complete. Run output identifier: {aggregation_result}")
+
+    indexing_run: State = await run_indexing_from_aggregate_results(
+        run_output_identifier=aggregation_result,
+        config=aggregation_config,
+        batch_size=indexing_batch_size,
+        indexer_concurrency_limit=indexer_concurrency_limit,
+        indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+        indexer_max_vespa_connections=indexer_max_vespa_connections,
+        return_state=True,
+    )
+    indexing_result: None | Exception = await indexing_run.result(
+        raise_on_failure=False
+    )
+
+    if isinstance(indexing_result, Exception):
+        logger.error("Indexing failed.")
+        raise indexing_result
