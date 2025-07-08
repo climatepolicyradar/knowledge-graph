@@ -47,6 +47,7 @@ R = TypeVar("R")
 INFERENCE_RESULTS_PREFIX = "inference_results"
 
 DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
+DEFAULT_N_BATCHES: PositiveInt = 5
 
 # A unique identifier for the run output made from the run context
 RunOutputIdentifier: TypeAlias = str
@@ -431,7 +432,7 @@ async def aggregate_inference_results(
     document_stems: None | Sequence[DocumentStem] = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
-    n_batches: PositiveInt = 5,
+    n_batches: PositiveInt = DEFAULT_N_BATCHES,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:

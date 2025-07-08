@@ -2,13 +2,21 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from flows.aggregate_inference_results import (
+    DEFAULT_N_BATCHES,
+    DEFAULT_N_DOCUMENTS_IN_BATCH,
+    RunOutputIdentifier,
+)
 from flows.aggregate_inference_results import Config as AggregationConfig
-from flows.aggregate_inference_results import RunOutputIdentifier
+from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
 from flows.full_pipeline import (
     full_pipeline,
     validate_aggregation_inference_configs,
 )
-from flows.inference import Config as InferenceConfig
+from flows.inference import INFERENCE_BATCH_SIZE_DEFAULT
+from flows.inference import (
+    Config as InferenceConfig,
+)
 from flows.utils import DocumentImportId, DocumentStem
 from scripts.cloud import AwsEnv, ClassifierSpec
 
@@ -160,20 +168,20 @@ async def test_full_pipeline_no_config_provided(
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["use_new_and_updated"] is False
-        assert call_args.kwargs["batch_size"] == 1000
+        assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
         assert call_args.kwargs["document_stems"] == mock_document_stems
         assert call_args.kwargs["config"] == test_aggregate_config
-        assert call_args.kwargs["n_documents_in_batch"] == 20
-        assert call_args.kwargs["n_batches"] == 5
+        assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
+        assert call_args.kwargs["n_batches"] == DEFAULT_N_BATCHES
 
         mock_indexing.assert_called_once()
         call_args = mock_indexing.call_args
         assert call_args.kwargs["run_output_identifier"] == mock_run_identifier
         assert call_args.kwargs["config"] == test_aggregate_config
-        assert call_args.kwargs["batch_size"] == 50
+        assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
 
 
 @pytest.mark.asyncio
