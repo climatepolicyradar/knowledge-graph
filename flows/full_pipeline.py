@@ -75,9 +75,9 @@ def validate_aggregation_inference_configs(
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
 @flow(log_prints=True)
 async def full_pipeline(
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
     inference_config: InferenceConfig | None = None,
-    inference_classifier_specs: Sequence[ClassifierSpec] | None = None,
-    inference_document_ids: Sequence[DocumentImportId] | None = None,
     inference_use_new_and_updated: bool = False,
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -98,9 +98,9 @@ async def full_pipeline(
     3. Indexing
 
     Args:
+        classifier_specs: Classifier specifications to use for inference.
+        document_ids: Specific document IDs to process. If None, processes all.
         inference_config: Configuration for the inference stage. If None, creates default.
-        inference_classifier_specs: Classifier specifications to use for inference.
-        inference_document_ids: Specific document IDs to process. If None, processes all.
         inference_use_new_and_updated: Whether to process only new/updated documents.
         inference_batch_size: Number of documents to process in each batch.
         inference_classifier_concurrency_limit: Maximum concurrent classifiers.
@@ -137,8 +137,8 @@ async def full_pipeline(
     )
 
     classifier_inference_run: State = await classifier_inference(
-        classifier_specs=inference_classifier_specs,
-        document_ids=inference_document_ids,
+        classifier_specs=classifier_specs,
+        document_ids=document_ids,
         use_new_and_updated=inference_use_new_and_updated,
         config=inference_config,
         batch_size=inference_batch_size,
@@ -152,7 +152,9 @@ async def full_pipeline(
     if isinstance(classifier_inference_result, Exception):
         logger.error("Inference failed.")
         raise classifier_inference_result
-    logger.info("Inference complete.")
+    logger.info(
+        f"Inference complete. Document stems count: {len(classifier_inference_result)}"
+    )
 
     # TODO: Update run_classifier_inference_on_batch_of_documents to return a result with
     # the document stems that were successfully processed. Then update classifier_inference
@@ -162,7 +164,6 @@ async def full_pipeline(
     # these may not have inference results due to failures and thus we expect further
     # failures in the aggregation step.
 
-    logger.info("Starting aggregation...")
     aggregation_run: State = await aggregate_inference_results(
         document_stems=classifier_inference_result,
         config=aggregation_config,
@@ -177,9 +178,8 @@ async def full_pipeline(
     if isinstance(aggregation_result, Exception):
         logger.error("Aggregation failed.")
         raise aggregation_result
-    logger.info("Aggregation complete.")
+    logger.info(f"Aggregation complete. Run output identifier: {aggregation_result}")
 
-    logger.info("Starting indexing...")
     indexing_run: State = await run_indexing_from_aggregate_results(
         run_output_identifier=aggregation_result,
         config=aggregation_config,
@@ -196,4 +196,3 @@ async def full_pipeline(
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
         raise indexing_result
-    logger.info("Indexing complete.")
