@@ -191,7 +191,6 @@ async def index_document_passages(
     raw_data = load_json_data_from_s3(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
-    print(f"Loaded aggregated inference results from S3: {aggregated_results_key}")
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
     }
@@ -308,6 +307,8 @@ async def index_family_document(
     simple_concepts: list[SimpleConcept],
 ) -> Result[None, Error]:
     """Index document concept counts in Vespa via partial update."""
+    logger = get_run_logger()
+
     concepts_counts: Counter[SimpleConcept] = Counter(simple_concepts)
 
     concepts_counts_with_names = {
@@ -315,7 +316,7 @@ async def index_family_document(
         for concept, count in concepts_counts.items()
     }
 
-    print(f"serialised concepts counts: {concepts_counts_with_names}")
+    logger.debug(f"serialised concepts counts: {concepts_counts_with_names}")
 
     path = vespa_connection_pool.app.get_document_v1_path(
         id=document_id,
@@ -325,7 +326,7 @@ async def index_family_document(
     )
     # NB: The schema is misnamed in Vespa
     fields = {"concept_counts": concepts_counts_with_names}
-    print(f"update data at path {path} with fields {fields}")
+    logger.debug(f"update data at path {path} with fields {fields}")
 
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="family_document",
@@ -340,7 +341,7 @@ async def index_family_document(
         # `get_json` returns a Dict[1].
         #
         # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
-        print(f"Vespa update failed: {json.dumps(response.get_json())}")
+        logger.error(f"Vespa update failed: {json.dumps(response.get_json())}")
 
         return Err(
             Error(
@@ -461,8 +462,6 @@ async def index_all(
                 indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
             )
 
-            print("finished indexing document passages")
-
             simple_concepts: list[SimpleConcept] = []
             errors: list[Error] = []
             for result in results:
@@ -472,8 +471,6 @@ async def index_all(
                     case Err(err):
                         errors.append(err)
                         print(f"indexing document passage failed: {err}")
-
-            print(f"simple counts: {simple_concepts}")
 
             document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
@@ -540,7 +537,6 @@ async def index_aggregate_results_for_batch_of_documents(
         f"no. of documents: {len(document_stems)}"
     )
 
-    print("getting futures")
     futures = index_all.map(  # pyright: ignore[reportFunctionMemberAccess] document_ids,
         document_stems,
         config=unmapped(config),
@@ -550,18 +546,13 @@ async def index_aggregate_results_for_batch_of_documents(
         ),
         indexer_max_vespa_connections=unmapped(indexer_max_vespa_connections),
     )
-
-    print("getting results")
     results = futures.result(raise_on_failure=False)
 
-    print("handling results")
     fault_per_document: dict[DocumentStem, Fault] = {}
-
     for result in results:
         if isinstance(result, Fault):
             fault_per_document[result.metadata.get("document_stem")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
 
-    print("creating summary artifact")
     await create_indexing_batch_summary_artifact(
         config=config,
         run_output_identifier=run_output_identifier,
