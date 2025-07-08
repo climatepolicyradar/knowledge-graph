@@ -74,9 +74,9 @@ def validate_aggregation_inference_configs(
 
 @flow(log_prints=True)
 async def full_pipeline(
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
     inference_config: InferenceConfig | None = None,
-    inference_classifier_specs: Sequence[ClassifierSpec] | None = None,
-    inference_document_ids: Sequence[DocumentImportId] | None = None,
     inference_use_new_and_updated: bool = False,
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -97,9 +97,9 @@ async def full_pipeline(
     3. Indexing
 
     Args:
+        classifier_specs: Classifier specifications to use for inference.
+        document_ids: Specific document IDs to process. If None, processes all.
         inference_config: Configuration for the inference stage. If None, creates default.
-        inference_classifier_specs: Classifier specifications to use for inference.
-        inference_document_ids: Specific document IDs to process. If None, processes all.
         inference_use_new_and_updated: Whether to process only new/updated documents.
         inference_batch_size: Number of documents to process in each batch.
         inference_classifier_concurrency_limit: Maximum concurrent classifiers.
@@ -136,16 +136,15 @@ async def full_pipeline(
     )
 
     try:
-        logger.info("Starting inference...")
         document_stems = await classifier_inference(
-            classifier_specs=inference_classifier_specs,
-            document_ids=inference_document_ids,
+            classifier_specs=classifier_specs,
+            document_ids=document_ids,
             use_new_and_updated=inference_use_new_and_updated,
             config=inference_config,
             batch_size=inference_batch_size,
             classifier_concurrency_limit=inference_classifier_concurrency_limit,
         )
-        logger.info("Inference complete.")
+        logger.info(f"Inference complete. Document stems count: {len(document_stems)}")
     except Exception as e:
         logger.error(f"Inference failed: {e}")
         raise

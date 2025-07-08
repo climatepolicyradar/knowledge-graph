@@ -226,8 +226,8 @@ async def test_full_pipeline_with_full_config(
         await full_pipeline(
             inference_config=test_config,
             aggregation_config=test_aggregate_config,
-            inference_classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
-            inference_document_ids=[
+            classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
+            document_ids=[
                 DocumentImportId("test.doc.1"),
                 DocumentImportId("test.doc.2"),
             ],
