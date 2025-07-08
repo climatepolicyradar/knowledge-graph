@@ -189,7 +189,9 @@ async def full_pipeline(
         indexer_max_vespa_connections=indexer_max_vespa_connections,
         return_state=True,
     )
-    indexing_result: Exception = await indexing_run.result(raise_on_failure=False)
+    indexing_result: None | Exception = await indexing_run.result(
+        raise_on_failure=False
+    )
 
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
