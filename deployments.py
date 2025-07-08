@@ -24,6 +24,7 @@ from flows.aggregate_inference_results import (
 )
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
+from flows.full_pipeline import full_pipeline
 from flows.index_from_aggregate_results import (
     index_aggregate_results_for_batch_of_documents,
     run_indexing_from_aggregate_results,
@@ -166,6 +167,12 @@ create_deployment(
     description="Run partial updates of labelled passages stored in S3 into Vespa",
 )
 
+# Orchestrate full pipeline
+
+create_deployment(
+    flow=full_pipeline,
+    description="Run the full Knowledge Graph Pipeline",
+)
 # Wikibase
 
 create_deployment(

@@ -573,7 +573,7 @@ async def index_aggregate_results_for_batch_of_documents(
 )
 async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
-    document_stems: list[DocumentStem] | None = None,
+    document_stems: Sequence[DocumentStem] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,

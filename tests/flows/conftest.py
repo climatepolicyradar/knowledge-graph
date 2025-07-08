@@ -429,8 +429,8 @@ def parser_output_pdf(parser_output):
 def s3_prefix_mock_bucket(
     mock_bucket: str,
 ) -> str:
-    return f"s3://{mock_bucket}"
     """Returns the s3 prefix for the concepts."""
+    return f"s3://{mock_bucket}"
 
 
 @pytest.fixture
@@ -556,7 +556,7 @@ def mock_bucket_labelled_passages_b(
 @pytest_asyncio.fixture
 async def mock_bucket_labelled_passages_large(
     mock_async_bucket,
-) -> None:
+) -> tuple[list[str], str, S3Client]:
     """A version of the labelled_passage bucket with more files"""
     bucket, mock_s3_async_client = mock_async_bucket
     fixture_root = FIXTURE_DIR / "labelled_passages"
