@@ -24,6 +24,7 @@ from flows.aggregate_inference_results import (
 )
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
+from flows.full_pipeline import full_pipeline
 from flows.index_from_aggregate_results import (
     index_aggregate_results_for_batch_of_documents,
     run_indexing_from_aggregate_results,
@@ -32,7 +33,6 @@ from flows.inference import (
     classifier_inference,
     run_classifier_inference_on_batch_of_documents,
 )
-from flows.orchestrate_full_pipeline import orchestrate_full_pipeline
 from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -170,7 +170,7 @@ create_deployment(
 # Orchestrate full pipeline
 
 create_deployment(
-    flow=orchestrate_full_pipeline,
+    flow=full_pipeline,
     description="Orchestrate the full Knowledge Graph Pipeline",
 )
 # Wikibase

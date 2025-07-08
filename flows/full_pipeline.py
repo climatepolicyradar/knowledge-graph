@@ -60,7 +60,7 @@ def check_sub_config_fields_match(
 
 
 @flow(log_prints=True)
-async def orchestrate_full_pipeline(
+async def full_pipeline(
     inference_config: InferenceConfig | None = None,
     inference_classifier_specs: Sequence[ClassifierSpec] | None = None,
     inference_document_ids: Sequence[DocumentImportId] | None = None,
