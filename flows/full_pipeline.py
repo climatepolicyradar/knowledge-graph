@@ -171,11 +171,3 @@ async def full_pipeline(
     except Exception as e:
         logger.error(f"Indexing failed: {e}")
         raise
-
-
-# TODO: Add run artifact.
-#   What needs to be in this one as we have the child artifacts?
-#       document_stem count, run_output_identifier etc. these are already captured.
-# TODO: Add tests.
-#   What to mock and what to let run?
-# TODO: Add docs.

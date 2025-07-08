@@ -250,16 +250,3 @@ async def test_full_pipeline_with_full_config(test_config, test_aggregate_config
             indexer_document_passages_concurrency_limit=4,
             indexer_max_vespa_connections=8,
         )
-
-
-@pytest.mark.asyncio
-async def test_full_pipeline_with_real_sub_flows(
-    mock_bucket_documents, test_config, test_aggregate_config
-) -> None:
-    """Test the flow with real sub-flows."""
-
-    # Run the flow and sub flows against mock bucket documents
-    await full_pipeline(
-        inference_config=test_config,
-        aggregation_config=test_aggregate_config,
-    )

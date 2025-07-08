@@ -98,3 +98,26 @@ In the longer term, we expect the graph to be a useful artefact in its own right
 ## Testing
 
 Make sure you have [Git LFS](https://git-lfs.com) installed if you want to run all the tests.
+
+
+## Pipelines
+
+Within this Knowledge Graph repo we have a full pipeline at `flows/full_pipeline.py:full_pipeline` that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
+
+This solution calls inference -> aggregation -> indexing in series for all documents in the run as opposed to running single documents through concurrently. Eg. we wait for all inference jobs to complete before progressing. This was chosen for simplicity and to rely on the concurrency functionality and limits already integrated in to the sub flows / pipelines.
+
+For example we don't want to try and index 25k docs all at once and already have functionality for managing this within the indexing flow. To do this at the document level in this pipeline would require a lot more work relative to just calling the indexing flow from the parent flow.
+
+All the sub pipelines (inference, aggregation & indexing) can be run individually as distinct steps.
+
+1. Inference
+
+This consists of running our classifiers over our documents to generate `LabelledPassages` which themselves contain `Spans` as listed above in this `README.md`. 
+
+2. Aggregation
+
+This consists of aggregating (collating) the inference results for a document from different classifiers which are stored at multiple s3 paths into one object in s3.
+
+3. Indexing
+
+This consists of indexing the concept matches in to our passage index and concept counts to our family index within our vespa database.
