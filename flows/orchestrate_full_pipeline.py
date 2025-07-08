@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 from prefect import flow, get_run_logger
+from prefect.client.schemas import State
 from pydantic import BaseModel, PositiveInt, model_validator
 
 from flows.aggregate_inference_results import (
@@ -24,10 +25,11 @@ from flows.index_from_aggregate_results import (
 )
 from flows.inference import CLASSIFIER_CONCURRENCY_LIMIT, classifier_inference
 from flows.inference import Config as InferenceConfig
-from flows.utils import DocumentImportId
+from flows.utils import DocumentImportId, DocumentStem
 from scripts.cloud import ClassifierSpec
 
 
+# TODO: Move the params and config to the top level.
 class OrchestrateFullPipelineConfig(BaseModel):
     """
     Configuration for the full knowledge graph pipeline orchestration.
@@ -106,6 +108,7 @@ class OrchestrateFullPipelineConfig(BaseModel):
         return self
 
 
+# TODO: Rethink naming of this flow.
 @flow(log_prints=True)
 async def orchestrate_full_pipeline(
     config: OrchestrateFullPipelineConfig | None = None,
@@ -156,31 +159,43 @@ async def orchestrate_full_pipeline(
 
     logger.info(f"Orchestrating full pipeline with config: {config}")
 
-    try:
-        logger.info("Starting inference...")
-        document_stems = await classifier_inference(
-            classifier_specs=config.inference_classifier_specs,
-            document_ids=config.inference_document_ids,
-            use_new_and_updated=config.inference_use_new_and_updated,
-            config=config.inference_config,
-            batch_size=config.inference_batch_size,
-            classifier_concurrency_limit=config.inference_classifier_concurrency_limit,
-        )
-        logger.info("Inference complete.")
-    except Exception as e:
-        logger.error(f"Inference failed: {e}")
-        raise
+    logger.info("Starting inference...")
+    classifier_inference_run: State = await classifier_inference(
+        classifier_specs=config.inference_classifier_specs,
+        document_ids=config.inference_document_ids,
+        use_new_and_updated=config.inference_use_new_and_updated,
+        config=config.inference_config,
+        batch_size=config.inference_batch_size,
+        classifier_concurrency_limit=config.inference_classifier_concurrency_limit,
+        return_state=True,
+    )  # pyright: ignore[reportGeneralTypeIssues]
+    classifier_inference_result: Sequence[DocumentStem] | Exception = (
+        await classifier_inference_run.result(raise_on_failure=False)  # pyright: ignore[reportGeneralTypeIssues]
+    )
+
+    if isinstance(classifier_inference_result, Exception):
+        logger.error(f"Inference failed: {classifier_inference_result}")
+        raise classifier_inference_result
+    logger.info("Inference complete.")
 
     try:
         logger.info("Starting aggregation...")
-        run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(
-            document_stems=document_stems,
+        aggregation_run: State = await aggregate_inference_results(
+            document_stems=classifier_inference_result,
             config=config.aggregation_config,
             n_documents_in_batch=config.aggregation_n_documents_in_batch,
             n_batches=config.aggregation_n_batches,
+            return_state=True,
+        )  # pyright: ignore[reportGeneralTypeIssues]
+        aggregation_result: RunOutputIdentifier | Exception = (
+            await aggregation_run.result(raise_on_failure=False)  # pyright: ignore[reportGeneralTypeIssues]
         )
+
+        if isinstance(aggregation_result, Exception):
+            logger.error(f"Aggregation failed: {aggregation_result}")
+            raise aggregation_result
         logger.info(
-            f"Aggregation complete. Run output identifier: {run_output_identifier}"
+            f"Aggregation complete. Run output identifier: {aggregation_result}"
         )
     except Exception as e:
         logger.error(f"Aggregation failed: {e}")
@@ -188,14 +203,23 @@ async def orchestrate_full_pipeline(
 
     try:
         logger.info("Starting indexing...")
-        await run_indexing_from_aggregate_results(
-            run_output_identifier=run_output_identifier,
+        indexing_run: State = await run_indexing_from_aggregate_results(
+            run_output_identifier=aggregation_result,
             config=config.aggregation_config,
             batch_size=config.indexing_batch_size,
             indexer_concurrency_limit=config.indexer_concurrency_limit,
             indexer_document_passages_concurrency_limit=config.indexer_document_passages_concurrency_limit,
             indexer_max_vespa_connections=config.indexer_max_vespa_connections,
+            return_state=True,
+        )  # pyright: ignore[reportGeneralTypeIssues]
+        indexing_result: None | Exception = (
+            await indexing_run.result(raise_on_failure=False)  # pyright: ignore[reportGeneralTypeIssues]
         )
+
+        if isinstance(indexing_result, Exception):
+            logger.error(f"Indexing failed: {indexing_result}")
+            raise indexing_result
+
         logger.info("Indexing complete.")
     except Exception as e:
         logger.error(f"Indexing failed: {e}")
