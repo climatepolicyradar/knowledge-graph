@@ -28,12 +28,12 @@ from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
 
 
-def check_sub_config_fields_match(
+def validate_aggregation_inference_configs(
     aggregation_config: AggregationConfig,
     inference_config: InferenceConfig,
 ) -> None:
     """
-    Check that the sub config fields match.
+    Check that the aggregation and inference config fields match.
 
     This is as they have fields that should match and we want to catch this before we
     run the flows.
@@ -74,40 +74,35 @@ async def full_pipeline(
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
-):
+) -> None:
     """
-    Orchestrate the full KG pipeline.
+    Full KG pipeline.
 
     This flow orchestrates the full KG pipeline, including:
     1. Inference
     2. Aggregation
     3. Indexing
 
-    We run inference either on all documents or based upon the configured document ids
-    and use_new_and_updated flag. This step identifies the document stems to process.
+    Args:
+        inference_config: Configuration for the inference stage. If None, creates default.
+        inference_classifier_specs: Classifier specifications to use for inference.
+        inference_document_ids: Specific document IDs to process. If None, processes all.
+        inference_use_new_and_updated: Whether to process only new/updated documents.
+        inference_batch_size: Number of documents to process in each batch.
+        inference_classifier_concurrency_limit: Maximum concurrent classifiers.
+        aggregation_config: Configuration for the aggregation stage. If None, creates default.
+        aggregation_n_documents_in_batch: Number of documents per aggregation batch.
+        aggregation_n_batches: Number of aggregation batches to run.
+        indexing_batch_size: Number of documents to index in each batch.
+        indexer_concurrency_limit: Maximum concurrent indexers.
+        indexer_document_passages_concurrency_limit: Max concurrent passage indexers.
+        indexer_max_vespa_connections: Maximum Vespa connections for indexing.
 
-    We return the document stems that inference ran on and use this as a parameter
-    within the aggregation step.
+    Returns:
+        None
 
-    Aggregation then returns a unique run identifier which we use as a parameter within
-    the indexing step. Thus, we index all documents from within the aggregation run
-    directory.
-
-    Indexing includes both passage level concept indexing as well as
-    family level indexing of concept counts.
-
-    We expose the listed parameters such that we can configure the
-    sub pipelines.
-
-    - If config is not provided for the inference and aggregation sub pipelines then we
-      create these with default values. We could have let the sub pipelines create the
-      config objects but it's preferred creating first and validating before starting the
-      run so we can check that the configs are correct and so we don't for
-      example run inference for OOM hrs and then fail at config instantiation and
-      validation.
-
-    - The aggregation and indexing configs are the same so we only expose the aggregation
-      config.
+    Raises:
+        ValueError: If inference and aggregation configs are incompatible.
     """
 
     logger = get_run_logger()
@@ -120,7 +115,7 @@ async def full_pipeline(
         logger.info("No inference config provided, creating default...")
         inference_config = await InferenceConfig.create()
 
-    check_sub_config_fields_match(aggregation_config, inference_config)
+    validate_aggregation_inference_configs(aggregation_config, inference_config)
 
     logger.info(
         f"Orchestrating full pipeline with aggregation config: {aggregation_config}, "
@@ -142,6 +137,10 @@ async def full_pipeline(
         logger.error(f"Inference failed: {e}")
         raise
 
+    # TODO: We use the filtered file stems that inference was run on as the input to the
+    # aggregation step to define which documents to aggregate. Some of these documents
+    # may not have inference results due to failures and thus we expect further failures
+    # in the aggregation step.
     try:
         logger.info("Starting aggregation...")
         run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(

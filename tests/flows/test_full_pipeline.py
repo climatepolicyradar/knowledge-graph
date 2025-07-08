@@ -5,18 +5,18 @@ import pytest
 from flows.aggregate_inference_results import Config as AggregationConfig
 from flows.aggregate_inference_results import RunOutputIdentifier
 from flows.full_pipeline import (
-    check_sub_config_fields_match,
     full_pipeline,
+    validate_aggregation_inference_configs,
 )
 from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentImportId, DocumentStem
 from scripts.cloud import AwsEnv, ClassifierSpec
 
 
-def test_check_sub_config_fields_match() -> None:
-    """Test the check_sub_config_fields_match function."""
+def test_validate_aggregation_inference_configs() -> None:
+    """Test the validate_aggregation_inference_configs function."""
 
-    config = check_sub_config_fields_match(
+    config = validate_aggregation_inference_configs(
         inference_config=InferenceConfig(
             cache_bucket="test",
             bucket_region="test",
@@ -92,15 +92,15 @@ def test_check_sub_config_fields_match() -> None:
         ),
     ],
 )
-def test_check_sub_config_fields_match_raises_value_error(
+def test_validate_aggregation_inference_configs_raises_value_error(
     inference_config: InferenceConfig,
     aggregation_config: AggregationConfig,
     expected_error: str,
 ) -> None:
-    """Test the check_sub_config_fields_match function raises a ValueError."""
+    """Test the validate_aggregation_inference_configs function raises a ValueError."""
 
     with pytest.raises(ValueError) as e:
-        check_sub_config_fields_match(
+        validate_aggregation_inference_configs(
             inference_config=inference_config,
             aggregation_config=aggregation_config,
         )

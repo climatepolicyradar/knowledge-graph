@@ -13,6 +13,7 @@ from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
     ClassifierSpec,
+    DocumentImportId,
     DocumentStem,
     _stringify,
     classifier_inference,
@@ -77,16 +78,16 @@ def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
 
 def test_determine_file_stems__error(test_config):
     with pytest.raises(ValueError):
-        determine_file_stems(
+        _ = determine_file_stems(
             config=test_config,
             use_new_and_updated=False,
             requested_document_ids=[
-                "AF.document.002MMUCR.n0000",
-                "AF.document.AFRDG00038.n00002",
+                DocumentImportId("AF.document.002MMUCR.n0000"),
+                DocumentImportId("AF.document.AFRDG00038.n00002"),
             ],
             current_bucket_file_stems=[
-                "CCLW.document.i00001313.n0000",
-                "AF.document.002MMUCR.n0000",
+                DocumentStem("CCLW.document.i00001313.n0000"),
+                DocumentStem("AF.document.002MMUCR.n0000"),
             ],
         )
 
@@ -227,13 +228,16 @@ async def test_classifier_inference(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
 ):
     mock_wandb_init, _, _ = mock_wandb
-    doc_ids = [Path(doc_file).stem for doc_file in mock_bucket_documents]
+    doc_ids = [
+        DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    ]
     with prefect_test_harness():
-        await classifier_inference(
+        filtered_file_stems = await classifier_inference(
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
+        assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
 
     mock_wandb_init.assert_called_once_with(
         entity="test_entity",
@@ -407,11 +411,11 @@ async def test_run_classifier_inference_on_document_missing(
         mock_run, test_config, classifier_name, classifier_alias
     )
 
-    document_id = "CCLW.executive.8133.0"
+    document_stem = DocumentStem("CCLW.executive.8133.0")
     with pytest.raises(ClientError) as excinfo:
         await run_classifier_inference_on_document(
             config=test_config,
-            file_stem=document_id,
+            file_stem=document_stem,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
             classifier=classifier,
@@ -500,7 +504,9 @@ async def test_run_classifier_inference_on_batch_of_documents(
     test_config.local_classifier_dir = mock_classifiers_dir
 
     # Prepare test data - use only the PDF document which has languages field
-    batch = [Path(mock_bucket_documents[0]).stem]  # PDF.document.0.1 has languages
+    batch = [
+        DocumentStem(Path(mock_bucket_documents[0]).stem)
+    ]  # PDF.document.0.1 has languages
     classifier_name = "Q788"
     classifier_alias = "v7"
     config_json = {
@@ -574,7 +580,7 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
     test_config.local_classifier_dir = mock_classifiers_dir
 
     # Use non-existent document IDs to trigger failures
-    batch = ["NonExistent.doc.1", "AnotherMissing.doc.2"]
+    batch = [DocumentStem("NonExistent.doc.1"), DocumentStem("AnotherMissing.doc.2")]
     classifier_name = "Q788"
     classifier_alias = "v8"
     config_json = {
@@ -638,7 +644,7 @@ async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
     mock_wandb_init, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
 
-    batch = []
+    batch: list[DocumentStem] = []
     classifier_name = "Q788"
     classifier_alias = "v12"
     config_json = {

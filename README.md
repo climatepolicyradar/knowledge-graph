@@ -120,4 +120,4 @@ This consists of aggregating (collating) the inference results for a document fr
 
 3. Indexing
 
-This consists of indexing the concept matches in to our passage index and concept counts to our family index within our vespa database.
+This consists of indexing the spans identified from inference in to our passage index's concepts field and concept counts to our family index within our vespa database.
