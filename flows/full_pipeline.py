@@ -44,19 +44,28 @@ def validate_aggregation_inference_configs(
 
     if aggregation_config.cache_bucket_str != inference_config.cache_bucket:
         raise ValueError(
-            f"Cache bucket mismatch: {aggregation_config.cache_bucket_str} != {inference_config.cache_bucket}"
+            f"Cache bucket mismatch: {aggregation_config.cache_bucket_str} != "
+            + f"{inference_config.cache_bucket}"
         )
     if (
         aggregation_config.document_source_prefix
         != inference_config.document_target_prefix
     ):
         raise ValueError(
-            "Inference target prefix does not match aggregation source prefix"
+            "Inference target prefix does not match aggregation source prefix: "
+            + f"{inference_config.document_target_prefix} != "
+            + f"{aggregation_config.document_source_prefix}"
         )
     if aggregation_config.bucket_region != inference_config.bucket_region:
-        raise ValueError("Bucket region mismatch")
+        raise ValueError(
+            f"Bucket region mismatch: {aggregation_config.bucket_region} != "
+            + f"{inference_config.bucket_region}"
+        )
     if aggregation_config.aws_env != inference_config.aws_env:
-        raise ValueError("AWS environment mismatch")
+        raise ValueError(
+            f"AWS environment mismatch: {aggregation_config.aws_env} != "
+            + f"{inference_config.aws_env}"
+        )
 
 
 @flow(log_prints=True)
