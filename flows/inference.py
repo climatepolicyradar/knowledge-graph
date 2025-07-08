@@ -812,10 +812,6 @@ async def classifier_inference(
             f"some classifier specs. had failures: {','.join(map(str, failures_classifier_specs))}"
         )
 
-    # TODO: Not all of these had successes though...
-    #   Alternatively we'd have to get the successful document_stems from the params of
-    #   successful batch results post asyncio.gather.
-    # TODO: Add a test for this return state.
     return filtered_file_stems
 
 
