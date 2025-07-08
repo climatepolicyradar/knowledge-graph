@@ -146,10 +146,13 @@ async def full_pipeline(
         logger.error(f"Inference failed: {e}")
         raise
 
-    # TODO: We use the filtered file stems that inference was run on as the input to the
-    # aggregation step to define which documents to aggregate. Some of these documents
-    # may not have inference results due to failures and thus we expect further failures
-    # in the aggregation step.
+    # TODO: Update run_classifier_inference_on_batch_of_documents to return a result with
+    # the document stems that were successfully processed. Then update classifier_inference
+    # to return all of the successful document stems from all the inference batches so that
+    # we can use this as the input to the aggregation step.
+    # Currently using filtered_file_stems as the input to the aggregation step, some of
+    # these may not have inference results due to failures and thus we expect further
+    # failures in the aggregation step.
     try:
         logger.info("Starting aggregation...")
         run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(
