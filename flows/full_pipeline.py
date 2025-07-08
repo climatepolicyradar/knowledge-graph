@@ -157,7 +157,6 @@ async def full_pipeline(
     # these may not have inference results due to failures and thus we expect further
     # failures in the aggregation step.
     try:
-        logger.info("Starting aggregation...")
         run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(
             document_stems=document_stems,
             config=aggregation_config,
@@ -172,7 +171,6 @@ async def full_pipeline(
         raise
 
     try:
-        logger.info("Starting indexing...")
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
             config=aggregation_config,
@@ -181,7 +179,6 @@ async def full_pipeline(
             indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
             indexer_max_vespa_connections=indexer_max_vespa_connections,
         )
-        logger.info("Indexing complete.")
     except Exception as e:
         logger.error(f"Indexing failed: {e}")
         raise
