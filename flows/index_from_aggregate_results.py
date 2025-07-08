@@ -112,7 +112,7 @@ async def _update_vespa_passage_concepts(
     # may be over 50,000 document passages. With these 2 constraints,
     # randomly sample from a pseudo-random distribution and
     # conditionally print this extra info.
-    if random.random() < 0.33:
+    if random.random() < 0.1:
         print(f"update data at path {path} with fields {fields}")
 
     if not response.is_successful():
