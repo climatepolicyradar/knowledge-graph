@@ -72,6 +72,7 @@ def validate_aggregation_inference_configs(
         )
 
 
+# pyright: reportCallIssue=false, reportGeneralTypeIssues=false
 @flow(log_prints=True)
 async def full_pipeline(
     inference_config: InferenceConfig | None = None,
@@ -143,10 +144,10 @@ async def full_pipeline(
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
         return_state=True,
-    )  # pyright: ignore[reportGeneralTypeIssues]
-    classifier_inference_result: Sequence[DocumentStem] | Exception = (
-        await classifier_inference_run.result(raise_on_failure=False)  # pyright: ignore[reportGeneralTypeIssues]
     )
+    classifier_inference_result: (
+        Sequence[DocumentStem] | Exception
+    ) = await classifier_inference_run.result(raise_on_failure=False)
 
     if isinstance(classifier_inference_result, Exception):
         logger.error("Inference failed.")
@@ -168,9 +169,9 @@ async def full_pipeline(
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
         return_state=True,
-    )  # pyright: ignore[reportGeneralTypeIssues]
-    aggregation_result: RunOutputIdentifier | Exception = (
-        await aggregation_run.result(raise_on_failure=False)  # pyright: ignore[reportGeneralTypeIssues]
+    )
+    aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
+        raise_on_failure=False
     )
 
     if isinstance(aggregation_result, Exception):
@@ -179,20 +180,16 @@ async def full_pipeline(
     logger.info("Aggregation complete.")
 
     logger.info("Starting indexing...")
-    indexing_run: State = (
-        await run_indexing_from_aggregate_results(
-            run_output_identifier=aggregation_result,
-            config=aggregation_config,
-            batch_size=indexing_batch_size,
-            indexer_concurrency_limit=indexer_concurrency_limit,
-            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
-            indexer_max_vespa_connections=indexer_max_vespa_connections,
-            return_state=True,
-        )  # pyright: ignore[reportGeneralTypeIssues]
+    indexing_run: State = await run_indexing_from_aggregate_results(
+        run_output_identifier=aggregation_result,
+        config=aggregation_config,
+        batch_size=indexing_batch_size,
+        indexer_concurrency_limit=indexer_concurrency_limit,
+        indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+        indexer_max_vespa_connections=indexer_max_vespa_connections,
+        return_state=True,
     )
-    indexing_result: Exception = (
-        await indexing_run.result(raise_on_failure=False)  # pyright: ignore[reportGeneralTypeIssues]
-    )
+    indexing_result: Exception = await indexing_run.result(raise_on_failure=False)
 
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
