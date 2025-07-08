@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from prefect import flow, get_run_logger
-from pydantic import BaseModel, PositiveInt, model_validator
+from pydantic import PositiveInt
 
 from flows.aggregate_inference_results import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
@@ -28,87 +28,52 @@ from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
 
 
-class OrchestrateFullPipelineConfig(BaseModel):
+def check_sub_config_fields_match(
+    aggregation_config: AggregationConfig,
+    inference_config: InferenceConfig,
+) -> None:
     """
-    Configuration for the full knowledge graph pipeline orchestration.
+    Check that the sub config fields match.
 
-    We expose the listed parameters such that we can configure the
-    sub pipelines.
+    This is as they have fields that should match and we want to catch this before we
+    run the flows.
 
-    - If config is not provided for the inference and aggregation sub pipelines then we
-      create these with default values. We could have let the sub pipelines create the
-      config objects but it's preferred creating first and validating before starting the
-      run so we can check that the configs are correct and so we don't for
-      example run inference for OOM hrs and then fail at config instantiation and
-      validation.
-
-    - The aggregation and indexing configs are the same so we only expose the aggregation
-      config.
+    Raises:
+        ValueError: If the config fields don't match.
     """
 
-    # Inference Params
-
-    inference_classifier_specs: Sequence[ClassifierSpec] | None = None
-    inference_document_ids: Sequence[DocumentImportId] | None = None
-    inference_use_new_and_updated: bool = False
-    inference_config: InferenceConfig
-    inference_batch_size: int = 1000
-    inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT
-
-    # Aggregation Params
-
-    aggregation_config: AggregationConfig
-    aggregation_n_documents_in_batch: PositiveInt = (
-        AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH
-    )
-    aggregation_n_batches: PositiveInt = 5
-
-    # Indexing Params
-
-    indexing_batch_size: int = INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE
-    indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT
-    indexer_document_passages_concurrency_limit: PositiveInt = (
-        INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT
-    )
-    indexer_max_vespa_connections: PositiveInt = (
-        DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
-    )
-
-    @model_validator(mode="after")
-    def check_sub_config_fields_match(self) -> "OrchestrateFullPipelineConfig":
-        """
-        Check that the sub config fields match.
-
-        This is a post instantiation check to ensure that the sub config fields match.
-        This is as they have fields that should match and we want to catch this before
-        we run the flows.
-        """
-
-        if (
-            self.aggregation_config.cache_bucket_str
-            != self.inference_config.cache_bucket
-        ):
-            raise ValueError(
-                f"Cache bucket mismatch: {self.aggregation_config.cache_bucket_str} != {self.inference_config.cache_bucket}"
-            )
-        if (
-            self.aggregation_config.document_source_prefix
-            != self.inference_config.document_target_prefix
-        ):
-            raise ValueError(
-                "Inference target prefix does not match aggregation source prefix"
-            )
-        if self.aggregation_config.bucket_region != self.inference_config.bucket_region:
-            raise ValueError("Bucket region mismatch")
-        if self.aggregation_config.aws_env != self.inference_config.aws_env:
-            raise ValueError("AWS environment mismatch")
-
-        return self
+    if aggregation_config.cache_bucket_str != inference_config.cache_bucket:
+        raise ValueError(
+            f"Cache bucket mismatch: {aggregation_config.cache_bucket_str} != {inference_config.cache_bucket}"
+        )
+    if (
+        aggregation_config.document_source_prefix
+        != inference_config.document_target_prefix
+    ):
+        raise ValueError(
+            "Inference target prefix does not match aggregation source prefix"
+        )
+    if aggregation_config.bucket_region != inference_config.bucket_region:
+        raise ValueError("Bucket region mismatch")
+    if aggregation_config.aws_env != inference_config.aws_env:
+        raise ValueError("AWS environment mismatch")
 
 
 @flow(log_prints=True)
 async def orchestrate_full_pipeline(
-    config: OrchestrateFullPipelineConfig | None = None,
+    inference_config: InferenceConfig | None = None,
+    inference_classifier_specs: Sequence[ClassifierSpec] | None = None,
+    inference_document_ids: Sequence[DocumentImportId] | None = None,
+    inference_use_new_and_updated: bool = False,
+    inference_batch_size: int = 1000,
+    inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    aggregation_config: AggregationConfig | None = None,
+    aggregation_n_documents_in_batch: PositiveInt = AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
+    aggregation_n_batches: PositiveInt = 5,
+    indexing_batch_size: int = INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
+    indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
+    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
+    indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
 ):
     """
     Orchestrate the full KG pipeline.
@@ -130,41 +95,47 @@ async def orchestrate_full_pipeline(
 
     Indexing includes both passage level concept indexing as well as
     family level indexing of concept counts.
+
+    We expose the listed parameters such that we can configure the
+    sub pipelines.
+
+    - If config is not provided for the inference and aggregation sub pipelines then we
+      create these with default values. We could have let the sub pipelines create the
+      config objects but it's preferred creating first and validating before starting the
+      run so we can check that the configs are correct and so we don't for
+      example run inference for OOM hrs and then fail at config instantiation and
+      validation.
+
+    - The aggregation and indexing configs are the same so we only expose the aggregation
+      config.
     """
 
     logger = get_run_logger()
 
-    if not config:
-        logger.info(
-            "No config provided, creating default OrchestrateFullPipelineConfig..."
-        )
+    if not aggregation_config:
+        logger.info("No aggregation config provided, creating default...")
         aggregation_config = await AggregationConfig.create()
-        inference_config = await InferenceConfig.create()
-        config = OrchestrateFullPipelineConfig(
-            aggregation_config=aggregation_config,
-            inference_config=inference_config,
-        )
-    else:
-        if not config.aggregation_config:
-            logger.info("No aggregation config provided, creating default...")
-            aggregation_config = await AggregationConfig.create()
-            config.aggregation_config = aggregation_config
-        if not config.inference_config:
-            logger.info("No inference config provided, creating default...")
-            inference_config = await InferenceConfig.create()
-            config.inference_config = inference_config
 
-    logger.info(f"Orchestrating full pipeline with config: {config}")
+    if not inference_config:
+        logger.info("No inference config provided, creating default...")
+        inference_config = await InferenceConfig.create()
+
+    check_sub_config_fields_match(aggregation_config, inference_config)
+
+    logger.info(
+        f"Orchestrating full pipeline with aggregation config: {aggregation_config}, "
+        + f"inference config: {inference_config}"
+    )
 
     try:
         logger.info("Starting inference...")
         document_stems = await classifier_inference(
-            classifier_specs=config.inference_classifier_specs,
-            document_ids=config.inference_document_ids,
-            use_new_and_updated=config.inference_use_new_and_updated,
-            config=config.inference_config,
-            batch_size=config.inference_batch_size,
-            classifier_concurrency_limit=config.inference_classifier_concurrency_limit,
+            classifier_specs=inference_classifier_specs,
+            document_ids=inference_document_ids,
+            use_new_and_updated=inference_use_new_and_updated,
+            config=inference_config,
+            batch_size=inference_batch_size,
+            classifier_concurrency_limit=inference_classifier_concurrency_limit,
         )
         logger.info("Inference complete.")
     except Exception as e:
@@ -175,9 +146,9 @@ async def orchestrate_full_pipeline(
         logger.info("Starting aggregation...")
         run_output_identifier: RunOutputIdentifier = await aggregate_inference_results(
             document_stems=document_stems,
-            config=config.aggregation_config,
-            n_documents_in_batch=config.aggregation_n_documents_in_batch,
-            n_batches=config.aggregation_n_batches,
+            config=aggregation_config,
+            n_documents_in_batch=aggregation_n_documents_in_batch,
+            n_batches=aggregation_n_batches,
         )
         logger.info(
             f"Aggregation complete. Run output identifier: {run_output_identifier}"
@@ -190,11 +161,11 @@ async def orchestrate_full_pipeline(
         logger.info("Starting indexing...")
         await run_indexing_from_aggregate_results(
             run_output_identifier=run_output_identifier,
-            config=config.aggregation_config,
-            batch_size=config.indexing_batch_size,
-            indexer_concurrency_limit=config.indexer_concurrency_limit,
-            indexer_document_passages_concurrency_limit=config.indexer_document_passages_concurrency_limit,
-            indexer_max_vespa_connections=config.indexer_max_vespa_connections,
+            config=aggregation_config,
+            batch_size=indexing_batch_size,
+            indexer_concurrency_limit=indexer_concurrency_limit,
+            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+            indexer_max_vespa_connections=indexer_max_vespa_connections,
         )
         logger.info("Indexing complete.")
     except Exception as e:

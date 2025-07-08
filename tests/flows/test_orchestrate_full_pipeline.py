@@ -6,21 +6,19 @@ from flows.aggregate_inference_results import Config as AggregationConfig
 from flows.aggregate_inference_results import RunOutputIdentifier
 from flows.inference import Config as InferenceConfig
 from flows.orchestrate_full_pipeline import (
-    OrchestrateFullPipelineConfig,
+    check_sub_config_fields_match,
     orchestrate_full_pipeline,
 )
 from flows.utils import DocumentImportId, DocumentStem
 from scripts.cloud import AwsEnv, ClassifierSpec
 
-########################################################################################
-# Test the instantiation and validation of the OrchestrateFullPipelineConfig object
-########################################################################################
+# Test the check_sub_config_fields_match function
 
 
-def test_orchestrate_full_pipeline_config() -> None:
-    """Test the OrchestrateFullPipelineConfig object."""
+def test_check_sub_config_fields_match() -> None:
+    """Test the check_sub_config_fields_match function."""
 
-    config = OrchestrateFullPipelineConfig(
+    config = check_sub_config_fields_match(
         inference_config=InferenceConfig(
             cache_bucket="test",
             bucket_region="test",
@@ -32,8 +30,7 @@ def test_orchestrate_full_pipeline_config() -> None:
             document_source_prefix="test",
         ),
     )
-    assert config is not None
-    assert isinstance(config.inference_config, InferenceConfig)
+    assert config is None
 
 
 @pytest.mark.parametrize(
@@ -97,31 +94,29 @@ def test_orchestrate_full_pipeline_config() -> None:
         ),
     ],
 )
-def test_orchestrate_full_pipeline_config_validation(
+def test_check_sub_config_fields_match_raises_value_error(
     inference_config: InferenceConfig,
     aggregation_config: AggregationConfig,
     expected_error: str,
 ) -> None:
-    """Test the OrchestrateFullPipelineConfig object validation."""
+    """Test the check_sub_config_fields_match function raises a ValueError."""
 
     with pytest.raises(ValueError) as e:
-        _ = OrchestrateFullPipelineConfig(
+        check_sub_config_fields_match(
             inference_config=inference_config,
             aggregation_config=aggregation_config,
         )
     assert expected_error in str(e.value)
 
 
-########################################################################################
 # Test the orchestrate_full_pipeline flow with mocked sub-flows
-########################################################################################
 
 
 @pytest.mark.asyncio
 async def test_orchestrate_full_pipeline_no_config_provided(
     test_config: InferenceConfig, test_aggregate_config: AggregationConfig
 ) -> None:
-    """Test the flow when no config is provided - should create default configs."""
+    """Test the flow when no aggregation or inference config is provided - should create default configs."""
 
     # Mock the sub-flows
     mock_document_stems = [DocumentStem("test.doc.1"), DocumentStem("test.doc.2")]
@@ -192,26 +187,6 @@ async def test_orchestrate_full_pipeline_with_full_config(
 ):
     """Test the flow with complete config provided."""
 
-    # Create a complete config
-    config = OrchestrateFullPipelineConfig(
-        inference_config=test_config,
-        aggregation_config=test_aggregate_config,
-        inference_classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
-        inference_document_ids=[
-            DocumentImportId("test.doc.1"),
-            DocumentImportId("test.doc.2"),
-        ],
-        inference_use_new_and_updated=True,
-        inference_batch_size=500,
-        inference_classifier_concurrency_limit=5,
-        aggregation_n_documents_in_batch=50,
-        aggregation_n_batches=3,
-        indexing_batch_size=200,
-        indexer_concurrency_limit=2,
-        indexer_document_passages_concurrency_limit=4,
-        indexer_max_vespa_connections=8,
-    )
-
     mock_document_stems = [DocumentStem("test.doc.1"), DocumentStem("test.doc.2")]
     mock_run_identifier = RunOutputIdentifier("test-run-789")
 
@@ -235,7 +210,24 @@ async def test_orchestrate_full_pipeline_with_full_config(
         mock_indexing.return_value = None
 
         # Run the flow
-        await orchestrate_full_pipeline(config=config)
+        await orchestrate_full_pipeline(
+            inference_config=test_config,
+            aggregation_config=test_aggregate_config,
+            inference_classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
+            inference_document_ids=[
+                DocumentImportId("test.doc.1"),
+                DocumentImportId("test.doc.2"),
+            ],
+            inference_use_new_and_updated=True,
+            inference_batch_size=500,
+            inference_classifier_concurrency_limit=5,
+            aggregation_n_documents_in_batch=50,
+            aggregation_n_batches=3,
+            indexing_batch_size=200,
+            indexer_concurrency_limit=2,
+            indexer_document_passages_concurrency_limit=4,
+            indexer_max_vespa_connections=8,
+        )
 
         # Verify sub-flows were called with correct parameters
         mock_inference.assert_called_once_with(
@@ -267,9 +259,7 @@ async def test_orchestrate_full_pipeline_with_full_config(
         )
 
 
-########################################################################################
 # Test the orchestrate_full_pipeline flow with real sub-flows
-########################################################################################
 
 
 @pytest.mark.asyncio
@@ -278,10 +268,8 @@ async def test_orchestrate_full_pipeline_with_real_sub_flows(
 ) -> None:
     """Test the flow with real sub-flows."""
 
-    # Run the flow
+    # Run the flow and sub flows against mock bucket documents
     await orchestrate_full_pipeline(
-        config=OrchestrateFullPipelineConfig(
-            inference_config=test_config,
-            aggregation_config=test_aggregate_config,
-        )
+        inference_config=test_config,
+        aggregation_config=test_aggregate_config,
     )
