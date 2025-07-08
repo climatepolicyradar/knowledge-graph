@@ -171,7 +171,7 @@ create_deployment(
 
 create_deployment(
     flow=full_pipeline,
-    description="Orchestrate the full Knowledge Graph Pipeline",
+    description="Run the full Knowledge Graph Pipeline",
 )
 # Wikibase
 

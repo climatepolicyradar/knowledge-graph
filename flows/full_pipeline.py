@@ -127,7 +127,7 @@ async def full_pipeline(
     validate_aggregation_inference_configs(aggregation_config, inference_config)
 
     logger.info(
-        f"Orchestrating full pipeline with aggregation config: {aggregation_config}, "
+        f"Running the full pipeline with aggregation config: {aggregation_config}, "
         + f"inference config: {inference_config}"
     )
 
