@@ -22,7 +22,11 @@ from flows.index_from_aggregate_results import (
     INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     run_indexing_from_aggregate_results,
 )
-from flows.inference import CLASSIFIER_CONCURRENCY_LIMIT, classifier_inference
+from flows.inference import (
+    CLASSIFIER_CONCURRENCY_LIMIT,
+    INFERENCE_BATCH_SIZE_DEFAULT,
+    classifier_inference,
+)
 from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
@@ -74,7 +78,7 @@ async def full_pipeline(
     inference_classifier_specs: Sequence[ClassifierSpec] | None = None,
     inference_document_ids: Sequence[DocumentImportId] | None = None,
     inference_use_new_and_updated: bool = False,
-    inference_batch_size: int = 1000,
+    inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
     aggregation_config: AggregationConfig | None = None,
     aggregation_n_documents_in_batch: PositiveInt = AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,

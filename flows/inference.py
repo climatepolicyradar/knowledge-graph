@@ -62,6 +62,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
+INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 
@@ -710,7 +711,7 @@ async def classifier_inference(
     document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
     config: Config | None = None,
-    batch_size: int = 1000,
+    batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ) -> Sequence[DocumentStem]:
     """
