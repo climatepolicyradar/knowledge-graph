@@ -17,7 +17,7 @@ from flows.inference import INFERENCE_BATCH_SIZE_DEFAULT
 from flows.inference import (
     Config as InferenceConfig,
 )
-from flows.utils import DocumentImportId, DocumentStem
+from flows.utils import DocumentImportId
 from scripts.cloud import AwsEnv, ClassifierSpec
 
 
@@ -117,14 +117,14 @@ def test_validate_aggregation_inference_configs_raises_value_error(
 
 @pytest.mark.asyncio
 async def test_full_pipeline_no_config_provided(
-    test_config: InferenceConfig, test_aggregate_config: AggregationConfig
+    test_config: InferenceConfig,
+    test_aggregate_config: AggregationConfig,
+    aggregate_inference_results_document_stems,
+    mock_run_output_identifier_str,
 ) -> None:
     """Test the flow when no aggregation or inference config is provided - should create default configs."""
 
     # Mock the sub-flows
-    mock_document_stems = [DocumentStem("test.doc.1"), DocumentStem("test.doc.2")]
-    mock_run_identifier = RunOutputIdentifier("test-run-123")
-
     with (
         patch(
             "flows.full_pipeline.classifier_inference",
@@ -150,8 +150,10 @@ async def test_full_pipeline_no_config_provided(
         # Setup mocks
         mock_inference_create.return_value = test_config
         mock_aggregate_create.return_value = test_aggregate_config
-        mock_inference.return_value = mock_document_stems
-        mock_aggregate.return_value = mock_run_identifier
+        mock_inference.return_value = aggregate_inference_results_document_stems
+        mock_aggregate.return_value = RunOutputIdentifier(
+            mock_run_output_identifier_str
+        )
         mock_indexing.return_value = None
 
         # Run the flow
@@ -172,25 +174,33 @@ async def test_full_pipeline_no_config_provided(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert call_args.kwargs["document_stems"] == mock_document_stems
+        assert (
+            call_args.kwargs["document_stems"]
+            == aggregate_inference_results_document_stems
+        )
         assert call_args.kwargs["config"] == test_aggregate_config
         assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
         assert call_args.kwargs["n_batches"] == DEFAULT_N_BATCHES
 
         mock_indexing.assert_called_once()
         call_args = mock_indexing.call_args
-        assert call_args.kwargs["run_output_identifier"] == mock_run_identifier
+        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
+            mock_run_output_identifier_str
+        )
         assert call_args.kwargs["config"] == test_aggregate_config
         assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_with_full_config(test_config, test_aggregate_config):
+async def test_full_pipeline_with_full_config(
+    test_config,
+    test_aggregate_config,
+    aggregate_inference_results_document_stems,
+    mock_run_output_identifier_str,
+):
     """Test the flow with complete config provided."""
 
-    mock_document_stems = [DocumentStem("test.doc.1"), DocumentStem("test.doc.2")]
-    mock_run_identifier = RunOutputIdentifier("test-run-789")
-
+    # Mock the sub-flows
     with (
         patch(
             "flows.full_pipeline.classifier_inference",
@@ -206,8 +216,10 @@ async def test_full_pipeline_with_full_config(test_config, test_aggregate_config
         ) as mock_indexing,
     ):
         # Setup mocks
-        mock_inference.return_value = mock_document_stems
-        mock_aggregate.return_value = mock_run_identifier
+        mock_inference.return_value = aggregate_inference_results_document_stems
+        mock_aggregate.return_value = RunOutputIdentifier(
+            mock_run_output_identifier_str
+        )
         mock_indexing.return_value = None
 
         # Run the flow
@@ -244,14 +256,14 @@ async def test_full_pipeline_with_full_config(test_config, test_aggregate_config
         )
 
         mock_aggregate.assert_called_once_with(
-            document_stems=mock_document_stems,
+            document_stems=aggregate_inference_results_document_stems,
             config=test_aggregate_config,
             n_documents_in_batch=50,
             n_batches=3,
         )
 
         mock_indexing.assert_called_once_with(
-            run_output_identifier=mock_run_identifier,
+            run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
             config=test_aggregate_config,
             batch_size=200,
             indexer_concurrency_limit=2,
