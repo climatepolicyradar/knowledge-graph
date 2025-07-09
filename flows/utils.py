@@ -12,7 +12,8 @@ from typing import Any, Callable, NewType, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
-from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.deployments import run_deployment
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
@@ -516,3 +517,28 @@ async def map_as_sub_flow(
                 failures.append(result)
 
     return successes, failures
+
+
+async def get_deployment_results(flow_runs: list[FlowRun]) -> list[dict[str, Any]]:
+    """
+    Get the results from the prefect deployment runs.
+
+    This requires that persist_results=True is set in the flow decorator that the
+    deployment is instantiated from.
+    """
+
+    client = get_client()
+    batch_inference_results: list[dict[str, Any]] = []
+    for flow_run in flow_runs:
+        flow_run_states: list[State[Any]] = await client.read_flow_run_states(
+            flow_run.id
+        )
+        completed_state = [
+            state for state in flow_run_states if state.type == StateType.COMPLETED
+        ]
+        if len(completed_state) != 1:
+            raise ValueError(f"Expected 1 completed state, got {len(completed_state)}")
+        completed_state_result = await completed_state[0].result()
+        batch_inference_results.append(completed_state_result)
+
+    return batch_inference_results

@@ -14,7 +14,6 @@ from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.artifacts import create_table_artifact
-from prefect.client.orchestration import get_client
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import get_run_context
@@ -31,6 +30,7 @@ from flows.utils import (
     Profiler,
     SlackNotify,
     filter_non_english_language_file_stems,
+    get_deployment_results,
     get_file_stems_for_document_id,
     iterate_batch,
     return_with_id,
@@ -121,9 +121,6 @@ class Config:
 class BatchInferenceResult(BaseModel):
     """Result from running inference on a batch of documents."""
 
-    # TODO: Set felt like what we want over a list / Sequence
-    # TODO: Post instantion validation to confirm no successes in failures.
-    # TODO: Could return classifier alias and spec as well.
     successful_document_stems: set[DocumentStem]
     failed_document_stems: set[tuple[DocumentStem, Exception]]
     classifier_name: str
@@ -134,6 +131,13 @@ class BatchInferenceResult(BaseModel):
         """Whether the batch failed, True if failed."""
 
         return self.failed_document_stems != set()
+
+
+class InferenceResult(BaseModel):
+    """Result from running inference on all batches of documents."""
+
+    batch_inference_results: list[BatchInferenceResult]
+    unexpected_failures: list[BaseException]
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -825,42 +829,12 @@ async def classifier_inference(
             *tasks, return_exceptions=True
         )
 
-    # TODO: We are no longer raising exceptions on failures so any exceptions here
-    # Are real / unexpected failures.
-    # TODO: I think we can remove the function as it's no longer releavant.
-    # failures, successes = group_inference_results_into_states(results)
     unexpected_failures: list[BaseException] = [
         result for result in results if isinstance(result, BaseException)
     ]
     flow_runs: list[FlowRun] = [
         result for result in results if not isinstance(result, BaseException)
     ]
-
-    async def get_deployment_results(flow_runs: list[FlowRun]) -> list[dict[str, Any]]:
-        """
-        Get the results from the prefect deployment runs.
-
-        This requires that persist_results=True is set in the flow decorator that the
-        deployment is instantiated from.
-        """
-
-        client = get_client()
-        batch_inference_results: list[dict[str, Any]] = []
-        for flow_run in flow_runs:
-            flow_run_states: list[State[Any]] = await client.read_flow_run_states(
-                flow_run.id
-            )
-            completed_state = [
-                state for state in flow_run_states if state.type == StateType.COMPLETED
-            ]
-            if len(completed_state) != 1:
-                raise ValueError(
-                    f"Expected 1 completed state, got {len(completed_state)}"
-                )
-            completed_state_result = await completed_state[0].result()
-            batch_inference_results.append(completed_state_result)
-
-        return batch_inference_results
 
     batch_inference_results_dicts: list[dict[str, Any]] = await get_deployment_results(
         flow_runs
@@ -873,12 +847,6 @@ async def classifier_inference(
         config=config,
         batch_results=batch_inference_results,
     )
-
-    class InferenceResult(BaseModel):
-        """Result from running inference on all batches of documents."""
-
-        batch_inference_results: list[BatchInferenceResult]
-        unexpected_failures: list[BaseException]
 
     inference_result = InferenceResult(
         batch_inference_results=batch_inference_results,
