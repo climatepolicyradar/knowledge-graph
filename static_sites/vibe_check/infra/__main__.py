@@ -62,7 +62,7 @@ bucket_policy = aws.s3.BucketPolicy(
 # Create a CloudFront Function for clean URLs
 clean_urls_function = aws.cloudfront.Function(
     f"{app_name}-clean-urls",
-    name=f"{app_name}-clean-urls",
+    name="clean-urls",
     runtime="cloudfront-js-1.0",
     code="""
 function handler(event) {
