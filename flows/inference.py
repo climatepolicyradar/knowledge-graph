@@ -21,7 +21,7 @@ from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.states import Completed, Failed, State
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, PositiveInt, SecretStr
+from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
@@ -118,8 +118,18 @@ class Config:
         }
 
 
+class BatchInferenceException(Exception):
+    """Exception raised when batch inference fails."""
+
+    def __init__(self, message: str, data: dict[str, Any]):
+        self.message = message
+        self.data = data
+
+
 class BatchInferenceResult(BaseModel):
     """Result from running inference on a batch of documents."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     successful_document_stems: set[DocumentStem]
     failed_document_stems: set[tuple[DocumentStem, Exception]]
@@ -133,8 +143,18 @@ class BatchInferenceResult(BaseModel):
         return self.failed_document_stems != set()
 
 
+class InferenceException(Exception):
+    """Exception raised when inference fails."""
+
+    def __init__(self, message: str, data: dict[str, Any]):
+        self.message = message
+        self.data = data
+
+
 class InferenceResult(BaseModel):
     """Result from running inference on all batches of documents."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     batch_inference_results: list[BatchInferenceResult]
     unexpected_failures: list[BaseException]
@@ -573,7 +593,7 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
-    await create_table_artifact(
+    _ = create_table_artifact(
         key=f"batch-inference-{flow_run_name}",
         table=document_details,
         description=overview_description,
@@ -679,10 +699,18 @@ async def run_classifier_inference_on_batch_of_documents(
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
     )
-    if len(failures) > 0:
+
+    if batch_inference_result.failed:
+        message = (
+            f"Failed to run inference on {len(failures) + len(unknown_failures)}/"
+            f"{len(results)} documents."
+        )
         return Failed(
-            message=f"Failed to run inference on {len(failures) + len(unknown_failures)}/{len(results)} documents.",
-            data=batch_inference_result.model_dump(),
+            message=message,
+            data=BatchInferenceException(
+                message=message,
+                data=batch_inference_result.model_dump(),
+            ),
         )
     return Completed(
         message=f"Successfully ran inference on all ({len(results)}) documents in batch.",
@@ -852,17 +880,25 @@ async def classifier_inference(
         batch_inference_results=batch_inference_results,
         unexpected_failures=unexpected_failures,
     )
+
     if (
         any([result.failed for result in batch_inference_results])
         or unexpected_failures
     ):
+        message = "Some inference batches had failures!"
         return Failed(
-            message="Some inference batches had failures!",
-            data=inference_result.model_dump(),
+            message=message,
+            # TODO: I believe this has to be an exception.
+            # TypeError: Unexpected result for failed state, dict
+            # cannot be resolved into an exception.
+            data=InferenceException(
+                message=message,
+                data=inference_result.model_dump(),
+            ),
         )
     return Completed(
         message="Successfully ran inference on all batches!",
-        data=batch_inference_results,
+        data=inference_result.model_dump(),
     )
 
 
