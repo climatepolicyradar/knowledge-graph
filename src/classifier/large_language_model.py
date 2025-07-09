@@ -10,7 +10,6 @@ from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.settings import ModelSettings
 from typing_extensions import Self
 
-
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
