@@ -6,21 +6,52 @@ from src.span import Span, jaccard_similarity_for_span_lists
 
 
 class HasUncertaintyMethods(Protocol):
-    """Protocol for the uncertainty calculation methods provided by UncertaintyMixin."""
+    """
+    Protocol defining the uncertainty calculation methods provided by UncertaintyMixin.
 
-    def _calculate_combined_uncertainty(
-        self, predictions: list[list[Span]]
-    ) -> "Uncertainty": ...  # noqa: D102
+    This protocol specifies the interface for uncertainty calculation methods that are
+    implemented by the UncertaintyMixin class. It defines three different approaches
+    to calculating uncertainty from multiple prediction samples:
+
+    - Passage uncertainty: Based only on binary prediction consistency (concept present/absent)
+    - Span uncertainty: Based only on overlap consistency between predicted spans
+    - Combined uncertainty: Merges both binary (present/absent) and span overlap consistency
+
+    Classes that inherit from UncertaintyMixin will automatically implement these methods
+    and can be type-checked against this protocol.
+    """
+
     def _calculate_passage_uncertainty(
         self, predictions: list[list[Span]]
     ) -> "Uncertainty": ...  # noqa: D102
     def _calculate_span_uncertainty(
         self, positive_predictions: list[list[Span]]
     ) -> "Uncertainty": ...  # noqa: D102
+    def _calculate_combined_uncertainty(
+        self, predictions: list[list[Span]]
+    ) -> "Uncertainty": ...  # noqa: D102
 
 
 class SupportsUncertainty(Protocol):
-    """Protocol for classes that support uncertainty estimation."""
+    """
+    Protocol for classes that support uncertainty estimation through sampling.
+
+    This protocol defines the core interface required for Monte Carlo uncertainty
+    estimation. Classes implementing this protocol can:
+
+    1. Create variant instances of themselves (with stochastic variation)
+    2. Make predictions on text
+
+    The uncertainty estimation process works by:
+    - Creating multiple variant classifiers using get_variant_sub_classifier()
+    - Running predictions with each variant on the same text
+    - Analyzing the variance in predictions to estimate uncertainty
+
+    Different classifier types may implement their variant subclassifiers differently.
+
+    This protocol ensures type safety when combining classifiers with uncertainty
+    estimation capabilities.
+    """
 
     def get_variant_sub_classifier(self) -> "SupportsUncertainty": ...  # noqa: D102
     def predict(self, text: str) -> list[Span]: ...  # noqa: D102
@@ -29,7 +60,29 @@ class SupportsUncertainty(Protocol):
 class UncertaintyCapableClassifier(
     SupportsUncertainty, HasUncertaintyMethods, Protocol
 ):
-    """Protocol combining classifier methods and uncertainty calculation methods."""
+    """
+    Protocol combining classifier prediction and uncertainty calculation capabilities.
+
+    This protocol represents the complete interface for classifiers that can perform
+    uncertainty estimation. It combines:
+
+    1. SupportsUncertainty: Ability to create variants and make predictions
+    2. HasUncertaintyMethods: Uncertainty calculation algorithms
+
+    The purpose of this protocol is to enable type-safe uncertainty estimation.
+    The UncertaintyMixin.predict_with_uncertainty() method uses this protocol
+    as a type constraint, ensuring it can only be called on objects that
+    implement both sets of required methods.
+
+    The design prevents runtime errors where uncertainty estimation might be
+    attempted on classifiers that don't properly support the required operations.
+
+    Example:
+        class MyClassifier(Classifier, UncertaintyMixin):
+            # This automatically implements UncertaintyCapableClassifier protocol,
+            # allowing us to safely call predict_with_uncertainty()
+            pass
+    """
 
 
 class Uncertainty(float):
