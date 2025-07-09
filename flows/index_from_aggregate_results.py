@@ -4,17 +4,17 @@ import os
 import random
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow, task
+from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.client.schemas.objects import FlowRun, StateType
-from prefect.deployments import run_deployment
+from prefect.client.schemas.objects import FlowRun
+from prefect.deployments import run_deployment  # noqa: F401
 from prefect.logging import get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
@@ -36,18 +36,16 @@ from flows.boundary import (
     TextBlockId,
     VespaDataId,
     VespaHitId,
-    function_to_flow_name,
-    generate_deployment_name,
     get_data_id_from_vespa_hit_id,
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
-    Profiler,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,
+    map_as_sub_flow,
     remove_translated_suffix,
     return_with_id,
     wait_for_semaphore,
@@ -114,7 +112,7 @@ async def _update_vespa_passage_concepts(
     # may be over 50,000 document passages. With these 2 constraints,
     # randomly sample from a pseudo-random distribution and
     # conditionally print this extra info.
-    if random.random() < 0.33:
+    if random.random() < 0.1:
         print(f"update data at path {path} with fields {fields}")
 
     if not response.is_successful():
@@ -133,9 +131,9 @@ async def _update_vespa_passage_concepts(
 
 async def create_aggregate_indexing_summary_artifact(
     config: Config,
-    document_stems: list[DocumentStem],
-    successes: list[FlowRun | BaseException],
-    failures: list[FlowRun | BaseException],
+    document_stems: Sequence[DocumentStem],
+    successes: Sequence[None],
+    failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
 
@@ -193,7 +191,6 @@ async def index_document_passages(
     raw_data = load_json_data_from_s3(
         bucket=config.cache_bucket_str, key=aggregated_results_key
     )
-    print(f"Loaded aggregated inference results from S3: {aggregated_results_key}")
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
     }
@@ -310,6 +307,8 @@ async def index_family_document(
     simple_concepts: list[SimpleConcept],
 ) -> Result[None, Error]:
     """Index document concept counts in Vespa via partial update."""
+    logger = get_run_logger()
+
     concepts_counts: Counter[SimpleConcept] = Counter(simple_concepts)
 
     concepts_counts_with_names = {
@@ -317,7 +316,7 @@ async def index_family_document(
         for concept, count in concepts_counts.items()
     }
 
-    print(f"serialised concepts counts: {concepts_counts_with_names}")
+    logger.debug(f"serialised concepts counts: {concepts_counts_with_names}")
 
     path = vespa_connection_pool.app.get_document_v1_path(
         id=document_id,
@@ -327,7 +326,7 @@ async def index_family_document(
     )
     # NB: The schema is misnamed in Vespa
     fields = {"concept_counts": concepts_counts_with_names}
-    print(f"update data at path {path} with fields {fields}")
+    logger.debug(f"update data at path {path} with fields {fields}")
 
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="family_document",
@@ -342,7 +341,7 @@ async def index_family_document(
         # `get_json` returns a Dict[1].
         #
         # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
-        print(f"Vespa update failed: {json.dumps(response.get_json())}")
+        logger.error(f"Vespa update failed: {json.dumps(response.get_json())}")
 
         return Err(
             Error(
@@ -438,6 +437,7 @@ async def index_all(
     document_stem: DocumentStem,
     config: Config,
     run_output_identifier: RunOutputIdentifier,
+    indexer_document_passages_concurrency_limit: PositiveInt,
     indexer_max_vespa_connections: PositiveInt,
 ) -> DocumentStem:
     """Indexes all (document passages and family documents) data."""
@@ -459,10 +459,8 @@ async def index_all(
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
-                indexer_document_passages_concurrency_limit=indexer_max_vespa_connections,
+                indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
             )
-
-            print("finished indexing document passages")
 
             simple_concepts: list[SimpleConcept] = []
             errors: list[Error] = []
@@ -473,8 +471,6 @@ async def index_all(
                     case Err(err):
                         errors.append(err)
                         print(f"indexing document passage failed: {err}")
-
-            print(f"simple counts: {simple_concepts}")
 
             document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
@@ -518,6 +514,7 @@ async def index_aggregate_results_for_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
     config_json: dict[str, Any],
+    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
@@ -532,7 +529,7 @@ async def index_aggregate_results_for_batch_of_documents(
         )
 
     # This doesn't correctly parse the values into the dataclass.
-    config = Config(**config_json)
+    config = Config.model_validate(config_json)
     config.aws_env = AwsEnv(config.aws_env)
 
     logger.info(
@@ -540,25 +537,22 @@ async def index_aggregate_results_for_batch_of_documents(
         f"no. of documents: {len(document_stems)}"
     )
 
-    print("getting futures")
     futures = index_all.map(  # pyright: ignore[reportFunctionMemberAccess] document_ids,
         document_stems,
-        config=config,
-        run_output_identifier=run_output_identifier,
-        indexer_max_vespa_connections=indexer_max_vespa_connections,
+        config=unmapped(config),
+        run_output_identifier=unmapped(run_output_identifier),
+        indexer_document_passages_concurrency_limit=unmapped(
+            indexer_document_passages_concurrency_limit
+        ),
+        indexer_max_vespa_connections=unmapped(indexer_max_vespa_connections),
     )
-
-    print("getting results")
     results = futures.result(raise_on_failure=False)
 
-    print("handling results")
     fault_per_document: dict[DocumentStem, Fault] = {}
-
     for result in results:
         if isinstance(result, Fault):
             fault_per_document[result.metadata.get("document_stem")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
 
-    print("creating summary artifact")
     await create_indexing_batch_summary_artifact(
         config=config,
         run_output_identifier=run_output_identifier,
@@ -579,7 +573,7 @@ async def index_aggregate_results_for_batch_of_documents(
 )
 async def run_indexing_from_aggregate_results(
     run_output_identifier: RunOutputIdentifier,
-    document_stems: list[DocumentStem] | None = None,
+    document_stems: Sequence[DocumentStem] | None = None,
     config: Config | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
@@ -588,7 +582,35 @@ async def run_indexing_from_aggregate_results(
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
 ) -> None:
-    """Index aggregated inference results from a list of S3 URIs into Vespa."""
+    """
+    Index aggregated inference results from a list of S3 URIs into Vespa.
+
+    Parameters:
+    ----------
+    run_output_identifier : str
+        The identifier for an aggregation run. This also represents the S3 sub
+        prefix that the aggregated results are saved to.
+
+    document_stems : list[str]
+        The list of document stems to index.
+
+    config : AggregationConfig
+        The configuration for the indexing.
+
+    batch_size : int
+        The size of the batch to index within each sub deployment.
+
+    indexer_concurrency_limit : int
+        The maximum number of indexing flows to run concurrently. This represents
+        the number of ECS tasks that are run concurrently.
+
+    indexer_document_passages_concurrency_limit : int
+        The maximum number of document passages to index concurrently within each
+        indexing flow.
+
+    indexer_max_vespa_connections : int
+        The maximum number of Vespa connections to use within each indexing flow.
+    """
 
     logger = get_run_logger()
 
@@ -602,7 +624,7 @@ async def run_indexing_from_aggregate_results(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
         collected_document_stems: list[DocumentStem] = (
-            collect_unique_file_stems_under_prefix(  #  type: ignore[call-arg]
+            collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
                 prefix=os.path.join(
                     config.aggregate_inference_results_prefix, run_output_identifier
@@ -612,67 +634,24 @@ async def run_indexing_from_aggregate_results(
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")
 
-    flow_name = function_to_flow_name(index_aggregate_results_for_batch_of_documents)
-    deployment_name = generate_deployment_name(
-        flow_name=flow_name, aws_env=config.aws_env
+    batches = iterate_batch(document_stems, batch_size)
+
+    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
+        return {
+            "document_stems": batch,
+            "config_json": config.model_dump(),
+            "run_output_identifier": run_output_identifier,
+            "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
+            "indexer_max_vespa_connections": indexer_max_vespa_connections,
+        }
+
+    successes, failures = await map_as_sub_flow(
+        fn=index_aggregate_results_for_batch_of_documents,
+        aws_env=config.aws_env,
+        counter=indexer_concurrency_limit,
+        batches=batches,
+        parameters=parameters,
     )
-
-    semaphore = asyncio.Semaphore(indexer_concurrency_limit)
-
-    with Profiler(
-        printer=print,
-        name="preparing tasks",
-    ):
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                run_deployment(
-                    name=f"{flow_name}/{deployment_name}",
-                    parameters={
-                        "document_stems": batch,
-                        "config_json": config.to_json(),
-                        "run_output_identifier": run_output_identifier,
-                        "indexer_max_vespa_connections": indexer_max_vespa_connections,
-                    },
-                    # Rely on the flow's own timeout, if any, to make sure it
-                    # eventually ends[1].
-                    #
-                    # [1]:
-                    # > Setting timeout to None will allow this function to
-                    # > poll indefinitely.
-                    timeout=None,
-                ),
-            )
-            for batch in iterate_batch(document_stems, batch_size)
-        ]
-
-    with Profiler(
-        printer=print,
-        name="gathering tasks",
-    ):
-        results: list[FlowRun | BaseException] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
-
-    failures = []
-    successes = []
-    for result in results:
-        if isinstance(result, BaseException):
-            failures.append(result)
-        elif not result.state:
-            failures.append(result)
-
-            print(
-                f"flow run's state was unknown. Flow run name: `{result.name}`",
-            )
-        elif result.state.type == StateType.COMPLETED:
-            successes.append(result)
-        else:
-            failures.append(result)
-
-            print(
-                f"flow run's state was not completed. Flow run name: `{result.name}`",
-            )
 
     await create_aggregate_indexing_summary_artifact(
         config=config,
@@ -683,5 +662,5 @@ async def run_indexing_from_aggregate_results(
 
     if failures:
         raise ValueError(
-            f"Some batches of documents had failures: {len(failures)}/{len(results)} failed."
+            f"Some batches of documents had failures: {len(failures)}/{len(successes) + len(failures)} failed."
         )

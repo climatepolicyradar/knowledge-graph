@@ -14,14 +14,14 @@ from prefect.artifacts import Artifact
 
 from flows.aggregate_inference_results import (
     AggregationFailure,
-    aggregate_inference_results,
+    aggregate_inference_results_batch,
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
     process_document,
     validate_passages_are_same_except_concepts,
 )
-from flows.utils import DocumentImportId
+from flows.utils import DocumentStem
 from scripts.cloud import ClassifierSpec
 from scripts.update_classifier_spec import write_spec_file
 from src.labelled_passage import LabelledPassage
@@ -48,31 +48,34 @@ def mock_classifier_specs():
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results(
+async def test_aggregate_inference_results_batch(
     mock_bucket_labelled_passages_large, test_aggregate_config, mock_classifier_specs
 ):
     _, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
 
-    document_ids = [
-        "CCLW.executive.10061.4515",
-        "CPR.document.i00000549.n0000",
-        "UNFCCC.non-party.467.0",
-        "UNFCCC.party.492.0",
+    document_stems = [
+        DocumentStem("CCLW.executive.10061.4515"),
+        DocumentStem("CPR.document.i00000549.n0000"),
+        DocumentStem("UNFCCC.non-party.467.0"),
+        DocumentStem("UNFCCC.party.492.0"),
     ]
 
-    run_reference = await aggregate_inference_results(
-        document_ids, test_aggregate_config
+    run_reference = await aggregate_inference_results_batch(
+        document_stems=document_stems,
+        config_json=test_aggregate_config.model_dump(),
+        classifier_specs=classifier_specs,
+        run_output_identifier="test-run",
     )
 
     all_collected_ids = []
     collected_ids_for_document = []
 
-    for document_id in document_ids:
+    for document_stem in document_stems:
         s3_path = os.path.join(
             test_aggregate_config.aggregate_inference_results_prefix,
             run_reference,
-            f"{document_id}.json",
+            f"{document_stem}.json",
         )
         try:
             response = await s3_async_client.get_object(Bucket=bucket, Key=s3_path)
@@ -81,7 +84,7 @@ async def test_aggregate_inference_results(
         except s3_async_client.exceptions.NoSuchKey:
             pytest.fail(f"Unable to find output file: {s3_path}")
         except json.JSONDecodeError:
-            pytest.fail(f"Unable to deserialise output for: {document_id}")
+            pytest.fail(f"Unable to deserialise output for: {document_stem}")
         except Exception as e:
             pytest.fail(f"Unexpected error: {e}")
 
@@ -99,7 +102,7 @@ async def test_aggregate_inference_results(
                     )
 
         assert len(collected_ids_for_document) > 0, (
-            f"No concepts found for document: {document_id}"
+            f"No concepts found for document: {document_stem}"
         )
         all_collected_ids.extend(collected_ids_for_document)
 
@@ -117,20 +120,29 @@ async def test_aggregate_inference_results(
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results__with_failures(
+async def test_aggregate_inference_results_batch__with_failures(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
-    expect_failure_ids = ["Some.Made.Up.Document.ID", "Another.One.That.Should.Fail"]
-    document_ids = ["CCLW.executive.10061.4515"] + expect_failure_ids
+    _, classifier_specs = mock_classifier_specs
+    expect_failure_stems = [
+        DocumentStem("Some.Made.Up.Document.ID"),
+        DocumentStem("Another.One.That.Should.Fail"),
+    ]
+    document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
 
     with pytest.raises(ValueError):
-        await aggregate_inference_results(document_ids, test_aggregate_config)
+        await aggregate_inference_results_batch(
+            document_stems=document_stems,
+            config_json=test_aggregate_config.model_dump(),
+            classifier_specs=classifier_specs,
+            run_output_identifier="test-run",
+        )
 
     summary_artifact = await Artifact.get("aggregate-inference-sandbox")
     assert summary_artifact and summary_artifact.description
     artifact_data = json.loads(summary_artifact.data)
-    failured_ids = [f["Failed document ID"] for f in artifact_data]
-    assert set(failured_ids) == set(expect_failure_ids)
+    failure_stems = [f["Failed document Stem"] for f in artifact_data]
+    assert set(failure_stems) == set(expect_failure_stems)
     assert artifact_data[0]["Context"]["Error"]["Code"] == "NoSuchKey"
     assert artifact_data[1]["Context"]["Error"]["Code"] == "NoSuchKey"
 
@@ -155,7 +167,7 @@ async def test_get_all_labelled_passages_for_one_document(
     mock_bucket_labelled_passages_large, test_aggregate_config
 ):
     _, _, s3_async_client = mock_bucket_labelled_passages_large
-    document_id = "CCLW.executive.10061.4515"
+    document_stem = DocumentStem("CCLW.executive.10061.4515")
     classifier_specs = [
         ClassifierSpec(name="Q218", alias="v5"),
         ClassifierSpec(name="Q767", alias="v3"),
@@ -163,7 +175,7 @@ async def test_get_all_labelled_passages_for_one_document(
     ]
     all_labelled_passages = []
     async for spec, labelled_passages in get_all_labelled_passages_for_one_document(
-        s3_async_client, document_id, classifier_specs, test_aggregate_config
+        s3_async_client, document_stem, classifier_specs, test_aggregate_config
     ):
         all_labelled_passages.append(labelled_passages)
     assert len(all_labelled_passages) == len(classifier_specs)
@@ -200,11 +212,11 @@ async def test_process_single_document__success(
 ):
     _, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
-    document_id = "CCLW.executive.10061.4515"
+    document_stem = DocumentStem("CCLW.executive.10061.4515")
 
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
-    assert document_id == await process_document.fn(
-        document_id,
+    assert document_stem == await process_document.fn(
+        document_stem,
         session,
         classifier_specs,
         test_aggregate_config,
@@ -217,7 +229,7 @@ async def test_process_single_document__success(
         Key=os.path.join(
             test_aggregate_config.aggregate_inference_results_prefix,
             "run_output_identifier",
-            f"{document_id}.json",
+            f"{document_stem}.json",
         ),
     )
     assert response["ContentLength"] > 0
@@ -228,7 +240,7 @@ async def test_process_single_document__success(
         Key=os.path.join(
             test_aggregate_config.aggregate_inference_results_prefix,
             "latest",
-            f"{document_id}.json",
+            f"{document_stem}.json",
         ),
     )
     assert response["ContentLength"] > 0
@@ -238,7 +250,7 @@ async def test_process_single_document__success(
 async def test_process_single_document__client_error(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
-    document_id = "CCLW.executive.10061.4515"
+    document_stem = DocumentStem("CCLW.executive.10061.4515")
     spec_file_path, classifier_specs = mock_classifier_specs
     classifier_specs.append(ClassifierSpec(name="Q9999999999", alias="v99"))
     write_spec_file(spec_file_path, classifier_specs)
@@ -246,7 +258,7 @@ async def test_process_single_document__client_error(
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
         process_document.fn(
-            document_id,
+            document_stem,
             session,
             classifier_specs,
             test_aggregate_config,
@@ -269,7 +281,7 @@ async def test_process_single_document__value_error(
     keys, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
 
-    document_id = DocumentImportId("CCLW.executive.10061.4515")
+    document_stem = DocumentStem("CCLW.executive.10061.4515")
 
     # Replace the doc with a broken  one
     new_data = [
@@ -286,7 +298,7 @@ async def test_process_single_document__value_error(
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
     result = await asyncio.gather(
         process_document.fn(
-            document_id,
+            document_stem,
             session,
             classifier_specs,
             test_aggregate_config,

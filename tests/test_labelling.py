@@ -5,7 +5,7 @@ import pytest
 from argilla import Dataset, Record, Settings, SpanQuestion, TextField, TextQuestion
 from dotenv import find_dotenv, load_dotenv
 
-from src.argilla_v2 import ArgillaSession
+from src.labelling import ArgillaSession
 
 load_dotenv(find_dotenv())
 
@@ -65,7 +65,7 @@ def test_combine_datasets():
     }
 
     with patch(
-        "tests.test_argilla_v2.DatasetRecordsIterator._list",
+        "tests.test_labelling.DatasetRecordsIterator._list",
         lambda self: records[self.__dataset.name],
     ):
         argilla = ArgillaSession()

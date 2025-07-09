@@ -1,23 +1,23 @@
 import json
 import os
 from collections.abc import AsyncGenerator, Sequence
-from dataclasses import asdict, dataclass
 from functools import partial
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypeVar
 
 import aioboto3
 import prefect.tasks as tasks
 from botocore.exceptions import ClientError
-from prefect import flow, task
-from prefect.artifacts import create_table_artifact
+from prefect import flow, task, unmapped
+from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.client.schemas.objects import FlowRun
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
+from pydantic import BaseModel, Field, PositiveInt
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
-    DocumentImportId,
     TextBlockId,
     convert_labelled_passage_to_concepts,
     s3_copy_file,
@@ -25,9 +25,12 @@ from flows.boundary import (
 )
 from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
 from flows.utils import (
+    DocumentStem,
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    iterate_batch,
+    map_as_sub_flow,
 )
 from scripts.cloud import (
     AwsEnv,
@@ -37,8 +40,14 @@ from scripts.cloud import (
 from scripts.update_classifier_spec import parse_spec_file
 from src.labelled_passage import LabelledPassage
 
-# Constant, s3 prefix for the aggregated results
+T = TypeVar("T")
+R = TypeVar("R")
+
+# Constant, S3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
+
+DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
+DEFAULT_N_BATCHES: PositiveInt = 5
 
 # A unique identifier for the run output made from the run context
 RunOutputIdentifier: TypeAlias = str
@@ -53,44 +62,44 @@ SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 class AggregationFailure(Exception):
     """A document failure."""
 
-    def __init__(
-        self, document_id: DocumentImportId, exception: Exception, context: str
-    ):
-        self.document_id = document_id
+    def __init__(self, document_stem: DocumentStem, exception: Exception, context: str):
+        self.document_stem = document_stem
         self.exception = exception
         self.context = context
 
     def __str__(self) -> str:
         """Return a string representation"""
-        return f"{self.document_id} | exception: {str(self.exception)} | context: {self.context}"
+        return f"{self.document_stem} | exception: {str(self.exception)} | context: {self.context}"
 
 
-@dataclass()
-class Config:
+class Config(BaseModel):
     """Configuration used across flow runs."""
 
-    _cache_bucket: str | None = None
-    document_source_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
-    aggregate_inference_results_prefix: str = INFERENCE_RESULTS_PREFIX
-    bucket_region: str = "eu-west-1"
-    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-
-    @property
-    def cache_bucket(self) -> str:
-        """Get the cache bucket name. Raises ValueError if not set."""
-        if self._cache_bucket is None:
-            raise ValueError("cache_bucket has not been set")
-        return self._cache_bucket
+    cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
+    document_source_prefix: str = Field(
+        default=DOCUMENT_TARGET_PREFIX_DEFAULT,
+        description="S3 prefix for source documents",
+    )
+    aggregate_inference_results_prefix: str = Field(
+        default=INFERENCE_RESULTS_PREFIX,
+        description="S3 prefix for aggregated inference results",
+    )
+    bucket_region: str = Field(
+        default="eu-west-1", description="AWS region for S3 bucket"
+    )
+    aws_env: AwsEnv = Field(
+        default_factory=lambda: AwsEnv(os.environ["AWS_ENV"]),
+        description="AWS environment",
+    )
 
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
         config = cls()
-        if not config._cache_bucket:
-            config._cache_bucket = await get_prefect_job_variable(
+        if not config.cache_bucket:
+            config.cache_bucket = await get_prefect_job_variable(
                 "pipeline_cache_bucket_name"
             )
-
         return config
 
     @property
@@ -101,12 +110,6 @@ class Config:
                 "Cache bucket is not set in config, consider calling the `create` method first."
             )
         return self.cache_bucket
-
-    def to_json(self) -> dict[str, Any]:
-        """Convert the Config instance to a dictionary, handling complex types."""
-        result = asdict(self)
-        result["aws_env"] = self.aws_env.value  # serialize AwsEnv manually
-        return result
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
@@ -123,20 +126,20 @@ def build_run_output_identifier() -> RunOutputIdentifier:
 
 async def get_all_labelled_passages_for_one_document(
     s3: S3Client,
-    document_id: DocumentImportId,
-    classifier_specs: list[ClassifierSpec],
+    document_stem: DocumentStem,
+    classifier_specs: Sequence[ClassifierSpec],
     config: Config,
 ) -> AsyncGenerator[tuple[ClassifierSpec, list[LabelledPassage]], None]:
     """Get the labelled passages from s3."""
 
     for spec in classifier_specs:
         s3_uri = S3Uri(
-            bucket=config.cache_bucket,
+            bucket=config.cache_bucket_str,
             key=os.path.join(
                 config.document_source_prefix,
                 spec.name,
                 spec.alias,
-                f"{document_id}.json",
+                f"{document_stem}.json",
             ),
         )
         response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
@@ -198,23 +201,23 @@ def task_run_name(parameters: dict[str, Any]) -> str:
     persist_result=False,
 )
 async def process_document(
-    document_id: DocumentImportId,
+    document_stem: DocumentStem,
     session: aioboto3.Session,
     classifier_specs: list[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
-) -> DocumentImportId:
+) -> DocumentStem:
     """Process a single document and return its status."""
     try:
         async with session.client("s3") as s3:
-            print("Fetching labelled passages for", document_id)
+            print("Fetching labelled passages for", document_stem)
 
             concepts_for_vespa: dict[TextBlockId, SerialisedVespaConcept] = {}
             async for (
                 spec,
                 labelled_passages,
             ) in get_all_labelled_passages_for_one_document(
-                s3, document_id, classifier_specs, config
+                s3, document_stem, classifier_specs, config
             ):
                 # `concepts_for_vespa`` starts empty so Validation not needed initially
                 if not concepts_for_vespa:
@@ -228,7 +231,7 @@ async def process_document(
                 if len(labelled_passages) != len(concepts_for_vespa.keys()):
                     raise ValueError(
                         f"The number of passages diverge when appending {spec}: "
-                        f"{len(labelled_passages)=} != {len(concepts_for_vespa)=}"
+                        + f"{len(labelled_passages)=} != {len(concepts_for_vespa)=}"
                     )
 
                 for passage, text_block_id in zip(
@@ -236,8 +239,9 @@ async def process_document(
                 ):
                     if passage.id != text_block_id:
                         raise ValueError(
-                            f"The text_block id diverges for {spec} when compared with what has been collected so far:"
-                            f"{passage.id=} != {text_block_id=}"
+                            f"The text_block id diverges for {spec} when compared with"
+                            + "what has been collected so far:"
+                            + f"{passage.id=} != {text_block_id=}"
                         )
                     serialised_concepts = [
                         vc.model_dump(mode="json")
@@ -249,11 +253,11 @@ async def process_document(
 
             # Write to s3
             s3_uri = S3Uri(
-                bucket=config.cache_bucket,
+                bucket=config.cache_bucket_str,
                 key=os.path.join(
                     config.aggregate_inference_results_prefix,
                     run_output_identifier,
-                    f"{document_id}.json",
+                    f"{document_stem}.json",
                 ),
             )
             await s3_object_write_text_async(s3, s3_uri, json.dumps(concepts_for_vespa))
@@ -263,44 +267,46 @@ async def process_document(
                 s3,
                 source=s3_uri,
                 target=S3Uri(
-                    bucket=config.cache_bucket,
+                    bucket=config.cache_bucket_str,
                     key=os.path.join(
                         config.aggregate_inference_results_prefix,
                         "latest",
-                        f"{document_id}.json",
+                        f"{document_stem}.json",
                     ),
                 ),
             )
-            return document_id
+            return document_stem
     except ClientError as e:
         print(f"ClientError: {e.response}")
         raise AggregationFailure(
-            document_id=document_id, exception=e, context=e.response
+            document_stem=document_stem, exception=e, context=e.response
         )
     except Exception as e:
-        raise AggregationFailure(document_id=document_id, exception=e, context=repr(e))
+        raise AggregationFailure(
+            document_stem=document_stem, exception=e, context=repr(e)
+        )
 
 
 def handle_results(
-    results: Sequence[DocumentImportId | AggregationFailure],
-) -> tuple[list[DocumentImportId], list[AggregationFailure]]:
-    success_ids: list[DocumentImportId] = []
+    results: Sequence[DocumentStem | AggregationFailure],
+) -> tuple[list[DocumentStem], list[AggregationFailure]]:
+    success_stems: list[DocumentStem] = []
     failures: list[AggregationFailure] = []
 
     for result in results:
         if isinstance(result, AggregationFailure):
             failures.append(result)
         elif isinstance(result, str):
-            success_ids.append(DocumentImportId(result))
+            success_stems.append(DocumentStem(result))
         else:
             raise ValueError(f"Unknown result type: {type(result)}")
 
-    return success_ids, failures
+    return success_stems, failures
 
 
 async def create_aggregate_inference_summary_artifact(
     config: Config,
-    success_ids: list[DocumentImportId],
+    success_stems: list[DocumentStem],
     failures: list[AggregationFailure],
 ) -> None:
     """Create a summary artifact of the aggregated inference results."""
@@ -309,13 +315,13 @@ async def create_aggregate_inference_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Documents processed**: {len(success_ids)}
-- **Failed documents**: {len(failures)}/{len(success_ids)}
+- **Documents processed**: {len(success_stems)}
+- **Failed documents**: {len(failures)}/{len(success_stems)}
 """
 
     details = [
         {
-            "Failed document ID": failure.document_id,
+            "Failed document Stem": failure.document_stem,
             "Exception": str(failure.exception),
             "Context": failure.context,
         }
@@ -329,73 +335,82 @@ async def create_aggregate_inference_summary_artifact(
     )
 
 
-def collect_stems_by_specs(config: Config) -> list[DocumentImportId]:
+async def create_aggregate_inference_overall_summary_artifact(
+    aws_env: AwsEnv,
+    document_stems: Sequence[DocumentStem],
+    classifier_specs: list[ClassifierSpec],
+    run_output_identifier: RunOutputIdentifier,
+    successes: Sequence[RunOutputIdentifier],
+    failures: Sequence[BaseException | FlowRun],
+) -> None:
+    """Create a summary artifact of the overall aggregated inference results."""
+    markdown_content = f"""# Aggregate Inference Overall Summary
+
+## Overview
+- **Environment**: {aws_env.value}
+- **Run Output Identifier**: `{run_output_identifier}`
+- **Total classifier specs.**: {len(classifier_specs)}
+- **Total documents**: {len(document_stems)}
+- **Successful batches**: {len(successes)}
+- **Failed batches**: {len(failures)}
+"""
+
+    await create_markdown_artifact(
+        key=f"aggregate-inference-overall-{aws_env.value}",
+        markdown=markdown_content,
+    )
+
+
+def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     """Collect the stems for the given specs."""
-    document_ids = []
+    document_stems = []
     specs = parse_spec_file(config.aws_env)
     for spec in specs:
         prefix = os.path.join(config.document_source_prefix, spec.name, spec.alias)
-        document_ids.extend(
+        document_stems.extend(
             collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket,
+                bucket_name=config.cache_bucket_str,
                 prefix=prefix,
             )
         )
 
-    return list(set(document_ids))
+    return list(set(document_stems))
 
 
 @flow(
-    on_failure=[SlackNotify.message],
-    on_crashed=[SlackNotify.message],
     timeout_seconds=None,
     log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=20),
+    task_runner=ThreadPoolTaskRunner(max_workers=DEFAULT_N_DOCUMENTS_IN_BATCH),
 )
-async def aggregate_inference_results(
-    document_ids: None | list[DocumentImportId] = None,
-    config: Config | None = None,
+async def aggregate_inference_results_batch(
+    document_stems: Sequence[DocumentStem],
+    config_json: dict[str, Any],
+    classifier_specs: Sequence[ClassifierSpec],
+    run_output_identifier: RunOutputIdentifier,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
-    if not config:
-        print("no config provided, creating one")
-        config = await Config.create()
-
-    if not document_ids:
-        print(
-            "no document ids provided, collecting all available from s3 under prefix: "
-            f"{config.document_source_prefix}"
-        )
-        document_ids = collect_stems_by_specs(config)
-
-    run_output_identifier = build_run_output_identifier()
-    classifier_specs = parse_spec_file(config.aws_env)
-
-    print(
-        f"Aggregating inference results for {len(document_ids)} documents, using "
-        f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
-    )
+    config = Config.model_validate(config_json)
 
     session = aioboto3.Session(region_name=config.bucket_region)
 
     futures = process_document.map(  # pyright: ignore[reportFunctionMemberAccess]
-        document_ids,
-        session=session,
-        classifier_specs=[classifier_specs] * len(document_ids),
-        config=config,
-        run_output_identifier=run_output_identifier,
+        document_stems,
+        session=unmapped(session),
+        classifier_specs=unmapped(classifier_specs),
+        config=unmapped(config),
+        run_output_identifier=unmapped(run_output_identifier),
     )
 
     print("getting results")
     results = futures.result(raise_on_failure=False)
 
     print("handling results")
-    success_ids, failures = handle_results(results)
+    success_stems, failures = handle_results(results)
 
     print("creating summary artifact")
     await create_aggregate_inference_summary_artifact(
         config=config,
-        success_ids=success_ids,
+        success_stems=success_stems,
         failures=failures,
     )
 
@@ -403,5 +418,70 @@ async def aggregate_inference_results(
         raise ValueError(
             f"Saw {len(failures)} failures when aggregating inference results"
         )
+
+    return run_output_identifier
+
+
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+    timeout_seconds=None,
+    log_prints=True,
+)
+async def aggregate_inference_results(
+    document_stems: None | Sequence[DocumentStem] = None,
+    config: Config | None = None,
+    n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
+    n_batches: PositiveInt = DEFAULT_N_BATCHES,
+) -> RunOutputIdentifier:
+    """Aggregate the inference results for the given document ids."""
+    if not config:
+        print("no config provided, creating one")
+        config = await Config.create()
+
+    if not document_stems:
+        print(
+            "no document stems provided, collecting all available from s3 under prefix: "
+            + f"{config.document_source_prefix}"
+        )
+        document_stems = collect_stems_by_specs(config)
+
+    run_output_identifier = build_run_output_identifier()
+    classifier_specs = parse_spec_file(config.aws_env)
+
+    print(
+        f"Aggregating inference results for {len(document_stems)} documents, using "
+        + f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
+    )
+
+    batches = iterate_batch(
+        document_stems,
+        n_documents_in_batch,
+    )
+
+    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
+        return {
+            "document_stems": batch,
+            "config_json": config.model_dump(),
+            "classifier_specs": classifier_specs,
+            "run_output_identifier": run_output_identifier,
+        }
+
+    successes, failures = await map_as_sub_flow(
+        fn=aggregate_inference_results_batch,
+        aws_env=config.aws_env,
+        counter=n_batches,
+        batches=batches,
+        parameters=parameters,
+    )
+
+    await create_aggregate_inference_overall_summary_artifact(
+        aws_env=config.aws_env,
+        document_stems=document_stems,
+        classifier_specs=classifier_specs,
+        run_output_identifier=run_output_identifier,
+        successes=successes,
+        failures=failures,
+    )
 
     return run_output_identifier

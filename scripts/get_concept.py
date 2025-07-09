@@ -4,8 +4,8 @@ import typer
 from rich.console import Console
 
 from scripts.config import concept_dir
-from src.argilla_v2 import ArgillaSession
 from src.identifiers import WikibaseID
+from src.labelling import ArgillaSession
 from src.wikibase import WikibaseSession
 
 console = Console()

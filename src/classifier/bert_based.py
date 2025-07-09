@@ -15,14 +15,14 @@ from transformers import (
 )
 from typing_extensions import Self
 
-from src.classifier.classifier import Classifier
+from src.classifier.classifier import Classifier, GPUBoundClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-class BertBasedClassifier(Classifier, UncertaintyMixin):
+class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
     """
     Classifier that uses a fine-tuned transformer model to identify concepts in text.
 

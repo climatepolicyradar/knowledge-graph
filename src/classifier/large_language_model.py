@@ -10,7 +10,8 @@ from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.settings import ModelSettings
 from typing_extensions import Self
 
-from src.classifier.classifier import Classifier
+
+from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import Identifier
@@ -63,7 +64,7 @@ Instructions:
 """
 
 
-class BaseLLMClassifier(Classifier, UncertaintyMixin):
+class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
     def __init__(
