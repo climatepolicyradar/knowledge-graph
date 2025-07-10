@@ -12,6 +12,7 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    BatchInferenceException,
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
@@ -592,9 +593,10 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    # Should raise ValueError due to failed documents
-    with pytest.raises(ValueError, match=r"Failed to process 2/2 documents"):
-        await run_classifier_inference_on_batch_of_documents(
+    with pytest.raises(
+        BatchInferenceException, match=r"Failed to run inference on 2/2 documents."
+    ):
+        _ = await run_classifier_inference_on_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
