@@ -593,7 +593,7 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
-    _ = create_table_artifact(
+    await create_table_artifact(
         key=f"batch-inference-{flow_run_name}",
         table=document_details,
         description=overview_description,
