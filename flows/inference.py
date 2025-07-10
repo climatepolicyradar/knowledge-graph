@@ -122,9 +122,9 @@ class BatchInferenceException(Exception):
     """
     Exception raised when batch inference fails.
 
-    The data attribute of the prefect StateType.FAILED must be an exception. Thus, we
-    declare a custom exception that can also be used to transfer the results of the
-    batch inference.
+    The data attribute of the prefect State when type is FAILED must be an object that
+    an exception can be raised from. Thus, we declare a custom exception that can also
+    be used to transfer the result of the batch inference run.
     """
 
     def __init__(self, message: str, data: dict[str, Any]):
@@ -153,9 +153,9 @@ class InferenceException(Exception):
     """
     Exception raised when inference fails.
 
-    The data attribute of the prefect StateType.FAILED must be an exception. Thus, we
-    declare a custom exception that can also be used to transfer the results of the
-    all the batch inference runs.
+    The data attribute of the prefect State when type is FAILED must be an object that
+    an exception can be raised from. Thus, we declare a custom exception that can also
+    be used to transfer the results of the all the batch inference runs.
     """
 
     def __init__(self, message: str, data: dict[str, Any]):

@@ -593,15 +593,15 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    with pytest.raises(BatchInferenceException) as exc_info:
+    with pytest.raises(
+        BatchInferenceException, match=r"Failed to run inference on 2/2 documents."
+    ):
         _ = await run_classifier_inference_on_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )
-
-        assert exc_info.value.message == "Failed to run inference on 2/2 documents."
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client
