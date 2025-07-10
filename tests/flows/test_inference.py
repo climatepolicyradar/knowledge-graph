@@ -601,7 +601,7 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
             classifier_alias=classifier_alias,
         )
 
-        # assert exc_info.value.message == "Failed to run inference on 2/2 documents."
+        assert exc_info.value.message == "Failed to run inference on 2/2 documents."
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client

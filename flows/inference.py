@@ -119,7 +119,13 @@ class Config:
 
 
 class BatchInferenceException(Exception):
-    """Exception raised when batch inference fails."""
+    """
+    Exception raised when batch inference fails.
+
+    The data attribute of the prefect StateType.FAILED must be an exception. Thus, we
+    declare a custom exception that can also be used to transfer the results of the
+    batch inference.
+    """
 
     def __init__(self, message: str, data: dict[str, Any]):
         self.message = message
@@ -144,7 +150,13 @@ class BatchInferenceResult(BaseModel):
 
 
 class InferenceException(Exception):
-    """Exception raised when inference fails."""
+    """
+    Exception raised when inference fails.
+
+    The data attribute of the prefect StateType.FAILED must be an exception. Thus, we
+    declare a custom exception that can also be used to transfer the results of the
+    all the batch inference runs.
+    """
 
     def __init__(self, message: str, data: dict[str, Any]):
         self.message = message
@@ -158,6 +170,15 @@ class InferenceResult(BaseModel):
 
     batch_inference_results: list[BatchInferenceResult]
     unexpected_failures: list[BaseException]
+
+    @property
+    def failed(self) -> bool:
+        """Whether the inference failed, True if failed."""
+
+        return (
+            any([result.failed for result in self.batch_inference_results])
+            or self.unexpected_failures != []
+        )
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -881,16 +902,10 @@ async def classifier_inference(
         unexpected_failures=unexpected_failures,
     )
 
-    if (
-        any([result.failed for result in batch_inference_results])
-        or unexpected_failures
-    ):
+    if inference_result.failed:
         message = "Some inference batches had failures!"
         return Failed(
             message=message,
-            # TODO: I believe this has to be an exception.
-            # TypeError: Unexpected result for failed state, dict
-            # cannot be resolved into an exception.
             data=InferenceException(
                 message=message,
                 data=inference_result.model_dump(),
@@ -907,15 +922,19 @@ async def create_inference_summary_artifact(
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
-    # TODO: Can we replace this with a list comprehension?
-    successful_document_stems = []
-    for result in batch_results:
-        successful_document_stems.extend(result.successful_document_stems)
-    failed_document_stems = []
-    for result in batch_results:
-        failed_document_stems.extend(result.failed_document_stems)
+    successful_document_stems = [
+        stem
+        for result in batch_results
+        if not result.failed
+        for stem in result.successful_document_stems
+    ]
+    failed_document_stems = [
+        stem
+        for result in batch_results
+        if result.failed
+        for stem, _ in result.failed_document_stems
+    ]
 
-    # TODO: Can we replace this with a lambda expression?
     successful_classifiers = [
         ClassifierSpec(
             name=result.classifier_name,
