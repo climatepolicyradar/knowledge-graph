@@ -15,7 +15,7 @@ from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
 from flows.inference import inference
-from scripts.cloud import PROJECT_NAME, AwsEnv
+from scripts.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -208,7 +208,7 @@ async def main() -> None:
         a_flow_name="navigator-data-s3-backup",
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
         b_flow_name=inference.name,
-        b_deployment_name=f"{PROJECT_NAME}-{inference.name}-{aws_env}",
+        b_deployment_name=generate_deployment_name(inference.name, aws_env),
         b_parameters={"use_new_and_updated": True},
         description="Start concept store inference with classifiers.",
         enabled=False,
