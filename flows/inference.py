@@ -882,7 +882,7 @@ async def classifier_inference(
         result for result in results if isinstance(result, BaseException)
     ]
     flow_runs: list[FlowRun] = [
-        result for result in results if not isinstance(result, BaseException)
+        result for result in results if isinstance(result, FlowRun)
     ]
 
     batch_inference_results_dicts: list[dict[str, Any]] = await get_deployment_results(
