@@ -885,11 +885,11 @@ async def classifier_inference(
         result for result in results if isinstance(result, FlowRun)
     ]
 
-    batch_inference_results_dicts: list[dict[str, Any]] = await get_deployment_results(
-        flow_runs
-    )
+    batch_inference_results_dicts: list[
+        tuple[FlowRun, dict[str, Any]]
+    ] = await get_deployment_results(flow_runs)
     batch_inference_results: list[BatchInferenceResult] = [
-        BatchInferenceResult(**result) for result in batch_inference_results_dicts
+        BatchInferenceResult(**result[1]) for result in batch_inference_results_dicts
     ]
 
     await create_inference_summary_artifact(

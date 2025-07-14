@@ -520,7 +520,9 @@ async def map_as_sub_flow(
 
 
 # TODO: Add tests.
-async def get_deployment_results(flow_runs: list[FlowRun]) -> list[dict[str, Any]]:
+async def get_deployment_results(
+    flow_runs: list[FlowRun],
+) -> list[tuple[FlowRun, dict[str, Any]]]:
     """
     Get the results from the prefect deployment runs.
 
@@ -529,7 +531,7 @@ async def get_deployment_results(flow_runs: list[FlowRun]) -> list[dict[str, Any
     """
 
     client = get_client()
-    batch_inference_results: list[dict[str, Any]] = []
+    batch_inference_results: list[tuple[FlowRun, dict[str, Any]]] = []
     for flow_run in flow_runs:
         flow_run_states: list[State[Any]] = await client.read_flow_run_states(
             flow_run.id
@@ -540,6 +542,6 @@ async def get_deployment_results(flow_runs: list[FlowRun]) -> list[dict[str, Any
         if len(completed_state) != 1:
             raise ValueError(f"Expected 1 completed state, got {len(completed_state)}")
         completed_state_result = await completed_state[0].result()
-        batch_inference_results.append(completed_state_result)
+        batch_inference_results.append((flow_run, completed_state_result))
 
     return batch_inference_results
