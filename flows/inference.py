@@ -181,8 +181,6 @@ class InferenceResult(BaseModel):
             or self.unexpected_failures != []
         )
 
-    # TODO: Add tests?
-    # TODO: Or do we just add all the documents to the batch result or inference result type?
     @cached_property
     def successful_document_stems(self) -> set[DocumentStem]:
         """
