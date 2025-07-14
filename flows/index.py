@@ -22,7 +22,7 @@ from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import (
+from flows.aggregate import (
     Config,
     RunOutputIdentifier,
     SerialisedVespaConcept,
@@ -510,7 +510,7 @@ async def index_all(
     timeout_seconds=None,
     task_runner=ThreadPoolTaskRunner(max_workers=10),
 )
-async def index_aggregate_results_for_batch_of_documents(
+async def index_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
     config_json: dict[str, Any],
@@ -571,7 +571,7 @@ async def index_aggregate_results_for_batch_of_documents(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-async def run_indexing_from_aggregate_results(
+async def index(
     run_output_identifier: RunOutputIdentifier,
     document_stems: Sequence[DocumentStem] | None = None,
     config: Config | None = None,
@@ -646,7 +646,7 @@ async def run_indexing_from_aggregate_results(
         }
 
     successes, failures = await map_as_sub_flow(
-        fn=index_aggregate_results_for_batch_of_documents,
+        fn=index_batch_of_documents,
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         batches=batches,

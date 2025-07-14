@@ -697,7 +697,7 @@ async def create_inference_on_batch_summary_artifact(
 
 
 @flow(log_prints=True, persist_result=True)
-async def run_classifier_inference_on_batch_of_documents(
+async def inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: dict,
     classifier_name: str,
@@ -863,7 +863,7 @@ def group_inference_results_into_states(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-async def classifier_inference(
+async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
@@ -910,7 +910,7 @@ async def classifier_inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    flow_name = function_to_flow_name(run_classifier_inference_on_batch_of_documents)
+    flow_name = function_to_flow_name(inference_batch_of_documents)
     deployment_name = generate_deployment_name(
         flow_name=flow_name, aws_env=config.aws_env
     )
