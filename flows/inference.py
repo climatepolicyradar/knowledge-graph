@@ -180,6 +180,54 @@ class InferenceResult(BaseModel):
             or self.unexpected_failures != []
         )
 
+    # TODO: Add tests?
+    # TODO: Is this right as a document could've failed for one classifier and passed for another?
+    @property
+    def successful_document_stems(self) -> set[DocumentStem]:
+        """The set of document stems that were successfully processed."""
+
+        return set(
+            document_stem
+            for batch_inference_result in self.batch_inference_results
+            for document_stem in batch_inference_result.successful_document_stems
+        )
+
+    @property
+    def failed_document_stems(self) -> set[DocumentStem]:
+        """The set of document stems that failed to be processed."""
+
+        return set(
+            document_stem
+            for batch_inference_result in self.batch_inference_results
+            for document_stem, _ in batch_inference_result.failed_document_stems
+        )
+
+    @property
+    def successful_classifiers(self) -> set[ClassifierSpec]:
+        """The set of classifiers that were successfully processed."""
+
+        return set(
+            ClassifierSpec(
+                name=result.classifier_name,
+                alias=result.classifier_alias,
+            )
+            for result in self.batch_inference_results
+            if not result.failed
+        )
+
+    @property
+    def failed_classifiers(self) -> set[ClassifierSpec]:
+        """The set of classifiers that failed to be processed."""
+
+        return set(
+            ClassifierSpec(
+                name=result.classifier_name,
+                alias=result.classifier_alias,
+            )
+            for result in self.batch_inference_results
+            if result.failed
+        )
+
 
 def get_bucket_paginator(config: Config, prefix: str):
     """Returns an s3 paginator for the pipeline cache bucket"""
@@ -892,14 +940,14 @@ async def classifier_inference(
         BatchInferenceResult(**result[1]) for result in batch_inference_results_dicts
     ]
 
-    await create_inference_summary_artifact(
-        config=config,
-        batch_results=batch_inference_results,
-    )
-
     inference_result = InferenceResult(
         batch_inference_results=batch_inference_results,
         unexpected_failures=unexpected_failures,
+    )
+
+    await create_inference_summary_artifact(
+        config=config,
+        inference_result=inference_result,
     )
 
     if inference_result.failed:
@@ -918,64 +966,39 @@ async def classifier_inference(
 
 
 async def create_inference_summary_artifact(
-    config: Config, batch_results: list[BatchInferenceResult]
+    config: Config, inference_result: InferenceResult
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
-    successful_document_stems = [
-        stem
-        for result in batch_results
-        if not result.failed
-        for stem in result.successful_document_stems
-    ]
-    failed_document_stems = [
-        stem
-        for result in batch_results
-        if result.failed
-        for stem, _ in result.failed_document_stems
-    ]
-
-    successful_classifiers = [
-        ClassifierSpec(
-            name=result.classifier_name,
-            alias=result.classifier_alias,
-        )
-        for result in batch_results
-        if not result.failed
-    ]
-    failed_classifiers = [
-        ClassifierSpec(
-            name=result.classifier_name,
-            alias=result.classifier_alias,
-        )
-        for result in batch_results
-        if result.failed
-    ]
+    successful_document_stems = inference_result.successful_document_stems
+    failed_document_stems = inference_result.failed_document_stems
+    successful_classifier_specs = inference_result.successful_classifiers
+    failed_classifier_specs = inference_result.failed_classifiers
 
     # Prepare summary data for the artifact
-    total_document_count = len(successful_document_stems + failed_document_stems)
-    total_classifier_count = len(successful_classifiers + failed_classifiers)
-    successful_classifier_count = len(successful_classifiers)
-    failed_classifier_count = len(failed_classifiers)
+    total_documents = len(successful_document_stems) + len(failed_document_stems)
+    total_classifiers = len(successful_classifier_specs) + len(failed_classifier_specs)
+    successful_classifiers = len(successful_classifier_specs)
+    failed_classifiers = len(failed_classifier_specs)
 
     # Format the overview information as a string for the description
     overview_description = f"""# Classifier Inference Summary
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Total documents processed**: {total_document_count}
-- **Total classifiers**: {total_classifier_count}
-- **Successful classifiers**: {successful_classifier_count}
-- **Failed classifiers**: {failed_classifier_count}
+- **Total documents processed**: {total_documents}
+- **Total classifiers**: {total_classifiers}
+- **Successful classifiers**: {successful_classifiers}
+- **Failed classifiers**: {failed_classifiers}
 """
 
     # Create classifier details table
     classifier_details = [
         {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
-        for spec in successful_classifiers
+        for spec in successful_classifier_specs
     ] + [
         {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
-        for spec in failed_classifiers
+        for spec in failed_classifier_specs
     ]
 
     # Create a single artifact with overview in description and classifier details in table

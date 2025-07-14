@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Any
 
 from prefect import State, flow, get_run_logger
 from pydantic import PositiveInt
@@ -25,10 +26,11 @@ from flows.index_from_aggregate_results import (
 from flows.inference import (
     CLASSIFIER_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
+    InferenceResult,
     classifier_inference,
 )
 from flows.inference import Config as InferenceConfig
-from flows.utils import DocumentImportId, DocumentStem
+from flows.utils import DocumentImportId
 from scripts.cloud import ClassifierSpec
 
 
@@ -145,24 +147,22 @@ async def full_pipeline(
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
         return_state=True,
     )
-    classifier_inference_result: (
-        Sequence[DocumentStem] | Exception
+    classifier_inference_result_dict: (
+        dict[str, Any] | Exception
     ) = await classifier_inference_run.result(raise_on_failure=False)
 
-    if isinstance(classifier_inference_result, Exception):
+    if isinstance(classifier_inference_result_dict, Exception):
         logger.error("Inference failed.")
-        raise classifier_inference_result
-    logger.info(
-        f"Inference complete. Document stems count: {len(classifier_inference_result)}"
+        raise classifier_inference_result_dict
+
+    classifier_inference_result: InferenceResult = InferenceResult(
+        **classifier_inference_result_dict
     )
 
-    # TODO: Update run_classifier_inference_on_batch_of_documents to return a result with
-    # the document stems that were successfully processed. Then update classifier_inference
-    # to return all of the successful document stems from all the inference batches so that
-    # we can use this as the input to the aggregation step.
-    # Currently using filtered_file_stems as the input to the aggregation step, some of
-    # these may not have inference results due to failures and thus we expect further
-    # failures in the aggregation step.
+    logger.info(
+        f"Inference complete. Successful document stems count: {len(classifier_inference_result.successful_document_stems)}, "
+        + f"failed document stems count: {len(classifier_inference_result.failed_document_stems)}"
+    )
 
     aggregation_run: State = await aggregate_inference_results(
         document_stems=classifier_inference_result,
