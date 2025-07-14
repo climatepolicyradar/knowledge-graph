@@ -218,7 +218,18 @@ class InferenceResult(BaseModel):
 
     @property
     def successful_classifiers(self) -> set[ClassifierSpec]:
-        """The set of classifiers that were successfully processed."""
+        """
+        The set of classifiers that were successfully processed.
+
+        A classifier is considered successful if it was succesful across all batches. For example,
+        if a classifier failed in one batch, but passed in another, then the classifier is considered unsuccessful.
+        """
+
+        failed_classifier_strings: list[str] = list(
+            f"{result.classifier_name}:{result.classifier_alias}"
+            for result in self.batch_inference_results
+            if result.failed
+        )
 
         return set(
             ClassifierSpec(
@@ -227,6 +238,8 @@ class InferenceResult(BaseModel):
             )
             for result in self.batch_inference_results
             if not result.failed
+            and f"{result.classifier_name}:{result.classifier_alias}"
+            not in failed_classifier_strings
         )
 
     @property
