@@ -13,12 +13,12 @@
     }),
   )
 # ---
-# name: test_run_classifier_inference_on_batch_of_documents
+# name: test_inference_batch_of_documents
   '[{"Document stem": "PDF.document.0.1", "Status": "\\u2713", "Exception": "N/A"}]'
 # ---
-# name: test_run_classifier_inference_on_batch_of_documents_empty_batch
+# name: test_inference_batch_of_documents_empty_batch
   '[]'
 # ---
-# name: test_run_classifier_inference_on_batch_of_documents_with_failures
+# name: test_inference_batch_of_documents_with_failures
   '[{"Document stem": "NonExistent.doc.1", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}, {"Document stem": "AnotherMissing.doc.2", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}]'
 # ---

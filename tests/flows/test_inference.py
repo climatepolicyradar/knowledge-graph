@@ -16,17 +16,17 @@ from flows.inference import (
     DocumentImportId,
     DocumentStem,
     _stringify,
-    classifier_inference,
     determine_file_stems,
     document_passages,
     download_classifier_from_wandb_to_local,
     get_latest_ingest_documents,
     group_inference_results_into_states,
+    inference,
+    inference_batch_of_documents,
     list_bucket_file_stems,
     load_classifier,
     load_document,
     remove_sabin_file_stems,
-    run_classifier_inference_on_batch_of_documents,
     run_classifier_inference_on_document,
     store_labels,
     text_block_inference,
@@ -224,7 +224,7 @@ async def test_text_block_inference_without_results(
 
 @pytest.mark.asyncio
 @pytest.mark.flaky_on_ci
-async def test_classifier_inference(
+async def test_inference(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
 ):
     mock_wandb_init, _, _ = mock_wandb
@@ -232,7 +232,7 @@ async def test_classifier_inference(
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
     with prefect_test_harness():
-        filtered_file_stems = await classifier_inference(
+        filtered_file_stems = await inference(
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
@@ -491,7 +491,7 @@ def test_group_inference_results_into_states(snapshot):
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_batch_of_documents(
+async def test_inference_batch_of_documents(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -519,7 +519,7 @@ async def test_run_classifier_inference_on_batch_of_documents(
     }
 
     # Should not raise any exceptions for successful processing
-    await run_classifier_inference_on_batch_of_documents(
+    await inference_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
@@ -572,7 +572,7 @@ async def test_run_classifier_inference_on_batch_of_documents(
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_batch_of_documents_with_failures(
+async def test_inference_batch_of_documents_with_failures(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
 ):
     """Test batch processing with some document failures."""
@@ -594,7 +594,7 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
 
     # Should raise ValueError due to failed documents
     with pytest.raises(ValueError, match=r"Failed to process 2/2 documents"):
-        await run_classifier_inference_on_batch_of_documents(
+        await inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
@@ -637,7 +637,7 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
+async def test_inference_batch_of_documents_empty_batch(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
 ):
     """Test batch processing with empty batch."""
@@ -657,7 +657,7 @@ async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    await run_classifier_inference_on_batch_of_documents(
+    await inference_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,

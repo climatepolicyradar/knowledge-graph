@@ -14,7 +14,7 @@ from prefect.client.schemas.responses import DeploymentResponse
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
-from flows.inference import classifier_inference
+from flows.inference import inference
 from scripts.cloud import PROJECT_NAME, AwsEnv
 
 # Create logger
@@ -207,8 +207,8 @@ async def main() -> None:
     await a_triggers_b(
         a_flow_name="navigator-data-s3-backup",
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
-        b_flow_name=classifier_inference.name,
-        b_deployment_name=f"{PROJECT_NAME}-{classifier_inference.name}-{aws_env}",
+        b_flow_name=inference.name,
+        b_deployment_name=f"{PROJECT_NAME}-{inference.name}-{aws_env}",
         b_parameters={"use_new_and_updated": True},
         description="Start concept store inference with classifiers.",
         enabled=False,

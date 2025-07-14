@@ -12,9 +12,9 @@ from cpr_sdk.models.search import Concept as VespaConcept
 from prefect import flow
 from prefect.artifacts import Artifact
 
-from flows.aggregate_inference_results import (
+from flows.aggregate import (
     AggregationFailure,
-    aggregate_inference_results_batch,
+    aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
@@ -48,7 +48,7 @@ def mock_classifier_specs():
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results_batch(
+async def test_aggregate_batch_of_documents(
     mock_bucket_labelled_passages_large, test_aggregate_config, mock_classifier_specs
 ):
     _, bucket, s3_async_client = mock_bucket_labelled_passages_large
@@ -61,7 +61,7 @@ async def test_aggregate_inference_results_batch(
         DocumentStem("UNFCCC.party.492.0"),
     ]
 
-    run_reference = await aggregate_inference_results_batch(
+    run_reference = await aggregate_batch_of_documents(
         document_stems=document_stems,
         config_json=test_aggregate_config.model_dump(),
         classifier_specs=classifier_specs,
@@ -120,7 +120,7 @@ async def test_aggregate_inference_results_batch(
 
 
 @pytest.mark.asyncio
-async def test_aggregate_inference_results_batch__with_failures(
+async def test_aggregate_batch_of_documents__with_failures(
     mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
 ):
     _, classifier_specs = mock_classifier_specs
@@ -131,7 +131,7 @@ async def test_aggregate_inference_results_batch__with_failures(
     document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
 
     with pytest.raises(ValueError):
-        await aggregate_inference_results_batch(
+        await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_aggregate_config.model_dump(),
             classifier_specs=classifier_specs,

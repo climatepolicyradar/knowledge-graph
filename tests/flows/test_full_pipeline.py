@@ -3,12 +3,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from prefect.client.schemas.objects import State, StateType
 
-from flows.aggregate_inference_results import (
+from flows.aggregate import (
     DEFAULT_N_BATCHES,
     DEFAULT_N_DOCUMENTS_IN_BATCH,
     RunOutputIdentifier,
 )
-from flows.aggregate_inference_results import Config as AggregationConfig
+from flows.aggregate import Config as AggregationConfig
 from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
 from flows.full_pipeline import (
     full_pipeline,
@@ -128,15 +128,15 @@ async def test_full_pipeline_no_config_provided(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.classifier_inference",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate_inference_results",
+            "flows.full_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.run_indexing_from_aggregate_results",
+            "flows.full_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
         patch(
@@ -210,15 +210,15 @@ async def test_full_pipeline_with_full_config(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.classifier_inference",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate_inference_results",
+            "flows.full_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.run_indexing_from_aggregate_results",
+            "flows.full_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
     ):

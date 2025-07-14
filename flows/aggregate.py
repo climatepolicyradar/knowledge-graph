@@ -382,7 +382,7 @@ def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     log_prints=True,
     task_runner=ThreadPoolTaskRunner(max_workers=DEFAULT_N_DOCUMENTS_IN_BATCH),
 )
-async def aggregate_inference_results_batch(
+async def aggregate_batch_of_documents(
     document_stems: Sequence[DocumentStem],
     config_json: dict[str, Any],
     classifier_specs: Sequence[ClassifierSpec],
@@ -428,7 +428,7 @@ async def aggregate_inference_results_batch(
     timeout_seconds=None,
     log_prints=True,
 )
-async def aggregate_inference_results(
+async def aggregate(
     document_stems: None | Sequence[DocumentStem] = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
@@ -468,7 +468,7 @@ async def aggregate_inference_results(
         }
 
     successes, failures = await map_as_sub_flow(
-        fn=aggregate_inference_results_batch,
+        fn=aggregate_batch_of_documents,
         aws_env=config.aws_env,
         counter=n_batches,
         batches=batches,
