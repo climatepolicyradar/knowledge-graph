@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_run_classifier_inference_on_batch_of_documents
+# name: test_inference_batch_of_documents
   '[{"Document stem": "PDF.document.0.1", "Status": "\\u2713", "Exception": "N/A"}]'
 # ---
 # name: test_inference_batch_of_documents_empty_batch
