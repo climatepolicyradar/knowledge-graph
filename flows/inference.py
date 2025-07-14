@@ -15,7 +15,7 @@ from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.artifacts import create_table_artifact
-from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import get_run_context
 from prefect.deployments import run_deployment
@@ -181,8 +181,6 @@ class InferenceResult(BaseModel):
             or self.unexpected_failures != []
         )
 
-    # TODO: Add tests?
-    # TODO: Or do we just add all the documents to the batch result or inference result type?
     @cached_property
     def successful_document_stems(self) -> set[DocumentStem]:
         """
@@ -801,50 +799,6 @@ async def run_classifier_inference_on_batch_of_documents(
         message=f"Successfully ran inference on all ({len(results)}) documents in batch.",
         data=batch_inference_result.model_dump(),
     )
-
-
-@Profiler(
-    printer=print,
-    name="processing results",
-)
-def group_inference_results_into_states(
-    results: list[FlowRun | BaseException],
-) -> tuple[
-    list[FlowRun | BaseException],
-    dict[ClassifierSpec, FlowRun],
-]:
-    """Group results of sub-runs into the different states of success and failure."""
-    failures: list[FlowRun | BaseException] = []
-    successes: dict[ClassifierSpec, FlowRun] = {}
-
-    for result in results:
-        if isinstance(result, BaseException):
-            failures.append(result)
-
-            print(
-                f"failed to process batch: {str(result)}",
-            )
-        else:
-            if not result.state:
-                failures.append(result)
-
-                print(
-                    f"flow run's state was unknown. Flow run name: `{result.name}`",
-                )
-            elif result.state.type != StateType.COMPLETED:
-                failures.append(result)
-
-                print(
-                    f"flow run's state was not completed. Flow run name: `{result.name}`",
-                )
-            elif result.state.type == StateType.COMPLETED:
-                classifier_spec = ClassifierSpec(
-                    name=result.parameters["classifier_name"],
-                    alias=result.parameters["classifier_alias"],
-                )
-                successes[classifier_spec] = result
-
-    return failures, successes
 
 
 @flow(

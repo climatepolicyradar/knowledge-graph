@@ -2,13 +2,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
-from uuid import UUID
 
 import boto3
 import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
-from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
@@ -23,7 +21,6 @@ from flows.inference import (
     document_passages,
     download_classifier_from_wandb_to_local,
     get_latest_ingest_documents,
-    group_inference_results_into_states,
     list_bucket_file_stems,
     load_classifier,
     load_document,
@@ -456,41 +453,6 @@ def test_remove_sabin_file_stems(
 ):
     result = remove_sabin_file_stems(input_stems)
     assert result == expected_output
-
-
-def test_group_inference_results_into_states(snapshot):
-    assert snapshot == group_inference_results_into_states(
-        [
-            FlowRun(
-                name="1",
-                id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-                flow_id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-                state=None,
-            ),
-            FlowRun(
-                name="2",
-                id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-                flow_id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-                state=State(type=StateType.CANCELLED),
-            ),
-            ValueError("2"),
-            ValueError("3"),
-            FlowRun(
-                name="4",
-                id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-                flow_id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-                state=State(type=StateType.COMPLETED),
-                parameters={"classifier_name": "Q100", "classifier_alias": "v3"},
-            ),
-            FlowRun(
-                name="5",
-                id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-                flow_id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-                state=State(type=StateType.COMPLETED),
-                parameters={"classifier_name": "Q200", "classifier_alias": "v5"},
-            ),
-        ]
-    )
 
 
 @pytest.mark.asyncio
