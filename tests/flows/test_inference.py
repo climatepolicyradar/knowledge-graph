@@ -13,6 +13,7 @@ from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
     BatchInferenceException,
+    BatchInferenceResult,
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
@@ -234,6 +235,7 @@ async def test_classifier_inference(
     ]
     with prefect_test_harness():
         filtered_file_stems = await classifier_inference(
+            # FIXME: ValueError: `latest` is not allowed
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
@@ -520,12 +522,16 @@ async def test_run_classifier_inference_on_batch_of_documents(
     }
 
     # Should not raise any exceptions for successful processing
-    await run_classifier_inference_on_batch_of_documents(
+    result = await run_classifier_inference_on_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
     )
+
+    # Assert that when we run as a flow we get a dict of the BatchInferenceResult
+    assert isinstance(result, dict)
+    assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -659,7 +665,7 @@ async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    await run_classifier_inference_on_batch_of_documents(
+    _ = await run_classifier_inference_on_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,

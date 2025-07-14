@@ -520,18 +520,18 @@ async def map_as_sub_flow(
 
 async def get_deployment_results(
     flow_runs: list[FlowRun],
-) -> list[tuple[FlowRun, Exception | dict[str, Any]]]:
+) -> list[tuple[FlowRun, dict[str, Any]]]:
     """
     Get the results from the prefect deployment runs.
 
     This requires that persist_results=True is set in the flow decorator that the
     deployment is instantiated from.
     """
-    batch_inference_results: list[tuple[FlowRun, Exception | dict[str, Any]]] = []
+    batch_inference_results: list[tuple[FlowRun, dict[str, Any]]] = []
     for flow_run in flow_runs:
         if not flow_run.state or flow_run.state.type != StateType.COMPLETED:
             raise ValueError(f"Expected COMPLETED flow run state, got {flow_run.state}")
-        flow_run_result = await flow_run.state.result(raise_on_failure=False)
+        flow_run_result = await flow_run.state.result()
         batch_inference_results.append((flow_run, flow_run_result))
 
     return batch_inference_results
