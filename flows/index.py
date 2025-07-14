@@ -11,14 +11,16 @@ from typing import Any, Final
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow, task, unmapped
+from prefect import flow, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.logging import get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
+from prefect.tasks import PrefectFutureList
 from prefect.utilities.names import generate_slug
 from pydantic import PositiveInt
-from vespa.application import VespaAsync
+from vespa.application import Vespa, VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate import (
@@ -41,12 +43,13 @@ from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
+    S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,
     map_as_sub_flow,
     remove_translated_suffix,
-    return_with_id,
+    return_with,
     wait_for_semaphore,
 )
 from scripts.cloud import AwsEnv
@@ -112,6 +115,19 @@ async def _update_vespa_passage_concepts(
     # randomly sample from a pseudo-random distribution and
     # conditionally print this extra info.
     if random.random() < 0.1:
+        # Example:
+        #
+        # update data at path
+        # /document/v1/doc_search/document_passage/docid/CCLW.executive.10014.4470.1039
+        # with fields {'concepts': [{'id': 'Q387', 'name':
+        # 'concept_81', 'parent_concepts': [],
+        # 'parent_concept_ids_flat': '', 'model':
+        # 'KeywordClassifier("concept_81")', 'end': 157, 'start': 166,
+        # 'timestamp': '2025-05-22T17:34:09.649548'}, {'id': 'Q299',
+        # 'name': 'concept_51', 'parent_concepts': [],
+        # 'parent_concept_ids_flat': '', 'model':
+        # 'KeywordClassifier("concept_51")', 'end': 108, 'start': 115,
+        # 'timestamp': '2025-05-22T17:34:09.649548'}]}
         print(f"update data at path {path} with fields {fields}")
 
     if not response.is_successful():
@@ -170,6 +186,36 @@ class SimpleConcept:
     name: str
 
 
+def generate_s3_uri_input_document_passages(
+    cache_bucket: str,
+    aggregate_inference_results_prefix: str,
+    run_output_identifier: RunOutputIdentifier,
+    document_stem: DocumentStem,
+) -> S3Uri:
+    return S3Uri(
+        bucket=cache_bucket,
+        key=os.path.join(
+            aggregate_inference_results_prefix,
+            run_output_identifier,
+            f"{document_stem}.json",
+        ),
+    )
+
+
+def generate_s3_uri_output_family_document(
+    vespa: Vespa, document_stem: DocumentStem
+) -> str:
+    document_id: DocumentImportId = remove_translated_suffix(document_stem)
+    # Example: /document/v1/doc_search/family_document/docid/CCLW.executive.10014.4470
+    document_v1_path = vespa.get_document_v1_path(
+        id=document_id,
+        schema="document_passage",
+        namespace="doc_search",
+        group=None,
+    )
+    return f"vespa:/{document_v1_path}"
+
+
 async def index_document_passages(
     config: Config,
     run_output_identifier: RunOutputIdentifier,
@@ -178,17 +224,17 @@ async def index_document_passages(
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
 ) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
-
-    aggregated_results_key = os.path.join(
-        config.aggregate_inference_results_prefix,
-        run_output_identifier,
-        f"{document_stem}.json",
+    aggregated_results_s3_uri = generate_s3_uri_input_document_passages(
+        cache_bucket=config.cache_bucket_str,
+        aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
+        run_output_identifier=run_output_identifier,
+        document_stem=document_stem,
     )
 
-    print(f"Loading aggregated inference results from S3: {aggregated_results_key}")
+    print(f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}")
 
     raw_data = load_json_data_from_s3(
-        bucket=config.cache_bucket_str, key=aggregated_results_key
+        bucket=aggregated_results_s3_uri.bucket, key=aggregated_results_s3_uri.key
     )
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
@@ -230,7 +276,7 @@ async def index_document_passages(
         tasks.append(
             wait_for_semaphore(
                 semaphore,
-                return_with_id(
+                return_with(
                     text_block_id,
                     _update_vespa_passage_concepts(
                         vespa_data_id=vespa_data_id,
@@ -428,7 +474,8 @@ def task_run_name(parameters: dict[str, Any]) -> str:
             return slug
 
 
-@task(
+@materialize(
+    None,  # Asset key is not known yet
     log_prints=True,
     task_run_name=task_run_name,
 )
@@ -504,6 +551,38 @@ async def index_all(
         )
 
 
+# Document passages aren't in here yet, since we can't get the
+# Vespa data IDs here, to build a document V1 path. They're
+# available inside the function that becomes a task.
+def generate_assets(vespa: Vespa, document_stem: DocumentStem) -> Sequence[str]:
+    return [
+        generate_s3_uri_output_family_document(
+            vespa=vespa,
+            document_stem=document_stem,
+        )
+    ]
+
+
+# Only document passages is mentioned here, since they're the
+# same inputs that are used for updating family documents too.
+def generate_asset_deps(
+    cache_bucket: str,
+    aggregate_inference_results_prefix: str,
+    run_output_identifier: RunOutputIdentifier,
+    document_stem: DocumentStem,
+) -> Sequence[str]:
+    return [
+        str(
+            generate_s3_uri_input_document_passages(
+                cache_bucket=cache_bucket,
+                aggregate_inference_results_prefix=aggregate_inference_results_prefix,
+                run_output_identifier=run_output_identifier,
+                document_stem=document_stem,
+            )
+        ),
+    ]
+
+
 @flow(
     log_prints=True,
     timeout_seconds=None,
@@ -536,15 +615,39 @@ async def index_batch_of_documents(
         f"no. of documents: {len(document_stems)}"
     )
 
-    futures = index_all.map(  # pyright: ignore[reportFunctionMemberAccess] document_ids,
-        document_stems,
-        config=unmapped(config),
-        run_output_identifier=unmapped(run_output_identifier),
-        indexer_document_passages_concurrency_limit=unmapped(
-            indexer_document_passages_concurrency_limit
-        ),
-        indexer_max_vespa_connections=unmapped(indexer_max_vespa_connections),
-    )
+    # Create Vespa connection inside the task to avoid serialization issues
+    temp_dir = tempfile.TemporaryDirectory()
+    vespa: Vespa = get_vespa_search_adapter_from_aws_secrets(
+        cert_dir=temp_dir.name,
+        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+    ).client
+
+    tasks = []
+    for document_stem in document_stems:
+        tasks.append(
+            index_all.with_options(  # pyright: ignore[reportFunctionMemberAccess]
+                assets=generate_assets(
+                    vespa=vespa,
+                    document_stem=document_stem,
+                ),
+                asset_deps=generate_asset_deps(
+                    cache_bucket=config.cache_bucket_str,
+                    aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
+                    run_output_identifier=run_output_identifier,
+                    document_stem=document_stem,
+                ),
+            ).submit(
+                document_stem=document_stem,
+                config=config,
+                run_output_identifier=run_output_identifier,
+                indexer_document_passages_concurrency_limit=unmapped(
+                    indexer_document_passages_concurrency_limit
+                ),
+                indexer_max_vespa_connections=indexer_max_vespa_connections,
+            )
+        )
+    futures = PrefectFutureList(tasks)
     results = futures.result(raise_on_failure=False)
 
     fault_per_document: dict[DocumentStem, Fault] = {}
