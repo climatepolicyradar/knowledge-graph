@@ -4,6 +4,7 @@ import os
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import cached_property
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, Optional, TypeAlias
@@ -181,18 +182,33 @@ class InferenceResult(BaseModel):
         )
 
     # TODO: Add tests?
-    # TODO: Is this right as a document could've failed for one classifier and passed for another?
-    @property
+    # TODO: Or do we just add all the documents to the batch result or inference result type?
+    @cached_property
     def successful_document_stems(self) -> set[DocumentStem]:
-        """The set of document stems that were successfully processed."""
+        """
+        The set of document stems that were successfully processed.
+
+        A document stem is considered successful if it was succesful across all classifiers. For example,
+        if a document successfully had inference run in one batch for classifier A, but failed for classifier B,
+        then the document stem is considered unsuccessful.
+
+        This is as the document would fail aggregation if there was a missing inference result for a classifier.
+        """
+
+        failed_document_stems = set(
+            document_stem
+            for batch_inference_result in self.batch_inference_results
+            for document_stem, _ in batch_inference_result.failed_document_stems
+        )
 
         return set(
             document_stem
             for batch_inference_result in self.batch_inference_results
             for document_stem in batch_inference_result.successful_document_stems
+            if document_stem not in failed_document_stems
         )
 
-    @property
+    @cached_property
     def failed_document_stems(self) -> set[DocumentStem]:
         """The set of document stems that failed to be processed."""
 
