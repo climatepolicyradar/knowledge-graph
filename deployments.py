@@ -70,6 +70,7 @@ def create_deployment(
     description: str,
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
     env_schedules: dict[AwsEnv, str] | None = None,
+    extra_tags: list[str] = [],
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
@@ -81,7 +82,7 @@ def create_deployment(
 
     default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
     job_variables = {**default_variables, **flow_variables}
-
+    tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
     schedule = get_schedule_for_env(aws_env, env_schedules)
 
     _ = flow.deploy(
@@ -95,7 +96,7 @@ def create_deployment(
         ),
         work_queue_name=f"mvp-{aws_env}",
         job_variables=job_variables,
-        tags=[f"repo:{docker_repository}", f"awsenv:{aws_env}"],
+        tags=tags,
         description=description,
         schedules=schedule,
         build=False,
@@ -108,11 +109,13 @@ def create_deployment(
 create_deployment(
     flow=inference,
     description="Run concept classifier inference on document passages",
+    extra_tags=["type:entry"],
 )
 
 create_deployment(
     flow=inference_batch_of_documents,
     description="Run concept classifier inference on a batch of documents",
+    extra_tags=["type:sub"],
 )
 
 # Aggregate inference results
@@ -124,11 +127,13 @@ create_deployment(
         "cpu": MEGABYTES_PER_GIGABYTE * 16,
         "memory": MEGABYTES_PER_GIGABYTE * 64,
     },
+    extra_tags=["type:sub"],
 )
 
 create_deployment(
     flow=aggregate,
     description="Aggregate inference results, through coordinating batches of documents",
+    extra_tags=["type:entry"],
 )
 
 # Boundary
@@ -148,11 +153,13 @@ create_deployment(
 create_deployment(
     flow=index_batch_of_documents,
     description="Run passage indexing for a batch of documents from S3 to Vespa",
+    extra_tags=["type:sub"],
 )
 
 create_deployment(
     flow=index,
     description="Run passage indexing for documents from S3 to Vespa",
+    extra_tags=["type:entry"],
 )
 
 # De-index
@@ -172,6 +179,7 @@ create_deployment(
 create_deployment(
     flow=full_pipeline,
     description="Run the full Knowledge Graph Pipeline",
+    extra_tags=["type:end_to_end"],
 )
 # Wikibase
 
