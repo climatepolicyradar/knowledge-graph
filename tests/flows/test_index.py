@@ -13,19 +13,19 @@ from prefect.client.schemas.objects import FlowRun
 from prefect.states import Completed
 from vespa.io import VespaResponse
 
-from flows.aggregate_inference_results import RunOutputIdentifier
+from flows.aggregate import RunOutputIdentifier
 from flows.boundary import (
     DocumentImportId,
     DocumentStem,
     get_document_from_vespa,
     get_document_passages_from_vespa__generator,
 )
-from flows.index_from_aggregate_results import (
+from flows.index import (
     SimpleConcept,
-    index_aggregate_results_for_batch_of_documents,
+    index,
+    index_batch_of_documents,
     index_document_passages,
     index_family_document,
-    run_indexing_from_aggregate_results,
 )
 from flows.result import is_err, is_ok, unwrap_err
 from flows.utils import remove_translated_suffix
@@ -145,7 +145,7 @@ async def test_index_document_passages__error_handling(
 
             # Mock this function response _update_vespa_passage_concepts to simulate an error
             with patch(
-                "flows.index_from_aggregate_results._update_vespa_passage_concepts"
+                "flows.index._update_vespa_passage_concepts"
             ) as mock_update_vespa_passage_concepts:
                 mock_update_vespa_passage_concepts.return_value = VespaResponse(
                     status_code=500,
@@ -165,7 +165,7 @@ async def test_index_document_passages__error_handling(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_aggregate_results_for_batch_of_documents(
+async def test_index_batch_of_documents(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
@@ -181,10 +181,10 @@ async def test_index_aggregate_results_for_batch_of_documents(
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
-        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        "flows.index.get_vespa_search_adapter_from_aws_secrets",
         return_value=local_vespa_search_adapter,
     ):
-        await index_aggregate_results_for_batch_of_documents(
+        await index_batch_of_documents(
             run_output_identifier=run_output_identifier,
             document_stems=aggregate_inference_results_document_stems,
             config_json=test_aggregate_config.model_dump(),
@@ -277,7 +277,7 @@ async def test_index_aggregate_results_for_batch_of_documents(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_aggregate_results_for_batch_of_documents__failure(
+async def test_index_batch_of_documents__failure(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_s3_client,
@@ -296,12 +296,12 @@ async def test_index_aggregate_results_for_batch_of_documents__failure(
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     with patch(
-        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        "flows.index.get_vespa_search_adapter_from_aws_secrets",
         return_value=local_vespa_search_adapter,
     ):
         # Index the aggregated inference results from S3 to Vespa
         with pytest.raises(ValueError) as excinfo:
-            await index_aggregate_results_for_batch_of_documents(
+            await index_batch_of_documents(
                 run_output_identifier=run_output_identifier,
                 config_json=test_aggregate_config.model_dump(),
                 document_stems=document_stems,
@@ -345,7 +345,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
 
         # Run indexing
         try:
-            await run_indexing_from_aggregate_results(
+            await index(
                 run_output_identifier=run_output_identifier,
                 document_stems=aggregate_inference_results_document_stems,
                 config=test_aggregate_config,
@@ -375,7 +375,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
 
         # Run indexing with no document_ids specified, which should run for all documents
         try:
-            await run_indexing_from_aggregate_results(
+            await index(
                 run_output_identifier=run_output_identifier,
                 document_stems=None,
                 config=test_aggregate_config,
@@ -423,11 +423,11 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
     # Assert that the indexing runs correctly when called as sub deployments and that we
     # continue on failure of one of the documents.
     with patch(
-        "flows.index_from_aggregate_results.get_vespa_search_adapter_from_aws_secrets",
+        "flows.index.get_vespa_search_adapter_from_aws_secrets",
         return_value=local_vespa_search_adapter,
     ):
         with pytest.raises(ValueError) as excinfo:
-            await run_indexing_from_aggregate_results(
+            await index(
                 run_output_identifier=run_output_identifier,
                 document_stems=document_stems,
                 config=test_aggregate_config,

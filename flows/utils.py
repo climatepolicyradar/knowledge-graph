@@ -527,11 +527,11 @@ async def get_deployment_results(
     This requires that persist_results=True is set in the flow decorator that the
     deployment is instantiated from.
     """
-    batch_inference_results: list[tuple[FlowRun, dict[str, Any]]] = []
+    results: list[tuple[FlowRun, dict[str, Any]]] = []
     for flow_run in flow_runs:
         if not flow_run.state or flow_run.state.type != StateType.COMPLETED:
             raise ValueError(f"Expected COMPLETED flow run state, got {flow_run.state}")
         flow_run_result = await flow_run.state.result()
-        batch_inference_results.append((flow_run, flow_run_result))
+        results.append((flow_run, flow_run_result))
 
-    return batch_inference_results
+    return results

@@ -39,7 +39,7 @@ from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
 from flows.boundary import DocumentStem
-from flows.index_from_aggregate_results import load_json_data_from_s3
+from flows.index import load_json_data_from_s3
 from flows.utils import (
     DocumentImportId,
     remove_translated_suffix,
