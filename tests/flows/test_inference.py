@@ -1,5 +1,8 @@
 import json
+import os
+import tempfile
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 from uuid import UUID
@@ -15,7 +18,10 @@ from flows.inference import (
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
+    SingleDocumentInferenceResult,
     _stringify,
+    deserialise_pydantic_list_from_jsonl,
+    deserialise_pydantic_list_with_fallback,
     determine_file_stems,
     document_passages,
     download_classifier_from_wandb_to_local,
@@ -28,6 +34,7 @@ from flows.inference import (
     load_document,
     remove_sabin_file_stems,
     run_classifier_inference_on_document,
+    serialise_pydantic_list_as_jsonl,
     store_labels,
     text_block_inference,
 )
@@ -164,17 +171,32 @@ def test_document_passages__pdf(parser_output_pdf):
     assert pdf_result == ("test pdf text", "2")
 
 
-def test_store_labels(test_config, mock_bucket):
+@pytest.mark.asyncio
+async def test_store_labels(test_config, mock_bucket, snapshot):
     text = "This is a test text block"
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    store_labels(test_config, labels, "TEST.DOC.0.1", "Q9081", "latest")
+    successes, failures, unknown_failures = await store_labels.fn(
+        test_config,
+        [
+            SingleDocumentInferenceResult(
+                labelled_passages=labels,
+                document_stem=DocumentStem("TEST.DOC.0.1"),
+                classifier_name="Q9081",
+                classifier_alias="v3",
+            )
+        ],
+    )
+
+    assert successes == snapshot(name="successes")
+    assert failures == snapshot(name="failures")
+    assert unknown_failures == snapshot(name="unknown_failures")
 
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/latest/TEST.DOC.0.1.json"
+    assert labels[0] == "labelled_passages/Q9081/v3/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -283,13 +305,18 @@ def test_get_latest_ingest_documents_no_latest(
 
 @pytest.mark.asyncio
 async def test_run_classifier_inference_on_document(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    snapshot,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
     classifier_name = "Q788"
-    classifier_alias = "latest"
+    classifier_alias = "v5"
 
     # Load classifier
     classifier = await load_classifier(
@@ -348,18 +375,9 @@ async def test_run_classifier_inference_on_document(
             classifier=classifier,
         )
 
-        assert result is None
+        assert result == snapshot
 
-        # Load the stored labels from s3
-        expected_key = f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
-        s3 = boto3.client("s3", region_name=test_config.bucket_region)
-        response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-        data = json.loads(response["Body"].read().decode("utf-8"))
-
-        # Verify we stored NO labels
-        assert len(data) == 0
-
-    # Run the function on a document with english language
+    # Run the function on a document with English language
     document_stem = Path(mock_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
         config=test_config,
@@ -369,28 +387,7 @@ async def test_run_classifier_inference_on_document(
         classifier=classifier,
     )
 
-    assert result is None
-
-    # Verify that labels were stored in S3
-    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
-    expected_key = (
-        f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
-    )
-    assert expected_key in labels
-
-    # Verify the content of the stored labels
-    s3 = boto3.client("s3", region_name=test_config.bucket_region)
-    response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-    data = json.loads(response["Body"].read().decode("utf-8"))
-
-    # Verify we have at least one label
-    assert len(data) > 0
-
-    # Verify the structure of the labels
-    for label in data:
-        assert "id" in label
-        assert "text" in label
-        assert "spans" in label
+    assert result == snapshot
 
 
 @pytest.mark.asyncio
@@ -522,13 +519,32 @@ async def test_inference_batch_of_documents(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    # Should not raise any exceptions for successful processing
-    await inference_batch_of_documents(
-        batch=batch,
-        config_json=config_json,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
-    )
+    # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
+    def mock_generate_assets(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-asset-1.json",
+            "s3://dummy-bucket/dummy-asset-2.json",
+        ]
+
+    def mock_generate_asset_deps(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-dep-1.json",
+            "s3://dummy-bucket/dummy-dep-2.json",
+        ]
+
+    with (
+        patch("flows.inference.generate_assets", side_effect=mock_generate_assets),
+        patch(
+            "flows.inference.generate_asset_deps", side_effect=mock_generate_asset_deps
+        ),
+    ):
+        # Should not raise any exceptions for successful processing
+        await inference_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -569,10 +585,17 @@ async def test_inference_batch_of_documents(
 
     # Verify the content of the stored labels
     response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-    data = json.loads(response["Body"].read().decode("utf-8"))
+    jsonl_content = response["Body"].read().decode("utf-8")
+
+    # Parse JSONL format - each line is a JSON object
+    lines = [line.strip() for line in jsonl_content.strip().split("\n") if line.strip()]
 
     # Verify we have at least one label for successful processing
-    assert len(data) > 0, "Expected at least one labelled passage"
+    assert len(lines) > 0, "Expected at least one labelled passage"
+
+    # Verify each line is valid JSON
+    for line in lines:
+        json.loads(line)  # This will raise if invalid JSON
 
 
 @pytest.mark.asyncio
@@ -690,3 +713,103 @@ async def test_inference_batch_of_documents_empty_batch(
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
+
+
+def test_jsonl_serialization_roundtrip():
+    """Test that JSONL serialization and deserialization works correctly."""
+    test_passages = [
+        LabelledPassage(
+            id="passage1",
+            text="This is the first test passage",
+            spans=[
+                Span(
+                    text="This is the first test passage",
+                    start_index=17,
+                    end_index=21,
+                    concept_id="Q123",
+                    labellers=["test_labeller"],
+                    timestamps=["2023-01-01T00:00:00"],
+                    id="span1",
+                    labelled_text="test",
+                )
+            ],
+            metadata={"source": "test"},
+        ),
+        LabelledPassage(
+            id="passage2",
+            text="This is the second test passage",
+            spans=[],
+            metadata={"source": "test"},
+        ),
+    ]
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".jsonl", delete=False) as f:
+        try:
+            serialized_data = serialise_pydantic_list_as_jsonl(test_passages)
+            f.write(serialized_data.read().decode("utf-8"))
+            f.flush()
+
+            with open(f.name, "r") as read_file:
+                content = read_file.read()
+
+            deserialized_passages = deserialise_pydantic_list_from_jsonl(
+                content, LabelledPassage
+            )
+
+            assert deserialized_passages == test_passages
+        finally:
+            # Clean up
+            os.unlink(f.name)
+
+
+def test_original_format_fallback():
+    """Test that the original serialization format can be deserialized correctly."""
+    # Create test data
+    test_passages = [
+        LabelledPassage(
+            id="passage1",
+            text="This is the first test passage",
+            spans=[
+                Span(
+                    text="This is the first test passage",
+                    start_index=17,
+                    end_index=21,
+                    concept_id="Q123",
+                    labellers=["test_labeller"],
+                    timestamps=["2023-01-01T00:00:00"],
+                    id="span1",
+                    labelled_text="test",
+                )
+            ],
+            metadata={"source": "test"},
+        ),
+        LabelledPassage(
+            id="passage2",
+            text="This is the second test passage",
+            spans=[],
+            metadata={"source": "test"},
+        ),
+    ]
+
+    def original_serialise_labels(labels: list[LabelledPassage]) -> BytesIO:
+        data = [label.model_dump_json() for label in labels]
+        return BytesIO(json.dumps(data).encode("utf-8"))
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=False) as f:
+        try:
+            serialized_data = original_serialise_labels(test_passages)
+            f.write(serialized_data.read().decode("utf-8"))
+            f.flush()
+
+            with open(f.name, "r") as read_file:
+                content = read_file.read()
+
+            # This should trigger the fallback logic automatically
+            deserialized_passages = deserialise_pydantic_list_with_fallback(
+                content, LabelledPassage
+            )
+
+            assert deserialized_passages == test_passages
+        finally:
+            # Clean up
+            os.unlink(f.name)

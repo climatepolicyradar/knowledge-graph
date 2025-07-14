@@ -1,3 +1,4 @@
+import random
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
@@ -182,9 +183,15 @@ async def test_index_batch_of_documents(
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
-    with patch(
-        "flows.index.get_vespa_search_adapter_from_aws_secrets",
-        return_value=local_vespa_search_adapter,
+    with (
+        patch(
+            "flows.index.get_vespa_search_adapter_from_aws_secrets",
+            return_value=local_vespa_search_adapter,
+        ),
+        patch(
+            "flows.index.generate_asset_deps",
+            return_value=[f"s3://foo/{random.random()}"],
+        ),
     ):
         await index_batch_of_documents(
             run_output_identifier=run_output_identifier,
@@ -297,9 +304,15 @@ async def test_index_batch_of_documents__failure(
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
-    with patch(
-        "flows.index.get_vespa_search_adapter_from_aws_secrets",
-        return_value=local_vespa_search_adapter,
+    with (
+        patch(
+            "flows.index.get_vespa_search_adapter_from_aws_secrets",
+            return_value=local_vespa_search_adapter,
+        ),
+        patch(
+            "flows.index.generate_asset_deps",
+            return_value=[f"s3://foo/{random.random()}"],
+        ),
     ):
         # Index the aggregated inference results from S3 to Vespa
         with pytest.raises(ValueError) as excinfo:
