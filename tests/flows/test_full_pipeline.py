@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from prefect.client.schemas.objects import State, StateType
+from prefect.states import Completed
 
 from flows.aggregate_inference_results import (
     DEFAULT_N_BATCHES,
@@ -14,7 +15,11 @@ from flows.full_pipeline import (
     full_pipeline,
     validate_aggregation_inference_configs,
 )
-from flows.inference import INFERENCE_BATCH_SIZE_DEFAULT
+from flows.inference import (
+    INFERENCE_BATCH_SIZE_DEFAULT,
+    BatchInferenceResult,
+    InferenceResult,
+)
 from flows.inference import (
     Config as InferenceConfig,
 )
@@ -152,8 +157,21 @@ async def test_full_pipeline_no_config_provided(
         mock_inference_create.return_value = test_config
         mock_aggregate_create.return_value = test_aggregate_config
 
-        mock_inference.return_value = State(
-            type=StateType.COMPLETED, data=aggregate_inference_results_document_stems
+        mock_inference.return_value = Completed(
+            message="Successfully ran inference on all batches!",
+            data=InferenceResult(
+                batch_inference_results=[
+                    BatchInferenceResult(
+                        successful_document_stems=set(
+                            aggregate_inference_results_document_stems
+                        ),
+                        failed_document_stems=set(),
+                        classifier_name="Q100",
+                        classifier_alias="v1",
+                    ),
+                ],
+                unexpected_failures=[],
+            ).model_dump(),
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -181,9 +199,8 @@ async def test_full_pipeline_no_config_provided(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert (
-            call_args.kwargs["document_stems"]
-            == aggregate_inference_results_document_stems
+        assert call_args.kwargs["document_stems"] == set(
+            aggregate_inference_results_document_stems
         )
         assert call_args.kwargs["config"] == test_aggregate_config
         assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
@@ -223,8 +240,21 @@ async def test_full_pipeline_with_full_config(
         ) as mock_indexing,
     ):
         # Setup mocks
-        mock_inference.return_value = State(
-            type=StateType.COMPLETED, data=aggregate_inference_results_document_stems
+        mock_inference.return_value = Completed(
+            message="Successfully ran inference on all batches!",
+            data=InferenceResult(
+                batch_inference_results=[
+                    BatchInferenceResult(
+                        successful_document_stems=set(
+                            aggregate_inference_results_document_stems
+                        ),
+                        failed_document_stems=set(),
+                        classifier_name="Q100",
+                        classifier_alias="v1",
+                    ),
+                ],
+                unexpected_failures=[],
+            ).model_dump(),
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -269,7 +299,7 @@ async def test_full_pipeline_with_full_config(
         )
 
         mock_aggregate.assert_called_once_with(
-            document_stems=aggregate_inference_results_document_stems,
+            document_stems=set(aggregate_inference_results_document_stems),
             config=test_aggregate_config,
             n_documents_in_batch=50,
             n_batches=3,
