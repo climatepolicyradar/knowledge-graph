@@ -35,7 +35,8 @@ DocumentImportId = NewType("DocumentImportId", str)
 # Needed to load the inference results
 # Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
 DocumentObjectUri = NewType("DocumentObjectUri", str)
-# A filename without the extension
+# A filename without the extension. May include a suffix indicating
+# translation.
 DocumentStem = NewType("DocumentStem", str)
 # Passed to a self-sufficient flow run
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
@@ -435,16 +436,16 @@ async def wait_for_semaphore(
         return await fn
 
 
-async def return_with_id(
-    id: U,
+async def return_with(
+    accompaniment: U,
     fn: Awaitable[T | Exception],
 ) -> tuple[U, T | Exception]:
-    """Wrap a function execution's return value as a tuple with an identifier"""
+    """Wrap a function's return value as a tuple with an accompanying value."""
     try:
         result = await fn
-        return (id, result)
+        return (accompaniment, result)
     except Exception as e:
-        return (id, e)
+        return (accompaniment, e)
 
 
 async def map_as_sub_flow(
@@ -509,7 +510,7 @@ async def map_as_sub_flow(
                 try:
                     if unwrap_result:
                         flow_result: U = result.state.result(
-                            #  Doing it this way, makes it easier to rely
+                            # Doing it this way, makes it easier to rely
                             # on the type system, instead of doing `False`
                             # and then allowing for a union of types in
                             # the return.
