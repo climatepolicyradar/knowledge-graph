@@ -101,7 +101,8 @@ def validate_transition(from_aws_env: AwsEnv, to_aws_env: AwsEnv) -> None:
 
 
 def generate_deployment_name(flow_name: str, aws_env: AwsEnv):
-    return f"{PROJECT_NAME}-{flow_name}-{aws_env}"
+    project_initials = "".join([i[0] for i in PROJECT_NAME.split("-")])
+    return f"{project_initials}-{flow_name}-{aws_env}"
 
 
 def function_to_flow_name(fn: Callable[..., Any]) -> str:
