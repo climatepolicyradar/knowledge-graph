@@ -508,13 +508,18 @@ async def map_as_sub_flow(
                 # For completed flows, extract the actual return value
                 try:
                     if unwrap_result:
-                        flow_result: U = result.state.result(
+                        flow_result_raw = result.state.result(
                             #  Doing it this way, makes it easier to rely
                             # on the type system, instead of doing `False`
                             # and then allowing for a union of types in
                             # the return.
                             raise_on_failure=True,
                         )
+                        # Conditionally await if the result is a coroutine
+                        if asyncio.iscoroutine(flow_result_raw):
+                            flow_result: U = await flow_result_raw
+                        else:
+                            flow_result: U = flow_result_raw
                         successes.append(flow_result)
                     else:
                         successes.append(result)
