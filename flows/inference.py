@@ -19,7 +19,6 @@ from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import get_run_context
 from prefect.logging import get_run_logger
-from prefect.states import Completed, Failed, State
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
@@ -115,20 +114,6 @@ class Config:
         }
 
 
-class BatchInferenceException(Exception):
-    """
-    Exception raised when batch inference fails.
-
-    The data attribute of the prefect State when type is FAILED must be an object that
-    an exception can be raised from. Thus, we declare a custom exception that can also
-    be used to transfer the result of the batch inference run.
-    """
-
-    def __init__(self, message: str, data: dict[str, Any]):
-        self.message = message
-        self.data = data
-
-
 class BatchInferenceResult(BaseModel):
     """Result from running inference on a batch of documents."""
 
@@ -146,18 +131,20 @@ class BatchInferenceResult(BaseModel):
         return self.failed_document_stems != set()
 
 
-class InferenceException(Exception):
+class BatchInferenceException(Exception):
     """
-    Exception raised when inference fails.
+    Exception raised when batch inference fails.
 
     The data attribute of the prefect State when type is FAILED must be an object that
     an exception can be raised from. Thus, we declare a custom exception that can also
-    be used to transfer the results of the all the batch inference runs.
+    be used to transfer the result of the batch inference run.
     """
 
-    def __init__(self, message: str, data: dict[str, Any]):
-        self.message = message
-        self.data = data
+    def __init__(self, message: str, batch_inference_result: BatchInferenceResult):
+        super().__init__(message)
+
+        self.message: str = message
+        self.batch_inference_result: BatchInferenceResult = batch_inference_result
 
 
 class InferenceResult(BaseModel):
@@ -166,10 +153,12 @@ class InferenceResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     batch_inference_results: list[BatchInferenceResult] = []
-    unexpected_failures: list[BaseException | FlowRun] = []
+    unexpected_failures: list[BatchInferenceException | BaseException | FlowRun] = []
     successful_classifier_specs: set[ClassifierSpec] = set()
     failed_classifier_specs: set[ClassifierSpec] = set()
 
+    # TODO: Really consider here what conditions we want to continue running under.
+    # Maybe split unexpected and batch inference failures.
     @property
     def failed(self) -> bool:
         """Whether the inference failed, True if failed."""
@@ -213,6 +202,22 @@ class InferenceResult(BaseModel):
             for batch_inference_result in self.batch_inference_results
             for document_stem, _ in batch_inference_result.failed_document_stems
         )
+
+
+class InferenceException(Exception):
+    """
+    Exception raised when inference fails.
+
+    The data attribute of the prefect State when type is FAILED must be an object that
+    an exception can be raised from. Thus, we declare a custom exception that can also
+    be used to transfer the results of the all the batch inference runs.
+    """
+
+    def __init__(self, message: str, inference_result: InferenceResult):
+        super().__init__(message)
+
+        self.message: str = message
+        self.inference_result: InferenceResult = inference_result
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -661,7 +666,7 @@ async def inference_batch_of_documents(
     config_json: dict,
     classifier_name: str,
     classifier_alias: str,
-) -> State | dict[str, Any]:
+) -> BatchInferenceResult | BatchInferenceException:
     """
     Run classifier inference on a batch of documents.
 
@@ -756,21 +761,14 @@ async def inference_batch_of_documents(
     )
 
     if batch_inference_result.failed:
-        message = (
-            f"Failed to run inference on {len(failures) + len(unknown_failures)}/"
-            f"{len(results)} documents."
-        )
-        return Failed(
-            message=message,
-            data=BatchInferenceException(
-                message=message,
-                data=batch_inference_result.model_dump(),
+        raise BatchInferenceException(
+            message=(
+                f"Failed to run inference on {len(failures) + len(unknown_failures)}/"
+                f"{len(results)} documents."
             ),
+            batch_inference_result=batch_inference_result,
         )
-    return Completed(
-        message=f"Successfully ran inference on all ({len(results)}) documents in batch.",
-        data=batch_inference_result.model_dump(),
-    )
+    return batch_inference_result
 
 
 @Profiler(
@@ -809,7 +807,7 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> State | dict[str, Any]:
+) -> InferenceResult | InferenceException:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -890,6 +888,8 @@ async def inference(
         BatchInferenceResult(**result) for result in all_raw_successes
     ]
 
+    # TODO: We need to get the failures that are BatchInferenceExceptions, currently
+    # we are only getting the successes.
     inference_result = InferenceResult(
         batch_inference_results=batch_inference_results,
         unexpected_failures=all_raw_failures,
@@ -903,18 +903,11 @@ async def inference(
     )
 
     if inference_result.failed:
-        message = "Some inference batches had failures!"
-        return Failed(
-            message=message,
-            data=InferenceException(
-                message=message,
-                data=inference_result.model_dump(),
-            ),
+        raise InferenceException(
+            message="Some inference batches had failures!",
+            inference_result=inference_result,
         )
-    return Completed(
-        message="Successfully ran inference on all batches!",
-        data=inference_result.model_dump(),
-    )
+    return inference_result
 
 
 async def create_inference_summary_artifact(

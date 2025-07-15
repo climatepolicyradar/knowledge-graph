@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Any
 
 from prefect import State, flow, get_run_logger
 from pydantic import PositiveInt
@@ -26,6 +25,7 @@ from flows.index import (
 from flows.inference import (
     CLASSIFIER_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
+    InferenceException,
     InferenceResult,
     inference,
 )
@@ -148,15 +148,20 @@ async def full_pipeline(
         return_state=True,
     )
 
-    inference_result_dict: dict[str, Any] | Exception = await inference_run.result(
-        raise_on_failure=False
-    )
+    inference_response: (
+        InferenceResult | InferenceException | Exception
+    ) = await inference_run.result(raise_on_failure=False)
 
-    if isinstance(inference_result_dict, Exception):
-        logger.error("Inference failed.")
-        raise inference_result_dict
-
-    inference_result: InferenceResult = InferenceResult(**inference_result_dict)
+    # TODO: Update to be clearer.
+    if isinstance(inference_response, InferenceException):
+        logger.error("Inference failed with an inference exception.")
+        inference_result = inference_response.inference_result
+    elif isinstance(inference_response, InferenceResult):
+        inference_result = inference_response
+    else:
+        raise ValueError(
+            f"Inference returned an unexpected result: {inference_response}"
+        )
 
     logger.info(
         f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "
