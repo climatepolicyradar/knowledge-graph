@@ -16,8 +16,6 @@ from prefect.deployments.schedules import create_deployment_schedule_create
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 
-import flows.boundary as boundary
-import flows.deindex as deindex
 from flows.aggregate import (
     aggregate,
     aggregate_batch_of_documents,
@@ -136,19 +134,7 @@ create_deployment(
     extra_tags=["type:entry"],
 )
 
-# Boundary
-
-create_deployment(
-    flow=boundary.run_partial_updates_of_concepts_for_batch,
-    description="Run partial updates of labelled passages stored in S3 into Vespa for a batch of documents",
-)
-
 # Index
-
-create_deployment(
-    flow=boundary.run_partial_updates_of_concepts_for_document_passages,
-    description="Co-ordinate updating inference results for concepts in Vespa",
-)
 
 create_deployment(
     flow=index_batch_of_documents,
@@ -162,18 +148,6 @@ create_deployment(
     extra_tags=["type:entry"],
 )
 
-# De-index
-
-create_deployment(
-    flow=deindex.run_cleanup_objects_for_batch,
-    description="Clean-up a concept's versions for a document",
-)
-
-create_deployment(
-    flow=deindex.deindex_labelled_passages_from_s3_to_vespa,
-    description="Run partial updates of labelled passages stored in S3 into Vespa",
-)
-
 # Orchestrate full pipeline
 
 create_deployment(
@@ -181,6 +155,7 @@ create_deployment(
     description="Run the full Knowledge Graph Pipeline",
     extra_tags=["type:end_to_end"],
 )
+
 # Wikibase
 
 create_deployment(
