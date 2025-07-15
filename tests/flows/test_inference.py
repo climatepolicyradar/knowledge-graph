@@ -12,9 +12,12 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    BatchInferenceException,
+    BatchInferenceResult,
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
+    InferenceResult,
     _stringify,
     determine_file_stems,
     document_passages,
@@ -233,6 +236,7 @@ async def test_inference(
     ]
     with prefect_test_harness():
         filtered_file_stems = await inference(
+            # FIXME: ValueError: `latest` is not allowed
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
@@ -523,12 +527,17 @@ async def test_inference_batch_of_documents(
     }
 
     # Should not raise any exceptions for successful processing
-    await inference_batch_of_documents(
+    result = await inference_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
     )
+
+    # Assert that when we run as a flow we get a dict of the BatchInferenceResult
+    assert isinstance(result, dict)
+    assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
+    _ = BatchInferenceResult(**result)
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -596,14 +605,15 @@ async def test_inference_batch_of_documents_with_failures(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    # Should raise ValueError due to failed documents
-    with pytest.raises(ValueError, match=r"Failed to process 2/2 documents"):
-        await inference_batch_of_documents(
+    with pytest.raises(BatchInferenceException) as exc_info:
+        _ = await inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )
+
+        assert exc_info.value.message == "Failed to run inference on 2/2 documents."
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client
@@ -661,7 +671,7 @@ async def test_inference_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    await inference_batch_of_documents(
+    _ = await inference_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
@@ -690,3 +700,66 @@ async def test_inference_batch_of_documents_empty_batch(
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
+
+
+def test_batch_inference_result_properties() -> None:
+    """Test the InferenceResult object."""
+
+    batch_inference_result_1 = BatchInferenceResult(
+        successful_document_stems=set(
+            [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.2.2")]
+        ),
+        classifier_name="Q100",
+        classifier_alias="v1",
+    )
+
+    result = InferenceResult(
+        batch_inference_results=[
+            batch_inference_result_1,
+        ],
+    )
+
+    assert not result.failed
+    assert result.successful_document_stems == set(
+        [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.2.2")]
+    )
+    assert result.failed_document_stems == set()
+
+    batch_inference_result_2 = BatchInferenceResult(
+        successful_document_stems=set(
+            [DocumentStem("TEST.executive.3.3"), DocumentStem("TEST.executive.4.4")]
+        ),
+        failed_document_stems=set(
+            [
+                (
+                    DocumentStem("TEST.executive.1.1"),
+                    Exception("Failed to run inference on TEST.executive.1.1"),
+                ),
+                (
+                    DocumentStem("TEST.executive.5.5"),
+                    Exception("Failed to run inference on TEST.executive.5.5"),
+                ),
+            ]
+        ),
+        classifier_name="Q101",
+        classifier_alias="v1",
+    )
+
+    result = InferenceResult(
+        batch_inference_results=[
+            batch_inference_result_1,
+            batch_inference_result_2,
+        ],
+    )
+
+    assert result.failed
+    assert result.successful_document_stems == set(
+        [
+            DocumentStem("TEST.executive.2.2"),
+            DocumentStem("TEST.executive.3.3"),
+            DocumentStem("TEST.executive.4.4"),
+        ]
+    )
+    assert result.failed_document_stems == set(
+        [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.5.5")]
+    )
