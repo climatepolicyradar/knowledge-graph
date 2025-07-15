@@ -696,7 +696,7 @@ async def create_inference_on_batch_summary_artifact(
     )
 
 
-@flow(log_prints=True, persist_result=True)
+@flow(log_prints=True)
 async def inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: dict,
