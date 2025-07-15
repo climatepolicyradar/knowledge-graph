@@ -453,7 +453,8 @@ async def map_as_sub_flow(
     counter: PositiveInt,
     batches: Generator[Sequence[T], None, None],
     parameters: Callable[[Sequence[T]], dict[str, Any]],
-) -> tuple[Sequence[U], Sequence[BaseException | FlowRun]]:
+    unwrap_result: bool,
+) -> tuple[Sequence[U | FlowRun], Sequence[BaseException | FlowRun]]:
     """
     Map over an iterable, running the function as a sub-flow.
 
@@ -465,6 +466,10 @@ async def map_as_sub_flow(
 
     The sub-flows are waited on until they complete, with no
     timeout.
+
+    Either return the flow run itself, or unwrap the result from it.
+
+    This assumes that the same parameters are used for each sub-flow run
     """
     flow_name = function_to_flow_name(fn)
     deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
@@ -502,36 +507,21 @@ async def map_as_sub_flow(
             if result.state and result.state.type == StateType.COMPLETED:
                 # For completed flows, extract the actual return value
                 try:
-                    flow_result: U = result.state.result(
-                        #  Doing it this way, makes it easier to rely
-                        # on the type system, instead of doing `False`
-                        # and then allowing for a union of types in
-                        # the return.
-                        raise_on_failure=True,
-                    )
-                    successes.append(flow_result)
+                    if unwrap_result:
+                        flow_result: U = result.state.result(
+                            #  Doing it this way, makes it easier to rely
+                            # on the type system, instead of doing `False`
+                            # and then allowing for a union of types in
+                            # the return.
+                            raise_on_failure=True,
+                        )
+                        successes.append(flow_result)
+                    else:
+                        successes.append(result)
+
                 except Exception as e:
                     failures.append(e)
             else:
                 failures.append(result)
 
     return successes, failures
-
-
-async def get_deployment_results(
-    flow_runs: list[FlowRun],
-) -> list[tuple[FlowRun, dict[str, Any]]]:
-    """
-    Get the results from the prefect deployment runs.
-
-    This requires that persist_results=True is set in the flow decorator that the
-    deployment is instantiated from.
-    """
-    results: list[tuple[FlowRun, dict[str, Any]]] = []
-    for flow_run in flow_runs:
-        if not flow_run.state or flow_run.state.type != StateType.COMPLETED:
-            raise ValueError(f"Expected COMPLETED flow run state, got {flow_run.state}")
-        flow_run_result = await flow_run.state.result()
-        results.append((flow_run, flow_run_result))
-
-    return results

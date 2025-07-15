@@ -460,38 +460,42 @@ def test_remove_sabin_file_stems(
 
 
 def test_group_inference_results_into_states(snapshot):
-    assert snapshot == group_inference_results_into_states(
-        [
-            FlowRun(
-                name="1",
-                id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-                flow_id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-                state=None,
-            ),
-            FlowRun(
-                name="2",
-                id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-                flow_id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-                state=State(type=StateType.CANCELLED),
-            ),
-            ValueError("2"),
-            ValueError("3"),
-            FlowRun(
-                name="4",
-                id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-                flow_id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-                state=State(type=StateType.COMPLETED),
-                parameters={"classifier_name": "Q100", "classifier_alias": "v3"},
-            ),
-            FlowRun(
-                name="5",
-                id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-                flow_id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-                state=State(type=StateType.COMPLETED),
-                parameters={"classifier_name": "Q200", "classifier_alias": "v5"},
-            ),
-        ]
-    )
+    # Test data separated into successes and failures as expected by the new signature
+    successes = [
+        FlowRun(
+            name="4",
+            id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
+            flow_id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
+            state=State(type=StateType.COMPLETED),
+            parameters={"classifier_name": "Q100", "classifier_alias": "v3"},
+        ),
+        FlowRun(
+            name="5",
+            id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
+            flow_id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
+            state=State(type=StateType.COMPLETED),
+            parameters={"classifier_name": "Q200", "classifier_alias": "v5"},
+        ),
+    ]
+
+    failures = [
+        FlowRun(
+            name="1",
+            id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
+            flow_id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
+            state=None,
+        ),
+        FlowRun(
+            name="2",
+            id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
+            flow_id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
+            state=State(type=StateType.CANCELLED),
+        ),
+        ValueError("2"),
+        ValueError("3"),
+    ]
+
+    assert snapshot == group_inference_results_into_states(successes, failures)
 
 
 @pytest.mark.asyncio

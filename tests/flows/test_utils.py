@@ -3,12 +3,10 @@ import re
 import time
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID
+from unittest.mock import patch
 
 import boto3
 import pytest
-from prefect.client.schemas.objects import FlowRun, State, StateType
 
 from flows.utils import (
     DocumentStem,
@@ -16,7 +14,6 @@ from flows.utils import (
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
     filter_non_english_language_file_stems,
-    get_deployment_results,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
@@ -271,77 +268,3 @@ def test_filter_non_english_file_stems() -> None:
     end_time = time.time()
 
     assert end_time - start_time < 1, "Filtering took too long"
-
-
-@pytest.mark.asyncio
-async def test_get_deployment_results():
-    """Test that get_deployment_results correctly retrieves and processes flow run results."""
-
-    # Create mock flow runs
-    flow_run_1 = FlowRun(
-        id=UUID("12345678-1234-5678-1234-567812345678"),
-        name="test-flow-1",
-        flow_id=UUID("87654321-4321-8765-4321-876543210987"),
-        state=State(type=StateType.COMPLETED),
-    )
-
-    flow_run_2 = FlowRun(
-        id=UUID("23456789-2345-6789-2345-678923456789"),
-        name="test-flow-2",
-        flow_id=UUID("87654321-4321-8765-4321-876543210987"),
-        state=State(type=StateType.COMPLETED),
-    )
-
-    flow_runs = [flow_run_1, flow_run_2]
-
-    # Mock data that would be returned by the flow run results
-    mock_result_1 = {
-        "successful_document_stems": ["doc1", "doc2"],
-        "failed_document_stems": [],
-        "classifier_name": "Q123",
-        "classifier_alias": "v1",
-    }
-
-    mock_result_2 = {
-        "successful_document_stems": ["doc3"],
-        "failed_document_stems": [("doc4", "error")],
-        "classifier_name": "Q456",
-        "classifier_alias": "v2",
-    }
-
-    # Create mock completed states and set them on the flow runs
-    mock_state_1 = MagicMock(spec=State)
-    mock_state_1.type = StateType.COMPLETED
-    mock_state_1.result = AsyncMock(return_value=mock_result_1)
-    flow_run_1.state = mock_state_1
-
-    mock_state_2 = MagicMock(spec=State)
-    mock_state_2.type = StateType.COMPLETED
-    mock_state_2.result = AsyncMock(return_value=mock_result_2)
-    flow_run_2.state = mock_state_2
-
-    results = await get_deployment_results(flow_runs)
-
-    # Verify the results
-    assert len(results) == 2
-
-    # Check first result
-    assert results[0][0] == flow_run_1
-    assert results[0][1] == mock_result_1
-
-    # Check second result
-    assert results[1][0] == flow_run_2
-    assert results[1][1] == mock_result_2
-
-    # Assert that we handle returned exceptions.
-    mock_result_2 = ValueError("Test error!")
-    mock_state_2.result = AsyncMock(return_value=mock_result_2)
-
-    results = await get_deployment_results(flow_runs)
-    assert isinstance(results[1][1], Exception)
-
-    # No completed state
-    mock_state_2.type = StateType.FAILED
-    with pytest.raises(ValueError) as e:
-        _ = await get_deployment_results(flow_runs)
-    assert "Expected COMPLETED flow run state" in str(e.value)

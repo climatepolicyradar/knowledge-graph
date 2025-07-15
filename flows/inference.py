@@ -15,10 +15,9 @@ from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from prefect.artifacts import create_table_artifact
-from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import get_run_context
-from prefect.deployments import run_deployment
 from prefect.logging import get_run_logger
 from prefect.states import Completed, Failed, State
 from prefect.utilities.names import generate_slug
@@ -31,18 +30,15 @@ from flows.utils import (
     Profiler,
     SlackNotify,
     filter_non_english_language_file_stems,
-    get_deployment_results,
     get_file_stems_for_document_id,
     iterate_batch,
+    map_as_sub_flow,
     return_with_id,
-    wait_for_semaphore,
 )
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
     disallow_latest_alias,
-    function_to_flow_name,
-    generate_deployment_name,
     get_prefect_job_variable,
 )
 from scripts.update_classifier_spec import parse_spec_file
@@ -170,7 +166,7 @@ class InferenceResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     batch_inference_results: list[BatchInferenceResult]
-    unexpected_failures: list[BaseException]
+    unexpected_failures: list[BaseException | FlowRun]
 
     @property
     def failed(self) -> bool:
@@ -819,43 +815,23 @@ async def inference_batch_of_documents(
     name="processing results",
 )
 def group_inference_results_into_states(
-    results: list[FlowRun | BaseException],
+    successes_in: Sequence[FlowRun],
+    failures_in: Sequence[BaseException | FlowRun],
 ) -> tuple[
     list[FlowRun | BaseException],
     dict[ClassifierSpec, FlowRun],
 ]:
     """Group results of sub-runs into the different states of success and failure."""
-    failures: list[FlowRun | BaseException] = []
     successes: dict[ClassifierSpec, FlowRun] = {}
 
-    for result in results:
-        if isinstance(result, BaseException):
-            failures.append(result)
+    for success in successes_in:
+        classifier_spec = ClassifierSpec(
+            name=success.parameters["classifier_name"],
+            alias=success.parameters["classifier_alias"],
+        )
+        successes[classifier_spec] = success
 
-            print(
-                f"failed to process batch: {str(result)}",
-            )
-        else:
-            if not result.state:
-                failures.append(result)
-
-                print(
-                    f"flow run's state was unknown. Flow run name: `{result.name}`",
-                )
-            elif result.state.type != StateType.COMPLETED:
-                failures.append(result)
-
-                print(
-                    f"flow run's state was not completed. Flow run name: `{result.name}`",
-                )
-            elif result.state.type == StateType.COMPLETED:
-                classifier_spec = ClassifierSpec(
-                    name=result.parameters["classifier_name"],
-                    alias=result.parameters["classifier_alias"],
-                )
-                successes[classifier_spec] = result
-
-    return failures, successes
+    return list(failures_in), successes
 
 
 @flow(
@@ -910,66 +886,47 @@ async def inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    flow_name = function_to_flow_name(inference_batch_of_documents)
-    deployment_name = generate_deployment_name(
-        flow_name=flow_name, aws_env=config.aws_env
-    )
+    all_raw_successes = []
+    all_raw_failures = []
 
-    semaphore = asyncio.Semaphore(classifier_concurrency_limit)
+    for classifier_spec in classifier_specs:
+        batches = iterate_batch(filtered_file_stems, batch_size)
 
-    with Profiler(
-        printer=print,
-        name="preparing tasks",
-    ):
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                run_deployment(
-                    name=f"{flow_name}/{deployment_name}",
-                    parameters={
-                        "batch": batch,
-                        "config_json": config.to_json(),
-                        "classifier_name": classifier_spec.name,
-                        "classifier_alias": classifier_spec.alias,
-                    },
-                    # Rely on the flow's own timeout, if any, to make sure it
-                    # eventually ends[1].
-                    #
-                    # [1]:
-                    # > Setting timeout to None will allow this function to
-                    # > poll indefinitely.
-                    timeout=None,
-                ),
+        def parameters(
+            batch: Sequence[DocumentStem],
+        ) -> dict[str, Any]:
+            return {
+                "batch": batch,
+                "config_json": config.to_json(),
+                "classifier_name": classifier_spec.name,
+                "classifier_alias": classifier_spec.alias,
+            }
+
+        with Profiler(
+            printer=print,
+            name="running classifier inference with map_as_sub_flow",
+        ):
+            raw_successes, raw_failures = await map_as_sub_flow(
+                fn=inference_batch_of_documents,
+                aws_env=config.aws_env,
+                counter=classifier_concurrency_limit,
+                batches=batches,
+                parameters=parameters,
+                unwrap_result=True,
             )
-            for classifier_spec in classifier_specs
-            for batch in iterate_batch(filtered_file_stems, batch_size)
-        ]
 
-    with Profiler(
-        printer=print,
-        name="gathering tasks",
-    ):
-        results: list[FlowRun | BaseException] = await asyncio.gather(
-            *tasks, return_exceptions=True
-        )
+            all_raw_successes.extend(raw_successes)
+            all_raw_failures.extend(raw_failures)
 
-    unexpected_failures: list[BaseException] = [
-        result for result in results if isinstance(result, BaseException)
-    ]
-    flow_runs: list[FlowRun] = [
-        result for result in results if isinstance(result, FlowRun)
-    ]
-
-    batch_inference_results_dicts: list[
-        tuple[FlowRun, dict[str, Any]]
-    ] = await get_deployment_results(flow_runs)
+    # TODO: All raw results should be dicts for batch inference when unwrap_result=True,
+    # especially as raise_on_failure=True.
     batch_inference_results: list[BatchInferenceResult] = [
-        BatchInferenceResult(**result[1]) for result in batch_inference_results_dicts
+        BatchInferenceResult(**result) for result in all_raw_successes
     ]
 
     inference_result = InferenceResult(
         batch_inference_results=batch_inference_results,
-        unexpected_failures=unexpected_failures,
+        unexpected_failures=all_raw_failures,
     )
 
     await create_inference_summary_artifact(
@@ -1028,8 +985,7 @@ async def create_inference_summary_artifact(
         for spec in failed_classifier_specs
     ]
 
-    # Create a single artifact with overview in description and classifier details in table
-    _ = create_table_artifact(
+    await create_table_artifact(
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,
