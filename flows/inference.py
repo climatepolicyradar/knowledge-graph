@@ -887,7 +887,9 @@ async def inference(
     # TODO: We need to get the failures that are BatchInferenceExceptions, currently
     # we are only getting the successes.
     inference_result = InferenceResult(
-        batch_inference_results=all_raw_successes,
+        batch_inference_results=[
+            BatchInferenceResult(**result) for result in all_raw_successes
+        ],
         unexpected_failures=all_raw_failures,
         successful_classifier_specs=successes.keys(),
         failed_classifier_specs=failures_classifier_specs,

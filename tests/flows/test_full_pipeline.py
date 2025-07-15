@@ -2,7 +2,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from prefect.client.schemas.objects import State, StateType
-from prefect.states import Completed
 
 from flows.aggregate import (
     DEFAULT_N_BATCHES,
@@ -157,21 +156,17 @@ async def test_full_pipeline_no_config_provided(
         mock_inference_create.return_value = test_config
         mock_aggregate_create.return_value = test_aggregate_config
 
-        mock_inference.return_value = Completed(
-            message="Successfully ran inference on all batches!",
-            data=InferenceResult(
-                batch_inference_results=[
-                    BatchInferenceResult(
-                        successful_document_stems=set(
-                            aggregate_inference_results_document_stems
-                        ),
-                        failed_document_stems=set(),
-                        classifier_name="Q100",
-                        classifier_alias="v1",
+        mock_inference.return_value = InferenceResult(
+            batch_inference_results=[
+                BatchInferenceResult(
+                    successful_document_stems=set(
+                        aggregate_inference_results_document_stems
                     ),
-                ],
-                unexpected_failures=[],
-            ).model_dump(),
+                    failed_document_stems=set(),
+                    classifier_name="Q100",
+                    classifier_alias="v1",
+                ),
+            ],
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -240,21 +235,17 @@ async def test_full_pipeline_with_full_config(
         ) as mock_indexing,
     ):
         # Setup mocks
-        mock_inference.return_value = Completed(
-            message="Successfully ran inference on all batches!",
-            data=InferenceResult(
-                batch_inference_results=[
-                    BatchInferenceResult(
-                        successful_document_stems=set(
-                            aggregate_inference_results_document_stems
-                        ),
-                        failed_document_stems=set(),
-                        classifier_name="Q100",
-                        classifier_alias="v1",
+        mock_inference.return_value = InferenceResult(
+            batch_inference_results=[
+                BatchInferenceResult(
+                    successful_document_stems=set(
+                        aggregate_inference_results_document_stems
                     ),
-                ],
-                unexpected_failures=[],
-            ).model_dump(),
+                    failed_document_stems=set(),
+                    classifier_name="Q100",
+                    classifier_alias="v1",
+                ),
+            ],
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
