@@ -235,13 +235,18 @@ async def test_inference(
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
     with prefect_test_harness():
-        filtered_file_stems = await inference(
+        inference_result = await inference(
             # FIXME: ValueError: `latest` is not allowed
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
-        assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
+
+        assert isinstance(inference_result, InferenceResult)
+        assert inference_result.successful_document_stems == set(
+            [DocumentStem(doc_id) for doc_id in doc_ids]
+        )
+        assert not inference_result.failed
 
     mock_wandb_init.assert_called_once_with(
         entity="test_entity",

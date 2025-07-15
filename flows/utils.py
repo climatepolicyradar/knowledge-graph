@@ -454,6 +454,8 @@ async def map_as_sub_flow(
     batches: Generator[Sequence[T], None, None],
     parameters: Callable[[Sequence[T]], dict[str, Any]],
     unwrap_result: bool,
+    # TODO: Bind this param to the unwrap param.
+    await_result: bool = False,
 ) -> tuple[Sequence[U | FlowRun], Sequence[BaseException | FlowRun]]:
     """
     Map over an iterable, running the function as a sub-flow.
@@ -473,6 +475,7 @@ async def map_as_sub_flow(
     """
     flow_name = function_to_flow_name(fn)
     deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+    print(f"Running {flow_name} as deployment: {flow_name}/{deployment_name}.")
     semaphore = asyncio.Semaphore(counter)
 
     tasks = [
@@ -508,18 +511,18 @@ async def map_as_sub_flow(
                 # For completed flows, extract the actual return value
                 try:
                     if unwrap_result:
-                        flow_result_raw = result.state.result(
-                            #  Doing it this way, makes it easier to rely
-                            # on the type system, instead of doing `False`
-                            # and then allowing for a union of types in
-                            # the return.
-                            raise_on_failure=True,
-                        )
-                        # Conditionally await if the result is a coroutine
-                        if asyncio.iscoroutine(flow_result_raw):
-                            flow_result: U = await flow_result_raw
+                        # Doing it this way, makes it easier to rely
+                        # on the type system, instead of doing `False`
+                        # and then allowing for a union of types in
+                        # the return.
+                        if await_result:
+                            flow_result: U = await result.state.result(
+                                raise_on_failure=True,
+                            )
                         else:
-                            flow_result: U = flow_result_raw
+                            flow_result: U = result.state.result(
+                                raise_on_failure=True,
+                            )
                         successes.append(flow_result)
                     else:
                         successes.append(result)

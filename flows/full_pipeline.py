@@ -152,16 +152,22 @@ async def full_pipeline(
         InferenceResult | InferenceException | Exception
     ) = await inference_run.result(raise_on_failure=False)
 
-    # TODO: Update to be clearer.
-    if isinstance(inference_response, InferenceException):
-        logger.error("Inference failed with an inference exception.")
-        inference_result = inference_response.inference_result
-    elif isinstance(inference_response, InferenceResult):
-        inference_result = inference_response
-    else:
-        raise ValueError(
-            f"Inference returned an unexpected result: {inference_response}"
-        )
+    match inference_response:
+        case InferenceException():
+            logger.warning(
+                "Some or all inference batches had failures. "
+                + "Continuing to process documents where inference was successful."
+            )
+            inference_result = inference_response.inference_result
+        case Exception():
+            logger.error("Inference failed with an unexpected exception.")
+            raise inference_response
+        case InferenceResult():
+            inference_result = inference_response
+        case _:
+            raise ValueError(
+                f"Inference returned an unexpected result: {inference_response}"
+            )
 
     logger.info(
         f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "

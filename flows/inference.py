@@ -874,6 +874,7 @@ async def inference(
                 batches=batches,
                 parameters=parameters,
                 unwrap_result=True,
+                await_result=True,
             )
 
             all_raw_successes.extend(raw_successes)
