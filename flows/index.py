@@ -14,7 +14,6 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun
-from prefect.deployments import run_deployment  # noqa: F401
 from prefect.logging import get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
