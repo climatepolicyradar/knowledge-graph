@@ -30,8 +30,6 @@ from flows.boundary import (
     CONCEPT_COUNT_SEPARATOR,
     DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_TIMEOUT_MS,
-    DocumentImportId,
-    DocumentStem,
     TextBlockId,
     VespaDataId,
     VespaHitId,
@@ -41,6 +39,8 @@ from flows.boundary import (
 )
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     iterate_batch,

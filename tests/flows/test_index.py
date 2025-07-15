@@ -15,8 +15,6 @@ from vespa.io import VespaResponse
 
 from flows.aggregate import RunOutputIdentifier
 from flows.boundary import (
-    DocumentImportId,
-    DocumentStem,
     get_document_from_vespa,
     get_document_passages_from_vespa__generator,
 )
@@ -28,7 +26,11 @@ from flows.index import (
     index_family_document,
 )
 from flows.result import is_err, is_ok, unwrap_err
-from flows.utils import remove_translated_suffix
+from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    remove_translated_suffix,
+)
 
 
 @pytest.mark.vespa
