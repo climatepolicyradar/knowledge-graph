@@ -776,19 +776,19 @@ async def inference_batch_of_documents(
     name="processing results",
 )
 def group_inference_results_into_states(
-    successes_in: Sequence[FlowRun],
+    successes_in: Sequence[BatchInferenceResult],
     failures_in: Sequence[BaseException | FlowRun],
 ) -> tuple[
     list[FlowRun | BaseException],
-    dict[ClassifierSpec, FlowRun],
+    dict[ClassifierSpec, BatchInferenceResult],
 ]:
     """Group results of sub-runs into the different states of success and failure."""
-    successes: dict[ClassifierSpec, FlowRun] = {}
+    successes: dict[ClassifierSpec, BatchInferenceResult] = {}
 
     for success in successes_in:
         classifier_spec = ClassifierSpec(
-            name=success.parameters["classifier_name"],
-            alias=success.parameters["classifier_alias"],
+            name=success.classifier_name,
+            alias=success.classifier_alias,
         )
         successes[classifier_spec] = success
 
@@ -884,14 +884,10 @@ async def inference(
     )
     failures_classifier_specs = set(classifier_specs) - set(successes.keys())
 
-    batch_inference_results: list[BatchInferenceResult] = [
-        BatchInferenceResult(**result) for result in all_raw_successes
-    ]
-
     # TODO: We need to get the failures that are BatchInferenceExceptions, currently
     # we are only getting the successes.
     inference_result = InferenceResult(
-        batch_inference_results=batch_inference_results,
+        batch_inference_results=all_raw_successes,
         unexpected_failures=all_raw_failures,
         successful_classifier_specs=successes.keys(),
         failed_classifier_specs=failures_classifier_specs,
@@ -945,7 +941,7 @@ async def create_inference_summary_artifact(
         for spec in inference_result.failed_classifier_specs
     ]
 
-    _ = create_table_artifact(
+    await create_table_artifact(
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,
