@@ -922,11 +922,10 @@ async def create_inference_summary_artifact(
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
-    successful_document_stems = inference_result.successful_document_stems
-    failed_document_stems = inference_result.failed_document_stems
-
     # Prepare summary data for the artifact
-    total_documents = len(successful_document_stems) + len(failed_document_stems)
+    total_documents = len(inference_result.successful_document_stems) + len(
+        inference_result.failed_document_stems
+    )
     total_classifiers = len(inference_result.successful_classifier_specs) + len(
         inference_result.failed_classifier_specs
     )

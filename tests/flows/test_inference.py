@@ -537,6 +537,7 @@ async def test_inference_batch_of_documents(
     # Assert that when we run as a flow we get a dict of the BatchInferenceResult
     assert isinstance(result, dict)
     assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
+    _ = BatchInferenceResult(**result)
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
