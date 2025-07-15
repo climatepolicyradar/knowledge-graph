@@ -708,7 +708,6 @@ def test_batch_inference_result_properties() -> None:
         successful_document_stems=set(
             [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.2.2")]
         ),
-        failed_document_stems=set(),
         classifier_name="Q100",
         classifier_alias="v1",
     )
@@ -717,7 +716,6 @@ def test_batch_inference_result_properties() -> None:
         batch_inference_results=[
             batch_inference_result_1,
         ],
-        unexpected_failures=[],
     )
 
     assert not result.failed
@@ -725,10 +723,6 @@ def test_batch_inference_result_properties() -> None:
         [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.2.2")]
     )
     assert result.failed_document_stems == set()
-    assert result.successful_classifiers == set(
-        [ClassifierSpec(name="Q100", alias="v1")]
-    )
-    assert result.failed_classifiers == set()
 
     batch_inference_result_2 = BatchInferenceResult(
         successful_document_stems=set(
@@ -755,7 +749,6 @@ def test_batch_inference_result_properties() -> None:
             batch_inference_result_1,
             batch_inference_result_2,
         ],
-        unexpected_failures=[],
     )
 
     assert result.failed
@@ -769,7 +762,3 @@ def test_batch_inference_result_properties() -> None:
     assert result.failed_document_stems == set(
         [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.5.5")]
     )
-    assert result.successful_classifiers == set(
-        [ClassifierSpec(name="Q100", alias="v1")]
-    )
-    assert result.failed_classifiers == set([ClassifierSpec(name="Q101", alias="v1")])

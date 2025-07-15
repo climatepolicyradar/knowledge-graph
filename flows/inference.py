@@ -134,8 +134,8 @@ class BatchInferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    successful_document_stems: set[DocumentStem]
-    failed_document_stems: set[tuple[DocumentStem, Exception]]
+    successful_document_stems: set[DocumentStem] = set()
+    failed_document_stems: set[tuple[DocumentStem, Exception]] = set()
     classifier_name: str
     classifier_alias: str
 
@@ -165,8 +165,10 @@ class InferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    batch_inference_results: list[BatchInferenceResult]
-    unexpected_failures: list[BaseException | FlowRun]
+    batch_inference_results: list[BatchInferenceResult] = []
+    unexpected_failures: list[BaseException | FlowRun] = []
+    successful_classifier_specs: set[ClassifierSpec] = set()
+    failed_classifier_specs: set[ClassifierSpec] = set()
 
     @property
     def failed(self) -> bool:
@@ -210,45 +212,6 @@ class InferenceResult(BaseModel):
             document_stem
             for batch_inference_result in self.batch_inference_results
             for document_stem, _ in batch_inference_result.failed_document_stems
-        )
-
-    @property
-    def successful_classifiers(self) -> set[ClassifierSpec]:
-        """
-        The set of classifiers that were successfully processed.
-
-        A classifier is considered successful if it was succesful across all batches. For example,
-        if a classifier failed in one batch, but passed in another, then the classifier is considered unsuccessful.
-        """
-
-        failed_classifier_strings: list[str] = list(
-            f"{result.classifier_name}:{result.classifier_alias}"
-            for result in self.batch_inference_results
-            if result.failed
-        )
-
-        return set(
-            ClassifierSpec(
-                name=result.classifier_name,
-                alias=result.classifier_alias,
-            )
-            for result in self.batch_inference_results
-            if not result.failed
-            and f"{result.classifier_name}:{result.classifier_alias}"
-            not in failed_classifier_strings
-        )
-
-    @property
-    def failed_classifiers(self) -> set[ClassifierSpec]:
-        """The set of classifiers that failed to be processed."""
-
-        return set(
-            ClassifierSpec(
-                name=result.classifier_name,
-                alias=result.classifier_alias,
-            )
-            for result in self.batch_inference_results
-            if result.failed
         )
 
 
@@ -918,8 +881,11 @@ async def inference(
             all_raw_successes.extend(raw_successes)
             all_raw_failures.extend(raw_failures)
 
-    # TODO: All raw results should be dicts for batch inference when unwrap_result=True,
-    # especially as raise_on_failure=True.
+    _, successes = group_inference_results_into_states(
+        all_raw_successes, all_raw_failures
+    )
+    failures_classifier_specs = set(classifier_specs) - set(successes.keys())
+
     batch_inference_results: list[BatchInferenceResult] = [
         BatchInferenceResult(**result) for result in all_raw_successes
     ]
@@ -927,6 +893,8 @@ async def inference(
     inference_result = InferenceResult(
         batch_inference_results=batch_inference_results,
         unexpected_failures=all_raw_failures,
+        successful_classifier_specs=successes.keys(),
+        failed_classifier_specs=failures_classifier_specs,
     )
 
     await create_inference_summary_artifact(
@@ -956,14 +924,14 @@ async def create_inference_summary_artifact(
 
     successful_document_stems = inference_result.successful_document_stems
     failed_document_stems = inference_result.failed_document_stems
-    successful_classifier_specs = inference_result.successful_classifiers
-    failed_classifier_specs = inference_result.failed_classifiers
 
     # Prepare summary data for the artifact
     total_documents = len(successful_document_stems) + len(failed_document_stems)
-    total_classifiers = len(successful_classifier_specs) + len(failed_classifier_specs)
-    successful_classifiers = len(successful_classifier_specs)
-    failed_classifiers = len(failed_classifier_specs)
+    total_classifiers = len(inference_result.successful_classifier_specs) + len(
+        inference_result.failed_classifier_specs
+    )
+    successful_classifiers = len(inference_result.successful_classifier_specs)
+    failed_classifiers = len(inference_result.failed_classifier_specs)
 
     # Format the overview information as a string for the description
     overview_description = f"""# Classifier Inference Summary
@@ -979,13 +947,13 @@ async def create_inference_summary_artifact(
     # Create classifier details table
     classifier_details = [
         {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
-        for spec in successful_classifier_specs
+        for spec in inference_result.successful_classifier_specs
     ] + [
         {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
-        for spec in failed_classifier_specs
+        for spec in inference_result.failed_classifier_specs
     ]
 
-    await create_table_artifact(
+    _ = create_table_artifact(
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,
