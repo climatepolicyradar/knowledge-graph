@@ -32,7 +32,7 @@ class ClassifierSpec(BaseModel):
 
     def __hash__(self):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""
-        return hash((self.wikibase_id, self.classifier_id))
+        return hash(self.classifier_id)
 
     def __str__(self):
         """Return a string representation of the classifier spec."""
