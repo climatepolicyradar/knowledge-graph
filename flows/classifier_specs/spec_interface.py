@@ -22,8 +22,9 @@ class ClassifierSpec(BaseModel):
             "The unique identifier for the classifier, built from its internals."
         ),
     )
-    wandb_registry_version: int = Field(
-        description=("The version of the classifier in wandb registry. e.g. 1"),
+    wandb_registry_version: str = Field(
+        description=("The version of the classifier in wandb registry. e.g. v1"),
+        pattern=r"^v\d+$",
     )
     gpu: bool = Field(
         description=("Whether the classifier should be run on a GPU."),

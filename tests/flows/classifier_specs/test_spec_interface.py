@@ -2,7 +2,6 @@ import tempfile
 import textwrap
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -20,10 +19,18 @@ from src.identifiers import WikibaseID
             pytest.raises(ValidationError),
         ),
         (
+            {  # Bad registry version - bad
+                "wikibase_id": WikibaseID("Q123"),
+                "classifier_id": "test_classifier",
+                "wandb_registry_version": "latest",
+            },
+            pytest.raises(ValidationError),
+        ),
+        (
             {  # missing optional fields - fine
                 "wikibase_id": WikibaseID("Q123"),
                 "classifier_id": "test_classifier",
-                "wandb_registry_version": 1,
+                "wandb_registry_version": "v1",
             },
             does_not_raise(),
         ),
@@ -31,7 +38,7 @@ from src.identifiers import WikibaseID
             {  # extra fields - fine
                 "wikibase_id": WikibaseID("Q123"),
                 "classifier_id": "test_classifier",
-                "wandb_registry_version": 1,
+                "wandb_registry_version": "v1",
                 "extra_info": "will be ignored",
             },
             does_not_raise(),
@@ -40,7 +47,7 @@ from src.identifiers import WikibaseID
             {  # all fields - fine
                 "wikibase_id": WikibaseID("Q123"),
                 "classifier_id": "test_classifier",
-                "wandb_registry_version": 1,
+                "wandb_registry_version": "v1",
                 "gpu": True,
             },
             does_not_raise(),
@@ -60,15 +67,15 @@ def test_load_classifier_specs():
         ---
         - wikibase_id: Q368
           classifier_id: ju9239oi
-          wandb_registry_version: 3
+          wandb_registry_version: v3
           gpu: True
         - wikibase_id: Q123
           classifier_id: x438f30k
-          wandb_registry_version: 1
+          wandb_registry_version: v1
           extra_info: will be ignored
         - wikibase_id: Q999
           classifier_id: ju3f93jf
-          wandb_registry_version: 2
+          wandb_registry_version: v2
     """).lstrip()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -77,7 +84,6 @@ def test_load_classifier_specs():
         with open(spec_file, "w") as f:
             f.write(sample_data)
 
-        with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_spec_dir):
-            specs = load_classifier_specs(AwsEnv("sandbox"))
+        specs = load_classifier_specs(AwsEnv("sandbox"), spec_dir=temp_spec_dir)
 
         assert len(specs) == 3
