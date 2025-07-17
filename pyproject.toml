@@ -14,7 +14,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
-pydantic-ai = "^0.0.53"
+pydantic-ai = "^0.2.20"
 rich = "^13.7.0"
 tqdm = "^4.66.2"
 ipykernel = "^6.29.3"
@@ -23,16 +23,16 @@ rapidfuzz = "^3.10.0"
 python-dotenv = "^1.0.1"
 more-itertools = "^10.3.0"
 argilla = ">=2.5"
-griffe = "1.5.7"
-cpr-sdk = "1.19.1"
-wandb = "^0.18.3"
+griffe = "1.7.3"
+cpr-sdk = "1.20.1"
+wandb = "^0.21.0"
 boto3 = "^1.35.31"
-pyvespa = "^0.54.0"
+pyvespa = "^0.59.0"
 pyyaml = "^6.0.2"
 nltk = "^3.9.1"
-datasets = "^2.18.0"
+datasets = "^4.0.0"
 boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
-typer = "0.15.1"
+typer = "0.16.0"
 schedule = "^1.2.2"
 awscli = "^1.37.24"
 prefect = {extras = ["slack"], version = "^3.4.7"}
@@ -40,15 +40,15 @@ httpx = "^0.28.1"
 tenacity = "^9.1.2"
 requests = "^2.32.3"
 aioboto3 = "^14.3.0"
-types-aioboto3 = {extras = ["s3"], version = "^14.3.0"}
+types-aioboto3 = {extras = ["s3"], version = "^15.0.0"}
 pytest-aioboto3 = "^0.6.0"
 
 [tool.poetry.group.transformers]
 optional = true
 
 [tool.poetry.group.transformers.dependencies]
-torch = {version = "2.4.1+cpu", source = "pytorch"}
-sentence-transformers = "^3.1.1"
+torch = {version = "2.7.1+cpu", source = "pytorch"}
+sentence-transformers = "^5.0.0"
 transformers = {extras = ["torch"], version = "^4.51.3"}
 scikit-learn = "^1.6.1"
 accelerate = "^1.6.0"
@@ -77,12 +77,12 @@ azure_pdf_parser = { git = "https://github.com/climatepolicyradar/azure-pdf-pars
 pytest = "^8.3.2"
 hypothesis = "^6.112.2"
 mkdocs-material = "^9.5.39"
-pre-commit = "^3.8.0"
+pre-commit = "^4.2.0"
 boto3 = "^1.35.32"
 syrupy = "^4.7.1"
 moto = {extras = ["s3"], version = "^5.0.16"}
 pytest-env = "^1.1.5"
-pytest-asyncio = "^0.24.0"
+pytest-asyncio = "^1.1.0"
 pulumi = "^3.145.0"
 pulumi-aws = "^6.66.2"
 jinja2 = "^3.1.4"
