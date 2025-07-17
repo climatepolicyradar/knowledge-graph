@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field
@@ -11,6 +12,14 @@ SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
 
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
+
+    class ComputeEnvironment(BaseModel):
+        """Details about the compute environment the classifier should on."""
+
+        gpu: bool = Field(
+            description=("Whether the classifier should be run on a GPU."),
+            default=False,
+        )
 
     wikibase_id: WikibaseID = Field(
         description=(
@@ -26,9 +35,9 @@ class ClassifierSpec(BaseModel):
         description=("The version of the classifier in wandb registry. e.g. v1"),
         pattern=r"^v\d+$",
     )
-    gpu: bool = Field(
-        description=("Whether the classifier should be run on a GPU."),
-        default=False,
+    compute_environment: Optional[ComputeEnvironment] = Field(
+        description=ComputeEnvironment.__doc__,
+        default=None,
     )
 
     def __hash__(self):
