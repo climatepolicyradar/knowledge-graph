@@ -48,7 +48,9 @@ from src.identifiers import Identifier, WikibaseID
                 "wikibase_id": WikibaseID("Q123"),
                 "classifier_id": Identifier("abcd2345"),
                 "wandb_registry_version": "v1",
-                "gpu": True,
+                "compute_environment": {
+                    "gpu": True,
+                },
             },
             does_not_raise(),
         ),
@@ -68,7 +70,8 @@ def test_load_classifier_specs():
         - wikibase_id: Q368
           classifier_id: abcd2345
           wandb_registry_version: v3
-          gpu: True
+          compute_environment:
+            gpu: true
         - wikibase_id: Q123
           classifier_id: abcd2345
           wandb_registry_version: v1
@@ -87,3 +90,5 @@ def test_load_classifier_specs():
         specs = load_classifier_specs(AwsEnv("sandbox"), spec_dir=temp_spec_dir)
 
         assert len(specs) == 3
+        assert specs[0].compute_environment.gpu
+        assert not specs[1].compute_environment
