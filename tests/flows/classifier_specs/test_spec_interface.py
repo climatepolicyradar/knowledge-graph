@@ -42,7 +42,6 @@ from src.identifiers import WikibaseID
                 "classifier_id": "test_classifier",
                 "wandb_registry_version": 1,
                 "gpu": True,
-                "only_run_on": ["UNFCCC", "Sabin"],
             },
             does_not_raise(),
         ),
@@ -70,9 +69,6 @@ def test_load_classifier_specs():
         - wikibase_id: Q999
           classifier_id: ju3f93jf
           wandb_registry_version: 2
-          only_run_on:
-            - sabin
-            - unfccc
     """).lstrip()
 
     with tempfile.TemporaryDirectory() as temp_dir:

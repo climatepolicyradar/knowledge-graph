@@ -29,14 +29,6 @@ class ClassifierSpec(BaseModel):
         description=("Whether the classifier should be run on a GPU."),
         default=False,
     )
-    only_run_on: list[str] = Field(
-        description=(
-            "The source of documents to classify. If not provided, the classifier will"
-            "be run on all sources. Sources are the first part of a document id, e.g. "
-            "'sabin' in 'sabin.document.1.1', or 'UNFCCC' in 'UNFCCC.document.1.1'"
-        ),
-        default=None,
-    )
 
     def __hash__(self):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""

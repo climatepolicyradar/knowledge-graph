@@ -12,5 +12,3 @@
 - wikibase_id: Q999
   classifier_id: ju3f93jf
   wandb_registry_version: 2
-  only_run_on:
-    - sabin
