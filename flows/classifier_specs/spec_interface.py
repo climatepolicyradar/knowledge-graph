@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from scripts.cloud import AwsEnv
 from src.identifiers import Identifier, WikibaseID
+from src.version import Version
 
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
 
@@ -31,9 +32,8 @@ class ClassifierSpec(BaseModel):
             "The unique identifier for the classifier, built from its internals."
         ),
     )
-    wandb_registry_version: str = Field(
+    wandb_registry_version: Version = Field(
         description=("The version of the classifier in wandb registry. e.g. v1"),
-        pattern=r"^v\d+$",
     )
     compute_environment: Optional[ComputeEnvironment] = Field(
         description=ComputeEnvironment.__doc__,
@@ -68,8 +68,3 @@ def load_classifier_specs(
         classifier_specs.append(ClassifierSpec.model_validate(spec))
 
     return classifier_specs
-
-
-if __name__ == "__main__":
-    classifier_specs = load_classifier_specs(AwsEnv("sandbox"))
-    print(classifier_specs)
