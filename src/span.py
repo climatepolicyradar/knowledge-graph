@@ -227,6 +227,35 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
     return intersection / union
 
 
+def jaccard_similarity_for_span_lists(
+    spans_a: list[Span], spans_b: list[Span]
+) -> float:
+    """
+    Calculate the Jaccard similarity between two lists of spans.
+
+    This is calculated by creating a set of all character indices covered by spans in
+    each list, and then calculating the Jaccard similarity (intersection over union)
+    of these two sets. This provides a holistic measure of overlap that naturally
+    handles multiple disjoint spans.
+    """
+    indices_a = {i for span in spans_a for i in range(span.start_index, span.end_index)}
+    indices_b = {i for span in spans_b for i in range(span.start_index, span.end_index)}
+
+    # If both lists are empty, return 1.0, ie perfect agreement
+    if not indices_a and not indices_b:
+        return 1.0
+
+    # If one list is empty but the other is not, return 0.0, ie maximum disagreement
+    if not indices_a or not indices_b:
+        return 0.0
+
+    # Otherwise, calculate the ratio of the intersection and union of the two sets
+    intersection = len(indices_a.intersection(indices_b))
+    union = len(indices_a.union(indices_b))
+
+    return intersection / union
+
+
 def group_overlapping_spans(
     spans: list[Span], jaccard_threshold: float = 0
 ) -> list[list[Span]]:
