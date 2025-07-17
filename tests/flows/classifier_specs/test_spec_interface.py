@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from scripts.cloud import AwsEnv
-from src.identifiers import WikibaseID
+from src.identifiers import Identifier, WikibaseID
 
 
 @pytest.mark.parametrize(
@@ -21,7 +21,7 @@ from src.identifiers import WikibaseID
         (
             {  # Bad registry version - bad
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": "test_classifier",
+                "classifier_id": Identifier("abcd2345"),
                 "wandb_registry_version": "latest",
             },
             pytest.raises(ValidationError),
@@ -29,7 +29,7 @@ from src.identifiers import WikibaseID
         (
             {  # missing optional fields - fine
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": "test_classifier",
+                "classifier_id": Identifier("abcd2345"),
                 "wandb_registry_version": "v1",
             },
             does_not_raise(),
@@ -37,7 +37,7 @@ from src.identifiers import WikibaseID
         (
             {  # extra fields - fine
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": "test_classifier",
+                "classifier_id": Identifier("abcd2345"),
                 "wandb_registry_version": "v1",
                 "extra_info": "will be ignored",
             },
@@ -46,7 +46,7 @@ from src.identifiers import WikibaseID
         (
             {  # all fields - fine
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": "test_classifier",
+                "classifier_id": Identifier("abcd2345"),
                 "wandb_registry_version": "v1",
                 "gpu": True,
             },
@@ -66,15 +66,15 @@ def test_load_classifier_specs():
     sample_data = textwrap.dedent("""
         ---
         - wikibase_id: Q368
-          classifier_id: ju9239oi
+          classifier_id: abcd2345
           wandb_registry_version: v3
           gpu: True
         - wikibase_id: Q123
-          classifier_id: x438f30k
+          classifier_id: abcd2345
           wandb_registry_version: v1
           extra_info: will be ignored
         - wikibase_id: Q999
-          classifier_id: ju3f93jf
+          classifier_id: abcd2345
           wandb_registry_version: v2
     """).lstrip()
 
