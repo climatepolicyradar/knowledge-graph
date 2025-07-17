@@ -131,7 +131,7 @@ class Identifier(str):
         return cls(identifier)
 
     @classmethod
-    def _validate(cls, value: str) -> str:
+    def _validate(cls, value: str, field=None) -> str:
         """Validate that the Identifier string is in the correct format"""
         if not isinstance(value, str):
             raise TypeError(
