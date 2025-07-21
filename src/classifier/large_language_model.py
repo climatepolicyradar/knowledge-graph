@@ -1,11 +1,14 @@
 import asyncio
 import json
+from abc import ABC, abstractmethod
 from typing import Annotated, Optional
 
-import llm
+import httpx
 from pydantic import BaseModel, Field, computed_field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
+from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
 from src.classifier.classifier import Classifier, ZeroShotClassifier
@@ -60,7 +63,7 @@ Instructions:
 """
 
 
-class BaseLLMClassifier(Classifier, ZeroShotClassifier):
+class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
     def __init__(
@@ -71,7 +74,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier):
             Field(
                 description=("The name of the model to use"),
             ),
-        ] = "gemini-1.5-flash-002",
+        ],
         system_prompt_template: Annotated[
             str,
             Field(
@@ -106,6 +109,13 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier):
         self.system_prompt = system_prompt_template.format(
             concept_description=self.concept.to_markdown()
         )
+
+        self.agent = self._create_agent()
+
+    @abstractmethod
+    def _create_agent(self) -> Agent:
+        """Create the pydantic-ai agent for the classifier."""
+        raise NotImplementedError
 
     @computed_field
     @property
@@ -147,58 +157,6 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier):
                 input_text=input_sanitised, output_text=output_sanitised
             )
 
-
-class LLMClassifier(BaseLLMClassifier):
-    """A classifier which uses a third-party LLM to identify concept mentions in text"""
-
-    def __init__(
-        self,
-        concept: Concept,
-        model_name: Annotated[
-            str,
-            Field(
-                description=(
-                    "The name of the model to use. See https://ai.pydantic.dev/models/ "
-                    "for a list of available models and the necessary environment "
-                    "variables needed to run each."
-                ),
-            ),
-        ] = "gemini-2.0-flash",
-        system_prompt_template: Annotated[
-            str,
-            Field(
-                description=(
-                    "The unformatted system prompt for the LLM, with values in {}. "
-                    "Should be able to be populated with {concept_description} and "
-                    "{examples} parameters."
-                ),
-            ),
-        ] = DEFAULT_SYSTEM_PROMPT,
-        random_seed: Annotated[
-            int,
-            Field(
-                description=(
-                    "Random seed for the classifier. "
-                    "Used for reproducibility and the ability to spawn multiple "
-                    "distinguishable classifiers at the same time"
-                )
-            ),
-        ] = 42,
-    ):
-        super().__init__(
-            concept=concept,
-            model_name=model_name,
-            system_prompt_template=system_prompt_template,
-            random_seed=random_seed,
-        )
-        self.agent = Agent(
-            self.model_name,
-            system_prompt=self.system_prompt,
-            result_type=LLMResponse,
-        )
-
-        self.random_seed = random_seed
-
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""
         state = self.__dict__.copy()
@@ -209,12 +167,7 @@ class LLMClassifier(BaseLLMClassifier):
     def __setstate__(self, state):
         """Recreate the agent instance when unpickling."""
         self.__dict__.update(state)
-        # Recreate the agent instance
-        self.agent = Agent(
-            self.model_name,
-            system_prompt=self.system_prompt,
-            result_type=LLMResponse,
-        )
+        self.agent = self._create_agent()
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
@@ -265,23 +218,15 @@ class LLMClassifier(BaseLLMClassifier):
                     input_text=text, response=response.data.marked_up_text
                 )
 
-                # str(self) includes the id now, as this is important in distinguishing between different instances
-                # of the same classifier + config, when comparing spans with each other
                 spans = Span.from_xml(
                     xml=response.data.marked_up_text,
                     concept_id=self.concept.wikibase_id,
                     labellers=[str(self)],
                 )
 
-                # We validate that the sanitised versions of input and output text are
-                # identical, but that doesn't guarantee that the un-sanitised responses
-                # match the input! For example, whitespace differences are deliberately
-                # ignored by the sanitisation step.
-                # To guard against the possibility of the LLM corrupting the input in
-                # subtle ways that the sanitisation step misses, we replace the text
-                # in the output spans with the original input text
                 batch_spans.append(
                     [
+                        # Use the original input text for the output spans
                         span.model_copy(update={"text": text}, deep=True)
                         for span in spans
                     ]
@@ -292,15 +237,8 @@ class LLMClassifier(BaseLLMClassifier):
         return batch_spans
 
 
-class LocalLLMClassifier(BaseLLMClassifier):
-    """
-    A classifier which uses a local LLM to identify concept mentions in text
-
-    This classifier uses https://github.com/simonw/llm-mlx/, based on the assumption
-    that the model is being run on on apple silicon chip. Until we need it to run on
-    other chips, this model is untested on other platforms and performance will probably
-    be poor!
-    """
+class LLMClassifier(BaseLLMClassifier):
+    """A classifier which uses a third-party LLM to identify concept mentions in text"""
 
     def __init__(
         self,
@@ -309,11 +247,12 @@ class LocalLLMClassifier(BaseLLMClassifier):
             str,
             Field(
                 description=(
-                    "The name of the model to use. "
-                    "See https://github.com/simonw/llm-mlx for a list of options."
+                    "The name of the model to use. See https://ai.pydantic.dev/models/ "
+                    "for a list of available models and the necessary environment "
+                    "variables needed to run each."
                 ),
             ),
-        ] = "mlx-community/Llama-3.2-3B-Instruct-4bit",
+        ] = "gemini-2.0-flash",
         system_prompt_template: Annotated[
             str,
             Field(
@@ -341,29 +280,78 @@ class LocalLLMClassifier(BaseLLMClassifier):
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
         )
-        try:
-            self.model = llm.get_model(model_name)
-        except llm.UnknownModelError as e:
-            raise ValueError(
-                "It looks like you've used an invalid/missing model name. Are you sure "
-                f"that `{model_name}` is correct? Try running `llm mlx download-model "
-                f"{model_name}` to download it, before running again."
-            ) from e
 
-    def predict(self, text: str) -> list[Span]:
-        """Predict whether the supplied text contains an instance of the concept."""
-        response = self.model.prompt(
-            text,
-            system=self.system_prompt,
-            # schema=LLMResponse,  # this line can be uncommented for models which support the schema param
-        ).text()
-        self._validate_response(input_text=text, response=response)
-        return Span.from_xml(
-            xml=response,
-            concept_id=self.concept.wikibase_id,
-            labellers=[str(self)],
+    def _create_agent(self) -> Agent:
+        return Agent(
+            self.model_name,
+            system_prompt=self.system_prompt,
+            result_type=LLMResponse,
         )
 
-    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
-        """Predict whether the supplied texts contain instances of the concept."""
-        return [self.predict(text) for text in texts]
+
+class LocalLLMClassifier(BaseLLMClassifier):
+    """
+    A classifier which uses a local LLM served to identify concept mentions in text.
+
+    This classifier interacts with a local Ollama instance, which must be running
+    with the specified model downloaded. See https://ollama.com/ for more details.
+    """
+
+    def __init__(
+        self,
+        concept: Concept,
+        model_name: Annotated[
+            str,
+            Field(
+                description=(
+                    "The name of the model to use. "
+                    "See https://ollama.com/library for a list of options."
+                ),
+            ),
+        ] = "gemma3n:e4b",
+        system_prompt_template: Annotated[
+            str,
+            Field(
+                description=(
+                    "The unformatted system prompt for the LLM, with values in {}. "
+                    "Should be able to be populated with {concept_description} and "
+                    "{examples} parameters."
+                ),
+            ),
+        ] = DEFAULT_SYSTEM_PROMPT,
+        random_seed: Annotated[
+            int,
+            Field(
+                description=(
+                    "Random seed for the classifier. "
+                    "Used for reproducibility and the ability to spawn multiple "
+                    "distinguishable classifiers at the same time"
+                )
+            ),
+        ] = 42,
+    ):
+        try:
+            httpx.get("http://localhost:11434", timeout=1)
+        except httpx.ConnectError as e:
+            raise ConnectionError(
+                "Ollama isn't running! Make sure you've downloaded and are running "
+                "Ollama before trying to use a local LLM classifier. "
+                "See https://ollama.com/ for more details."
+            ) from e
+        super().__init__(
+            concept=concept,
+            model_name=model_name,
+            system_prompt_template=system_prompt_template,
+            random_seed=random_seed,
+        )
+
+    def _create_agent(self) -> Agent:
+        ollama_model = OpenAIModel(
+            model_name=self.model_name,
+            provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
+        )
+        return Agent(
+            model=ollama_model,
+            system_prompt=self.system_prompt,
+            result_type=LLMResponse,
+        )

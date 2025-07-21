@@ -38,10 +38,10 @@ from tenacity import Retrying, stop_after_attempt
 from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
-from flows.boundary import DocumentStem
 from flows.index import load_json_data_from_s3
 from flows.utils import (
     DocumentImportId,
+    DocumentStem,
     remove_translated_suffix,
 )
 from scripts.audit.do_classifier_specs_have_results import collect_file_names
