@@ -455,6 +455,7 @@ async def map_as_sub_flow(
     batches: Generator[Sequence[T], None, None],
     parameters: Callable[[Sequence[T]], dict[str, Any]],
     unwrap_result: bool,
+    fn_is_async: bool = False,
 ) -> tuple[Sequence[U | FlowRun], Sequence[BaseException | FlowRun]]:
     """
     Map over an iterable, running the function as a sub-flow.
@@ -475,7 +476,6 @@ async def map_as_sub_flow(
     flow_name = function_to_flow_name(fn)
     deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
     semaphore = asyncio.Semaphore(counter)
-    is_async_fn: bool = inspect.iscoroutinefunction(fn)
 
     tasks = [
         wait_for_semaphore(
@@ -518,7 +518,7 @@ async def map_as_sub_flow(
                                 # the return.
                                 raise_on_failure=True,
                             )
-                            if not is_async_fn
+                            if not fn_is_async
                             else await result.state.result(
                                 raise_on_failure=True,
                             )

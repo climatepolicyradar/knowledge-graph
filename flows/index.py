@@ -754,6 +754,7 @@ async def index(
         batches=batches,
         parameters=parameters,
         unwrap_result=True,
+        fn_is_async=True,
     )
 
     await create_aggregate_indexing_summary_artifact(
