@@ -587,7 +587,12 @@ async def test_inference_batch_of_documents(
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_with_failures(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    snapshot,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with some document failures."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -653,7 +658,12 @@ async def test_inference_batch_of_documents_with_failures(
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_empty_batch(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    snapshot,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with empty batch."""
     mock_wandb_init, mock_run, _ = mock_wandb

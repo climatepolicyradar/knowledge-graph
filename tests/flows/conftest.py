@@ -855,6 +855,9 @@ async def s3_block_context():
         if asyncio.iscoroutine(uuid):
             uuid = await uuid
         yield uuid
+    except Exception as e:
+        print(f"Warning: Failed to save S3 block: {e}")
+
     finally:
         try:
             result = test_block.delete(bucket_name)
