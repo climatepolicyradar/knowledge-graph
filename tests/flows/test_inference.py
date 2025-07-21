@@ -505,6 +505,7 @@ async def test_inference_batch_of_documents(
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
+    mock_prefect_s3_block,
     snapshot,
 ):
     """Test successful batch processing of documents."""

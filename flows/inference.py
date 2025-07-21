@@ -62,8 +62,8 @@ DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
-AWS_ENV = os.getenv("AWS_ENV")
-S3_BLOCK_RESULTS_CACHE = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
+AWS_ENV: str = os.environ["AWS_ENV"]
+S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 

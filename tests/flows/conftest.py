@@ -1,8 +1,10 @@
+import asyncio
 import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
 from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -26,6 +28,7 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
+from prefect_aws.s3 import S3Bucket
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
 from types_aiobotocore_s3.client import S3Client
@@ -33,6 +36,7 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.aggregate import Config as AggregateInferenceResultsConfig
+from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -837,3 +841,31 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
     if not lower_max_hits_limit:
         raise ValueError("Lower max hits limit not found in XML file.")
     return int(lower_max_hits_limit)
+
+
+@asynccontextmanager
+async def s3_block_context():
+    """Context manager for creating and cleaning up S3 blocks."""
+    bucket_name = S3_BLOCK_RESULTS_CACHE.replace("s3-bucket/", "")
+
+    test_block = S3Bucket(bucket_name=bucket_name)
+
+    try:
+        uuid = test_block.save(bucket_name, overwrite=True)
+        if asyncio.iscoroutine(uuid):
+            uuid = await uuid
+        yield uuid
+    finally:
+        try:
+            result = test_block.delete(bucket_name)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as e:
+            print(f"Warning: Failed to delete S3 block: {e}")
+
+
+@pytest_asyncio.fixture
+async def mock_prefect_s3_block():
+    """Create an S3 block against the local prefect server."""
+    async with s3_block_context() as block:
+        yield block
