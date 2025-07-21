@@ -160,7 +160,8 @@ async def full_pipeline(
 
     logger.info(
         f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "
-        + f"failed document stems count: {len(inference_result.failed_document_stems)}"
+        + f"failed document stems count: {len(inference_result.failed_document_stems)},"
+        + f"unexpected failures count: {len(inference_result.unexpected_failures)}"
     )
 
     aggregation_run: State = await aggregate(

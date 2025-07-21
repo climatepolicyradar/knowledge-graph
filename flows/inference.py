@@ -132,6 +132,8 @@ class BatchInferenceException(Exception):
     """
 
     def __init__(self, message: str, data: dict[str, Any]):
+        super().__init__(message)
+
         self.message = message
         self.data = data
 
@@ -164,6 +166,8 @@ class InferenceException(Exception):
     """
 
     def __init__(self, message: str, data: dict[str, Any]):
+        super().__init__(message)
+
         self.message = message
         self.data = data
 
@@ -1083,7 +1087,10 @@ async def inference(
 
     await create_inference_summary_artifact(
         config=config,
-        inference_result=inference_result,
+        filtered_file_stems=filtered_file_stems,
+        classifier_specs=classifier_specs,
+        successes=successes,
+        failures_classifier_specs=failures_classifier_specs,
     )
 
     if inference_result.failed:
@@ -1102,19 +1109,19 @@ async def inference(
 
 
 async def create_inference_summary_artifact(
-    config: Config, inference_result: InferenceResult
+    config: Config,
+    filtered_file_stems: Sequence[DocumentStem],
+    classifier_specs: Sequence[ClassifierSpec],
+    successes: dict[ClassifierSpec, FlowRun],
+    failures_classifier_specs: set[ClassifierSpec],
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
     # Prepare summary data for the artifact
-    total_documents = len(inference_result.successful_document_stems) + len(
-        inference_result.failed_document_stems
-    )
-    total_classifiers = len(inference_result.successful_classifier_specs) + len(
-        inference_result.failed_classifier_specs
-    )
-    successful_classifiers = len(inference_result.successful_classifier_specs)
-    failed_classifiers = len(inference_result.failed_classifier_specs)
+    total_documents = len(filtered_file_stems)
+    total_classifiers = len(classifier_specs)
+    successful_classifiers = len(successes)
+    failed_classifiers = len(failures_classifier_specs)
 
     # Format the overview information as a string for the description
     overview_description = f"""# Classifier Inference Summary
@@ -1130,13 +1137,13 @@ async def create_inference_summary_artifact(
     # Create classifier details table
     classifier_details = [
         {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
-        for spec in inference_result.successful_classifier_specs
+        for spec in successes.keys()
     ] + [
         {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
-        for spec in inference_result.failed_classifier_specs
+        for spec in failures_classifier_specs
     ]
 
-    _ = create_table_artifact(
+    await create_table_artifact(
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,
