@@ -663,7 +663,7 @@ async def inference_batch_of_documents(
     config_json: dict,
     classifier_name: str,
     classifier_alias: str,
-) -> State | dict[str, Any]:
+) -> State:
     """
     Run classifier inference on a batch of documents.
 
@@ -811,7 +811,7 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> State | dict[str, Any]:
+) -> State:
     """
     Flow to run inference on documents within a bucket prefix.
 

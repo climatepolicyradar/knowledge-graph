@@ -148,15 +148,15 @@ async def full_pipeline(
         return_state=True,
     )
 
-    inference_result_dict: dict[str, Any] | Exception = await inference_run.result(
+    inference_result_raw: dict[str, Any] | Exception = await inference_run.result(
         raise_on_failure=False
     )
 
-    if isinstance(inference_result_dict, Exception):
+    if isinstance(inference_result_raw, Exception):
         logger.error("Inference failed.")
-        raise inference_result_dict
+        raise inference_result_raw
 
-    inference_result: InferenceResult = InferenceResult(**inference_result_dict)
+    inference_result: InferenceResult = InferenceResult(**inference_result_raw)
 
     logger.info(
         f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "
