@@ -62,6 +62,8 @@ DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
+AWS_ENV = os.getenv("AWS_ENV")
+S3_BLOCK_RESULTS_CACHE = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 
@@ -655,7 +657,7 @@ async def create_inference_on_batch_summary_artifact(
     )
 
 
-@flow(log_prints=True, persist_result=True)
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: dict,
