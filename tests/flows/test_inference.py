@@ -263,6 +263,7 @@ async def test_inference(
             document_ids=doc_ids,
             config=test_config,
         )
+
         assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
 
     mock_wandb_init.assert_called_once_with(
@@ -544,17 +545,26 @@ async def test_inference_batch_of_documents(
         ),
     ):
         # Should not raise any exceptions for successful processing
-        result = await inference_batch_of_documents(
+        result_state = await inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
+            return_state=True,
         )
 
-    # Assert that when we run as a flow we get a dict of the BatchInferenceResult
+    assert (
+        result_state.message
+        == f"Successfully ran inference on all ({len(batch)}) documents in batch."
+    )
+    result = await result_state.result()
     assert isinstance(result, dict)
     assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
-    _ = BatchInferenceResult(**result)
+    result_obj = BatchInferenceResult(**result)
+    assert result_obj.successful_document_stems == batch
+    assert result_obj.failed_document_stems == []
+    assert result_obj.classifier_name == classifier_name
+    assert result_obj.classifier_alias == classifier_alias
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(

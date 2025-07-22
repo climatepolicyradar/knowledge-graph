@@ -143,8 +143,8 @@ class BatchInferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    successful_document_stems: set[DocumentStem] = set()
-    failed_document_stems: set[tuple[DocumentStem, Exception]] = set()
+    successful_document_stems: list[DocumentStem] = []
+    failed_document_stems: list[tuple[DocumentStem, Exception]] = []
     unknown_failures: list[BaseException] = []
     classifier_name: str
     classifier_alias: str
@@ -153,7 +153,7 @@ class BatchInferenceResult(BaseModel):
     def failed(self) -> bool:
         """Whether the batch failed, True if failed."""
 
-        return self.failed_document_stems != set() or self.unknown_failures != []
+        return self.failed_document_stems != [] or self.unknown_failures != []
 
 
 class InferenceException(Exception):
@@ -179,8 +179,8 @@ class InferenceResult(BaseModel):
 
     batch_inference_results: list[BatchInferenceResult] = []
     unexpected_failures: list[BaseException | FlowRun] = []
-    successful_classifier_specs: set[ClassifierSpec] = set()
-    failed_classifier_specs: set[ClassifierSpec] = set()
+    successful_classifier_specs: list[ClassifierSpec] = []
+    failed_classifier_specs: list[ClassifierSpec] = []
 
     @property
     def failed(self) -> bool:
@@ -936,8 +936,8 @@ async def inference_batch_of_documents(
     )
 
     batch_inference_result = BatchInferenceResult(
-        successful_document_stems=set([i.document_stem for i in inferences_successes]),
-        failed_document_stems=set(inferences_failures),
+        successful_document_stems=[i.document_stem for i in inferences_successes],
+        failed_document_stems=inferences_failures,
         unknown_failures=inferences_unknown_failures,
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
@@ -1073,7 +1073,7 @@ async def inference(
     _, successes = group_inference_results_into_states(
         all_raw_successes, all_raw_failures
     )
-    failures_classifier_specs = set(classifier_specs) - set(successes.keys())
+    failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
     batch_inference_results: list[BatchInferenceResult] = [
         BatchInferenceResult(**result) for result in all_raw_successes
@@ -1091,7 +1091,7 @@ async def inference(
         filtered_file_stems=filtered_file_stems,
         classifier_specs=classifier_specs,
         successes=successes,
-        failures_classifier_specs=failures_classifier_specs,
+        failures_classifier_specs=set(failures_classifier_specs),
     )
 
     if inference_result.failed:
