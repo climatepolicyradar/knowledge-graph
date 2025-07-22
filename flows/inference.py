@@ -966,19 +966,19 @@ async def inference_batch_of_documents(
     name="processing results",
 )
 def group_inference_results_into_states(
-    successes_in: Sequence[FlowRun],
+    successes_in: Sequence[BatchInferenceResult],
     failures_in: Sequence[BaseException | FlowRun],
 ) -> tuple[
     list[FlowRun | BaseException],
-    dict[ClassifierSpec, FlowRun],
+    dict[ClassifierSpec, BatchInferenceResult],
 ]:
     """Group results of sub-runs into the different states of success and failure."""
-    successes: dict[ClassifierSpec, FlowRun] = {}
+    successes: dict[ClassifierSpec, BatchInferenceResult] = {}
 
     for success in successes_in:
         classifier_spec = ClassifierSpec(
-            name=success.parameters["classifier_name"],
-            alias=success.parameters["classifier_alias"],
+            name=success.classifier_name,
+            alias=success.classifier_alias,
         )
         successes[classifier_spec] = success
 

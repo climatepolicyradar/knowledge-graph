@@ -460,19 +460,23 @@ def test_remove_sabin_file_stems(
 def test_group_inference_results_into_states(snapshot):
     # Test data separated into successes and failures as expected by the new signature
     successes = [
-        FlowRun(
-            name="4",
-            id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-            flow_id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-            state=State(type=StateType.COMPLETED),
-            parameters={"classifier_name": "Q100", "classifier_alias": "v3"},
+        BatchInferenceResult(
+            successful_document_stems=[
+                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+                DocumentStem("CCLW.executive.10512.5360"),
+            ],
+            failed_document_stems=[],
+            classifier_name="Q200",
+            classifier_alias="v5",
         ),
-        FlowRun(
-            name="5",
-            id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-            flow_id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-            state=State(type=StateType.COMPLETED),
-            parameters={"classifier_name": "Q200", "classifier_alias": "v5"},
+        BatchInferenceResult(
+            successful_document_stems=[
+                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+                DocumentStem("CCLW.executive.10512.5360"),
+            ],
+            failed_document_stems=[],
+            classifier_name="Q201",
+            classifier_alias="v6",
         ),
     ]
 
