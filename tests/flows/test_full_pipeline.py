@@ -162,10 +162,10 @@ async def test_full_pipeline_no_config_provided(
             data=InferenceResult(
                 batch_inference_results=[
                     BatchInferenceResult(
-                        successful_document_stems=set(
+                        successful_document_stems=list(
                             aggregate_inference_results_document_stems
                         ),
-                        failed_document_stems=set(),
+                        failed_document_stems=[],
                         classifier_name="Q100",
                         classifier_alias="v1",
                     ),
@@ -199,7 +199,7 @@ async def test_full_pipeline_no_config_provided(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert call_args.kwargs["document_stems"] == set(
+        assert sorted(call_args.kwargs["document_stems"]) == sorted(
             aggregate_inference_results_document_stems
         )
         assert call_args.kwargs["config"] == test_aggregate_config
@@ -245,10 +245,8 @@ async def test_full_pipeline_with_full_config(
             data=InferenceResult(
                 batch_inference_results=[
                     BatchInferenceResult(
-                        successful_document_stems=set(
-                            aggregate_inference_results_document_stems
-                        ),
-                        failed_document_stems=set(),
+                        successful_document_stems=aggregate_inference_results_document_stems,
+                        failed_document_stems=[],
                         classifier_name="Q100",
                         classifier_alias="v1",
                     ),
@@ -299,7 +297,7 @@ async def test_full_pipeline_with_full_config(
         )
 
         mock_aggregate.assert_called_once_with(
-            document_stems=set(aggregate_inference_results_document_stems),
+            document_stems=aggregate_inference_results_document_stems,
             config=test_aggregate_config,
             n_documents_in_batch=50,
             n_batches=3,
