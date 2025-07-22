@@ -1070,17 +1070,12 @@ async def inference(
             all_raw_successes.extend(raw_successes)
             all_raw_failures.extend(raw_failures)
 
-    _, successes = group_inference_results_into_states(
-        all_raw_successes, all_raw_failures
-    )
+    all_successes = [BatchInferenceResult(**result) for result in all_raw_successes]
+    _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
-    batch_inference_results: list[BatchInferenceResult] = [
-        BatchInferenceResult(**result) for result in all_raw_successes
-    ]
-
     inference_result = InferenceResult(
-        batch_inference_results=batch_inference_results,
+        batch_inference_results=all_successes,
         unexpected_failures=all_raw_failures,
         successful_classifier_specs=successes.keys(),
         failed_classifier_specs=failures_classifier_specs,
