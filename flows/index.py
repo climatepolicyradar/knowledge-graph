@@ -753,8 +753,7 @@ async def index(
         counter=indexer_concurrency_limit,
         batches=batches,
         parameters=parameters,
-        unwrap_result=True,
-        fn_is_async=True,
+        unwrap_result=False,
     )
 
     await create_aggregate_indexing_summary_artifact(
