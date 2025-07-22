@@ -539,8 +539,7 @@ async def aggregate(
         counter=n_batches,
         batches=batches,
         parameters=parameters,
-        unwrap_result=True,
-        fn_is_async=True,
+        unwrap_result=False,
     )
 
     await create_aggregate_inference_overall_summary_artifact(
