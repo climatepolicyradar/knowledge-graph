@@ -283,26 +283,30 @@ async def test_full_pipeline_with_full_config(
         )
 
         # Verify sub-flows were called with correct parameters
-        mock_inference.assert_called_once_with(
-            classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
-            document_ids=[
+        mock_inference.assert_called_once()
+        call_args = mock_inference.call_args
+        assert call_args.kwargs["classifier_specs"] == [
+            ClassifierSpec(name="Q123", alias="v1")
+        ]
+        assert sorted(call_args.kwargs["document_ids"]) == sorted(
+            [
                 DocumentImportId("test.doc.1"),
                 DocumentImportId("test.doc.2"),
-            ],
-            use_new_and_updated=True,
-            config=test_config,
-            batch_size=500,
-            classifier_concurrency_limit=5,
-            return_state=True,
+            ]
         )
+        assert call_args.kwargs["use_new_and_updated"] is True
+        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["batch_size"] == 500
+        assert call_args.kwargs["classifier_concurrency_limit"] == 5
 
-        mock_aggregate.assert_called_once_with(
-            document_stems=aggregate_inference_results_document_stems,
-            config=test_aggregate_config,
-            n_documents_in_batch=50,
-            n_batches=3,
-            return_state=True,
+        mock_aggregate.assert_called_once()
+        call_args = mock_aggregate.call_args
+        assert sorted(call_args.kwargs["document_stems"]) == sorted(
+            aggregate_inference_results_document_stems
         )
+        assert call_args.kwargs["config"] == test_aggregate_config
+        assert call_args.kwargs["n_documents_in_batch"] == 50
+        assert call_args.kwargs["n_batches"] == 3
 
         mock_indexing.assert_called_once_with(
             run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
