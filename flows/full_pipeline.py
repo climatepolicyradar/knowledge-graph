@@ -165,7 +165,7 @@ async def full_pipeline(
     )
 
     aggregation_run: State = await aggregate(
-        document_stems=inference_result.successful_document_stems,
+        document_stems=list(inference_result.successful_document_stems),
         config=aggregation_config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
