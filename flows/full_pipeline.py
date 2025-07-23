@@ -138,7 +138,7 @@ async def full_pipeline(
         + f"inference config: {inference_config}"
     )
 
-    inference_run: State = await inference(
+    inference_run: State | Exception = await inference(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
         use_new_and_updated=inference_use_new_and_updated,
@@ -148,18 +148,25 @@ async def full_pipeline(
         return_state=True,
     )
 
-    inference_result_raw: dict[str, Any] | Exception = await inference_run.result(
+    if isinstance(inference_run, Exception):
+        logger.error("Inference failed.")
+        raise inference_run
+
+    inference_result_raw: dict[str, Any] | Fault = await inference_run.result(
         raise_on_failure=False
     )
 
-    if (
-        isinstance(inference_result_raw, Exception)
-        and type(inference_result_raw) is not Fault
-    ):
-        logger.error("Inference failed.")
-        raise inference_result_raw
-
-    inference_result: InferenceResult = InferenceResult(**inference_result_raw)
+    match inference_result_raw:
+        case Fault():
+            inference_result: InferenceResult = InferenceResult(
+                **inference_result_raw.data
+            )
+        case dict():
+            inference_result: InferenceResult = InferenceResult(**inference_result_raw)
+        case _:
+            raise ValueError(
+                f"Unexpected inference result type: {type(inference_result_raw)}"
+            )
 
     logger.info(
         f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "
