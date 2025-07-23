@@ -199,11 +199,11 @@ def get_file_stems_for_document_id(
             .with_stem(f"{document_id}_translated_{target_language}")
             .with_suffix(".json")
         )
-        file_exists = s3_file_exists(
+
+        if s3_file_exists(
             bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
-        )
-        if file_exists:
+        ):
             stems.append(translated_file_key.stem)
 
     if not stems:

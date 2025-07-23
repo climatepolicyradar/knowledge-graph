@@ -26,8 +26,8 @@ def create_balanced_sample(
     :return pd.DataFrame: A balanced sample of the dataframe
     """
     # Input validation
-    missing_columns = set(on_columns) - set(df.columns)
-    if missing_columns:
+
+    if missing_columns := set(on_columns) - set(df.columns):
         raise ValueError(f"Columns {missing_columns} are not in the dataframe")
     if len(on_columns) == 0:
         raise ValueError("At least one column must be specified")

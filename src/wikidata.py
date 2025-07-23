@@ -184,8 +184,7 @@ class WikidataSession:
 
         preferred_label = entity_data.get("labels", {}).get("en", {}).get("value")
         if preferred_label is None:
-            all_labels = entity_data.get("labels", {})
-            if all_labels:
+            if all_labels := entity_data.get("labels", {}):
                 preferred_label = next(iter(all_labels.values()), {}).get("value")
 
         description = entity_data.get("descriptions", {}).get("en", {}).get("value")

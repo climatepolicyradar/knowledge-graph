@@ -279,9 +279,8 @@ def check_existing_artifact_aliases(
     # Get all AWS env values except the one we're promoting to
     other_env_values = {env.value for env in AwsEnv} - {aws_env.value}
     # Check if any other AWS environment values are present as aliases
-    existing_env_aliases = set(target_artifact.aliases) & other_env_values
 
-    if existing_env_aliases:
+    if existing_env_aliases := set(target_artifact.aliases) & other_env_values:
         raise typer.BadParameter(
             "An artifact already exists with AWS environment aliases "
             f"{existing_env_aliases} in collection {target_path}."

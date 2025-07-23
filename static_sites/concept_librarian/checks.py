@@ -222,12 +222,11 @@ def validate_alternative_label_uniqueness(
     """Make sure alternative labels are unique"""
     issues = []
     for concept in concepts:
-        duplicate_labels = [
+        if duplicate_labels := [
             label
             for label in concept.alternative_labels
             if concept.alternative_labels.count(label) > 1
-        ]
-        if duplicate_labels:
+        ]:
             issues.append(
                 ConceptIssue(
                     issue_type="duplicate_alternative_labels",
@@ -263,8 +262,7 @@ def ensure_positive_and_negative_labels_dont_overlap(
     """Make sure negative labels don't appear in positive labels"""
     issues = []
     for concept in concepts:
-        overlapping_labels = set(concept.negative_labels) & set(concept.all_labels)
-        if overlapping_labels:
+        if overlapping_labels := set(concept.negative_labels) & set(concept.all_labels):
             issues.append(
                 ConceptIssue(
                     issue_type="overlapping_labels",

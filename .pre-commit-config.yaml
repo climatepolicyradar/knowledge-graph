@@ -27,3 +27,7 @@ repos:
     rev: 2.1.1
     hooks:
     -   id: poetry-check
+  - repo: https://github.com/boidolr/ast-grep-pre-commit
+    rev: 0.39.1
+    hooks:
+      - id: ast-grep
