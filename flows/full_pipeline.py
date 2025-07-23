@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Any
 
 from prefect import State, flow, get_run_logger
 from pydantic import PositiveInt
@@ -152,21 +151,15 @@ async def full_pipeline(
         logger.error("Inference failed.")
         raise inference_run
 
-    inference_result_raw: dict[str, Any] | Fault = await inference_run.result(
+    # TODO: Validate what get's returned here now we've updated the function return statement.
+    inference_result_raw: InferenceResult | Fault = await inference_run.result(
         raise_on_failure=False
     )
 
-    match inference_result_raw:
-        case Fault():
-            inference_result: InferenceResult = InferenceResult(
-                **inference_result_raw.data
-            )
-        case dict():
-            inference_result: InferenceResult = InferenceResult(**inference_result_raw)
-        case _:
-            raise ValueError(
-                f"Unexpected inference result type: {type(inference_result_raw)}"
-            )
+    if isinstance(inference_result_raw, Fault):
+        inference_result: InferenceResult = InferenceResult(**inference_result_raw.data)
+    else:
+        inference_result: InferenceResult = inference_result_raw
 
     logger.info(
         f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "

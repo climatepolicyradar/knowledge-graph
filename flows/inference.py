@@ -21,7 +21,6 @@ from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import get_run_context
 from prefect.logging import get_run_logger
-from prefect.states import Completed, Failed, State
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from types_aiobotocore_s3.type_defs import PutObjectOutputTypeDef
@@ -794,7 +793,7 @@ async def inference_batch_of_documents(
     config_json: dict,
     classifier_name: str,
     classifier_alias: str,
-) -> State:
+) -> BatchInferenceResult | Fault:
     """
     Run classifier inference on a batch of documents.
 
@@ -911,18 +910,12 @@ async def inference_batch_of_documents(
             f"Failed to run inference on {len(inferences_failures) + len(inferences_unknown_failures)}/"
             f"{len(results)} documents."
         )
-        return Failed(
-            message=message,
-            data=Fault(
-                msg=message,
-                metadata={},
-                data=batch_inference_result.model_dump(),
-            ),
+        return Fault(
+            msg=message,
+            metadata={},
+            data=batch_inference_result.model_dump(),
         )
-    return Completed(
-        message=f"Successfully ran inference on all ({len(results)}) documents in batch.",
-        data=batch_inference_result.model_dump(),
-    )
+    return batch_inference_result
 
 
 @Profiler(
@@ -961,7 +954,7 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> State:
+) -> InferenceResult | Fault:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -1053,19 +1046,12 @@ async def inference(
     )
 
     if inference_result.failed:
-        message = "Some inference batches had failures!"
-        return Failed(
-            message=message,
-            data=Fault(
-                msg=message,
-                metadata={},
-                data=inference_result.model_dump(),
-            ),
+        return Fault(
+            msg="Some inference batches had failures!",
+            metadata={},
+            data=inference_result.model_dump(),
         )
-    return Completed(
-        message="Successfully ran inference on all batches!",
-        data=inference_result.model_dump(),
-    )
+    return inference_result
 
 
 async def create_inference_summary_artifact(
