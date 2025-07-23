@@ -26,6 +26,7 @@ from flows.index import (
 from flows.inference import (
     CLASSIFIER_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
+    InferenceException,
     InferenceResult,
     inference,
 )
@@ -152,7 +153,10 @@ async def full_pipeline(
         raise_on_failure=False
     )
 
-    if isinstance(inference_result_raw, Exception):
+    if (
+        isinstance(inference_result_raw, Exception)
+        and type(inference_result_raw) is not InferenceException
+    ):
         logger.error("Inference failed.")
         raise inference_result_raw
 
