@@ -451,8 +451,15 @@ async def return_with(
         return (accompaniment, e)
 
 
+def fn_is_async(fn: Callable[..., Any]) -> bool:
+    """Check if a function is async."""
+    if isinstance(fn, Flow):
+        return fn.isasync
+    return inspect.iscoroutinefunction(fn)
+
+
 async def map_as_sub_flow(
-    fn: Flow[..., Awaitable[U]],
+    fn: Callable[..., Awaitable[U]],
     aws_env: AwsEnv,
     counter: PositiveInt,
     batches: Generator[Sequence[T], None, None],
@@ -521,7 +528,7 @@ async def map_as_sub_flow(
                             raise_on_failure=True,
                         )
                         flow_result: U = (
-                            await result_fn() if fn.isasync else result_fn()
+                            await result_fn() if fn_is_async(fn) else result_fn()
                         )
                         successes.append(flow_result)
                     else:
