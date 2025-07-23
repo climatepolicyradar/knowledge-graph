@@ -255,13 +255,12 @@ class Concept(BaseModel):
             sections.append("```mermaid\n" + "\n".join(mermaid_lines) + "\n```")
 
         # Example passages
-        positive_passages = [
+
+        if positive_passages := [
             passage
             for passage in self.labelled_passages
             if any(span.concept_id == self.wikibase_id for span in passage.spans)
-        ]
-
-        if positive_passages:
+        ]:
             sections.append("## Example passages")
             sections.append(
                 "These are examples of passages from real documents which mention the "

@@ -449,8 +449,7 @@ def get_continuation_tokens_from_query_response(
     vespa_query_response_root = vespa_query_response.json["root"]
     group_hits = dig(vespa_query_response_root, "children", 0, "children", default=[])
     for hit in group_hits:
-        hit_continuation_token = dig(hit, "continuation", "next", default=None)
-        if hit_continuation_token:
+        if hit_continuation_token := dig(hit, "continuation", "next", default=None):
             continuation_tokens.append(hit_continuation_token)
     return continuation_tokens or None
 
@@ -820,8 +819,8 @@ class ConceptModel(BaseModel):
                 ...
             ValueError: Could not extract concept name from model name 'InvalidModelName'
         """
-        match = re.search(r'"([^"]+)"', self.model_name)
-        if match:
+
+        if match := re.search(r'"([^"]+)"', self.model_name):
             return match.group(1)
 
         raise ValueError(

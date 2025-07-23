@@ -187,8 +187,7 @@ def generate_predictions_for_classifier(
                     if not text.strip():
                         continue
 
-                    predicted_spans = classifier.predict(text)
-                    if predicted_spans:
+                    if predicted_spans := classifier.predict(text):
                         predictions.append(
                             LabelledPassage(
                                 text=text,
@@ -380,8 +379,7 @@ def main():
 
         for concept_id in all_concept_ids:
             try:
-                concept = wikibase.get_concept(wikibase_id=concept_id)
-                if concept:
+                if concept := wikibase.get_concept(wikibase_id=concept_id):
                     concepts[concept_id] = concept
                     valid_concept_ids.append(concept_id)
                 else:
@@ -426,10 +424,9 @@ def main():
                 classifier = ClassifierFactory.create(concept)
                 console.log(f"🤖 Created classifier: {classifier}")
 
-                predictions = generate_predictions_for_classifier(
+                if predictions := generate_predictions_for_classifier(
                     classifier, sample_passages
-                )
-                if predictions:
+                ):
                     concept_predictions[classifier.id] = predictions
 
             except Exception as e:
