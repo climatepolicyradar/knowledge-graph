@@ -83,7 +83,7 @@ class KeywordExpansionClassifier(RulesBasedClassifier):
                 max_tokens=1000,
             )
             .content[0]
-            .text
+            .text  # pyright: ignore[reportAttributeAccessIssue]
         )
 
         try:

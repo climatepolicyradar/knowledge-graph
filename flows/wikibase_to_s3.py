@@ -114,7 +114,7 @@ def list_s3_concepts(config: Config) -> list[str]:
         Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
     ):
         if "Contents" in page:
-            concept_paths.extend([o["Key"] for o in page["Contents"]])
+            concept_paths.extend([o["Key"] for o in page["Contents"]])  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
     s3_concepts = [file_name_from_path(path) for path in concept_paths]
     return s3_concepts
@@ -139,8 +139,8 @@ def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config) -> li
 
 
 @flow(
-    on_failure=[SlackNotify.message],
-    on_crashed=[SlackNotify.message],
+    on_failure=[SlackNotify.message],  # pyright: ignore[reportUnknownMemberType]
+    on_crashed=[SlackNotify.message],  # pyright: ignore[reportUnknownMemberType]
 )
 async def wikibase_to_s3(config: Config | None = None):
     logger = get_run_logger()

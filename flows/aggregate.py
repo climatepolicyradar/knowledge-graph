@@ -10,10 +10,9 @@ from prefect import flow
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
-from prefect.context import get_run_context
-from prefect.exceptions import MissingContextError
+from prefect.context import TaskRunContext, get_run_context
+from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
-from prefect.tasks import PrefectFutureList
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, Field, PositiveInt
 from types_aiobotocore_s3.client import S3Client
@@ -67,13 +66,12 @@ class AggregationFailure(Exception):
     """A document failure."""
 
     def __init__(self, document_stem: DocumentStem, exception: Exception, context: str):
+        super().__init__(
+            f"{document_stem} | exception: {str(exception)} | context: {context}"
+        )
         self.document_stem = document_stem
         self.exception = exception
         self.context = context
-
-    def __str__(self) -> str:
-        """Return a string representation"""
-        return f"{self.document_stem} | exception: {str(self.exception)} | context: {self.context}"
 
 
 class Config(BaseModel):
@@ -119,8 +117,15 @@ class Config(BaseModel):
 def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""
     run_context = get_run_context()
-    if not run_context:
-        raise MissingContextError()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    if run_context.flow_run.start_time is None:
+        raise ValueError("flow run didn't have a start time.")
+
     start_time = run_context.flow_run.start_time.replace(tzinfo=None).isoformat(
         timespec="minutes"
     )
@@ -175,7 +180,7 @@ def validate_passages_are_same_except_concepts(passages: list[LabelledPassage]) 
 
 def task_input_hash(
     remove: Sequence[str],
-    context: tasks.TaskRunContext,
+    context: TaskRunContext,
     arguments: dict[str, Any],
 ) -> str | None:
     """
@@ -188,12 +193,6 @@ def task_input_hash(
         context,
         {k: v for k, v in arguments.items() if k not in remove},
     )
-
-
-def task_run_name(parameters: dict[str, Any]) -> str:
-    document_id = parameters.get("document_id", "unknown")
-    slug = generate_slug(2)
-    return f"aggregate-single-document-{document_id}-{slug}"
 
 
 def generate_s3_uri_input(
@@ -229,16 +228,22 @@ def generate_s3_uri_output(
     )
 
 
+def task_run_name(parameters: dict[str, Any]) -> str:
+    document_id = parameters.get("document_id", "unknown")
+    slug = generate_slug(2)
+    return f"aggregate-single-document-{document_id}-{slug}"
+
+
 @materialize(
-    None,  # Asset key is not known yet
-    task_run_name=task_run_name,
+    "foo://bar",  # Asset key is not known yet
+    task_run_name=task_run_name,  # pyright: ignore[reportArgumentType]
     retries=1,
     persist_result=False,
 )
 async def process_document(
     document_stem: DocumentStem,
     session: aioboto3.Session,
-    classifier_specs: list[ClassifierSpec],
+    classifier_specs: Sequence[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
 ) -> DocumentStem:
@@ -254,7 +259,8 @@ async def process_document(
             ) in get_all_labelled_passages_for_one_document(
                 s3, document_stem, classifier_specs, config
             ):
-                # `concepts_for_vespa`` starts empty so Validation not needed initially
+                # `concepts_for_vespa` starts empty so Validation not
+                # needed initially
                 if not concepts_for_vespa:
                     for passage in labelled_passages:
                         concepts_for_vespa[TextBlockId(passage.id)] = [
@@ -274,8 +280,8 @@ async def process_document(
                 ):
                     if passage.id != text_block_id:
                         raise ValueError(
-                            f"The text_block id diverges for {spec} when compared with"
-                            + "what has been collected so far:"
+                            f"The text_block id diverges for {spec} when "
+                            + "compared with what has been collected so far:"
                             + f"{passage.id=} != {text_block_id=}"
                         )
                     serialised_concepts = [
@@ -312,7 +318,9 @@ async def process_document(
     except ClientError as e:
         print(f"ClientError: {e.response}")
         raise AggregationFailure(
-            document_stem=document_stem, exception=e, context=e.response
+            document_stem=document_stem,
+            exception=e,
+            context=str(e.response),
         )
     except Exception as e:
         raise AggregationFailure(
@@ -361,7 +369,7 @@ async def create_aggregate_inference_summary_artifact(
         for failure in failures
     ]
 
-    await create_table_artifact(
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"aggregate-inference-{config.aws_env.value}",
         table=details,
         description=overview_description,
@@ -388,7 +396,7 @@ async def create_aggregate_inference_overall_summary_artifact(
 - **Failed batches**: {len(failures)}
 """
 
-    await create_markdown_artifact(
+    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"aggregate-inference-overall-{aws_env.value}",
         markdown=markdown_content,
     )
@@ -410,10 +418,15 @@ def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     return list(set(document_stems))
 
 
-@flow(
+@flow(  # pyright: ignore[reportCallIssue]
     timeout_seconds=None,
     log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=DEFAULT_N_DOCUMENTS_IN_BATCH),
+    task_runner=ThreadPoolTaskRunner(
+        # This is valid, as per the docs[1].
+        #
+        # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/docs/v3/concepts/task-runners.mdx#L49
+        max_workers=DEFAULT_N_DOCUMENTS_IN_BATCH  # pyright: ignore[reportArgumentType]
+    ),
 )
 async def aggregate_batch_of_documents(
     document_stems: Sequence[DocumentStem],
@@ -426,11 +439,11 @@ async def aggregate_batch_of_documents(
 
     session = aioboto3.Session(region_name=config.bucket_region)
 
-    tasks = []
+    tasks: list[PrefectFuture[DocumentStem]] = []
 
     print("submitting tasks")
     for document_stem in document_stems:
-        assets = [
+        assets: Sequence[str] = [
             str(
                 generate_s3_uri_output(
                     cache_bucket=config.cache_bucket_str,
@@ -440,7 +453,7 @@ async def aggregate_batch_of_documents(
                 )
             )
         ]
-        asset_deps = [
+        asset_deps: list[str] = [
             str(
                 generate_s3_uri_input(
                     cache_bucket=config.cache_bucket_str,
@@ -453,9 +466,9 @@ async def aggregate_batch_of_documents(
         ]
 
         tasks.append(
-            process_document.with_options(  # pyright: ignore[reportFunctionMemberAccess]
+            process_document.with_options(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
                 assets=assets,
-                asset_deps=asset_deps,
+                asset_deps=asset_deps,  # pyright: ignore[reportArgumentType]
             ).submit(
                 document_stem=document_stem,
                 session=session,
@@ -465,7 +478,10 @@ async def aggregate_batch_of_documents(
             )
         )
 
-    futures = PrefectFutureList(tasks)
+    # This is valid, as per the source code[1].
+    #
+    # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/src/prefect/task_runners.py#L183-L213
+    futures: PrefectFutureList[DocumentStem] = PrefectFutureList(tasks)  # pyright: ignore[reportAbstractUsage]
 
     print("getting results")
     results = futures.result(raise_on_failure=False)
@@ -533,8 +549,9 @@ async def aggregate(
             "run_output_identifier": run_output_identifier,
         }
 
-    successes, failures = await map_as_sub_flow(
-        fn=aggregate_batch_of_documents,
+    successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
+        # The typing doesn't pick up the Flow decorator
+        fn=aggregate_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=n_batches,
         batches=batches,

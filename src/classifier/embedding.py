@@ -26,7 +26,9 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         super().__init__(concept)
 
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import (  # type: ignore[import-untyped]
+                SentenceTransformer,
+            )
 
             self.embedding_model = SentenceTransformer(embedding_model_name)
         except ImportError:

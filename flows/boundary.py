@@ -406,7 +406,7 @@ def get_document_passage_from_vespa(
         f"id:doc_search:family_document::{document_import_id}"
     ) & qb.QueryField("text_block_id").contains(text_block_id)
 
-    yql = qb.select("*").from_("document_passage").where(condition)
+    yql = qb.select("*").from_("document_passage").where(condition)  # type: ignore[attr-defined]
 
     vespa_query_response: VespaQueryResponse = vespa_search_adapter.client.query(
         yql=yql
@@ -623,7 +623,7 @@ async def get_document_passages_from_vespa(
         if text_blocks_ids_n == 1:
             text_block_id_contains = text_blocks_ids[0]
         else:
-            text_block_id_contains = qb.equiv(*text_blocks_ids)
+            text_block_id_contains = qb.equiv(*text_blocks_ids)  # type: ignore[attr-defined]
 
         conditions &= text_block_id.contains(text_block_id_contains)
 
@@ -643,7 +643,7 @@ async def get_document_passages_from_vespa(
     )
 
     query: qb.Query = (
-        qb.select("*")
+        qb.select("*")  # type: ignore[attr-defined]
         .from_(
             Schema(name="document_passage", document=Document()),
         )

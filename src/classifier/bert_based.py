@@ -4,9 +4,9 @@ from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime
 
-import torch
+import torch  # type: ignore[import-untyped]
 from datasets import Dataset
-from transformers import (
+from transformers import (  # type: ignore[import-untyped]
     AutoModelForSequenceClassification,
     AutoTokenizer,
     Trainer,

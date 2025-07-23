@@ -15,7 +15,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.table import Table
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split  # type: ignore[import-untyped]
 
 from scripts.config import classifier_dir, equity_columns, processed_data_dir
 from src.classifier import (
@@ -104,7 +104,9 @@ def save_labelled_passages_and_classifier(
     console.log(f"💾 Saved labelled passages to {predictions_path}")
 
     classifier_path = (
-        classifier_dir / classifier.concept.wikibase_id / f"{classifier.id}.pickle"
+        classifier_dir
+        / str(classifier.concept.wikibase_id or "unknown")
+        / f"{classifier.id}.pickle"
     )
     classifier_path.parent.mkdir(parents=True, exist_ok=True)
     classifier.save(classifier_path)
@@ -183,7 +185,7 @@ def main(
         )
 
         passages_to_label_with_embedding_classifier: list[LabelledPassage] = [
-            LabelledPassage(text=row["text_block.text"], spans=[])
+            LabelledPassage(text=str(row["text_block.text"]), spans=[])
             for _, row in balanced_sample_dataframe.iterrows()
         ]
     console.log(

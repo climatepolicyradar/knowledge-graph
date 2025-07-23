@@ -186,7 +186,7 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
         s3_client.head_object(Bucket=bucket_name, Key=file_key)
         return True
     except ClientError as e:
-        if e.response["Error"]["Code"] in ["404", "403"]:
+        if e.response["Error"]["Code"] in ["404", "403"]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
             return False
         raise
 
@@ -237,8 +237,8 @@ def collect_unique_file_stems_under_prefix(
     file_stems = []
     for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
         for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".json"):
-                file_stems.append(DocumentStem(Path(obj["Key"]).stem))
+            if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return list(set(file_stems))
 
 
@@ -672,7 +672,7 @@ async def gather_and_report(
     desc_create: str,
     desc_update_fn: Callable[[Sequence[Any], list[Any]], str] = default_desc,
 ) -> Sequence[T] | Sequence[T | Exception]:
-    progress_artifact_id: UUID = await create_progress_artifact(
+    progress_artifact_id: UUID = await create_progress_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         progress=0.0,
         key=key,
         description=desc_create,
@@ -690,7 +690,7 @@ async def gather_and_report(
             else:
                 raise e
         finally:
-            await update_progress_artifact(
+            await update_progress_artifact(  # pyright: ignore[reportGeneralTypeIssues]
                 artifact_id=progress_artifact_id,
                 progress=Percentage.from_lists(results, tasks).to_float(),
                 description=desc_update_fn(tasks, results),

@@ -48,7 +48,7 @@ async def _trigger_deployment(
     documents: list[str] | None,
 ) -> FlowRun:
     try:
-        flow_run = await run_deployment(
+        flow_run = await run_deployment(  # type: ignore[misc]
             name=deployment_name,
             parameters={
                 "classifier_specs": classifiers,
