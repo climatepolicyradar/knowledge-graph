@@ -35,14 +35,13 @@ boto3-stubs = {extras = ["s3"], version = "^1.35.93"}
 typer = "0.15.1"
 schedule = "^1.2.2"
 awscli = "^1.37.24"
-prefect = {extras = ["slack"], version = "^3.4.7"}
+prefect = {extras = ["aws", "slack"], version = "^3.4.7"}
 httpx = "^0.28.1"
 tenacity = "^9.1.2"
 requests = "^2.32.3"
 aioboto3 = "^14.3.0"
 types-aioboto3 = {extras = ["s3"], version = "^14.3.0"}
 pytest-aioboto3 = "^0.6.0"
-prefect-aws = "^0.5.12"
 
 [tool.poetry.group.transformers]
 optional = true

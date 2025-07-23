@@ -6,6 +6,7 @@ import re
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, NewType, TypeVar
@@ -14,6 +15,7 @@ import boto3
 from botocore.exceptions import ClientError
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
+from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
 from pydantic import PositiveInt
@@ -449,13 +451,12 @@ async def return_with(
 
 
 async def map_as_sub_flow(
-    fn: Callable[..., Awaitable[U]],
+    fn: Flow[..., Awaitable[U]],
     aws_env: AwsEnv,
     counter: PositiveInt,
     batches: Generator[Sequence[T], None, None],
     parameters: Callable[[Sequence[T]], dict[str, Any]],
     unwrap_result: bool,
-    fn_is_async: bool = False,
 ) -> tuple[Sequence[U | FlowRun], Sequence[BaseException | FlowRun]]:
     """
     Map over an iterable, running the function as a sub-flow.
@@ -510,18 +511,16 @@ async def map_as_sub_flow(
                 # For completed flows, extract the actual return value
                 try:
                     if unwrap_result:
+                        result_fn = partial(
+                            result.state.result,
+                            # Doing it this way, makes it easier to rely
+                            # on the type system, instead of doing `False`
+                            # and then allowing for a union of types in
+                            # the return.
+                            raise_on_failure=True,
+                        )
                         flow_result: U = (
-                            result.state.result(
-                                #  Doing it this way, makes it easier to rely
-                                # on the type system, instead of doing `False`
-                                # and then allowing for a union of types in
-                                # the return.
-                                raise_on_failure=True,
-                            )
-                            if not fn_is_async
-                            else await result.state.result(
-                                raise_on_failure=True,
-                            )
+                            await result_fn() if fn.isasync else result_fn()
                         )
                         successes.append(flow_result)
                     else:

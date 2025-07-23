@@ -5111,6 +5111,7 @@ orjson = ">=3.7,<4.0"
 packaging = ">=21.3,<25.1"
 pathspec = ">=0.8.0"
 pendulum = {version = ">=3.0.0,<4", markers = "python_version < \"3.13\""}
+prefect-aws = {version = ">=0.5.8", optional = true, markers = "extra == \"aws\""}
 prefect-slack = {version = ">=0.3.0", optional = true, markers = "extra == \"slack\""}
 prometheus-client = ">=0.20.0"
 pydantic = ">=2.9,<2.10.0 || >2.10.0,<2.11.0 || >2.11.0,<2.11.1 || >2.11.1,<2.11.2 || >2.11.2,<2.11.3 || >2.11.3,<2.11.4 || >2.11.4,<3.0.0"
@@ -9616,4 +9617,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.11"
-content-hash = "7ca3f7a049d5bdd4a2e0896259d0d01ef800ed1aa56e830d20e935d91abea339"
+content-hash = "5bef2708a78b6d2fe34c4f6f87b39e407b71efffb1aef59cddd186a84b53512a"

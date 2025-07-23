@@ -203,17 +203,11 @@ class InferenceResult(BaseModel):
         This is as the document would fail aggregation if there was a missing inference result for a classifier.
         """
 
-        failed_document_stems = set(
-            document_stem
-            for batch_inference_result in self.batch_inference_results
-            for document_stem, _ in batch_inference_result.failed_document_stems
-        )
-
         return set(
             document_stem
             for batch_inference_result in self.batch_inference_results
             for document_stem in batch_inference_result.successful_document_stems
-            if document_stem not in failed_document_stems
+            if document_stem not in self.failed_document_stems
         )
 
     @cached_property
@@ -1064,7 +1058,6 @@ async def inference(
                 batches=batches,
                 parameters=parameters,
                 unwrap_result=True,
-                fn_is_async=True,
             )
 
             all_raw_successes.extend(raw_successes)
