@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import inspect
+import json
 import os
 import re
 import time
@@ -532,3 +533,18 @@ async def map_as_sub_flow(
                 failures.append(result)
 
     return successes, failures
+
+
+@dataclass
+class Fault(Exception):
+    """A simple and generic exception with optional, helpful metadata"""
+
+    msg: str
+    metadata: dict[str, Any] | None
+    data: dict[str, Any] | None = None
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        if self.metadata is None:
+            return self.msg
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"

@@ -21,7 +21,6 @@ from flows.index import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
     INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
-    Fault,
     index,
 )
 from flows.inference import (
@@ -31,7 +30,7 @@ from flows.inference import (
     inference,
 )
 from flows.inference import Config as InferenceConfig
-from flows.utils import DocumentImportId
+from flows.utils import DocumentImportId, Fault
 from scripts.cloud import ClassifierSpec
 
 

@@ -19,7 +19,6 @@ from flows.inference import (
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
-    Fault,
     InferenceResult,
     SingleDocumentInferenceResult,
     _stringify,
@@ -41,6 +40,7 @@ from flows.inference import (
     store_labels,
     text_block_inference,
 )
+from flows.utils import Fault
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -769,11 +769,11 @@ def test_batch_inference_result_properties() -> None:
     )
 
     assert not result.failed
-    assert result.successful_document_stems == [
+    assert result.successful_document_stems == {
         DocumentStem("TEST.executive.1.1"),
         DocumentStem("TEST.executive.2.2"),
-    ]
-    assert result.failed_document_stems == []
+    }
+    assert result.failed_document_stems == set()
 
     batch_inference_result_2 = BatchInferenceResult(
         successful_document_stems=[
@@ -802,16 +802,15 @@ def test_batch_inference_result_properties() -> None:
     )
 
     assert result.failed
-    assert result.successful_document_stems == set(
-        [
-            DocumentStem("TEST.executive.2.2"),
-            DocumentStem("TEST.executive.3.3"),
-            DocumentStem("TEST.executive.4.4"),
-        ]
-    )
-    assert result.failed_document_stems == set(
-        [DocumentStem("TEST.executive.1.1"), DocumentStem("TEST.executive.5.5")]
-    )
+    assert result.successful_document_stems == {
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+    }
+    assert result.failed_document_stems == {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.5.5"),
+    }
 
 
 def test_jsonl_serialization_roundtrip():

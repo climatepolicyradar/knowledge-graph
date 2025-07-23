@@ -27,10 +27,10 @@ from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from types_aiobotocore_s3.type_defs import PutObjectOutputTypeDef
 from wandb.sdk.wandb_run import Run
 
-from flows.index import Fault
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
+    Fault,
     Profiler,
     S3Uri,
     SlackNotify,
