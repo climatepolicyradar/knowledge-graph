@@ -125,7 +125,7 @@ class Classifier(ABC):
         assert isinstance(classifier, Classifier)
         if model_to_cuda and hasattr(classifier, "pipeline"):
             classifier.pipeline.model.to("cuda:0")  # type: ignore
-            import torch
+            import torch  # type: ignore[import-untyped]
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier

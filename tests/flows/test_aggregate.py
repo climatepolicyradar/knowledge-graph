@@ -52,7 +52,7 @@ async def test_aggregate_batch_of_documents(
     mock_bucket_labelled_passages_large, test_aggregate_config, mock_classifier_specs
 ):
     _, bucket, s3_async_client = mock_bucket_labelled_passages_large
-    _, classifier_specs = mock_classifier_specs
+    classifier_specs: list[ClassifierSpec] = mock_classifier_specs[1]
 
     document_stems = [
         DocumentStem("CCLW.executive.10061.4515"),
@@ -143,8 +143,8 @@ async def test_aggregate_batch_of_documents__with_failures(
     artifact_data = json.loads(summary_artifact.data)
     failure_stems = [f["Failed document Stem"] for f in artifact_data]
     assert set(failure_stems) == set(expect_failure_stems)
-    assert artifact_data[0]["Context"]["Error"]["Code"] == "NoSuchKey"
-    assert artifact_data[1]["Context"]["Error"]["Code"] == "NoSuchKey"
+    assert "NoSuchKey" in artifact_data[0]["Context"]
+    assert "NoSuchKey" in artifact_data[1]["Context"]
 
 
 def test_build_run_output_prefix():

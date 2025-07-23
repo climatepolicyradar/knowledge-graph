@@ -144,22 +144,22 @@ def main(
         df = pd.read_json(performance_data_path)
         df = df[df["Agreement at"] == "Span level (0)"]
 
-        span_level_precision_values = df["Precision"].values
+        span_level_precision_values = df["Precision"].values  # type: ignore[attr-defined]
 
         # Find the groups which are outliers
         outlier_groups = df.loc[
             (
                 df["Precision"]
                 > (
-                    span_level_precision_values.mean()
-                    + span_level_precision_values.std()
+                    span_level_precision_values.mean()  # type: ignore[attr-defined]
+                    + span_level_precision_values.std()  # type: ignore[attr-defined]
                 )
             )
             | (
                 df["Precision"]
                 < (
-                    span_level_precision_values.mean()
-                    - span_level_precision_values.std()
+                    span_level_precision_values.mean()  # type: ignore[attr-defined]
+                    - span_level_precision_values.std()  # type: ignore[attr-defined]
                 )
             )
         ]

@@ -171,8 +171,9 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        response: AgentRunResult[LLMResponse] = self.agent.run_sync(
-            text, model_settings=ModelSettings(seed=self.random_seed)
+        response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
+            text,
+            model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
         self._validate_response(input_text=text, response=response.data.marked_up_text)
         return Span.from_xml(
@@ -187,7 +188,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
         async def run_predictions():
             async_responses = [
                 self.agent.run(
-                    text, model_settings=ModelSettings(seed=self.random_seed)
+                    text,
+                    model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
                 )
                 for text in texts
             ]
@@ -202,7 +204,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
 
         try:
             # Run all predictions in the batch in parallel
-            responses: list[AgentRunResult[LLMResponse]] = loop.run_until_complete(
+            responses: list[AgentRunResult[LLMResponse]] = loop.run_until_complete(  # type: ignore[assignment]
                 run_predictions()
             )
         finally:
@@ -281,8 +283,8 @@ class LLMClassifier(BaseLLMClassifier):
             random_seed=random_seed,
         )
 
-    def _create_agent(self) -> Agent:
-        return Agent(
+    def _create_agent(self) -> Agent:  # type: ignore[type-arg]
+        return Agent(  # type: ignore[return-value]
             self.model_name,
             system_prompt=self.system_prompt,
             result_type=LLMResponse,
@@ -350,7 +352,7 @@ class LocalLLMClassifier(BaseLLMClassifier):
             model_name=self.model_name,
             provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
         )
-        return Agent(
+        return Agent(  # type: ignore[return-value]
             model=ollama_model,
             system_prompt=self.system_prompt,
             result_type=LLMResponse,
