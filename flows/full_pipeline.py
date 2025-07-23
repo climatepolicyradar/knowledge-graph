@@ -21,12 +21,12 @@ from flows.index import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
     INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
+    Fault,
     index,
 )
 from flows.inference import (
     CLASSIFIER_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
-    InferenceException,
     InferenceResult,
     inference,
 )
@@ -155,7 +155,7 @@ async def full_pipeline(
 
     if (
         isinstance(inference_result_raw, Exception)
-        and type(inference_result_raw) is not InferenceException
+        and type(inference_result_raw) is not Fault
     ):
         logger.error("Inference failed.")
         raise inference_result_raw

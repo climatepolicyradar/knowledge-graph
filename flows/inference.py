@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from types_aiobotocore_s3.type_defs import PutObjectOutputTypeDef
 from wandb.sdk.wandb_run import Run
 
+from flows.index import Fault
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -122,22 +123,6 @@ class Config:
         }
 
 
-class BatchInferenceException(Exception):
-    """
-    Exception raised when batch inference fails.
-
-    The data attribute of the prefect State when type is FAILED must be an object that
-    an exception can be raised from. Thus, we declare a custom exception that can also
-    be used to transfer the result of the batch inference run.
-    """
-
-    def __init__(self, message: str, data: dict[str, Any]):
-        super().__init__(message)
-
-        self.message = message
-        self.data = data
-
-
 class BatchInferenceResult(BaseModel):
     """Result from running inference on a batch of documents."""
 
@@ -154,22 +139,6 @@ class BatchInferenceResult(BaseModel):
         """Whether the batch failed, True if failed."""
 
         return self.failed_document_stems != [] or self.unknown_failures != []
-
-
-class InferenceException(Exception):
-    """
-    Exception raised when inference fails.
-
-    The data attribute of the prefect State when type is FAILED must be an object that
-    an exception can be raised from. Thus, we declare a custom exception that can also
-    be used to transfer the results of the all the batch inference runs.
-    """
-
-    def __init__(self, message: str, data: dict[str, Any]):
-        super().__init__(message)
-
-        self.message = message
-        self.data = data
 
 
 class InferenceResult(BaseModel):
@@ -944,8 +913,9 @@ async def inference_batch_of_documents(
         )
         return Failed(
             message=message,
-            data=BatchInferenceException(
-                message=message,
+            data=Fault(
+                msg=message,
+                metadata={},
                 data=batch_inference_result.model_dump(),
             ),
         )
@@ -1086,8 +1056,9 @@ async def inference(
         message = "Some inference batches had failures!"
         return Failed(
             message=message,
-            data=InferenceException(
-                message=message,
+            data=Fault(
+                msg=message,
+                metadata={},
                 data=inference_result.model_dump(),
             ),
         )
