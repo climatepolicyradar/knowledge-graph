@@ -226,10 +226,10 @@ class UncertaintyMixin:
             Uncertainty score between 0 and 1
         """
 
-        binary_predictions = [1 if spans else 0 for spans in predictions]
-
-        if len(set(binary_predictions)) <= 1:
+        if all(not spans for spans in predictions):
             return Uncertainty(0.0)
+
+        binary_predictions = [1 if spans else 0 for spans in predictions]
 
         # Calculate proportion of positive predictions
         positive_ratio = sum(binary_predictions) / len(binary_predictions)
