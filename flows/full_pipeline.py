@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Any
 
 from prefect import State, flow, get_run_logger
 from pydantic import PositiveInt
@@ -25,10 +26,11 @@ from flows.index import (
 from flows.inference import (
     CLASSIFIER_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
+    InferenceResult,
     inference,
 )
 from flows.inference import Config as InferenceConfig
-from flows.utils import DocumentImportId, DocumentStem
+from flows.utils import DocumentImportId, Fault
 from scripts.cloud import ClassifierSpec
 
 
@@ -145,25 +147,40 @@ async def full_pipeline(
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
         return_state=True,
     )
-    inference_result: Sequence[DocumentStem] | Exception = await inference_run.result(
-        raise_on_failure=False
+
+    inference_result_raw: (
+        dict[str, Any] | Fault | Exception
+    ) = await inference_run.result(raise_on_failure=False)
+
+    match inference_result_raw:
+        case Exception() if not isinstance(inference_result_raw, Fault):
+            logger.error("Inference failed.")
+            raise inference_result_raw
+        case Fault():
+            inference_result: InferenceResult = InferenceResult(
+                **inference_result_raw.data
+            )
+        case dict():
+            inference_result: InferenceResult = InferenceResult(**inference_result_raw)
+        case _:
+            raise ValueError(
+                f"Unexpected inference result type: {type(inference_result_raw)}"
+            )
+
+    logger.info(
+        f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "
+        + f"failed document stems count: {len(inference_result.failed_document_stems)},"
+        + f"unexpected failures count: {len(inference_result.unexpected_failures)}"
     )
 
-    if isinstance(inference_result, Exception):
-        logger.error("Inference failed.")
-        raise inference_result
-    logger.info(f"Inference complete. Document stems count: {len(inference_result)}")
-
-    # TODO: Update inference_batch_of_documents to return a result with
-    # the document stems that were successfully processed. Then update inference
-    # to return all of the successful document stems from all the inference batches so that
-    # we can use this as the input to the aggregation step.
-    # Currently using filtered_file_stems as the input to the aggregation step, some of
-    # these may not have inference results due to failures and thus we expect further
-    # failures in the aggregation step.
+    if len(inference_result.successful_document_stems) == 0:
+        logger.info(
+            "Inference successfully ran on 0 documents, skipping aggregation and indexing."
+        )
+        return
 
     aggregation_run: State = await aggregate(
-        document_stems=inference_result,
+        document_stems=list(inference_result.successful_document_stems),
         config=aggregation_config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
@@ -194,3 +211,5 @@ async def full_pipeline(
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
         raise indexing_result
+
+    logger.info("Full pipeline run completed!")

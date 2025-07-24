@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from prefect.flows import flow
 
 from flows.utils import (
     DocumentStem,
@@ -14,6 +15,7 @@ from flows.utils import (
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
     filter_non_english_language_file_stems,
+    fn_is_async,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
@@ -268,3 +270,25 @@ def test_filter_non_english_file_stems() -> None:
     end_time = time.time()
 
     assert end_time - start_time < 1, "Filtering took too long"
+
+
+def test_fn_is_async():
+    async def async_fn():
+        return 1
+
+    def sync_fn():
+        return 1
+
+    assert fn_is_async(async_fn)
+    assert not fn_is_async(sync_fn)
+
+    @flow
+    async def async_flow():
+        return 1
+
+    @flow
+    def sync_flow():
+        return 1
+
+    assert fn_is_async(async_flow)
+    assert not fn_is_async(sync_flow)

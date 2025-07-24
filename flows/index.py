@@ -43,6 +43,7 @@ from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
+    Fault,
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
@@ -60,20 +61,6 @@ DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
 DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 # How many document passages to index concurrently per document
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
-
-
-@dataclass
-class Fault(Exception):
-    """A simple and generic exception with optional, helpful metadata"""
-
-    msg: str
-    metadata: dict[str, Any] | None
-
-    def __str__(self) -> str:
-        """Return a string representation"""
-        if self.metadata is None:
-            return self.msg
-        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"
 
 
 def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
@@ -753,7 +740,7 @@ async def index(
         counter=indexer_concurrency_limit,
         batches=batches,
         parameters=parameters,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_aggregate_indexing_summary_artifact(

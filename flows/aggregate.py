@@ -373,7 +373,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     document_stems: Sequence[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-    successes: Sequence[RunOutputIdentifier],
+    successes: Sequence[FlowRun],
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
@@ -539,7 +539,7 @@ async def aggregate(
         counter=n_batches,
         batches=batches,
         parameters=parameters,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_aggregate_inference_overall_summary_artifact(

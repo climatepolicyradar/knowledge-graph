@@ -1,11 +1,13 @@
 import asyncio
 import functools
 import inspect
+import json
 import os
 import re
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, NewType, TypeVar
@@ -14,6 +16,7 @@ import boto3
 from botocore.exceptions import ClientError
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
+from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackWebhook
 from pydantic import PositiveInt
@@ -448,6 +451,13 @@ async def return_with(
         return (accompaniment, e)
 
 
+def fn_is_async(fn: Callable[..., Any] | Flow) -> bool:
+    """Check if a function is async."""
+    if isinstance(fn, Flow):
+        return fn.isasync  # type: ignore[reportFunctionMemberAccess]
+    return inspect.iscoroutinefunction(fn)
+
+
 async def map_as_sub_flow(
     fn: Callable[..., Awaitable[U]],
     aws_env: AwsEnv,
@@ -509,12 +519,16 @@ async def map_as_sub_flow(
                 # For completed flows, extract the actual return value
                 try:
                     if unwrap_result:
-                        flow_result: U = result.state.result(
+                        result_fn = partial(
+                            result.state.result,
                             # Doing it this way, makes it easier to rely
                             # on the type system, instead of doing `False`
                             # and then allowing for a union of types in
                             # the return.
                             raise_on_failure=True,
+                        )
+                        flow_result: U = (
+                            await result_fn() if fn_is_async(fn) else result_fn()
                         )
                         successes.append(flow_result)
                     else:
@@ -526,3 +540,18 @@ async def map_as_sub_flow(
                 failures.append(result)
 
     return successes, failures
+
+
+@dataclass
+class Fault(Exception):
+    """A simple and generic exception with optional, helpful metadata"""
+
+    msg: str
+    metadata: dict[str, Any] | None
+    data: dict[str, Any] | None = None
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        if self.metadata is None:
+            return self.msg
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"

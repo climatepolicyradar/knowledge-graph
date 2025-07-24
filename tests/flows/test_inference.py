@@ -15,9 +15,11 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    BatchInferenceResult,
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
+    InferenceResult,
     SingleDocumentInferenceResult,
     _stringify,
     deserialise_pydantic_list_from_jsonl,
@@ -38,6 +40,7 @@ from flows.inference import (
     store_labels,
     text_block_inference,
 )
+from flows.utils import Fault
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -255,10 +258,12 @@ async def test_inference(
     ]
     with prefect_test_harness():
         filtered_file_stems = await inference(
+            # FIXME: ValueError: `latest` is not allowed
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
+
         assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
 
     mock_wandb_init.assert_called_once_with(
@@ -455,19 +460,23 @@ def test_remove_sabin_file_stems(
 def test_group_inference_results_into_states(snapshot):
     # Test data separated into successes and failures as expected by the new signature
     successes = [
-        FlowRun(
-            name="4",
-            id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-            flow_id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-            state=State(type=StateType.COMPLETED),
-            parameters={"classifier_name": "Q100", "classifier_alias": "v3"},
+        BatchInferenceResult(
+            successful_document_stems=[
+                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+                DocumentStem("CCLW.executive.10512.5360"),
+            ],
+            failed_document_stems=[],
+            classifier_name="Q200",
+            classifier_alias="v5",
         ),
-        FlowRun(
-            name="5",
-            id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-            flow_id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-            state=State(type=StateType.COMPLETED),
-            parameters={"classifier_name": "Q200", "classifier_alias": "v5"},
+        BatchInferenceResult(
+            successful_document_stems=[
+                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+                DocumentStem("CCLW.executive.10512.5360"),
+            ],
+            failed_document_stems=[],
+            classifier_name="Q201",
+            classifier_alias="v6",
         ),
     ]
 
@@ -498,6 +507,7 @@ async def test_inference_batch_of_documents(
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
+    mock_prefect_s3_block,
     snapshot,
 ):
     """Test successful batch processing of documents."""
@@ -539,12 +549,26 @@ async def test_inference_batch_of_documents(
         ),
     ):
         # Should not raise any exceptions for successful processing
-        await inference_batch_of_documents(
+        result_state = await inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
+            return_state=True,
         )
+
+    assert (
+        result_state.message
+        == f"Successfully ran inference on all ({len(batch)}) documents in batch."
+    )
+    result = await result_state.result()
+    assert isinstance(result, dict)
+    assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
+    result_obj = BatchInferenceResult(**result)
+    assert result_obj.successful_document_stems == batch
+    assert result_obj.failed_document_stems == []
+    assert result_obj.classifier_name == classifier_name
+    assert result_obj.classifier_alias == classifier_alias
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -600,7 +624,12 @@ async def test_inference_batch_of_documents(
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_with_failures(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    snapshot,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with some document failures."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -619,14 +648,15 @@ async def test_inference_batch_of_documents_with_failures(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    # Should raise ValueError due to failed documents
-    with pytest.raises(ValueError, match=r"Failed to process 2/2 documents"):
-        await inference_batch_of_documents(
+    with pytest.raises(Fault) as exc_info:
+        _ = await inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )
+
+        assert exc_info.value.msg == "Failed to run inference on 2/2 documents."
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client
@@ -665,7 +695,12 @@ async def test_inference_batch_of_documents_with_failures(
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_empty_batch(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    snapshot,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with empty batch."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -684,7 +719,7 @@ async def test_inference_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    await inference_batch_of_documents(
+    _ = await inference_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
@@ -713,6 +748,69 @@ async def test_inference_batch_of_documents_empty_batch(
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
+
+
+def test_batch_inference_result_properties() -> None:
+    """Test the InferenceResult object."""
+
+    batch_inference_result_1 = BatchInferenceResult(
+        successful_document_stems=[
+            DocumentStem("TEST.executive.1.1"),
+            DocumentStem("TEST.executive.2.2"),
+        ],
+        classifier_name="Q100",
+        classifier_alias="v1",
+    )
+
+    result = InferenceResult(
+        batch_inference_results=[
+            batch_inference_result_1,
+        ],
+    )
+
+    assert not result.failed
+    assert result.successful_document_stems == {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+    }
+    assert result.failed_document_stems == set()
+
+    batch_inference_result_2 = BatchInferenceResult(
+        successful_document_stems=[
+            DocumentStem("TEST.executive.3.3"),
+            DocumentStem("TEST.executive.4.4"),
+        ],
+        failed_document_stems=[
+            (
+                DocumentStem("TEST.executive.1.1"),
+                Exception("Failed to run inference on TEST.executive.1.1"),
+            ),
+            (
+                DocumentStem("TEST.executive.5.5"),
+                Exception("Failed to run inference on TEST.executive.5.5"),
+            ),
+        ],
+        classifier_name="Q101",
+        classifier_alias="v1",
+    )
+
+    result = InferenceResult(
+        batch_inference_results=[
+            batch_inference_result_1,
+            batch_inference_result_2,
+        ],
+    )
+
+    assert result.failed
+    assert result.successful_document_stems == {
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+    }
+    assert result.failed_document_stems == {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.5.5"),
+    }
 
 
 def test_jsonl_serialization_roundtrip():
