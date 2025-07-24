@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from prefect.client.schemas.objects import State, StateType
+from prefect.exceptions import FailedRun
 from prefect.states import Completed, Failed
 
 from flows.aggregate import (
@@ -435,9 +436,11 @@ async def test_full_pipeline_with_inference_failure(
         mock_aggregate.reset_mock()
         mock_indexing.reset_mock()
 
-        mock_inference.return_value = ValueError("Test error")
+        mock_inference.return_value = Failed(
+            message="Test error", result=Exception("Test exception")
+        )
 
-        with pytest.raises(ValueError, match="Test error"):
+        with pytest.raises(FailedRun, match="Test error"):
             await full_pipeline(
                 inference_config=test_config,
                 aggregation_config=test_aggregate_config,

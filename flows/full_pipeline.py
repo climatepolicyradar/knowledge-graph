@@ -138,7 +138,7 @@ async def full_pipeline(
         + f"inference config: {inference_config}"
     )
 
-    inference_run: State | Exception = await inference(
+    inference_run: State = await inference(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
         use_new_and_updated=inference_use_new_and_updated,
@@ -148,15 +148,14 @@ async def full_pipeline(
         return_state=True,
     )
 
-    if isinstance(inference_run, Exception):
-        logger.error("Inference failed.")
-        raise inference_run
-
-    inference_result_raw: dict[str, Any] | Fault = await inference_run.result(
-        raise_on_failure=False
-    )
+    inference_result_raw: (
+        dict[str, Any] | Fault | Exception
+    ) = await inference_run.result(raise_on_failure=False)
 
     match inference_result_raw:
+        case Exception() if not isinstance(inference_result_raw, Fault):
+            logger.error("Inference failed.")
+            raise inference_result_raw
         case Fault():
             inference_result: InferenceResult = InferenceResult(
                 **inference_result_raw.data
@@ -173,6 +172,12 @@ async def full_pipeline(
         + f"failed document stems count: {len(inference_result.failed_document_stems)},"
         + f"unexpected failures count: {len(inference_result.unexpected_failures)}"
     )
+
+    if len(inference_result.successful_document_stems) == 0:
+        logger.info(
+            "Inference successfully ran on 0 documents, skipping aggregation and indexing."
+        )
+        return
 
     aggregation_run: State = await aggregate(
         document_stems=list(inference_result.successful_document_stems),
@@ -206,3 +211,5 @@ async def full_pipeline(
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
         raise indexing_result
+
+    logger.info("Full pipeline run completed!")
