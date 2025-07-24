@@ -1,32 +1,21 @@
-import asyncio
 import datetime
 import json
-import os
 import re
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
-from prefect.logging import disable_run_logger
 from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse
 from vespa.package import Document, Schema
 
 from flows.boundary import (
-    CONCEPTS_COUNTS_PREFIX_DEFAULT,
-    DEFAULT_DOCUMENTS_BATCH_SIZE,
     VESPA_MAX_EQUIV_ELEMENTS_IN_QUERY,
     VESPA_MAX_LIMIT,
-    DocumentImporter,
-    DocumentImportId,
     DocumentObjectUri,
-    Operation,
     TextBlockId,
-    _update_text_block,
     convert_labelled_passage_to_concepts,
     get_continuation_tokens_from_query_response,
     get_data_id_from_vespa_hit_id,
@@ -38,15 +27,7 @@ from flows.boundary import (
     get_vespa_passages_from_query_response,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
-    remove_concepts_from_existing_vespa_concepts,
-    s3_obj_generator,
-    s3_obj_generator_from_s3_paths,
-    s3_obj_generator_from_s3_prefixes,
-    s3_paths_or_s3_prefixes,
-    updates_by_s3,
 )
-from flows.deindex import Config
-from scripts.cloud import AwsEnv, ClassifierSpec
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -117,56 +98,6 @@ def test_vespa_search_adapter_from_aws_secrets(
     assert vespa_search_adapter.client.key == str(key_path)
 
 
-def test_s3_obj_generator_from_s3_prefixes(
-    mock_bucket,
-    mock_bucket_b,
-    mock_bucket_labelled_passages,
-    mock_bucket_labelled_passages_b,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-) -> None:
-    """Test the s3 object generator."""
-    gen = s3_obj_generator_from_s3_prefixes(
-        [
-            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages),
-            os.path.join("s3://", mock_bucket_b, s3_prefix_labelled_passages),
-        ],
-    )
-    result = list(gen)
-    expected: list[DocumentImporter] = [
-        (
-            Path(f).stem,
-            f"s3://{b}/{s3_prefix_labelled_passages}/{Path(f).stem}.json",
-        )
-        for b in [mock_bucket, mock_bucket_b]
-        for f in labelled_passage_fixture_files
-    ]
-    assert expected == result
-
-
-def test_s3_obj_generator_from_s3_paths(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-) -> None:
-    """Test the s3 object generator."""
-    s3_paths = [
-        os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
-        for f in labelled_passage_fixture_files
-    ]
-    gen = s3_obj_generator_from_s3_paths(s3_paths=s3_paths)
-    result = list(gen)
-    expected: list[DocumentImporter] = [
-        (
-            Path(f).stem,
-            f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{Path(f).stem}.json",
-        )
-        for f in labelled_passage_fixture_files
-    ]
-    assert expected == result
-
-
 def test_convert_labelled_passges_to_concepts(
     example_labelled_passages: list[LabelledPassage],
 ) -> None:
@@ -220,175 +151,6 @@ def test_get_parent_concepts_from_concept() -> None:
             labelled_passages=[],
         )
     ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
-
-
-def test_s3_paths_or_s3_prefixes_no_classifier(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-):
-    """Test s3_paths_or_s3_prefixes returns base prefix when no classifier spec provided."""
-    config = Config(cache_bucket=mock_bucket)
-
-    s3_accessor = s3_paths_or_s3_prefixes(
-        classifier_specs=None,
-        document_ids=None,
-        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        prefix=config.document_source_prefix,
-    )
-
-    assert s3_accessor.prefixes == [f"s3://{mock_bucket}/labelled_passages"]
-    assert s3_accessor.paths is None
-
-
-def test_s3_paths_or_s3_prefixes_no_classifier_and_docs(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    labelled_passage_fixture_ids,
-    labelled_passage_fixture_files,
-    s3_prefix_mock_bucket_labelled_passages,
-):
-    config = Config(cache_bucket=mock_bucket)
-
-    with (
-        pytest.raises(
-            ValueError,
-            match="if document IDs are specified, a classifier "
-            "specifcation must also be specified, since they're "
-            "namespaced by classifiers \\(e\\.g\\. "
-            "`s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/"
-            "v4/CCLW\\.legislative\\.10695\\.6015\\.json`\\)",
-        ),
-        disable_run_logger(),
-    ):
-        s3_paths_or_s3_prefixes(
-            classifier_specs=None,
-            document_ids=labelled_passage_fixture_ids,
-            cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-            prefix=config.document_source_prefix,
-        )
-
-
-def test_s3_paths_or_s3_prefixes_with_classifier_no_docs(
-    mock_bucket,
-):
-    """Test s3_paths_or_s3_prefixes returns classifier-specific prefix when no document IDs provided."""
-    config = Config(cache_bucket=mock_bucket)
-    classifier_spec_q788 = ClassifierSpec(name="Q788", alias="v4")
-    classifier_spec_q699 = ClassifierSpec(name="Q699", alias="v4")
-
-    s3_accessor = s3_paths_or_s3_prefixes(
-        classifier_specs=[classifier_spec_q788, classifier_spec_q699],
-        document_ids=None,
-        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        prefix=config.document_source_prefix,
-    )
-
-    assert s3_accessor.prefixes == [
-        f"s3://{mock_bucket}/labelled_passages/Q788/v4",
-        f"s3://{mock_bucket}/labelled_passages/Q699/v4",
-    ]
-    assert s3_accessor.paths is None
-
-
-def test_s3_paths_or_s3_prefixes_with_classifier_and_docs(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    labelled_passage_fixture_ids,
-    labelled_passage_fixture_files,
-    s3_prefix_mock_bucket_labelled_passages,
-):
-    """Test s3_paths_or_s3_prefixes returns specific paths when both classifier and document IDs provided."""
-    config = Config(cache_bucket=mock_bucket)
-    classifier_spec = ClassifierSpec(name="Q788", alias="v4")
-
-    expected_paths = [
-        f"{s3_prefix_mock_bucket_labelled_passages}/{labelled_passage_fixture_file}"
-        for labelled_passage_fixture_file in labelled_passage_fixture_files
-    ]
-
-    s3_accessor = s3_paths_or_s3_prefixes(
-        classifier_specs=[classifier_spec],
-        document_ids=labelled_passage_fixture_ids,
-        cache_bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        prefix=config.document_source_prefix,
-    )
-
-    assert s3_accessor.prefixes is None
-    assert sorted(s3_accessor.paths) == sorted(  # pyright: ignore[reportArgumentType]
-        expected_paths
-    )
-
-
-@pytest.mark.parametrize(
-    "s3_prefixes,s3_paths,expected_error,error_match",
-    [
-        # Both provided - should raise error
-        (
-            ["s3://bucket/prefix"],
-            ["s3://bucket/prefix/file.json"],
-            ValueError,
-            "Either s3_prefixes or s3_paths must be provided, not both.",
-        ),
-        # Neither provided - should raise error
-        (
-            None,
-            None,
-            ValueError,
-            "Either s3_prefix or s3_paths must be provided.",
-        ),
-        # Invalid types - should raise error
-        (
-            None,
-            None,
-            ValueError,
-            "Either s3_prefix or s3_paths must be provided.",
-        ),
-    ],
-)
-def test_s3_obj_generator_errors(
-    s3_prefixes: list[str] | None,
-    s3_paths: list[str] | None,
-    expected_error: type[Exception],
-    error_match: str,
-) -> None:
-    """Test s3_obj_generator error cases."""
-    with pytest.raises(expected_error, match=error_match), disable_run_logger():
-        _ = s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
-
-
-@pytest.mark.parametrize(
-    "use_prefixes",
-    [True, False],
-    ids=["using_prefixes", "using_paths"],
-)
-def test_s3_obj_generator_valid_cases(
-    mock_bucket: str,
-    mock_bucket_labelled_passages: None,
-    s3_prefix_labelled_passages: str,
-    labelled_passage_fixture_files: list[str],
-    use_prefixes: bool,
-) -> None:
-    """Test s3_obj_generator with valid inputs using either prefixes or paths."""
-    if use_prefixes:
-        s3_prefixes = [os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)]
-        s3_paths = None
-    else:
-        s3_prefixes = None
-        s3_paths = [
-            os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages, f)
-            for f in labelled_passage_fixture_files
-        ]
-
-    gen = s3_obj_generator(s3_prefixes=s3_prefixes, s3_paths=s3_paths)
-    result = list(gen)
-    expected: list[DocumentImporter] = [
-        (
-            Path(f).stem,
-            f"s3://{mock_bucket}/{s3_prefix_labelled_passages}/{Path(f).stem}.json",
-        )
-        for f in labelled_passage_fixture_files
-    ]
-    assert expected == result
 
 
 @pytest.mark.vespa
@@ -563,166 +325,6 @@ async def test_get_document_passages_from_vespa_over_limit(
                 document_import_id="test.executive.1.1",
                 vespa_connection_pool=vespa_connection_pool,
             )
-
-
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_updates_by_s3_with_s3_paths(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-    s3_prefix_mock_bucket_labelled_passages,
-    labelled_passage_fixture_ids,
-) -> None:
-    """We can successfully index labelled passages from S3 into Vespa."""
-    initial_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    initial_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
-    )
-
-    await updates_by_s3(
-        partial_update_flow=Operation.DEINDEX,
-        aws_env=AwsEnv.sandbox,
-        s3_prefixes=None,
-        s3_paths=[
-            os.path.join(
-                s3_prefix_mock_bucket_labelled_passages,
-                f"{labelled_passage_fixture_ids[0]}.json",
-            )
-        ],
-        as_deployment=False,
-        cache_bucket=mock_bucket,
-        concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    final_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    final_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
-    )
-
-    assert initial_concepts_count == final_concepts_count
-
-
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_updates_by_s3_with_s3_prefixes(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-    s3_prefix_mock_bucket_labelled_passages,
-    labelled_passage_fixture_ids,
-) -> None:
-    """We can successfully index labelled passages from S3 into Vespa."""
-    initial_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    initial_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in initial_passages_response.hits
-    )
-
-    await updates_by_s3(
-        partial_update_flow=Operation.DEINDEX,
-        aws_env=AwsEnv.sandbox,
-        s3_prefixes=[
-            s3_prefix_mock_bucket_labelled_passages,
-        ],
-        s3_paths=None,
-        as_deployment=False,
-        cache_bucket=mock_bucket,
-        concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    final_passages_response = local_vespa_search_adapter.client.query(
-        yql="select * from document_passage where true"
-    )
-    final_concepts_count = sum(
-        len(hit["fields"]["concepts"]) for hit in final_passages_response.hits
-    )
-
-    assert initial_concepts_count == final_concepts_count
-
-
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_updates_by_s3_task_failure(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-) -> None:
-    """Test that index_by_s3 handles task failures gracefully."""
-
-    async def mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment(
-        *args, **kwargs
-    ):
-        raise Exception("Forced update failure")
-
-    with (
-        patch(
-            "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
-            side_effect=mock_run_partial_updates_of_concepts_for_batch_flow_or_deployment,
-        ),
-        pytest.raises(ValueError, match="there was at least 1 task that failed"),
-    ):
-        await updates_by_s3(
-            partial_update_flow=Operation.DEINDEX,
-            aws_env=AwsEnv.sandbox,
-            s3_prefixes=[
-                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
-            ],
-            s3_paths=None,
-            as_deployment=False,
-            cache_bucket=mock_bucket,
-            concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
-            vespa_search_adapter=local_vespa_search_adapter,
-        )
-
-
-@pytest.mark.asyncio
-@pytest.mark.vespa
-async def test_updates_by_s3_task_unexpected_result(
-    mock_bucket,
-    mock_bucket_labelled_passages,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    vespa_app,
-) -> None:
-    """Test that index_by_s3 handles unexpected results gracefully."""
-    with (
-        patch(
-            "flows.boundary.run_partial_updates_of_concepts_for_batch_flow_or_deployment",
-            # Force a value that's not a valid type of result
-            return_value=0,
-        ),
-        pytest.raises(ValueError, match="there was at least 1 task that failed"),
-    ):
-        await updates_by_s3(
-            partial_update_flow=Operation.DEINDEX,
-            aws_env=AwsEnv.sandbox,
-            s3_prefixes=[
-                os.path.join("s3://", mock_bucket, s3_prefix_labelled_passages)
-            ],
-            s3_paths=None,
-            as_deployment=False,
-            cache_bucket=mock_bucket,
-            concepts_counts_prefix=CONCEPTS_COUNTS_PREFIX_DEFAULT,
-            vespa_search_adapter=local_vespa_search_adapter,
-        )
 
 
 def test_load_labelled_passages_by_uri_obj(mock_bucket, mock_s3_client):
@@ -1184,85 +786,3 @@ async def test_lower_max_hits_query_profile(
     assert error_info["summary"] == "Illegal query"
     assert f"{hits_beyond_limit} hits requested" in error_info["message"]
     assert "configured limit" in error_info["message"]
-
-
-@pytest.mark.vespa
-@pytest.mark.asyncio
-async def test__update_text_block__update(
-    vespa_app,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    example_vespa_concepts,
-) -> None:
-    text_block_id = TextBlockId("1457")
-    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
-
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id=text_block_id,
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
-
-    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        (
-            vespa_response,
-            text_block_id_response,
-            document_import_id_response,
-        ) = await _update_text_block(
-            semaphore=semaphore,
-            text_block_id=text_block_id,
-            document_passage_id=document_passage_id,
-            document_passage=document_passage,
-            merge_serialise_concepts_cb=remove_concepts_from_existing_vespa_concepts,
-            concepts=example_vespa_concepts,
-            vespa_connection_pool=vespa_connection_pool,
-        )
-
-        assert text_block_id == text_block_id_response
-        assert (
-            "id:doc_search:document_passage::CCLW.executive.10014.4470.1457"
-            == document_import_id_response
-        )
-        assert vespa_response.is_successful()
-
-
-@pytest.mark.vespa
-@pytest.mark.asyncio
-async def test__update_text_block__remove(
-    vespa_app,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    example_vespa_concepts,
-) -> None:
-    text_block_id = TextBlockId("1457")
-    document_import_id = DocumentImportId("CCLW.executive.10014.4470")
-
-    document_passage_id, document_passage = get_document_passage_from_vespa(
-        text_block_id=text_block_id,
-        document_import_id=document_import_id,
-        vespa_search_adapter=local_vespa_search_adapter,
-    )
-
-    semaphore = asyncio.Semaphore(DEFAULT_DOCUMENTS_BATCH_SIZE)
-
-    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
-        (
-            vespa_response,
-            text_block_id_response,
-            document_import_id_response,
-        ) = await _update_text_block(
-            semaphore=semaphore,
-            text_block_id=text_block_id,
-            document_passage_id=document_passage_id,
-            document_passage=document_passage,
-            merge_serialise_concepts_cb=remove_concepts_from_existing_vespa_concepts,
-            concepts=example_vespa_concepts,
-            vespa_connection_pool=vespa_connection_pool,
-        )
-
-        assert text_block_id == text_block_id_response
-        assert (
-            "id:doc_search:document_passage::CCLW.executive.10014.4470.1457"
-            == document_import_id_response
-        )
-        assert vespa_response.is_successful()

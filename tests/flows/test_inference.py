@@ -1,5 +1,8 @@
 import json
+import os
+import tempfile
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 from uuid import UUID
@@ -12,25 +15,32 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.testing.utilities import prefect_test_harness
 
 from flows.inference import (
+    BatchInferenceResult,
     ClassifierSpec,
     DocumentImportId,
     DocumentStem,
+    InferenceResult,
+    SingleDocumentInferenceResult,
     _stringify,
-    classifier_inference,
+    deserialise_pydantic_list_from_jsonl,
+    deserialise_pydantic_list_with_fallback,
     determine_file_stems,
     document_passages,
     download_classifier_from_wandb_to_local,
     get_latest_ingest_documents,
     group_inference_results_into_states,
+    inference,
+    inference_batch_of_documents,
     list_bucket_file_stems,
     load_classifier,
     load_document,
     remove_sabin_file_stems,
-    run_classifier_inference_on_batch_of_documents,
     run_classifier_inference_on_document,
+    serialise_pydantic_list_as_jsonl,
     store_labels,
     text_block_inference,
 )
+from flows.utils import Fault
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -164,17 +174,32 @@ def test_document_passages__pdf(parser_output_pdf):
     assert pdf_result == ("test pdf text", "2")
 
 
-def test_store_labels(test_config, mock_bucket):
+@pytest.mark.asyncio
+async def test_store_labels(test_config, mock_bucket, snapshot):
     text = "This is a test text block"
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    store_labels(test_config, labels, "TEST.DOC.0.1", "Q9081", "latest")
+    successes, failures, unknown_failures = await store_labels.fn(
+        test_config,
+        [
+            SingleDocumentInferenceResult(
+                labelled_passages=labels,
+                document_stem=DocumentStem("TEST.DOC.0.1"),
+                classifier_name="Q9081",
+                classifier_alias="v3",
+            )
+        ],
+    )
+
+    assert successes == snapshot(name="successes")
+    assert failures == snapshot(name="failures")
+    assert unknown_failures == snapshot(name="unknown_failures")
 
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/latest/TEST.DOC.0.1.json"
+    assert labels[0] == "labelled_passages/Q9081/v3/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -224,7 +249,7 @@ async def test_text_block_inference_without_results(
 
 @pytest.mark.asyncio
 @pytest.mark.flaky_on_ci
-async def test_classifier_inference(
+async def test_inference(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
 ):
     mock_wandb_init, _, _ = mock_wandb
@@ -232,11 +257,13 @@ async def test_classifier_inference(
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
     with prefect_test_harness():
-        filtered_file_stems = await classifier_inference(
+        filtered_file_stems = await inference(
+            # FIXME: ValueError: `latest` is not allowed
             classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
             document_ids=doc_ids,
             config=test_config,
         )
+
         assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
 
     mock_wandb_init.assert_called_once_with(
@@ -283,13 +310,18 @@ def test_get_latest_ingest_documents_no_latest(
 
 @pytest.mark.asyncio
 async def test_run_classifier_inference_on_document(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    snapshot,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
     classifier_name = "Q788"
-    classifier_alias = "latest"
+    classifier_alias = "v5"
 
     # Load classifier
     classifier = await load_classifier(
@@ -348,18 +380,9 @@ async def test_run_classifier_inference_on_document(
             classifier=classifier,
         )
 
-        assert result is None
+        assert result == snapshot
 
-        # Load the stored labels from s3
-        expected_key = f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
-        s3 = boto3.client("s3", region_name=test_config.bucket_region)
-        response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-        data = json.loads(response["Body"].read().decode("utf-8"))
-
-        # Verify we stored NO labels
-        assert len(data) == 0
-
-    # Run the function on a document with english language
+    # Run the function on a document with English language
     document_stem = Path(mock_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
         config=test_config,
@@ -369,28 +392,7 @@ async def test_run_classifier_inference_on_document(
         classifier=classifier,
     )
 
-    assert result is None
-
-    # Verify that labels were stored in S3
-    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
-    expected_key = (
-        f"labelled_passages/{classifier_name}/{classifier_alias}/{document_stem}.json"
-    )
-    assert expected_key in labels
-
-    # Verify the content of the stored labels
-    s3 = boto3.client("s3", region_name=test_config.bucket_region)
-    response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-    data = json.loads(response["Body"].read().decode("utf-8"))
-
-    # Verify we have at least one label
-    assert len(data) > 0
-
-    # Verify the structure of the labels
-    for label in data:
-        assert "id" in label
-        assert "text" in label
-        assert "spans" in label
+    assert result == snapshot
 
 
 @pytest.mark.asyncio
@@ -456,47 +458,56 @@ def test_remove_sabin_file_stems(
 
 
 def test_group_inference_results_into_states(snapshot):
-    assert snapshot == group_inference_results_into_states(
-        [
-            FlowRun(
-                name="1",
-                id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-                flow_id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-                state=None,
-            ),
-            FlowRun(
-                name="2",
-                id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-                flow_id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-                state=State(type=StateType.CANCELLED),
-            ),
-            ValueError("2"),
-            ValueError("3"),
-            FlowRun(
-                name="4",
-                id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-                flow_id=UUID("3a8fcdc1-f11e-4279-aee9-0624f91a2822"),
-                state=State(type=StateType.COMPLETED),
-                parameters={"classifier_name": "Q100", "classifier_alias": "v3"},
-            ),
-            FlowRun(
-                name="5",
-                id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-                flow_id=UUID("c04c3798-b15e-427d-b51d-9e7b4870885f"),
-                state=State(type=StateType.COMPLETED),
-                parameters={"classifier_name": "Q200", "classifier_alias": "v5"},
-            ),
-        ]
-    )
+    # Test data separated into successes and failures as expected by the new signature
+    successes = [
+        BatchInferenceResult(
+            successful_document_stems=[
+                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+                DocumentStem("CCLW.executive.10512.5360"),
+            ],
+            failed_document_stems=[],
+            classifier_name="Q200",
+            classifier_alias="v5",
+        ),
+        BatchInferenceResult(
+            successful_document_stems=[
+                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+                DocumentStem("CCLW.executive.10512.5360"),
+            ],
+            failed_document_stems=[],
+            classifier_name="Q201",
+            classifier_alias="v6",
+        ),
+    ]
+
+    failures = [
+        FlowRun(
+            name="1",
+            id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
+            flow_id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
+            state=None,
+        ),
+        FlowRun(
+            name="2",
+            id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
+            flow_id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
+            state=State(type=StateType.CANCELLED),
+        ),
+        ValueError("2"),
+        ValueError("3"),
+    ]
+
+    assert snapshot == group_inference_results_into_states(successes, failures)
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_batch_of_documents(
+async def test_inference_batch_of_documents(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
+    mock_prefect_s3_block,
     snapshot,
 ):
     """Test successful batch processing of documents."""
@@ -518,13 +529,46 @@ async def test_run_classifier_inference_on_batch_of_documents(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    # Should not raise any exceptions for successful processing
-    await run_classifier_inference_on_batch_of_documents(
-        batch=batch,
-        config_json=config_json,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+    # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
+    def mock_generate_assets(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-asset-1.json",
+            "s3://dummy-bucket/dummy-asset-2.json",
+        ]
+
+    def mock_generate_asset_deps(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-dep-1.json",
+            "s3://dummy-bucket/dummy-dep-2.json",
+        ]
+
+    with (
+        patch("flows.inference.generate_assets", side_effect=mock_generate_assets),
+        patch(
+            "flows.inference.generate_asset_deps", side_effect=mock_generate_asset_deps
+        ),
+    ):
+        # Should not raise any exceptions for successful processing
+        result_state = await inference_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+            return_state=True,
+        )
+
+    assert (
+        result_state.message
+        == f"Successfully ran inference on all ({len(batch)}) documents in batch."
     )
+    result = await result_state.result()
+    assert isinstance(result, dict)
+    assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
+    result_obj = BatchInferenceResult(**result)
+    assert result_obj.successful_document_stems == batch
+    assert result_obj.failed_document_stems == []
+    assert result_obj.classifier_name == classifier_name
+    assert result_obj.classifier_alias == classifier_alias
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -565,15 +609,27 @@ async def test_run_classifier_inference_on_batch_of_documents(
 
     # Verify the content of the stored labels
     response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-    data = json.loads(response["Body"].read().decode("utf-8"))
+    jsonl_content = response["Body"].read().decode("utf-8")
+
+    # Parse JSONL format - each line is a JSON object
+    lines = [line.strip() for line in jsonl_content.strip().split("\n") if line.strip()]
 
     # Verify we have at least one label for successful processing
-    assert len(data) > 0, "Expected at least one labelled passage"
+    assert len(lines) > 0, "Expected at least one labelled passage"
+
+    # Verify each line is valid JSON
+    for line in lines:
+        json.loads(line)  # This will raise if invalid JSON
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_batch_of_documents_with_failures(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+async def test_inference_batch_of_documents_with_failures(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    snapshot,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with some document failures."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -592,14 +648,15 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
         "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
-    # Should raise ValueError due to failed documents
-    with pytest.raises(ValueError, match=r"Failed to process 2/2 documents"):
-        await run_classifier_inference_on_batch_of_documents(
+    with pytest.raises(Fault) as exc_info:
+        _ = await inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
         )
+
+        assert exc_info.value.msg == "Failed to run inference on 2/2 documents."
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client
@@ -637,8 +694,13 @@ async def test_run_classifier_inference_on_batch_of_documents_with_failures(
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, snapshot
+async def test_inference_batch_of_documents_empty_batch(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    snapshot,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with empty batch."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -657,7 +719,7 @@ async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    await run_classifier_inference_on_batch_of_documents(
+    _ = await inference_batch_of_documents(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
@@ -686,3 +748,166 @@ async def test_run_classifier_inference_on_batch_of_documents_empty_batch(
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
+
+
+def test_batch_inference_result_properties() -> None:
+    """Test the InferenceResult object."""
+
+    batch_inference_result_1 = BatchInferenceResult(
+        successful_document_stems=[
+            DocumentStem("TEST.executive.1.1"),
+            DocumentStem("TEST.executive.2.2"),
+        ],
+        classifier_name="Q100",
+        classifier_alias="v1",
+    )
+
+    result = InferenceResult(
+        batch_inference_results=[
+            batch_inference_result_1,
+        ],
+    )
+
+    assert not result.failed
+    assert result.successful_document_stems == {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+    }
+    assert result.failed_document_stems == set()
+
+    batch_inference_result_2 = BatchInferenceResult(
+        successful_document_stems=[
+            DocumentStem("TEST.executive.3.3"),
+            DocumentStem("TEST.executive.4.4"),
+        ],
+        failed_document_stems=[
+            (
+                DocumentStem("TEST.executive.1.1"),
+                Exception("Failed to run inference on TEST.executive.1.1"),
+            ),
+            (
+                DocumentStem("TEST.executive.5.5"),
+                Exception("Failed to run inference on TEST.executive.5.5"),
+            ),
+        ],
+        classifier_name="Q101",
+        classifier_alias="v1",
+    )
+
+    result = InferenceResult(
+        batch_inference_results=[
+            batch_inference_result_1,
+            batch_inference_result_2,
+        ],
+    )
+
+    assert result.failed
+    assert result.successful_document_stems == {
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+    }
+    assert result.failed_document_stems == {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.5.5"),
+    }
+
+
+def test_jsonl_serialization_roundtrip():
+    """Test that JSONL serialization and deserialization works correctly."""
+    test_passages = [
+        LabelledPassage(
+            id="passage1",
+            text="This is the first test passage",
+            spans=[
+                Span(
+                    text="This is the first test passage",
+                    start_index=17,
+                    end_index=21,
+                    concept_id="Q123",
+                    labellers=["test_labeller"],
+                    timestamps=["2023-01-01T00:00:00"],
+                    id="span1",
+                    labelled_text="test",
+                )
+            ],
+            metadata={"source": "test"},
+        ),
+        LabelledPassage(
+            id="passage2",
+            text="This is the second test passage",
+            spans=[],
+            metadata={"source": "test"},
+        ),
+    ]
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".jsonl", delete=False) as f:
+        try:
+            serialized_data = serialise_pydantic_list_as_jsonl(test_passages)
+            f.write(serialized_data.read().decode("utf-8"))
+            f.flush()
+
+            with open(f.name, "r") as read_file:
+                content = read_file.read()
+
+            deserialized_passages = deserialise_pydantic_list_from_jsonl(
+                content, LabelledPassage
+            )
+
+            assert deserialized_passages == test_passages
+        finally:
+            # Clean up
+            os.unlink(f.name)
+
+
+def test_original_format_fallback():
+    """Test that the original serialization format can be deserialized correctly."""
+    # Create test data
+    test_passages = [
+        LabelledPassage(
+            id="passage1",
+            text="This is the first test passage",
+            spans=[
+                Span(
+                    text="This is the first test passage",
+                    start_index=17,
+                    end_index=21,
+                    concept_id="Q123",
+                    labellers=["test_labeller"],
+                    timestamps=["2023-01-01T00:00:00"],
+                    id="span1",
+                    labelled_text="test",
+                )
+            ],
+            metadata={"source": "test"},
+        ),
+        LabelledPassage(
+            id="passage2",
+            text="This is the second test passage",
+            spans=[],
+            metadata={"source": "test"},
+        ),
+    ]
+
+    def original_serialise_labels(labels: list[LabelledPassage]) -> BytesIO:
+        data = [label.model_dump_json() for label in labels]
+        return BytesIO(json.dumps(data).encode("utf-8"))
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=False) as f:
+        try:
+            serialized_data = original_serialise_labels(test_passages)
+            f.write(serialized_data.read().decode("utf-8"))
+            f.flush()
+
+            with open(f.name, "r") as read_file:
+                content = read_file.read()
+
+            # This should trigger the fallback logic automatically
+            deserialized_passages = deserialise_pydantic_list_with_fallback(
+                content, LabelledPassage
+            )
+
+            assert deserialized_passages == test_passages
+        finally:
+            # Clean up
+            os.unlink(f.name)

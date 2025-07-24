@@ -1,18 +1,19 @@
 import json
 import os
 from collections.abc import AsyncGenerator, Sequence
-from functools import partial
 from typing import Any, TypeAlias, TypeVar
 
 import aioboto3
 import prefect.tasks as tasks
 from botocore.exceptions import ClientError
-from prefect import flow, task, unmapped
+from prefect import flow
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.task_runners import ThreadPoolTaskRunner
+from prefect.tasks import PrefectFutureList
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, Field, PositiveInt
 from types_aiobotocore_s3.client import S3Client
@@ -23,7 +24,10 @@ from flows.boundary import (
     s3_copy_file,
     s3_object_write_text_async,
 )
-from flows.inference import DOCUMENT_TARGET_PREFIX_DEFAULT
+from flows.inference import (
+    DOCUMENT_TARGET_PREFIX_DEFAULT,
+    deserialise_pydantic_list_with_fallback,
+)
 from flows.utils import (
     DocumentStem,
     S3Uri,
@@ -133,21 +137,19 @@ async def get_all_labelled_passages_for_one_document(
     """Get the labelled passages from s3."""
 
     for spec in classifier_specs:
-        s3_uri = S3Uri(
-            bucket=config.cache_bucket_str,
-            key=os.path.join(
-                config.document_source_prefix,
-                spec.name,
-                spec.alias,
-                f"{document_stem}.json",
-            ),
+        s3_uri = generate_s3_uri_input(
+            cache_bucket=config.cache_bucket_str,
+            document_source_prefix=config.document_source_prefix,
+            classifier_spec=spec,
+            document_stem=document_stem,
         )
         response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
         body = await response["Body"].read()
-        labelled_passages = [
-            LabelledPassage.model_validate_json(passage)
-            for passage in json.loads(body.decode("utf-8"))
-        ]
+        content = body.decode("utf-8")
+
+        labelled_passages = deserialise_pydantic_list_with_fallback(
+            content, LabelledPassage
+        )
         yield spec, labelled_passages
 
 
@@ -194,8 +196,41 @@ def task_run_name(parameters: dict[str, Any]) -> str:
     return f"aggregate-single-document-{document_id}-{slug}"
 
 
-@task(
-    cache_key_fn=partial(task_input_hash, ["session"]),
+def generate_s3_uri_input(
+    cache_bucket: str,
+    document_source_prefix: str,
+    classifier_spec: ClassifierSpec,
+    document_stem: DocumentStem,
+) -> S3Uri:
+    return S3Uri(
+        bucket=cache_bucket,
+        key=os.path.join(
+            document_source_prefix,
+            classifier_spec.name,
+            classifier_spec.alias,
+            f"{document_stem}.json",
+        ),
+    )
+
+
+def generate_s3_uri_output(
+    cache_bucket: str,
+    aggregate_inference_results_prefix: str,
+    run_output_identifier: RunOutputIdentifier,
+    document_stem: DocumentStem,
+) -> S3Uri:
+    return S3Uri(
+        bucket=cache_bucket,
+        key=os.path.join(
+            aggregate_inference_results_prefix,
+            run_output_identifier,
+            f"{document_stem}.json",
+        ),
+    )
+
+
+@materialize(
+    None,  # Asset key is not known yet
     task_run_name=task_run_name,
     retries=1,
     persist_result=False,
@@ -252,13 +287,11 @@ async def process_document(
                     )
 
             # Write to s3
-            s3_uri = S3Uri(
-                bucket=config.cache_bucket_str,
-                key=os.path.join(
-                    config.aggregate_inference_results_prefix,
-                    run_output_identifier,
-                    f"{document_stem}.json",
-                ),
+            s3_uri = generate_s3_uri_output(
+                cache_bucket=config.cache_bucket_str,
+                aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
+                run_output_identifier=run_output_identifier,
+                document_stem=document_stem,
             )
             await s3_object_write_text_async(s3, s3_uri, json.dumps(concepts_for_vespa))
 
@@ -340,7 +373,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     document_stems: Sequence[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-    successes: Sequence[RunOutputIdentifier],
+    successes: Sequence[FlowRun],
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
@@ -382,7 +415,7 @@ def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     log_prints=True,
     task_runner=ThreadPoolTaskRunner(max_workers=DEFAULT_N_DOCUMENTS_IN_BATCH),
 )
-async def aggregate_inference_results_batch(
+async def aggregate_batch_of_documents(
     document_stems: Sequence[DocumentStem],
     config_json: dict[str, Any],
     classifier_specs: Sequence[ClassifierSpec],
@@ -393,13 +426,46 @@ async def aggregate_inference_results_batch(
 
     session = aioboto3.Session(region_name=config.bucket_region)
 
-    futures = process_document.map(  # pyright: ignore[reportFunctionMemberAccess]
-        document_stems,
-        session=unmapped(session),
-        classifier_specs=unmapped(classifier_specs),
-        config=unmapped(config),
-        run_output_identifier=unmapped(run_output_identifier),
-    )
+    tasks = []
+
+    print("submitting tasks")
+    for document_stem in document_stems:
+        assets = [
+            str(
+                generate_s3_uri_output(
+                    cache_bucket=config.cache_bucket_str,
+                    aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
+                    run_output_identifier=run_output_identifier,
+                    document_stem=document_stem,
+                )
+            )
+        ]
+        asset_deps = [
+            str(
+                generate_s3_uri_input(
+                    cache_bucket=config.cache_bucket_str,
+                    document_source_prefix=config.document_source_prefix,
+                    classifier_spec=spec,
+                    document_stem=document_stem,
+                )
+            )
+            for spec in classifier_specs
+        ]
+
+        tasks.append(
+            process_document.with_options(  # pyright: ignore[reportFunctionMemberAccess]
+                assets=assets,
+                asset_deps=asset_deps,
+            ).submit(
+                document_stem=document_stem,
+                session=session,
+                classifier_specs=classifier_specs,
+                config=config,
+                run_output_identifier=run_output_identifier,
+            )
+        )
+
+    futures = PrefectFutureList(tasks)
 
     print("getting results")
     results = futures.result(raise_on_failure=False)
@@ -428,7 +494,7 @@ async def aggregate_inference_results_batch(
     timeout_seconds=None,
     log_prints=True,
 )
-async def aggregate_inference_results(
+async def aggregate(
     document_stems: None | Sequence[DocumentStem] = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
@@ -468,11 +534,12 @@ async def aggregate_inference_results(
         }
 
     successes, failures = await map_as_sub_flow(
-        fn=aggregate_inference_results_batch,
+        fn=aggregate_batch_of_documents,
         aws_env=config.aws_env,
         counter=n_batches,
         batches=batches,
         parameters=parameters,
+        unwrap_result=False,
     )
 
     await create_aggregate_inference_overall_summary_artifact(
@@ -483,5 +550,8 @@ async def aggregate_inference_results(
         successes=successes,
         failures=failures,
     )
+
+    if failures:
+        raise ValueError(f"{len(failures)}/{len(failures) + len(successes)} failed")
 
     return run_output_identifier

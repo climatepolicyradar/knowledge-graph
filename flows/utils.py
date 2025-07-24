@@ -1,22 +1,40 @@
 import asyncio
 import functools
 import inspect
+import json
 import os
 import re
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, NewType, TypeVar
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Literal,
+    NewType,
+    ParamSpec,
+    TypeVar,
+    overload,
+)
+from uuid import UUID
 
 import boto3
 from botocore.exceptions import ClientError
+from prefect.artifacts import (
+    create_progress_artifact,
+    update_progress_artifact,
+)
 from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.deployments import run_deployment
+from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL
+from prefect.utilities.names import generate_slug
 from prefect_slack.credentials import SlackWebhook
-from pydantic import PositiveInt
+from pydantic import Field, PositiveInt, RootModel
 from typing_extensions import Self
 
 from scripts.cloud import (
@@ -35,7 +53,8 @@ DocumentImportId = NewType("DocumentImportId", str)
 # Needed to load the inference results
 # Example: s3://cpr-sandbox-data-pipeline-cache/labelled_passages/Q787/v4/CCLW.executive.1813.2418.json
 DocumentObjectUri = NewType("DocumentObjectUri", str)
-# A filename without the extension
+# A filename without the extension. May include a suffix indicating
+# translation.
 DocumentStem = NewType("DocumentStem", str)
 # Passed to a self-sufficient flow run
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
@@ -195,11 +214,11 @@ def get_file_stems_for_document_id(
             .with_stem(f"{document_id}_translated_{target_language}")
             .with_suffix(".json")
         )
-        file_exists = s3_file_exists(
+
+        if s3_file_exists(
             bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
-        )
-        if file_exists:
+        ):
             stems.append(translated_file_key.stem)
 
     if not stems:
@@ -435,25 +454,95 @@ async def wait_for_semaphore(
         return await fn
 
 
-async def return_with_id(
-    id: U,
+async def return_with(
+    accompaniment: U,
     fn: Awaitable[T | Exception],
 ) -> tuple[U, T | Exception]:
-    """Wrap a function execution's return value as a tuple with an identifier"""
+    """Wrap a function's return value as a tuple with an accompanying value."""
     try:
         result = await fn
-        return (id, result)
+        return (accompaniment, result)
     except Exception as e:
-        return (id, e)
+        return (accompaniment, e)
 
 
+# Match what Prefect uses for Flows:
+#
+# > .. we use the generic type variables `P` and `R` for "Parameters"
+# > and "Returns" respectively.
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def fn_is_async(fn: Callable[..., Any] | Flow[P, R]) -> bool:
+    """Check if a function is async."""
+    if isinstance(fn, Flow):
+        return fn.isasync  # type: ignore[reportFunctionMemberAccess]
+    return inspect.iscoroutinefunction(fn)
+
+
+class Percentage(
+    RootModel[
+        Annotated[
+            float,
+            Field(ge=0.0, le=100.0),
+        ]
+    ]
+):
+    """A percentage"""
+
+    def __str__(self) -> str:
+        """Return as string"""
+        return f"{self.root}%"
+
+    def __repr__(self) -> str:
+        """Return as string representation"""
+        return f"{self.__name__}({self.root})"
+
+    def __float__(self) -> float:
+        """Enable automatic conversion to float"""
+        return self.root
+
+    def to_float(self: Self) -> float:
+        """Return as a float"""
+        return float(self)
+
+    @staticmethod
+    def from_lists(r: Sequence[T], t: Sequence[U]) -> "Percentage":
+        """Relative size of 2 lists as a precentage."""
+        return Percentage((len(r) / len(t)) * 100.0)
+
+
+@overload
 async def map_as_sub_flow(
-    fn: Callable[..., Awaitable[U]],
+    fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
     batches: Generator[Sequence[T], None, None],
     parameters: Callable[[Sequence[T]], dict[str, Any]],
-) -> tuple[Sequence[U], Sequence[BaseException | FlowRun]]:
+    unwrap_result: Literal[True],
+) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]: ...
+
+
+@overload
+async def map_as_sub_flow(
+    fn: Flow[P, R],
+    aws_env: AwsEnv,
+    counter: PositiveInt,
+    batches: Generator[Sequence[T], None, None],
+    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    unwrap_result: Literal[False],
+) -> tuple[Sequence[FlowRun], Sequence[BaseException | FlowRun]]: ...
+
+
+async def map_as_sub_flow(
+    fn: Flow[P, R],
+    aws_env: AwsEnv,
+    counter: PositiveInt,
+    batches: Generator[Sequence[T], None, None],
+    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    unwrap_result: bool,
+) -> tuple[Sequence[R | FlowRun], Sequence[BaseException | FlowRun]]:
     """
     Map over an iterable, running the function as a sub-flow.
 
@@ -465,16 +554,21 @@ async def map_as_sub_flow(
 
     The sub-flows are waited on until they complete, with no
     timeout.
+
+    Either return the flow run itself, or unwrap the result from it.
+
+    This assumes that the same parameters are used for each sub-flow run
     """
-    flow_name = function_to_flow_name(fn)
+    flow_name = function_to_flow_name(fn.fn)
     deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+    qualified_name = f"{flow_name}/{deployment_name}"
     semaphore = asyncio.Semaphore(counter)
 
     tasks = [
         wait_for_semaphore(
             semaphore,
             run_deployment(
-                name=f"{flow_name}/{deployment_name}",
+                name=qualified_name,
                 parameters=parameters(batch),
                 # Rely on the flow's own timeout, if any, to make sure it
                 # eventually ends[1].
@@ -488,12 +582,18 @@ async def map_as_sub_flow(
         for batch in batches
     ]
 
-    results: Sequence[FlowRun | BaseException] = await asyncio.gather(
-        *tasks,
+    def desc_update_fn(tasks, results) -> str:
+        return f"Finished sub-flow for {qualified_name}, progressing to {len(results)}/{len(tasks)} finished"
+
+    results: Sequence[FlowRun | BaseException] = await gather_and_report(
+        tasks=tasks,
         return_exceptions=True,
+        key=f"progress-sub-flows-{generate_slug(2)}",
+        desc_create=f"Starting sub-flows for {qualified_name} for {len(tasks)} tasks",
+        desc_update_fn=desc_update_fn,
     )
 
-    successes: list[U] = []
+    successes: list[R | FlowRun] = []
     failures: list[BaseException | FlowRun] = []
     for result in results:
         if isinstance(result, BaseException):
@@ -502,17 +602,98 @@ async def map_as_sub_flow(
             if result.state and result.state.type == StateType.COMPLETED:
                 # For completed flows, extract the actual return value
                 try:
-                    flow_result: U = result.state.result(
-                        #  Doing it this way, makes it easier to rely
-                        # on the type system, instead of doing `False`
-                        # and then allowing for a union of types in
-                        # the return.
-                        raise_on_failure=True,
-                    )
-                    successes.append(flow_result)
+                    if unwrap_result:
+                        result_fn = partial(
+                            result.state.result,
+                            # Doing it this way, makes it easier to rely
+                            # on the type system, instead of doing `False`
+                            # and then allowing for a union of types in
+                            # the return.
+                            raise_on_failure=True,
+                        )
+                        flow_result: R = (
+                            await result_fn() if fn_is_async(fn) else result_fn()
+                        )
+                        successes.append(flow_result)
+                    else:
+                        successes.append(result)
+
                 except Exception as e:
                     failures.append(e)
             else:
                 failures.append(result)
 
     return successes, failures
+
+
+@dataclass
+class Fault(Exception):
+    """A simple and generic exception with optional, helpful metadata"""
+
+    msg: str
+    metadata: dict[str, Any] | None
+    data: dict[str, Any] | None = None
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        if self.metadata is None:
+            return self.msg
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"
+
+
+def default_desc(tasks, results) -> str:
+    return f"Finished task {len(results)} of {len(tasks)}"
+
+
+@overload
+async def gather_and_report(
+    tasks: Sequence[Awaitable[T]],
+    return_exceptions: Literal[True],
+    key: str,
+    desc_create: str,
+    desc_update_fn: Callable[[Sequence[Any], list[Any]], str] = default_desc,
+) -> Sequence[T | Exception]: ...
+
+
+@overload
+async def gather_and_report(
+    tasks: Sequence[Awaitable[T]],
+    return_exceptions: Literal[False],
+    key: str,
+    desc_create: str,
+    desc_update_fn: Callable[[Sequence[Any], list[Any]], str] = default_desc,
+) -> Sequence[T]: ...
+
+
+async def gather_and_report(
+    tasks: Sequence[Awaitable[T]],
+    return_exceptions: bool,
+    key: str,
+    desc_create: str,
+    desc_update_fn: Callable[[Sequence[Any], list[Any]], str] = default_desc,
+) -> Sequence[T] | Sequence[T | Exception]:
+    progress_artifact_id: UUID = await create_progress_artifact(
+        progress=0.0,
+        key=key,
+        description=desc_create,
+    )
+
+    results = []
+
+    for future in asyncio.as_completed(tasks):
+        try:
+            result = await future
+            results.append(result)
+        except Exception as e:
+            if return_exceptions:
+                results.append(e)
+            else:
+                raise e
+        finally:
+            await update_progress_artifact(
+                artifact_id=progress_artifact_id,
+                progress=Percentage.from_lists(results, tasks).to_float(),
+                description=desc_update_fn(tasks, results),
+            )
+
+    return results

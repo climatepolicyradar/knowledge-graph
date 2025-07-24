@@ -136,8 +136,7 @@ def get_labelled_passages(bucket_name: str, s3_path: str) -> list[dict]:
 def parse_concept_name_from_labelled_passage(s: dict) -> str:
     matches = set()
     for labeller in s["labellers"]:
-        match = re.search(r'\w+\("([^"]+)"\)', labeller)
-        if match:
+        if match := re.search(r'\w+\("([^"]+)"\)', labeller):
             matches.add(match.group(1))
     if len(matches) != 1:
         raise ValueError(

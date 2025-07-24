@@ -1,0 +1,6 @@
+ruleDirs:
+- .rules
+testConfigs:
+- testDir: .rules-tests
+utilDirs:
+- .rules-utils

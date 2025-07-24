@@ -17,7 +17,7 @@ class Version:
         return hash(self.value)
 
     @classmethod
-    def _validate(cls, value: str) -> int:
+    def _validate(cls, value: str, field=None) -> int:
         if value == "latest":
             raise ValueError("`latest` isn't yet supported")
 
@@ -56,6 +56,11 @@ class Version:
         if isinstance(other, Version):
             return self.value < other.value
         return str(self) < other
+
+    @classmethod
+    def __get_validators__(cls):
+        """Return a generator of validators for Pydantic compatibility."""
+        yield cls._validate
 
     def increment(self) -> "Version":
         """Increment the version number by 1."""

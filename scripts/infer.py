@@ -7,7 +7,7 @@ from prefect.settings import PREFECT_UI_URL
 from rich.console import Console
 from typing_extensions import Annotated
 
-from flows.inference import classifier_inference
+from flows.inference import inference
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
@@ -111,7 +111,9 @@ def main(
     classifiers_or_default: list[ClassifierSpec] | None = classifiers or None  # type: ignore
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
-    deployment_name = f"{classifier_inference.name}/{generate_deployment_name(classifier_inference.name, aws_env)}"  # pyright: ignore[reportFunctionMemberAccess]
+    deployment_name = (
+        f"{inference.name}/{generate_deployment_name(inference.name, aws_env)}"  # pyright: ignore[reportFunctionMemberAccess]
+    )
     console.log(f"Starting run for deployment: {deployment_name}")
     import asyncio
 

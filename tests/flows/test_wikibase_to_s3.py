@@ -139,16 +139,13 @@ async def test_wikibase_to_s3__overwrite_concept(
 
 
 @pytest.mark.asyncio
-async def test_wikibase_to_s3__trigger_deindexing_called(
+async def test_wikibase_to_s3__extra_concept_removed(
     MockedWikibaseSession,
     mock_cdn_bucket,
     mock_prefect_slack_webhook,
     test_wikibase_to_s3_config,
     mock_s3_client,
-    monkeypatch,
 ):
-    test_wikibase_to_s3_config.trigger_deindexing = True
-
     # Set up extra concept in S3 that's not in Wikibase
     extra_concept_id = "Q999"
     extra_concept = Concept(
@@ -162,24 +159,8 @@ async def test_wikibase_to_s3__trigger_deindexing_called(
     s3_concepts_before = list_s3_concepts(config=test_wikibase_to_s3_config)
     assert extra_concept_id in s3_concepts_before
 
-    # Mock the trigger_deindexing function to track if it's called
-    trigger_deindexing_called = False
-
-    async def mock_trigger_deindexing(extras_in_s3, _config):
-        nonlocal trigger_deindexing_called
-        trigger_deindexing_called = True
-        assert extra_concept_id in extras_in_s3
-        return None
-
-    monkeypatch.setattr(
-        "flows.wikibase_to_s3.trigger_deindexing", mock_trigger_deindexing
-    )
-
     # Run the flow
     await wikibase_to_s3.fn(config=test_wikibase_to_s3_config)
-
-    # Verify trigger_deindexing was called
-    assert trigger_deindexing_called, "trigger_deindexing should have been called"
 
     # Verify the extra concept was removed from S3
     s3_concepts_after = list_s3_concepts(config=test_wikibase_to_s3_config)

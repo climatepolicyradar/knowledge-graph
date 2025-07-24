@@ -1,12 +1,15 @@
+import asyncio
 import os
 import re
 import time
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import boto3
 import pytest
+from prefect.flows import flow
 
 from flows.utils import (
     DocumentStem,
@@ -14,6 +17,8 @@ from flows.utils import (
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
     filter_non_english_language_file_stems,
+    fn_is_async,
+    gather_and_report,
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
@@ -268,3 +273,225 @@ def test_filter_non_english_file_stems() -> None:
     end_time = time.time()
 
     assert end_time - start_time < 1, "Filtering took too long"
+
+
+def test_fn_is_async():
+    async def async_fn():
+        return 1
+
+    def sync_fn():
+        return 1
+
+    assert fn_is_async(async_fn)
+    assert not fn_is_async(sync_fn)
+
+    @flow
+    async def async_flow():
+        return 1
+
+    @flow
+    def sync_flow():
+        return 1
+
+    assert fn_is_async(async_flow)
+    assert not fn_is_async(sync_flow)
+
+
+@pytest.fixture
+def mock_progress_artifacts():
+    """Fixture to mock progress artifact functions and return their IDs."""
+    with (
+        patch(
+            "flows.utils.create_progress_artifact", new_callable=AsyncMock
+        ) as mock_create,
+        patch(
+            "flows.utils.update_progress_artifact", new_callable=AsyncMock
+        ) as mock_update,
+    ):
+        mock_artifact_id = uuid4()
+        mock_create.return_value = mock_artifact_id
+        yield {
+            "create": mock_create,
+            "update": mock_update,
+            "artifact_id": mock_artifact_id,
+        }
+
+
+@pytest.mark.asyncio
+async def test_gather_and_report_calls_progress_artifacts(mock_progress_artifacts):
+    """Test that gather_and_report calls create_progress_artifact and update_progress_artifact."""
+    mock_create_progress_artifact = mock_progress_artifacts["create"]
+    mock_update_progress_artifact = mock_progress_artifacts["update"]
+    mock_artifact_id = mock_progress_artifacts["artifact_id"]
+
+    # Create some async tasks to gather
+    async def sample_task(value):
+        await asyncio.sleep(0.01)  # Small delay to simulate work
+        return value * 2
+
+    tasks = [sample_task(i) for i in range(3)]
+
+    # Call gather_and_report
+    results = await gather_and_report(
+        tasks=tasks,
+        return_exceptions=False,
+        key="test-progress-key",
+        desc_create="Starting test tasks",
+        desc_update_fn=lambda tasks,
+        results: f"Completed {len(results)}/{len(tasks)} tasks",
+    )
+
+    # Verify results (order may vary due to asyncio.as_completed)
+    assert sorted(results) == [0, 2, 4]
+
+    # Verify create_progress_artifact was called once
+    mock_create_progress_artifact.assert_called_once_with(
+        progress=0.0,
+        key="test-progress-key",
+        description="Starting test tasks",
+    )
+
+    # Verify update_progress_artifact was called for each completed task
+    assert mock_update_progress_artifact.call_count == 3
+
+    # Check that all calls to update_progress_artifact used the correct artifact_id
+    for call in mock_update_progress_artifact.call_args_list:
+        _args, kwargs = call
+        assert kwargs["artifact_id"] == mock_artifact_id
+
+
+@pytest.mark.asyncio
+async def test_gather_and_report_with_exceptions(mock_progress_artifacts):
+    """Test that gather_and_report calls progress artifacts even when tasks raise exceptions."""
+    mock_create_progress_artifact = mock_progress_artifacts["create"]
+    mock_update_progress_artifact = mock_progress_artifacts["update"]
+
+    # Create tasks that will raise exceptions
+    async def failing_task():
+        await asyncio.sleep(0.01)
+        raise ValueError("Test error")
+
+    async def success_task():
+        await asyncio.sleep(0.01)
+        return "success"
+
+    tasks = [failing_task(), success_task(), failing_task()]
+
+    # Call gather_and_report with return_exceptions=True
+    results = await gather_and_report(
+        tasks=tasks,
+        return_exceptions=True,
+        key="test-error-key",
+        desc_create="Starting tasks with errors",
+    )
+
+    # Verify results contain both exceptions and successful values
+    # (order may vary)
+    assert len(results) == 3
+    success_results = [r for r in results if r == "success"]
+    error_results = [r for r in results if isinstance(r, ValueError)]
+    assert len(success_results) == 1
+    assert len(error_results) == 2
+
+    # Verify create_progress_artifact was called once
+    mock_create_progress_artifact.assert_called_once_with(
+        progress=0.0,
+        key="test-error-key",
+        description="Starting tasks with errors",
+    )
+
+    # Verify update_progress_artifact was called for each task
+    # (including failed ones)
+    assert mock_update_progress_artifact.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_gather_and_report_matches_asyncio_gather(mock_progress_artifacts):
+    """Test that gather_and_report produces the same results as asyncio.gather."""
+
+    # Create test tasks with deterministic results
+    async def task_add(x, y):
+        await asyncio.sleep(0.001)  # Minimal delay
+        return x + y
+
+    async def task_multiply(x, y):
+        await asyncio.sleep(0.001)
+        return x * y
+
+    async def task_power(x, y):
+        await asyncio.sleep(0.001)
+        return x**y
+
+    tasks_for_gather = [task_add(2, 3), task_multiply(4, 5), task_power(2, 3)]
+    tasks_for_gather_and_report = [
+        task_add(2, 3),
+        task_multiply(4, 5),
+        task_power(2, 3),
+    ]
+
+    gather_results = await asyncio.gather(*tasks_for_gather, return_exceptions=False)
+    gather_and_report_results = await gather_and_report(
+        tasks=tasks_for_gather_and_report,
+        return_exceptions=False,
+        key="comparison-test",
+        desc_create="Comparing with asyncio.gather",
+    )
+
+    assert sorted(gather_results) == sorted(gather_and_report_results) == [5, 8, 20]
+
+
+@pytest.mark.asyncio
+async def test_gather_and_report_matches_asyncio_gather_with_exceptions(
+    mock_progress_artifacts,
+):
+    """Test that gather_and_report handles exceptions the same as asyncio.gather."""
+
+    async def success_task(value):
+        await asyncio.sleep(0.001)
+        return value * 2
+
+    async def failing_task(error_msg):
+        await asyncio.sleep(0.001)
+        raise ValueError(error_msg)
+
+    tasks_for_gather = [
+        success_task(10),
+        failing_task("error1"),
+        success_task(20),
+        failing_task("error2"),
+    ]
+    tasks_for_gather_and_report = [
+        success_task(10),
+        failing_task("error1"),
+        success_task(20),
+        failing_task("error2"),
+    ]
+
+    gather_results = await asyncio.gather(*tasks_for_gather, return_exceptions=True)
+    gather_and_report_results = await gather_and_report(
+        tasks=tasks_for_gather_and_report,
+        return_exceptions=True,
+        key="exception-comparison-test",
+        desc_create="Comparing exceptions with asyncio.gather",
+    )
+
+    assert len(gather_results) == len(gather_and_report_results) == 4
+
+    gather_successes = [r for r in gather_results if not isinstance(r, Exception)]
+    gather_exceptions = [r for r in gather_results if isinstance(r, Exception)]
+
+    report_successes = [
+        r for r in gather_and_report_results if not isinstance(r, Exception)
+    ]
+    report_exceptions = [
+        r for r in gather_and_report_results if isinstance(r, Exception)
+    ]
+
+    assert len(gather_successes) == len(report_successes) == 2
+    assert len(gather_exceptions) == len(report_exceptions) == 2
+
+    assert sorted(gather_successes) == sorted(report_successes) == [20, 40]
+
+    gather_error_messages = sorted([str(e) for e in gather_exceptions])
+    report_error_messages = sorted([str(e) for e in report_exceptions])
+    assert gather_error_messages == report_error_messages == ["error1", "error2"]

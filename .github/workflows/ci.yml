@@ -80,3 +80,15 @@ jobs:
 
       - name: Run tests
         run: just test -v -m "'not flaky_on_ci and not transformers'" --ignore tests/test_labelling.py
+
+  deploy_prefect_sandbox:
+    name: "Deploy"
+    needs: [test]
+    uses: ./.github/workflows/prefect_deploy.yml
+    with:
+      aws-env: sandbox
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}

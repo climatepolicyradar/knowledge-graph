@@ -4,14 +4,11 @@ from io import BytesIO
 
 import boto3
 from cpr_sdk.ssm import get_aws_ssm_param
-from prefect import flow, get_run_logger, task
-from prefect.deployments import run_deployment
+from prefect import flow, get_run_logger
 from pydantic import SecretStr
 
-from flows.deindex import deindex_labelled_passages_from_s3_to_vespa
 from flows.utils import SlackNotify, file_name_from_path
-from scripts.cloud import AwsEnv, function_to_flow_name, generate_deployment_name
-from scripts.update_classifier_spec import ClassifierSpec
+from scripts.cloud import AwsEnv
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.wikibase import WikibaseSession
@@ -34,7 +31,6 @@ class Config:
     wikibase_username: str | None = None
     wikibase_url: str | None = None
     logging_interval: int = 200
-    trigger_deindexing: bool = False
 
     @classmethod
     def create(cls) -> "Config":
@@ -142,41 +138,6 @@ def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config) -> li
     return failures
 
 
-@task
-async def trigger_deindexing(extras_in_s3: list[str], config: Config):
-    logger = get_run_logger()
-
-    # Run deployment for de-indexing
-    logger.info(f"Running de-indexing deployment for {len(extras_in_s3)} concepts")
-    flow_name = function_to_flow_name(deindex_labelled_passages_from_s3_to_vespa)
-    deployment_name = generate_deployment_name(
-        flow_name=flow_name, aws_env=config.aws_env
-    )
-
-    # Convert WikibaseIDs to ClassifierSpecs
-    classifier_specs = [
-        # Convert it to a dict, so Prefect can serialise it
-        dict(
-            ClassifierSpec(
-                name=concept_id,
-                # If a concept has been removed, we'll wipe all versions
-                # of results, so just use the 'latest' version alias here.
-                alias="latest",
-            )
-        )
-        for concept_id in extras_in_s3
-    ]
-
-    await run_deployment(
-        name=f"{flow_name}/{deployment_name}",
-        parameters={
-            "classifier_specs": classifier_specs,
-        },
-        timeout=0,  # Don't wait for it to finish
-    )
-    logger.info("Successfully triggered de-indexing deployment")
-
-
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -223,7 +184,6 @@ async def wikibase_to_s3(config: Config | None = None):
 
     failed_extras_in_s3_deletions: list[str] = []
     if extras_in_s3:
-        await trigger_deindexing(extras_in_s3, config)
         failed_extras_in_s3_deletions = delete_extra_concepts_from_s3(
             extras_in_s3, config
         )

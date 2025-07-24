@@ -53,12 +53,12 @@ def sync_to_s3(app_name: str, bucket_name: str):
             "s3",
             "sync",
             f"static_sites/{app_name}/dist",
-            f"s3://{bucket_name}",
+            f"s3://{bucket_name}/dist",
             "--delete",
         ],
         check=True,
     )
-    print(f"Sync complete for {app_name} to S3 bucket {bucket_name}.")
+    print(f"Sync complete for {app_name} to S3 bucket {bucket_name}/dist")
 
 
 @flow(log_prints=True)

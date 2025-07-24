@@ -4,7 +4,13 @@ import botocore
 import pytest
 from moto import mock_aws
 
-from scripts.cloud import AwsEnv, function_to_flow_name, is_logged_in, parse_aws_env
+from scripts.cloud import (
+    AwsEnv,
+    function_to_flow_name,
+    generate_deployment_name,
+    is_logged_in,
+    parse_aws_env,
+)
 
 
 def test_function_to_flow_name():
@@ -54,3 +60,16 @@ def test_is_logged_in(aws_env, use_aws_profiles, is_logged_in_result):
 def test_parse_aws_env_invalid(invalid_input):
     with pytest.raises(ValueError, match=f"'{invalid_input}' is not one of"):
         parse_aws_env(invalid_input)
+
+
+@pytest.mark.parametrize(
+    "flow_name, aws_env, expected",
+    [
+        ("inference", AwsEnv.labs, "kg-inference-labs"),
+        ("aggregate", AwsEnv.sandbox, "kg-aggregate-sandbox"),
+        ("index", AwsEnv.staging, "kg-index-staging"),
+        ("full-pipeline", AwsEnv.production, "kg-full-pipeline-prod"),
+    ],
+)
+def test_generate_deployment_name(flow_name, aws_env, expected):
+    assert generate_deployment_name(flow_name, aws_env) == expected
