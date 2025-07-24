@@ -1,5 +1,7 @@
 import os
 import tempfile
+from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime
 
 import torch
@@ -11,14 +13,16 @@ from transformers import (
     TrainingArguments,
     pipeline,
 )
+from typing_extensions import Self
 
 from src.classifier.classifier import Classifier, GPUBoundClassifier
+from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-class BertBasedClassifier(Classifier, GPUBoundClassifier):
+class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
     """
     Classifier that uses a fine-tuned transformer model to identify concepts in text.
 
@@ -39,6 +43,7 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier):
     ):
         super().__init__(concept)
         self.base_model = base_model
+        self._use_dropout_during_inference = False
 
         # For training, we can use GPU/MPS if available
         if torch.backends.mps.is_available():
@@ -49,8 +54,10 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier):
             self.training_device = torch.device("cpu")
 
         # Initialize model and tokenizer
-        self.model = AutoModelForSequenceClassification.from_pretrained(base_model)
-        self.tokenizer = AutoTokenizer.from_pretrained(base_model)
+        self.model: AutoModelForSequenceClassification = (
+            AutoModelForSequenceClassification.from_pretrained(base_model)
+        )
+        self.tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(base_model)
 
         # Always use CPU for inference, to ensure consistency across different deployment
         # environments. Models may be developed on machines with GPU/MPS but need to run
@@ -65,9 +72,20 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier):
         # Move model to training device (only used during training)
         self.model.to(self.training_device)
 
-    def __repr__(self):
-        """Return a string representation of the classifier."""
-        return f'{self.name}({self.concept.preferred_label}, base_model="{self.base_model}")'
+    @contextmanager
+    def _dropout_enabled(self):
+        """
+        Context manager for safely enabling dropout during inference.
+
+        This ensures the model is always returned to its original state,
+        even if an exception occurs during uncertainty estimation.
+        """
+        was_training = self.model.training
+        self.model.train()  # Turn on dropout
+        try:
+            yield
+        finally:
+            self.model.train(was_training)  # Restore original state when we're done
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
@@ -75,9 +93,13 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier):
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
-        self.model.eval()
 
-        predictions = self.pipeline(texts, padding=True, truncation=True)
+        if getattr(self, "_use_dropout_during_inference", False):
+            with self._dropout_enabled():
+                predictions = self.pipeline(texts, padding=True, truncation=True)
+        else:
+            self.model.eval()
+            predictions = self.pipeline(texts, padding=True, truncation=True)
 
         results = []
         for text, prediction in zip(texts, predictions):
@@ -98,6 +120,12 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier):
             results.append(text_results)
 
         return results
+
+    def get_variant_sub_classifier(self) -> Self:
+        """Get a variant of the classifier for Monte Carlo dropout estimation."""
+        variant = deepcopy(self)
+        variant._use_dropout_during_inference = True
+        return variant
 
     def _prepare_dataset(self, labelled_passages: list[LabelledPassage]) -> Dataset:
         """
