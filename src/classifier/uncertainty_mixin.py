@@ -85,7 +85,19 @@ class UncertaintyCapableClassifier(
     """
 
 
-class Uncertainty(float):
+class Uncertainty(RootModel[Annotated[float, Field(ge=0.0, le=1.0)]])::
+    """
+    A validated float representing uncertainty as a number, inclusive of 0.0 and 1.0.
+
+    Lower values represent high confidence, with 0 representing total certainty.
+    Higher values represent low confidence, with 1 representing total uncertainty.
+    """
+
+    def __str__(self) -> str:
+         return str(self.root)
+         
+    def __repr__(self) -> str:
+        return f"Uncertainty({self.root})"
     """
     A validated float representing uncertainty as a number between 0 and 1.
 
