@@ -1,9 +1,8 @@
-from typing import Annotated, Literal, Protocol
+from typing import Literal, Protocol
 
 from more_itertools import pairwise
-from pydantic import Field, RootModel
 
-from src.span import Span, jaccard_similarity_for_span_lists
+from src.span import Span, UnitInterval, jaccard_similarity_for_span_lists
 
 
 class UncertaintyCapableClassifier(Protocol):
@@ -41,21 +40,13 @@ class UncertaintyCapableClassifier(Protocol):
     ) -> "Uncertainty": ...  # noqa: D102
 
 
-class Uncertainty(RootModel[Annotated[float, Field(ge=0.0, le=1.0)]]):
+class Uncertainty(UnitInterval):
     """
-    A validated float representing uncertainty as a number, inclusive of 0.0 and 1.0.
+    A validated float representing uncertainty between 0.0 and 1.0.
 
     Lower values represent high confidence, with 0 representing total certainty.
     Higher values represent low confidence, with 1 representing total uncertainty.
     """
-
-    def __str__(self) -> str:
-        """Return the uncertainty value as a string."""
-        return str(self.root)
-
-    def __repr__(self) -> str:
-        """Return constructor-style representation."""
-        return f"Uncertainty({self.root})"
 
 
 class UncertaintyMixin:

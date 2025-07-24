@@ -165,7 +165,10 @@ def test_uncertainty_validation_accepts_valid_values(value, expected):
 @pytest.mark.parametrize("invalid_value", [-0.1, 1.1, 2.0, -1.0, 10.0])
 def test_uncertainty_validation_rejects_invalid_values(invalid_value):
     """Test that Uncertainty rejects values outside the valid range."""
-    with pytest.raises(ValueError, match="Uncertainty values must be between 0 and 1"):
+    with pytest.raises(
+        ValueError,
+        match=f"Values must be between 0 and 1. Got {invalid_value}",
+    ):
         Uncertainty(invalid_value)
 
 

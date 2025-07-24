@@ -3,8 +3,19 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, model_validator
+from typing_extensions import Self
 
 from src.identifiers import Identifier, WikibaseID
+
+
+class UnitInterval(float):
+    """A validated float in the unit interval [0.0, 1.0]."""
+
+    def __new__(cls, value: int | float) -> Self:
+        """Create a new value in the unit interval"""
+        if not 0 <= value <= 1:
+            raise ValueError(f"Values must be between 0 and 1. Got {value}")
+        return super().__new__(cls, value)
 
 
 class Span(BaseModel):
@@ -202,7 +213,7 @@ class Span(BaseModel):
         return spans
 
 
-def jaccard_similarity(span_a: Span, span_b: Span) -> float:
+def jaccard_similarity(span_a: Span, span_b: Span) -> UnitInterval:
     """
     Calculate the Jaccard similarity of two spans.
 
@@ -212,7 +223,7 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
 
     :param Span span_a: The first span
     :param Span span_b: The second span
-    :return float: The Jaccard similarity of the two spans
+    :return float: The Jaccard similarity of the two spans (guaranteed to be in [0.0, 1.0])
     """
     if span_a.text != span_b.text:
         raise ValueError("The spans must have the same text")
@@ -224,12 +235,13 @@ def jaccard_similarity(span_a: Span, span_b: Span) -> float:
     union = max(span_a.end_index, span_b.end_index) - min(
         span_a.start_index, span_b.start_index
     )
-    return intersection / union
+
+    return UnitInterval(intersection / union)
 
 
 def jaccard_similarity_for_span_lists(
     spans_a: list[Span], spans_b: list[Span]
-) -> float:
+) -> UnitInterval:
     """
     Calculate the Jaccard similarity between two lists of spans.
 
@@ -237,23 +249,26 @@ def jaccard_similarity_for_span_lists(
     each list, and then calculating the Jaccard similarity (intersection over union)
     of these two sets. This provides a holistic measure of overlap that naturally
     handles multiple disjoint spans.
+
+    Returns:
+        float: The Jaccard similarity (guaranteed to be in [0.0, 1.0])
     """
     indices_a = {i for span in spans_a for i in range(span.start_index, span.end_index)}
     indices_b = {i for span in spans_b for i in range(span.start_index, span.end_index)}
 
     # If both lists are empty, return 1.0, ie perfect agreement
     if not indices_a and not indices_b:
-        return 1.0
+        return UnitInterval(1.0)
 
     # If one list is empty but the other is not, return 0.0, ie maximum disagreement
     if not indices_a or not indices_b:
-        return 0.0
+        return UnitInterval(0.0)
 
     # Otherwise, calculate the ratio of the intersection and union of the two sets
     intersection = len(indices_a.intersection(indices_b))
     union = len(indices_a.union(indices_b))
 
-    return intersection / union
+    return UnitInterval(intersection / union)
 
 
 def group_overlapping_spans(
