@@ -451,7 +451,7 @@ async def return_with(
         return (accompaniment, e)
 
 
-def fn_is_async(fn: Callable[..., Any]) -> bool:
+def fn_is_async(fn: Callable[..., Any] | Flow) -> bool:
     """Check if a function is async."""
     if isinstance(fn, Flow):
         return fn.isasync  # type: ignore[reportFunctionMemberAccess]
