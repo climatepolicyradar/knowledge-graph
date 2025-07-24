@@ -129,7 +129,8 @@ class UncertaintyMixin:
         # Calculate binary prediction consistency (concept present/absent)
         binary_uncertainty = self._calculate_passage_uncertainty(predictions)
 
-        # If all predictions are negative, uncertainty is based only on binary consistency
+        # If there are fewer than 2 positive predictions, we can't calculate span overlap
+        # uncertainty, so the uncertainty is based only on the binary consistency
         positive_predictions = [spans for spans in predictions if spans]
         if len(positive_predictions) < 2:
             return binary_uncertainty
