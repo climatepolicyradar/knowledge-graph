@@ -1046,7 +1046,7 @@ async def inference(
     )
 
     if inference_result.failed:
-        return Fault(
+        raise Fault(
             msg="Some inference batches had failures!",
             metadata={},
             data=inference_result,
