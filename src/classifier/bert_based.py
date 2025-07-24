@@ -93,9 +93,8 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
-        use_dropout = getattr(self, "_use_dropout_during_inference", False)
 
-        if use_dropout:
+        if getattr(self, "_use_dropout_during_inference", False):
             with self._dropout_enabled():
                 predictions = self.pipeline(texts, padding=True, truncation=True)
         else:
