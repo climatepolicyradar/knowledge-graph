@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Any
 
 from prefect import State, flow, get_run_logger
 from pydantic import PositiveInt
@@ -149,7 +148,7 @@ async def full_pipeline(
     )
 
     inference_result_raw: (
-        dict[str, Any] | Fault | Exception
+        InferenceResult | Fault | Exception
     ) = await inference_run.result(raise_on_failure=False)
 
     match inference_result_raw:
@@ -157,11 +156,15 @@ async def full_pipeline(
             logger.error("Inference failed.")
             raise inference_result_raw
         case Fault():
-            inference_result: InferenceResult = InferenceResult(
-                **inference_result_raw.data
+            assert inference_result_raw.data is not None, (
+                "Expected data field of the Fault to contain an InferenceResult object got None."
             )
-        case dict():
-            inference_result: InferenceResult = InferenceResult(**inference_result_raw)
+            assert isinstance(inference_result_raw.data, InferenceResult), (
+                f"Expected data field of the Fault to contain an InferenceResult object got {type(inference_result_raw.data)}."
+            )
+            inference_result: InferenceResult = inference_result_raw.data
+        case InferenceResult():
+            inference_result: InferenceResult = inference_result_raw
         case _:
             raise ValueError(
                 f"Unexpected inference result type: {type(inference_result_raw)}"
