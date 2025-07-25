@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from abc import ABC, abstractmethod
 from typing import Annotated, Optional
 
@@ -10,8 +11,10 @@ from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
+from typing_extensions import Self
 
 from src.classifier.classifier import Classifier, ZeroShotClassifier
+from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import Identifier
 from src.labelled_passage import LabelledPassage
@@ -63,7 +66,7 @@ Instructions:
 """
 
 
-class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
+class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
     def __init__(
@@ -94,7 +97,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
                     "time"
                 )
             ),
-        ] = None,
+        ] = 42,
     ):
         super().__init__(concept)
         self.concept = concept
@@ -123,7 +126,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
         """Return a neat human-readable identifier for the classifier."""
         return Identifier.generate(
             self.name,
-            self.concept.__hash__(),
+            self.concept,
             self.version if self.version else None,
             self.model_name,
             self.system_prompt_template,
@@ -157,6 +160,15 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
                 input_text=input_sanitised, output_text=output_sanitised
             )
 
+    def get_variant_sub_classifier(self) -> Self:
+        """Get a variant of the classifier, using a different random seed."""
+        return type(self)(
+            concept=self.concept,
+            model_name=self.model_name,
+            system_prompt_template=self.system_prompt_template,
+            random_seed=random.randint(0, 1000000),
+        )
+
     def __getstate__(self):
         """Handle pickling by removing the unpickleable agent instance."""
         state = self.__dict__.copy()
@@ -171,8 +183,9 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        response: AgentRunResult[LLMResponse] = self.agent.run_sync(
-            text, model_settings=ModelSettings(seed=self.random_seed)
+        response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
+            text,
+            model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
         self._validate_response(input_text=text, response=response.data.marked_up_text)
         return Span.from_xml(
@@ -187,7 +200,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
         async def run_predictions():
             async_responses = [
                 self.agent.run(
-                    text, model_settings=ModelSettings(seed=self.random_seed)
+                    text,
+                    model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
                 )
                 for text in texts
             ]
@@ -202,7 +216,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
 
         try:
             # Run all predictions in the batch in parallel
-            responses: list[AgentRunResult[LLMResponse]] = loop.run_until_complete(
+            responses: list[AgentRunResult[LLMResponse]] = loop.run_until_complete(  # type: ignore[assignment]
                 run_predictions()
             )
         finally:
@@ -226,7 +240,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, ABC):
 
                 batch_spans.append(
                     [
-                        # Use the original input text for the output spans
+                        # Use the original input texts for the output spans
                         span.model_copy(update={"text": text}, deep=True)
                         for span in spans
                     ]
@@ -281,8 +295,8 @@ class LLMClassifier(BaseLLMClassifier):
             random_seed=random_seed,
         )
 
-    def _create_agent(self) -> Agent:
-        return Agent(
+    def _create_agent(self) -> Agent:  # type: ignore[type-arg]
+        return Agent(  # type: ignore[return-value]
             self.model_name,
             system_prompt=self.system_prompt,
             result_type=LLMResponse,
@@ -350,7 +364,7 @@ class LocalLLMClassifier(BaseLLMClassifier):
             model_name=self.model_name,
             provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
         )
-        return Agent(
+        return Agent(  # type: ignore[return-value]
             model=ollama_model,
             system_prompt=self.system_prompt,
             result_type=LLMResponse,

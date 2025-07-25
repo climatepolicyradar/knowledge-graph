@@ -195,7 +195,7 @@ class WikidataSession:
 
         concept = Concept(
             wikibase_id=entity_id,
-            preferred_label=preferred_label,
+            preferred_label=preferred_label or "Unknown",  # type: ignore[arg-type]
             description=description,
             alternative_labels=aliases,
         )

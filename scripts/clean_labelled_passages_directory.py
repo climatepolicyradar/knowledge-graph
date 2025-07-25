@@ -25,7 +25,7 @@ def list_s3_objects(bucket_name: str, prefix: str) -> Generator[str, None, None]
 
     for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
         for obj in page.get("Contents", []):
-            yield obj["Key"]
+            yield obj["Key"]  # type: ignore[misc]
 
 
 def load_json_from_s3(bucket_name: str, key: str) -> Dict[str, Any]:

@@ -14,16 +14,16 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
 from more_itertools import flatten
+from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow
 from prefect.artifacts import create_table_artifact
 from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
-from prefect.context import get_run_context
+from prefect.context import FlowRunContext, get_run_context
 from prefect.logging import get_run_logger
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
-from types_aiobotocore_s3.type_defs import PutObjectOutputTypeDef
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
@@ -194,7 +194,7 @@ def get_bucket_paginator(config: Config, prefix: str):
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
     return paginator.paginate(
-        Bucket=config.cache_bucket,
+        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         Prefix=prefix,
     )
 
@@ -212,7 +212,7 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     for p in page_iterator:
         if "Contents" in p:
             for o in p["Contents"]:
-                file_stem = Path(o["Key"]).stem
+                file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
                 file_stems.append(file_stem)
 
     return file_stems
@@ -364,7 +364,10 @@ def download_s3_file(config: Config, key: str):
     """Retrieve an s3 file from the pipeline cache"""
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
-    response = s3.get_object(Bucket=config.cache_bucket, Key=key)
+    response = s3.get_object(
+        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        Key=key,
+    )
     content = response["Body"].read().decode("utf-8")
     return content
 
@@ -493,7 +496,7 @@ def generate_s3_uri_input(
 
 
 @materialize(
-    None,  # Asset key is not known yet
+    "foo://bar",  # Asset key is not known yet
     retries=1,
     persist_result=False,
 )
@@ -514,7 +517,7 @@ async def store_labels(
     # Don't get rate-limited by AWS
     semaphore = asyncio.Semaphore(10)
 
-    async def fn(inference) -> PutObjectOutputTypeDef:
+    async def fn(inference: SingleDocumentInferenceResult) -> PutObjectOutputTypeDef:
         s3_uri = generate_s3_uri_output(config, inference)
         logger.info(
             f"Storing labels for document {inference.document_stem} at {s3_uri}"
@@ -751,7 +754,7 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
-    await create_table_artifact(
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"batch-inference-{flow_run_name}",
         table=document_details,
         description=overview_description,
@@ -868,9 +871,9 @@ async def inference_batch_of_documents(
         store_labels_successes,
         store_labels_failures,
         store_labels_unknown_failures,
-    ) = await store_labels.with_options(  # pyright: ignore[reportFunctionMemberAccess]
+    ) = await store_labels.with_options(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
         assets=generate_assets(config, inferences_successes),
-        asset_deps=generate_asset_deps(config, inferences_successes),
+        asset_deps=generate_asset_deps(config, inferences_successes),  # pyright: ignore[reportArgumentType]
     )(config=config, inferences=inferences_successes)
 
     # This doesn't need to be combined since successes are funnelled
@@ -885,7 +888,7 @@ async def inference_batch_of_documents(
     # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
     run_context = get_run_context()
     flow_run_name: str | None
-    if run_context:
+    if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
         flow_run_name = str(run_context.flow_run.name)
     else:
         flow_run_name = None
@@ -1015,7 +1018,8 @@ async def inference(
             name="running classifier inference with map_as_sub_flow",
         ):
             raw_successes, raw_failures = await map_as_sub_flow(
-                fn=inference_batch_of_documents,
+                # The typing doesn't pick up the Flow decorator
+                fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
                 aws_env=config.aws_env,
                 counter=classifier_concurrency_limit,
                 batches=batches,
@@ -1093,7 +1097,7 @@ async def create_inference_summary_artifact(
         for spec in failures_classifier_specs
     ]
 
-    await create_table_artifact(
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,

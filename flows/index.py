@@ -15,10 +15,12 @@ from prefect import flow, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
+from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.logging import get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
-from prefect.tasks import PrefectFutureList
-from prefect.utilities.names import generate_slug
+
+# generate_slug is being used, but in an implicit f-string
+from prefect.utilities.names import generate_slug  # noqa: F401
 from pydantic import PositiveInt
 from vespa.application import Vespa, VespaAsync
 from vespa.io import VespaResponse
@@ -154,7 +156,7 @@ async def create_aggregate_indexing_summary_artifact(
 - **Failed Batches**: {failed_document_batches_count}
 """
 
-    await create_markdown_artifact(
+    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"indexing-aggregate-results-summary-{config.aws_env.value}",
         description="Summary of the passages indexing run to update concept counts.",
         markdown=indexing_report,
@@ -442,7 +444,7 @@ async def create_indexing_batch_summary_artifact(
         )
 
     # Create a single artifact with overview in description and document details in table
-    await create_table_artifact(
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"indexing-aggregate-results-{config.aws_env.value}",
         table=document_details,
         description=overview_description,
@@ -462,9 +464,9 @@ def task_run_name(parameters: dict[str, Any]) -> str:
 
 
 @materialize(
-    None,  # Asset key is not known yet
+    "foo://bar",  # Asset key is not known yet
     log_prints=True,
-    task_run_name=task_run_name,
+    task_run_name=task_run_name,  # pyright: ignore[reportArgumentType]
 )
 async def index_all(
     document_stem: DocumentStem,
@@ -570,10 +572,15 @@ def generate_asset_deps(
     ]
 
 
-@flow(
+@flow(  # pyright: ignore[reportCallIssue]
     log_prints=True,
     timeout_seconds=None,
-    task_runner=ThreadPoolTaskRunner(max_workers=10),
+    task_runner=ThreadPoolTaskRunner(
+        # This is valid, as per the docs[1].
+        #
+        # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/docs/v3/concepts/task-runners.mdx#L49
+        max_workers=10  # pyright: ignore[reportArgumentType]
+    ),
 )
 async def index_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
@@ -610,10 +617,11 @@ async def index_batch_of_documents(
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
     ).client
 
-    tasks = []
+    tasks: list[PrefectFuture[Any]] = []
+
     for document_stem in document_stems:
         tasks.append(
-            index_all.with_options(  # pyright: ignore[reportFunctionMemberAccess]
+            index_all.with_options(  # pyright: ignore[reportUnknownMemberType]
                 assets=generate_assets(
                     vespa=vespa,
                     document_stem=document_stem,
@@ -623,18 +631,22 @@ async def index_batch_of_documents(
                     aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
                     run_output_identifier=run_output_identifier,
                     document_stem=document_stem,
-                ),
+                ),  # pyright: ignore[reportArgumentType]
             ).submit(
                 document_stem=document_stem,
                 config=config,
                 run_output_identifier=run_output_identifier,
                 indexer_document_passages_concurrency_limit=unmapped(
-                    indexer_document_passages_concurrency_limit
+                    int(indexer_document_passages_concurrency_limit)  # pyright: ignore[reportArgumentType]
                 ),
                 indexer_max_vespa_connections=indexer_max_vespa_connections,
             )
         )
-    futures = PrefectFutureList(tasks)
+
+    # This is valid, as per the source code[1].
+    #
+    # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/src/prefect/task_runners.py#L183-L213
+    futures: PrefectFutureList[Any] = PrefectFutureList(tasks)  # pyright: ignore[reportAbstractUsage]
     results = futures.result(raise_on_failure=False)
 
     fault_per_document: dict[DocumentStem, Fault] = {}
@@ -734,8 +746,8 @@ async def index(
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
         }
 
-    successes, failures = await map_as_sub_flow(
-        fn=index_batch_of_documents,
+    successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
+        fn=index_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         batches=batches,

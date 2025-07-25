@@ -43,7 +43,7 @@ def collect_file_names(bucket_name: str, prefix: str) -> list[str]:
     for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
         if "Contents" in page:
             file_names.extend(
-                [obj["Key"].removeprefix(f"{prefix}/") for obj in page["Contents"]]
+                [obj["Key"].removeprefix(f"{prefix}/") for obj in page["Contents"]]  # pyright: ignore[reportTypedDictNotRequiredAccess]
             )
     return file_names
 

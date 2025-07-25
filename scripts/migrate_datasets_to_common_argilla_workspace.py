@@ -12,10 +12,10 @@ console = Console()
 source_workspace_name = "impacted-groups-relabel"
 target_workspace_name = "knowledge-graph"
 
-rg.init(api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL"))
+rg.init(api_key=os.getenv("ARGILLA_API_KEY"), api_url=os.getenv("ARGILLA_API_URL"))  # type: ignore[attr-defined]
 
 with console.status("📚 Getting datasets from source workspace..."):
-    source_datasets = rg.list_datasets(workspace=source_workspace_name)
+    source_datasets = rg.list_datasets(workspace=source_workspace_name)  # type: ignore[attr-defined]
 console.print(
     f'✅ Found {len(source_datasets)} datasets in the "{source_workspace_name}" workspace:'
 )
@@ -24,17 +24,17 @@ console.print([dataset.name for dataset in source_datasets])
 
 with console.status("🔍 Checking for source workspace..."):
     try:
-        source_workspace = rg.Workspace.from_name(name=source_workspace_name)
+        source_workspace = rg.Workspace.from_name(name=source_workspace_name)  # type: ignore[attr-defined]
         console.print(f"✅ Found source workspace: {source_workspace.name}")
     except ValueError:
         raise ValueError(f"Source workspace {source_workspace_name} not found.")
 
 with console.status("🔍 Checking for target workspace..."):
     try:
-        target_workspace = rg.Workspace.from_name(name=target_workspace_name)
+        target_workspace = rg.Workspace.from_name(name=target_workspace_name)  # type: ignore[attr-defined]
         console.print(f"✅ Found target workspace: {target_workspace.name}")
     except ValueError:
-        target_workspace = rg.Workspace.create(name=target_workspace_name)
+        target_workspace = rg.Workspace.create(name=target_workspace_name)  # type: ignore[attr-defined,call-arg]
         console.print(f"⚡ Created target workspace: {target_workspace.name}")
 
 # copy each dataset from the source workspace to the target workspace
@@ -56,7 +56,7 @@ for source_dataset in source_datasets:
     # check whether we've lost anything in the process of pickling and unpickling
     with open(argilla_dir / f"{source_dataset.name}.pkl", "rb") as f:
         dataset_loaded_from_pickle = pickle.load(f)
-        assert isinstance(dataset_loaded_from_pickle, rg.FeedbackDataset)
+        assert isinstance(dataset_loaded_from_pickle, rg.FeedbackDataset)  # type: ignore[attr-defined]
         assert len(dataset_loaded_from_pickle.records) == len(source_dataset.records)
 
     # check whether the dataset already exists in the target workspace. If it does,
@@ -66,7 +66,7 @@ for source_dataset in source_datasets:
     existing_target_dataset = None
     local_existing_target_dataset = None
     try:
-        existing_target_dataset = rg.FeedbackDataset.from_argilla(
+        existing_target_dataset = rg.FeedbackDataset.from_argilla(  # type: ignore[attr-defined]
             name=wikibase_id, workspace=target_workspace.name
         )
         local_existing_target_dataset = existing_target_dataset.pull()
@@ -115,7 +115,7 @@ for source_dataset in source_datasets:
     )
 
     for user_id in unique_user_ids_in_the_remote_dataset:
-        user = rg.User.from_id(user_id)
+        user = rg.User.from_id(user_id)  # type: ignore[attr-defined]
 
         try:
             target_workspace.add_user(user.id)

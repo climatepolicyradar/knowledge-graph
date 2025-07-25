@@ -34,7 +34,7 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
         )
 
         try:
-            from transformers import (
+            from transformers import (  # type: ignore[import-untyped]
                 AutoModelForSequenceClassification,
                 AutoTokenizer,
                 pipeline,

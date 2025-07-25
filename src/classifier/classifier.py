@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
+from typing_extensions import Self
+
 from src.concept import Concept
 from src.identifiers import Identifier, WikibaseID
 from src.span import Span
@@ -79,6 +81,15 @@ class Classifier(ABC):
         """
         return [self.predict(text) for text in texts]
 
+    def get_variant_sub_classifier(self) -> Self:
+        """
+        Get a variant of the classifier, used for uncertainty estimation.
+
+        Subclasses should override this method to return a variant of the classifier
+        with some stochastic variation, eg a different random seed, or dropout enabled.
+        """
+        raise NotImplementedError
+
     def __repr__(self):
         """Return a string representation of the classifier."""
         return f'{self.name}("{self.concept.preferred_label}")'
@@ -125,7 +136,7 @@ class Classifier(ABC):
         assert isinstance(classifier, Classifier)
         if model_to_cuda and hasattr(classifier, "pipeline"):
             classifier.pipeline.model.to("cuda:0")  # type: ignore
-            import torch
+            import torch  # type: ignore[import-untyped]
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier

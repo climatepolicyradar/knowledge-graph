@@ -65,7 +65,10 @@ class ClassifierFactory:
     def create(concept: Concept) -> Classifier:
         """Create a classifier for a concept, depending on its attributes"""
         # First, check whether we have a bespoke classifier for the concept
-        if concept.wikibase_id in ClassifierFactory.bespoke_classifier_map:
+        if (
+            concept.wikibase_id is not None
+            and concept.wikibase_id in ClassifierFactory.bespoke_classifier_map
+        ):
             name, module_path = ClassifierFactory.bespoke_classifier_map[
                 concept.wikibase_id
             ]

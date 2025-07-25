@@ -52,7 +52,7 @@ async def get_prefect_job_variable(param_name: str) -> str:
     """Get a single variable from the Prefect job variables."""
     aws_env = AwsEnv(os.environ["AWS_ENV"])
     block_name = f"default-job-variables-prefect-mvp-{aws_env}"
-    workpool_default_job_variables = await JSON.load(block_name)
+    workpool_default_job_variables = await JSON.load(block_name)  # pyright: ignore[reportGeneralTypeIssues]
     return workpool_default_job_variables.value[param_name]
 
 
