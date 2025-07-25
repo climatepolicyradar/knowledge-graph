@@ -557,18 +557,12 @@ async def test_inference_batch_of_documents(
             return_state=True,
         )
 
-    assert (
-        result_state.message
-        == f"Successfully ran inference on all ({len(batch)}) documents in batch."
-    )
     result = await result_state.result()
-    assert isinstance(result, dict)
-    assert set(result.keys()) == set(BatchInferenceResult.model_fields.keys())
-    result_obj = BatchInferenceResult(**result)
-    assert result_obj.successful_document_stems == batch
-    assert result_obj.failed_document_stems == []
-    assert result_obj.classifier_name == classifier_name
-    assert result_obj.classifier_alias == classifier_alias
+    assert isinstance(result, BatchInferenceResult)
+    assert result.successful_document_stems == batch
+    assert result.failed_document_stems == []
+    assert result.classifier_name == classifier_name
+    assert result.classifier_alias == classifier_alias
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -657,6 +651,7 @@ async def test_inference_batch_of_documents_with_failures(
         )
 
         assert exc_info.value.msg == "Failed to run inference on 2/2 documents."
+        assert isinstance(exc_info.value.data, BatchInferenceResult)
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client

@@ -172,7 +172,7 @@ async def test_full_pipeline_no_config_provided(
                     ),
                 ],
                 unexpected_failures=[],
-            ).model_dump(),
+            ),
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -253,7 +253,7 @@ async def test_full_pipeline_with_full_config(
                     ),
                 ],
                 unexpected_failures=[],
-            ).model_dump(),
+            ),
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -369,7 +369,7 @@ async def test_full_pipeline_with_inference_failure(
                         ),
                     ],
                     unexpected_failures=[],
-                ).model_dump(),
+                ),
             ),
         )
         mock_aggregate.return_value = State(

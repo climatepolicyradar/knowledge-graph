@@ -632,7 +632,7 @@ class Fault(Exception):
 
     msg: str
     metadata: dict[str, Any] | None
-    data: dict[str, Any] | None = None
+    data: Any | None = None
 
     def __str__(self) -> str:
         """Return a string representation"""
