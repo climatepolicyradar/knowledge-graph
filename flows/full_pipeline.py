@@ -156,11 +156,9 @@ async def full_pipeline(
             logger.error("Inference failed.")
             raise inference_result_raw
         case Fault():
-            assert inference_result_raw.data is not None, (
-                "Expected data field of the Fault to contain an InferenceResult object got None."
-            )
             assert isinstance(inference_result_raw.data, InferenceResult), (
-                f"Expected data field of the Fault to contain an InferenceResult object got {type(inference_result_raw.data)}."
+                "Expected data field of the Fault to contain an InferenceResult object,"
+                + f"got type: {type(inference_result_raw.data)}"
             )
             inference_result: InferenceResult = inference_result_raw.data
         case InferenceResult():
