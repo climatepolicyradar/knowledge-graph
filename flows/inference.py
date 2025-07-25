@@ -1026,7 +1026,11 @@ async def inference(
             all_raw_successes.extend(raw_successes)
             all_raw_failures.extend(raw_failures)
 
-    all_successes = [BatchInferenceResult(**result) for result in all_raw_successes]
+    # The type of response when running as a sub deployment is:
+    #   <class 'inference.BatchInferenceResult'>
+    all_successes = [
+        BatchInferenceResult(**result.model_dump()) for result in all_raw_successes
+    ]
     _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
