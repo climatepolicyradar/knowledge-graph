@@ -122,7 +122,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
 
     @property
     def id(self) -> Identifier:
-        """Return a neat human-readable identifier for the classifier."""
+        """Return a deterministic, human-readable identifier for the classifier."""
         return Identifier.generate(
             self.name,
             self.concept.id,

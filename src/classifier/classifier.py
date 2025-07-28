@@ -106,6 +106,7 @@ class Classifier(ABC):
         return self.id == other.id
 
     @property
+    @abstractmethod
     def id(self) -> Identifier:
         """
         Return a deterministic, human-readable identifier for the classifier.
@@ -129,7 +130,7 @@ class Classifier(ABC):
 
         :return Identifier: A deterministic 8-character identifier
         """
-        return Identifier.generate(self.name, self.concept.id)
+        ...
 
     def __hash__(self) -> int:
         """

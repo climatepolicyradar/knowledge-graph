@@ -60,12 +60,9 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
 
     @property
     def id(self) -> Identifier:
-        """Return a neat human-readable identifier for the classifier."""
+        """Return a deterministic, human-readable identifier for the classifier."""
         return Identifier.generate(
-            self.name,
-            self.concept.id,
-            self.model_name,
-            self.commit_hash,
+            self.name, self.concept.id, self.model_name, self.commit_hash
         )
 
     @abstractmethod

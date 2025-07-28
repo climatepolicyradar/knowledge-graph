@@ -24,13 +24,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         threshold: float = 0.65,
     ):
         super().__init__(concept)
-        self.embedding_model_name = embedding_model_name
         try:
             from sentence_transformers import (
                 SentenceTransformer,  # type: ignore[import-untyped]
             )
 
-            self.embedding_model = SentenceTransformer(self.embedding_model_name)
+            self.embedding_model = SentenceTransformer(embedding_model_name)
         except ImportError:
             raise ImportError(
                 f"The `sentence-transformers` library is required to run {self.name}s. "
@@ -50,12 +49,9 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
 
     @property
     def id(self) -> Identifier:
-        """Return a hash of the classifier."""
+        """Return a deterministic, human-readable identifier for the classifier."""
         return Identifier.generate(
-            self.name,
-            self.concept.id,
-            self.embedding_model_name,
-            self.threshold,
+            self.name, self.concept.id, self.embedding_model, self.threshold
         )
 
     def __hash__(self) -> int:
