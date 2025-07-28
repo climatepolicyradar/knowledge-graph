@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Annotated, Optional
 
 import httpx
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.models.openai import OpenAIModel
@@ -120,16 +120,14 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         """Create the pydantic-ai agent for the classifier."""
         raise NotImplementedError
 
-    @computed_field
     @property
     def id(self) -> Identifier:
         """Return a neat human-readable identifier for the classifier."""
         return Identifier.generate(
             self.name,
-            self.concept,
-            self.version if self.version else None,
+            self.concept.id,
             self.model_name,
-            self.system_prompt_template,
+            self.system_prompt,
             self.random_seed,
         )
 

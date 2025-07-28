@@ -108,7 +108,7 @@ class Classifier(ABC):
     @property
     def id(self) -> Identifier:
         """Return a neat human-readable identifier for the classifier."""
-        return Identifier.generate(self.name, self.concept)
+        return Identifier.generate(self.name, self.concept.id)
 
     def __hash__(self) -> int:
         """Return a hash for the classifier."""

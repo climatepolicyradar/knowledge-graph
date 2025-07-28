@@ -9,15 +9,16 @@ from datasets import Dataset
 from transformers import (  # type: ignore[import-untyped]
     AutoModelForSequenceClassification,
     AutoTokenizer,
-    Trainer,
-    TrainingArguments,
-    pipeline,
 )
+from transformers.pipelines import pipeline  # type: ignore[import-untyped]
+from transformers.trainer import Trainer  # type: ignore[import-untyped]
+from transformers.training_args import TrainingArguments  # type: ignore[import-untyped]
 from typing_extensions import Self
 
 from src.classifier.classifier import Classifier, GPUBoundClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
+from src.identifiers import Identifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -64,13 +65,22 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
         # reliably on CPU in production pipelines.
         self.pipeline = pipeline(
             "text-classification",
-            model=self.model,
-            tokenizer=self.tokenizer,
+            model=self.model,  # type: ignore[arg-type]
+            tokenizer=self.tokenizer,  # type: ignore[arg-type]
             device=self.training_device,
         )
 
         # Move model to training device (only used during training)
-        self.model.to(self.training_device)
+        self.model.to(self.training_device)  # type: ignore[attr-defined]
+
+    @property
+    def id(self) -> Identifier:
+        """Return a neat human-readable identifier for the classifier."""
+        return Identifier.generate(
+            self.name,
+            self.concept.id,
+            self.base_model,
+        )
 
     @contextmanager
     def _dropout_enabled(self):
@@ -80,12 +90,12 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
         This ensures the model is always returned to its original state,
         even if an exception occurs during uncertainty estimation.
         """
-        was_training = self.model.training
-        self.model.train()  # Turn on dropout
+        was_training = self.model.training  # type: ignore[attr-defined]
+        self.model.train()  # type: ignore[attr-defined]
         try:
             yield
         finally:
-            self.model.train(was_training)  # Restore original state when we're done
+            self.model.train(was_training)  # type: ignore[attr-defined]
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
@@ -98,7 +108,7 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
             with self._dropout_enabled():
                 predictions = self.pipeline(texts, padding=True, truncation=True)
         else:
-            self.model.eval()
+            self.model.eval()  # type: ignore[attr-defined]
             predictions = self.pipeline(texts, padding=True, truncation=True)
 
         results = []
@@ -147,7 +157,7 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
             texts.append(passage.text)
             labels.append(1 if contains_concept else 0)
 
-        tokenized_inputs = self.tokenizer(
+        tokenized_inputs = self.tokenizer(  # type: ignore[operator]
             texts, padding="max_length", truncation=True, return_tensors="pt"
         )
 
@@ -198,7 +208,9 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
             )
 
             trainer = Trainer(
-                model=self.model, args=training_args, train_dataset=tokenized_dataset
+                model=self.model,  # type: ignore[arg-type]
+                args=training_args,
+                train_dataset=tokenized_dataset,
             )
             trainer.train()
 
