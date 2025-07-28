@@ -195,19 +195,31 @@ def task_input_hash(
     )
 
 
+# Inverse of inference.generate_s3_uri_output
 def generate_s3_uri_input(
     cache_bucket: str,
     document_source_prefix: str,
     classifier_spec: ClassifierSpec,
     document_stem: DocumentStem,
 ) -> S3Uri:
+    from datetime import datetime
+
+    # Use .jsonl for artifacts produced after the JSONL change, .json
+    # for artifacts before.
+    cutoff_date = datetime(2025, 7, 28)
+
+    if datetime.now() >= cutoff_date:
+        extension = "jsonl"
+    else:
+        extension = "json"
+
     return S3Uri(
         bucket=cache_bucket,
         key=os.path.join(
             document_source_prefix,
             classifier_spec.name,
             classifier_spec.alias,
-            f"{document_stem}.json",
+            f"{document_stem}.{extension}",
         ),
     )
 

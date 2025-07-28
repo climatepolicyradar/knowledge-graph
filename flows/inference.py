@@ -484,7 +484,7 @@ def generate_s3_uri_output(
             config.document_target_prefix,
             inference.classifier_name,
             inference.classifier_alias,
-            f"{inference.document_stem}.json",
+            f"{inference.document_stem}.jsonl",
         ),
     )
 

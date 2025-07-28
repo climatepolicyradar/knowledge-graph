@@ -87,6 +87,7 @@ pulumi = "^3.145.0"
 pulumi-aws = "^6.66.2"
 jinja2 = "^3.1.4"
 pyright = "^1.1.403"
+freezegun = "^1.5.3"
 
 
 [tool.pytest.ini_options]
@@ -98,10 +99,6 @@ env = [
 ]
 markers = ["vespa", "flaky_on_ci", "transformers", "slow"]
 asyncio_default_fixture_loop_scope = "function"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 lint.select = ["E", "F", "D", "I"]
@@ -144,3 +141,7 @@ lint.ignore = [
 
 [tool.pyright]
 reportMissingImports = false
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

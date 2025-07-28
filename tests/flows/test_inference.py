@@ -199,7 +199,7 @@ async def test_store_labels(test_config, mock_bucket, snapshot):
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/v3/TEST.DOC.0.1.json"
+    assert labels[0] == "labelled_passages/Q9081/v3/TEST.DOC.0.1.jsonl"
 
 
 @pytest.mark.asyncio
@@ -274,8 +274,8 @@ async def test_inference(
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert sorted(labels) == [
-        "labelled_passages/Q788/latest/HTML.document.0.1.json",
-        "labelled_passages/Q788/latest/PDF.document.0.1.json",
+        "labelled_passages/Q788/latest/HTML.document.0.1.jsonl",
+        "labelled_passages/Q788/latest/PDF.document.0.1.jsonl",
     ]
 
     for key in labels:
@@ -592,7 +592,7 @@ async def test_inference_batch_of_documents(
     # Verify that inference outputs were stored in S3
     s3 = boto3.client("s3", region_name=test_config.bucket_region)
     expected_key = (
-        f"labelled_passages/{classifier_name}/{classifier_alias}/{batch[0]}.json"
+        f"labelled_passages/{classifier_name}/{classifier_alias}/{batch[0]}.jsonl"
     )
 
     # Check that the S3 object exists
@@ -681,7 +681,7 @@ async def test_inference_batch_of_documents_with_failures(
     # Check that no labels were stored for the non-existent documents
     for doc_stem in batch:
         expected_key = (
-            f"labelled_passages/{classifier_name}/{classifier_alias}/{doc_stem}.json"
+            f"labelled_passages/{classifier_name}/{classifier_alias}/{doc_stem}.jsonl"
         )
         with pytest.raises(ClientError) as exc_info:
             s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)

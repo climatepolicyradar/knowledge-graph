@@ -9,6 +9,7 @@ import aioboto3
 import pydantic
 import pytest
 from cpr_sdk.models.search import Concept as VespaConcept
+from freezegun import freeze_time
 from prefect import flow
 from prefect.artifacts import Artifact
 
@@ -17,6 +18,7 @@ from flows.aggregate import (
     aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
+    generate_s3_uri_input,
     get_all_labelled_passages_for_one_document,
     process_document,
     validate_passages_are_same_except_concepts,
@@ -271,7 +273,7 @@ async def test_process_single_document__client_error(
     code = result[0].exception.response["Error"]["Code"]
     assert code == "NoSuchKey"
     key = result[0].exception.response["Error"]["Key"]
-    assert key == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"
+    assert key == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.jsonl"
 
 
 @pytest.mark.asyncio
@@ -334,3 +336,60 @@ def test_collect_stems_by_specs(
             "CPR.document.i00000549.n0000",
         ]
     )
+
+
+@freeze_time("2025-07-27")  # Before cutoff date
+def test_generate_s3_uri_input_before_cutoff_date():
+    """Test that generate_s3_uri_input uses .json extension before cutoff date."""
+    cache_bucket = "test-bucket"
+    document_source_prefix = "labelled_passages"
+    classifier_spec = ClassifierSpec(name="Q123", alias="v4")
+    document_stem = DocumentStem("test.document.123")
+
+    result = generate_s3_uri_input(
+        cache_bucket=cache_bucket,
+        document_source_prefix=document_source_prefix,
+        classifier_spec=classifier_spec,
+        document_stem=document_stem,
+    )
+
+    assert result.bucket == cache_bucket
+    assert result.key == "labelled_passages/Q123/v4/test.document.123.json"
+
+
+@freeze_time("2025-07-28")  # On cutoff date
+def test_generate_s3_uri_input_on_cutoff_date():
+    """Test that generate_s3_uri_input uses .jsonl extension on cutoff date."""
+    cache_bucket = "test-bucket"
+    document_source_prefix = "labelled_passages"
+    classifier_spec = ClassifierSpec(name="Q456", alias="v2")
+    document_stem = DocumentStem("another.test.doc")
+
+    result = generate_s3_uri_input(
+        cache_bucket=cache_bucket,
+        document_source_prefix=document_source_prefix,
+        classifier_spec=classifier_spec,
+        document_stem=document_stem,
+    )
+
+    assert result.bucket == cache_bucket
+    assert result.key == "labelled_passages/Q456/v2/another.test.doc.jsonl"
+
+
+@freeze_time("2025-07-29")  # After cutoff date
+def test_generate_s3_uri_input_after_cutoff_date():
+    """Test that generate_s3_uri_input uses .jsonl extension after cutoff date."""
+    cache_bucket = "production-bucket"
+    document_source_prefix = "inference_data"
+    classifier_spec = ClassifierSpec(name="Q789", alias="v1")
+    document_stem = DocumentStem("future.document.456")
+
+    result = generate_s3_uri_input(
+        cache_bucket=cache_bucket,
+        document_source_prefix=document_source_prefix,
+        classifier_spec=classifier_spec,
+        document_stem=document_stem,
+    )
+
+    assert result.bucket == cache_bucket
+    assert result.key == "inference_data/Q789/v1/future.document.456.jsonl"
