@@ -18,11 +18,10 @@ from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow
 from prefect.artifacts import create_table_artifact
 from prefect.assets import materialize
-from prefect.client.schemas.objects import FlowRun, State
+from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.logging import get_run_logger
-from prefect.states import Completed, Failed
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
@@ -791,13 +790,15 @@ def generate_asset_deps(
     )
 
 
+# The default serializer that is used is cloud pickle - this can handle basic pydantic types.
+# Should the complexity of the returned objects become more complex then a custom serialiser should be considered.
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: dict,
     classifier_name: str,
     classifier_alias: str,
-) -> State:
+) -> BatchInferenceResult | Fault:
     """
     Run classifier inference on a batch of documents.
 
@@ -914,18 +915,12 @@ async def inference_batch_of_documents(
             f"Failed to run inference on {len(inferences_failures) + len(inferences_unknown_failures)}/"
             f"{len(results)} documents."
         )
-        return Failed(
-            message=message,
-            data=Fault(
-                msg=message,
-                metadata={},
-                data=batch_inference_result.model_dump(),
-            ),
+        raise Fault(
+            msg=message,
+            metadata={},
+            data=batch_inference_result,
         )
-    return Completed(
-        message=f"Successfully ran inference on all ({len(results)}) documents in batch.",
-        data=batch_inference_result.model_dump(),
-    )
+    return batch_inference_result
 
 
 @Profiler(
@@ -964,7 +959,7 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> State:
+) -> InferenceResult | Fault:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -1037,7 +1032,11 @@ async def inference(
             all_raw_successes.extend(raw_successes)
             all_raw_failures.extend(raw_failures)
 
-    all_successes = [BatchInferenceResult(**result) for result in all_raw_successes]
+    # The type of response when running as a sub deployment is:
+    #   <class 'inference.BatchInferenceResult'>
+    all_successes = [
+        BatchInferenceResult(**result.model_dump()) for result in all_raw_successes
+    ]
     _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
@@ -1057,19 +1056,12 @@ async def inference(
     )
 
     if inference_result.failed:
-        message = "Some inference batches had failures!"
-        return Failed(
-            message=message,
-            data=Fault(
-                msg=message,
-                metadata={},
-                data=inference_result.model_dump(),
-            ),
+        raise Fault(
+            msg="Some inference batches had failures!",
+            metadata={},
+            data=inference_result,
         )
-    return Completed(
-        message="Successfully ran inference on all batches!",
-        data=inference_result.model_dump(),
-    )
+    return inference_result
 
 
 async def create_inference_summary_artifact(
