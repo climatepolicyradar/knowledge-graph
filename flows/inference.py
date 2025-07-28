@@ -789,6 +789,7 @@ def generate_asset_deps(
         )
     )
 
+
 # The default serializer that is used is cloud pickle - this can handle basic pydantic types.
 # Should the complexity of the returned objects become more complex then a custom serialiser should be considered.
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
