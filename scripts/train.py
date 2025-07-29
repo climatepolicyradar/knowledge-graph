@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -238,80 +239,80 @@ def main(
     # Validate parameter dependencies
     validate_params(track, upload, aws_env)
 
-    if track:
-        run = wandb.init(  # type: ignore
+    with (
+        wandb.init(
             entity=namespace.entity, project=namespace.project, job_type=job_type
         )
+        if track
+        else nullcontext()
+    ) as run:
+        classifier_dir.mkdir(parents=True, exist_ok=True)
 
-    classifier_dir.mkdir(parents=True, exist_ok=True)
+        wikibase = WikibaseSession()
 
-    wikibase = WikibaseSession()
-
-    # Fetch all of its subconcepts recursively
-    concept = wikibase.get_concept(
-        wikibase_id,
-        include_recursive_has_subconcept=True,
-        include_labels_from_subconcepts=True,
-    )
-
-    # Create a classifier instance
-    classifier = ClassifierFactory.create(concept=concept)
-
-    # until we have more sophisticated classifier implementations in
-    # the factory, this is effectively a no-op
-    classifier.fit()
-
-    # In both scenarios, we need the next version aka the new version
-    if track or upload:
-        next_version = get_next_version(
-            namespace,
+        # Fetch all of its subconcepts recursively
+        concept = wikibase.get_concept(
             wikibase_id,
-            classifier,
+            include_recursive_has_subconcept=True,
+            include_labels_from_subconcepts=True,
         )
 
-        console.log(f"Using next version {next_version}")
+        # Create a classifier instance
+        classifier = ClassifierFactory.create(concept=concept)
 
-        # Set this _before_ the model is saved to disk
-        classifier.version = Version(next_version)
+        # until we have more sophisticated classifier implementations in
+        # the factory, this is effectively a no-op
+        classifier.fit()
 
-    # Save the classifier to a file with the concept ID in the name
-    classifier_path = get_local_classifier_path(concept, classifier)
-    classifier_path.parent.mkdir(parents=True, exist_ok=True)
-    classifier.save(classifier_path)
-    console.log(f"Saved {classifier} to {classifier_path}")
+        # In both scenarios, we need the next version aka the new version
+        if track or upload:
+            next_version = get_next_version(
+                namespace,
+                wikibase_id,
+                classifier,
+            )
 
-    if upload:
-        region_name = "eu-west-1"
-        s3_client = get_s3_client(aws_env, region_name)
+            console.log(f"Using next version {next_version}")
 
-        storage_upload = StorageUpload(
-            next_version=next_version,  # type: ignore
-            aws_env=aws_env,
-        )
+            # Set this _before_ the model is saved to disk
+            classifier.version = Version(next_version)
 
-        bucket, key = upload_model_artifact(
-            classifier,
-            classifier_path,
-            storage_upload,
-            namespace,
-            s3_client=s3_client,
-        )
+        # Save the classifier to a file with the concept ID in the name
+        classifier_path = get_local_classifier_path(concept, classifier)
+        classifier_path.parent.mkdir(parents=True, exist_ok=True)
+        classifier.save(classifier_path)
+        console.log(f"Saved {classifier} to {classifier_path}")
 
-    if track:
         if upload:
-            storage_link = StorageLink(
-                bucket=bucket,  # type: ignore
-                key=key,  # type: ignore
+            region_name = "eu-west-1"
+            s3_client = get_s3_client(aws_env, region_name)
+
+            storage_upload = StorageUpload(
+                next_version=next_version,  # type: ignore
                 aws_env=aws_env,
             )
 
-            link_model_artifact(
-                run,  # type: ignore
+            bucket, key = upload_model_artifact(
                 classifier,
-                storage_link,
+                classifier_path,
+                storage_upload,
+                namespace,
+                s3_client=s3_client,
             )
 
-        run.finish()  # type: ignore
+        if track:
+            if upload:
+                storage_link = StorageLink(
+                    bucket=bucket,  # type: ignore
+                    key=key,  # type: ignore
+                    aws_env=aws_env,
+                )
+
+                link_model_artifact(
+                    run,  # type: ignore
+                    classifier,
+                    storage_link,
+                )
 
     return classifier
 
