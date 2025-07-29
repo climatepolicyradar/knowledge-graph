@@ -345,6 +345,10 @@ def test_whether_a_classifier_with_a_small_change_to_the_internal_concept_produc
 
 def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts_any_concept():
     class UnrestrictedClassifier(Classifier):
+        @property
+        def id(self) -> Identifier:
+            return Identifier("unrestricted")
+
         def predict(self, text: str) -> list[Span]:
             return []
 
@@ -358,6 +362,10 @@ def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts
 def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correctly():
     class SingleIDClassifier(Classifier):
         allowed_concept_ids = [WikibaseID("Q123")]
+
+        @property
+        def id(self) -> Identifier:
+            return Identifier("single_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
@@ -377,6 +385,10 @@ def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correc
     class MultiIDClassifier(Classifier):
         allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
 
+        @property
+        def id(self) -> Identifier:
+            return Identifier("multi_id")
+
         def predict(self, text: str) -> list[Span]:
             return []
 
@@ -394,6 +406,10 @@ def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correc
 def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance():
     class ParentClassifier(Classifier):
         allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
+
+        @property
+        def id(self) -> Identifier:
+            return Identifier("parent_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
@@ -426,6 +442,10 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
 
     class EmptyIDClassifier(Classifier):
         allowed_concept_ids = []
+
+        @property
+        def id(self) -> Identifier:
+            return Identifier("empty_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
