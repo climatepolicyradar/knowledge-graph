@@ -2,7 +2,7 @@ import os
 from unittest.mock import ANY, Mock, patch
 
 import pytest
-import wandb
+from wandb.errors.errors import CommError
 
 from scripts.cloud import AwsEnv
 from scripts.train import (
@@ -135,10 +135,11 @@ def test_get_next_version_with_existing(mock_api):
 
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
-    mock_classifier.name = "test_classifier"
-    wikibase_id = "Q123"
+    mock_classifier.name = "KeywordClassifier"
+    mock_classifier.concept.wikibase_id = "Q123"
 
-    next_version = get_next_version(namespace, wikibase_id, mock_classifier)
+    wandb_target_entity = f"{namespace.project}/{mock_classifier.name}"
+    next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v3"
 
@@ -147,13 +148,13 @@ def test_get_next_version_with_existing(mock_api):
 def test_get_next_version_with_default(mock_api):
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
-    mock_classifier.name = "test_classifier"
-    wikibase_id = "Q123"
+    mock_classifier.name = "KeywordClassifier"
+    mock_classifier.concept.wikibase_id = "Q123"
 
-    mock_api.side_effect = wandb.errors.CommError(
+    mock_api.side_effect = CommError(
         "artifact 'test_classifier:latest' not found in 'test_entity/Q123'"
     )
-
-    next_version = get_next_version(namespace, wikibase_id, mock_classifier)
+    wandb_target_entity = f"{namespace.project}/{mock_classifier.name}"
+    next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v0"
