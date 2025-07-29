@@ -21,6 +21,21 @@ console = Console()
 app = typer.Typer()
 
 
+def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
+    """Validate parameter dependencies."""
+    if (not track) and upload:
+        raise ValueError(
+            "you can only upload a model artifact, if you're also tracking the run"
+        )
+
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
+    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
+        raise typer.BadParameter(
+            f"you're not logged into {aws_env.value}. "
+            f"Do `aws sso login --profile {aws_env.value}`"
+        )
+
+
 class StorageUpload(BaseModel):
     """Represents the storage configuration for model artifacts in S3."""
 
@@ -220,18 +235,8 @@ def main(
     namespace = Namespace(project=project, entity=entity)
     job_type = "train_model"
 
-    if (not track) and upload:
-        raise ValueError(
-            "you can only upload a model artifact, if you're also tracking the run"
-        )
-
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-
-    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
-        raise typer.BadParameter(
-            f"you're not logged into {aws_env.value}. "
-            f"Do `aws sso login --profile {aws_env.value}`"
-        )
+    # Validate parameter dependencies
+    validate_params(track, upload, aws_env)
 
     if track:
         run = wandb.init(  # type: ignore
