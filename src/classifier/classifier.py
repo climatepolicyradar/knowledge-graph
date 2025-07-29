@@ -106,12 +106,43 @@ class Classifier(ABC):
         return self.id == other.id
 
     @property
+    @abstractmethod
     def id(self) -> Identifier:
-        """Return a neat human-readable identifier for the classifier."""
-        return Identifier.generate(self.name, self.concept)
+        """
+        Return a deterministic, human-readable identifier for the classifier.
+
+        Identifiers are generated from each classifier's core properties (name, concept,
+        and behavior-driving parameters). They should be:
+
+        - deterministic: the same classifier configuration will always produce
+          the same id
+        - cross-session consistent: the id remains identical across different
+          python sessions, processes, and machines
+        - unique: different classifier configurations will produce different ids
+        - human-readable: an 8-character string using unambiguous characters
+
+        This property should be used for:
+        - Persistent storage and retrieval of classifiers
+        - Tracing and debugging classifiers across different environments
+
+        Classifier subclasses should override this method to return a unique identifier
+        for the classifier according to its specific parameters and implementation.
+
+        :return Identifier: A deterministic 8-character identifier
+        """
+        ...
 
     def __hash__(self) -> int:
-        """Return a hash for the classifier."""
+        """
+        Return a hash for the classifier for use in Python collections.
+
+        This hash is derived from the classifier's id, but is only intended to be used
+        for in-memory collection/comparison purposes (sets, dictionaries, equality
+        checks, etc.). Unlike the classifier.id, hashes are session-dependent and
+        should not be used for persistent, cross-session identification.
+
+        :return int: A hash value for in-memory collection/comparison usage
+        """
         return hash(self.id)
 
     def save(self, path: Union[str, Path]):

@@ -5,7 +5,7 @@ from typing import Callable
 
 from src.classifier.classifier import Classifier, GPUBoundClassifier
 from src.concept import Concept
-from src.identifiers import WikibaseID
+from src.identifiers import Identifier, WikibaseID
 from src.span import Span
 
 # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
@@ -37,8 +37,8 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
             from transformers import (  # type: ignore[import-untyped]
                 AutoModelForSequenceClassification,
                 AutoTokenizer,
-                pipeline,
             )
+            from transformers.pipelines import pipeline  # type: ignore[import-untyped]
         except ImportError:
             raise ImportError(
                 f"The `transformers` library is required to run {self.name}s. "
@@ -56,6 +56,13 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
             ),
             function_to_apply="sigmoid",
             device="cpu",
+        )
+
+    @property
+    def id(self) -> Identifier:
+        """Return a deterministic, human-readable identifier for the classifier."""
+        return Identifier.generate(
+            self.name, self.concept.id, self.model_name, self.commit_hash
         )
 
     @abstractmethod
