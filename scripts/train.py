@@ -257,18 +257,18 @@ def main(
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
 
-        # In both scenarios, we need the next version aka the new version
-        if track or upload:
-            next_version = get_next_version(
-                namespace,
-                wikibase_id,
-                classifier,
-            )
+        # Lookup the next version (aka the new version) before saving, even if we're
+        # not uploading or tracking, so the classifier has the correct version
+        next_version = get_next_version(
+            namespace,
+            wikibase_id,
+            classifier,
+        )
 
-            console.log(f"Using next version {next_version}")
+        console.log(f"Using next version {next_version}")
 
-            # Set this _before_ the model is saved to disk
-            classifier.version = Version(next_version)
+        # Set this _before_ the model is saved to disk
+        classifier.version = Version(next_version)
 
         # Save the classifier to a file with the concept ID in the name
         classifier_path = get_local_classifier_path(classifier)
@@ -281,7 +281,7 @@ def main(
             s3_client = get_s3_client(aws_env, region_name)
 
             storage_upload = StorageUpload(
-                next_version=next_version,  # type: ignore
+                next_version=next_version,
                 aws_env=aws_env,
             )
 
@@ -293,19 +293,17 @@ def main(
                 s3_client=s3_client,
             )
 
-        if track:
-            if upload:
-                storage_link = StorageLink(
-                    bucket=bucket,  # type: ignore
-                    key=key,  # type: ignore
-                    aws_env=aws_env,
-                )
+            storage_link = StorageLink(
+                bucket=bucket,
+                key=key,
+                aws_env=aws_env,
+            )
 
-                link_model_artifact(
-                    run,  # type: ignore
-                    classifier,
-                    storage_link,
-                )
+            link_model_artifact(
+                run,  # type: ignore
+                classifier,
+                storage_link,
+            )
 
     return classifier
 
