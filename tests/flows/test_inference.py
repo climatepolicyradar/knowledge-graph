@@ -751,38 +751,36 @@ async def test_inference_batch_of_documents_empty_batch(
 def test_batch_inference_result_properties() -> None:
     """Test the InferenceResult object."""
 
-    batch_1_document_stems = [
+    batch_document_stems = [
         DocumentStem("TEST.executive.1.1"),
         DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
     ]
 
     batch_inference_result_1 = BatchInferenceResult(
-        batch_document_stems=batch_1_document_stems,
-        successful_document_stems=batch_1_document_stems,
+        batch_document_stems=batch_document_stems,
+        successful_document_stems=batch_document_stems,
         classifier_name="Q100",
         classifier_alias="v1",
     )
 
     result = InferenceResult(
+        document_stems=batch_document_stems,
+        classifier_specs=[
+            ClassifierSpec(name="Q100", alias="v1"),
+        ],
         batch_inference_results=[
             batch_inference_result_1,
         ],
     )
 
     assert not result.failed
-    assert result.successful_document_stems == {
-        DocumentStem("TEST.executive.1.1"),
-        DocumentStem("TEST.executive.2.2"),
-    }
-    assert result.failed_document_stems == set()
+    assert result.successful_document_stems == set(batch_document_stems)
 
     batch_inference_result_2 = BatchInferenceResult(
-        batch_document_stems=[
-            DocumentStem("TEST.executive.1.1"),
-            DocumentStem("TEST.executive.3.3"),
-            DocumentStem("TEST.executive.4.4"),
-            DocumentStem("TEST.executive.5.5"),
-        ],
+        batch_document_stems=batch_document_stems,
         successful_document_stems=[
             DocumentStem("TEST.executive.3.3"),
             DocumentStem("TEST.executive.4.4"),
@@ -792,6 +790,11 @@ def test_batch_inference_result_properties() -> None:
     )
 
     result = InferenceResult(
+        document_stems=batch_document_stems,
+        classifier_specs=[
+            ClassifierSpec(name="Q100", alias="v1"),
+            ClassifierSpec(name="Q101", alias="v1"),
+        ],
         batch_inference_results=[
             batch_inference_result_1,
             batch_inference_result_2,
@@ -800,7 +803,6 @@ def test_batch_inference_result_properties() -> None:
 
     assert result.failed
     assert result.successful_document_stems == {
-        DocumentStem("TEST.executive.2.2"),
         DocumentStem("TEST.executive.3.3"),
         DocumentStem("TEST.executive.4.4"),
     }

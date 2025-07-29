@@ -169,9 +169,9 @@ async def full_pipeline(
             )
 
     logger.info(
-        f"Inference complete. Successful document stems count: {len(inference_result.successful_document_stems)}, "
-        + f"failed document stems count: {len(inference_result.failed_document_stems)},"
-        + f"unexpected failures count: {len(inference_result.unexpected_failures)}"
+        "Inference complete. "
+        + "Successful document stems count: "
+        + f"{len(inference_result.successful_document_stems)}/{len(inference_result.document_stems)}"
     )
 
     if len(inference_result.successful_document_stems) == 0:

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from collections import Counter
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
@@ -144,8 +145,9 @@ class InferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    document_stems: list[DocumentStem]
+    classifier_specs: list[ClassifierSpec]
     batch_inference_results: list[BatchInferenceResult] = []
-    unexpected_failures: list[BaseException | FlowRun] = []
     successful_classifier_specs: list[ClassifierSpec] = []
     failed_classifier_specs: list[ClassifierSpec] = []
 
@@ -153,42 +155,43 @@ class InferenceResult(BaseModel):
     def failed(self) -> bool:
         """Whether the inference failed, True if failed."""
 
-        return (
-            any([result.failed for result in self.batch_inference_results])
-            or self.unexpected_failures != []
-        )
+        return any([result.failed for result in self.batch_inference_results]) or len(
+            self.document_stems
+        ) != len(self.successful_document_stems)
 
     @cached_property
     def successful_document_stems(self) -> set[DocumentStem]:
         """
         The set of document stems that were successfully processed.
 
-        A document stem is considered successful if it was succesful across all classifiers. For example,
-        if a document successfully had inference run in one batch for classifier A, but failed for classifier B,
-        then the document stem is considered unsuccessful.
+        A document stem is considered successful if it was succesful across all
+        classifiers. For example, if a document successfully had inference run in one
+        batch for classifier A, but failed for classifier B, then the document stem is
+        considered unsuccessful.
 
-        This is as the document would fail aggregation if there was a missing inference result for a classifier.
+        This is as the document would fail aggregation if there was a missing inference
+        result for a classifier.
         """
 
-        return set(
-            document_stem
-            for batch_inference_result in self.batch_inference_results
-            for document_stem in batch_inference_result.successful_document_stems
-            if document_stem not in self.failed_document_stems
-        )
+        # Create an array containing all the successful document stem results from all
+        # batches. Therefore this contains duplicates potentially of the same document
+        # stem. We can then count the occurence of a document stem in the successful
+        # results to ascertain whether it was successful. E.g. we ran on 10 classifiers
+        # but only got 9 successful occurences of the document stem and thus it failed.
 
-    @cached_property
-    def failed_document_stems(self) -> set[DocumentStem]:
-        """The set of document stems that failed to be processed."""
-
-        return set(
-            document_stem
-            for batch_inference_result in self.batch_inference_results
-            for document_stem in list(
-                set(batch_inference_result.batch_document_stems)
-                - set(batch_inference_result.successful_document_stems)
+        all_successful_document_stems: list[DocumentStem] = []
+        for batch_inference_result in self.batch_inference_results:
+            all_successful_document_stems.extend(
+                batch_inference_result.successful_document_stems
             )
-        )
+
+        counter = Counter(all_successful_document_stems)
+
+        return {
+            successful_document_stem
+            for successful_document_stem, count in counter.items()
+            if count == len(self.classifier_specs)
+        }
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -1047,8 +1050,9 @@ async def inference(
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
     inference_result = InferenceResult(
+        document_stems=list(filtered_file_stems),
+        classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
-        unexpected_failures=all_raw_failures,
         successful_classifier_specs=successes.keys(),
         failed_classifier_specs=failures_classifier_specs,
     )
