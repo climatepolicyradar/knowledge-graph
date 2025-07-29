@@ -458,23 +458,26 @@ def test_remove_sabin_file_stems(
 
 
 def test_group_inference_results_into_states(snapshot):
+    batch_1_document_stems = [
+        DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+        DocumentStem("CCLW.executive.10512.5360"),
+    ]
+    batch_2_document_stems = [
+        DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+        DocumentStem("CCLW.executive.10512.5360"),
+    ]
+
     # Test data separated into successes and failures as expected by the new signature
     successes = [
         BatchInferenceResult(
-            successful_document_stems=[
-                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-                DocumentStem("CCLW.executive.10512.5360"),
-            ],
-            failed_document_stems=[],
+            batch_document_stems=batch_1_document_stems,
+            successful_document_stems=batch_1_document_stems,
             classifier_name="Q200",
             classifier_alias="v5",
         ),
         BatchInferenceResult(
-            successful_document_stems=[
-                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-                DocumentStem("CCLW.executive.10512.5360"),
-            ],
-            failed_document_stems=[],
+            batch_document_stems=batch_2_document_stems,
+            successful_document_stems=batch_2_document_stems,
             classifier_name="Q201",
             classifier_alias="v6",
         ),
@@ -559,8 +562,8 @@ async def test_inference_batch_of_documents(
 
     result = await result_state.result()
     assert isinstance(result, BatchInferenceResult)
+    assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
-    assert result.failed_document_stems == []
     assert result.classifier_name == classifier_name
     assert result.classifier_alias == classifier_alias
 
@@ -748,11 +751,14 @@ async def test_inference_batch_of_documents_empty_batch(
 def test_batch_inference_result_properties() -> None:
     """Test the InferenceResult object."""
 
+    batch_1_document_stems = [
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+    ]
+
     batch_inference_result_1 = BatchInferenceResult(
-        successful_document_stems=[
-            DocumentStem("TEST.executive.1.1"),
-            DocumentStem("TEST.executive.2.2"),
-        ],
+        batch_document_stems=batch_1_document_stems,
+        successful_document_stems=batch_1_document_stems,
         classifier_name="Q100",
         classifier_alias="v1",
     )
@@ -771,19 +777,15 @@ def test_batch_inference_result_properties() -> None:
     assert result.failed_document_stems == set()
 
     batch_inference_result_2 = BatchInferenceResult(
+        batch_document_stems=[
+            DocumentStem("TEST.executive.1.1"),
+            DocumentStem("TEST.executive.3.3"),
+            DocumentStem("TEST.executive.4.4"),
+            DocumentStem("TEST.executive.5.5"),
+        ],
         successful_document_stems=[
             DocumentStem("TEST.executive.3.3"),
             DocumentStem("TEST.executive.4.4"),
-        ],
-        failed_document_stems=[
-            (
-                DocumentStem("TEST.executive.1.1"),
-                Exception("Failed to run inference on TEST.executive.1.1"),
-            ),
-            (
-                DocumentStem("TEST.executive.5.5"),
-                Exception("Failed to run inference on TEST.executive.5.5"),
-            ),
         ],
         classifier_name="Q101",
         classifier_alias="v1",
@@ -801,10 +803,6 @@ def test_batch_inference_result_properties() -> None:
         DocumentStem("TEST.executive.2.2"),
         DocumentStem("TEST.executive.3.3"),
         DocumentStem("TEST.executive.4.4"),
-    }
-    assert result.failed_document_stems == {
-        DocumentStem("TEST.executive.1.1"),
-        DocumentStem("TEST.executive.5.5"),
     }
 
 

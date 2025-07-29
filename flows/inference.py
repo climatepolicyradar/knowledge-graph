@@ -127,9 +127,8 @@ class BatchInferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    successful_document_stems: list[DocumentStem] = []
-    failed_document_stems: list[tuple[DocumentStem, Exception]] = []
-    unknown_failures: list[BaseException] = []
+    batch_document_stems: list[DocumentStem]
+    successful_document_stems: list[DocumentStem]
     classifier_name: str
     classifier_alias: str
 
@@ -137,7 +136,7 @@ class BatchInferenceResult(BaseModel):
     def failed(self) -> bool:
         """Whether the batch failed, True if failed."""
 
-        return self.failed_document_stems != [] or self.unknown_failures != []
+        return len(self.batch_document_stems) != len(self.successful_document_stems)
 
 
 class InferenceResult(BaseModel):
@@ -185,7 +184,10 @@ class InferenceResult(BaseModel):
         return set(
             document_stem
             for batch_inference_result in self.batch_inference_results
-            for document_stem, _ in batch_inference_result.failed_document_stems
+            for document_stem in list(
+                set(batch_inference_result.batch_document_stems)
+                - set(batch_inference_result.successful_document_stems)
+            )
         )
 
 
@@ -903,17 +905,21 @@ async def inference_batch_of_documents(
     )
 
     batch_inference_result = BatchInferenceResult(
-        successful_document_stems=[i.document_stem for i in inferences_successes],
-        failed_document_stems=inferences_failures,
-        unknown_failures=inferences_unknown_failures,
+        batch_document_stems=batch,
+        successful_document_stems=[i.document_stem for i in store_labels_successes],
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
     )
 
     if batch_inference_result.failed:
+        failed_document_count: int = len(
+            batch_inference_result.batch_document_stems
+        ) - len(batch_inference_result.successful_document_stems)
+        all_document_count: int = len(batch_inference_result.batch_document_stems)
+
         message = (
-            f"Failed to run inference on {len(inferences_failures) + len(inferences_unknown_failures)}/"
-            f"{len(results)} documents."
+            f"Failed to run inference on {failed_document_count}/{all_document_count} "
+            + "documents."
         )
         raise Fault(
             msg=message,
