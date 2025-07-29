@@ -8,6 +8,7 @@ import typer
 import wandb
 from pydantic import BaseModel, Field
 from rich.console import Console
+from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
@@ -108,7 +109,7 @@ def link_model_artifact(
 
 def get_next_version(
     namespace: Namespace,
-    wikibase_id: WikibaseID,
+    target_path: str,
     classifier: Classifier,
 ) -> str:
     """
@@ -116,27 +117,30 @@ def get_next_version(
 
     :param namespace: The W&B configuration containing project and entity.
     :type namespace: WandBConfig
-    :param wikibase_id: The Wikibase ID.
-    :type wikibase_id: WikibaseID
+    :param target_path: The path to the classifier in W&B.
+    :type target_path: str
     :param classifier: The classifier object.
     :type classifier: Classifier
     :return: The next version string.
     :rtype: str
     """
-    version = 0  # Default value
-
     try:
-        api = wandb.Api()  # type: ignore
-        latest = api.artifact(f"{namespace.project}/{classifier.name}:latest")._version
-        version = int(latest[1:]) + 1  # type: ignore
-    except wandb.errors.CommError as e:  # type: ignore
+        api = wandb.Api()
+        artifact = api.artifact(f"{namespace.entity}/{target_path}:latest")
+        next_version = Version(artifact._version).increment()  # type: ignore[reportArgumentType]
+    except CommError as e:
         error_message = str(e)
-        pattern = rf"artifact '{classifier.name}:latest' not found in '{namespace.entity}/{wikibase_id}'"
-
-        if not re.search(pattern, error_message):
+        wikibase_id = classifier.concept.wikibase_id
+        pattern = rf"artifact '.*?' not found in '{namespace.entity}/{wikibase_id}'"
+        if re.search(pattern, error_message):
+            console.log(
+                f"No previous wandb version found, '{target_path}' will be at v0"
+            )
+            next_version = Version("v0")
+        else:
             raise
 
-    return f"v{version}"
+    return str(next_version)
 
 
 def upload_model_artifact(
@@ -259,10 +263,11 @@ def main(
 
         # Lookup the next version (aka the new version) before saving, even if we're
         # not uploading or tracking, so the classifier has the correct version
+        target_path = f"{namespace.project}/{classifier.name}"
         next_version = get_next_version(
-            namespace,
-            wikibase_id,
-            classifier,
+            namespace=namespace,
+            target_path=target_path,
+            classifier=classifier,
         )
 
         console.log(f"Using next version {next_version}")
