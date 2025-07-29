@@ -62,20 +62,6 @@ def sync_to_s3(app_name: str, bucket_name: str):
 
 
 @flow(log_prints=True)
-def deploy_one_site_pipeline(app_name: str, bucket_name: str):
-    """Generates and deploys a single static site."""
-    print(f"Starting deployment pipeline for {app_name} to bucket {bucket_name}.")
-
-    try:
-        gen_future = generate_static_site(app_name)
-        sync_to_s3(app_name, bucket_name, wait_for=[gen_future])  # type: ignore
-        print(f"Deployment tasks for {app_name} completed.")
-    except Exception as e:
-        print(f"Error in deployment pipeline for {app_name}: {e}")
-        raise
-
-
-@flow(log_prints=True)
 def deploy_static_sites():
     """Flow to deploy all our static sites in parallel."""
     print("Starting deployment of all static sites.")
@@ -92,21 +78,34 @@ def deploy_static_sites():
         {"app_name": "vibe_check", "bucket_name": "cpr-knowledge-graph-vibe-check"},
     ]
 
-    setup_env_future = setup_environment()
+    setup_environment()
 
-    active_deployments = []
+    generation_futures = []
     for site in sites_to_deploy:
-        print(f"Initiating deployment for {site['app_name']}.")
-        deployment_future = deploy_one_site_pipeline(
-            app_name=site["app_name"],
-            bucket_name=site["bucket_name"],
-            wait_for=[setup_env_future],  # type: ignore
-        )
-        active_deployments.append(deployment_future)
+        print(f"Initiating generation for {site['app_name']}.")
+        future = generate_static_site.submit(app_name=site["app_name"])
+        generation_futures.append((future, site))
 
-    print(
-        f"All {len(sites_to_deploy)} site deployment pipelines initiated. Main flow will wait for their completion."
-    )
+    sync_futures = []
+    for future, site in generation_futures:
+        try:
+            future.result()  # Wait for generation to complete
+            print(f"Generation completed for {site['app_name']}, starting sync...")
+            sync_future = sync_to_s3.submit(
+                app_name=site["app_name"], bucket_name=site["bucket_name"]
+            )
+            sync_futures.append((sync_future, site))
+        except Exception as e:
+            print(f"Generation failed for {site['app_name']}: {e}")
+            raise
+
+    for future, site in sync_futures:
+        try:
+            future.result()
+            print(f"Successfully completed deployment for {site['app_name']}")
+        except Exception as e:
+            print(f"Sync failed for {site['app_name']}: {e}")
+            raise
 
     print("All static site deployment pipelines have concluded.")
 
