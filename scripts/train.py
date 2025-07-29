@@ -11,7 +11,6 @@ from rich.console import Console
 from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
-from scripts.config import classifier_dir
 from scripts.utils import get_local_classifier_path
 from src.classifier import Classifier, ClassifierFactory
 from src.identifiers import WikibaseID
@@ -246,22 +245,16 @@ def main(
         if track
         else nullcontext()
     ) as run:
-        classifier_dir.mkdir(parents=True, exist_ok=True)
-
-        wikibase = WikibaseSession()
-
         # Fetch all of its subconcepts recursively
+        wikibase = WikibaseSession()
         concept = wikibase.get_concept(
             wikibase_id,
             include_recursive_has_subconcept=True,
             include_labels_from_subconcepts=True,
         )
 
-        # Create a classifier instance
+        # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
-
-        # until we have more sophisticated classifier implementations in
-        # the factory, this is effectively a no-op
         classifier.fit()
 
         # In both scenarios, we need the next version aka the new version
@@ -278,7 +271,7 @@ def main(
             classifier.version = Version(next_version)
 
         # Save the classifier to a file with the concept ID in the name
-        classifier_path = get_local_classifier_path(concept, classifier)
+        classifier_path = get_local_classifier_path(classifier)
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
         classifier.save(classifier_path)
         console.log(f"Saved {classifier} to {classifier_path}")
