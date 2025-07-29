@@ -14,6 +14,26 @@ import subprocess
 
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
+from prefect.futures import wait
+
+
+def _wait_for_futures_and_check_failures(futures_dict: dict, task_type: str):
+    """Helper to wait for futures and check for failures"""
+    print(f"Waiting for all {task_type.lower()} tasks to complete...")
+    futures_list = list(futures_dict.values())
+    done_futures, _ = wait(futures_list)
+
+    failed_sites = []
+    for future in done_futures:
+        if future.state.is_failed():
+            app_name = next(name for name, f in futures_dict.items() if f == future)
+            failed_sites.append(app_name)
+            print(f"{task_type} failed for {app_name}: {future.state.message}")
+
+    if failed_sites:
+        raise Exception(f"{task_type} failed for sites: {', '.join(failed_sites)}")
+
+    return done_futures
 
 
 @task(log_prints=True)
@@ -62,53 +82,44 @@ def sync_to_s3(app_name: str, bucket_name: str):
 
 
 @flow(log_prints=True)
-def deploy_one_site_pipeline(app_name: str, bucket_name: str):
-    """Generates and deploys a single static site."""
-    print(f"Starting deployment pipeline for {app_name} to bucket {bucket_name}.")
-
-    try:
-        gen_future = generate_static_site(app_name)
-        sync_to_s3(app_name, bucket_name, wait_for=[gen_future])  # type: ignore
-        print(f"Deployment tasks for {app_name} completed.")
-    except Exception as e:
-        print(f"Error in deployment pipeline for {app_name}: {e}")
-        raise
-
-
-@flow(log_prints=True)
 def deploy_static_sites():
     """Flow to deploy all our static sites in parallel."""
-    print("Starting deployment of all static sites.")
+    print("Starting deployment of static sites...")
 
-    sites_to_deploy = [
-        {
-            "app_name": "concept_librarian",
-            "bucket_name": "cpr-knowledge-graph-concept-librarian",
-        },
-        {
-            "app_name": "labelling_librarian",
-            "bucket_name": "cpr-knowledge-graph-labelling-librarian",
-        },
-        {"app_name": "vibe_check", "bucket_name": "cpr-knowledge-graph-vibe-check"},
-    ]
+    app_name_to_bucket_name = {
+        "concept_librarian": "cpr-knowledge-graph-concept-librarian",
+        "labelling_librarian": "cpr-knowledge-graph-labelling-librarian",
+        "vibe_check": "cpr-knowledge-graph-vibe-check",
+    }
 
-    setup_env_future = setup_environment()
+    setup_environment()
 
-    active_deployments = []
-    for site in sites_to_deploy:
-        print(f"Initiating deployment for {site['app_name']}.")
-        deployment_future = deploy_one_site_pipeline(
-            app_name=site["app_name"],
-            bucket_name=site["bucket_name"],
-            wait_for=[setup_env_future],  # type: ignore
-        )
-        active_deployments.append(deployment_future)
+    # submit all generation tasks in parallel
+    generation_futures = {}
+    for app_name in app_name_to_bucket_name:
+        print(f"Initiating generation for {app_name}.")
+        future = generate_static_site.submit(app_name=app_name)
+        generation_futures[app_name] = future
 
-    print(
-        f"All {len(sites_to_deploy)} site deployment pipelines initiated. Main flow will wait for their completion."
+    # wait for all generation tasks to complete
+    done_generation_futures = _wait_for_futures_and_check_failures(
+        generation_futures, "Generation"
     )
 
-    print("All static site deployment pipelines have concluded.")
+    # submit all sync tasks in parallel
+    sync_futures = {}
+    for app_name, gen_future in generation_futures.items():
+        if gen_future in done_generation_futures and not gen_future.state.is_failed():
+            print(f"Generation completed for {app_name}, starting sync...")
+            sync_future = sync_to_s3.submit(
+                app_name=app_name, bucket_name=app_name_to_bucket_name[app_name]
+            )
+            sync_futures[app_name] = sync_future
+
+    # wait for all sync tasks to complete
+    _wait_for_futures_and_check_failures(sync_futures, "Sync")
+
+    print("All static site deployments have finished.")
 
 
 if __name__ == "__main__":
