@@ -67,8 +67,6 @@ DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
-AWS_ENV: str = os.environ["AWS_ENV"]
-S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 
@@ -790,9 +788,7 @@ def generate_asset_deps(
     )
 
 
-# The default serializer that is used is cloud pickle - this can handle basic pydantic types.
-# Should the complexity of the returned objects become more complex then a custom serialiser should be considered.
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(log_prints=True)
 async def inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: dict,

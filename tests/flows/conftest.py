@@ -28,6 +28,7 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
+from prefect.blocks.system import JSON
 from prefect_aws.s3 import S3Bucket
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
@@ -36,7 +37,6 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.aggregate import Config as AggregateInferenceResultsConfig
-from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -844,31 +844,54 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
 
 
 @asynccontextmanager
-async def s3_block_context():
-    """Context manager for creating and cleaning up S3 blocks."""
-    bucket_name = S3_BLOCK_RESULTS_CACHE.replace("s3-bucket/", "")
+async def prefect_blocks_context():
+    """Context manager for creating and cleaning up prefect blocks."""
+    # TODO: Make a fixture for this, use it in creating a default block as well.
+    bucket_name = "s3-bucket/cpr-sandbox-prefect-results-cache".replace(
+        "s3-bucket/", ""
+    )
 
     test_block = S3Bucket(bucket_name=bucket_name)
+    test_default_job_variables = JSON(
+        value={
+            "result_cache_s3_block_name": "s3-bucket/cpr-sandbox-prefect-results-cache"
+        }
+    )
 
+    # TODO: Deduplicate
     try:
-        uuid = test_block.save(bucket_name, overwrite=True)
-        if asyncio.iscoroutine(uuid):
-            uuid = await uuid
-        yield uuid
+        uuid_s3_block = test_block.save(bucket_name, overwrite=True)
+        if asyncio.iscoroutine(uuid_s3_block):
+            uuid_s3_block = await uuid_s3_block
+        uuid_default_job_variables = test_default_job_variables.save(
+            "default-job-variables-prefect-mvp-sandbox", overwrite=True
+        )
+        if asyncio.iscoroutine(uuid_default_job_variables):
+            uuid_default_job_variables = await uuid_default_job_variables
+
+        yield uuid_s3_block, uuid_default_job_variables
     except Exception as e:
-        print(f"Warning: Failed to save S3 block: {e}")
+        print(f"Warning: Failed to save prefect blocks: {e}")
 
     finally:
         try:
-            result = test_block.delete(bucket_name)
-            if asyncio.iscoroutine(result):
-                await result
+            result_s3_block = test_block.delete(bucket_name)
+            if asyncio.iscoroutine(result_s3_block):
+                await result_s3_block
+            result_default_job_variables = test_default_job_variables.delete(
+                "default-job-variables-prefect-mvp-sandbox"
+            )
+            if asyncio.iscoroutine(result_default_job_variables):
+                await result_default_job_variables
         except Exception as e:
-            print(f"Warning: Failed to delete S3 block: {e}")
+            print(f"Warning: Failed to delete prefect blocks: {e}")
 
 
 @pytest_asyncio.fixture
-async def mock_prefect_s3_block():
-    """Create an S3 block against the local prefect server."""
-    async with s3_block_context() as block:
-        yield block
+async def mock_prefect_blocks():
+    """Create an prefect blocks against the local prefect server."""
+    async with prefect_blocks_context() as (
+        uuid_s3_block,
+        uuid_default_job_variables,
+    ):
+        yield uuid_s3_block, uuid_default_job_variables
