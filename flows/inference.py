@@ -174,10 +174,11 @@ class InferenceResult(BaseModel):
         """
 
         # Create an array containing all the successful document stem results from all
-        # batches. Therefore this contains duplicates potentially of the same document
-        # stem. We can then count the occurence of a document stem in the successful
-        # results to ascertain whether it was successful. E.g. we ran on 10 classifiers
-        # but only got 9 successful occurences of the document stem and thus it failed.
+        # batches. Therefore this contains duplicates of the same document
+        # stem if we run on multiple classifiers. We can then count the occurence of a
+        # document stem in the successful results to ascertain whether it was successful.
+        # E.g. we ran on 10 classifiers but only got 9 successful occurences of the
+        # document stem and thus it failed.
 
         all_successful_document_stems: list[DocumentStem] = []
         for batch_inference_result in self.batch_inference_results:
