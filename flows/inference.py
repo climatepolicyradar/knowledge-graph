@@ -1002,35 +1002,45 @@ async def inference(
     all_raw_successes = []
     all_raw_failures = []
 
-    for classifier_spec in classifier_specs:
-        batches = iterate_batch(filtered_file_stems, batch_size)
+    def create_classifier_batch_generator(
+        document_batches: Generator[Sequence[DocumentStem], None, None],
+    ) -> Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None]:
+        """Create batches that pair each classifier with document batches."""
+        for classifier_spec in classifier_specs:
+            for document_batch in document_batches:
+                yield (classifier_spec, document_batch)
 
-        def parameters(
-            batch: Sequence[DocumentStem],
-        ) -> dict[str, Any]:
-            return {
-                "batch": batch,
-                "config_json": config.to_json(),
-                "classifier_name": classifier_spec.name,
-                "classifier_alias": classifier_spec.alias,
-            }
+    document_batches = iterate_batch(filtered_file_stems, batch_size)
+    classifier_document_batches = create_classifier_batch_generator(document_batches)
 
-        with Profiler(
-            printer=print,
-            name="running classifier inference with map_as_sub_flow",
-        ):
-            raw_successes, raw_failures = await map_as_sub_flow(
-                # The typing doesn't pick up the Flow decorator
-                fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
-                aws_env=config.aws_env,
-                counter=classifier_concurrency_limit,
-                batches=batches,
-                parameters=parameters,
-                unwrap_result=True,
-            )
+    def parameters(
+        batch: tuple[ClassifierSpec, Sequence[DocumentStem]],
+    ) -> dict[str, Any]:
+        classifier_spec = batch[0]
+        batch_document_stems = batch[1]
+        return {
+            "batch": batch_document_stems,
+            "config_json": config.to_json(),
+            "classifier_name": classifier_spec.name,
+            "classifier_alias": classifier_spec.alias,
+        }
 
-            all_raw_successes.extend(raw_successes)
-            all_raw_failures.extend(raw_failures)
+    with Profiler(
+        printer=print,
+        name="running classifier inference with map_as_sub_flow",
+    ):
+        raw_successes, raw_failures = await map_as_sub_flow(
+            # The typing doesn't pick up the Flow decorator
+            fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
+            aws_env=config.aws_env,
+            counter=classifier_concurrency_limit,
+            batches=classifier_document_batches,
+            parameters=parameters,
+            unwrap_result=True,
+        )
+
+        all_raw_successes.extend(raw_successes)
+        all_raw_failures.extend(raw_failures)
 
     # The type of response when running as a sub deployment is:
     #   <class 'inference.BatchInferenceResult'>

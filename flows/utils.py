@@ -535,12 +535,25 @@ async def map_as_sub_flow(
 ) -> tuple[Sequence[FlowRun], Sequence[BaseException | FlowRun]]: ...
 
 
+@overload
 async def map_as_sub_flow(
     fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    batches: Generator[Sequence[T], None, None],
-    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    batches: Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None],
+    parameters: Callable[
+        [tuple[ClassifierSpec, Sequence[DocumentStem]]], dict[str, Any]
+    ],
+    unwrap_result: Literal[True],
+) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]: ...
+
+
+async def map_as_sub_flow(
+    fn: Flow[P, R],
+    aws_env: AwsEnv,
+    counter: PositiveInt,
+    batches: Generator[Any, None, None],
+    parameters: Callable[[Any], dict[str, Any]],
     unwrap_result: bool,
 ) -> tuple[Sequence[R | FlowRun], Sequence[BaseException | FlowRun]]:
     """
