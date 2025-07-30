@@ -284,7 +284,7 @@ def main(
         # Save the classifier to a file locally
         classifier_path = get_local_classifier_path(
             target_path=target_path,
-            next_version=next_version,
+            version=next_version,
         )
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
         classifier.save(classifier_path)
