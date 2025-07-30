@@ -94,7 +94,7 @@ def create_and_link_model_artifact(
     os.environ["AWS_PROFILE"] = storage_link.aws_env.value
 
     artifact = wandb.Artifact(  # type: ignore
-        name=classifier.name,
+        name=classifier.id,
         type="model",
         metadata=metadata,
     )
@@ -261,11 +261,12 @@ def main(
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
 
+        target_path = f"{namespace.project}/{classifier.id}"  # e.g. 'Q123/v4prnc54'
+
         # Lookup the next version (aka the new version) before saving, even if we're
         # not uploading or tracking, so the classifier has the correct version
-        target_path = (
-            f"{namespace.project}/{classifier.name}"  # e.g. 'Q123/KeywordClassifier'
-        )
+        # Note that as we use the id and the id changes whenever the model changes,
+        # the version would almost always be v0 in practice.
         next_version = get_next_version(
             namespace=namespace,
             target_path=target_path,
