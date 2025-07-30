@@ -4,6 +4,7 @@ import re
 import time
 from io import BytesIO
 from pathlib import Path
+from typing import Any, Callable, Generator
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -11,6 +12,7 @@ import boto3
 import pytest
 from prefect.flows import flow
 
+from flows.inference import parameters
 from flows.utils import (
     DocumentStem,
     SlackNotify,
@@ -22,10 +24,11 @@ from flows.utils import (
     get_file_stems_for_document_id,
     get_labelled_passage_paths,
     iterate_batch,
+    map_as_sub_flow,
     remove_translated_suffix,
     s3_file_exists,
 )
-from scripts.cloud import ClassifierSpec
+from scripts.cloud import AwsEnv, ClassifierSpec
 
 
 @pytest.mark.parametrize(
@@ -495,3 +498,53 @@ async def test_gather_and_report_matches_asyncio_gather_with_exceptions(
     gather_error_messages = sorted([str(e) for e in gather_exceptions])
     report_error_messages = sorted([str(e) for e in report_exceptions])
     assert gather_error_messages == report_error_messages == ["error1", "error2"]
+
+
+@pytest.mark.parametrize(
+    "batches,parameters,unwrap_result",
+    [
+        (
+            (
+                batch
+                for batch in [
+                    [
+                        (
+                            ClassifierSpec(name="CCLW", alias="1.1"),
+                            [DocumentStem("CCLW.executive.1.1")],
+                        ),
+                        (
+                            ClassifierSpec(name="CCLW", alias="1.2"),
+                            [DocumentStem("CCLW.executive.1.2")],
+                        ),
+                    ]
+                ]
+            ),
+            parameters,
+            True,
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_map_as_sub_flow(
+    batches: Generator[Any, None, None],
+    parameters: Callable[[Any], dict[str, Any]],
+    unwrap_result: bool,
+) -> None:
+    """Test that map_as_sub_flow works as expected."""
+
+    @flow
+    def some_function() -> None:
+        pass
+
+    # No overloads for "map_as_sub_flow" match the provided argumentsbasedpyrightreportCallIssue
+    # utils.py(541, 11): Overload 3 is the closest match
+    _ = await map_as_sub_flow(
+        fn=some_function,  # pyright: ignore[reportArgumentType]
+        aws_env=AwsEnv.sandbox,
+        counter=1,
+        batches=batches,
+        parameters=parameters,
+        config_json={"foo": "bar"},
+        # Currently we only have an overload for the True unwrap_result case.
+        unwrap_result=unwrap_result,
+    )

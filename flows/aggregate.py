@@ -541,10 +541,12 @@ async def aggregate(
         n_documents_in_batch,
     )
 
-    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
+    def parameters(
+        config_json: dict[str, Any], batch: Sequence[DocumentStem]
+    ) -> dict[str, Any]:
         return {
             "document_stems": batch,
-            "config_json": config.model_dump(),
+            "config_json": config_json,
             "classifier_specs": classifier_specs,
             "run_output_identifier": run_output_identifier,
         }
@@ -556,6 +558,7 @@ async def aggregate(
         counter=n_batches,
         batches=batches,
         parameters=parameters,
+        config_json=config.model_dump(),
         unwrap_result=False,
     )
 

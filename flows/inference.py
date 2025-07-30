@@ -947,6 +947,20 @@ def group_inference_results_into_states(
     return list(failures_in), successes
 
 
+def parameters(
+    config_json: dict[str, Any],
+    batch: tuple[ClassifierSpec, Sequence[DocumentStem]],
+) -> dict[str, Any]:
+    classifier_spec = batch[0]
+    batch_document_stems = batch[1]
+    return {
+        "batch": batch_document_stems,
+        "config_json": config_json,
+        "classifier_name": classifier_spec.name,
+        "classifier_alias": classifier_spec.alias,
+    }
+
+
 @flow(
     log_prints=True,
     on_failure=[SlackNotify.message],
@@ -1019,18 +1033,6 @@ async def inference(
     document_batches = iterate_batch(filtered_file_stems, batch_size)
     classifier_document_batches = create_classifier_batch_generator(document_batches)
 
-    def parameters(
-        batch: tuple[ClassifierSpec, Sequence[DocumentStem]],
-    ) -> dict[str, Any]:
-        classifier_spec = batch[0]
-        batch_document_stems = batch[1]
-        return {
-            "batch": batch_document_stems,
-            "config_json": config.to_json(),
-            "classifier_name": classifier_spec.name,
-            "classifier_alias": classifier_spec.alias,
-        }
-
     with Profiler(
         printer=print,
         name="running classifier inference with map_as_sub_flow",
@@ -1042,6 +1044,7 @@ async def inference(
             counter=classifier_concurrency_limit,
             batches=classifier_document_batches,
             parameters=parameters,
+            config_json=config.to_json(),
             unwrap_result=True,
         )
 

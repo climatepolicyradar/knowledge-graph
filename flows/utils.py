@@ -519,7 +519,8 @@ async def map_as_sub_flow(
     aws_env: AwsEnv,
     counter: PositiveInt,
     batches: Generator[Sequence[T], None, None],
-    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    parameters: Callable[[dict[str, Any], Sequence[T]], dict[str, Any]],
+    config_json: dict[str, Any],
     unwrap_result: Literal[True],
 ) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]: ...
 
@@ -530,7 +531,8 @@ async def map_as_sub_flow(
     aws_env: AwsEnv,
     counter: PositiveInt,
     batches: Generator[Sequence[T], None, None],
-    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    parameters: Callable[[dict[str, Any], Sequence[T]], dict[str, Any]],
+    config_json: dict[str, Any],
     unwrap_result: Literal[False],
 ) -> tuple[Sequence[FlowRun], Sequence[BaseException | FlowRun]]: ...
 
@@ -542,8 +544,9 @@ async def map_as_sub_flow(
     counter: PositiveInt,
     batches: Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None],
     parameters: Callable[
-        [tuple[ClassifierSpec, Sequence[DocumentStem]]], dict[str, Any]
+        [dict[str, Any], tuple[ClassifierSpec, Sequence[DocumentStem]]], dict[str, Any]
     ],
+    config_json: dict[str, Any],
     unwrap_result: Literal[True],
 ) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]: ...
 
@@ -553,7 +556,8 @@ async def map_as_sub_flow(
     aws_env: AwsEnv,
     counter: PositiveInt,
     batches: Generator[Any, None, None],
-    parameters: Callable[[Any], dict[str, Any]],
+    parameters: Callable[[dict[str, Any], Any], dict[str, Any]],
+    config_json: dict[str, Any],
     unwrap_result: bool,
 ) -> tuple[Sequence[R | FlowRun], Sequence[BaseException | FlowRun]]:
     """
@@ -582,7 +586,7 @@ async def map_as_sub_flow(
             semaphore,
             run_deployment(
                 name=qualified_name,
-                parameters=parameters(batch),
+                parameters=parameters(config_json, batch),
                 # Rely on the flow's own timeout, if any, to make sure it
                 # eventually ends[1].
                 #
