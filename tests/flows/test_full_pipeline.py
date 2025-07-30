@@ -122,10 +122,14 @@ def test_validate_aggregation_inference_configs_raises_value_error(
 
 
 class MockFlowWithOptions:
+    """Mock flow with options that returns a given value."""
+
     def __init__(self, return_value):
+        """Mock __init__ method that sets the return value."""
         self.return_value = return_value
 
     async def __call__(self, **kwargs):
+        """Mock __call__ method that returns the return value."""
         return self.return_value
 
 
