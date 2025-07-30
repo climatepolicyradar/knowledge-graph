@@ -39,7 +39,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     # Create a mock S3 client
     mock_s3_client = Mock()
 
-    target_path = "Q123/test_classifier"
+    target_path = "Q123/v4prnc54"
     storage_upload = StorageUpload(
         target_path=target_path,
         next_version="v3",
@@ -58,7 +58,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     assert bucket == expected_bucket
 
     # Assert the key structure is correct
-    assert key == "Q123/test_classifier/v3.pickle"
+    assert key == "Q123/v4prnc54/v3.pickle"
 
     # Verify that the upload_file method was called with correct arguments
     mock_s3_client.upload_file.assert_called_once_with(
@@ -111,7 +111,7 @@ def test_create_and_link_model_artifact():
 
         # Then the artifact was created with correct parameters
         mock_artifact_class.assert_called_once_with(
-            name=mock_classifier.name,
+            name=mock_classifier.id,
             type="model",
             metadata={"aws_env": aws_env.value},
         )
@@ -136,10 +136,9 @@ def test_get_next_version_with_existing(mock_api):
 
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
-    mock_classifier.name = "KeywordClassifier"
     mock_classifier.concept.wikibase_id = "Q123"
 
-    wandb_target_entity = f"{namespace.project}/{mock_classifier.name}"
+    wandb_target_entity = f"{namespace.project}/{mock_classifier.id}"
     next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v3"
@@ -149,13 +148,12 @@ def test_get_next_version_with_existing(mock_api):
 def test_get_next_version_with_default(mock_api):
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
-    mock_classifier.name = "KeywordClassifier"
     mock_classifier.concept.wikibase_id = "Q123"
 
     mock_api.side_effect = CommError(
         "artifact 'test_classifier:latest' not found in 'test_entity/Q123'"
     )
-    wandb_target_entity = f"{namespace.project}/{mock_classifier.name}"
+    wandb_target_entity = f"{namespace.project}/{mock_classifier.id}"
     next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v0"
