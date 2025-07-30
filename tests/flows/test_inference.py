@@ -458,11 +458,7 @@ def test_remove_sabin_file_stems(
 
 
 def test_group_inference_results_into_states(snapshot):
-    batch_1_document_stems = [
-        DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-        DocumentStem("CCLW.executive.10512.5360"),
-    ]
-    batch_2_document_stems = [
+    batch_document_stems = [
         DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
         DocumentStem("CCLW.executive.10512.5360"),
     ]
@@ -470,14 +466,14 @@ def test_group_inference_results_into_states(snapshot):
     # Test data separated into successes and failures as expected by the new signature
     successes = [
         BatchInferenceResult(
-            batch_document_stems=batch_1_document_stems,
-            successful_document_stems=batch_1_document_stems,
+            batch_document_stems=batch_document_stems,
+            successful_document_stems=batch_document_stems,
             classifier_name="Q200",
             classifier_alias="v5",
         ),
         BatchInferenceResult(
-            batch_document_stems=batch_2_document_stems,
-            successful_document_stems=batch_2_document_stems,
+            batch_document_stems=batch_document_stems,
+            successful_document_stems=batch_document_stems,
             classifier_name="Q201",
             classifier_alias="v6",
         ),
