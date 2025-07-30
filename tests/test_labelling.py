@@ -8,6 +8,10 @@ from dotenv import find_dotenv, load_dotenv
 from src.labelling import ArgillaSession
 
 load_dotenv(find_dotenv())
+pytest.skip(
+    reason="These tests actually create a dataset in Argilla when run, so skipping",
+    allow_module_level=True,
+)
 
 
 def test_combine_datasets():
