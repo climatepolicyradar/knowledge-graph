@@ -83,7 +83,11 @@ def main(
         console.log(f"✅ Created a {classifier}")
 
         # Save the classifier
-        classifier_path = get_local_classifier_path(concept, classifier)
+        target_path = f"{concept.wikibase_id}/{classifier.id}"
+        version = str(classifier.version if classifier.version else "v0")
+        classifier_path = get_local_classifier_path(
+            target_path=target_path, version=version
+        )
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
         classifier.save(classifier_path)
         console.log(f"✅ Saved {classifier} to {classifier_path}")
