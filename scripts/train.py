@@ -40,6 +40,10 @@ def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
 class StorageUpload(BaseModel):
     """Represents the storage configuration for model artifacts in S3."""
 
+    target_path: str = Field(
+        ...,
+        description="The target path in S3 where the model artifact will be stored.",
+    )
     next_version: str = Field(
         ...,
         description="The next version used for this artifact.",
@@ -67,7 +71,7 @@ class StorageLink(BaseModel):
     )
 
 
-def link_model_artifact(
+def create_and_link_model_artifact(
     run: Run,
     classifier: Classifier,
     storage_link: StorageLink,
@@ -101,6 +105,7 @@ def link_model_artifact(
     )
     artifact.add_reference(uri=uri, checksum=True)
 
+    # Log the artifact to W&B, creating it within a wandb project
     artifact = run.log_artifact(artifact)
     artifact = artifact.wait()
 
@@ -147,7 +152,6 @@ def upload_model_artifact(
     classifier: Classifier,
     classifier_path: Path,
     storage_upload: StorageUpload,
-    namespace: Namespace,
     s3_client: Any,
 ) -> tuple[str, str]:
     """
@@ -155,12 +159,10 @@ def upload_model_artifact(
 
     :param classifier: The classifier object.
     :type classifier: Classifier
-    :param classifier_path: The path to the classifier file.
+    :param classifier_path: The local path to the classifier file.
     :type classifier_path: Path
     :param storage_upload: The configuration for uploading the artifact.
     :type storage_upload: StorageUpload
-    :param namespace: The W&B configuration containing project and entity.
-    :type namespace: Namespace
     :param s3_client: The S3 client used for uploading.
     :type s3_client: Any
     :return: The bucket name and the key of the uploaded artifact.
@@ -169,10 +171,8 @@ def upload_model_artifact(
     bucket = f"cpr-{storage_upload.aws_env.value}-models"
 
     key = os.path.join(
-        namespace.project,
-        classifier.name,
-        storage_upload.next_version,
-        "model.pickle",
+        storage_upload.target_path,
+        f"{storage_upload.next_version}.pickle",
     )
 
     console.log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
@@ -263,7 +263,9 @@ def main(
 
         # Lookup the next version (aka the new version) before saving, even if we're
         # not uploading or tracking, so the classifier has the correct version
-        target_path = f"{namespace.project}/{classifier.name}"
+        target_path = (
+            f"{namespace.project}/{classifier.name}"  # e.g. 'Q123/KeywordClassifier'
+        )
         next_version = get_next_version(
             namespace=namespace,
             target_path=target_path,
@@ -275,8 +277,11 @@ def main(
         # Set this _before_ the model is saved to disk
         classifier.version = Version(next_version)
 
-        # Save the classifier to a file with the concept ID in the name
-        classifier_path = get_local_classifier_path(classifier)
+        # Save the classifier to a file locally
+        classifier_path = get_local_classifier_path(
+            target_path=target_path,
+            next_version=next_version,
+        )
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
         classifier.save(classifier_path)
         console.log(f"Saved {classifier} to {classifier_path}")
@@ -286,6 +291,7 @@ def main(
             s3_client = get_s3_client(aws_env, region_name)
 
             storage_upload = StorageUpload(
+                target_path=target_path,
                 next_version=next_version,
                 aws_env=aws_env,
             )
@@ -294,7 +300,6 @@ def main(
                 classifier,
                 classifier_path,
                 storage_upload,
-                namespace,
                 s3_client=s3_client,
             )
 
@@ -304,7 +309,7 @@ def main(
                 aws_env=aws_env,
             )
 
-            link_model_artifact(
+            create_and_link_model_artifact(
                 run,  # type: ignore
                 classifier,
                 storage_link,
