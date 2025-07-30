@@ -79,7 +79,7 @@ jobs:
         run: just vespa_dev_setup
 
       - name: Run tests
-        run: just test -v -m "'not flaky_on_ci and not transformers'" --ignore tests/test_labelling.py
+        run: just test -v -m "'not flaky_on_ci and not transformers'"
 
   deploy_prefect_sandbox:
     name: "Deploy"
