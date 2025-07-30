@@ -999,6 +999,12 @@ async def inference(
     )
     filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
 
+    removed_sabin_file_count = len(validated_file_stems) - len(filtered_file_stems)
+
+    print(
+        f"excluded: {removed_sabin_file_count} Sabin files from being processed by the pipeline"
+    )
+
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
