@@ -9,8 +9,8 @@ from scripts.train import (
     Namespace,
     StorageLink,
     StorageUpload,
+    create_and_link_model_artifact,
     get_next_version,
-    link_model_artifact,
     main,
     upload_model_artifact,
 )
@@ -39,7 +39,9 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     # Create a mock S3 client
     mock_s3_client = Mock()
 
+    target_path = "Q123/test_classifier"
     storage_upload = StorageUpload(
+        target_path=target_path,
         next_version="v3",
         aws_env=aws_env,
     )
@@ -49,7 +51,6 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
         classifier=mock_classifier,
         classifier_path=test_file_path,
         storage_upload=storage_upload,
-        namespace=Namespace(project=WikibaseID("Q123"), entity="test_entity"),
         s3_client=mock_s3_client,
     )
 
@@ -57,7 +58,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     assert bucket == expected_bucket
 
     # Assert the key structure is correct
-    assert key == "Q123/test_classifier/v3/model.pickle"
+    assert key == "Q123/test_classifier/v3.pickle"
 
     # Verify that the upload_file method was called with correct arguments
     mock_s3_client.upload_file.assert_called_once_with(
@@ -82,7 +83,7 @@ def test_main_track_false_upload_true():
         )
 
 
-def test_link_model_artifact():
+def test_create_and_link_model_artifact():
     # Given there's a model that's been uploaded to S3
     mock_run = Mock()
     mock_classifier = Mock()
@@ -102,7 +103,7 @@ def test_link_model_artifact():
         mock_artifact_instance = Mock()
         mock_artifact_class.return_value = mock_artifact_instance
 
-        link_model_artifact(
+        create_and_link_model_artifact(
             mock_run,
             mock_classifier,
             storage_link,
