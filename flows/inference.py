@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from collections import Counter
+from collections import defaultdict
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
@@ -164,7 +164,7 @@ class InferenceResult(BaseModel):
         """
         The set of document stems that were successfully processed.
 
-        A document stem is considered successful if it was succesful across all
+        A document stem is considered successful if it was successful across all
         classifiers. For example, if a document successfully had inference run in one
         batch for classifier A, but failed for classifier B, then the document stem is
         considered unsuccessful.
@@ -173,25 +173,25 @@ class InferenceResult(BaseModel):
         result for a classifier.
         """
 
-        # Create an array containing all the successful document stem results from all
-        # batches. Therefore this contains duplicates of the same document
-        # stem if we run on multiple classifiers. We can then count the occurence of a
-        # document stem in the successful results to ascertain whether it was successful.
-        # E.g. we ran on 10 classifiers but only got 9 successful occurences of the
-        # document stem and thus it failed.
+        document_classifier_mapping: dict[DocumentStem, set[ClassifierSpec]] = (
+            defaultdict(set)
+        )
 
-        all_successful_document_stems: list[DocumentStem] = []
         for batch_inference_result in self.batch_inference_results:
-            all_successful_document_stems.extend(
-                batch_inference_result.successful_document_stems
+            classifier_spec = ClassifierSpec(
+                name=batch_inference_result.classifier_name,
+                alias=batch_inference_result.classifier_alias,
             )
 
-        counter = Counter(all_successful_document_stems)
+            for document_stem in batch_inference_result.successful_document_stems:
+                document_classifier_mapping[document_stem].add(classifier_spec)
+
+        expected_classifier_specs = set(self.classifier_specs)
 
         return {
-            successful_document_stem
-            for successful_document_stem, count in counter.items()
-            if count == len(self.classifier_specs)
+            document_stem
+            for document_stem, successful_classifiers in document_classifier_mapping.items()
+            if successful_classifiers >= expected_classifier_specs
         }
 
 
