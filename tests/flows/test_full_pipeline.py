@@ -207,7 +207,7 @@ async def test_full_pipeline_no_config_provided(
         assert mock_inference.mock_calls == [
             call.with_options(
                 # TODO: Make dynamic
-                result_storage="s3-bucket/s3-bucket/cpr-sandbox-prefect-results-cache"
+                result_storage="s3-bucket/cpr-sandbox-prefect-results-cache"
             )
         ]
 
@@ -305,7 +305,7 @@ async def test_full_pipeline_with_full_config(
         assert mock_inference.mock_calls == [
             call.with_options(
                 # TODO: Make dynamic
-                result_storage="s3-bucket/s3-bucket/cpr-sandbox-prefect-results-cache"
+                result_storage="s3-bucket/cpr-sandbox-prefect-results-cache"
             )
         ]
 
@@ -414,7 +414,7 @@ async def test_full_pipeline_with_inference_failure(
         assert mock_inference.mock_calls == [
             call.with_options(
                 # TODO: Make dynamic
-                result_storage="s3-bucket/s3-bucket/cpr-sandbox-prefect-results-cache"
+                result_storage="s3-bucket/cpr-sandbox-prefect-results-cache"
             )
         ]
 
@@ -467,6 +467,8 @@ async def test_full_pipeline_with_inference_failure(
         assert mock_inference.mock_calls == [
             call.with_options(
                 # TODO: Make dynamic
-                result_storage="s3-bucket/s3-bucket/cpr-sandbox-prefect-results-cache"
+                result_storage="s3-bucket/cpr-sandbox-prefect-results-cache"
             )
         ]
+        assert mock_aggregate.call_count == 0
+        assert mock_indexing.call_count == 0
