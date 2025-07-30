@@ -507,7 +507,7 @@ async def test_inference_batch_of_documents(
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
-    mock_prefect_s3_block,
+    mock_prefect_blocks,
     snapshot,
 ):
     """Test successful batch processing of documents."""
@@ -623,7 +623,7 @@ async def test_inference_batch_of_documents_with_failures(
     mock_wandb,
     mock_bucket,
     snapshot,
-    mock_prefect_s3_block,
+    mock_prefect_blocks,
 ):
     """Test batch processing with some document failures."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -695,7 +695,7 @@ async def test_inference_batch_of_documents_empty_batch(
     mock_wandb,
     mock_bucket,
     snapshot,
-    mock_prefect_s3_block,
+    mock_prefect_blocks,
 ):
     """Test batch processing with empty batch."""
     mock_wandb_init, mock_run, _ = mock_wandb

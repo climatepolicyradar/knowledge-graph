@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 from prefect.client.schemas.objects import State, StateType
@@ -17,7 +17,6 @@ from flows.full_pipeline import (
     validate_aggregation_inference_configs,
 )
 from flows.inference import (
-    INFERENCE_BATCH_SIZE_DEFAULT,
     BatchInferenceResult,
     InferenceResult,
 )
@@ -122,12 +121,21 @@ def test_validate_aggregation_inference_configs_raises_value_error(
     assert expected_error in str(e.value)
 
 
+class MockFlowWithOptions:
+    def __init__(self, return_value):
+        self.return_value = return_value
+
+    async def __call__(self, **kwargs):
+        return self.return_value
+
+
 @pytest.mark.asyncio
 async def test_full_pipeline_no_config_provided(
     test_config: InferenceConfig,
     test_aggregate_config: AggregationConfig,
     aggregate_inference_results_document_stems,
     mock_run_output_identifier_str,
+    mock_prefect_blocks,
 ) -> None:
     """Test the flow when no aggregation or inference config is provided - should create default configs."""
 
@@ -135,7 +143,7 @@ async def test_full_pipeline_no_config_provided(
     with (
         patch(
             "flows.full_pipeline.inference",
-            new_callable=AsyncMock,
+            Mock(),
         ) as mock_inference,
         patch(
             "flows.full_pipeline.aggregate",
@@ -158,21 +166,22 @@ async def test_full_pipeline_no_config_provided(
         mock_inference_create.return_value = test_config
         mock_aggregate_create.return_value = test_aggregate_config
 
-        mock_inference.return_value = Completed(
-            message="Successfully ran inference on all batches!",
-            data=InferenceResult(
-                batch_inference_results=[
-                    BatchInferenceResult(
-                        successful_document_stems=list(
-                            aggregate_inference_results_document_stems
+        mock_inference.with_options.return_value = MockFlowWithOptions(
+            Completed(
+                message="Successfully ran inference on all batches!",
+                data=InferenceResult(
+                    batch_inference_results=[
+                        BatchInferenceResult(
+                            successful_document_stems=list(
+                                aggregate_inference_results_document_stems
+                            ),
+                            failed_document_stems=[],
+                            classifier_name="Q100",
+                            classifier_alias="v1",
                         ),
-                        failed_document_stems=[],
-                        classifier_name="Q100",
-                        classifier_alias="v1",
-                    ),
-                ],
-                unexpected_failures=[],
-            ),
+                    ],
+                ),
+            )
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -190,13 +199,13 @@ async def test_full_pipeline_no_config_provided(
         mock_aggregate_create.assert_called_once()
 
         # Verify sub-flows were called with correct parameters
-        mock_inference.assert_called_once()
-        call_args = mock_inference.call_args
-        assert call_args.kwargs["config"] == test_config
-        assert call_args.kwargs["classifier_specs"] is None
-        assert call_args.kwargs["document_ids"] is None
-        assert call_args.kwargs["use_new_and_updated"] is False
-        assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
+        assert len(mock_inference.mock_calls) == 1
+        assert mock_inference.mock_calls == [
+            call.with_options(
+                # TODO: Make dynamic
+                result_storage="s3-bucket/s3-bucket/cpr-sandbox-prefect-results-cache"
+            )
+        ]
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
@@ -222,6 +231,7 @@ async def test_full_pipeline_with_full_config(
     test_aggregate_config,
     aggregate_inference_results_document_stems,
     mock_run_output_identifier_str,
+    mock_prefect_blocks,
 ):
     """Test the flow with complete config provided."""
 
@@ -246,13 +256,14 @@ async def test_full_pipeline_with_full_config(
             data=InferenceResult(
                 batch_inference_results=[
                     BatchInferenceResult(
-                        successful_document_stems=aggregate_inference_results_document_stems,
+                        successful_document_stems=list(
+                            aggregate_inference_results_document_stems
+                        ),
                         failed_document_stems=[],
                         classifier_name="Q100",
                         classifier_alias="v1",
                     ),
                 ],
-                unexpected_failures=[],
             ),
         )
         mock_aggregate.return_value = State(
@@ -325,6 +336,7 @@ async def test_full_pipeline_with_inference_failure(
     test_config,
     test_aggregate_config,
     mock_run_output_identifier_str,
+    mock_prefect_blocks,
 ):
     """Test the flows handling of inference failures modes."""
 
