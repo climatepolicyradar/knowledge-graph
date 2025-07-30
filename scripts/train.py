@@ -88,7 +88,10 @@ def create_and_link_model_artifact(
     :return: The created W&B artifact.
     :rtype: wandb.Artifact
     """
-    metadata = {"aws_env": storage_link.aws_env.value}
+    metadata = {
+        "aws_env": storage_link.aws_env.value,
+        "classifier_name": classifier.name,
+    }
 
     # Set this, so W&B knows where to look for AWS credentials profile
     os.environ["AWS_PROFILE"] = storage_link.aws_env.value

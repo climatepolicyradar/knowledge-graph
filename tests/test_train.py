@@ -113,7 +113,10 @@ def test_create_and_link_model_artifact():
         mock_artifact_class.assert_called_once_with(
             name=mock_classifier.id,
             type="model",
-            metadata={"aws_env": aws_env.value},
+            metadata={
+                "aws_env": aws_env.value,
+                "classifier_name": "test_classifier",
+            },
         )
 
         # Then the S3 reference was added to the artifact
