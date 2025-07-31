@@ -737,10 +737,12 @@ async def index(
 
     batches = iterate_batch(document_stems, batch_size)
 
-    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
+    def parameters(
+        config_json: dict[str, Any], batch: Sequence[DocumentStem]
+    ) -> dict[str, Any]:
         return {
             "document_stems": batch,
-            "config_json": config.model_dump(),
+            "config_json": config_json,
             "run_output_identifier": run_output_identifier,
             "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
@@ -752,6 +754,7 @@ async def index(
         counter=indexer_concurrency_limit,
         batches=batches,
         parameters=parameters,
+        config_json=config.model_dump(),
         unwrap_result=False,
     )
 
