@@ -788,8 +788,9 @@ def test_inference_result_all_successful() -> None:
         "Should fail when some documents fail for some classifiers"
     )
 
-    # Only documents that succeeded for both classifiers should be in successful_document_stems
-    assert result.successful_document_stems == set(all_documents), (
+    # Only documents that succeeded for both classifiers should be in
+    # fully_successfully_classified_document_stems
+    assert result.fully_successfully_classified_document_stems == set(all_documents), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
 
@@ -840,12 +841,12 @@ def test_inference_result_partial_failures() -> None:
     assert result.failed, "Should fail when some documents fail for some classifiers"
 
     # Only documents that succeeded for both classifiers should be in
-    # successful_document_stems
+    # fully_successfully_classified_document_stems
     expected_successful = {
         DocumentStem("TEST.executive.3.3"),
         DocumentStem("TEST.executive.4.4"),
     }
-    assert result.successful_document_stems == expected_successful, (
+    assert result.fully_successfully_classified_document_stems == expected_successful, (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
 

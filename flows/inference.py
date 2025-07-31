@@ -157,10 +157,10 @@ class InferenceResult(BaseModel):
 
         return any([result.failed for result in self.batch_inference_results]) or len(
             self.document_stems
-        ) != len(self.successful_document_stems)
+        ) != len(self.fully_successfully_classified_document_stems)
 
     @cached_property
-    def successful_document_stems(self) -> set[DocumentStem]:
+    def fully_successfully_classified_document_stems(self) -> set[DocumentStem]:
         """
         The set of document stems that were successfully processed.
 
