@@ -458,23 +458,22 @@ def test_remove_sabin_file_stems(
 
 
 def test_group_inference_results_into_states(snapshot):
+    batch_document_stems = [
+        DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+        DocumentStem("CCLW.executive.10512.5360"),
+    ]
+
     # Test data separated into successes and failures as expected by the new signature
     successes = [
         BatchInferenceResult(
-            successful_document_stems=[
-                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-                DocumentStem("CCLW.executive.10512.5360"),
-            ],
-            failed_document_stems=[],
+            batch_document_stems=batch_document_stems,
+            successful_document_stems=batch_document_stems,
             classifier_name="Q200",
             classifier_alias="v5",
         ),
         BatchInferenceResult(
-            successful_document_stems=[
-                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-                DocumentStem("CCLW.executive.10512.5360"),
-            ],
-            failed_document_stems=[],
+            batch_document_stems=batch_document_stems,
+            successful_document_stems=batch_document_stems,
             classifier_name="Q201",
             classifier_alias="v6",
         ),
@@ -559,8 +558,8 @@ async def test_inference_batch_of_documents(
 
     result = await result_state.result()
     assert isinstance(result, BatchInferenceResult)
+    assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
-    assert result.failed_document_stems == []
     assert result.classifier_name == classifier_name
     assert result.classifier_alias == classifier_alias
 
@@ -745,67 +744,111 @@ async def test_inference_batch_of_documents_empty_batch(
     # Since batch is empty, we don't need to check any specific files - there should be none created
 
 
-def test_batch_inference_result_properties() -> None:
-    """Test the InferenceResult object."""
+def test_inference_result_all_successful() -> None:
+    """Test InferenceResult when all documents are successful for all classifiers."""
 
-    batch_inference_result_1 = BatchInferenceResult(
-        successful_document_stems=[
-            DocumentStem("TEST.executive.1.1"),
-            DocumentStem("TEST.executive.2.2"),
-        ],
+    # Setup: 5 documents, 2 classifiers
+    all_documents = [
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
+    ]
+
+    # Classifier Q100: All documents succeed
+    all_successful_batch_1 = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
         classifier_name="Q100",
         classifier_alias="v1",
     )
 
-    result = InferenceResult(
-        batch_inference_results=[
-            batch_inference_result_1,
-        ],
+    # Classifier Q101: All documents succeed
+    all_successful_batch_2 = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_name="Q101",
+        classifier_alias="v1",
     )
 
-    assert not result.failed
-    assert result.successful_document_stems == {
+    # Create inference result with both classifiers
+    result = InferenceResult(
+        document_stems=all_documents,
+        classifier_specs=[
+            ClassifierSpec(name="Q100", alias="v1"),
+            ClassifierSpec(name="Q101", alias="v1"),
+        ],
+        batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
+    )
+
+    # All documents are successful as we have successes for all documents
+    # and all classifiers in the InferenceResult
+    assert not result.failed, (
+        "Should fail when some documents fail for some classifiers"
+    )
+
+    # Only documents that succeeded for both classifiers should be in
+    # fully_successfully_classified_document_stems
+    assert result.fully_successfully_classified_document_stems == set(all_documents), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+
+def test_inference_result_partial_failures() -> None:
+    """Test InferenceResult when some documents fail for some classifiers."""
+
+    # Setup: 5 documents, 2 classifiers
+    all_documents = [
         DocumentStem("TEST.executive.1.1"),
         DocumentStem("TEST.executive.2.2"),
-    }
-    assert result.failed_document_stems == set()
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
+    ]
 
-    batch_inference_result_2 = BatchInferenceResult(
+    # Classifier Q100: All documents succeed
+    all_successful_batch = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_name="Q100",
+        classifier_alias="v1",
+    )
+
+    # Classifier Q101: Only 2 documents succeed
+    partial_success_batch = BatchInferenceResult(
+        batch_document_stems=all_documents,
         successful_document_stems=[
             DocumentStem("TEST.executive.3.3"),
             DocumentStem("TEST.executive.4.4"),
-        ],
-        failed_document_stems=[
-            (
-                DocumentStem("TEST.executive.1.1"),
-                Exception("Failed to run inference on TEST.executive.1.1"),
-            ),
-            (
-                DocumentStem("TEST.executive.5.5"),
-                Exception("Failed to run inference on TEST.executive.5.5"),
-            ),
         ],
         classifier_name="Q101",
         classifier_alias="v1",
     )
 
+    # Create inference result with both classifiers
     result = InferenceResult(
-        batch_inference_results=[
-            batch_inference_result_1,
-            batch_inference_result_2,
+        document_stems=all_documents,
+        classifier_specs=[
+            ClassifierSpec(name="Q100", alias="v1"),
+            ClassifierSpec(name="Q101", alias="v1"),
         ],
+        batch_inference_results=[all_successful_batch, partial_success_batch],
     )
 
-    assert result.failed
-    assert result.successful_document_stems == {
-        DocumentStem("TEST.executive.2.2"),
+    # A document is only considered successful if it succeeds for ALL classifiers
+    # Since Q101 failed on 3 documents, those documents are considered failed overall
+    assert result.failed, "Should fail when some documents fail for some classifiers"
+
+    # Only documents that succeeded for both classifiers should be in
+    # fully_successfully_classified_document_stems
+    expected_successful = {
         DocumentStem("TEST.executive.3.3"),
         DocumentStem("TEST.executive.4.4"),
     }
-    assert result.failed_document_stems == {
-        DocumentStem("TEST.executive.1.1"),
-        DocumentStem("TEST.executive.5.5"),
-    }
+    assert result.fully_successfully_classified_document_stems == expected_successful, (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
 
 
 def test_jsonl_serialization_roundtrip():
