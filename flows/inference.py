@@ -1010,14 +1010,17 @@ async def inference(
 
     def create_classifier_batch_generator(
         document_batches: Generator[Sequence[DocumentStem], None, None],
+        classifiers: Sequence[ClassifierSpec],
     ) -> Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None]:
         """Create batches that pair each classifier with document batches."""
-        for classifier_spec in classifier_specs:
-            for document_batch in document_batches:
-                yield (classifier_spec, document_batch)
+        for document_batch in document_batches:
+            for classifier in classifiers:
+                yield (classifier, document_batch)
 
     document_batches = iterate_batch(filtered_file_stems, batch_size)
-    classifier_document_batches = create_classifier_batch_generator(document_batches)
+    classifier_document_batches = create_classifier_batch_generator(
+        document_batches, classifier_specs
+    )
 
     def parameters(
         batch: tuple[ClassifierSpec, Sequence[DocumentStem]],
