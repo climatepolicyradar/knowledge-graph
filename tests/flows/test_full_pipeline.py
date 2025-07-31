@@ -161,17 +161,22 @@ async def test_full_pipeline_no_config_provided(
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
+                document_stems=list(aggregate_inference_results_document_stems),
+                classifier_specs=[
+                    ClassifierSpec(name="Q100", alias="v1"),
+                ],
                 batch_inference_results=[
                     BatchInferenceResult(
+                        batch_document_stems=list(
+                            aggregate_inference_results_document_stems
+                        ),
                         successful_document_stems=list(
                             aggregate_inference_results_document_stems
                         ),
-                        failed_document_stems=[],
                         classifier_name="Q100",
                         classifier_alias="v1",
                     ),
                 ],
-                unexpected_failures=[],
             ),
         )
         mock_aggregate.return_value = State(
@@ -244,15 +249,18 @@ async def test_full_pipeline_with_full_config(
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
+                document_stems=list(aggregate_inference_results_document_stems),
+                classifier_specs=[
+                    ClassifierSpec(name="Q100", alias="v1"),
+                ],
                 batch_inference_results=[
                     BatchInferenceResult(
+                        batch_document_stems=aggregate_inference_results_document_stems,
                         successful_document_stems=aggregate_inference_results_document_stems,
-                        failed_document_stems=[],
                         classifier_name="Q100",
                         classifier_alias="v1",
                     ),
                 ],
-                unexpected_failures=[],
             ),
         )
         mock_aggregate.return_value = State(
@@ -347,8 +355,9 @@ async def test_full_pipeline_with_inference_failure(
             DocumentImportId("CCLW.executive.1.1"),
             DocumentImportId("CCLW.executive.2.2"),
         ]
-        document_stems_failed = [
-            (DocumentStem("CCLW.executive.1.1"), Exception("Test error"))
+        document_stems_batch = [
+            DocumentStem("CCLW.executive.1.1"),
+            DocumentStem("CCLW.executive.2.2"),
         ]
         document_stems_successful = [DocumentStem("CCLW.executive.2.2")]
         classifier_spec = ClassifierSpec(name="Q100", alias="v1")
@@ -360,15 +369,16 @@ async def test_full_pipeline_with_inference_failure(
                 msg="Some inference batches had failures!",
                 metadata={},
                 data=InferenceResult(
+                    document_stems=list(document_stems_batch),
+                    classifier_specs=[classifier_spec],
                     batch_inference_results=[
                         BatchInferenceResult(
+                            batch_document_stems=document_stems_batch,
                             successful_document_stems=document_stems_successful,
-                            failed_document_stems=document_stems_failed,
                             classifier_name=classifier_spec.name,
                             classifier_alias=classifier_spec.alias,
                         ),
                     ],
-                    unexpected_failures=[],
                 ),
             ),
         )
