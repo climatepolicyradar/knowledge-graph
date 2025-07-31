@@ -58,7 +58,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     assert bucket == expected_bucket
 
     # Assert the key structure is correct
-    assert key == "Q123/v4prnc54/v3.pickle"
+    assert key == "Q123/v4prnc54/v3/model.pickle"
 
     # Verify that the upload_file method was called with correct arguments
     mock_s3_client.upload_file.assert_called_once_with(
@@ -89,7 +89,7 @@ def test_create_and_link_model_artifact():
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
     bucket = "cpr-labs-models"
-    key = "Q123/test_classifier/v3/model.pickle"
+    key = "Q123/v4prnc54/v3/model.pickle"
     aws_env = AwsEnv.labs
 
     storage_link = StorageLink(

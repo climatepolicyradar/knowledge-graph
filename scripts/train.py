@@ -175,7 +175,8 @@ def upload_model_artifact(
 
     key = os.path.join(
         storage_upload.target_path,
-        f"{storage_upload.next_version}.pickle",
+        storage_upload.next_version,
+        "model.pickle",
     )
 
     console.log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
