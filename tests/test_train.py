@@ -2,15 +2,15 @@ import os
 from unittest.mock import ANY, Mock, patch
 
 import pytest
-import wandb
+from wandb.errors.errors import CommError
 
 from scripts.cloud import AwsEnv
 from scripts.train import (
     Namespace,
     StorageLink,
     StorageUpload,
+    create_and_link_model_artifact,
     get_next_version,
-    link_model_artifact,
     main,
     upload_model_artifact,
 )
@@ -39,7 +39,9 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     # Create a mock S3 client
     mock_s3_client = Mock()
 
+    target_path = "Q123/v4prnc54"
     storage_upload = StorageUpload(
+        target_path=target_path,
         next_version="v3",
         aws_env=aws_env,
     )
@@ -49,7 +51,6 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
         classifier=mock_classifier,
         classifier_path=test_file_path,
         storage_upload=storage_upload,
-        namespace=Namespace(project=WikibaseID("Q123"), entity="test_entity"),
         s3_client=mock_s3_client,
     )
 
@@ -57,7 +58,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     assert bucket == expected_bucket
 
     # Assert the key structure is correct
-    assert key == "Q123/test_classifier/v3/model.pickle"
+    assert key == "Q123/v4prnc54/v3/model.pickle"
 
     # Verify that the upload_file method was called with correct arguments
     mock_s3_client.upload_file.assert_called_once_with(
@@ -82,13 +83,13 @@ def test_main_track_false_upload_true():
         )
 
 
-def test_link_model_artifact():
+def test_create_and_link_model_artifact():
     # Given there's a model that's been uploaded to S3
     mock_run = Mock()
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
     bucket = "cpr-labs-models"
-    key = "Q123/test_classifier/v3/model.pickle"
+    key = "Q123/v4prnc54/v3/model.pickle"
     aws_env = AwsEnv.labs
 
     storage_link = StorageLink(
@@ -102,7 +103,7 @@ def test_link_model_artifact():
         mock_artifact_instance = Mock()
         mock_artifact_class.return_value = mock_artifact_instance
 
-        link_model_artifact(
+        create_and_link_model_artifact(
             mock_run,
             mock_classifier,
             storage_link,
@@ -110,9 +111,12 @@ def test_link_model_artifact():
 
         # Then the artifact was created with correct parameters
         mock_artifact_class.assert_called_once_with(
-            name=mock_classifier.name,
+            name=mock_classifier.id,
             type="model",
-            metadata={"aws_env": aws_env.value},
+            metadata={
+                "aws_env": aws_env.value,
+                "classifier_name": "test_classifier",
+            },
         )
 
         # Then the S3 reference was added to the artifact
@@ -135,10 +139,10 @@ def test_get_next_version_with_existing(mock_api):
 
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
-    mock_classifier.name = "test_classifier"
-    wikibase_id = "Q123"
+    mock_classifier.concept.wikibase_id = "Q123"
 
-    next_version = get_next_version(namespace, wikibase_id, mock_classifier)
+    wandb_target_entity = f"{namespace.project}/{mock_classifier.id}"
+    next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v3"
 
@@ -147,13 +151,12 @@ def test_get_next_version_with_existing(mock_api):
 def test_get_next_version_with_default(mock_api):
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
-    mock_classifier.name = "test_classifier"
-    wikibase_id = "Q123"
+    mock_classifier.concept.wikibase_id = "Q123"
 
-    mock_api.side_effect = wandb.errors.CommError(
+    mock_api.side_effect = CommError(
         "artifact 'test_classifier:latest' not found in 'test_entity/Q123'"
     )
-
-    next_version = get_next_version(namespace, wikibase_id, mock_classifier)
+    wandb_target_entity = f"{namespace.project}/{mock_classifier.id}"
+    next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v0"
