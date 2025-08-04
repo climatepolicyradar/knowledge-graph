@@ -8,7 +8,7 @@ from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Optional, TypeAlias, TypeVar
+from typing import Any, Final, Iterable, Optional, TypeAlias, TypeVar
 
 import boto3
 import wandb
@@ -957,16 +957,6 @@ def group_inference_results_into_states(
     return list(failures_in), successes
 
 
-def create_classifier_batch_generator(
-    document_batches: Generator[Sequence[DocumentStem], None, None],
-    classifier_specs: Sequence[ClassifierSpec],
-) -> Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None]:
-    """Create batches containing a classifier spec and a batch of document stems."""
-    for document_batch in document_batches:
-        for classifier_spec in classifier_specs:
-            yield (classifier_spec, document_batch)
-
-
 @flow(
     log_prints=True,
     on_failure=[SlackNotify.message],
@@ -1029,20 +1019,23 @@ async def inference(
     all_raw_failures = []
 
     document_batches = iterate_batch(filtered_file_stems, batch_size)
-    classifier_document_batches = create_classifier_batch_generator(
-        document_batches, classifier_specs
-    )
 
     def parameters(
-        batch: tuple[ClassifierSpec, Sequence[DocumentStem]],
-    ) -> dict[str, Any]:
-        classifier_spec, batch_document_stems = batch
-        return {
-            "batch": batch_document_stems,
-            "config_json": config.to_json(),
-            "classifier_name": classifier_spec.name,
-            "classifier_alias": classifier_spec.alias,
-        }
+        classifier_specs: Sequence[ClassifierSpec],
+        document_batches: Generator[Sequence[DocumentStem], None, None],
+    ) -> Generator[dict[str, Any], None, None]:
+        for batch in document_batches:
+            for classifier_spec in classifier_specs:
+                yield {
+                    "batch": batch,
+                    "config_json": config.to_json(),
+                    "classifier_name": classifier_spec.name,
+                    "classifier_alias": classifier_spec.alias,
+                }
+
+    parameterised_batches: Iterable[dict[str, Any]] = parameters(
+        classifier_specs, document_batches
+    )
 
     with Profiler(
         printer=print,
@@ -1053,8 +1046,7 @@ async def inference(
             fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
-            batches=classifier_document_batches,
-            parameters=parameters,
+            parameterised_batches=parameterised_batches,
             unwrap_result=True,
         )
 
