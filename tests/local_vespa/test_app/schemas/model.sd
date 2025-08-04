@@ -1,0 +1,13 @@
+schema model {
+    document model {
+        # E.g. RulesBasedClassifier
+        field name type string {
+            indexing: attribute | summary | index
+            match: substring
+        }
+        # E.g. kx7m3p9w
+        field id type string {
+            indexing: attribute | summary | index
+        }
+    }
+}

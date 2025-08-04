@@ -1,0 +1,67 @@
+[
+    {
+        "id": "id:doc_search:document_passage::CCLW.document.i00000005.n0000.1457",
+        "fields": {
+            "text_block_id": "1457",
+            "search_weights_ref": "id:doc_search:search_weights::default_weights",
+            "family_document_ref": "id:doc_search:family_document::CCLW.document.i00000005.n0000",
+            "text_block_page": 83,
+            "text_block_type": "BlockType.TABLE_CELL",
+            "text_block": "Clean production technologies reduce local air pollution and greenhouse gas emissions",
+            "concepts": [
+                {
+                    "name": "air pollution",
+                    "id": "q880",
+                    "start": 45,
+                    "end": 58,
+                    "model": "r5n8qz2t",
+                    "timestamp": "2024-09-26T16:15:39.817896",
+                    "parent_concepts": [
+                        {
+                            "id": "q110",
+                            "name": "environmental issues"
+                        }
+                    ],
+                    "parent_concept_ids_flat": "q110,"
+                }
+            ],
+            "concepts_instances": {
+                "q880": {
+                    "concept_id": "q880",
+                    "model_id_latest": "r5n8qz2t",
+                    "model_id_all": "kx7m3p9w,r5n8qz2t",
+                    "spans_by_model_version": {
+                        "kx7m3p9w": [{ "start": 45, "end": 58 }],
+                        "r5n8qz2t": [
+                            { "start": 45, "end": 58 },
+                            { "start": 63, "end": 84 }
+                        ]
+                    },
+                    "parent_concept_ids_flat": "q110,",
+                    "parent_concepts": [
+                        {
+                            "id": "q110",
+                            "name": "environmental issues"
+                        }
+                    ]
+                },
+                "q730": {
+                    "concept_id": "q730",
+                    "model_id_latest": "w3kb7x1s",
+                    "model_id_all": "d9fg4j6m,w3kb7x1s",
+                    "spans_by_model_version": {
+                        "d9fg4j6m": [{ "start": 6, "end": 27 }],
+                        "w3kb7x1s": [{ "start": 6, "end": 27 }]
+                    },
+                    "parent_concept_ids_flat": "q110,",
+                    "parent_concepts": [
+                        {
+                            "id": "q110",
+                            "name": "environmental issues"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+]

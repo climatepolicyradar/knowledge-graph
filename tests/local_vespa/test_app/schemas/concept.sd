@@ -1,0 +1,18 @@
+schema concept {
+    document concept {
+        # E.g. fishing sector
+        field name type string {
+            indexing: attribute | summary | index
+        }
+        # E.g. Q880
+        field id type string {
+            indexing: attribute | summary | index
+        }
+        # E.g. Q110, 290
+        #
+        # We can't do self-references, so use strings for the IDs.
+        field parents type array<string> {
+            indexing: attribute | summary
+        }
+    }
+}
