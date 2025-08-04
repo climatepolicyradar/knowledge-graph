@@ -256,10 +256,11 @@ async def test_inference(
     doc_ids = [
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
+    print(f"Doc Ids to processing: {doc_ids}")
+    assert len(doc_ids) > 0
     with prefect_test_harness():
         filtered_file_stems = await inference(
-            # FIXME: ValueError: `latest` is not allowed
-            classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
+            classifier_specs=[ClassifierSpec(name="Q788", alias="v")],
             document_ids=doc_ids,
             config=test_config,
         )
