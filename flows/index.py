@@ -4,7 +4,7 @@ import os
 import random
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -737,16 +737,18 @@ async def index(
 
     batches = iterate_batch(document_stems, batch_size)
 
-    def parameters(
-        config_json: dict[str, Any], batch: Sequence[DocumentStem]
-    ) -> dict[str, Any]:
+    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
         return {
             "document_stems": batch,
-            "config_json": config_json,
+            "config_json": config.model_dump(),
             "run_output_identifier": run_output_identifier,
             "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
         }
+
+    parameterised_batches: Iterable[dict[str, Any]] = (
+        parameters(batch) for batch in batches
+    )
 
     successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
         fn=index_batch_of_documents,  # pyright: ignore[reportArgumentType]
@@ -754,7 +756,7 @@ async def index(
         counter=indexer_concurrency_limit,
         batches=batches,
         parameters=parameters,
-        config_json=config.model_dump(),
+        parameterised_batches=parameterised_batches,
         unwrap_result=False,
     )
 
