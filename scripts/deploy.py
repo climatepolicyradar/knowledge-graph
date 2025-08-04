@@ -74,7 +74,7 @@ def existing(
                     wikibase_id=WikibaseID(spec.name),
                     classifier=classifier.name,
                     version=classifier.version,
-                    within_aws_env=to_aws_env,
+                    aws_env=to_aws_env,
                     primary=True,
                 )
 
@@ -83,7 +83,7 @@ def existing(
 
 @app.command()
 def new(
-    to_aws_env: Annotated[
+    aws_env: Annotated[
         AwsEnv,
         typer.Option(
             help="AWS environment to deploy to",
@@ -116,7 +116,7 @@ def new(
                 wikibase_id=wikibase_id,
                 track=True,
                 upload=True,
-                aws_env=to_aws_env,
+                aws_env=aws_env,
             )
 
             if classifier.version is None:
@@ -129,11 +129,11 @@ def new(
                     wikibase_id=wikibase_id,
                     classifier=classifier.name,
                     version=classifier.version,
-                    within_aws_env=to_aws_env,
+                    aws_env=aws_env,
                     primary=True,
                 )
 
-    get_all_available_classifiers([to_aws_env])
+    get_all_available_classifiers([aws_env])
 
 
 if __name__ == "__main__":
