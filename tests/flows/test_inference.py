@@ -256,11 +256,11 @@ async def test_inference(
     doc_ids = [
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
-    print(f"Doc Ids to processing: {doc_ids}")
+    print(f"Document Ids to process: {doc_ids}")
     assert len(doc_ids) > 0
     with prefect_test_harness():
         filtered_file_stems = await inference(
-            classifier_specs=[ClassifierSpec(name="Q788", alias="v")],
+            classifier_specs=[ClassifierSpec(name="Q788", alias="v13")],
             document_ids=doc_ids,
             config=test_config,
         )
