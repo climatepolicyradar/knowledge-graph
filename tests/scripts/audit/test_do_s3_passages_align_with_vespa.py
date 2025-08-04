@@ -1,3 +1,4 @@
+import pytest
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 
 from flows.boundary import DocumentImportId
@@ -5,6 +6,7 @@ from scripts.audit.do_s3_passages_align_with_vespa import get_vespa_passage_coun
 from tests.flows.conftest import *  # noqa: F403
 
 
+@pytest.mark.vespa
 def test_get_vespa_passage_counts(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
