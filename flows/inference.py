@@ -1035,8 +1035,7 @@ async def inference(
     def parameters(
         batch: tuple[ClassifierSpec, Sequence[DocumentStem]],
     ) -> dict[str, Any]:
-        classifier_spec = batch[0]
-        batch_document_stems = batch[1]
+        classifier_spec, batch_document_stems = batch
         return {
             "batch": batch_document_stems,
             "config_json": config.to_json(),
