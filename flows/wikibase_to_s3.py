@@ -154,7 +154,7 @@ async def wikibase_to_s3(config: Config | None = None):
         password=config.get_wikibase_password_secret_value(),
         url=config.get_wikibase_url(),
     )
-    wikibase_ids = wikibase.get_all_concept_ids()
+    wikibase_ids = await wikibase.get_all_concept_ids_async()
     logger.info(f"Found {len(wikibase_ids)} concept IDs in Wikibase")
 
     failed_wikibase_ids_uploads: list[WikibaseID] = []
@@ -164,7 +164,7 @@ async def wikibase_to_s3(config: Config | None = None):
         if i == start or i % config.logging_interval == 0:
             logger.info(f"Uploading concepts #{i}..#{next_interval}")
         try:
-            concept = wikibase.get_concept(
+            concept = await wikibase.get_concept_async(
                 wikibase_id, include_recursive_subconcept_of=True
             )
             upload_to_s3(config, concept)
