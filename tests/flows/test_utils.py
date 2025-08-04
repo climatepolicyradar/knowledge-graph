@@ -500,35 +500,25 @@ async def test_gather_and_report_matches_asyncio_gather_with_exceptions(
     assert gather_error_messages == report_error_messages == ["error1", "error2"]
 
 
-@pytest.mark.parametrize(
-    "unwrap_result",
-    [
-        (True),
-        (False),
-    ],
-)
+@pytest.mark.parametrize("unwrap_result", [True, False])
 @pytest.mark.asyncio
 @patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
-async def test_map_as_sub_flow(
+async def test_map_as_sub_flow_on_flow_success(
     mock_wait_for_semaphore,
     mock_flow,
     unwrap_result,
 ) -> None:
     """Test that map_as_sub_flow works as expected with successful flows."""
 
-    # Define the parameterised batch count.
+    flow_result: dict[str, Any] = {"status": "success", "data": "test_data"}
+    expected_flow_result_type = type(flow_result) if unwrap_result else FlowRun
     batches_count = 10
 
-    # Define the result of the flow.
-    flow_result: dict[str, Any] = {"status": "success", "data": "test_data"}
-
-    # Setup the mock
     mock_wait_for_semaphore.return_value = FlowRun(
         flow_id=uuid4(),
         state=State(type=StateType.COMPLETED, data=flow_result),
     )
 
-    # Call the function
     successes, failures = await map_as_sub_flow(
         fn=mock_flow,
         aws_env=AwsEnv.sandbox,
@@ -537,40 +527,29 @@ async def test_map_as_sub_flow(
         unwrap_result=unwrap_result,
     )
 
-    # Assertions
     assert mock_wait_for_semaphore.call_count == batches_count
-    expected_flow_result_type = dict if unwrap_result else FlowRun
     assert all(isinstance(success, expected_flow_result_type) for success in successes)
     assert len(successes) == batches_count
     assert not failures
 
 
-@pytest.mark.parametrize(
-    "unwrap_result",
-    [
-        (True),
-        (False),
-    ],
-)
+@pytest.mark.parametrize("unwrap_result", [True, False])
 @pytest.mark.asyncio
 @patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
-async def test_map_as_sub_flow_with_failure(
+async def test_map_as_sub_flow_on_flow_failure(
     mock_wait_for_semaphore,
     mock_flow,
     unwrap_result,
 ) -> None:
     """Test that map_as_sub_flow works as expected with a flow failure."""
 
-    # Define the parameterised batch count.
     batches_count = 10
 
-    # Setup the mock
     mock_wait_for_semaphore.return_value = FlowRun(
         flow_id=uuid4(),
         state=State(type=StateType.FAILED, data=ValueError("test_error")),
     )
 
-    # Call the function
     successes, failures = await map_as_sub_flow(
         fn=mock_flow,
         aws_env=AwsEnv.sandbox,
@@ -579,10 +558,7 @@ async def test_map_as_sub_flow_with_failure(
         unwrap_result=unwrap_result,
     )
 
-    # Assertions
     assert mock_wait_for_semaphore.call_count == batches_count
-
-    # For exceptions we return the FlowRun object.
     assert all(isinstance(failure, FlowRun) for failure in failures)
     assert len(failures) == batches_count
     assert not successes
