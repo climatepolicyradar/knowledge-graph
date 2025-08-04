@@ -109,7 +109,7 @@ def create_and_link_model_artifact(
     artifact.add_reference(uri=uri, checksum=True)
 
     # Log the artifact to W&B, creating it within a wandb project
-    artifact = run.log_artifact(artifact)
+    artifact = run.log_artifact(artifact, aliases=[storage_link.aws_env.value])
     artifact = artifact.wait()
 
     return artifact
