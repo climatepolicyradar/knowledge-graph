@@ -563,11 +563,6 @@ async def test_map_as_sub_flow_with_unwrap_result(
     assert mock_wait_for_semaphore.call_count == batches_count
     # For exceptions we return the FlowRun object.
     assert all(isinstance(failure, FlowRun) for failure in failures)
-    # assert all(
-    #     failure.state.result(raise_on_failure=False) == flow_result_failure
-    #     for failure in failures
-    #     if not isinstance(failure, BaseException) and failure.state
-    # )
     assert len(failures) == batches_count
     assert not successes
 
@@ -632,9 +627,8 @@ async def test_map_as_sub_flow_without_unwrap_result(
     )
 
     # Assertions
-    assert mock_wait_for_semaphore.called_count
+    assert mock_wait_for_semaphore.call_count == batches_count
     # For exceptions we return the FlowRun object.
     assert all(isinstance(failure, FlowRun) for failure in failures)
-    # assert all(failure == flow_result_failure for failure in failures)
     assert len(failures) == batches_count
     assert not successes
