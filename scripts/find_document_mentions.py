@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 
 import boto3
@@ -36,7 +37,7 @@ concept = Concept(
     preferred_label="document mention",
     alternative_labels=[
         "citation",
-        "referencereference to a document",
+        "reference to a document",
         "document reference",
         "something that looks like a reference to a document",
     ],
@@ -44,9 +45,9 @@ concept = Concept(
     definition="""
         A reference to a document which might appear somewhere in the climate policy radar database.
         That could be a formal citation or a loose, off-hand reference.
-        These should NOT be the names of governmental bodies or organisations, acronyms, the names of sub-articles, frameworks, or conventions, or other names which are not the title of a document.
-        Correct examples: 'The Paris Agreement', 'the 2015 Paris Agreement', 'Kenya's NDC', 'Singapore's First BTR'
-        Incorrect examples: 'Article 10', 'UNFCCC', 'Paris', 'COP-28', 'Chapter 3'
+        These should NOT be the names of governmental bodies or organisations, acronyms, the names of sub-articles, frameworks, or conventions, or other names which are not the title of a document.  Do not label the Paris Agreement, IPCC Guidelines, or simply 'NDC' as a document.
+        Correct examples: 'Kenya's NDC', 'Singapore's First BTR', 'National Strategy for Environmental Education for Sustainability'
+        Incorrect examples: 'Article 10', 'UNFCCC', 'Paris', 'COP-28', 'Chapter 3', '2020', 'Appendix IX', 'NDC', 'Paris Agreement', 'IPCC Guidelines 2006'
     """,
 )
 console.print(f"🤓 Created a concept: {concept}")
@@ -64,7 +65,9 @@ classifier = LLMClassifier(
 )
 console.print(f"🤖 Created a {classifier}")
 
-parser_output_dir = Path("data/processed/documents/translated_parser_outputs")
+parser_output_dir = Path(
+    "/Users/juliesaigusa/Documents/cpr/policy-mentions-classifier/data/BTRs"
+)
 parser_output_paths = list(parser_output_dir.rglob("*.json"))
 
 documents: list[BaseDocument] = []
@@ -82,8 +85,8 @@ document_passage_dict = {
         "document_source_url": document.document_source_url,
         "passages": [
             text_block.to_string()
-            for text_block in document.text_blocks
-            if len(text_block.to_string()) > 20
+            for text_block in (document.text_blocks or [])
+            if len(text_block.to_string()) > 20 and text_block.type == "Text"
         ],
     }
     for document in documents
@@ -94,7 +97,8 @@ n_passages = sum(
 console.print(f"📝 Gathered {n_passages} passages from {len(documents)} documents")
 
 labelled_passages: list[LabelledPassage] = []
-batch_size = 50
+error_passages: list[tuple[str, str]] = []
+batch_size = 1000
 with Progress(
     TextColumn("[progress.description]{task.description}"),
     MofNCompleteColumn(),
@@ -108,9 +112,20 @@ with Progress(
         f"Labeling passages with {classifier.name}", total=n_passages
     )
     for document_id, document_data in document_passage_dict.items():
+        console.print(f"[blue]🔍 Document ID: {document_id}[/blue]", style="bold")
         for i in range(0, len(document_data["passages"]), batch_size):
             batch_passages = document_data["passages"][i : i + batch_size]
-            batch_spans = classifier.predict_batch(batch_passages)
+            # time.sleep(60)
+            try:
+                batch_spans = classifier.predict_batch(batch_passages)
+            except Exception as e:
+                console.print(f"⚠️ [red]Error labelling passage[/red] ⚠️: {e}")
+                console.print(f"\nDocument ID: {document_id}")
+                console.print(f"\nPassage 1: {batch_passages[0]}")
+                console.print(f"\nLast passage: {batch_passages[-1]}")
+                error_passages.append((document_id, batch_passages[0]))
+                error_passages.append((document_id, batch_passages[-1]))
+                continue
 
             for passage_text, predicted_spans in zip(batch_passages, batch_spans):
                 try:
@@ -131,6 +146,7 @@ with Progress(
                         spans=[],
                         concept_id=concept.wikibase_id,
                     )
+                    continue
                 labelled_passages.append(labelled_passage)
 
             n_positive_passages = sum(
@@ -150,6 +166,8 @@ with Progress(
                 advance=len(batch_passages),
                 description=f"found {n_positive_passages} passages with document mentions",
             )
+            time.sleep(60)
+
 
 n_positive_passages = sum([bool(passage.spans) for passage in labelled_passages])
 n_spans = sum([len(passage.spans) for passage in labelled_passages])
@@ -169,5 +187,5 @@ for labelled_passage in labelled_passages:
             }
         )
 df = pd.DataFrame(rows)
-df.to_csv("document_mentions.csv", index=False)
+df.to_csv("./data/document_mentions.csv", index=False)
 console.print("💾 Saved labelled spans to data/labelled_spans.csv")
