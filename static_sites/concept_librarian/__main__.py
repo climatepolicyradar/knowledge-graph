@@ -23,6 +23,7 @@ from static_sites.concept_librarian.checks import (
     ensure_positive_and_negative_labels_dont_overlap,
     validate_alternative_label_uniqueness,
     validate_circular_hierarchical_relationships,
+    validate_concept_depth_and_descendant_balance,
     validate_concept_label_casing,
     validate_hierarchical_relationship_symmetry,
     validate_related_relationship_symmetry,
@@ -143,7 +144,7 @@ async def async_main():
         validate_circular_hierarchical_relationships,
         check_for_unconnected_concepts,
         validate_concept_label_casing,
-        # validate_concept_depth_and_descendant_balance,
+        validate_concept_depth_and_descendant_balance,
     ]:
         issues.extend(check(concepts))
         logging.info('🔬 Ran "%s"', check.__name__)
