@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 from logging import getLogger
-from typing import Any, Optional
+from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
 
 import dotenv
 import httpx
@@ -18,24 +18,53 @@ from src.identifiers import WikibaseID
 logger = getLogger(__name__)
 dotenv.load_dotenv()
 
+T = TypeVar("T")
 
-def async_to_sync(async_func):
-    """Decorator to convert async methods to sync interface"""
+
+def async_to_sync(
+    async_func: Callable[..., Coroutine[Any, Any, T]],
+) -> Callable[..., T]:
+    """
+    Decorator that converts async methods to synchronous interface
+
+    This decorator wraps async methods to provide a synchronous interface by
+    automatically managing the event loop. It creates a new event loop if none exists,
+    or raises an error if called from within an existing async context to prevent
+    deadlocks.
+
+    The decorator preserves the original function's return type, so type checkers should
+    understand that sync wrappers return the actual objects, not coroutines.
+
+    Args:
+        async_func: An async function that returns a Coroutine[Any, Any, T]
+
+    Returns:
+        A synchronous function that returns T (the unwrapped result type)
+
+    Example:
+        @async_to_sync
+        async def get_data(self) -> MyData:
+            return await self.get_data_async()
+
+        # Type checker knows this returns MyData, not Awaitable[MyData]
+        data = session.get_data()
+    """
 
     @functools.wraps(async_func)
-    def wrapper(self, *args, **kwargs):
-        # If we're already in an async context, just await the function
+    def wrapper(self, *args, **kwargs) -> T:
         try:
-            asyncio.get_running_loop()
-            raise RuntimeError(
-                f"Cannot call sync version of {async_func.__name__} from async context. "
-                f"Use {async_func.__name__} directly."
-            )
-        except RuntimeError:
-            # No event loop running, so create one and run the function
-            return asyncio.run(async_func(self, *args, **kwargs))
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                raise RuntimeError(
+                    f"Cannot call sync version of {async_func.__name__} from async context. "
+                    f"Use {async_func.__name__}_async directly."
+                )
+        except RuntimeError as e:
+            if "Cannot call sync version" in str(e):
+                raise
+        return asyncio.run(async_func(self, *args, **kwargs))
 
-    return wrapper
+    return cast(Callable[..., T], wrapper)
 
 
 class WikibaseSession:
@@ -471,7 +500,8 @@ class WikibaseSession:
                     tasks.append(task)
                     valid_concepts_in_batch += 1
                 else:
-                    pass  # No entity info for this concept
+                    # No entity info for this concept - skip it
+                    continue
 
             # Execute all concept fetches concurrently
             if tasks:
