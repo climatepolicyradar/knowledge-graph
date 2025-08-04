@@ -57,7 +57,11 @@ def test_main(
     os.environ["USE_AWS_PROFILES"] = "false"
     os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
 
-    monkeypatch.setattr("wandb.init", lambda **kwargs: Mock())
+    init_mock = Mock()
+    init_mock.return_value.__enter__ = Mock()
+    init_mock.return_value.__exit__ = Mock()
+
+    monkeypatch.setattr("wandb.init", init_mock)
     monkeypatch.setattr("wandb.Artifact", lambda **kwargs: Mock())
 
     monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
