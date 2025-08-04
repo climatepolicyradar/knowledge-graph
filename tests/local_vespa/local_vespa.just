@@ -23,14 +23,18 @@ vespa_healthy:
 # Deploys schema to dev instance
 vespa_deploy_schema:
 	vespa config set target local
-	@vespa deploy tests/local_vespa/test_app --wait 180
+	@vespa deploy -l debug tests/local_vespa/test_app --wait 180
 
 # Feeds some test data into local Vespa instance
 vespa_feed_data:
 	vespa config set target local
 	vespa feed --target local tests/local_vespa/test_documents/search_weights.json
-	vespa feed --target local tests/local_vespa/test_documents/family_document.json
-	vespa feed --target local tests/local_vespa/test_documents/document_passage.json
+	# vespa feed --target local tests/local_vespa/test_documents/family_document.json
+	# vespa feed --target local tests/local_vespa/test_documents/document_passage.json
+	vespa feed --target local tests/local_vespa/test_documents/model.json
+	vespa feed --target local tests/local_vespa/test_documents/concept.json
+	vespa feed --target local tests/local_vespa/test_documents/document_passage_with_new_schema.json
+	vespa feed --target local tests/local_vespa/test_documents/family_document_with_new_schema.json
 
 # Feeds some large test data into local Vespa instance
 vespa_feed_large_data:
