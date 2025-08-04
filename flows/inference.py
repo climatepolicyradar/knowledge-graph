@@ -971,6 +971,16 @@ def parameters(
     }
 
 
+def create_classifier_batch_generator(
+    document_batches: Generator[Sequence[DocumentStem], None, None],
+    classifier_specs: Sequence[ClassifierSpec],
+) -> Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None]:
+    """Create batches containing a classifier spec and a batch of document stems."""
+    for document_batch in document_batches:
+        for classifier_spec in classifier_specs:
+            yield (classifier_spec, document_batch)
+
+
 @flow(
     log_prints=True,
     on_failure=[SlackNotify.message],
@@ -1031,15 +1041,6 @@ async def inference(
 
     all_raw_successes = []
     all_raw_failures = []
-
-    def create_classifier_batch_generator(
-        document_batches: Generator[Sequence[DocumentStem], None, None],
-        classifiers: Sequence[ClassifierSpec],
-    ) -> Generator[tuple[ClassifierSpec, Sequence[DocumentStem]], None, None]:
-        """Create batches that pair each classifier with document batches."""
-        for document_batch in document_batches:
-            for classifier in classifiers:
-                yield (classifier, document_batch)
 
     document_batches = iterate_batch(filtered_file_stems, batch_size)
     classifier_document_batches = create_classifier_batch_generator(
