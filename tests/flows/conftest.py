@@ -687,6 +687,12 @@ def mock_flow():
     """Mock Prefect flow object."""
     mock_flow = MagicMock(spec=Flow)
     mock_flow.name = "TestFlow"
+
+    async def mock_flow_fn():
+        pass
+
+    mock_flow.fn = mock_flow_fn
+    mock_flow.isasync = True
     yield mock_flow
 
 

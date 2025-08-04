@@ -4,15 +4,15 @@ import re
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Generator
+from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import boto3
 import pytest
+from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.flows import flow
 
-from flows.inference import parameters
 from flows.utils import (
     DocumentStem,
     SlackNotify,
@@ -500,51 +500,141 @@ async def test_gather_and_report_matches_asyncio_gather_with_exceptions(
     assert gather_error_messages == report_error_messages == ["error1", "error2"]
 
 
-@pytest.mark.parametrize(
-    "batches,parameters,unwrap_result",
-    [
-        (
-            (
-                batch
-                for batch in [
-                    [
-                        (
-                            ClassifierSpec(name="CCLW", alias="1.1"),
-                            [DocumentStem("CCLW.executive.1.1")],
-                        ),
-                        (
-                            ClassifierSpec(name="CCLW", alias="1.2"),
-                            [DocumentStem("CCLW.executive.1.2")],
-                        ),
-                    ]
-                ]
-            ),
-            parameters,
-            True,
-        ),
-    ],
-)
 @pytest.mark.asyncio
-async def test_map_as_sub_flow(
-    batches: Generator[Any, None, None],
-    parameters: Callable[[Any], dict[str, Any]],
-    unwrap_result: bool,
+@patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
+async def test_map_as_sub_flow_with_unwrap_result(
+    mock_wait_for_semaphore,
+    mock_flow,
 ) -> None:
-    """Test that map_as_sub_flow works as expected."""
+    """Test that map_as_sub_flow works as expected with unwrap_result=True."""
 
-    @flow
-    def some_function() -> None:
-        pass
+    # Define the parameterised batches.
+    batches_count = 10
 
-    # No overloads for "map_as_sub_flow" match the provided argumentsbasedpyrightreportCallIssue
-    # utils.py(541, 11): Overload 3 is the closest match
-    _ = await map_as_sub_flow(
-        fn=some_function,  # pyright: ignore[reportArgumentType]
+    def get_parameterised_batches():
+        return ({} for _ in range(batches_count))
+
+    # Define the result of the flow.
+    flow_result: dict[str, Any] = {"status": "success", "data": "test_data"}
+
+    # Setup the mock
+    mock_wait_for_semaphore.return_value = FlowRun(
+        flow_id=uuid4(),
+        state=State(type=StateType.COMPLETED, data=flow_result),
+    )
+
+    # Call the function
+    successes, failures = await map_as_sub_flow(
+        fn=mock_flow,
         aws_env=AwsEnv.sandbox,
         counter=1,
-        batches=batches,
-        parameters=parameters,
-        config_json={"foo": "bar"},
-        # Currently we only have an overload for the True unwrap_result case.
-        unwrap_result=unwrap_result,
+        parameterised_batches=get_parameterised_batches(),
+        unwrap_result=True,
     )
+
+    # Assertions
+    assert mock_wait_for_semaphore.call_count == batches_count
+    assert all(isinstance(success, type(flow_result)) for success in successes)
+    assert all(success == flow_result for success in successes)
+    assert not failures
+
+    # Reset the mock
+    mock_wait_for_semaphore.reset_mock()
+
+    # Define the result of the flow as a failure.
+    flow_result_failure: BaseException = ValueError("test_error")
+
+    # Setup the mock
+    mock_wait_for_semaphore.return_value = FlowRun(
+        flow_id=uuid4(),
+        state=State(type=StateType.FAILED, data=flow_result_failure),
+    )
+
+    # Call the function
+    successes, failures = await map_as_sub_flow(
+        fn=mock_flow,
+        aws_env=AwsEnv.sandbox,
+        counter=1,
+        parameterised_batches=get_parameterised_batches(),
+        unwrap_result=True,
+    )
+
+    # Assertions
+    assert mock_wait_for_semaphore.call_count == batches_count
+    # For exceptions we return the FlowRun object.
+    assert all(isinstance(failure, FlowRun) for failure in failures)
+    # assert all(
+    #     failure.state.result(raise_on_failure=False) == flow_result_failure
+    #     for failure in failures
+    #     if not isinstance(failure, BaseException) and failure.state
+    # )
+    assert len(failures) == batches_count
+    assert not successes
+
+
+@pytest.mark.asyncio
+@patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
+async def test_map_as_sub_flow_without_unwrap_result(
+    mock_wait_for_semaphore,
+    mock_flow,
+) -> None:
+    """Test that map_as_sub_flow works as expected with unwrap_result=False."""
+
+    # Define the parameterised batches.
+    batches_count = 10
+
+    def get_parameterised_batches():
+        return ({} for _ in range(batches_count))
+
+    # Define the result of the flow.
+    flow_result: dict[str, Any] = {"status": "success", "data": "test_data"}
+
+    # Setup the mock
+    mock_wait_for_semaphore.return_value = FlowRun(
+        flow_id=uuid4(),
+        state=State(type=StateType.COMPLETED, data=flow_result),
+    )
+
+    # Call the function
+    successes, failures = await map_as_sub_flow(
+        fn=mock_flow,
+        aws_env=AwsEnv.sandbox,
+        counter=1,
+        parameterised_batches=get_parameterised_batches(),
+        unwrap_result=False,
+    )
+
+    # Assertions
+    assert mock_wait_for_semaphore.call_count == batches_count
+    assert all(isinstance(success, FlowRun) for success in successes)
+    assert len(successes) == batches_count
+    assert not failures
+
+    # Reset the mock
+    mock_wait_for_semaphore.reset_mock()
+
+    # Define the result of the flow as a failure.
+    flow_result_failure: BaseException = ValueError("test_error")
+
+    # Setup the mock
+    mock_wait_for_semaphore.return_value = FlowRun(
+        flow_id=uuid4(),
+        state=State(type=StateType.FAILED, data=flow_result_failure),
+    )
+
+    # Call the function
+    successes, failures = await map_as_sub_flow(
+        fn=mock_flow,
+        aws_env=AwsEnv.sandbox,
+        counter=1,
+        parameterised_batches=get_parameterised_batches(),
+        unwrap_result=False,
+    )
+
+    # Assertions
+    assert mock_wait_for_semaphore.called_count
+    # For exceptions we return the FlowRun object.
+    assert all(isinstance(failure, FlowRun) for failure in failures)
+    # assert all(failure == flow_result_failure for failure in failures)
+    assert len(failures) == batches_count
+    assert not successes
