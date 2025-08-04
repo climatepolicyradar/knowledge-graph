@@ -556,7 +556,7 @@ async def aggregate(
         fn=aggregate_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=n_batches,
-        batches=parameterised_batches,
+        parameterised_batches=parameterised_batches,
         unwrap_result=False,
     )
 

@@ -1044,7 +1044,7 @@ async def inference(
             fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
-            batches=parameterised_batches,
+            parameterised_batches=parameterised_batches,
             unwrap_result=True,
         )
 
