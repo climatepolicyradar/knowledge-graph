@@ -8,7 +8,7 @@ from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Optional, TypeAlias, TypeVar
+from typing import Any, Final, Iterable, Optional, TypeAlias, TypeVar
 
 import boto3
 import wandb
@@ -1020,7 +1020,7 @@ async def inference(
 
     document_batches = iterate_batch(filtered_file_stems, batch_size)
 
-    def parameterise(
+    def parameters(
         classifier_specs: Sequence[ClassifierSpec],
         document_batches: Generator[Sequence[DocumentStem], None, None],
     ) -> Generator[dict[str, Any], None, None]:
@@ -1033,7 +1033,9 @@ async def inference(
                     "classifier_alias": classifier_spec.alias,
                 }
 
-    parameterised_batches = parameterise(classifier_specs, document_batches)
+    parameterised_batches: Iterable[dict[str, Any]] = parameters(
+        classifier_specs, document_batches
+    )
 
     with Profiler(
         printer=print,

@@ -1,6 +1,6 @@
 import json
 import os
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Iterable, Sequence
 from typing import Any, TypeAlias, TypeVar
 
 import aioboto3
@@ -549,7 +549,9 @@ async def aggregate(
             "run_output_identifier": run_output_identifier,
         }
 
-    parameterised_batches = (parameters(batch) for batch in batches)
+    parameterised_batches: Iterable[dict[str, Any]] = (
+        parameters(batch) for batch in batches
+    )
 
     successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
         # The typing doesn't pick up the Flow decorator
