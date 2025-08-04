@@ -541,9 +541,7 @@ async def aggregate(
         n_documents_in_batch,
     )
 
-    def parameters(
-        batch: Sequence[DocumentStem],
-    ) -> dict[str, Any]:
+    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
         return {
             "document_stems": batch,
             "config_json": config.model_dump(),

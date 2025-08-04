@@ -754,8 +754,6 @@ async def index(
         fn=index_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
-        batches=batches,
-        parameters=parameters,
         parameterised_batches=parameterised_batches,
         unwrap_result=False,
     )
