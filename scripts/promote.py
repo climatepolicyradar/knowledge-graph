@@ -338,11 +338,19 @@ def main(
     ] = False,
 ):
     """
-    Promote a model from one account to another.
+    Promote a model to the registry so it can be used downstream.
 
-    Optionally as the primary model. If a W&B model registry
-    collection doesn't exist for the concept, it'll
-    automatically be made as part of this script.
+    The model should already have been trained, meaning it will exist
+    as an artefact in wandb, with a linked model in s3 for the environment.
+
+    This script adds a link to the chosen model from the wandb registry as a
+    collection. Optionally the model can be made the primary version for the
+    AWS environment.
+
+    If a W&B model registry collection doesn't exist, it'll automatically be
+    made as part of this script.
+
+    Note: promoting between environments is not yet supported.
     """
     log.info("Starting model promotion process")
 
