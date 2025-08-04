@@ -1021,20 +1021,20 @@ async def inference(
     document_batches = iterate_batch(filtered_file_stems, batch_size)
 
     def parameters(
-        classifier_specs: Sequence[ClassifierSpec],
-        document_batches: Generator[Sequence[DocumentStem], None, None],
-    ) -> Generator[dict[str, Any], None, None]:
-        for batch in document_batches:
-            for classifier_spec in classifier_specs:
-                yield {
-                    "batch": batch,
-                    "config_json": config.to_json(),
-                    "classifier_name": classifier_spec.name,
-                    "classifier_alias": classifier_spec.alias,
-                }
+        classifier_spec: ClassifierSpec,
+        document_batch: Sequence[DocumentStem],
+    ) -> dict[str, Any]:
+        return {
+            "batch": document_batch,
+            "config_json": config.to_json(),
+            "classifier_name": classifier_spec.name,
+            "classifier_alias": classifier_spec.alias,
+        }
 
-    parameterised_batches: Iterable[dict[str, Any]] = parameters(
-        classifier_specs, document_batches
+    parameterised_batches: Iterable[dict[str, Any]] = (
+        parameters(classifier_spec, document_batch)
+        for document_batch in document_batches
+        for classifier_spec in classifier_specs
     )
 
     with Profiler(
