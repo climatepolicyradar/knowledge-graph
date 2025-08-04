@@ -159,44 +159,36 @@ def main(
     log.info(f"Using model collection: {target_path}...")
 
     log.info("Initializing Weights & Biases run...")
-    run = wandb.init(entity=ENTITY, project=wikibase_id, job_type=JOB_TYPE)
+    with wandb.init(entity=ENTITY, project=wikibase_id, job_type=JOB_TYPE) as run:
+        # Regardless of the promotion, we'll always be using some artifact.
+        #
+        # This also validates that the classifier exists. It relies on an
+        # artifiact not existing. That is, when trying to `use_artifact`
+        # below, it'll throw an exception.
+        artifact_id = f"{wikibase_id}/{classifier}:{version}"
+        log.info(f"Using model artifact: {artifact_id}...")
+        artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
-    # Regardless of the promotion, we'll always be using some artifact.
-    #
-    # This also validates that the classifier exists. It relies on an
-    # artifiact not existing. That is, when trying to `use_artifact`
-    # below, it'll throw an exception.
-    artifact_id = f"{wikibase_id}/{classifier}:{version}"
-    log.info(f"Using model artifact: {artifact_id}...")
-    artifact: wandb.Artifact = run.use_artifact(artifact_id)
+        api = wandb.Api()
 
-    api = wandb.Api()
+        check_existing_artifact_aliases(
+            api,
+            target_path,
+            version,
+            aws_env,
+        )
 
-    check_existing_artifact_aliases(
-        api,
-        target_path,
-        version,
-        aws_env,
-    )
+        aliases: Union[list[str], None] = [aws_env.value] if primary else None
 
-    aliases: Union[list[str], None] = [aws_env.value] if primary else None
+        # Link the artifact to a collection
+        log.info(f"Linking artifact to collection: {target_path}...")
+        run.link_artifact(
+            artifact=artifact,
+            target_path=target_path,
+            aliases=aliases,
+        )
 
-    # Link the artifact to a collection
-    #
-    # It will either be the Artifact that we originally used, if a
-    # _within_, or a newly logged Artifact, if _across_.
-    log.info(f"Linking artifact to collection: {target_path}...")
-    run.link_artifact(
-        artifact=artifact,
-        target_path=target_path,
-        aliases=aliases,
-    )
-
-    log.info("Finishing W&B run...")
-
-    run.finish()
-
-    log.info("Model promoted")
+        log.info("Model promoted")
 
 
 if __name__ == "__main__":
