@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import subprocess
@@ -405,6 +406,10 @@ def MockedWikibaseSession(
             # Skip login and redirects for tests - set them directly
             self._csrf_token = "test_csrf_token"
             self._redirects = {}
+
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
+
         return self._client
 
     WikibaseSession._get_client = mocked_get_client

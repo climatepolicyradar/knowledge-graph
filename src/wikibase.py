@@ -124,9 +124,12 @@ class WikibaseSession:
         """Get the HTTP client, initializing session on first use"""
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=self.DEFAULT_TIMEOUT)
-            self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
             await self._login()
             self._redirects = await self._get_all_redirects()
+
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
+
         return self._client
 
     async def _login(self):
