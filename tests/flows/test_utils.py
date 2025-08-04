@@ -539,7 +539,8 @@ async def test_map_as_sub_flow(
 
     # Assertions
     assert mock_wait_for_semaphore.call_count == batches_count
-    assert all(isinstance(success, type(flow_result)) for success in successes)
+    expected_flow_result_type = dict if unwrap_result else FlowRun
+    assert all(isinstance(success, expected_flow_result_type) for success in successes)
     assert len(successes) == batches_count
     assert not failures
 
