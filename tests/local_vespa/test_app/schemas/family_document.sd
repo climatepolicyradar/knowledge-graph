@@ -179,6 +179,39 @@ schema family_document {
             struct-field key { indexing: attribute }
             struct-field value { indexing: attribute }
         }
+
+        struct concept_instance {
+             # E.g. Q880
+             field concept_id type string {}
+             # E.g. n2nuerdn
+             field model_id_latest type string {}
+             # E.g. n2nuerdn, 9dgp6jgz
+             #
+             # Use a similar flattened approach, as
+             # parent_concept_ids_flat, due to Vespa limitations and
+             # how we've chosen to model this.
+             field model_id_all type string {}
+             # E.g. string is the model ID
+             field counts_by_model_version type map<string, int> {}
+        }
+
+        # The string is the concept ID, e.g. Q880
+        field concepts_instances type map<string, concept_instance> {
+            indexing: summary
+
+            struct-field key {
+                indexing: attribute
+            }
+            struct-field value.concept_id {
+                indexing: attribute
+            }
+            struct-field value.model_id_latest {
+                indexing: attribute
+            }
+            struct-field value.model_id_all {
+                indexing: attribute
+            }
+        }
     }
 
     fieldset default {
