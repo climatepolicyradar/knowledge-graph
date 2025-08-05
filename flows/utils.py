@@ -518,8 +518,7 @@ async def map_as_sub_flow(
     fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    batches: Generator[Sequence[T], None, None],
-    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    parameterised_batches: Generator[dict[str, Any], None, None],
     unwrap_result: Literal[True],
 ) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]: ...
 
@@ -529,8 +528,7 @@ async def map_as_sub_flow(
     fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    batches: Generator[Sequence[T], None, None],
-    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    parameterised_batches: Generator[dict[str, Any], None, None],
     unwrap_result: Literal[False],
 ) -> tuple[Sequence[FlowRun], Sequence[BaseException | FlowRun]]: ...
 
@@ -539,8 +537,7 @@ async def map_as_sub_flow(
     fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    batches: Generator[Sequence[T], None, None],
-    parameters: Callable[[Sequence[T]], dict[str, Any]],
+    parameterised_batches: Generator[dict[str, Any], None, None],
     unwrap_result: bool,
 ) -> tuple[Sequence[R | FlowRun], Sequence[BaseException | FlowRun]]:
     """
@@ -569,7 +566,7 @@ async def map_as_sub_flow(
             semaphore,
             run_deployment(
                 name=qualified_name,
-                parameters=parameters(batch),
+                parameters=parameterised_batch,
                 # Rely on the flow's own timeout, if any, to make sure it
                 # eventually ends[1].
                 #
@@ -579,7 +576,7 @@ async def map_as_sub_flow(
                 timeout=None,
             ),
         )
-        for batch in batches
+        for parameterised_batch in parameterised_batches
     ]
 
     def desc_update_fn(tasks, results) -> str:
