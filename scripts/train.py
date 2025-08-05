@@ -12,7 +12,7 @@ from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
-from scripts.utils import get_local_classifier_path
+from scripts.utils import ModelPath, get_local_classifier_path
 from src.classifier import Classifier, ClassifierFactory
 from src.identifiers import WikibaseID
 from src.version import Version
@@ -117,7 +117,7 @@ def create_and_link_model_artifact(
 
 def get_next_version(
     namespace: Namespace,
-    target_path: str,
+    target_path: ModelPath,
     classifier: Classifier,
 ) -> str:
     """
@@ -126,7 +126,7 @@ def get_next_version(
     :param namespace: The W&B configuration containing project and entity.
     :type namespace: WandBConfig
     :param target_path: The path to the classifier in W&B.
-    :type target_path: str
+    :type target_path: ModelPath
     :param classifier: The classifier object.
     :type classifier: Classifier
     :return: The next version string.
@@ -265,8 +265,9 @@ def main(
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
 
-        target_path = f"{namespace.project}/{classifier.id}"  # e.g. 'Q123/v4prnc54'
-
+        target_path = ModelPath(
+            wikibase_id=namespace.project, classifier_id=classifier.id
+        )
         # Lookup the next version (aka the new version) before saving, even if we're
         # not uploading or tracking, so the classifier has the correct version
         # Note that as we use the id and the id changes whenever the model changes,
@@ -296,7 +297,7 @@ def main(
             s3_client = get_s3_client(aws_env, region_name)
 
             storage_upload = StorageUpload(
-                target_path=target_path,
+                target_path=str(target_path),
                 next_version=next_version,
                 aws_env=aws_env,
             )

@@ -28,6 +28,8 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
+from prefect.logging import disable_run_logger
+from prefect.testing.utilities import prefect_test_harness
 from prefect_aws.s3 import S3Bucket
 from pydantic import SecretStr
 from requests.exceptions import ConnectionError
@@ -46,6 +48,13 @@ from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def prefect_test_fixture():
+    with prefect_test_harness(server_startup_timeout=120):
+        with disable_run_logger():
+            yield
 
 
 @pytest.fixture
@@ -687,6 +696,12 @@ def mock_flow():
     """Mock Prefect flow object."""
     mock_flow = MagicMock(spec=Flow)
     mock_flow.name = "TestFlow"
+
+    async def mock_flow_fn():
+        pass
+
+    mock_flow.fn = mock_flow_fn
+    mock_flow.isasync = True
     yield mock_flow
 
 
