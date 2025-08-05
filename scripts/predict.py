@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.progress import track
 
 from scripts.config import processed_data_dir
-from scripts.utils import get_local_classifier_path
+from scripts.utils import ModelPath, get_local_classifier_path
 from src.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
@@ -83,7 +83,7 @@ def main(
         console.log(f"✅ Created a {classifier}")
 
         # Save the classifier
-        target_path = f"{concept.wikibase_id}/{classifier.id}"
+        target_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier.id)
         version = str(classifier.version if classifier.version else "v0")
         classifier_path = get_local_classifier_path(
             target_path=target_path, version=version
