@@ -21,7 +21,6 @@ from src.version import Version
             {  # Labs environment, logged in
                 "wikibase_id": "Q123",
                 "classifier_id": "abcd2345",
-                "version": Version("v1"),
                 "aws_env": AwsEnv.labs,
                 "primary": False,
             },
@@ -32,7 +31,6 @@ from src.version import Version
             {  # Staging environment, logged in, primary
                 "wikibase_id": "Q456",
                 "classifier_id": "abcd2345",
-                "version": Version("v2"),
                 "aws_env": AwsEnv.staging,
                 "primary": True,
             },
@@ -43,7 +41,6 @@ from src.version import Version
             {  # Labs environment, logged in
                 "wikibase_id": "Q789",
                 "classifier_id": "abcd2345",
-                "version": Version("v3"),
                 "aws_env": AwsEnv.labs,
                 "primary": False,
             },
@@ -54,7 +51,6 @@ from src.version import Version
             {  # Labs environment, not logged in
                 "wikibase_id": "Q789",
                 "classifier_id": "abcd2345",
-                "version": Version("v3"),
                 "aws_env": AwsEnv.labs,
                 "primary": False,
             },
@@ -72,8 +68,19 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 
     init_mock = Mock(return_value=nullcontext(Mock()))
 
+    artifact_mock = Mock()
+    artifact_mock.version = "v1"
+
+    run_mock = Mock()
+    run_mock.use_artifact.return_value = artifact_mock
+    run_mock.link_artifact = Mock()
+
+    api_mock = Mock()
+    api_mock.artifact_collection_exists.return_value = False
+
+    init_mock = Mock(return_value=nullcontext(run_mock))
     monkeypatch.setattr("wandb.init", init_mock)
-    monkeypatch.setattr("wandb.Artifact", lambda **kwargs: Mock())
+    monkeypatch.setattr("wandb.Artifact", lambda **kwargs: artifact_mock)
     monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
 
     with patch("scripts.promote.is_logged_in", return_value=logged_in):
