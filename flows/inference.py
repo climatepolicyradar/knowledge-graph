@@ -1015,11 +1015,6 @@ async def inference(
         f"{len(classifier_specs)} classifiers"
     )
 
-    all_raw_successes = []
-    all_raw_failures = []
-
-    document_batches = iterate_batch(filtered_file_stems, batch_size)
-
     def parameters(
         classifier_spec: ClassifierSpec,
         document_batch: Sequence[DocumentStem],
@@ -1031,11 +1026,16 @@ async def inference(
             "classifier_alias": classifier_spec.alias,
         }
 
+    document_batches = iterate_batch(filtered_file_stems, batch_size)
+
     parameterised_batches: Iterable[dict[str, Any]] = (
         parameters(classifier_spec, document_batch)
         for document_batch in document_batches
         for classifier_spec in classifier_specs
     )
+
+    all_raw_successes = []
+    all_raw_failures = []
 
     with Profiler(
         printer=print,

@@ -503,7 +503,7 @@ async def test_gather_and_report_matches_asyncio_gather_with_exceptions(
 @pytest.mark.parametrize("unwrap_result", [True, False])
 @pytest.mark.asyncio
 @patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
-async def test_map_as_sub_flow_on_flow_success(
+async def test_map_as_sub_flow__on_flow_success(
     mock_wait_for_semaphore,
     mock_flow,
     unwrap_result,
@@ -536,7 +536,7 @@ async def test_map_as_sub_flow_on_flow_success(
 @pytest.mark.parametrize("unwrap_result", [True, False])
 @pytest.mark.asyncio
 @patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
-async def test_map_as_sub_flow_on_flow_failure(
+async def test_map_as_sub_flow__on_flow_failure(
     mock_wait_for_semaphore,
     mock_flow,
     unwrap_result,
