@@ -33,6 +33,7 @@ vespa_feed_data:
 	# vespa feed --target local tests/local_vespa/test_documents/document_passage.json
 	vespa feed --target local tests/local_vespa/test_documents/model.json
 	vespa feed --target local tests/local_vespa/test_documents/concept.json
+	vespa feed --target local tests/local_vespa/test_documents/models_profile.json
 	vespa feed --target local tests/local_vespa/test_documents/document_passage_with_new_schema.json
 	vespa feed --target local tests/local_vespa/test_documents/family_document_with_new_schema.json
 
