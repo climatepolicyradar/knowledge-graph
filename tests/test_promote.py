@@ -9,8 +9,9 @@ from moto import mock_aws
 from scripts.cloud import AwsEnv
 from scripts.promote import (
     check_existing_artifact_aliases,
-    find_artifact_by_version,
+    find_artifact_in_registry,
 )
+from src.identifiers import Identifier
 from src.version import Version
 
 
@@ -92,12 +93,13 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "collection_exists,artifact_aliases,version,aws_env,target_path,expected_error",
+    "collection_exists,artifact_aliases,classifier_id,version,aws_env,target_path,expected_error",
     [
         # Collection doesn't exist
         (
             False,
             [],
+            Identifier("abcd2345"),
             Version("v1"),
             AwsEnv.labs,
             "test/path",
@@ -107,6 +109,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
         (
             True,
             ["labs"],
+            Identifier("abcd2345"),
             Version("v1"),
             AwsEnv.labs,
             "test/path",
@@ -116,6 +119,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
         (
             True,
             ["staging"],
+            Identifier("abcd2345"),
             Version("v1"),
             AwsEnv.labs,
             "test/path",
@@ -126,6 +130,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 def test_check_existing_artifact_aliases(
     collection_exists,
     artifact_aliases,
+    classifier_id,
     version,
     aws_env,
     target_path,
@@ -136,9 +141,16 @@ def test_check_existing_artifact_aliases(
     mock_api.artifact_collection_exists.return_value = collection_exists
 
     if collection_exists:
-        mock_artifact = Mock(aliases=artifact_aliases, version=str(version))
+        other_mock_artifact = Mock(
+            aliases=[],
+            source_name="abcd2345:v2",
+        )
+        mock_artifact = Mock(
+            aliases=artifact_aliases,
+            source_name=f"{classifier_id}:{version}",
+        )
         mock_collection = Mock()
-        mock_collection.artifacts.return_value = [mock_artifact]
+        mock_collection.artifacts.return_value = [other_mock_artifact, mock_artifact]
         mock_api.artifact_collection.return_value = mock_collection
 
     if expected_error:
@@ -146,6 +158,7 @@ def test_check_existing_artifact_aliases(
             check_existing_artifact_aliases(
                 mock_api,
                 target_path,
+                classifier_id,
                 version,
                 aws_env,
             )
@@ -153,6 +166,7 @@ def test_check_existing_artifact_aliases(
         check_existing_artifact_aliases(
             mock_api,
             target_path,
+            classifier_id,
             version,
             aws_env,
         )
@@ -164,12 +178,12 @@ def test_check_existing_artifact_aliases(
         # No artifacts
         ([], "v1", None),
         # One matching artifact
-        ([Mock(version="v1", aliases=["prod"])], "v1", "snapshot1"),
+        ([Mock(source_name="abcd2345:v1", aliases=["prod"])], "v1", "snapshot1"),
         # Multiple artifacts, one match
         (
             [
-                Mock(version="v1", aliases=["prod"]),
-                Mock(version="v2", aliases=["staging"]),
+                Mock(source_name="abcd2345:v1", aliases=["prod"]),
+                Mock(source_name="abcd2345:v2", aliases=["staging"]),
             ],
             "v1",
             "snapshot1",
@@ -177,20 +191,22 @@ def test_check_existing_artifact_aliases(
         # Multiple artifacts, no match
         (
             [
-                Mock(version="v1", aliases=["prod"]),
-                Mock(version="v2", aliases=["staging"]),
+                Mock(source_name="abcd2345:v1", aliases=["prod"]),
+                Mock(source_name="abcd2345:v2", aliases=["staging"]),
             ],
             "v3",
             None,
         ),
     ],
 )
-def test_find_artifact_by_version(artifacts, version, expected):
+def test_find_artifact_in_registry(artifacts, version, expected):
     """Test finding artifacts by version."""
     mock_collection = Mock()
     mock_collection.artifacts.return_value = artifacts
 
-    result = find_artifact_by_version(mock_collection, Version(version))
+    result = find_artifact_in_registry(
+        mock_collection, Identifier("abcd2345"), Version(version)
+    )
 
     if expected is None:
         assert result is None
