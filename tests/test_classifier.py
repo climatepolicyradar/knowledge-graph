@@ -89,6 +89,7 @@ classifier_classes: list[Type[Classifier]] = [
 ]
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy(), text=st.data())
 def test_whether_classifier_matches_concept_labels_in_text(
@@ -105,6 +106,7 @@ def test_whether_classifier_matches_concept_labels_in_text(
     ), f"{classifier} matched incorrect text in '{text}'"
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy(), text=st.data())
 def test_whether_classifier_finds_no_spans_in_negative_text(
@@ -117,6 +119,7 @@ def test_whether_classifier_finds_no_spans_in_negative_text(
     assert not spans, f"{classifier} matched text in '{text}'"
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(data=st.data())
 def test_whether_classifier_respects_negative_labels(
@@ -149,6 +152,7 @@ def test_whether_classifier_respects_negative_labels(
     assert not spans, f"{classifier} matched text in '{text}'"
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @pytest.mark.parametrize(
     "concept_data,test_text,should_match",
@@ -232,6 +236,7 @@ def test_concrete_negative_label_examples(
         assert not spans, f"{classifier} incorrectly matched text in '{test_text}'"
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy(), text=st.data())
 def test_whether_returned_spans_are_valid(
@@ -248,6 +253,7 @@ def test_whether_returned_spans_are_valid(
         assert span.concept_id == concept.wikibase_id
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy())
 def test_whether_classifier_repr_is_correct(
@@ -259,6 +265,7 @@ def test_whether_classifier_repr_is_correct(
     )
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy())
 def test_whether_classifier_hashes_are_generated_correctly(
@@ -269,6 +276,7 @@ def test_whether_classifier_hashes_are_generated_correctly(
     assert classifier == classifier_class(concept)
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy())
 def test_whether_classifier_id_generation_is_affected_by_internal_state(
@@ -284,6 +292,7 @@ def test_whether_classifier_id_generation_is_affected_by_internal_state(
     assert classifier.id == classifier_class(concept).id
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concepts=st.sets(concept_strategy(), min_size=10, max_size=10))
 def test_whether_different_concepts_produce_different_hashes_when_using_the_same_classifier_class(
@@ -295,6 +304,7 @@ def test_whether_different_concepts_produce_different_hashes_when_using_the_same
     assert len(set(hashes)) == len(hashes)
 
 
+@pytest.mark.xdist_group(name="classifier")
 @given(concept=concept_strategy())
 def test_whether_different_classifier_models_produce_different_hashes_when_based_on_the_same_concept(
     concept: Concept,
@@ -305,6 +315,7 @@ def test_whether_different_classifier_models_produce_different_hashes_when_based
     assert len(set(hashes)) == len(hashes)
 
 
+@pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy())
 def test_whether_a_classifier_with_a_small_change_to_the_internal_concept_produces_a_different_id(
@@ -343,6 +354,7 @@ def test_whether_a_classifier_with_a_small_change_to_the_internal_concept_produc
     assert classifier != new_classifier
 
 
+@pytest.mark.xdist_group(name="classifier")
 def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts_any_concept():
     class UnrestrictedClassifier(Classifier):
         @property
@@ -359,6 +371,7 @@ def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts
     assert UnrestrictedClassifier(concept2)
 
 
+@pytest.mark.xdist_group(name="classifier")
 def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correctly():
     class SingleIDClassifier(Classifier):
         allowed_concept_ids = [WikibaseID("Q123")]
@@ -381,6 +394,7 @@ def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correct
     assert "not Q456" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group(name="classifier")
 def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correctly():
     class MultiIDClassifier(Classifier):
         allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
@@ -403,6 +417,7 @@ def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correc
     assert "not Q789" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group(name="classifier")
 def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance():
     class ParentClassifier(Classifier):
         allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
@@ -432,6 +447,7 @@ def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance
     assert "not Q456" in str(exc_info.value)
 
 
+@pytest.mark.xdist_group(name="classifier")
 def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
     """
     Test whether supplying an empty list of allowed_concept_ids is prohibitive.
