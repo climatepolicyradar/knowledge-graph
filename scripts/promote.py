@@ -103,13 +103,6 @@ def main(
             parser=Identifier,
         ),
     ],
-    version: Annotated[
-        Version,
-        typer.Option(
-            help="Version of the model (e.g., v3)",
-            parser=Version,
-        ),
-    ],
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
@@ -168,7 +161,7 @@ def main(
         # artifiact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
         model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
-        artifact_id = f"{model_path}:{version}"
+        artifact_id = f"{model_path}:{aws_env.value}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
@@ -177,7 +170,7 @@ def main(
         check_existing_artifact_aliases(
             api,
             target_path,
-            version,
+            Version(artifact.version),
             aws_env,
         )
 
