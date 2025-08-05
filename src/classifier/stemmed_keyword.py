@@ -9,8 +9,6 @@ from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.span import Span
 
-nltk.download("punkt_tab", quiet=True)
-
 
 class StemmedKeywordClassifier(RulesBasedClassifier):
     """
@@ -28,6 +26,11 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
 
         :param Concept concept: The concept which the classifier will identify in text
         """
+        # Ensure NLTK data is available
+        try:
+            nltk.data.find("tokenizers/punkt_tab")
+        except LookupError:
+            nltk.download("punkt_tab", quiet=True)
 
         self.stemmer = PorterStemmer()
 
