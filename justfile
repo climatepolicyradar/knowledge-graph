@@ -9,21 +9,25 @@ default:
 
 # install dependencies and set up the project
 install +OPTS="":
-    uv sync --locked --extra dev --extra transformers --extra coiled {{OPTS}}
+    uv sync --locked --extra dev --extra coiled {{OPTS}}
     uv run pre-commit install
     uv run ipython kernel install --user
 
+install-transformers:
+  just install --extra transformers
+
 # test the project
 test +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}}
+    just test-without-vespa
+    just test-with-vespa
+
+# test the project, excluding tests that rely on a local Vespa instance
+test-with-vespa +OPTS="":
+    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'vespa'
 
 # test the project, excluding tests that rely on a local Vespa instance
 test-without-vespa +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
-
-# test the project, excluding slow tests
-test-without-slow +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
+    uv run pytest -n logical --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
 
 # update the snapshots for the tests
 test-snapshot-update +OPTS="":
