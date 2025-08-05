@@ -416,10 +416,10 @@
                 "q880": 1,
                 "q730": 1
             },
+            "models_profile_ref": "id:doc_search:models_profile::primaries",
             "concepts_instances": {
                 "q880": {
                     "concept_id": "q880",
-                    "model_id_primary": "r5n8qz2t",
                     "model_id_all": "kx7m3p9w,r5n8qz2t",
                     "counts_by_model_version": {
                         "kx7m3p9w": 1,
@@ -428,7 +428,6 @@
                 },
                 "q730": {
                     "concept_id": "q730",
-                    "model_id_primary": "w3kb7x1s",
                     "model_id_all": "d9fg4j6m,w3kb7x1s",
                     "counts_by_model_version": {
                         "d9fg4j6m": 1,

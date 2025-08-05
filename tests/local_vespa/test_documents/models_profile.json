@@ -1,0 +1,40 @@
+[
+    {
+        "id": "id:doc_search:models_profile::primaries",
+        "fields": {
+            "id": "primaries",
+            "name": "primaries",
+            "concepts_versions": {
+                "q880": {
+                    "concept_id": "q880",
+                    "revision_id": "1610",
+                    "canonical_id": "kx7m3p9w"
+                },
+                "q730": {
+                    "concept_id": "q730",
+                    "revision_id": "2010",
+                    "canonical_id": "w3kb7x1s"
+                }
+            }
+        }
+    },
+    {
+        "id": "id:doc_search:models_profile::experimentals",
+        "fields": {
+            "id": "experimentals",
+            "name": "experimentals",
+            "concepts_versions": {
+                "q880": {
+                    "concept_id": "q880",
+                    "revision_id": "1620",
+                    "canonical_id": "r5n8qz2t"
+                },
+                "q730": {
+                    "concept_id": "q730",
+                    "revision_id": "3005",
+                    "canonical_id": "w3kb7x1s"
+                }
+            }
+        }
+    }
+]
