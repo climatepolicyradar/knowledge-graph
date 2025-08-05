@@ -12,9 +12,9 @@ from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
-from scripts.utils import get_local_classifier_path
+from scripts.utils import ModelPath, get_local_classifier_path
 from src.classifier import Classifier, ClassifierFactory
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import WikibaseID
 from src.version import Version
 from src.wikibase import WikibaseSession
 
@@ -35,21 +35,6 @@ def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
             f"you're not logged into {aws_env.value}. "
             f"Do `aws sso login --profile {aws_env.value}`"
         )
-
-
-class ModelPath(BaseModel):
-    """Represents the expected path to a model artifact locally or in S3."""
-
-    wikibase_id: WikibaseID
-    classifier_id: Identifier
-
-    def __str__(self) -> str:
-        """
-        Return the path to the model artifact.
-
-        e.g. 'Q123/v4prnc54'
-        """
-        return f"{self.wikibase_id}/{self.classifier_id}"
 
 
 class StorageUpload(BaseModel):
@@ -300,7 +285,7 @@ def main(
 
         # Save the classifier to a file locally
         classifier_path = get_local_classifier_path(
-            target_path=str(target_path),
+            target_path=target_path,
             version=next_version,
         )
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
