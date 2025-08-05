@@ -1,5 +1,5 @@
 import os
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 import typer
@@ -66,8 +66,17 @@ def test_main(
 
     monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
 
-    if expected_exception:
-        with pytest.raises(expected_exception):
+    with patch("scripts.promote.is_logged_in", return_value=True):
+        if expected_exception:
+            with pytest.raises(expected_exception):
+                main(
+                    wikibase_id=wikibase_id,
+                    classifier=classifier,
+                    version=version,
+                    aws_env=aws_env,
+                    primary=primary,
+                )
+        else:
             main(
                 wikibase_id=wikibase_id,
                 classifier=classifier,
@@ -75,14 +84,6 @@ def test_main(
                 aws_env=aws_env,
                 primary=primary,
             )
-    else:
-        main(
-            wikibase_id=wikibase_id,
-            classifier=classifier,
-            version=version,
-            aws_env=aws_env,
-            primary=primary,
-        )
 
 
 @pytest.mark.parametrize(
