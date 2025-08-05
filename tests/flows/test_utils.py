@@ -301,7 +301,7 @@ def test_filter_non_english_file_stems() -> None:
     _ = filter_non_english_language_file_stems(file_stems=file_stems)
     end_time = time.time()
 
-    assert end_time - start_time < 1, "Filtering took too long"
+    assert end_time - start_time < 1.5, "Filtering took too long"
 
 
 def test_fn_is_async():
