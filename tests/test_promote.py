@@ -20,7 +20,7 @@ from src.version import Version
         (
             {  # Labs environment, logged in
                 "wikibase_id": "Q123",
-                "classifier": "TestClassifier",
+                "classifier_id": "abcd2345",
                 "version": Version("v1"),
                 "aws_env": AwsEnv.labs,
                 "primary": False,
@@ -31,7 +31,7 @@ from src.version import Version
         (
             {  # Staging environment, logged in, primary
                 "wikibase_id": "Q456",
-                "classifier": "AnotherClassifier",
+                "classifier_id": "abcd2345",
                 "version": Version("v2"),
                 "aws_env": AwsEnv.staging,
                 "primary": True,
@@ -42,7 +42,7 @@ from src.version import Version
         (
             {  # Labs environment, logged in
                 "wikibase_id": "Q789",
-                "classifier": "ThirdClassifier",
+                "classifier_id": "abcd2345",
                 "version": Version("v3"),
                 "aws_env": AwsEnv.labs,
                 "primary": False,
@@ -53,7 +53,7 @@ from src.version import Version
         (
             {  # Labs environment, not logged in
                 "wikibase_id": "Q789",
-                "classifier": "ThirdClassifier",
+                "classifier_id": "abcd2345",
                 "version": Version("v3"),
                 "aws_env": AwsEnv.labs,
                 "primary": False,
