@@ -1,4 +1,5 @@
 import os
+from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
 import pytest
@@ -69,9 +70,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
     os.environ["USE_AWS_PROFILES"] = "false"
     os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
 
-    init_mock = Mock()
-    init_mock.return_value.__enter__ = Mock()
-    init_mock.return_value.__exit__ = Mock()
+    init_mock = Mock(return_value=nullcontext(Mock()))
 
     monkeypatch.setattr("wandb.init", init_mock)
     monkeypatch.setattr("wandb.Artifact", lambda **kwargs: Mock())
