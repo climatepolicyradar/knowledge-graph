@@ -180,11 +180,14 @@ schema family_document {
             struct-field value { indexing: attribute }
         }
 
+        # Optional reference to models profile, defaults to "primaries"
+        field models_profile_ref type reference<models_profile> {
+            indexing: attribute | summary
+        }
+
         struct concept_instance {
              # E.g. Q880
              field concept_id type string {}
-             # E.g. n2nuerdn
-             field model_id_primary type string {}
              # E.g. n2nuerdn, 9dgp6jgz
              #
              # Use a similar flattened approach, as
@@ -205,14 +208,13 @@ schema family_document {
             struct-field value.concept_id {
                 indexing: attribute
             }
-            struct-field value.model_id_primary {
-                indexing: attribute
-            }
             struct-field value.model_id_all {
                 indexing: attribute
             }
         }
     }
+
+    import field models_profile_ref.concepts_versions as concepts_versions {}
 
     fieldset default {
         fields: family_name_index, family_description_index
@@ -313,6 +315,8 @@ schema family_document {
         summary corpus_type_name {}
         summary collection_title {}
         summary collection_summary {}
+        summary concepts_instances {}
+        summary concepts_versions {}
     }
 
     document-summary search_summary_with_tokens inherits search_summary {

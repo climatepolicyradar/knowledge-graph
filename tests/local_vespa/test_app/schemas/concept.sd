@@ -1,17 +1,45 @@
 schema concept {
     document concept {
-        # E.g. fishing sector
-        field name type string {
-            indexing: attribute | summary | index
-        }
         # E.g. Q880
         field id type string {
             indexing: attribute | summary | index
         }
+        # E.g. 14696
+        field revision type string {
+            indexing: attribute | summary | index
+        }
+        # E.g. fishing sector
+        field preferred_label type string {
+            indexing: attribute | summary | index
+        }
+        field description type string {
+            indexing: attribute | summary
+        }
+        field definition type string {
+            indexing: attribute | summary
+        }
+        field alternative_labels type array<string> {
+            indexing: attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
+        }
         # E.g. Q110, 290
         #
         # We can't do self-references, so use strings for the IDs.
-        field parents type array<string> {
+        field subconcept_of type array<string> {
+            indexing: attribute | summary
+        }
+        field has_subconcept type array<string> {
+            indexing: attribute | summary
+        }
+        field relative_concepts type array<string> {
+            indexing: attribute | summary
+        }
+        field recursive_subconcept_of type array<string> {
+            indexing: attribute | summary
+        }
+        field recursive_has_subconcept type bool {
             indexing: attribute | summary
         }
     }

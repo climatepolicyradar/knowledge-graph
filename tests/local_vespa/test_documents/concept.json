@@ -2,41 +2,86 @@
     {
         "id": "id:doc_search:concept::q880",
         "fields": {
-            "name": "air pollution",
             "id": "q880",
-            "parents": ["q110", "q290"]
+            "revision": "1402",
+            "preferred_label": "air pollution",
+            "description": "air pollution",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": ["q110", "q290"],
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
         "id": "id:doc_search:concept::q730",
         "fields": {
-            "name": "fishing sector",
             "id": "q730",
-            "parents": ["q500"]
+            "revision": "3982",
+            "preferred_label": "fishing sector",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": ["q500"],
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
         "id": "id:doc_search:concept::q110",
         "fields": {
-            "name": "environmental issues",
             "id": "q110",
-            "parents": []
+            "revision": "223",
+            "preferred_label": "environmental issues",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [],
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
         "id": "id:doc_search:concept::q290",
         "fields": {
-            "name": "pollution",
             "id": "q290",
-            "parents": ["q110"]
+            "revision": "1099",
+            "preferred_label": "pollution",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": ["q110"],
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
         "id": "id:doc_search:concept::q500",
         "fields": {
-            "name": "economic sectors",
             "id": "q500",
-            "parents": []
+            "revision": "4700",
+            "preferred_label": "economic sectors",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [],
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     }
 ]
