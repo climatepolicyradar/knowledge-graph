@@ -14,44 +14,56 @@ from src.version import Version
 
 
 @pytest.mark.parametrize(
-    "wikibase_id, classifier, version, aws_env, primary, expected_exception",
+    ("test_case", "logged_in", "expected_exception"),
     [
         (
-            "Q123",
-            "TestClassifier",
-            Version("v1"),
-            AwsEnv.labs,
-            False,
-            None,
-        ),
-        (
-            "Q456",
-            "AnotherClassifier",
-            Version("v2"),
-            AwsEnv.staging,
+            {  # Labs environment, logged in
+                "wikibase_id": "Q123",
+                "classifier": "TestClassifier",
+                "version": Version("v1"),
+                "aws_env": AwsEnv.labs,
+                "primary": False,
+            },
             True,
             None,
         ),
         (
-            "Q789",
-            "ThirdClassifier",
-            Version("v3"),
-            AwsEnv.labs,
-            False,
+            {  # Staging environment, logged in, primary
+                "wikibase_id": "Q456",
+                "classifier": "AnotherClassifier",
+                "version": Version("v2"),
+                "aws_env": AwsEnv.staging,
+                "primary": True,
+            },
+            True,
             None,
+        ),
+        (
+            {  # Labs environment, logged in
+                "wikibase_id": "Q789",
+                "classifier": "ThirdClassifier",
+                "version": Version("v3"),
+                "aws_env": AwsEnv.labs,
+                "primary": False,
+            },
+            True,
+            None,
+        ),
+        (
+            {  # Labs environment, not logged in
+                "wikibase_id": "Q789",
+                "classifier": "ThirdClassifier",
+                "version": Version("v3"),
+                "aws_env": AwsEnv.labs,
+                "primary": False,
+            },
+            False,
+            typer.BadParameter,
         ),
     ],
 )
 @mock_aws
-def test_main(
-    wikibase_id,
-    classifier,
-    version,
-    aws_env,
-    primary,
-    expected_exception,
-    monkeypatch,
-):
+def test_main(test_case, logged_in, expected_exception, monkeypatch):
     from scripts.promote import main
 
     os.environ["USE_AWS_PROFILES"] = "false"
@@ -63,27 +75,14 @@ def test_main(
 
     monkeypatch.setattr("wandb.init", init_mock)
     monkeypatch.setattr("wandb.Artifact", lambda **kwargs: Mock())
-
     monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
 
-    with patch("scripts.promote.is_logged_in", return_value=True):
+    with patch("scripts.promote.is_logged_in", return_value=logged_in):
         if expected_exception:
             with pytest.raises(expected_exception):
-                main(
-                    wikibase_id=wikibase_id,
-                    classifier=classifier,
-                    version=version,
-                    aws_env=aws_env,
-                    primary=primary,
-                )
+                main(**test_case)
         else:
-            main(
-                wikibase_id=wikibase_id,
-                classifier=classifier,
-                version=version,
-                aws_env=aws_env,
-                primary=primary,
-            )
+            main(**test_case)
 
 
 @pytest.mark.parametrize(
