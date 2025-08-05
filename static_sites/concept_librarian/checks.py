@@ -365,16 +365,27 @@ def validate_concept_depth_and_descendant_balance(
         if concept.wikibase_id is not None
     }  # check is needed to mollify type checks
 
+    logger.info("Building descendants map for %d concepts...", len(concepts_by_id))
     number_of_descendants_map = _build_number_of_descendants_map(concepts_by_id)
-    longest_depths = {
-        c.wikibase_id: _longest_concept_depth(c, concepts_by_id) for c in concepts
-    }
+
+    logger.info("Calculating depths for %d concepts...", len(concepts))
+    longest_depths, cycle_errors = _build_longest_depths_map_with_cycle_detection(
+        concepts, concepts_by_id
+    )
+
+    # Add cycle errors to issues
+    issues.extend(cycle_errors)
 
     for concept in concepts:
-        id = concept.wikibase_id
-        assert id is not None, "Concepts should have a Wikibase ID"
-        depth = longest_depths[id]
-        n_descendants = number_of_descendants_map[id]
+        concept_id = concept.wikibase_id
+        assert concept_id is not None, "Concepts should have a Wikibase ID"
+
+        # Skip concepts that are part of cycles, as they won't have valid depths
+        if concept_id not in longest_depths:
+            continue
+
+        depth = longest_depths[concept_id]
+        n_descendants = number_of_descendants_map[concept_id]
 
         # This threshold is somewhat arbitrary: I've come up with it be looking at the upper
         # limit of this ratio for well-behaving concepts, which seemed to be bounded by
@@ -411,15 +422,102 @@ def _longest_concept_depth(
     )
 
 
+def _build_longest_depths_map_with_cycle_detection(
+    concepts: list[Concept], concept_map: dict[WikibaseID, Concept]
+) -> tuple[dict[WikibaseID, int], list[ConceptIssue]]:
+    """
+    Build a map of concept ID to longest depth with cycle detection.
+
+    Concepts that are part of cycles will not appear in the depth_map and will be reported as errors.
+    """
+    depth_cache: dict[WikibaseID, int] = {}
+    cycle_errors: list[ConceptIssue] = []
+    concepts_in_cycles: set[WikibaseID] = set()
+
+    def calculate_depth_with_cycle_detection(
+        concept_id: WikibaseID, visiting: set[WikibaseID]
+    ) -> int:
+        if concept_id in visiting:
+            return -1
+
+        if concept_id in depth_cache:
+            return depth_cache[concept_id]
+
+        if concept_id in concepts_in_cycles:
+            return -1
+
+        concept = concept_map.get(concept_id)
+        if concept is None:
+            depth_cache[concept_id] = 0
+            return 0
+
+        parent_concepts = [concept_map.get(parent) for parent in concept.subconcept_of]
+        parent_concepts = [parent for parent in parent_concepts if parent is not None]
+
+        if not parent_concepts:
+            depth_cache[concept_id] = 0
+            return 0
+
+        visiting.add(concept_id)
+        max_parent_depth = -1
+        cycle_detected = False
+
+        for parent in parent_concepts:
+            parent_depth = calculate_depth_with_cycle_detection(
+                parent.wikibase_id, visiting
+            )
+            if parent_depth == -1:
+                cycle_detected = True
+                concepts_in_cycles.add(concept_id)
+                concepts_in_cycles.add(parent.wikibase_id)
+                break
+            else:
+                max_parent_depth = max(max_parent_depth, parent_depth)
+
+        visiting.remove(concept_id)
+
+        if cycle_detected:
+            return -1
+
+        depth = 1 + max_parent_depth
+        depth_cache[concept_id] = depth
+        return depth
+
+    result = {}
+    for concept in concepts:
+        if concept.wikibase_id is not None:
+            depth = calculate_depth_with_cycle_detection(concept.wikibase_id, set())
+            if depth != -1:
+                result[concept.wikibase_id] = depth
+
+    for concept in concepts:
+        if (
+            concept.wikibase_id is not None
+            and concept.wikibase_id in concepts_in_cycles
+        ):
+            cycle_errors.append(
+                ConceptIssue(
+                    concept=concept,
+                    issue_type="circular_dependency",
+                    message=f"{format_concept_link(concept)} is part of a circular dependency in the concept hierarchy",
+                )
+            )
+
+    if cycle_errors:
+        logger.warning("Found %d concepts in circular dependencies", len(cycle_errors))
+
+    return result, cycle_errors
+
+
 def _build_number_of_descendants_map(
     concept_map: dict[WikibaseID, Concept],
-) -> dict[WikibaseID, int]:  # type: ignore
+) -> dict[WikibaseID, int]:
     """
     Build a map of concept ID to number of all descendants (at any level)
 
     Traverses the hierarchy, counting the number of descendants each concept has.
-    It starts with those nodes, that have no descendants (these will return 0). Then continues
-    by processing those nodes, that only have processed children, etc.
+    It starts with those nodes, that have no descendants (these will return 0). Then
+    continues by processing those nodes, that only have processed children, etc.
     """
     queue: MutableSequence[Concept] = deque()
 
@@ -428,39 +526,37 @@ def _build_number_of_descendants_map(
             queue.append(concept)
 
     children_map = defaultdict(int)
+    processed_count = 0
+    total_concepts = len(concept_map)
 
     while queue:
         current = queue.popleft()
-        children_map[current.wikibase_id] = _aggregate_number_of_descendants(
-            current, children_map
-        )
+        number_of_descendants = 0
+        for child in current.has_subconcept:
+            number_of_descendants += children_map[child] + 1
+
+        children_map[current.wikibase_id] = number_of_descendants
+
+        processed_count += 1
+        if processed_count % 100 == 0:
+            logger.info(
+                "Processed %d/%d concepts for descendants calculation",
+                processed_count,
+                total_concepts,
+            )
 
         for parent_id in current.subconcept_of:
-            parent = concept_map.get(
-                parent_id, None
-            )  # this happens due to other concept store errors
-            if (
-                parent is not None
-                and parent not in children_map
-                and all(
-                    sibling in children_map
-                    for sibling in parent.has_subconcept
-                    if sibling in concept_map
-                )
-            ):
-                queue.append(parent)
+            parent = concept_map.get(parent_id)
+            if parent is not None and parent.wikibase_id not in children_map:
+                all_children_processed = True
+                for child_id in parent.has_subconcept:
+                    if child_id in concept_map and child_id not in children_map:
+                        all_children_processed = False
+                        break
+                if all_children_processed:
+                    queue.append(parent)
 
-    skipped_values = list(set(concept_map.keys()) - set(children_map.keys()))
-    logger.warning(f"Missing values: {skipped_values}")
+    if skipped_values := list(set(concept_map.keys()) - set(children_map.keys())):
+        logger.warning("Missing values: %s", skipped_values)
 
     return children_map
-
-
-def _aggregate_number_of_descendants(
-    concept: Concept, children_map: dict[WikibaseID, int]
-) -> int:
-    """Aggregate the number of descendants for all concepts"""
-    number_of_descendants = 0
-    for child in concept.has_subconcept:
-        number_of_descendants += children_map[child] + 1
-    return number_of_descendants
