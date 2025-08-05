@@ -9,6 +9,7 @@ from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
 import dotenv
 import httpx
 from httpx import HTTPError
+from more_itertools import chunked
 from pydantic import ValidationError
 
 from src.concept import Concept
@@ -22,7 +23,7 @@ T = TypeVar("T")
 
 
 def async_to_sync(
-    async_func: Callable[..., Coroutine[Any, Any, T]],
+    async_func: Callable[..., Coroutine[None, None, T]],
 ) -> Callable[..., T]:
     """
     Decorator that converts async methods to synchronous interface
@@ -191,10 +192,9 @@ class WikibaseSession:
         redirects = {}
 
         # Process redirects in batches
-        for i in range(0, len(pages), batch_size):
-            batch = pages[i : i + batch_size]
+        for batch in chunked(pages, batch_size):
             ids_to_fetch = [
-                page["title"].replace(self.ITEM_PREFIX, "") for page in batch
+                page["title"].removeprefix(self.ITEM_PREFIX) for page in batch
             ]
 
             response = await client.get(
@@ -254,7 +254,7 @@ class WikibaseSession:
         return pages
 
     async def get_all_concept_ids_async(self) -> list[WikibaseID]:
-        """Get a complete list of all concept ids in the Wikibase instance."""
+        """Get a complete list of all concept IDs in the Wikibase instance."""
         pages = await self._get_pages(extra_params={"apfilterredir": "nonredirects"})
         return [page["title"].replace(self.ITEM_PREFIX, "") for page in pages]
 
@@ -298,11 +298,14 @@ class WikibaseSession:
 
                 # Check for HTTP errors (rate limiting, etc.)
                 if revisions_response.status_code != 200:
+                    truncated_text = revisions_response.text
+                    if len(truncated_text) > 200:
+                        truncated_text = truncated_text[:200] + "..."
                     logger.warning(
                         "❌ HTTP %s for concept %s: %s",
                         revisions_response.status_code,
                         wikibase_id,
-                        revisions_response.text[:200],
+                        truncated_text,
                     )
                     return None
 
@@ -458,11 +461,10 @@ class WikibaseSession:
         # Process in batches for entity info, then fetch concepts concurrently
         all_concepts = []
         failed_concepts = 0
-        BATCH_SIZE = self.DEFAULT_BATCH_SIZE
-        total_batches = (len(wikibase_ids) + BATCH_SIZE - 1) // BATCH_SIZE
+        batch_size = self.DEFAULT_BATCH_SIZE
+        total_batches = (len(wikibase_ids) + batch_size - 1) // batch_size
 
-        for batch_num, i in enumerate(range(0, len(wikibase_ids), BATCH_SIZE), 1):
-            batch_ids = wikibase_ids[i : i + BATCH_SIZE]
+        for batch_num, batch_ids in enumerate(chunked(wikibase_ids, batch_size), 1):
             logger.info(
                 "Processing batch %d/%d (%d concepts): %s",
                 batch_num,
