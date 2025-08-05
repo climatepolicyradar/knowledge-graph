@@ -64,16 +64,11 @@ def existing(
                 aws_env=to_aws_env,
             )
 
-            if classifier.version is None:
-                print(f"classifier {classifier.name} is missing a version, so skipping")
-                continue
-
             if promote:
                 print("promoting")
                 scripts.promote.main(
                     wikibase_id=WikibaseID(spec.name),
-                    classifier=classifier.name,
-                    version=classifier.version,
+                    classifier_id=classifier.id,
                     aws_env=to_aws_env,
                     primary=True,
                 )
@@ -119,16 +114,11 @@ def new(
                 aws_env=aws_env,
             )
 
-            if classifier.version is None:
-                print(f"classifier {classifier.name} is missing a version, so skipping")
-                continue
-
             if promote:
                 print("promoting")
                 scripts.promote.main(
                     wikibase_id=wikibase_id,
-                    classifier=classifier.name,
-                    version=classifier.version,
+                    classifier_id=classifier.id,
                     aws_env=aws_env,
                     primary=True,
                 )
