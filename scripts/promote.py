@@ -13,7 +13,8 @@ from scripts.cloud import (
     is_logged_in,
     parse_aws_env,
 )
-from src.identifiers import WikibaseID
+from scripts.utils import ModelPath
+from src.identifiers import Identifier, WikibaseID
 from src.version import Version
 
 log = logging.getLogger(__name__)
@@ -95,10 +96,11 @@ def main(
             parser=WikibaseID,
         ),
     ],
-    classifier: Annotated[
-        str,
+    classifier_id: Annotated[
+        Identifier,
         typer.Option(
-            help="Classifier name that aligns with the Python class name",
+            help="Classifier ID that aligns with the Python class name",
+            parser=Identifier,
         ),
     ],
     version: Annotated[
@@ -165,7 +167,8 @@ def main(
         # This also validates that the classifier exists. It relies on an
         # artifiact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
-        artifact_id = f"{wikibase_id}/{classifier}:{version}"
+        model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
+        artifact_id = f"{model_path}:{version}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
