@@ -81,7 +81,7 @@ class SlackNotify:
     )
 
     # Block name
-    slack_channel_name = "platform"
+    slack_channel_name = "alerts-platform"
     environment = os.getenv("AWS_ENV", "sandbox")
     slack_block_name = f"slack-webhook-{slack_channel_name}-prefect-mvp-{environment}"
 
