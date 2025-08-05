@@ -8,7 +8,6 @@ from moto import mock_aws
 from scripts.cloud import AwsEnv
 from scripts.promote import (
     Across,
-    Version,
     Within,
     check_existing_artifact_aliases,
     download,
@@ -19,47 +18,7 @@ from scripts.promote import (
     upload,
     validate_logins,
 )
-
-
-@pytest.mark.parametrize("input_version", ["v1", "v10", "v0"])
-def test_version_valid(input_version):
-    assert str(Version(input_version)) == input_version
-
-
-@pytest.mark.parametrize("invalid_version", ["1", "v", "v1.0", "latest"])
-def test_version_invalid(invalid_version):
-    with pytest.raises(ValueError):
-        Version(invalid_version)
-
-
-@pytest.mark.parametrize(
-    "version_a,version_b,expected",
-    [
-        ("v1", "v2", True),
-        ("v2", "v1", False),
-        ("v10", "v2", False),
-    ],
-)
-def test_version_comparison(version_a, version_b, expected):
-    assert (Version(version_a) < Version(version_b)) == expected
-
-
-def test_version_sorting():
-    versions = [Version("v3"), Version("v1"), Version("v10"), Version("v2")]
-    sorted_versions = sorted(versions)
-    assert [str(v) for v in sorted_versions] == ["v1", "v2", "v3", "v10"]
-
-
-def test_version_sorting_with_larger_numbers():
-    versions = [
-        Version("v3"),
-        Version("v1"),
-        Version("v10"),
-        Version("v2"),
-        Version("v20"),
-    ]
-    sorted_versions = sorted(versions)
-    assert [str(v) for v in sorted_versions] == ["v1", "v2", "v3", "v10", "v20"]
+from src.version import Version
 
 
 @pytest.mark.parametrize(
@@ -166,23 +125,6 @@ def test_main(
                     within_aws_env=within_aws_env,
                     primary=primary,
                 )
-
-
-def test_version_latest_not_supported():
-    with pytest.raises(ValueError, match="`latest` isn't yet supported"):
-        Version("latest")
-
-
-def test_version_equality():
-    assert Version("v1") == Version("v1")
-    assert Version("v1") == "v1"
-    assert Version("v1") != Version("v2")
-    assert Version("v1") != "v2"
-
-
-def test_version_hash():
-    versions = {Version("v1"), Version("v2"), Version("v1")}
-    assert len(versions) == 2
 
 
 @pytest.mark.parametrize(
