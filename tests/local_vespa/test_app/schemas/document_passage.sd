@@ -99,7 +99,7 @@ schema document_passage {
              # E.g. Q880
              field concept_id type string {}
              # E.g. n2nuerdn
-             field model_id_latest type string {}
+             field model_id_primary type string {}
              # E.g. n2nuerdn, 9dgp6jgz
              #
              # Use a similar flattened approach, as
@@ -123,7 +123,7 @@ schema document_passage {
             struct-field value.concept_id {
                 indexing: attribute
             }
-            struct-field value.model_id_latest {
+            struct-field value.model_id_primary {
                 indexing: attribute
             }
             struct-field value.model_id_all {

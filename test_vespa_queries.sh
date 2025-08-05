@@ -93,8 +93,8 @@ run_query "Document passages with concept q880" \
     'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880")' \
     '"q880"'
 
-run_query "Family documents with latest model r5n8qz2t for q880" \
-    'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880", value.model_id_latest contains "r5n8qz2t")' \
+run_query "Family documents with primary model r5n8qz2t for q880" \
+    'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880", value.model_id_primary contains "r5n8qz2t")' \
     '"r5n8qz2t"'
 
 run_query "Document passages with multiple models for q880" \
@@ -107,4 +107,4 @@ echo
 echo "To run individual queries manually:"
 echo "vespa query 'yql=select * from concept where true'"
 echo "vespa query 'yql=select * from family_document where concepts_instances contains sameElement(key contains \"q880\")'"
-echo "vespa query 'yql=select * from document_passage where concepts_instances contains sameElement(key contains \"q880\", value.model_id_latest contains \"r5n8qz2t\")'"
+echo "vespa query 'yql=select * from document_passage where concepts_instances contains sameElement(key contains \"q880\", value.model_id_primary contains \"r5n8qz2t\")'"
