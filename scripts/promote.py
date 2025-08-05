@@ -36,23 +36,33 @@ def throw_not_logged_in(aws_env: AwsEnv):
     )
 
 
-def find_artifact_by_version(
-    model_collection, version: Version
+def find_artifact_in_registry(
+    model_collection, expected_id: Identifier, expected_version: Version
 ) -> Optional[wandb.Artifact]:
     """Find an artifact with the specified version in the model collection."""
-    return next(
-        (art for art in model_collection.artifacts() if art.version == str(version)),
-        None,
-    )
+    for art in model_collection.artifacts():
+        classifier_id, version = art.source_name.split(":")
+        if classifier_id == str(expected_id) and version == str(expected_version):
+            return art
 
 
 def check_existing_artifact_aliases(
     api: wandb.apis.public.api.Api,
     target_path: str,
+    classifier_id: Identifier,
     version: Version,
     aws_env: AwsEnv,
 ) -> None:
-    """Check if an artifact exists and has conflicting AWS environment aliases."""
+    """
+    Review current state of the model in the wandb registry.
+
+    This means first checking wether the collection itself exists (/Q123).
+    Then if found, will look if the artifact already exists within the collection.
+    If the artifact exists, will check the aliases to see if there are any conflicts.
+
+    Note that the versions for project artifacts are not the same as the versions for
+    collection models.
+    """
     if not api.artifact_collection_exists(
         type="model",
         name=target_path,
@@ -66,9 +76,11 @@ def check_existing_artifact_aliases(
         name=target_path,
     )
 
-    target_artifact = find_artifact_by_version(model_collection, version)
+    target_artifact = find_artifact_in_registry(
+        model_collection, classifier_id, version
+    )
 
-    # It's okay if there isn't yet an artifact for this version, and
+    # It's okay if there isn't yet an registry artifact for this version, and
     # if there isn't, then there's nothing to check.
     if not target_artifact:
         log.info(f"Model collection artifact with version {version} not found")
@@ -170,6 +182,7 @@ def main(
         check_existing_artifact_aliases(
             api,
             target_path,
+            classifier_id,
             Version(artifact.version),
             aws_env,
         )
