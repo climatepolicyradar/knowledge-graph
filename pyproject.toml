@@ -88,6 +88,7 @@ pulumi = "^3.145.0"
 pulumi-aws = "^6.66.2"
 jinja2 = "^3.1.4"
 pyright = "^1.1.403"
+pytest-xdist = {extras = ["psutil"], version = "^3.8.0"}
 
 
 [tool.pytest.ini_options]

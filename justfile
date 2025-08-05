@@ -15,7 +15,7 @@ install +OPTS="":
 
 # test the project
 test +OPTS="":
-    poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}}
+    poetry run pytest -n logical --disable-pytest-warnings --color=yes {{OPTS}}
 
 # test the project, excluding tests that rely on a local Vespa instance
 test-without-vespa +OPTS="":
