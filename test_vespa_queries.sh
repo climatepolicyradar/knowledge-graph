@@ -94,8 +94,9 @@ run_query "Document passages with concept q880" \
     '"q880"'
 
 run_query "Family documents with primary model r5n8qz2t for q880" \
-    'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880", value.model_id_primary contains "r5n8qz2t")' \
-    '"r5n8qz2t"'
+    'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880", value.model_id_all matches "kx7m3p9w")' \
+    '"concepts_versions"' \
+    'presentation.summary=search_summary when=models_profile_ref'
 
 run_query "Document passages with multiple models for q880" \
     'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880", value.model_id_all matches "kx7m3p9w")' \

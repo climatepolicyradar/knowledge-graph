@@ -90,6 +90,10 @@ schema document_passage {
             }
         }
 
+        field models_profile_ref type reference<models_profile> {
+            indexing: attribute | summary
+        }
+
         struct span {
             field start                      type int {}
             field end                        type int {}
@@ -98,8 +102,6 @@ schema document_passage {
         struct concept_instance {
              # E.g. Q880
              field concept_id type string {}
-             # E.g. n2nuerdn
-             field model_id_primary type string {}
              # E.g. n2nuerdn, 9dgp6jgz
              #
              # Use a similar flattened approach, as
@@ -120,14 +122,13 @@ schema document_passage {
             struct-field value.concept_id {
                 indexing: attribute
             }
-            struct-field value.model_id_primary {
-                indexing: attribute
-            }
             struct-field value.model_id_all {
                 indexing: attribute | summary
             }
         }
     }
+
+    import field models_profile_ref.concepts_versions as concepts_versions {}
 
     import field family_document_ref.family_name as family_name {}
     import field family_document_ref.family_description as family_description {}
@@ -178,6 +179,8 @@ schema document_passage {
         summary text_block_page {}
         summary text_block_coords {}
         summary concepts {}
+        summary concepts_instances {}
+        summary concepts_versions {}
     }
 
     document-summary search_summary_with_tokens inherits search_summary {
