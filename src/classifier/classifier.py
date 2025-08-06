@@ -155,7 +155,12 @@ class Classifier(ABC):
             pickle.dump(self, f)
 
     @classmethod
-    def load(cls, path: Union[str, Path], model_to_cuda: bool = False) -> "Classifier":
+    def load(
+        cls,
+        path: Union[str, Path],
+        model_to_cuda: bool = False,
+        set_missing_attributes: bool = True,
+    ) -> "Classifier":
         """
         Load a classifier from a file.
 
@@ -170,6 +175,13 @@ class Classifier(ABC):
             import torch  # type: ignore[import-untyped]
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
+
+        if set_missing_attributes:
+            pipeline_model_config = classifier.pipeline.model.config  # type: ignore
+
+            pipeline_model_config._output_attentions = False  # type: ignore
+            pipeline_model_config._output_attentions = False  # type: ignore
+
         return classifier
 
 
