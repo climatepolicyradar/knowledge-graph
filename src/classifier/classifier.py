@@ -170,6 +170,13 @@ class Classifier(ABC):
             import torch  # type: ignore[import-untyped]
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
+
+        if type(classifier).__name__ == "TargetClassifier":
+            pipeline_model_config = classifier.pipeline.model.config  # type: ignore
+
+            pipeline_model_config._output_attentions = False  # type: ignore
+            pipeline_model_config.output_attentions = False  # type: ignore
+
         return classifier
 
 
