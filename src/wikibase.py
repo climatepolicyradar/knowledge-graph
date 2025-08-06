@@ -205,6 +205,7 @@ class WikibaseSession:
                     "ids": "|".join(ids_to_fetch),
                     "props": "info",
                 },
+                timeout=self.DEFAULT_TIMEOUT,
             )
             data = response.json()
 
