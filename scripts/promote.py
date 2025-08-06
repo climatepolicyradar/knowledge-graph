@@ -13,8 +13,8 @@ from scripts.cloud import (
     is_logged_in,
     parse_aws_env,
 )
-from src.identifiers import WikibaseID
-from src.version import Version
+from scripts.utils import ModelPath
+from src.identifiers import Identifier, WikibaseID
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -35,23 +35,38 @@ def throw_not_logged_in(aws_env: AwsEnv):
     )
 
 
-def find_artifact_by_version(
-    model_collection, version: Version
+def find_artifact_in_registry(
+    model_collection, classifier_id: Identifier, aws_env: AwsEnv
 ) -> Optional[wandb.Artifact]:
-    """Find an artifact with the specified version in the model collection."""
-    return next(
-        (art for art in model_collection.artifacts() if art.version == str(version)),
-        None,
-    )
+    """
+    Find an artifact with the specified alias in the model collection.
+
+    This runs through artifacts in the collection and inspects them, checking if they
+    have the id we are looking for, and also inspecting the alias for the aws_env.
+    """
+    for art in model_collection.artifacts():
+        found_classifier_id, _ = art.source_name.split(":")
+        aliases = art.aliases
+        if found_classifier_id == str(classifier_id) and aws_env.value in aliases:
+            return art
 
 
 def check_existing_artifact_aliases(
     api: wandb.apis.public.api.Api,
     target_path: str,
-    version: Version,
+    classifier_id: Identifier,
     aws_env: AwsEnv,
 ) -> None:
-    """Check if an artifact exists and has conflicting AWS environment aliases."""
+    """
+    Review current state of the model in the wandb registry.
+
+    This means first checking wether the collection itself exists (/Q123).
+    Then if found, will look if the artifact already exists within the collection.
+    If the artifact exists, will check the aliases to see if there are any conflicts.
+
+    Note that the versions for project artifacts are not the same as the versions for
+    collection models.
+    """
     if not api.artifact_collection_exists(
         type="model",
         name=target_path,
@@ -65,24 +80,26 @@ def check_existing_artifact_aliases(
         name=target_path,
     )
 
-    target_artifact = find_artifact_by_version(model_collection, version)
+    target_artifact = find_artifact_in_registry(
+        model_collection, classifier_id, aws_env=aws_env
+    )
 
-    # It's okay if there isn't yet an artifact for this version, and
+    # It's okay if there isn't yet an registry artifact for this version, and
     # if there isn't, then there's nothing to check.
     if not target_artifact:
-        log.info(f"Model collection artifact with version {version} not found")
+        log.info(f"Model collection artifact with alias {aws_env.value} not found")
         return None
 
-    log.info(f"Model collection artifact with version {version} found")
+    log.info(f"Model collection artifact with alias {aws_env.value} found")
 
     # Get all AWS env values except the one we're promoting to
     other_env_values = {env.value for env in AwsEnv} - {aws_env.value}
-    # Check if any other AWS environment values are present as aliases
 
-    if existing_env_aliases := set(target_artifact.aliases) & other_env_values:
+    # Check if any other AWS environment values are present as aliases
+    if set(target_artifact.aliases) & other_env_values:
         raise typer.BadParameter(
-            "An artifact already exists with AWS environment aliases "
-            f"{existing_env_aliases} in collection {target_path}."
+            "Something has gone wrong with the source artifact, multiple AWS "
+            f"environments where found in the aliases: {target_artifact.aliases}"
         )
 
 
@@ -95,17 +112,11 @@ def main(
             parser=WikibaseID,
         ),
     ],
-    classifier: Annotated[
-        str,
+    classifier_id: Annotated[
+        Identifier,
         typer.Option(
-            help="Classifier name that aligns with the Python class name",
-        ),
-    ],
-    version: Annotated[
-        Version,
-        typer.Option(
-            help="Version of the model (e.g., v3)",
-            parser=Version,
+            help="Classifier ID that aligns with the Python class name",
+            parser=Identifier,
         ),
     ],
     aws_env: Annotated[
@@ -165,7 +176,8 @@ def main(
         # This also validates that the classifier exists. It relies on an
         # artifiact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
-        artifact_id = f"{wikibase_id}/{classifier}:{version}"
+        model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
+        artifact_id = f"{model_path}:{aws_env.value}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
@@ -174,7 +186,7 @@ def main(
         check_existing_artifact_aliases(
             api,
             target_path,
-            version,
+            classifier_id,
             aws_env,
         )
 
