@@ -99,6 +99,7 @@ env = [
   "WIKIBASE_URL=https://test.test.test",
   "ARGILLA_API_URL=http://localhost:6900",
   "ARGILLA_API_KEY=argilla.apikey",
+  "WANDB_API_KEY=test_wandb_api_key"
 ]
 markers = ["vespa", "transformers", "slow"]
 asyncio_default_fixture_loop_scope = "function"

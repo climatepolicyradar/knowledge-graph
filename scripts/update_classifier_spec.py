@@ -1,4 +1,3 @@
-import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -102,10 +101,7 @@ def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
 
 
 @app.command()
-def get_all_available_classifiers(
-    aws_envs: list[AwsEnv] | None = None,
-    api_key: str | None = None,
-) -> None:
+def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
     """
     Return all available models for the given environment
 
@@ -120,9 +116,7 @@ def get_all_available_classifiers(
         f"Running for AWS environments: {[aws_env.value for aws_env in aws_envs]}"
     )
 
-    if not api_key:
-        api_key = os.environ["WANDB_API_KEY"]
-    api = wandb.Api(api_key=api_key)  # type: ignore
+    api = wandb.Api()
     model_type = ArtifactType(
         api.client,
         entity=WANDB_MODEL_ORG,

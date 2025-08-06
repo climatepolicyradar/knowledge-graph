@@ -85,10 +85,7 @@ def test_is_latest_model_in_env():
 def test_get_all_available_classifiers(mock_wandb_api):
     with TemporaryDirectory() as temp_dir:
         with patch("scripts.update_classifier_spec.SPEC_DIR", Path(temp_dir)):
-            get_all_available_classifiers(
-                aws_envs=[AwsEnv.sandbox],
-                api_key="test_wandb_api_key",
-            )
+            get_all_available_classifiers(aws_envs=[AwsEnv.sandbox])
             specs = read_spec_file(AwsEnv.sandbox)
             assert specs == ["Q111:v1", "Q222:v1"]
 
