@@ -12,6 +12,7 @@ from scripts.cloud import (
     AwsEnv,
     is_logged_in,
     parse_aws_env,
+    throw_not_logged_in,
 )
 from scripts.utils import ModelPath
 from src.identifiers import Identifier, WikibaseID
@@ -26,13 +27,6 @@ ENTITY = "climatepolicyradar"
 JOB_TYPE = "promote_model"
 
 app = typer.Typer()
-
-
-def throw_not_logged_in(aws_env: AwsEnv):
-    """Raise a typer.BadParameter exception for a not logged in AWS environment."""
-    raise typer.BadParameter(
-        f"you're not logged into {aws_env.value}. Do `aws sso --login {aws_env.value}`"
-    )
 
 
 def find_artifact_in_registry(
