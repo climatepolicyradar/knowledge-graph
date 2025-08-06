@@ -81,7 +81,7 @@ def main(
 
     target_path = f"wandb-registry-{REGISTRY_NAME}/{collection_name}:{aws_env}"
 
-    api = wandb.Api()  # type: ignore[reportGeneralTypeIssues]
+    api = wandb.Api()
 
     model = api.artifact(target_path)
     model.aliases.remove(aws_env.value)
