@@ -42,13 +42,13 @@ Or to also track in W&B:
 just evaluate Q992 --track
 ```
 
-You can promote a model version to be the primary version that's used in that account.
+You can promote a model to be the primary used in that environment using its ClassifierID.
 
 ```bash
-poetry run promote Q992 --classifier RulesBasedClassifier --version v13 --aws-env labs --primary
+poetry run promote Q992 --classifier_id abcd2345  --aws-env labs --primary
 ```
 
-You can also demote (aka disable) a promoted model version in an AWS account/environment, for a concept.
+You can also demote (aka disable) a promoted model in an AWS account/environment, for a concept.
 
 ```bash
 just demote Q787 labs

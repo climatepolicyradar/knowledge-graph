@@ -78,7 +78,7 @@ def check_existing_artifact_aliases(
         model_collection, classifier_id, aws_env=aws_env
     )
 
-    # It's okay if there isn't yet an registry artifact for this version, and
+    # It's okay if there isn't yet an registry artifact for this artifact, and
     # if there isn't, then there's nothing to check.
     if not target_artifact:
         log.info(f"Model collection artifact with alias {aws_env.value} not found")
@@ -123,7 +123,7 @@ def main(
     primary: Annotated[
         bool,
         typer.Option(
-            help="Whether this will be the primary version for this AWS environment",
+            help="Whether this will be primary for this AWS environment",
         ),
     ] = False,
 ):
@@ -134,8 +134,9 @@ def main(
     as an artefact in wandb, with a linked model in s3 for the environment.
 
     This script adds a link to the chosen model from the wandb registry as a
-    collection. Optionally the model can be made the primary version for the
-    AWS environment.
+    collection. Optionally the model can be made primary for the AWS
+    environment, this means applying an environment alias to the model in the
+    collection.
 
     If a W&B model registry collection doesn't exist, it'll automatically be
     made as part of this script.
