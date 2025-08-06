@@ -12,7 +12,6 @@ from scripts.promote import (
     find_artifact_in_registry,
 )
 from src.identifiers import Identifier
-from src.version import Version
 
 
 @pytest.mark.parametrize(
@@ -93,14 +92,13 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "collection_exists,artifact_aliases,classifier_id,version,aws_env,target_path,expected_error",
+    "collection_exists,artifact_aliases,classifier_id,aws_env,target_path,expected_error",
     [
         # Collection doesn't exist
         (
             False,
             [],
             Identifier("abcd2345"),
-            Version("v1"),
             AwsEnv.labs,
             "test/path",
             None,
@@ -110,7 +108,6 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
             True,
             ["labs"],
             Identifier("abcd2345"),
-            Version("v1"),
             AwsEnv.labs,
             "test/path",
             None,
@@ -118,12 +115,11 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
         # Artifact exists with conflicting alias
         (
             True,
-            ["staging"],
+            ["staging", "labs"],
             Identifier("abcd2345"),
-            Version("v1"),
             AwsEnv.labs,
             "test/path",
-            "An artifact already exists with AWS environment aliases {'staging'}",
+            "Something has gone wrong with the source artifact",
         ),
     ],
 )
@@ -131,7 +127,6 @@ def test_check_existing_artifact_aliases(
     collection_exists,
     artifact_aliases,
     classifier_id,
-    version,
     aws_env,
     target_path,
     expected_error,
@@ -147,7 +142,7 @@ def test_check_existing_artifact_aliases(
         )
         mock_artifact = Mock(
             aliases=artifact_aliases,
-            source_name=f"{classifier_id}:{version}",
+            source_name=f"{classifier_id}:v1",
         )
         mock_collection = Mock()
         mock_collection.artifacts.return_value = [other_mock_artifact, mock_artifact]
@@ -159,7 +154,6 @@ def test_check_existing_artifact_aliases(
                 mock_api,
                 target_path,
                 classifier_id,
-                version,
                 aws_env,
             )
     else:
@@ -167,25 +161,28 @@ def test_check_existing_artifact_aliases(
             mock_api,
             target_path,
             classifier_id,
-            version,
             aws_env,
         )
 
 
 @pytest.mark.parametrize(
-    "artifacts,version,expected",
+    "artifacts,aws_env,expected",
     [
         # No artifacts
-        ([], "v1", None),
+        ([], AwsEnv.labs, None),
         # One matching artifact
-        ([Mock(source_name="abcd2345:v1", aliases=["prod"])], "v1", "snapshot1"),
+        (
+            [Mock(source_name="abcd2345:v1", aliases=["prod"])],
+            AwsEnv.production,
+            "snapshot1",
+        ),
         # Multiple artifacts, one match
         (
             [
                 Mock(source_name="abcd2345:v1", aliases=["prod"]),
                 Mock(source_name="abcd2345:v2", aliases=["staging"]),
             ],
-            "v1",
+            AwsEnv.production,
             "snapshot1",
         ),
         # Multiple artifacts, no match
@@ -194,19 +191,17 @@ def test_check_existing_artifact_aliases(
                 Mock(source_name="abcd2345:v1", aliases=["prod"]),
                 Mock(source_name="abcd2345:v2", aliases=["staging"]),
             ],
-            "v3",
+            AwsEnv.sandbox,
             None,
         ),
     ],
 )
-def test_find_artifact_in_registry(artifacts, version, expected):
-    """Test finding artifacts by version."""
+def test_find_artifact_in_registry(artifacts, aws_env, expected):
+    """Test finding artifacts by aws_env."""
     mock_collection = Mock()
     mock_collection.artifacts.return_value = artifacts
 
-    result = find_artifact_in_registry(
-        mock_collection, Identifier("abcd2345"), Version(version)
-    )
+    result = find_artifact_in_registry(mock_collection, Identifier("abcd2345"), aws_env)
 
     if expected is None:
         assert result is None

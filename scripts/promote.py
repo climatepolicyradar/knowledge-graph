@@ -15,7 +15,6 @@ from scripts.cloud import (
 )
 from scripts.utils import ModelPath
 from src.identifiers import Identifier, WikibaseID
-from src.version import Version
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -37,12 +36,18 @@ def throw_not_logged_in(aws_env: AwsEnv):
 
 
 def find_artifact_in_registry(
-    model_collection, expected_id: Identifier, expected_version: Version
+    model_collection, classifier_id: Identifier, aws_env: AwsEnv
 ) -> Optional[wandb.Artifact]:
-    """Find an artifact with the specified version in the model collection."""
+    """
+    Find an artifact with the specified alias in the model collection.
+
+    This runs through artifacts in the collection and inspects them, checking if they
+    have the id we are looking for, and also inspecting the alias for the aws_env.
+    """
     for art in model_collection.artifacts():
-        classifier_id, version = art.source_name.split(":")
-        if classifier_id == str(expected_id) and version == str(expected_version):
+        found_classifier_id, _ = art.source_name.split(":")
+        aliases = art.aliases
+        if found_classifier_id == str(classifier_id) and aws_env.value in aliases:
             return art
 
 
@@ -50,7 +55,6 @@ def check_existing_artifact_aliases(
     api: wandb.apis.public.api.Api,
     target_path: str,
     classifier_id: Identifier,
-    version: Version,
     aws_env: AwsEnv,
 ) -> None:
     """
@@ -77,25 +81,25 @@ def check_existing_artifact_aliases(
     )
 
     target_artifact = find_artifact_in_registry(
-        model_collection, classifier_id, version
+        model_collection, classifier_id, aws_env=aws_env
     )
 
     # It's okay if there isn't yet an registry artifact for this version, and
     # if there isn't, then there's nothing to check.
     if not target_artifact:
-        log.info(f"Model collection artifact with version {version} not found")
+        log.info(f"Model collection artifact with alias {aws_env.value} not found")
         return None
 
-    log.info(f"Model collection artifact with version {version} found")
+    log.info(f"Model collection artifact with alias {aws_env.value} found")
 
     # Get all AWS env values except the one we're promoting to
     other_env_values = {env.value for env in AwsEnv} - {aws_env.value}
-    # Check if any other AWS environment values are present as aliases
 
-    if existing_env_aliases := set(target_artifact.aliases) & other_env_values:
+    # Check if any other AWS environment values are present as aliases
+    if set(target_artifact.aliases) & other_env_values:
         raise typer.BadParameter(
-            "An artifact already exists with AWS environment aliases "
-            f"{existing_env_aliases} in collection {target_path}."
+            "Something has gone wrong with the source artifact, multiple AWS "
+            f"environments where found in the aliases: {target_artifact.aliases}"
         )
 
 
@@ -183,7 +187,6 @@ def main(
             api,
             target_path,
             classifier_id,
-            Version(artifact.version),
             aws_env,
         )
 
