@@ -175,7 +175,7 @@ class Classifier(ABC):
             pipeline_model_config = classifier.pipeline.model.config  # type: ignore
 
             pipeline_model_config._output_attentions = False  # type: ignore
-            pipeline_model_config._output_attentions = False  # type: ignore
+            pipeline_model_config.output_attentions = False  # type: ignore
 
         return classifier
 
