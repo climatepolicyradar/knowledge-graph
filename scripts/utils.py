@@ -3,14 +3,14 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from scripts.config import classifier_dir
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 
 
 class ModelPath(BaseModel):
     """Represents the expected path to a model artifact locally or in S3."""
 
     wikibase_id: WikibaseID
-    classifier_id: Identifier
+    classifier_id: ClassifierID
 
     def __str__(self) -> str:
         """

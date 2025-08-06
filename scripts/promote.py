@@ -15,7 +15,7 @@ from scripts.cloud import (
     throw_not_logged_in,
 )
 from scripts.utils import ModelPath
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -30,7 +30,7 @@ app = typer.Typer()
 
 
 def find_artifact_in_registry(
-    model_collection, classifier_id: Identifier, aws_env: AwsEnv
+    model_collection, classifier_id: ClassifierID, aws_env: AwsEnv
 ) -> Optional[wandb.Artifact]:
     """
     Find an artifact with the specified alias in the model collection.
@@ -48,7 +48,7 @@ def find_artifact_in_registry(
 def check_existing_artifact_aliases(
     api: wandb.apis.public.api.Api,
     target_path: str,
-    classifier_id: Identifier,
+    classifier_id: ClassifierID,
     aws_env: AwsEnv,
 ) -> None:
     """
@@ -107,10 +107,10 @@ def main(
         ),
     ],
     classifier_id: Annotated[
-        Identifier,
+        ClassifierID,
         typer.Option(
             help="Classifier ID that aligns with the Python class name",
-            parser=Identifier,
+            parser=ClassifierID,
         ),
     ],
     aws_env: Annotated[

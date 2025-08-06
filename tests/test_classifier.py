@@ -9,7 +9,7 @@ from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 from src.span import Span
 from tests.common_strategies import concept_label_strategy, concept_strategy
 
@@ -265,7 +265,7 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
     classifier = classifier_class(concept)
-    assert classifier.id == Identifier.generate(classifier.name, concept.id)
+    assert classifier.id == ClassifierID.generate(classifier.name, concept.id)
     assert classifier == classifier_class(concept)
 
 
@@ -346,8 +346,8 @@ def test_whether_a_classifier_with_a_small_change_to_the_internal_concept_produc
 def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts_any_concept():
     class UnrestrictedClassifier(Classifier):
         @property
-        def id(self) -> Identifier:
-            return Identifier("unrestricted")
+        def id(self) -> ClassifierID:
+            return ClassifierID("unrestricted")
 
         def predict(self, text: str) -> list[Span]:
             return []
@@ -364,8 +364,8 @@ def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correct
         allowed_concept_ids = [WikibaseID("Q123")]
 
         @property
-        def id(self) -> Identifier:
-            return Identifier("single_id")
+        def id(self) -> ClassifierID:
+            return ClassifierID("single_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
@@ -386,8 +386,8 @@ def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correc
         allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
 
         @property
-        def id(self) -> Identifier:
-            return Identifier("multi_id")
+        def id(self) -> ClassifierID:
+            return ClassifierID("multi_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
@@ -408,8 +408,8 @@ def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance
         allowed_concept_ids = [WikibaseID("Q123"), WikibaseID("Q456")]
 
         @property
-        def id(self) -> Identifier:
-            return Identifier("parent_id")
+        def id(self) -> ClassifierID:
+            return ClassifierID("parent_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
@@ -444,8 +444,8 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
         allowed_concept_ids = []
 
         @property
-        def id(self) -> Identifier:
-            return Identifier("empty_id")
+        def id(self) -> ClassifierID:
+            return ClassifierID("empty_id")
 
         def predict(self, text: str) -> list[Span]:
             return []
