@@ -1,7 +1,7 @@
 import os
-from pathlib import Path
 from collections.abc import Callable, Sequence
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
 import boto3
@@ -9,14 +9,15 @@ import boto3.session
 import botocore
 import botocore.client
 import typer
+import yaml
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
-import yaml
 
 from src.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"
+
 
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
