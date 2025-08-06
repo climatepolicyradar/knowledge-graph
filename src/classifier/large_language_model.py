@@ -16,7 +16,7 @@ from typing_extensions import Self
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
-from src.identifiers import Identifier
+from src.identifiers import ClassifierID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -121,9 +121,9 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         raise NotImplementedError
 
     @property
-    def id(self) -> Identifier:
+    def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
-        return Identifier.generate(
+        return ClassifierID.generate(
             self.name,
             self.concept.id,
             self.model_name,
