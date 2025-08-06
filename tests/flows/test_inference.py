@@ -305,6 +305,8 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
             config=test_config,
         )
 
+        assert type(inference_result) is InferenceResult
+
         assert inference_result.batch_inference_results != InferenceResult.failed
 
         # Check the document filtering works
