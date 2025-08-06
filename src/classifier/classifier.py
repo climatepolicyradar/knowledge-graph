@@ -159,7 +159,7 @@ class Classifier(ABC):
         cls,
         path: Union[str, Path],
         model_to_cuda: bool = False,
-        set_missing_attributes: bool = True,
+        set_missing_attributes: bool = False,
     ) -> "Classifier":
         """
         Load a classifier from a file.
