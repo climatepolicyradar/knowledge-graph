@@ -43,6 +43,7 @@ aioboto3 = "^14.3.0"
 types-aioboto3 = {extras = ["s3"], version = "^14.3.0"}
 pytest-aioboto3 = "^0.6.0"
 coiled = "^1.115.0"
+prefect-coiled = "^0.0.4"
 
 [tool.poetry.group.transformers]
 optional = true
