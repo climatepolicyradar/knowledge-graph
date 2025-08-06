@@ -250,14 +250,24 @@ async def test_text_block_inference_without_results(
 
 @pytest.mark.asyncio
 async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    mock_bucket_sabin_documents,
 ):
     """Test inference flow when creating batches of inference results"""
-    doc_ids = [
-        DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    input_doc_ids = [
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_bucket_sabin_documents
     ]
 
-    expected_classifier = ClassifierSpec(name="Q788", alias="v13")
+    # expect Sabin documents to be filtered out
+    expected_doc_stems = [
+        DocumentStem(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    ]
+    expected_classifier_spec = ClassifierSpec(name="Q788", alias="v13")
 
     with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
         flow_run_counter = 0
@@ -274,12 +284,12 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
                 state=Completed(
                     data=ResultRecord(
                         result=BatchInferenceResult(
-                            batch_document_stems=list(doc_ids),
+                            batch_document_stems=list(expected_doc_stems),
                             successful_document_stems=list(
-                                doc_ids
+                                expected_doc_stems
                             ),  # all documents were classified successfully
-                            classifier_name=expected_classifier.name,
-                            classifier_alias=expected_classifier.alias,
+                            classifier_name=expected_classifier_spec.name,
+                            classifier_alias=expected_classifier_spec.alias,
                         )
                     )
                 ),
@@ -291,8 +301,8 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         try:
             inference_result = await inference(
-                classifier_specs=[expected_classifier],
-                document_ids=doc_ids,
+                classifier_specs=[expected_classifier_spec],
+                document_ids=input_doc_ids,
                 config=test_config,
             )
         except ValueError:
@@ -306,7 +316,13 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         filtered_file_stems = (
             inference_result.fully_successfully_classified_document_stems
         )
-        assert filtered_file_stems == {DocumentStem(doc_id) for doc_id in doc_ids}
+        assert filtered_file_stems == {
+            DocumentStem(doc_id) for doc_id in expected_doc_stems
+        }
+
+        assert inference_result.failed_classifier_specs == []
+
+        assert inference_result.classifier_specs == [expected_classifier_spec]
 
 
 def test_get_latest_ingest_documents(
