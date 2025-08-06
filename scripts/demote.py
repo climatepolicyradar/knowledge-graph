@@ -67,8 +67,8 @@ def main(
     """
     Demote a model within an AWS environment.
 
-    This removes the environment alias from the specified version, effectively
-    making it no longer the primary version for that environment.
+    This removes the environment alias from the specified model in the registery,
+    effectively making it no longer the primary version for that environment.
     """
     log.info("Starting model demotion process")
 

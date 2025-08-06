@@ -7,7 +7,7 @@ Individual scripts' docstrings contain more information about their purpose and 
 
 ## Updating a Classifier
 
-First we run the training scripts. This will increment the version of the classifier in the projects registry in weights and biases. You can then run the promote script which is used for promoting a model to primary within or cross aws environment. Promotion will not affect the version / alias.
+First we run the training scripts. This will upload the classifier to s3 and link to it from its weights and biases project. You can then run the promote script which is used for promoting a model to primary within an aws environment. Promotion as adds the model to the weights and bias registry and setting it as primary gives it the environment alias.
 
 _Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires s3 access._
 
@@ -18,7 +18,7 @@ just train "Q123" --track --upload --aws-env sandbox
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier KeywordClassifier --version v3 --aws-env sandbox --primary
+just promote "Q123" --classifier_id abcd2345 --aws-env sandbox --primary
 ```
 
 You can also achieve the above directly with:
