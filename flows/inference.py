@@ -46,8 +46,8 @@ from scripts.cloud import (
     ClassifierSpec,
     disallow_latest_alias,
     get_prefect_job_variable,
+    parse_spec_file,
 )
-from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span

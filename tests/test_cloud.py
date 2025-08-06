@@ -1,8 +1,8 @@
 from unittest.mock import Mock, patch
-from tempfile import TemporaryDirectory
 
 import botocore
 import pytest
+import yaml
 from moto import mock_aws
 
 from scripts.cloud import (
@@ -13,7 +13,6 @@ from scripts.cloud import (
     is_logged_in,
     parse_aws_env,
     parse_spec_file,
-    read_spec_file,
 )
 
 
@@ -78,6 +77,7 @@ def test_parse_aws_env_invalid(invalid_input):
 def test_generate_deployment_name(flow_name, aws_env, expected):
     assert generate_deployment_name(flow_name, aws_env) == expected
 
+
 @pytest.mark.parametrize(
     "spec_contents,expected_specs",
     [
@@ -101,9 +101,6 @@ def test_parse_spec_file(spec_contents, expected_specs, tmp_path):
     spec_dir = tmp_path / "classifier_specs"
     spec_dir.mkdir(parents=True)
     spec_file = spec_dir / f"{test_env}.yaml"
-
-    # Write test contents
-    import yaml
 
     with open(spec_file, "w") as f:
         yaml.dump(spec_contents, f)
