@@ -1,122 +1,137 @@
+import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import pytest
-from wandb.apis.public import ArtifactType
-from wandb.apis.public.artifacts import ArtifactCollection
 
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from scripts.cloud import AwsEnv
 from scripts.update_classifier_spec import (
     get_all_available_classifiers,
-    is_concept_model,
-    model_artifact_is_primary,
-    model_seen_in_env,
-    parse_spec_file,
-    read_spec_file,
     sort_specs,
 )
+from src.identifiers import WikibaseID
 
 
 @pytest.fixture
 def mock_wandb_api():
-    with (
-        patch("wandb.Api") as mock_api,
-        patch("wandb.apis.public.ArtifactType") as mock_artifact_type,
-    ):
+    with patch("wandb.Api") as mock_api:
         # Create a mock for the API instance
         api_instance = Mock()
         mock_api.return_value = api_instance
 
-        # Create mock model collections
-        collections = []
+        # Create mock classifier artifacts
+        mock_artifacts = []
         for model_data in [
-            {"name": "Q111", "env": "sandbox"},
-            {"name": "Q444", "env": "labs"},
-            {"name": "some_other_model", "env": "sandbox"},
-            {"name": "Q222", "env": "sandbox"},
+            {"name": "Q111:v1", "env": "sandbox", "id": "abcd2345"},
+            {"name": "Q444:v2", "env": "labs", "id": "efgh6789"},
+            {"name": "Q222:v1", "env": "sandbox", "id": "2345abcd"},
         ]:
             mock_artifact = Mock()
-            mock_artifact.name = f"{model_data['name']}:v1"
+            mock_artifact.name = model_data["name"]
             mock_artifact.metadata = {"aws_env": model_data["env"]}
-            mock_artifact.aliases = ["latest", "sandbox"]
+            mock_artifact.json_encode.return_value = {"sequenceName": model_data["id"]}
+            mock_artifacts.append(mock_artifact)
 
-            mock_collection = Mock()
-            mock_collection.name = model_data["name"]
-            mock_collection.artifacts.return_value = [mock_artifact]
-            collections.append(mock_collection)
+        # api.registries().collections().versions() = artifacts
+        mock_registries = Mock()
+        api_instance.registries.return_value = mock_registries
 
-        mock_type_instance = Mock()
-        mock_type_instance.collections.return_value = collections
+        mock_collections = Mock()
+        mock_registries.collections.return_value = mock_collections
 
-        mock_artifact_type.return_value = mock_type_instance
-        with (
-            patch.object(ArtifactType, "load", return_value="mocked"),
-            patch.object(ArtifactType, "collections", return_value=collections),
-        ):
-            yield mock_api
+        mock_collections.versions.return_value = mock_artifacts
 
-
-def test_is_concept_model():
-    # Make the artifact collection mockable
-    def mocked_artifact_init(self, name):
-        self.name = name
-
-    ArtifactCollection.__init__ = mocked_artifact_init
-
-    # Some other model
-    not_concept_model = ArtifactCollection(name="other_model")
-    assert not is_concept_model(not_concept_model)
-
-    # Concept model
-    concept_model = ArtifactCollection(name="Q123456")
-    assert is_concept_model(concept_model)
-
-
-def test_is_latest_model_in_env():
-    classifier_specs = [
-        ClassifierSpec(name="Q22", alias="v1"),
-        ClassifierSpec(name="Q11", alias="v2"),
-    ]
-    assert model_seen_in_env(classifier_specs, model_name="Q11")
-    assert not model_seen_in_env(classifier_specs, model_name="Q33")
+        yield mock_api
 
 
 def test_get_all_available_classifiers(mock_wandb_api):
     with TemporaryDirectory() as temp_dir:
-        with patch("scripts.update_classifier_spec.SPEC_DIR", Path(temp_dir)):
+        temp_dir = Path(temp_dir)
+        with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_dir):
             get_all_available_classifiers(aws_envs=[AwsEnv.sandbox])
-            specs = read_spec_file(AwsEnv.sandbox)
-            assert specs == ["Q111:v1", "Q222:v1"]
+            output_path = temp_dir / "sandbox.yaml"
 
+            with open(output_path, "r") as file:
+                results = file.read()
+
+            expected = textwrap.dedent("""
+                ---
+                - classifier_id: abcd2345
+                  wandb_registry_version: 1
+                  wikibase_id: Q111
+                - classifier_id: 2345abcd
+                  wandb_registry_version: 1
+                  wikibase_id: Q222
+                """).lstrip()
+
+            assert results == expected
 
 
 def test_sort_specs():
     unsorted_specs = [
-        ClassifierSpec(name="Q123", alias="v4"),
-        ClassifierSpec(name="Q789", alias="v1"),
-        ClassifierSpec(name="Q1023", alias="v2"),
-        ClassifierSpec(name="Q456", alias="v30"),
-        ClassifierSpec(name="Q999", alias="v3"),
-        ClassifierSpec(name="Q111", alias="v3"),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q444"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q111"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q555"),
+            classifier_id="efgh2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q333"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q222"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q555"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
     ]
 
     assert sort_specs(unsorted_specs) == [
-        ClassifierSpec(name="Q111", alias="v3"),
-        ClassifierSpec(name="Q123", alias="v4"),
-        ClassifierSpec(name="Q456", alias="v30"),
-        ClassifierSpec(name="Q789", alias="v1"),
-        ClassifierSpec(name="Q999", alias="v3"),
-        ClassifierSpec(name="Q1023", alias="v2"),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q111"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q222"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q333"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q444"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q555"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q555"),
+            classifier_id="efgh2345",
+            wandb_registry_version="v1",
+        ),
     ]
-
-
-@pytest.mark.parametrize(
-    "aliases,aws_env,expected",
-    [
-        ([AwsEnv.sandbox.value, "latest"], AwsEnv.sandbox, True),
-        ([], AwsEnv.staging, False),
-    ],
-)
-def test_model_artifact_is_primary(aliases, aws_env, expected):
-    assert model_artifact_is_primary(aliases=aliases, aws_env=aws_env) == expected
