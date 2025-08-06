@@ -257,6 +257,8 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
 
+    expected_classifier = ClassifierSpec(name="Q788", alias="v13")
+
     with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
         flow_run_counter = 0
 
@@ -276,8 +278,8 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
                             successful_document_stems=list(
                                 doc_ids
                             ),  # all documents were classified successfully
-                            classifier_name="Q788",
-                            classifier_alias="v13",
+                            classifier_name=expected_classifier.name,
+                            classifier_alias=expected_classifier.alias,
                         )
                     )
                 ),
@@ -289,7 +291,7 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         try:
             inference_result = await inference(
-                classifier_specs=[ClassifierSpec(name="Q788", alias="v13")],
+                classifier_specs=[expected_classifier],
                 document_ids=doc_ids,
                 config=test_config,
             )
