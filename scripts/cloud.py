@@ -7,6 +7,7 @@ import boto3
 import boto3.session
 import botocore
 import botocore.client
+import typer
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
@@ -91,6 +92,13 @@ VALID_FROM_TO_TRANSITIONS = [
     (AwsEnv.labs, AwsEnv.staging),
     (AwsEnv.staging, AwsEnv.production),
 ]
+
+
+def throw_not_logged_in(aws_env: AwsEnv):
+    """Raise a typer.BadParameter exception for a not logged in AWS environment."""
+    raise typer.BadParameter(
+        f"you're not logged into {aws_env.value}. Do `aws sso --login {aws_env.value}`"
+    )
 
 
 def validate_transition(from_aws_env: AwsEnv, to_aws_env: AwsEnv) -> None:

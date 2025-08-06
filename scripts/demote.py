@@ -8,7 +8,12 @@ import typer
 import wandb
 from rich.logging import RichHandler
 
-from scripts.cloud import AwsEnv, is_logged_in
+from scripts.cloud import (
+    AwsEnv,
+    is_logged_in,
+    parse_aws_env,
+    throw_not_logged_in,
+)
 from src.identifiers import WikibaseID
 
 logging.basicConfig(
@@ -30,13 +35,6 @@ JOB_TYPE = "demote_model"
 REGION_NAME = "eu-west-1"
 
 
-def throw_not_logged_in(aws_env: AwsEnv):
-    """Raise a typer.BadParameter exception for a not logged in AWS environment."""
-    raise typer.BadParameter(
-        f"you're not logged into {aws_env.value}. Do `aws sso --login {aws_env.value}`"
-    )
-
-
 def validate_login(
     aws_env: AwsEnv,
     use_aws_profiles: bool,
@@ -47,27 +45,6 @@ def validate_login(
 
 
 app = typer.Typer()
-
-
-def parse_aws_env(value: str) -> str:
-    """
-    Parse a string a string as a possible enum value.
-
-    We rely on a somewhat custom enum, to allow `"dev"`|`"staging"` for
-    `staging`.
-    """
-    try:
-        # This would convert `"dev"` to `AwsEnv.staging`.
-        #
-        # The raw value is returned, since we can't return an `AwsEnv` from
-        # this function.
-        return AwsEnv(value).value
-    except ValueError as e:
-        if "is not a valid AwsEnv" in str(e):
-            valid = ", ".join([f"'{env.value}'" for env in AwsEnv])
-            raise typer.BadParameter(f"'{value}' is not one of {valid}.")
-        else:
-            raise typer.BadParameter(str(e))
 
 
 @app.command()
