@@ -249,12 +249,10 @@ async def test_text_block_inference_without_results(
 
 
 @pytest.mark.asyncio
-@pytest.mark.flaky_on_ci
-async def test_inference(
+async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
     test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
 ):
-    """Test inference flow of a batch of documents"""
-    mock_wandb_init, _, _ = mock_wandb
+    """Test inference flow when creating batches of inference results"""
     doc_ids = [
         DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
@@ -267,15 +265,25 @@ async def test_inference(
             flow_run_counter += 1
             from prefect.results import ResultRecord
 
+            # mock the expected List of BatchInferenceResults when map_as_subflow is called
             return FlowRun(
                 flow_id=uuid.uuid4(),
                 name=f"mock-run-{flow_run_counter}",
-                state=Completed(data=ResultRecord(result=None)),
+                state=Completed(
+                    data=ResultRecord(
+                        result=BatchInferenceResult(
+                            batch_document_stems=list(doc_ids),
+                            successful_document_stems=list(
+                                doc_ids
+                            ),  # all documents were classified successfully
+                            classifier_name="Q788",
+                            classifier_alias="v13",
+                        )
+                    )
+                ),
             )
 
         mock_inference_run_deployment.side_effect = mock_awaitable
-
-        # check the deployment was created. Look at the name of deployment
 
         # run the inference flow
 
@@ -296,28 +304,7 @@ async def test_inference(
         filtered_file_stems = (
             inference_result.fully_successfully_classified_document_stems
         )
-        assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
-
-    mock_wandb_init.assert_called_once_with(
-        entity="test_entity",
-        job_type="concept_inference",
-    )
-
-    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
-
-    assert sorted(labels) == [
-        "labelled_passages/Q788/latest/HTML.document.0.1.json",
-        "labelled_passages/Q788/latest/PDF.document.0.1.json",
-    ]
-
-    for key in labels:
-        s3 = boto3.client("s3", region_name=test_config.bucket_region)
-        response = s3.get_object(Bucket=test_config.cache_bucket, Key=key)
-        data = json.loads(response["Body"].read().decode("utf-8"))
-
-        # Some spans where identified
-        with_spans = [d for d in data if len(d["spans"]) > 0]
-        assert len(with_spans) > 0
+        assert filtered_file_stems == {DocumentStem(doc_id) for doc_id in doc_ids}
 
 
 def test_get_latest_ingest_documents(

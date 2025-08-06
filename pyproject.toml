@@ -99,7 +99,7 @@ env = [
   "ARGILLA_API_URL=http://localhost:6900",
   "ARGILLA_API_KEY=argilla.apikey",
 ]
-markers = ["vespa", "flaky_on_ci", "transformers", "slow"]
+markers = ["vespa", "transformers", "slow"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
