@@ -325,7 +325,7 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_bucket_sabin_documents(mock_s3_client, mock_bucket):
+def mock_bucket_containing_some_sabin_documents(mock_s3_client, mock_bucket):
     fixture_files = [
         "PDF.document.0.1.json",
         "HTML.document.0.1.json",

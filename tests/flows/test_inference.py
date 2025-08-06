@@ -255,12 +255,12 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
-    mock_bucket_sabin_documents,
+    mock_bucket_containing_some_sabin_documents,
 ):
     """Test inference flow when creating batches of inference results"""
     input_doc_ids = [
         DocumentImportId(Path(doc_file).stem)
-        for doc_file in mock_bucket_sabin_documents
+        for doc_file in mock_bucket_containing_some_sabin_documents
     ]
 
     # expect Sabin documents to be filtered out
@@ -299,16 +299,11 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         # run the inference flow
 
-        try:
-            inference_result = await inference(
-                classifier_specs=[expected_classifier_spec],
-                document_ids=input_doc_ids,
-                config=test_config,
-            )
-        except ValueError:
-            # Expected to fail due to test environment mock limitations
-            # See below for assertations against the results
-            pass
+        inference_result = await inference(
+            classifier_specs=[expected_classifier_spec],
+            document_ids=input_doc_ids,
+            config=test_config,
+        )
 
         assert inference_result.batch_inference_results != InferenceResult.failed
 
