@@ -6,7 +6,7 @@ from nltk.tokenize import word_tokenize  # type: ignore
 
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
-from src.identifiers import Identifier
+from src.identifiers import ClassifierID
 from src.span import Span
 
 nltk.download("punkt_tab", quiet=True)
@@ -66,9 +66,9 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
         self.concept = concept
 
     @property
-    def id(self) -> Identifier:
+    def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
-        return Identifier.generate(self.name, self.concept.id)
+        return ClassifierID.generate(self.name, self.concept.id)
 
     def _stem_label(self, label: str) -> str:
         """

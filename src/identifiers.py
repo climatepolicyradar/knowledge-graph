@@ -4,6 +4,7 @@ from enum import Enum
 from functools import total_ordering
 
 from pydantic import BaseModel, Field
+from typing_extensions import Self
 
 
 @total_ordering
@@ -111,7 +112,7 @@ class Identifier(str):
     pattern = re.compile(rf"^[{valid_characters}]{{8}}$")
 
     @classmethod
-    def generate(cls, *args) -> "Identifier":
+    def generate(cls, *args) -> "Self":
         """Generates a new Identifier from the supplied data."""
         if not args:
             raise TypeError(
@@ -157,3 +158,13 @@ class Identifier(str):
     def __get_validators__(cls):
         """Return a generator of validators for Pydantic compatibility."""
         yield cls._validate
+
+
+class ClassifierID(Identifier):
+    """
+    A unique identifier specifically for classifiers.
+
+    This is intended for typing clarity rather than extending the Identifier class.
+    """
+
+    pass

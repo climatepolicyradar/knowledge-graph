@@ -11,7 +11,7 @@ from scripts.promote import (
     check_existing_artifact_aliases,
     find_artifact_in_registry,
 )
-from src.identifiers import Identifier
+from src.identifiers import ClassifierID
 
 
 @pytest.mark.parametrize(
@@ -98,7 +98,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
         (
             False,
             [],
-            Identifier("abcd2345"),
+            ClassifierID("abcd2345"),
             AwsEnv.labs,
             "test/path",
             None,
@@ -107,7 +107,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
         (
             True,
             ["labs"],
-            Identifier("abcd2345"),
+            ClassifierID("abcd2345"),
             AwsEnv.labs,
             "test/path",
             None,
@@ -116,7 +116,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
         (
             True,
             ["staging", "labs"],
-            Identifier("abcd2345"),
+            ClassifierID("abcd2345"),
             AwsEnv.labs,
             "test/path",
             "Something has gone wrong with the source artifact",
@@ -201,7 +201,9 @@ def test_find_artifact_in_registry(artifacts, aws_env, expected):
     mock_collection = Mock()
     mock_collection.artifacts.return_value = artifacts
 
-    result = find_artifact_in_registry(mock_collection, Identifier("abcd2345"), aws_env)
+    result = find_artifact_in_registry(
+        mock_collection, ClassifierID("abcd2345"), aws_env
+    )
 
     if expected is None:
         assert result is None

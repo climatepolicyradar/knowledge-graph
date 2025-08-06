@@ -2,7 +2,7 @@
 
 from src.classifier.classifier import Classifier, GPUBoundClassifier, ZeroShotClassifier
 from src.concept import Concept
-from src.identifiers import Identifier
+from src.identifiers import ClassifierID
 from src.span import Span
 
 
@@ -14,9 +14,9 @@ class DummyClassifier(Classifier):
         return []
 
     @property
-    def id(self) -> Identifier:
+    def id(self) -> ClassifierID:
         """Return the ID of the classifier."""
-        return Identifier("dummy")
+        return ClassifierID("dummy")
 
 
 class DummyZeroShotClassifier(DummyClassifier, ZeroShotClassifier):
