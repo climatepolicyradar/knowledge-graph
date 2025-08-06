@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Union
 from typing_extensions import Self
 
 from src.concept import Concept
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 from src.span import Span
 from src.version import Version
 
@@ -107,7 +107,7 @@ class Classifier(ABC):
 
     @property
     @abstractmethod
-    def id(self) -> Identifier:
+    def id(self) -> ClassifierID:
         """
         Return a deterministic, human-readable identifier for the classifier.
 
@@ -128,7 +128,7 @@ class Classifier(ABC):
         Classifier subclasses should override this method to return a unique identifier
         for the classifier according to its specific parameters and implementation.
 
-        :return Identifier: A deterministic 8-character identifier
+        :return ClassifierID: A deterministic 8-character identifier
         """
         ...
 

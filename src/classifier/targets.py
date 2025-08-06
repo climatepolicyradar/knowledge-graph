@@ -5,7 +5,7 @@ from typing import Callable
 
 from src.classifier.classifier import Classifier, GPUBoundClassifier
 from src.concept import Concept
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 from src.span import Span
 
 # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
@@ -59,9 +59,9 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
         )
 
     @property
-    def id(self) -> Identifier:
+    def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
-        return Identifier.generate(
+        return ClassifierID.generate(
             self.name, self.concept.id, self.model_name, self.commit_hash
         )
 

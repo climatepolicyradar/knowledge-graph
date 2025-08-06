@@ -5,7 +5,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from scripts.cloud import AwsEnv
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
@@ -27,7 +27,7 @@ class ClassifierSpec(BaseModel):
             "The wikibase id for the underlying concept being classified. e.g. 'Q992'"
         ),
     )
-    classifier_id: Identifier = Field(
+    classifier_id: ClassifierID = Field(
         description=(
             "The unique identifier for the classifier, built from its internals."
         ),
