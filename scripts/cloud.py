@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any, Optional
@@ -10,11 +11,12 @@ import botocore.client
 import typer
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
+import yaml
 
 from src.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
-
+SPEC_DIR = Path("flows") / "classifier_specs"
 
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
@@ -194,3 +196,27 @@ def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
     ) as e:
         print(f"determining that not logged in due to exception: {e}")
         return False
+
+
+def build_spec_file_path(aws_env: AwsEnv) -> Path:
+    file_path = SPEC_DIR / f"{aws_env}.yaml"
+    return file_path
+
+
+def read_spec_file(aws_env: AwsEnv) -> list[str]:
+    file_path = build_spec_file_path(aws_env)
+    with open(file_path, "r") as file:
+        return yaml.load(file, Loader=yaml.FullLoader)
+
+
+def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
+    contents = read_spec_file(aws_env)
+    classifier_specs: list[ClassifierSpec] = []
+    for item in contents:
+        try:
+            name, alias = item.split(":")
+            classifier_specs.append(ClassifierSpec(name=name, alias=alias))
+        except ValueError:
+            raise ValueError(f"Invalid format in spec file: {item}")
+
+    return classifier_specs
