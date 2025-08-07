@@ -83,6 +83,10 @@ class AwsEnv(str, Enum):
     staging = "staging"
     production = "prod"
 
+    def __str__(self):
+        """Return a string representation"""
+        return self.value
+
     @classmethod
     def _missing_(cls, value):
         if value == "dev":
