@@ -30,8 +30,11 @@ def mock_wandb_api():
         ]:
             mock_artifact = Mock()
             mock_artifact.name = model_data["name"]
-            mock_artifact.metadata = {"aws_env": model_data["env"]}
-            mock_artifact.json_encode.return_value = {"sequenceName": model_data["id"]}
+            mock_artifact.metadata = {
+                "aws_env": model_data["env"],
+                "classifier_name": "TestClassifier",
+            }
+            mock_artifact.source_name = f"{model_data['id']}:v1"
             mock_artifacts.append(mock_artifact)
 
         # api.registries().collections().versions() = artifacts
@@ -73,6 +76,11 @@ def test_sort_specs():
     unsorted_specs = [
         ClassifierSpec(
             wikibase_id=WikibaseID("Q444"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q1001"),
             classifier_id="abcd2345",
             wandb_registry_version="v1",
         ),
@@ -132,6 +140,11 @@ def test_sort_specs():
         ClassifierSpec(
             wikibase_id=WikibaseID("Q555"),
             classifier_id="efgh2345",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id=WikibaseID("Q1001"),
+            classifier_id="abcd2345",
             wandb_registry_version="v1",
         ),
     ]
