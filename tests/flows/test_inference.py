@@ -13,6 +13,7 @@ import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
 from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.results import ResultRecord
 from prefect.states import Completed
 
 from flows.inference import (
@@ -270,17 +271,12 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
     expected_classifier_spec = ClassifierSpec(name="Q788", alias="v13")
 
     with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
-        flow_run_counter = 0
 
         async def mock_awaitable(*args, **kwargs):
-            nonlocal flow_run_counter
-            flow_run_counter += 1
-            from prefect.results import ResultRecord
-
             # mock the expected List of BatchInferenceResults when map_as_subflow is called
             return FlowRun(
                 flow_id=uuid.uuid4(),
-                name=f"mock-run-{flow_run_counter}",
+                name="mock-run-any-run-count",
                 state=Completed(
                     data=ResultRecord(
                         result=BatchInferenceResult(
@@ -304,6 +300,8 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
             document_ids=input_doc_ids,
             config=test_config,
         )
+
+        mock_inference_run_deployment.assert_called_once()
 
         assert type(inference_result) is InferenceResult
 
