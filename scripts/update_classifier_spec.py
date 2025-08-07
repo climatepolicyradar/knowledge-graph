@@ -34,7 +34,10 @@ def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
 
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
     """Order the classifier spec items consistently"""
-    return sorted(specs, key=lambda x: x.model_dump_json())
+    return sorted(
+        specs,
+        key=lambda spec: (WikibaseID(spec.wikibase_id).numeric, spec.classifier_id),
+    )
 
 
 @app.command()
@@ -61,9 +64,14 @@ def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
     )
     specs = defaultdict(list)
     for art in artifacts:
+        # Skipping old data model
+        if not art.metadata.get("classifier_name"):
+            continue
+
         env = art.metadata["aws_env"]
         wikibase_id, wandb_registry_version = art.name.split(":")
-        classifier_id = art.json_encode().get("sequenceName")
+        classifier_id, wandb_project_version = art.source_name.split(":")  # noqa: F841
+        WikibaseID(wikibase_id)
         spec = ClassifierSpec(
             wikibase_id=wikibase_id,
             classifier_id=classifier_id,

@@ -157,7 +157,7 @@ def test_get_next_version_with_default(mock_api):
     mock_classifier.concept.wikibase_id = "Q123"
 
     mock_api.side_effect = CommError(
-        "artifact 'test_classifier:latest' not found in 'test_entity/Q123'"
+        "artifact membership 'test_classifier:latest' not found in 'test_entity/Q123'"
     )
     wandb_target_entity = f"{namespace.project}/{mock_classifier.id}"
     next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
