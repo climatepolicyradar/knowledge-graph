@@ -4,7 +4,6 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from src.concept import Concept, WikibaseID
-from src.wikibase import WikibaseSession
 from static_sites.concept_librarian.checks import (
     ConceptIssue,
     ConceptStoreIssue,
@@ -21,8 +20,6 @@ env = Environment(loader=FileSystemLoader(current_dir / "templates"))
 env.tests["concept_issue"] = lambda x: isinstance(x, ConceptIssue)
 env.tests["relationship_issue"] = lambda x: isinstance(x, RelationshipIssue)
 env.tests["multi_concept_issue"] = lambda x: isinstance(x, MultiConceptIssue)
-
-wikibase = WikibaseSession()
 
 
 def get_issues_for_concept(
