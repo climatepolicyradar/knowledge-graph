@@ -19,6 +19,8 @@ PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"
 
 
+# Version 1 classifier spec, to be cleaned up and replaced
+# with model from `flows/classifier_specs/spec_interface.py`
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
 
@@ -199,17 +201,23 @@ def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
         return False
 
 
+# Version 1 classifier spec helper, to be cleaned up and replaced
+# with model from `flows/classifier_specs/spec_interface.py`
 def build_spec_file_path(aws_env: AwsEnv) -> Path:
     file_path = SPEC_DIR / f"{aws_env}.yaml"
     return file_path
 
 
+# Version 1 classifier spec helper, to be cleaned up and replaced
+# with model from `flows/classifier_specs/spec_interface.py`
 def read_spec_file(aws_env: AwsEnv) -> list[str]:
     file_path = build_spec_file_path(aws_env)
     with open(file_path, "r") as file:
         return yaml.load(file, Loader=yaml.FullLoader)
 
 
+# Version 1 classifier spec helper, to be cleaned up and replaced
+# with model from `flows/classifier_specs/spec_interface.py`
 def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
     contents = read_spec_file(aws_env)
     classifier_specs: list[ClassifierSpec] = []
@@ -223,6 +231,8 @@ def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
     return classifier_specs
 
 
+# Version 1 classifier spec helper, to be cleaned up and replaced
+# with model from `flows/classifier_specs/spec_interface.py`
 def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     """Save a classifier spec YAML"""
     serialised_data = list(map(lambda spec: str(spec), data))
