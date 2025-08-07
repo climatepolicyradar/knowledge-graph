@@ -1,3 +1,5 @@
+from typing import Annotated
+
 import duckdb
 import typer
 from datasets import Dataset, disable_progress_bars, load_dataset
@@ -43,8 +45,19 @@ def get_world_bank_region(geo_array):
 
 
 @app.command()
-def download_dataset(n: int = 1000):
-    """Download the dataset from the huggingface hub and sample it."""
+def build_dataset(
+    n: Annotated[
+        int, typer.Option(help="Target number of samples in the final dataset")
+    ] = 10000,
+):
+    """
+    Build a balanced, sampled dataset from the HuggingFace climate document corpus.
+
+    This script downloads the ClimatePolicyRadar/all-document-text-data-weekly dataset,
+    filters for English text, applies stratified pre-sampling for efficiency, adds
+    geographic metadata (World Bank regions), and creates a balanced sample across
+    multiple dimensions (geography, corpus type, translation status).
+    """
     dataset_name = "ClimatePolicyRadar/all-document-text-data-weekly"
 
     console.log(f"🚚 Loading [white]{dataset_name}[/white]")

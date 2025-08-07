@@ -38,8 +38,8 @@ lint-all:
     poetry run pre-commit run --all-files --show-diff-on-failure
 
 # build a dataset of passages for sampling
-build-dataset:
-    poetry run python scripts/build_dataset.py
+build-dataset n="10000":
+    poetry run python scripts/build_dataset.py --n {{n}}
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
