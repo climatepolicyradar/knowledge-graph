@@ -16,8 +16,9 @@ from tests.flows.conftest import *  # noqa: F403
 
 
 def test_check_classifier_specs(mock_bucket, capsys):
+    test_aws_env = AwsEnv("sandbox")
     check_classifier_specs(
-        aws_env=AwsEnv("sandbox"),
+        aws_env=test_aws_env,
         bucket_name=mock_bucket,
         max_workers=4,
         write_file_names=False,
@@ -25,7 +26,8 @@ def test_check_classifier_specs(mock_bucket, capsys):
     stdout, stderr = capsys.readouterr()
     assert "to_process: " in stdout
     assert (
-        "Checking sandbox classifier specs in test_bucket/labelled_passages" in stdout
+        f"Checking {test_aws_env} classifier specs in test_bucket/labelled_passages"
+        in stdout
     )
     assert stderr == ""
 
@@ -55,7 +57,8 @@ def test_collect_file_names(
 
 def test_write_result():
     test_file_name = "test-file-name"
-    with TemporaryDirectory() as temp_dir:
+    with TemporaryDirectory() as temp_dir_str:
+        temp_dir = Path(temp_dir_str)
         result = Result(
             path_exists=True,
             classifier_spec="test-classifier-spec",
@@ -64,7 +67,7 @@ def test_write_result():
         path = write_result(
             result=result,
             start_time="YYYY-MM-DD",
-            parent_dir=Path(temp_dir),
+            parent_dir=temp_dir,
             aws_env=AwsEnv("sandbox"),
         )
         assert path.read_text() == json.dumps([test_file_name])
