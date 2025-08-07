@@ -39,13 +39,7 @@ lint-all:
 
 # build a dataset of passages for sampling
 build-dataset:
-    poetry run python scripts/build_dataset/01_download_corporate_disclosures.py
-    poetry run python scripts/build_dataset/02_download_litigation.py
-    poetry run python scripts/build_dataset/03_parse.py
-    poetry run python scripts/build_dataset/04_translate.py
-    poetry run python scripts/build_dataset/05_add_geography.py
-    poetry run python scripts/build_dataset/06_merge.py
-    poetry run python scripts/build_dataset/07_create_balanced_dataset_for_sampling.py
+    poetry run python scripts/build_dataset.py
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
