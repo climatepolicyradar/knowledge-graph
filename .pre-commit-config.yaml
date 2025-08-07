@@ -21,14 +21,15 @@ repos:
     hooks:
       - id: pyright
         name: pyright
-        entry: poetry run pyright
+        entry: uv run pyright
         language: system
         files: ^(src/|scripts/|flows/)
         types: [python]
-  - repo: https://github.com/python-poetry/poetry
-    rev: 2.1.1
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.8.5
     hooks:
-    -   id: poetry-check
+      - id: uv-lock
   - repo: https://github.com/boidolr/ast-grep-pre-commit
     rev: 0.39.1
     hooks:
