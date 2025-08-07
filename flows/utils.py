@@ -635,7 +635,12 @@ class Fault(Exception):
         """Return a string representation"""
         if self.metadata is None:
             return self.msg
-        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"
+        try:
+            data_str = str(self.data)
+        except Exception as e:
+            print(f"could not represent fault's data as a string: {e}")
+            data_str = ""
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)} | data: {data_str}"
 
 
 def default_desc(tasks, results) -> str:

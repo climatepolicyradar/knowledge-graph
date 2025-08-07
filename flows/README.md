@@ -18,7 +18,7 @@ The following example requires declaring a flow, then serving this locally as a 
 
 Serve the deployment from local:
 ```shell
-poetry run python -m flows.repo_info
+uv run python -m flows.repo_info
 ```
 
 Trigger the deployment:
@@ -32,7 +32,7 @@ The following example runs a flow in the prefect worker that is deployed in an e
 
 Execute the flow:
 ```shell
-poetry run python -m flows.repo_info
+uv run python -m flows.repo_info
 ```
 
 There are alternative interfaces for running flows. For example you can register your local terminal as a worker in a work pool and have that poll a work queue for jobs. If the above doesn't meet the requirements then we can look at expanding more. 
@@ -43,5 +43,5 @@ There are alternative interfaces for running flows. For example you can register
 As proof that the prefect flows can utilise local dependencies and code please see the `flows/concepts.py` module.
 
 ```shell 
-poetry run python -m flows.concepts
+uv run python -m flows.concepts
 ```

@@ -11,7 +11,7 @@ docker-compose up --build -d neo4j
 When it's running, you can populate the database with the following command:
 
 ```bash
-poetry run python scripts/neo4j/populate.py
+uv run python scripts/neo4j/populate.py
 ```
 
 The script will fetch all concepts from wikibase and add them (and their relationships) to the knowledge graph. It will then use the predicted passages in the `data/processed/predictions` directory to create the relationships between each concept and the passages where they're mentioned, and between each passage and the documents where they're found.
