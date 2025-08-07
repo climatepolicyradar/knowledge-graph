@@ -1,15 +1,13 @@
 ---
-- wikibase_id: Q368
-  classifier_id: ju9239oi
-  wandb_registry_version: v3
-  compute_environment:
-    gpu: true
-- wikibase_id: Q123
-  classifier_id: x438f30k
-  wandb_registry_version: v1
-  extra_info:
-    - key: "extra_info"
-      value: "extra_value"
-- wikibase_id: Q999
-  classifier_id: ju3f93jf
-  wandb_registry_version: v2
+- classifier_id: mfe6wvbv
+  wandb_registry_version: 15
+  wikibase_id: Q368
+- classifier_id: 2dpw38rj
+  wandb_registry_version: 14
+  wikibase_id: Q374
+- classifier_id: fd5t9bhw
+  wandb_registry_version: 14
+  wikibase_id: Q404
+- classifier_id: cqq6asrb
+  wandb_registry_version: 18
+  wikibase_id: Q412
