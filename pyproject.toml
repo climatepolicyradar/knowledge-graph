@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "knowledge_graph"
-version = "0.8.0"
+version = "0.8.1"
 description = ""
 authors = ["CPR Data Science <dsci@climatepolicyradar.org>"]
 license = "Apache 2.0"
@@ -49,18 +49,25 @@ prefect-coiled = "^0.0.4"
 optional = true
 
 [tool.poetry.group.transformers.dependencies]
-torch = {version = "2.4.1+cpu", source = "pytorch"}
+torch = [
+    {version = "2.8.0", source = "torch", markers = "sys_platform == 'darwin'"},
+    {version = "2.8.0+cpu", source = "torch-cpu", markers = "sys_platform == 'linux'"},
+    {version = "2.8.0+cpu", source = "torch-cpu", markers = "sys_platform == 'win32'"}
+]
 sentence-transformers = "^3.1.1"
-transformers = {extras = ["torch"], version = "^4.51.3"}
+transformers = {extras = ["torch"], version = "^4.55.0"}
 scikit-learn = "^1.6.1"
 accelerate = "^1.6.0"
 
-
 [[tool.poetry.source]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cpu"
+name = "torch"
+url = "https://download.pytorch.org/whl"
 priority = "explicit"
 
+[[tool.poetry.source]]
+name = "torch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [tool.poetry.scripts]
 train = "scripts.train:app"

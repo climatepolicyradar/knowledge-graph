@@ -59,7 +59,7 @@ jobs:
           echo "version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build the docker image
+      - name: Build the Docker image
         env:
           DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
@@ -67,7 +67,7 @@ jobs:
         run: |
           just build-image
 
-      - name: Push the docker image
+      - name: Push the Docker image
         env:
           DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
