@@ -134,7 +134,8 @@ class ArgillaSession:
                     TermsMetadataProperty("pipeline_metadata-parser_metadata"),
                     TermsMetadataProperty("text_block-index"),
                     TermsMetadataProperty("world_bank_region"),
-                    # TermsMetadataProperty("keywordclassifier"),
+                    TermsMetadataProperty("corpus_type_name"),
+                    TermsMetadataProperty("geographies"),
                 ],
             ),
             workspace=workspace,
@@ -161,6 +162,7 @@ class ArgillaSession:
         """Changes dots to hyphens in the key name"""
         # Dropping this, as it can't be serialised into the metadata field by Argilla...
         metadata.pop("KeywordClassifier", None)
+        metadata.pop("EmbeddingClassifier", None)
         return {key.replace(".", "-").lower(): value for key, value in metadata.items()}
 
     def dataset_to_labelled_passages(self, dataset: Dataset) -> list[LabelledPassage]:
@@ -295,3 +297,12 @@ class ArgillaSession:
                 raise ValueError("All datasets must have the same fields")
             if dataset.questions != questions:
                 raise ValueError("All datasets must have the same questions")
+
+    def delete_dataset(self, dataset_name: str, workspace: str = "knowledge-graph"):
+        """
+        Delete a dataset from Argilla.
+
+        :param str dataset_name: The name of the dataset to delete
+        """
+        dataset = self.client.datasets(name=dataset_name, workspace=workspace)
+        dataset.delete()  # type: ignore

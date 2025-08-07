@@ -8,11 +8,11 @@ from argilla._exceptions._api import ConflictError, UnprocessableEntityError
 from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 
-from scripts.config import concept_dir, processed_data_dir
-from src.concept import Concept
+from scripts.config import processed_data_dir
 from src.identifiers import Identifier, WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.labelling import ArgillaSession
+from src.wikibase import WikibaseSession
 
 tqdm.pandas()
 
@@ -110,20 +110,13 @@ def main(
             console.log(
                 f'✅ Added user "{user.username}" to workspace "{workspace.name}"'
             )
-        except (ValueError, UnprocessableEntityError):
+        except (ValueError, UnprocessableEntityError, ConflictError):
             console.log(
                 f'✅ User "{user.username}" already in workspace "{workspace.name}"'
             )
 
-    try:
-        concept = Concept.load(concept_dir / f"{wikibase_id}.json")
-    except FileNotFoundError as e:
-        raise typer.BadParameter(
-            f"Data for {wikibase_id} not found. \n"
-            "If you haven't already, you should run:\n"
-            f"  just get-concept {wikibase_id}\n"
-        ) from e
-
+    wikibase = WikibaseSession()
+    concept = wikibase.get_concept(wikibase_id)
     console.log(f"✅ Loaded metadata for {concept}")
 
     dataset = argilla.labelled_passages_to_dataset(

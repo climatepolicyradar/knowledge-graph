@@ -3,12 +3,13 @@ from typing import Annotated
 
 import pandas as pd
 import typer
+from more_itertools import chunked
 from rich.console import Console
-from rich.progress import track
 
-from scripts.config import equity_columns, processed_data_dir
-from src.classifier import EmbeddingClassifier, KeywordClassifier
+from scripts.config import processed_data_dir
 from src.classifier.classifier import Classifier
+from src.classifier.embedding import EmbeddingClassifier
+from src.classifier.keyword import KeywordClassifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.sampling import create_balanced_sample, split_evenly
@@ -16,6 +17,8 @@ from src.wikibase import WikibaseSession
 
 app = typer.Typer()
 console = Console()
+
+equity_columns = ["world_bank_region", "corpus_type_name", "translated"]
 
 
 @app.command()
@@ -58,9 +61,7 @@ def main(
         "Loading the balanced passage dataset for inference and sampling"
     ):
         try:
-            balanced_dataset_path = (
-                processed_data_dir / "balanced_dataset_for_sampling.feather"
-            )
+            balanced_dataset_path = processed_data_dir / "sampled_dataset.feather"
             balanced_dataset = pd.read_feather(balanced_dataset_path)
         except FileNotFoundError as e:
             raise FileNotFoundError(
@@ -78,27 +79,21 @@ def main(
     # Run inference with all classifiers
     raw_text_passages = balanced_dataset["text_block.text"].tolist()
 
-    model_classes = [KeywordClassifier]
+    model_classes = [KeywordClassifier, EmbeddingClassifier]
     models: list[Classifier] = [model_class(concept) for model_class in model_classes]
 
     for model in models:
         model.fit()
         console.log(f"🤖 Created a {model}")
 
-        if isinstance(model, EmbeddingClassifier):
-            console.log(f"Predicting spans for {model}")
-            predictions = model.predict_batch(raw_text_passages)
-        else:
-            # Keeping other classifiers using stock 'predict' as logging is better
-            # and the classifiers are manually selected just above here.
-            predictions = [
-                model.predict(text)
-                for text in track(
-                    raw_text_passages,
-                    description=f"Predicting spans for {model}",
-                    transient=True,
-                )
-            ]
+        console.log(f"Predicting spans for {model}")
+        predictions = []
+        i = 0
+        for chunk in chunked(raw_text_passages, 100):
+            batch_predictions = model.predict_batch(chunk)
+            predictions.extend(batch_predictions)
+            i += len(chunk)
+            console.log(f"Predicted spans for {model} - {i} / {len(raw_text_passages)}")
 
         # Add a column to the dataset for each classifier's predictions
         balanced_dataset[model.name] = predictions
@@ -175,6 +170,19 @@ def main(
     for _, row in sampled_passages.iterrows():
         metadata = row.to_dict()
         metadata.pop("text_block.text")
+
+        # Convert numpy arrays to lists for JSON serialization
+        for key, value in metadata.items():
+            if hasattr(value, "tolist"):  # numpy arrays have a tolist() method
+                metadata[key] = value.tolist()
+            elif hasattr(value, "__iter__") and not isinstance(value, (str, dict)):
+                # Handle other array-like objects
+                try:
+                    metadata[key] = list(value)
+                except (TypeError, ValueError):
+                    # Keep original value if conversion fails
+                    pass
+
         labelled_passages.append(
             LabelledPassage(text=row["text_block.text"], metadata=metadata, spans=[])  # type: ignore
         )
