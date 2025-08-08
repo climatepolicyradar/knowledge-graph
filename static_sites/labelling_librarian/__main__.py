@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 from pathlib import Path
@@ -30,6 +31,12 @@ current_dir = Path(__file__).parent.resolve()
 
 @app.command()
 def main():
+    """CLI entry point to generate the Labelling Librarian static site."""
+    asyncio.run(async_main())
+
+
+async def async_main():
+    """Fetch datasets from Argilla, run checks, and generate static HTML pages."""
     client = rg.Argilla(
         api_url=os.getenv("ARGILLA_API_URL"),
         api_key=os.getenv("ARGILLA_API_KEY"),
@@ -60,7 +67,7 @@ def main():
     output_dir.mkdir(parents=True)
 
     # Generate and save the index page
-    html_content = create_index_page(issues)
+    html_content = await create_index_page(issues)
     output_path = output_dir / "index.html"
     output_path.write_text(html_content)
     console.log("Generated index page")
@@ -73,7 +80,7 @@ def main():
         relevant_issues = [
             issue for issue in issues if issue.dataset_name == dataset_name
         ]
-        html_content = create_dataset_page(
+        html_content = await create_dataset_page(
             dataset_name=dataset_name, issues=relevant_issues
         )
         output_path = output_dir / f"{dataset_name}.html"
