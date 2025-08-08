@@ -16,20 +16,16 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
 
-      - name: Install Poetry
-        run: pipx install poetry
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version-file: .python-version
-          cache: poetry
+          enable-cache: true
 
       - name: Install dependencies
-        run: poetry install --with dev
+        run: uv sync --extra dev
 
       - name: Run pre-commit autoupdate
-        run: poetry run pre-commit autoupdate
+        run: uv run pre-commit autoupdate
 
       - name: Detect changes
         id: changed-file

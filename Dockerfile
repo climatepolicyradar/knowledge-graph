@@ -1,12 +1,30 @@
-FROM prefecthq/prefect:3.3.7-python3.10
+FROM python:3.10-slim-bookworm
 
-RUN pip install --upgrade pip
-RUN pip install poetry
+# The installer requires curl (and certificates) to download the release archive
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
 
-WORKDIR /opt/prefect/knowledge-graph
+# Download the latest installer
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
+
+# Run the installer then remove it
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+
+# Ensure the installed binary is on the `PATH`
+ENV PATH="/root/.local/bin/:$PATH"
+
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_SYSTEM_PYTHON=1
+
+# This allows the dependencies of the project (which do not change
+# often) to be cached separately from the project itself (which
+# changes very frequently).
+COPY pyproject.toml .
+RUN uv pip install -r pyproject.toml --extra transformers
+COPY . .
+RUN uv pip install -e .
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
-# Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and stderr streams are sent straight to terminal (e.g. your container log) without being first buffered and that you can see the output of your application (e.g. django logs) in real time.
+# Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and
 ENV PYTHONUNBUFFERED=1
 # Example of a segmentation fault on Linux with and without enabling the fault handler:
 #
@@ -23,15 +41,3 @@ ENV PYTHONUNBUFFERED=1
 #   File "<stdin>", line 1 in <module>
 # Segmentation fault
 ENV PYTHONFAULTHANDLER=1
-
-# Set up environment
-COPY ./poetry.lock ./pyproject.toml ./
-RUN poetry config virtualenvs.create false
-RUN poetry install --no-root --no-interaction --with transformers --without dev
-
-# Set up package
-COPY ./flows ./flows/
-COPY ./src ./src/
-COPY ./scripts ./scripts
-COPY ./static_sites ./static_sites/
-RUN poetry install --no-interaction --only-root
