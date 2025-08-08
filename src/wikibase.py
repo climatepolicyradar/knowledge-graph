@@ -761,3 +761,99 @@ class WikibaseSession:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.close()
+
+    async def add_alternative_labels_async(
+        self,
+        wikibase_id: WikibaseID,
+        alternative_labels: list[str],
+        language: str = "en",
+        batch_size: int = 500,  # Limit batch size to avoid 413 errors
+    ):
+        """Add a list of alternative labels to a Wikibase item, preserving existing ones"""
+        try:
+            # Get existing labels
+            concept = await self.get_concept_async(wikibase_id)
+            existing_alternative_labels = concept.alternative_labels
+
+            # Combine and deduplicate
+            all_alternative_labels = list(
+                set(existing_alternative_labels + alternative_labels)
+            )
+
+            # Filter out empty strings
+            all_alternative_labels = [label for label in all_alternative_labels if label and label.strip()]
+
+            if not all_alternative_labels:
+                logger.warning(f"No valid labels to add for {wikibase_id}")
+                return {"success": True, "message": "No labels to add"}
+
+            # Split into batches to avoid 413 errors
+            batches = [all_alternative_labels[i:i + batch_size] 
+                      for i in range(0, len(all_alternative_labels), batch_size)]
+            
+            logger.info(f"Uploading {len(all_alternative_labels)} labels to {wikibase_id} in {len(batches)} batches")
+
+            client = await self._get_client()
+            
+            for batch_num, batch_labels in enumerate(batches, 1):
+                # Prepare the request data for this batch
+                request_data = {
+                    "aliases": {
+                        language: [
+                            {"language": language, "value": alias}
+                            for alias in batch_labels
+                        ]
+                    }
+                }
+
+                response = await client.post(
+                    url=self.api_url,
+                    data={
+                        "action": "wbeditentity",
+                        "format": "json",
+                        "id": wikibase_id,
+                        "token": self._csrf_token,
+                        "data": json.dumps(request_data),
+                    },
+                    timeout=60,  # Increase timeout for large requests
+                )
+
+                # Check if response is empty or invalid
+                if not response.text.strip():
+                    raise Exception(f"Empty response from Wikibase API for {wikibase_id} batch {batch_num}")
+
+                try:
+                    response_data = response.json()
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON response for {wikibase_id} batch {batch_num}: {response.text[:200]}")
+                    raise Exception(f"Invalid JSON response from Wikibase API: {e}")
+
+                if "error" in response_data:
+                    raise Exception(
+                        f"Error adding alternative labels to {wikibase_id} batch {batch_num}: {response_data['error']}"
+                    )
+
+                logger.info(f"Successfully uploaded batch {batch_num}/{len(batches)} ({len(batch_labels)} labels) to {wikibase_id}")
+                
+                # Small delay between batches
+                if batch_num < len(batches):
+                    await asyncio.sleep(1)
+
+            logger.info(f"Successfully added all {len(all_alternative_labels)} labels to {wikibase_id}")
+            return {"success": True, "total_labels": len(all_alternative_labels)}
+
+        except Exception as e:
+            logger.error(f"Failed to add alternative labels to {wikibase_id}: {e}")
+            raise
+
+    @async_to_sync
+    async def add_alternative_labels(
+        self,
+        wikibase_id: WikibaseID,
+        alternative_labels: list[str],
+        language: str = "en",
+    ):
+        """Sync wrapper for add_alternative_labels_async"""
+        return await self.add_alternative_labels_async(
+            wikibase_id, alternative_labels, language
+        )
