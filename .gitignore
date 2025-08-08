@@ -185,3 +185,8 @@ tests/local_vespa/test_app/search/query-profiles/lower_max_hits.xml
 
 # Output report created by the scripts/audit/do_s3_passages_align_with_vespa.py audit script
 missing_passages.csv
+
+data.db
+data.db.wal
+impacts.png
+scripts/build_dataset/subset_dataset_sexual_minority.py
