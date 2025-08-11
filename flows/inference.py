@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Final, Iterable, Optional, TypeAlias, TypeVar
 
 import boto3
+import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
@@ -28,9 +29,11 @@ from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
+    DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
     DocumentStem,
     Fault,
+    JsonDict,
     Profiler,
     S3Uri,
     SlackNotify,
@@ -796,12 +799,9 @@ def generate_asset_deps(
     )
 
 
-# The default serializer that is used is cloud pickle - this can handle basic pydantic types.
-# Should the complexity of the returned objects become more complex then a custom serialiser should be considered.
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
-async def inference_batch_of_documents(
+async def _inference_batch_of_documents(
     batch: list[DocumentStem],
-    config_json: dict,
+    config_json: JsonDict,
     classifier_name: str,
     classifier_alias: str,
 ) -> BatchInferenceResult | Fault:
@@ -933,6 +933,44 @@ async def inference_batch_of_documents(
     return batch_inference_result
 
 
+# The default serialiser is cloudpickle, which can handle basic Pydantic types.
+# Should the complexity of the returned objects become more complex
+# then a custom serialiser should be considered.
+
+
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+async def inference_batch_of_documents_cpu(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_name: str,
+    classifier_alias: str,
+) -> BatchInferenceResult | Fault:
+    return await _inference_batch_of_documents(
+        batch,
+        config_json,
+        classifier_name,
+        classifier_alias,
+    )
+
+
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+@coiled.function(  # pyright: ignore[reportUnknownMemberType]
+    vm_type=DEFAULT_GPU_VM_TYPES,
+)
+async def inference_batch_of_documents_gpu(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_name: str,
+    classifier_alias: str,
+) -> BatchInferenceResult | Fault:
+    return await _inference_batch_of_documents(
+        batch,
+        config_json,
+        classifier_name,
+        classifier_alias,
+    )
+
+
 @Profiler(
     printer=print,
     name="processing results",
@@ -1043,7 +1081,7 @@ async def inference(
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
             # The typing doesn't pick up the Flow decorator
-            fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
+            fn=inference_batch_of_documents_cpu,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,

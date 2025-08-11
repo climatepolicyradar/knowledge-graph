@@ -9,7 +9,7 @@ default:
 
 # install dependencies and set up the project
 install +OPTS="":
-    uv sync --locked --extra dev --extra transformers {{OPTS}}
+    uv sync --locked --extra dev --extra transformers --extra coiled {{OPTS}}
     uv run pre-commit install
     uv run ipython kernel install --user
 
