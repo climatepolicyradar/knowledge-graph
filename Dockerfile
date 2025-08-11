@@ -19,7 +19,7 @@ ENV UV_SYSTEM_PYTHON=1
 # often) to be cached separately from the project itself (which
 # changes very frequently).
 COPY pyproject.toml .
-RUN uv pip install -r pyproject.toml --extra transformers
+RUN uv pip install -r pyproject.toml --extra transformers --extra coiled
 COPY . .
 RUN uv pip install -e .
 
