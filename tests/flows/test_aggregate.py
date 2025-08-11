@@ -275,23 +275,39 @@ async def test_process_single_document__client_error(
 
 @pytest.mark.asyncio
 async def test_process_single_document__value_error(
-    mock_bucket_labelled_passages_large, mock_classifier_specs, test_aggregate_config
+    mock_bucket_labelled_passages_large,
+    mock_classifier_specs,
+    test_aggregate_config,
+    snapshot,
 ):
     keys, bucket, s3_async_client = mock_bucket_labelled_passages_large
     _, classifier_specs = mock_classifier_specs
 
+    # Use Q223 and Q767 to create mismatch.
+    #
+    # Those classifiers are setup in the fixtures.
+    classifier_specs = [
+        spec for spec in classifier_specs if spec.name in ["Q223", "Q767"]
+    ]
+
     document_stem = DocumentStem("CCLW.executive.10061.4515")
 
-    # Replace the doc with a broken  one
-    new_data = [
+    # Replace Q767 with fewer passages to create mismatch with Q223
+    # (which has 27).
+    new_data_short = [
         '{"id":"b1","text":"Some words","spans":[],"metadata":{}}',
         '{"id":"b2","text":"But not enough words","spans":[],"metadata":{}}',
     ]
-    key = [k for k in keys if "CCLW.executive.10061.4515" in k][0]
+
+    # Find and replace the Q767 file to have only 2 passages, while
+    # Q223 keeps its 27.
+    q767_key = [k for k in keys if "CCLW.executive.10061.4515" in k and "Q767/v3" in k][
+        0
+    ]
     await s3_async_client.put_object(
         Bucket=bucket,
-        Key=key,
-        Body=json.dumps(new_data),
+        Key=q767_key,
+        Body=json.dumps(new_data_short),
     )
 
     session = aioboto3.Session(region_name=test_aggregate_config.bucket_region)
@@ -305,19 +321,7 @@ async def test_process_single_document__value_error(
         ),
         return_exceptions=True,
     )
-    assert len(result) == 1
-    assert isinstance(result[0], AggregationFailure)
-    assert isinstance(result[0].exception, ValueError)
-    assert (
-        result[0]
-        .exception.args[0]
-        .startswith("The number of passages diverge when appending")
-    )
-    assert (
-        result[0]
-        .exception.args[0]
-        .endswith("len(labelled_passages)=2 != len(concepts_for_vespa)=27")
-    )
+    assert result == snapshot
 
 
 def test_collect_stems_by_specs(
