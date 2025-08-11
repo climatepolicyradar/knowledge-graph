@@ -39,8 +39,8 @@ from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
     get_prefect_job_variable,
+    parse_spec_file,
 )
-from scripts.update_classifier_spec import parse_spec_file
 from src.labelled_passage import LabelledPassage
 
 T = TypeVar("T")

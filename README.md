@@ -104,7 +104,7 @@ In the longer term, we expect the graph to be a useful artefact in its own right
 
 To run the tests and exclude known problematic tests in the CI environment run
 
-``just test -v -m "'not flaky_on_ci and not transformers'" ``
+``just test -v -m "'not transformers'" ``
 
 ## Pipelines
 

@@ -1,4 +1,3 @@
-import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -7,9 +6,12 @@ import wandb
 import yaml  # type: ignore
 from dotenv import load_dotenv
 from rich.console import Console
-from wandb.apis.public.artifacts import ArtifactCollection, ArtifactType
 
-from scripts.cloud import AwsEnv, ClassifierSpec
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    determine_spec_file_path,
+)
+from scripts.cloud import AwsEnv
 from src.identifiers import WikibaseID
 
 load_dotenv()
@@ -21,160 +23,70 @@ app = typer.Typer()
 
 WANDB_MODEL_ORG = "climatepolicyradar_UZODYJSN66HCQ"
 WANDB_MODEL_REGISTRY = "wandb-registry-model"
-SPEC_DIR = Path("flows") / "classifier_specs"
-
-
-def build_spec_file_path(aws_env: AwsEnv) -> Path:
-    file_path = SPEC_DIR / f"{aws_env}.yaml"
-    return file_path
-
-
-def read_spec_file(aws_env: AwsEnv) -> list[str]:
-    file_path = build_spec_file_path(aws_env)
-    with open(file_path, "r") as file:
-        return yaml.load(file, Loader=yaml.FullLoader)
-
-
-def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
-    contents = read_spec_file(aws_env)
-    classifier_specs: list[ClassifierSpec] = []
-    for item in contents:
-        try:
-            name, alias = item.split(":")
-            classifier_specs.append(ClassifierSpec(name=name, alias=alias))
-        except ValueError:
-            raise ValueError(f"Invalid format in spec file: {item}")
-
-    return classifier_specs
 
 
 def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     """Save a classifier spec YAML"""
-    serialised_data = list(map(lambda spec: str(spec), data))
+    serialised_data = [d.model_dump(exclude_none=True) for d in data]
     with open(file_path, "w") as file:
         yaml.dump(serialised_data, file, explicit_start=True)
 
 
-def is_concept_model(model_artifact) -> bool:
-    """
-    Check if a model is a concept classifier
-
-    This check is based on whether the model name can be instantiated as a WikibaseID.
-    For example: `Q123`, `Q972`
-    """
-    try:
-        WikibaseID(model_artifact.name)  # type: ignore
-
-        return True
-    except ValueError as e:
-        if "is not a valid Wikibase ID" in str(e):
-            return False
-
-        raise
-
-
-def get_relevant_model_version(
-    model: ArtifactCollection, aws_env: AwsEnv
-) -> list[str] | None:
-    """Returns the model name and version if a valid model is found"""
-    if not is_concept_model(model):
-        return None
-
-    for model_artifacts in model.artifacts():
-        if ("aws_env", aws_env.value) in model_artifacts.metadata.items():
-            return model_artifacts.name
-
-
-def model_seen_in_env(classifier_specs: list[ClassifierSpec], model_name: str) -> bool:
-    """Check to see if this model already has a version found for the env"""
-    env_models = [m.name for m in classifier_specs]
-    return model_name in env_models
-
-
-def model_artifact_is_primary(aliases: list[str], aws_env: AwsEnv) -> bool:
-    return aws_env.value in aliases
-
-
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
-    # Have stable ordering. First, the name is gotten from
-    # `Q000:v0`, and then the number part is gotten from `Q000`.
-    return sorted(specs, key=lambda x: int(WikibaseID(x.name).numeric))
+    """Order the classifier spec items consistently"""
+    return sorted(
+        specs,
+        key=lambda spec: (WikibaseID(spec.wikibase_id).numeric, spec.classifier_id),
+    )
 
 
 @app.command()
-def get_all_available_classifiers(
-    aws_envs: list[AwsEnv] | None = None,
-    api_key: str | None = None,
-) -> None:
-    """
-    Return all available models for the given environment
-
-    Current implementation relies on the wandb sdk abstraction over
-    the graphql endpoint, which queries each item as an individual
-    request.
-    """
+def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
+    """Refreshes the classifier specs with the latest state of wandb."""
     if not aws_envs:
         aws_envs = [e for e in AwsEnv]
 
     console.log(
         f"Running for AWS environments: {[aws_env.value for aws_env in aws_envs]}"
     )
+    api = wandb.Api()
 
-    if not api_key:
-        api_key = os.environ["WANDB_API_KEY"]
-    api = wandb.Api(api_key=api_key)  # type: ignore
-    model_type = ArtifactType(
-        api.client,
-        entity=WANDB_MODEL_ORG,
-        project=WANDB_MODEL_REGISTRY,
-        type_name="model",
+    registry_filters = {"name": {"$regex": "model"}}
+
+    collection_filters = {"name": {"$regex": WikibaseID.regex}}
+
+    version_filters = {"$or": [{"alias": env} for env in aws_envs]}
+
+    artifacts = (
+        api.registries(filter=registry_filters)
+        .collections(collection_filters)
+        .versions(filter=version_filters)
     )
-    model_collections = model_type.collections()
-
-    console.log("Checking for matching environments for model")
-    classifier_specs: dict[AwsEnv, list[ClassifierSpec]] = defaultdict(list)
-    for model in model_collections:
-        if not is_concept_model(model):
+    specs = defaultdict(list)
+    for art in artifacts:
+        # Skipping old data model
+        if not art.metadata.get("classifier_name"):
             continue
 
-        console.log(model.name)
-        for model_artifact in model.artifacts():
-            model_env = AwsEnv(model_artifact.metadata.get("aws_env"))
+        env = art.metadata["aws_env"]
+        wikibase_id, wandb_registry_version = art.name.split(":")
+        classifier_id, wandb_project_version = art.source_name.split(":")  # noqa: F841
+        WikibaseID(wikibase_id)
+        spec = ClassifierSpec(
+            wikibase_id=wikibase_id,
+            classifier_id=classifier_id,
+            wandb_registry_version=wandb_registry_version,
+        )
 
-            if (
-                # Is it a known AWS env.?
-                model_env not in aws_envs
-                # Does it have any aliases? If there's none, there's no
-                # way it could be the primary.
-                or not model_artifact.aliases
-                # Is it the primary version or not?
-                or not model_artifact_is_primary(model_artifact.aliases, model_env)
-            ):
-                continue
+        # Placeholder for possible implementation
+        if compute_environment := art.metadata.get("compute_environment"):
+            print(compute_environment)
 
-            # Has the primary model already been found?
-            if model_seen_in_env(
-                classifier_specs[model_env],
-                model.name,
-            ):
-                break
+        specs[env].append(spec)
 
-            model_parts: list[str] = model_artifact.name.split(":")
-            if len(model_parts) != 2:
-                raise ValueError(
-                    f"Model name had unexpected format: {model_artifact.name}"
-                )
-            classifier_specs[model_env].append(
-                ClassifierSpec(
-                    name=model_parts[0],
-                    alias=model_parts[1],
-                )
-            )
-
-    for aws_env, specs in classifier_specs.items():
-        aws_env = AwsEnv(aws_env)
-        spec_path = build_spec_file_path(aws_env)
-        sorted_specs = sort_specs(specs)
+    for env in aws_envs:
+        spec_path = determine_spec_file_path(env)
+        sorted_specs = sort_specs(specs[env])
         write_spec_file(spec_path, data=sorted_specs)
 
     console.log("Finished!")

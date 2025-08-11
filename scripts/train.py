@@ -139,7 +139,7 @@ def get_next_version(
     except CommError as e:
         error_message = str(e)
         wikibase_id = classifier.concept.wikibase_id
-        pattern = rf"artifact '.*?' not found in '{namespace.entity}/{wikibase_id}'"
+        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{wikibase_id}'"
         if re.search(pattern, error_message):
             console.log(
                 f"No previous wandb version found, '{target_path}' will be at v0"

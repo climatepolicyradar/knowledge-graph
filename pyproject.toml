@@ -25,7 +25,7 @@ more-itertools = "^10.3.0"
 argilla = ">=2.5"
 griffe = "1.5.7"
 cpr-sdk = "1.19.1"
-wandb = "^0.18.3"
+wandb = "0.21.0"
 boto3 = "^1.35.31"
 pyvespa = "^0.54.0"
 pyyaml = "^6.0.2"
@@ -99,8 +99,9 @@ env = [
   "WIKIBASE_URL=https://test.test.test",
   "ARGILLA_API_URL=http://localhost:6900",
   "ARGILLA_API_KEY=argilla.apikey",
+  "WANDB_API_KEY=test_wandb_api_key"
 ]
-markers = ["vespa", "flaky_on_ci", "transformers", "slow"]
+markers = ["vespa", "transformers", "slow"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]

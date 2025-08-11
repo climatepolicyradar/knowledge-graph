@@ -22,8 +22,7 @@ from flows.aggregate import (
     validate_passages_are_same_except_concepts,
 )
 from flows.utils import DocumentStem
-from scripts.cloud import ClassifierSpec
-from scripts.update_classifier_spec import write_spec_file
+from scripts.cloud import ClassifierSpec, write_spec_file
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -43,7 +42,7 @@ def mock_classifier_specs():
         spec_file_path = temp_spec_dir / "sandbox.yaml"
         write_spec_file(spec_file_path, classifier_specs)
 
-        with patch("scripts.update_classifier_spec.SPEC_DIR", temp_spec_dir):
+        with patch("scripts.cloud.SPEC_DIR", temp_spec_dir):
             yield spec_file_path, classifier_specs
 
 

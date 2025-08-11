@@ -156,6 +156,7 @@ generate-static-site tool:
     poetry run python -m static_sites.{{tool}}
 
 # Deploy (Get, train & deploy) new models to primary for the given AWS environment.
+# Example: just deploy-classifiers sandbox 'Q123 Q368 Q374 Q404 Q412'
 deploy-classifiers aws_env ids:
     #!/bin/bash
     set -e
@@ -167,7 +168,7 @@ deploy-classifiers aws_env ids:
     done
 
     poetry run python scripts/deploy.py new \
-        --to-aws-env {{aws_env}} \
+        --aws-env {{aws_env}} \
         $ids_args \
         --get \
         --train \

@@ -2,14 +2,17 @@ from unittest.mock import Mock, patch
 
 import botocore
 import pytest
+import yaml
 from moto import mock_aws
 
 from scripts.cloud import (
     AwsEnv,
+    ClassifierSpec,
     function_to_flow_name,
     generate_deployment_name,
     is_logged_in,
     parse_aws_env,
+    parse_spec_file,
 )
 
 
@@ -73,3 +76,65 @@ def test_parse_aws_env_invalid(invalid_input):
 )
 def test_generate_deployment_name(flow_name, aws_env, expected):
     assert generate_deployment_name(flow_name, aws_env) == expected
+
+
+@pytest.mark.parametrize(
+    "spec_contents,expected_specs",
+    [
+        # Test valid single entry
+        (["Q123:v1"], [ClassifierSpec(name="Q123", alias="v1")]),
+        # Test valid multiple entries
+        (
+            ["Q123:v1", "Q456:v2"],
+            [
+                ClassifierSpec(name="Q123", alias="v1"),
+                ClassifierSpec(name="Q456", alias="v2"),
+            ],
+        ),
+        # Test empty list
+        ([], []),
+    ],
+)
+def test_parse_spec_file(spec_contents, expected_specs, tmp_path):
+    # Create a temporary spec file
+    test_env = AwsEnv.sandbox
+    spec_dir = tmp_path / "classifier_specs"
+    spec_dir.mkdir(parents=True)
+    spec_file = spec_dir / f"{test_env}.yaml"
+
+    with open(spec_file, "w") as f:
+        yaml.dump(spec_contents, f)
+
+    # Patch the SPEC_DIR to use our temporary directory
+    with patch("scripts.cloud.SPEC_DIR", spec_dir):
+        result = parse_spec_file(test_env)
+        assert result == expected_specs
+
+
+@pytest.mark.parametrize(
+    "invalid_contents",
+    [
+        ["invalid_format"],  # Missing colon separator
+        ["Q123:v1:extra"],  # Too many separators
+        ["Q123"],  # No version
+        [":v1"],  # No name
+        ["Q123:"],  # No version after separator
+    ],
+)
+def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
+    # Create a temporary spec file
+    test_env = AwsEnv.sandbox
+    spec_dir = tmp_path / "classifier_specs"
+    spec_dir.mkdir(parents=True)
+    spec_file = spec_dir / f"{test_env}.yaml"
+
+    # Write test contents
+    import yaml
+
+    with open(spec_file, "w") as f:
+        yaml.dump(invalid_contents, f)
+
+    # Patch the SPEC_DIR to use our temporary directory
+    with patch("scripts.cloud.SPEC_DIR", spec_dir):
+        with pytest.raises(ValueError):
+            parse_spec_file(test_env)
