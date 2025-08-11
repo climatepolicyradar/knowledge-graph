@@ -177,10 +177,9 @@ async def full_pipeline(
     )
 
     if len(inference_result.fully_successfully_classified_document_stems) == 0:
-        logger.info(
+        raise ValueError(
             "Inference successfully ran on 0 documents, skipping aggregation and indexing."
         )
-        return
 
     aggregation_run: State = await aggregate(
         document_stems=list(
