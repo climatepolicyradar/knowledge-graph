@@ -127,3 +127,20 @@ This consists of aggregating (collating) the inference results for a document fr
 3. Indexing
 
 This consists of indexing the spans identified from inference in to our passage index's concepts field and concept counts to our family index within our vespa database.
+
+## Static sites 
+We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
+
+* [Vibe Checker](./static_sites/vibe_check/)
+* [labelling_librarian](./static_sites/labelling_librarian/)
+* [concept_librarian](./static_sites/concept_librarian/)
+
+  These can be created by the `justfile` commands
+
+### Run a static site locally
+
+``just serve-static-site``
+
+### Generate a static site
+
+``just generate-static-site``
