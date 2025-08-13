@@ -209,7 +209,7 @@ async def main() -> None:
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
         b_flow_name=full_pipeline.name,
         b_deployment_name=generate_deployment_name(full_pipeline.name, aws_env),
-        b_parameters={"use_new_and_updated": True},
+        b_parameters={"inference_use_new_and_updated": True},
         description="Start the knowledge graph full pipeline.",
         enabled=False,
         aws_env=aws_env,
