@@ -10,6 +10,7 @@ import prefect.events.schemas.automations as automations
 import prefect.events.schemas.events as events
 from prefect.automations import Automation
 from prefect.client.orchestration import get_client
+from prefect.client.schemas.objects import StateType
 from prefect.client.schemas.responses import DeploymentResponse
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
@@ -30,12 +31,12 @@ logger.addHandler(ch)
 
 
 def create_target_automation(
-    a_flow_name: str,
     a_deployment: DeploymentResponse,
     b_deployment: DeploymentResponse,
     description: str,
     parameters: dict,
     enabled: bool,
+    expect_state: StateType = StateType.COMPLETED,
 ) -> Automation:
     """
     Create a copy of the `Automation` that triggers another `Deployment`.
@@ -84,7 +85,7 @@ def create_target_automation(
             # > event.
             #
             # NB: Currently a set due to the Prefect Python class used
-            expect=set(["prefect.flow-run.Running"]),
+            expect=set([f"prefect.flow-run.{expect_state.title()}"]),
         ),
         actions=[
             RunDeployment(
@@ -184,7 +185,6 @@ async def a_triggers_b(
     )
 
     target = create_target_automation(
-        a_flow_name=a_flow_name,
         a_deployment=a_deployment,
         b_deployment=b_deployment,
         description=description,
