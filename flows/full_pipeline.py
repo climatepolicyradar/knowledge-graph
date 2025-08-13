@@ -73,6 +73,39 @@ def validate_aggregation_inference_configs(
         )
 
 
+async def inference_with_result_cache(
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
+    use_new_and_updated: bool = False,
+    config: InferenceConfig | None = None,
+    batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
+    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+) -> State:
+    """Run inference with a result cache."""
+
+    # The default serializer that is used is cloud pickle - this can handle basic
+    # pydantic types. Should the complexity of the returned objects become more complex
+    # then a custom serialiser should be considered.
+    result_cache_s3_block_name = await get_prefect_job_variable(
+        "result_cache_s3_block_name"
+    )
+    result_cache_s3_block_uri = f"s3-bucket/{result_cache_s3_block_name}"
+
+    inference_run: State = await inference.with_options(
+        result_storage=result_cache_s3_block_uri
+    )(
+        classifier_specs=classifier_specs,
+        document_ids=document_ids,
+        use_new_and_updated=use_new_and_updated,
+        config=config,
+        batch_size=batch_size,
+        classifier_concurrency_limit=classifier_concurrency_limit,
+        return_state=True,
+    )
+
+    return inference_run
+
+
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
 @flow(log_prints=True)
 async def full_pipeline(
@@ -137,25 +170,13 @@ async def full_pipeline(
         + f"inference config: {inference_config}"
     )
 
-    # The default serializer that is used is cloud pickle - this can handle basic
-    # pydantic types. Should the complexity of the returned objects become more complex
-    # then a custom serialiser should be considered.
-    result_cache_s3_block_name = await get_prefect_job_variable(
-        "result_cache_s3_block_name"
-    )
-    result_cache_s3_block_uri = f"s3-bucket/{result_cache_s3_block_name}"
-    logger.info(f"Using S3 block URI for result cache: {result_cache_s3_block_uri}")
-
-    inference_run: State = await inference.with_options(
-        result_storage=result_cache_s3_block_uri
-    )(
+    inference_run: State = await inference_with_result_cache(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
         use_new_and_updated=inference_use_new_and_updated,
         config=inference_config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
-        return_state=True,
     )
 
     inference_result_raw: (
