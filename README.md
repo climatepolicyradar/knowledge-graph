@@ -139,3 +139,20 @@ Scripts which support [justfile](./justfile) commands can be found in their own 
 # Documentation generation
 
 Can be found in [/docs](./docs)
+
+## Static sites 
+We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
+
+* [Vibe Checker](./static_sites/vibe_check/)
+* [labelling_librarian](./static_sites/labelling_librarian/)
+* [concept_librarian](./static_sites/concept_librarian/)
+
+  These can be created by the `justfile` commands
+
+### Run a static site locally
+
+``just serve-static-site``
+
+### Generate a static site
+
+``just generate-static-site``
