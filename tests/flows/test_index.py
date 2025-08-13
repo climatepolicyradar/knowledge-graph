@@ -337,7 +337,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
     mock_run_output_identifier_str: str,
     test_aggregate_config,
 ) -> None:
-    """Test that run passage level indexing correctly from aggregated restuls."""
+    """Test that run passage level indexing correctly from aggregated results."""
 
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 

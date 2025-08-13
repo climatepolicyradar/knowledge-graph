@@ -9,79 +9,79 @@ default:
 
 # install dependencies and set up the project
 install +OPTS="":
-    poetry install --with dev {{OPTS}}
-    poetry run pre-commit install
-    poetry run ipython kernel install --user
+    uv sync --locked --extra dev --extra transformers {{OPTS}}
+    uv run pre-commit install
+    uv run ipython kernel install --user
 
 # test the project
 test +OPTS="":
-    poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}}
+    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}}
 
 # test the project, excluding tests that rely on a local Vespa instance
 test-without-vespa +OPTS="":
-    poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
+    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
 
 # test the project, excluding slow tests
 test-without-slow +OPTS="":
-    poetry run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
+    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
 
 # update the snapshots for the tests
 test-snapshot-update +OPTS="":
-    poetry run pytest --snapshot-update {{OPTS}}
+    uv run pytest --snapshot-update {{OPTS}}
 
 # run linters and code formatters on relevant files
 lint:
-    poetry run pre-commit run --show-diff-on-failure
+    uv run pre-commit run --show-diff-on-failure
 
 # run linters and code formatters on all files
 lint-all:
-    poetry run pre-commit run --all-files --show-diff-on-failure
+    uv run pre-commit run --all-files --show-diff-on-failure
 
 # build a dataset of passages for sampling
 build-dataset:
-    poetry run python scripts/build_dataset/01_download_corporate_disclosures.py
-    poetry run python scripts/build_dataset/02_download_litigation.py
-    poetry run python scripts/build_dataset/03_parse.py
-    poetry run python scripts/build_dataset/04_translate.py
-    poetry run python scripts/build_dataset/05_add_geography.py
-    poetry run python scripts/build_dataset/06_merge.py
-    poetry run python scripts/build_dataset/07_create_balanced_dataset_for_sampling.py
+    uv run python scripts/build_dataset/01_download_corporate_disclosures.py
+    uv run python scripts/build_dataset/02_download_litigation.py
+    uv run python scripts/build_dataset/03_parse.py
+    uv run python scripts/build_dataset/04_translate.py
+    uv run python scripts/build_dataset/05_add_geography.py
+    uv run python scripts/build_dataset/06_merge.py
+    uv run python scripts/build_dataset/07_create_balanced_dataset_for_sampling.py
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
-    poetry run python scripts/get_concept.py --wikibase-id {{id}}
+    uv run python scripts/get_concept.py --wikibase-id {{id}}
 
 # train a model for a specific wikibase ID
 train id +OPTS="":
-    poetry run train --wikibase-id {{id}} {{OPTS}}
+    uv run train --wikibase-id {{id}} {{OPTS}}
 
 # evaluate a model for a specific wikibase ID
 evaluate id +OPTS="":
-    poetry run evaluate --wikibase-id {{id}} {{OPTS}}
+    uv run evaluate --wikibase-id {{id}} {{OPTS}}
 
 # promote a model for a specific wikibase ID
 promote id +OPTS="":
-    poetry run promote --wikibase-id {{id}} {{OPTS}}
+    uv run promote --wikibase-id {{id}} {{OPTS}}
 
 # demote a model for a specific wikibase ID
 demote id aws_env:
-    poetry run demote --wikibase-id {{id}} --aws-env {{aws_env}}
+    uv run demote --wikibase-id {{id}} --aws-env {{aws_env}}
 
 # run a model for a specific wikibase ID on a supplied string
 label id string:
-    poetry run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
+    uv run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
 
 # find instances of the concept in a set of passages for a specific wikibase ID
 predict id +OPTS="":
-    poetry run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
+    uv run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:
-    poetry run python scripts/sample.py --wikibase-id {{id}}
+    uv run python scripts/sample.py --wikibase-id {{id}}
 
 # push a sampled set of passages to argilla for a specific wikibase ID
 push-to-argilla id usernames workspace:
-    poetry run python scripts/push_to_argilla.py --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
+    uv run python scripts/push_to_argilla.py --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
 
 # run the full pipeline for a specific wikibase ID
 create-labelling-task id usernames workspace:
@@ -93,16 +93,19 @@ create-labelling-task id usernames workspace:
 
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:
-    poetry run python scripts/generate_report.py --wikibase-ids {{wikibase-ids}}
+    uv run python scripts/generate_report.py --wikibase-ids {{wikibase-ids}}
 
 # visualise IAA, model vs gold-standard agreement, and positive predictions on the full dataset
 visualise-labels id:
-    poetry run python scripts/visualise_labels.py --wikibase-id {{id}}
+    uv run python scripts/visualise_labels.py --wikibase-id {{id}}
 
 analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id)
 
 build-image:
     docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+
+run-image cmd="sh":
+    docker run --rm -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} {{cmd}}
 
 ecr-login:
   aws ecr --profile prod get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
@@ -111,7 +114,7 @@ push-image:
     docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
 
 get-version:
-    poetry run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
+    uv run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
 
 export-env-vars:
 	export $(cat .env | xargs)
@@ -132,7 +135,7 @@ deploy-automations: prefect-login
 
 # Run inference over documents in a pipeline bucket
 infer +OPTS="":
-    poetry run infer {{OPTS}}
+    uv run infer {{OPTS}}
 
 # Run inference over documents in the sandbox pipeline bucket
 infer-sandbox +OPTS="":
@@ -145,17 +148,18 @@ infer-labs +OPTS="":
 # Update what classifiers we are going to run for during inference.
 # Checks for latest versions of classifiers in wandb and updates spec files
 update-inference-classifiers +OPTS="":
-    poetry run update_inference_classifiers {{OPTS}}
+    uv run update-inference-classifiers {{OPTS}}
 
 # Run a static site locally
 serve-static-site tool:
-    poetry run python -m http.server -d static_sites/{{tool}}/dist 8080
+    uv run python -m http.server -d static_sites/{{tool}}/dist 8080
 
 # Generate a static site
 generate-static-site tool:
-    poetry run python -m static_sites.{{tool}}
+    uv run python -m static_sites.{{tool}}
 
 # Deploy (Get, train & deploy) new models to primary for the given AWS environment.
+# Example: just deploy-classifiers sandbox 'Q123 Q368 Q374 Q404 Q412'
 deploy-classifiers aws_env ids:
     #!/bin/bash
     set -e
@@ -166,8 +170,8 @@ deploy-classifiers aws_env ids:
       ids_args="$ids_args --wikibase-id $id"
     done
 
-    poetry run python scripts/deploy.py new \
-        --to-aws-env {{aws_env}} \
+    uv run python scripts/deploy.py new \
+        --aws-env {{aws_env}} \
         $ids_args \
         --get \
         --train \
@@ -176,20 +180,20 @@ deploy-classifiers aws_env ids:
 # Does inference have results for accepted classifiers?
 # Set STAGING_CACHE_BUCKET, or pass as argument:
 audit-inference-staging bucket_name="${STAGING_CACHE_BUCKET:-}":
-    poetry run python scripts/audit/do_classifier_specs_have_results.py \
+    uv run python scripts/audit/do_classifier_specs_have_results.py \
         staging {{bucket_name}}
 
 # Does inference have results for accepted classifiers?
 # Set PROD_CACHE_BUCKET, or pass as argument:
 audit-inference-prod bucket_name="${PROD_CACHE_BUCKET:-}":
-    poetry run python scripts/audit/do_classifier_specs_have_results.py \
+    uv run python scripts/audit/do_classifier_specs_have_results.py \
         prod {{bucket_name}}
 
 # Do concepts for a doc align across sources - staging
 # Set STAGING_CACHE_BUCKET in `.env`, or pass as argument:
 # `just audit-doc-staging CCLW.executive.10491.5392 2025-06-03T16:35-eta4-esgaroth-ring`
 audit-doc-staging document_id aggregator_run_identifier="latest" bucket_name="${STAGING_CACHE_BUCKET:-}":
-    poetry run python scripts/audit/do_outputs_align_for_a_document.py \
+    uv run python scripts/audit/do_outputs_align_for_a_document.py \
         {{document_id}} staging {{bucket_name}} \
         --aggregator-run-identifier {{aggregator_run_identifier}}
 
@@ -197,11 +201,11 @@ audit-doc-staging document_id aggregator_run_identifier="latest" bucket_name="${
 # Set PROD_CACHE_BUCKET in `.env`, or pass as argument:
 # `just audit-doc-prod CCLW.document.i00001242.n0000 2025-06-03T16:35-eta4-esgaroth-ring`
 audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PROD_CACHE_BUCKET:-}":
-    poetry run python scripts/audit/do_outputs_align_for_a_document.py \
+    uv run python scripts/audit/do_outputs_align_for_a_document.py \
         {{document_id}} prod {{bucket_name}} \
         --aggregator-run-identifier {{aggregator_run_identifier}}
 
 
 # Check if passages in S3 align with Vespa
 audit-s3-vespa-alignment +OPTS="":
-    poetry run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}
+    uv run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}

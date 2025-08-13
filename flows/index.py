@@ -4,7 +4,7 @@ import os
 import random
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -746,12 +746,15 @@ async def index(
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
         }
 
+    parameterised_batches: Iterable[dict[str, Any]] = (
+        parameters(batch) for batch in batches
+    )
+
     successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
         fn=index_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
-        batches=batches,
-        parameters=parameters,
+        parameterised_batches=parameterised_batches,
         unwrap_result=False,
     )
 

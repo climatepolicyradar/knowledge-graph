@@ -1,13 +1,14 @@
 import asyncio
 import json
 import os
+from collections import defaultdict
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Optional, TypeAlias, TypeVar
+from typing import Any, Final, Iterable, Optional, TypeAlias, TypeVar
 
 import boto3
 import wandb
@@ -45,8 +46,8 @@ from scripts.cloud import (
     ClassifierSpec,
     disallow_latest_alias,
     get_prefect_job_variable,
+    parse_spec_file,
 )
-from scripts.update_classifier_spec import parse_spec_file
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -125,9 +126,8 @@ class BatchInferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    successful_document_stems: list[DocumentStem] = []
-    failed_document_stems: list[tuple[DocumentStem, Exception]] = []
-    unknown_failures: list[BaseException] = []
+    batch_document_stems: list[DocumentStem]
+    successful_document_stems: list[DocumentStem]
     classifier_name: str
     classifier_alias: str
 
@@ -135,7 +135,7 @@ class BatchInferenceResult(BaseModel):
     def failed(self) -> bool:
         """Whether the batch failed, True if failed."""
 
-        return self.failed_document_stems != [] or self.unknown_failures != []
+        return len(self.batch_document_stems) != len(self.successful_document_stems)
 
 
 class InferenceResult(BaseModel):
@@ -143,8 +143,9 @@ class InferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    document_stems: list[DocumentStem]
+    classifier_specs: list[ClassifierSpec]
     batch_inference_results: list[BatchInferenceResult] = []
-    unexpected_failures: list[BaseException | FlowRun] = []
     successful_classifier_specs: list[ClassifierSpec] = []
     failed_classifier_specs: list[ClassifierSpec] = []
 
@@ -152,39 +153,44 @@ class InferenceResult(BaseModel):
     def failed(self) -> bool:
         """Whether the inference failed, True if failed."""
 
-        return (
-            any([result.failed for result in self.batch_inference_results])
-            or self.unexpected_failures != []
-        )
+        return any([result.failed for result in self.batch_inference_results]) or len(
+            self.document_stems
+        ) != len(self.fully_successfully_classified_document_stems)
 
     @cached_property
-    def successful_document_stems(self) -> set[DocumentStem]:
+    def fully_successfully_classified_document_stems(self) -> set[DocumentStem]:
         """
         The set of document stems that were successfully processed.
 
-        A document stem is considered successful if it was succesful across all classifiers. For example,
-        if a document successfully had inference run in one batch for classifier A, but failed for classifier B,
-        then the document stem is considered unsuccessful.
+        A document stem is considered successful if it was successful across all
+        classifiers. For example, if a document successfully had inference run in one
+        batch for classifier A, but failed for classifier B, then the document stem is
+        considered unsuccessful.
 
-        This is as the document would fail aggregation if there was a missing inference result for a classifier.
+        This is as the document would fail aggregation if there was a missing inference
+        result for a classifier.
         """
 
-        return set(
-            document_stem
-            for batch_inference_result in self.batch_inference_results
-            for document_stem in batch_inference_result.successful_document_stems
-            if document_stem not in self.failed_document_stems
+        document_classifier_mapping: dict[DocumentStem, set[ClassifierSpec]] = (
+            defaultdict(set)
         )
 
-    @cached_property
-    def failed_document_stems(self) -> set[DocumentStem]:
-        """The set of document stems that failed to be processed."""
+        for batch_inference_result in self.batch_inference_results:
+            classifier_spec = ClassifierSpec(
+                name=batch_inference_result.classifier_name,
+                alias=batch_inference_result.classifier_alias,
+            )
 
-        return set(
+            for document_stem in batch_inference_result.successful_document_stems:
+                document_classifier_mapping[document_stem].add(classifier_spec)
+
+        expected_classifier_specs = set(self.classifier_specs)
+
+        return {
             document_stem
-            for batch_inference_result in self.batch_inference_results
-            for document_stem, _ in batch_inference_result.failed_document_stems
-        )
+            for document_stem, successful_classifiers in document_classifier_mapping.items()
+            if successful_classifiers >= expected_classifier_specs
+        }
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -899,17 +905,21 @@ async def inference_batch_of_documents(
     )
 
     batch_inference_result = BatchInferenceResult(
-        successful_document_stems=[i.document_stem for i in inferences_successes],
-        failed_document_stems=inferences_failures,
-        unknown_failures=inferences_unknown_failures,
+        batch_document_stems=batch,
+        successful_document_stems=[i.document_stem for i in store_labels_successes],
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
     )
 
     if batch_inference_result.failed:
+        failed_document_count: int = len(
+            batch_inference_result.batch_document_stems
+        ) - len(batch_inference_result.successful_document_stems)
+        all_document_count: int = len(batch_inference_result.batch_document_stems)
+
         message = (
-            f"Failed to run inference on {len(inferences_failures) + len(inferences_unknown_failures)}/"
-            f"{len(results)} documents."
+            f"Failed to run inference on {failed_document_count}/{all_document_count} "
+            + "documents."
         )
         raise Fault(
             msg=message,
@@ -985,6 +995,12 @@ async def inference(
     )
     filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
 
+    removed_sabin_file_count = len(validated_file_stems) - len(filtered_file_stems)
+
+    print(
+        f"excluded: {removed_sabin_file_count} Sabin files from being processed by the pipeline"
+    )
+
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
 
@@ -995,38 +1011,43 @@ async def inference(
         f"{len(classifier_specs)} classifiers"
     )
 
+    def parameters(
+        classifier_spec: ClassifierSpec,
+        document_batch: Sequence[DocumentStem],
+    ) -> dict[str, Any]:
+        return {
+            "batch": document_batch,
+            "config_json": config.to_json(),
+            "classifier_name": classifier_spec.name,
+            "classifier_alias": classifier_spec.alias,
+        }
+
+    document_batches = iterate_batch(filtered_file_stems, batch_size)
+
+    parameterised_batches: Iterable[dict[str, Any]] = (
+        parameters(classifier_spec, document_batch)
+        for document_batch in document_batches
+        for classifier_spec in classifier_specs
+    )
+
     all_raw_successes = []
     all_raw_failures = []
 
-    for classifier_spec in classifier_specs:
-        batches = iterate_batch(filtered_file_stems, batch_size)
+    with Profiler(
+        printer=print,
+        name="running classifier inference with map_as_sub_flow",
+    ):
+        raw_successes, raw_failures = await map_as_sub_flow(
+            # The typing doesn't pick up the Flow decorator
+            fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
+            aws_env=config.aws_env,
+            counter=classifier_concurrency_limit,
+            parameterised_batches=parameterised_batches,
+            unwrap_result=True,
+        )
 
-        def parameters(
-            batch: Sequence[DocumentStem],
-        ) -> dict[str, Any]:
-            return {
-                "batch": batch,
-                "config_json": config.to_json(),
-                "classifier_name": classifier_spec.name,
-                "classifier_alias": classifier_spec.alias,
-            }
-
-        with Profiler(
-            printer=print,
-            name="running classifier inference with map_as_sub_flow",
-        ):
-            raw_successes, raw_failures = await map_as_sub_flow(
-                # The typing doesn't pick up the Flow decorator
-                fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
-                aws_env=config.aws_env,
-                counter=classifier_concurrency_limit,
-                batches=batches,
-                parameters=parameters,
-                unwrap_result=True,
-            )
-
-            all_raw_successes.extend(raw_successes)
-            all_raw_failures.extend(raw_failures)
+        all_raw_successes.extend(raw_successes)
+        all_raw_failures.extend(raw_failures)
 
     # The type of response when running as a sub deployment is:
     #   <class 'inference.BatchInferenceResult'>
@@ -1037,8 +1058,9 @@ async def inference(
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
     inference_result = InferenceResult(
+        document_stems=list(filtered_file_stems),
+        classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
-        unexpected_failures=all_raw_failures,
         successful_classifier_specs=successes.keys(),
         failed_classifier_specs=failures_classifier_specs,
     )

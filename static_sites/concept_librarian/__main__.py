@@ -1,11 +1,13 @@
+import asyncio
+import logging
 import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import Set
 
 import typer
-from rich.console import Console
-from rich.progress import track
+from rich.highlighter import NullHighlighter
+from rich.logging import RichHandler
 
 from src.concept import Concept, WikibaseID
 from src.wikibase import WikibaseSession
@@ -32,7 +34,13 @@ from static_sites.concept_librarian.template import (
 )
 
 app = typer.Typer()
-console = Console()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    handlers=[RichHandler(rich_tracebacks=True, highlighter=NullHighlighter())],
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Get the directory where this file lives
 current_dir = Path(__file__).parent.resolve()
@@ -54,7 +62,7 @@ def get_affected_concept_ids(issues: list[ConceptStoreIssue]) -> Set[WikibaseID]
 
 def get_all_subconcepts(
     concept_id: WikibaseID,
-    visited: set,
+    visited: set[WikibaseID],
     wikibase_id_to_concept: dict[WikibaseID, Concept],
 ) -> set[WikibaseID]:
     """
@@ -92,21 +100,25 @@ def get_all_subconcepts(
 
 @app.command()
 def main():
-    wikibase = WikibaseSession()
-    concepts: list[Concept] = []
-    with console.status("Fetching all of our concepts from wikibase"):
-        concepts = wikibase.get_concepts()
-    console.log(f"✅ Fetched {len(concepts)} concepts from wikibase")
+    """CLI entry point to generate the Concept Librarian static site."""
+    asyncio.run(async_main())
 
-    wikibase_id_to_recursive_subconcept_ids = defaultdict(lambda: set[WikibaseID]())
+
+async def async_main():
+    """Fetch concepts, run validation checks, and generate static HTML pages."""
+    concepts: list[Concept] = []
+
+    logging.info("Fetching all of our concepts from wikibase (async)...")
+    async with WikibaseSession() as wikibase:
+        concepts = await wikibase.get_concepts_async()
+    logging.info("✅ Fetched %d concepts from wikibase", len(concepts))
+
+    wikibase_id_to_recursive_subconcept_ids: dict[WikibaseID, set[WikibaseID]] = (
+        defaultdict(set)
+    )
     wikibase_id_to_concept = {c.wikibase_id: c for c in concepts}
 
-    for concept in track(
-        concepts,
-        description="🌳 Mapping the list of all subconcepts for all concepts",
-        transient=True,
-        console=console,
-    ):
+    for concept in concepts:
         wikibase_id_to_recursive_subconcept_ids[concept.wikibase_id] = (
             get_all_subconcepts(
                 concept.wikibase_id,
@@ -118,7 +130,7 @@ def main():
     wikibase_id_to_recursive_subconcept_ids = {
         k: list(v) for k, v in wikibase_id_to_recursive_subconcept_ids.items()
     }
-    console.log("✅ Mapped the list of subconcepts for all concepts")
+    logging.info("✅ Mapped the list of subconcepts for all concepts")
 
     issues: list[ConceptStoreIssue] = []
     for check in [
@@ -135,11 +147,13 @@ def main():
         validate_concept_depth_and_descendant_balance,
     ]:
         issues.extend(check(concepts))
-        console.log(f'🔬 Ran "{check.__name__}"')
+        logging.info('🔬 Ran "%s"', check.__name__)
 
     problematic_concepts = get_affected_concept_ids(issues)
-    console.log(
-        f"❗ Found {len(issues)} issues in {len(problematic_concepts)} problematic concepts"
+    logging.info(
+        "❗ Found %d issues in %d problematic concepts",
+        len(issues),
+        len(problematic_concepts),
     )
 
     # Delete and recreate the output directory
@@ -152,15 +166,10 @@ def main():
     html_content = create_index_page(issues)
     output_path = output_dir / "index.html"
     output_path.write_text(html_content)
-    console.log("✅ Generated index page")
+    logging.info("✅ Generated index page")
 
     # Generate and save individual concept pages
-    for concept in track(
-        concepts,
-        description="✨ Generating concept pages",
-        transient=True,
-        console=console,
-    ):
+    for concept in concepts:
         subconcept_ids = wikibase_id_to_recursive_subconcept_ids[concept.wikibase_id]
         subconcepts = [
             wikibase_id_to_concept[wikibase_id]
@@ -173,7 +182,7 @@ def main():
         )
         output_path = output_dir / f"{concept.wikibase_id}.html"
         output_path.write_text(html_content)
-    console.log(f"✅ Generated {len(concepts)} concept pages")
+    logging.info("✅ Generated %d concept pages", len(concepts))
 
 
 if __name__ == "__main__":

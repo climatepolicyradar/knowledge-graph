@@ -2,6 +2,7 @@
 
 from src.classifier.classifier import Classifier, GPUBoundClassifier, ZeroShotClassifier
 from src.concept import Concept
+from src.identifiers import ClassifierID
 from src.span import Span
 
 
@@ -11,6 +12,11 @@ class DummyClassifier(Classifier):
     def predict(self, text: str) -> list[Span]:
         """Predicts nothing."""
         return []
+
+    @property
+    def id(self) -> ClassifierID:
+        """Return the ID of the classifier."""
+        return ClassifierID("dummy")
 
 
 class DummyZeroShotClassifier(DummyClassifier, ZeroShotClassifier):

@@ -1,6 +1,7 @@
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.concept import Concept
+from src.identifiers import ClassifierID
 from src.span import Span
 
 
@@ -45,6 +46,11 @@ class RulesBasedClassifier(Classifier, ZeroShotClassifier):
             )
         else:
             self.negative_matcher = None
+
+    @property
+    def id(self) -> ClassifierID:
+        """Return a deterministic, human-readable identifier for the classifier."""
+        return ClassifierID.generate(self.name, self.concept.id)
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""

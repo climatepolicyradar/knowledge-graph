@@ -3,6 +3,7 @@ from datetime import datetime
 
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
+from src.identifiers import ClassifierID
 from src.span import Span
 
 
@@ -69,6 +70,11 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         self.case_insensitive_pattern = re.compile(
             create_pattern(self.case_insensitive_labels), re.IGNORECASE
         )
+
+    @property
+    def id(self) -> ClassifierID:
+        """Return a deterministic, human-readable identifier for the classifier."""
+        return ClassifierID.generate(self.name, self.concept.id)
 
     def predict(self, text: str) -> list[Span]:
         """

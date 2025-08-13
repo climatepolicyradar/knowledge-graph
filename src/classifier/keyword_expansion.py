@@ -5,6 +5,7 @@ from anthropic import Anthropic
 
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
+from src.identifiers import ClassifierID
 
 
 class KeywordExpansionClassifier(RulesBasedClassifier):
@@ -29,6 +30,11 @@ class KeywordExpansionClassifier(RulesBasedClassifier):
 
         # Initialize with original concept so that we can always fall back to it
         super().__init__(self.concept)
+
+    @property
+    def id(self) -> ClassifierID:
+        """Return a deterministic, human-readable identifier for the classifier."""
+        return ClassifierID.generate(self.name, self.concept.id)
 
     def _generate_prompt(self) -> str:
         """Generate the prompt for keyword expansion."""

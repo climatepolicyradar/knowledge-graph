@@ -2,13 +2,14 @@ import tempfile
 import textwrap
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from scripts.cloud import AwsEnv
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 
 
 @pytest.mark.parametrize(
@@ -21,7 +22,7 @@ from src.identifiers import Identifier, WikibaseID
         (
             {  # Bad registry version - bad
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": Identifier("abcd2345"),
+                "classifier_id": ClassifierID("abcd2345"),
                 "wandb_registry_version": "latest",
             },
             pytest.raises(ValidationError),
@@ -29,7 +30,7 @@ from src.identifiers import Identifier, WikibaseID
         (
             {  # missing optional fields - fine
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": Identifier("abcd2345"),
+                "classifier_id": ClassifierID("abcd2345"),
                 "wandb_registry_version": "v1",
             },
             does_not_raise(),
@@ -37,7 +38,7 @@ from src.identifiers import Identifier, WikibaseID
         (
             {  # extra fields - fine
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": Identifier("abcd2345"),
+                "classifier_id": ClassifierID("abcd2345"),
                 "wandb_registry_version": "v1",
                 "extra_info": "will be ignored",
             },
@@ -46,7 +47,7 @@ from src.identifiers import Identifier, WikibaseID
         (
             {  # all fields - fine
                 "wikibase_id": WikibaseID("Q123"),
-                "classifier_id": Identifier("abcd2345"),
+                "classifier_id": ClassifierID("abcd2345"),
                 "wandb_registry_version": "v1",
                 "compute_environment": {
                     "gpu": True,
@@ -87,7 +88,8 @@ def test_load_classifier_specs():
         with open(spec_file, "w") as f:
             f.write(sample_data)
 
-        specs = load_classifier_specs(AwsEnv("sandbox"), spec_dir=temp_spec_dir)
+        with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_spec_dir):
+            specs = load_classifier_specs(AwsEnv("sandbox"))
 
         assert len(specs) == 3
         assert specs[0].compute_environment.gpu

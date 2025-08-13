@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import subprocess
@@ -8,20 +9,11 @@ from urllib.parse import parse_qs
 import httpx
 import pandas as pd
 import pytest
-from prefect.logging import disable_run_logger
-from prefect.testing.utilities import prefect_test_harness
 
 from scripts.config import get_git_root
 from src.classifier.classifier import Classifier
 from src.concept import Concept
 from src.wikibase import WikibaseSession
-
-
-@pytest.fixture(autouse=True, scope="session")
-def prefect_test_fixture():
-    with prefect_test_harness(server_startup_timeout=120):
-        with disable_run_logger():
-            yield
 
 
 @pytest.fixture(scope="function")
@@ -367,10 +359,24 @@ def MockedWikibaseSession(
                 # Handle redirects
                 if request.url.params.get("ids") == "Q15":
                     return httpx.Response(200, json=mock_wikibase_redirect_target_json)
-                wikibase_id = request.url.params.get("ids")
-                return httpx.Response(
-                    200, json=mock_wikibase_entities_json(wikibase_id)
-                )
+
+                ids_param = request.url.params.get("ids")
+                if "|" in ids_param:
+                    # Handle batch requests - split the IDs and create response for each
+                    ids = ids_param.split("|")
+                    entities_response = {"entities": {}, "success": 1}
+                    for wikibase_id in ids:
+                        single_response = mock_wikibase_entities_json(wikibase_id)
+                        entities_response["entities"].update(
+                            single_response["entities"]
+                        )
+                    return httpx.Response(200, json=entities_response)
+                else:
+                    # Handle single ID request
+                    wikibase_id = ids_param
+                    return httpx.Response(
+                        200, json=mock_wikibase_entities_json(wikibase_id)
+                    )
             # get_statements
             case "wbgetclaims":
                 return httpx.Response(200, json={"claims": {}})
@@ -381,10 +387,29 @@ def MockedWikibaseSession(
         raise MockedWikibaseException(f"Unhandled test endpoint: {request.url}")
 
     mock_transport = httpx.MockTransport(mock_request_handler)
-    with httpx.Client(transport=mock_transport) as client:
-        WikibaseSession.session = client
-        try:
-            yield WikibaseSession
-        except MockedWikibaseException:
-            exc_info = traceback.format_exc()
-            pytest.fail(f"Wikibase test failed because of an exception:\n {exc_info}")
+
+    # Patch WikibaseSession to use the mocked transport
+    original_get_client = WikibaseSession._get_client
+
+    async def mocked_get_client(self):
+        if self._client is None:
+            self._client = httpx.AsyncClient(transport=mock_transport, timeout=30)
+            # Skip login and redirects for tests - set them directly
+            self._csrf_token = "test_csrf_token"
+            self._redirects = {}
+
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
+
+        return self._client
+
+    WikibaseSession._get_client = mocked_get_client
+
+    try:
+        yield WikibaseSession
+    except MockedWikibaseException:
+        exc_info = traceback.format_exc()
+        pytest.fail(f"Wikibase test failed because of an exception:\n {exc_info}")
+    finally:
+        # Restore original method
+        WikibaseSession._get_client = original_get_client

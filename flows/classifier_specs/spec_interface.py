@@ -5,7 +5,7 @@ import yaml
 from pydantic import BaseModel, Field
 
 from scripts.cloud import AwsEnv
-from src.identifiers import Identifier, WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
@@ -27,7 +27,7 @@ class ClassifierSpec(BaseModel):
             "The wikibase id for the underlying concept being classified. e.g. 'Q992'"
         ),
     )
-    classifier_id: Identifier = Field(
+    classifier_id: ClassifierID = Field(
         description=(
             "The unique identifier for the classifier, built from its internals."
         ),
@@ -49,16 +49,16 @@ class ClassifierSpec(BaseModel):
         return f"{self.wikibase_id}:{self.classifier_id}"
 
 
-def determine_spec_file_path(aws_env: AwsEnv, spec_dir: Path = SPEC_DIR) -> Path:
+def determine_spec_file_path(aws_env: AwsEnv) -> Path:
     """Determine the path to the spec file for a given AWS environment."""
-    return spec_dir / f"{aws_env}.yaml"
+    return SPEC_DIR / f"{aws_env}.yaml"
 
 
 def load_classifier_specs(
     aws_env: AwsEnv, spec_dir: Path = SPEC_DIR
 ) -> list[ClassifierSpec]:
     """Load classifier specs into python for a given environment."""
-    file_path = determine_spec_file_path(aws_env, spec_dir)
+    file_path = determine_spec_file_path(aws_env)
 
     with open(file_path, "r") as file:
         contents = yaml.load(file, Loader=yaml.FullLoader)

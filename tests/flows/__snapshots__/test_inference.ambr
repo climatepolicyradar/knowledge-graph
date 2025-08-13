@@ -8,8 +8,8 @@
       ValueError('3'),
     ]),
     dict({
-      Q200:v5: BatchInferenceResult(successful_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], failed_document_stems=[], unknown_failures=[], classifier_name='Q200', classifier_alias='v5'),
-      Q201:v6: BatchInferenceResult(successful_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], failed_document_stems=[], unknown_failures=[], classifier_name='Q201', classifier_alias='v6'),
+      Q200:v5: BatchInferenceResult(batch_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], successful_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], classifier_name='Q200', classifier_alias='v5'),
+      Q201:v6: BatchInferenceResult(batch_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], successful_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], classifier_name='Q201', classifier_alias='v6'),
     }),
   )
 # ---

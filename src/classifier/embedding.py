@@ -3,7 +3,7 @@ from typing import Optional
 
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
-from src.identifiers import Identifier
+from src.identifiers import ClassifierID
 from src.span import Span
 
 
@@ -24,17 +24,16 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         threshold: float = 0.65,
     ):
         super().__init__(concept)
-
         try:
-            from sentence_transformers import (  # type: ignore[import-untyped]
-                SentenceTransformer,
+            from sentence_transformers import (
+                SentenceTransformer,  # type: ignore[import-untyped]
             )
 
             self.embedding_model = SentenceTransformer(embedding_model_name)
         except ImportError:
             raise ImportError(
                 f"The `sentence-transformers` library is required to run {self.name}s. "
-                "Install it with 'poetry install --with transformers'"
+                "Install it with 'uv install --extra transformers'"
             )
 
         self.threshold = threshold
@@ -49,13 +48,10 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         )
 
     @property
-    def id(self) -> Identifier:
-        """Return a hash of the classifier."""
-        return Identifier.generate(
-            self.name,
-            self.concept,
-            self.embedding_model,
-            self.threshold,
+    def id(self) -> ClassifierID:
+        """Return a deterministic, human-readable identifier for the classifier."""
+        return ClassifierID.generate(
+            self.name, self.concept.id, self.embedding_model, self.threshold
         )
 
     def __hash__(self) -> int:

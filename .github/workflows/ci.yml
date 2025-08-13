@@ -21,9 +21,10 @@ jobs:
         with:
           lfs: true
 
-      - name: Install poetry
-        shell: bash
-        run: pipx install poetry
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install just
         run: pipx install rust-just
@@ -31,8 +32,7 @@ jobs:
       - name: Install python or load from cache with dependencies
         uses: actions/setup-python@v5
         with:
-          python-version-file: .python-version
-          cache: poetry
+          python-version-file: pyproject.toml
 
       - name: Install dependencies
         run: just install
@@ -43,16 +43,16 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: "Test"
-    needs: [lint]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
         with:
           lfs: true
 
-      - name: Install poetry
-        shell: bash
-        run: pipx install poetry
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install just
         run: pipx install rust-just
@@ -60,8 +60,7 @@ jobs:
       - name: Install python or load from cache with dependencies
         uses: actions/setup-python@v5
         with:
-          python-version-file: .python-version
-          cache: poetry
+          python-version-file: pyproject.toml
 
       - name: Install dependencies
         run: just install
@@ -79,11 +78,58 @@ jobs:
         run: just vespa_dev_setup
 
       - name: Run tests
-        run: just test -v -m "'not flaky_on_ci and not transformers'" --ignore tests/test_labelling.py
+        run: just test
+
+  build:
+    runs-on: ubuntu-latest
+    name: "Build"
+    needs: [lint]
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install just
+        run: pipx install rust-just
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(just get-version)
+          echo "version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Confirm Prefect binary availability
+        run: docker run --rm dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} prefect version
+
+      - name: Confirm dependencies availability
+        run: docker run --rm dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} python -c "import aioboto3; print('aioboto3 imported successfully')"
 
   deploy_prefect_sandbox:
     name: "Deploy"
-    needs: [test]
+    needs: [test, build]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox

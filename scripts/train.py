@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -7,11 +8,11 @@ import typer
 import wandb
 from pydantic import BaseModel, Field
 from rich.console import Console
+from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
-from scripts.config import classifier_dir
-from scripts.utils import get_local_classifier_path
+from scripts.utils import ModelPath, get_local_classifier_path
 from src.classifier import Classifier, ClassifierFactory
 from src.identifiers import WikibaseID
 from src.version import Version
@@ -21,9 +22,28 @@ console = Console()
 app = typer.Typer()
 
 
+def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
+    """Validate parameter dependencies."""
+    if (not track) and upload:
+        raise ValueError(
+            "you can only upload a model artifact, if you're also tracking the run"
+        )
+
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
+    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
+        raise typer.BadParameter(
+            f"you're not logged into {aws_env.value}. "
+            f"Do `aws sso login --profile {aws_env.value}`"
+        )
+
+
 class StorageUpload(BaseModel):
     """Represents the storage configuration for model artifacts in S3."""
 
+    target_path: str = Field(
+        ...,
+        description="The target path in S3 where the model artifact will be stored.",
+    )
     next_version: str = Field(
         ...,
         description="The next version used for this artifact.",
@@ -51,7 +71,7 @@ class StorageLink(BaseModel):
     )
 
 
-def link_model_artifact(
+def create_and_link_model_artifact(
     run: Run,
     classifier: Classifier,
     storage_link: StorageLink,
@@ -68,13 +88,16 @@ def link_model_artifact(
     :return: The created W&B artifact.
     :rtype: wandb.Artifact
     """
-    metadata = {"aws_env": storage_link.aws_env.value}
+    metadata = {
+        "aws_env": storage_link.aws_env.value,
+        "classifier_name": classifier.name,
+    }
 
     # Set this, so W&B knows where to look for AWS credentials profile
     os.environ["AWS_PROFILE"] = storage_link.aws_env.value
 
     artifact = wandb.Artifact(  # type: ignore
-        name=classifier.name,
+        name=classifier.id,
         type="model",
         metadata=metadata,
     )
@@ -85,7 +108,8 @@ def link_model_artifact(
     )
     artifact.add_reference(uri=uri, checksum=True)
 
-    artifact = run.log_artifact(artifact)
+    # Log the artifact to W&B, creating it within a wandb project
+    artifact = run.log_artifact(artifact, aliases=[storage_link.aws_env.value])
     artifact = artifact.wait()
 
     return artifact
@@ -93,7 +117,7 @@ def link_model_artifact(
 
 def get_next_version(
     namespace: Namespace,
-    wikibase_id: WikibaseID,
+    target_path: ModelPath,
     classifier: Classifier,
 ) -> str:
     """
@@ -101,34 +125,36 @@ def get_next_version(
 
     :param namespace: The W&B configuration containing project and entity.
     :type namespace: WandBConfig
-    :param wikibase_id: The Wikibase ID.
-    :type wikibase_id: WikibaseID
+    :param target_path: The path to the classifier in W&B.
+    :type target_path: ModelPath
     :param classifier: The classifier object.
     :type classifier: Classifier
     :return: The next version string.
     :rtype: str
     """
-    version = 0  # Default value
-
     try:
-        api = wandb.Api()  # type: ignore
-        latest = api.artifact(f"{namespace.project}/{classifier.name}:latest")._version
-        version = int(latest[1:]) + 1  # type: ignore
-    except wandb.errors.CommError as e:  # type: ignore
+        api = wandb.Api()
+        artifact = api.artifact(f"{namespace.entity}/{target_path}:latest")
+        next_version = Version(artifact._version).increment()  # type: ignore[reportArgumentType]
+    except CommError as e:
         error_message = str(e)
-        pattern = rf"artifact '{classifier.name}:latest' not found in '{namespace.entity}/{wikibase_id}'"
-
-        if not re.search(pattern, error_message):
+        wikibase_id = classifier.concept.wikibase_id
+        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{wikibase_id}'"
+        if re.search(pattern, error_message):
+            console.log(
+                f"No previous wandb version found, '{target_path}' will be at v0"
+            )
+            next_version = Version("v0")
+        else:
             raise
 
-    return f"v{version}"
+    return str(next_version)
 
 
 def upload_model_artifact(
     classifier: Classifier,
     classifier_path: Path,
     storage_upload: StorageUpload,
-    namespace: Namespace,
     s3_client: Any,
 ) -> tuple[str, str]:
     """
@@ -136,12 +162,10 @@ def upload_model_artifact(
 
     :param classifier: The classifier object.
     :type classifier: Classifier
-    :param classifier_path: The path to the classifier file.
+    :param classifier_path: The local path to the classifier file.
     :type classifier_path: Path
     :param storage_upload: The configuration for uploading the artifact.
     :type storage_upload: StorageUpload
-    :param namespace: The W&B configuration containing project and entity.
-    :type namespace: Namespace
     :param s3_client: The S3 client used for uploading.
     :type s3_client: Any
     :return: The bucket name and the key of the uploaded artifact.
@@ -150,8 +174,7 @@ def upload_model_artifact(
     bucket = f"cpr-{storage_upload.aws_env.value}-models"
 
     key = os.path.join(
-        namespace.project,
-        classifier.name,
+        storage_upload.target_path,
         storage_upload.next_version,
         "model.pickle",
     )
@@ -220,48 +243,39 @@ def main(
     namespace = Namespace(project=project, entity=entity)
     job_type = "train_model"
 
-    if (not track) and upload:
-        raise ValueError(
-            "you can only upload a model artifact, if you're also tracking the run"
-        )
+    # Validate parameter dependencies
+    validate_params(track, upload, aws_env)
 
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-
-    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
-        raise typer.BadParameter(
-            f"you're not logged into {aws_env.value}. "
-            f"Do `aws sso login --profile {aws_env.value}`"
-        )
-
-    if track:
-        run = wandb.init(  # type: ignore
+    with (
+        wandb.init(
             entity=namespace.entity, project=namespace.project, job_type=job_type
         )
-
-    classifier_dir.mkdir(parents=True, exist_ok=True)
-
-    wikibase = WikibaseSession()
-
-    # Fetch all of its subconcepts recursively
-    concept = wikibase.get_concept(
-        wikibase_id,
-        include_recursive_has_subconcept=True,
-        include_labels_from_subconcepts=True,
-    )
-
-    # Create a classifier instance
-    classifier = ClassifierFactory.create(concept=concept)
-
-    # until we have more sophisticated classifier implementations in
-    # the factory, this is effectively a no-op
-    classifier.fit()
-
-    # In both scenarios, we need the next version aka the new version
-    if track or upload:
-        next_version = get_next_version(
-            namespace,
+        if track
+        else nullcontext()
+    ) as run:
+        # Fetch all of its subconcepts recursively
+        wikibase = WikibaseSession()
+        concept = wikibase.get_concept(
             wikibase_id,
-            classifier,
+            include_recursive_has_subconcept=True,
+            include_labels_from_subconcepts=True,
+        )
+
+        # Create and train a classifier instance
+        classifier = ClassifierFactory.create(concept=concept)
+        classifier.fit()
+
+        target_path = ModelPath(
+            wikibase_id=namespace.project, classifier_id=classifier.id
+        )
+        # Lookup the next version (aka the new version) before saving, even if we're
+        # not uploading or tracking, so the classifier has the correct version
+        # Note that as we use the id and the id changes whenever the model changes,
+        # the version would almost always be v0 in practice.
+        next_version = get_next_version(
+            namespace=namespace,
+            target_path=target_path,
+            classifier=classifier,
         )
 
         console.log(f"Using next version {next_version}")
@@ -269,44 +283,43 @@ def main(
         # Set this _before_ the model is saved to disk
         classifier.version = Version(next_version)
 
-    # Save the classifier to a file with the concept ID in the name
-    classifier_path = get_local_classifier_path(concept, classifier)
-    classifier_path.parent.mkdir(parents=True, exist_ok=True)
-    classifier.save(classifier_path)
-    console.log(f"Saved {classifier} to {classifier_path}")
-
-    if upload:
-        region_name = "eu-west-1"
-        s3_client = get_s3_client(aws_env, region_name)
-
-        storage_upload = StorageUpload(
-            next_version=next_version,  # type: ignore
-            aws_env=aws_env,
+        # Save the classifier to a file locally
+        classifier_path = get_local_classifier_path(
+            target_path=target_path,
+            version=next_version,
         )
+        classifier_path.parent.mkdir(parents=True, exist_ok=True)
+        classifier.save(classifier_path)
+        console.log(f"Saved {classifier} to {classifier_path}")
 
-        bucket, key = upload_model_artifact(
-            classifier,
-            classifier_path,
-            storage_upload,
-            namespace,
-            s3_client=s3_client,
-        )
-
-    if track:
         if upload:
-            storage_link = StorageLink(
-                bucket=bucket,  # type: ignore
-                key=key,  # type: ignore
+            region_name = "eu-west-1"
+            s3_client = get_s3_client(aws_env, region_name)
+
+            storage_upload = StorageUpload(
+                target_path=str(target_path),
+                next_version=next_version,
                 aws_env=aws_env,
             )
 
-            link_model_artifact(
+            bucket, key = upload_model_artifact(
+                classifier,
+                classifier_path,
+                storage_upload,
+                s3_client=s3_client,
+            )
+
+            storage_link = StorageLink(
+                bucket=bucket,
+                key=key,
+                aws_env=aws_env,
+            )
+
+            create_and_link_model_artifact(
                 run,  # type: ignore
                 classifier,
                 storage_link,
             )
-
-        run.finish()  # type: ignore
 
     return classifier
 

@@ -13,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader
 from pydantic import ValidationError
 from rich.console import Console
 
-from scripts.config import processed_data_dir, root_dir
+from scripts.config import processed_data_dir
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
 from src.identifiers import WikibaseID
@@ -337,18 +337,14 @@ def main():
     # Load sample dataset
     sample_passages = load_sample_dataset()
 
-    # Get concept IDs from production classifiers
-    prod_concept_ids = set()
+    concept_ids_from_config = set()
     try:
-        with open(root_dir / "flows" / "classifier_specs" / "prod.yaml", "r") as f:
+        with open(base_dir / "config.yml", "r") as f:
             classifier_specs = yaml.safe_load(f)
-            prod_concept_ids = set(
-                [
-                    WikibaseID(classifier_spec.split(":")[0])
-                    for classifier_spec in classifier_specs
-                ]
+            concept_ids_from_config = set(
+                [WikibaseID(concept_id) for concept_id in classifier_specs]
             )
-        console.log(f"📋 Found {len(prod_concept_ids)} concepts in production specs")
+        console.log(f"📋 Found {len(concept_ids_from_config)} wikibase IDs in config")
     except Exception as e:
         console.log(
             f"⚠️  Failed to load classifier specs: {e}. Continuing with persistent results only.",
@@ -359,7 +355,7 @@ def main():
     persistent_concept_ids = discover_persistent_concept_ids()
 
     # Combine all concept IDs (production + persistent experimental)
-    all_concept_ids = prod_concept_ids.union(persistent_concept_ids)
+    all_concept_ids = concept_ids_from_config.union(persistent_concept_ids)
     console.log(f"🎯 Total unique concepts to process: {len(all_concept_ids)}")
 
     if not all_concept_ids:
@@ -379,7 +375,11 @@ def main():
 
         for concept_id in all_concept_ids:
             try:
-                if concept := wikibase.get_concept(wikibase_id=concept_id):
+                if concept := wikibase.get_concept(
+                    wikibase_id=concept_id,
+                    include_recursive_has_subconcept=True,
+                    include_labels_from_subconcepts=True,
+                ):
                     concepts[concept_id] = concept
                     valid_concept_ids.append(concept_id)
                 else:
@@ -406,7 +406,7 @@ def main():
     }
 
     console.log(
-        f"🎯 Processing {len(concepts)} concepts ({len(prod_concept_ids & set(concepts.keys()))} production + {len(persistent_concept_ids & set(concepts.keys()))} persistent-only)"
+        f"🎯 Processing {len(concepts)} concepts ({len(concept_ids_from_config & set(concepts.keys()))} production + {len(persistent_concept_ids & set(concepts.keys()))} persistent-only)"
     )
 
     # Phase 1: Generate all JSON predictions
@@ -419,7 +419,7 @@ def main():
         concept_predictions = {}
 
         # Generate predictions from default classifier (if this concept is in production)
-        if concept_id in prod_concept_ids:
+        if concept_id in concept_ids_from_config:
             try:
                 classifier = ClassifierFactory.create(concept)
                 console.log(f"🤖 Created classifier: {classifier}")

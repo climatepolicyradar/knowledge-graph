@@ -97,8 +97,14 @@ In the longer term, we expect the graph to be a useful artefact in its own right
 
 ## Testing
 
-Make sure you have [Git LFS](https://git-lfs.com) installed if you want to run all the tests.
+### Local Prequisites
 
+* Install [Git LFS](https://git-lfs.com)
+* Start Docker (Desktop) locally and follow instructions in [Vespa README.md](./tests/local_vespa/README.md)
+
+To run the tests and exclude known problematic tests in the CI environment run
+
+``just test -v -m "'not transformers'" ``
 
 ## Pipelines
 
@@ -106,7 +112,7 @@ Within this Knowledge Graph repo we have a full pipeline at `flows/full_pipeline
 
 This solution calls inference -> aggregation -> indexing in series for all documents in the run as opposed to running single documents through concurrently. Eg. we wait for all inference jobs to complete before progressing. This was chosen for simplicity and to rely on the concurrency functionality and limits already integrated in to the sub flows / pipelines.
 
-For example we don't want to try and index 25k docs all at once and already have functionality for managing this within the indexing flow. To do this at the document level in this pipeline would require a lot more work relative to just calling the indexing flow from the parent flow.
+For example, we don't want to try and index 25k docs all at once and already have functionality for managing this within the indexing flow. To do this at the document level in this pipeline would require a lot more work relative to just calling the indexing flow from the parent flow.
 
 All the sub pipelines (inference, aggregation & indexing) can be run individually as distinct steps.
 
@@ -121,3 +127,20 @@ This consists of aggregating (collating) the inference results for a document fr
 3. Indexing
 
 This consists of indexing the spans identified from inference in to our passage index's concepts field and concept counts to our family index within our vespa database.
+
+## Static sites 
+We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
+
+* [Vibe Checker](./static_sites/vibe_check/)
+* [labelling_librarian](./static_sites/labelling_librarian/)
+* [concept_librarian](./static_sites/concept_librarian/)
+
+  These can be created by the `justfile` commands
+
+### Run a static site locally
+
+``just serve-static-site``
+
+### Generate a static site
+
+``just generate-static-site``

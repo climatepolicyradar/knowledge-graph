@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Annotated, Optional
 
 import httpx
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.models.openai import OpenAIModel
@@ -16,7 +16,7 @@ from typing_extensions import Self
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
-from src.identifiers import Identifier
+from src.identifiers import ClassifierID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -120,16 +120,14 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         """Create the pydantic-ai agent for the classifier."""
         raise NotImplementedError
 
-    @computed_field
     @property
-    def id(self) -> Identifier:
-        """Return a neat human-readable identifier for the classifier."""
-        return Identifier.generate(
+    def id(self) -> ClassifierID:
+        """Return a deterministic, human-readable identifier for the classifier."""
+        return ClassifierID.generate(
             self.name,
-            self.concept,
-            self.version if self.version else None,
+            self.concept.id,
             self.model_name,
-            self.system_prompt_template,
+            self.system_prompt,
             self.random_seed,
         )
 
@@ -187,9 +185,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             text,
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
-        self._validate_response(input_text=text, response=response.data.marked_up_text)
+        self._validate_response(
+            input_text=text, response=response.output.marked_up_text
+        )
         return Span.from_xml(
-            xml=response.data.marked_up_text,
+            xml=response.output.marked_up_text,
             concept_id=self.concept.wikibase_id,
             labellers=[str(self)],
         )
@@ -229,11 +229,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         for text, response in zip(texts, responses):
             try:
                 self._validate_response(
-                    input_text=text, response=response.data.marked_up_text
+                    input_text=text, response=response.output.marked_up_text
                 )
 
                 spans = Span.from_xml(
-                    xml=response.data.marked_up_text,
+                    xml=response.output.marked_up_text,
                     concept_id=self.concept.wikibase_id,
                     labellers=[str(self)],
                 )

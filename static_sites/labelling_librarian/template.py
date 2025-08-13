@@ -1,4 +1,3 @@
-from functools import lru_cache
 from pathlib import Path
 from typing import Counter
 
@@ -15,22 +14,21 @@ from static_sites.labelling_librarian.checks import (
 
 load_dotenv()
 
-session = WikibaseSession()
-
 
 # Get the directory where this file lives and load the templates
 current_dir = Path(__file__).parent.resolve()
 env = Environment(loader=FileSystemLoader(current_dir / "templates"))
 
 
-@lru_cache(maxsize=1024)
-def get_dataset_to_preferred_label_map(dataset_name: str) -> str:
+async def get_dataset_to_preferred_label_map(
+    dataset_name: str, wikibase_session: WikibaseSession
+) -> str:
     """Retrieves the name of the dataset to present in the UI"""
-    concept = session.get_concept(WikibaseID(dataset_name))
+    concept = await wikibase_session.get_concept_async(WikibaseID(dataset_name))
     return concept.preferred_label
 
 
-def create_index_page(issues: list[LabellingIssue]) -> str:
+async def create_index_page(issues: list[LabellingIssue]) -> str:
     """Create an HTML report of all issues found using the Jinja template"""
     passage_issues = dict(
         Counter(
@@ -48,22 +46,29 @@ def create_index_page(issues: list[LabellingIssue]) -> str:
         )
     )
 
-    dataset_info = {
-        dataset_name: {
-            "passage_issue_count": passage_issues.get(dataset_name, 0),
-            "dataset_issue_count": dataset_issues.get(dataset_name, 0),
-            "issue_types": list(
-                set(
-                    issue.type for issue in issues if issue.dataset_name == dataset_name
-                )
-            ),
-            "preferred_label": get_dataset_to_preferred_label_map(dataset_name),
-        }
-        for dataset_name in {issues.dataset_name for issues in issues}
-    }
+    unique_dataset_names = {issue.dataset_name for issue in issues}
 
-    # Sorting, bringing those with the most issues to the top. Considering there are ~130 passages per dataset
-    # discounting the passage-level issues as such.
+    dataset_info = {}
+    async with WikibaseSession() as wikibase_session:
+        for dataset_name in unique_dataset_names:
+            preferred_label = await get_dataset_to_preferred_label_map(
+                dataset_name, wikibase_session
+            )
+            dataset_info[dataset_name] = {
+                "passage_issue_count": passage_issues.get(dataset_name, 0),
+                "dataset_issue_count": dataset_issues.get(dataset_name, 0),
+                "issue_types": list(
+                    set(
+                        issue.type
+                        for issue in issues
+                        if issue.dataset_name == dataset_name
+                    )
+                ),
+                "preferred_label": preferred_label,
+            }
+
+    # Sorting, bringing those with the most issues to the top. Considering there are
+    # ~130 passages per dataset discounting the passage-level issues as such.
     dataset_info = dict(
         sorted(
             dataset_info.items(),
@@ -79,7 +84,7 @@ def create_index_page(issues: list[LabellingIssue]) -> str:
     )
 
 
-def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:
+async def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:
     """Create an HTML report of all issues found for a single dataset using the Jinja template"""
     assert all(issue.dataset_name == dataset_name for issue in issues)  # type: ignore
 
@@ -93,9 +98,14 @@ def create_dataset_page(dataset_name: str, issues: list[LabellingIssue]) -> str:
 
     passage_issue_counts = dict(Counter(issue.type for issue in passage_issues))
 
+    async with WikibaseSession() as wikibase_session:
+        preferred_label = await get_dataset_to_preferred_label_map(
+            dataset_name, wikibase_session
+        )
+
     return env.get_template("dataset.html").render(
         dataset_name=dataset_name,
-        preferred_label=get_dataset_to_preferred_label_map(dataset_name),
+        preferred_label=preferred_label,
         dataset_issues=dataset_issues,
         passage_issues=passage_issues,
         passage_issue_counts=passage_issue_counts,
