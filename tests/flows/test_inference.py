@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -12,7 +13,8 @@ import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
 from prefect.client.schemas.objects import FlowRun, State, StateType
-from prefect.testing.utilities import prefect_test_harness
+from prefect.results import ResultRecord
+from prefect.states import Completed
 
 from flows.inference import (
     BatchInferenceResult,
@@ -248,44 +250,74 @@ async def test_text_block_inference_without_results(
 
 
 @pytest.mark.asyncio
-@pytest.mark.flaky_on_ci
-async def test_inference(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
+async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    mock_bucket_containing_some_sabin_documents,
 ):
-    mock_wandb_init, _, _ = mock_wandb
-    doc_ids = [
-        DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    """Test inference flow when creating batches of inference results"""
+    input_doc_ids = [
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_bucket_containing_some_sabin_documents
     ]
-    with prefect_test_harness():
-        filtered_file_stems = await inference(
-            # FIXME: ValueError: `latest` is not allowed
-            classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
-            document_ids=doc_ids,
+
+    # expect Sabin documents to be filtered out
+    expected_doc_stems = [
+        DocumentStem(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    ]
+    expected_classifier_spec = ClassifierSpec(name="Q788", alias="v13")
+
+    with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
+
+        async def mock_awaitable(*args, **kwargs):
+            # mock the expected List of BatchInferenceResults when map_as_subflow is called
+            return FlowRun(
+                flow_id=uuid.uuid4(),
+                name="mock-run-any-run-count",
+                state=Completed(
+                    data=ResultRecord(
+                        result=BatchInferenceResult(
+                            batch_document_stems=list(expected_doc_stems),
+                            successful_document_stems=list(
+                                expected_doc_stems
+                            ),  # all documents were classified successfully
+                            classifier_name=expected_classifier_spec.name,
+                            classifier_alias=expected_classifier_spec.alias,
+                        )
+                    )
+                ),
+            )
+
+        mock_inference_run_deployment.side_effect = mock_awaitable
+
+        # run the inference flow
+
+        inference_result = await inference(
+            classifier_specs=[expected_classifier_spec],
+            document_ids=input_doc_ids,
             config=test_config,
         )
 
-        assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
+        mock_inference_run_deployment.assert_called_once()
 
-    mock_wandb_init.assert_called_once_with(
-        entity="test_entity",
-        job_type="concept_inference",
-    )
+        assert type(inference_result) is InferenceResult
 
-    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
+        assert inference_result.batch_inference_results != InferenceResult.failed
 
-    assert sorted(labels) == [
-        "labelled_passages/Q788/latest/HTML.document.0.1.json",
-        "labelled_passages/Q788/latest/PDF.document.0.1.json",
-    ]
+        # Check the document filtering works
+        filtered_file_stems = (
+            inference_result.fully_successfully_classified_document_stems
+        )
+        assert filtered_file_stems == {
+            DocumentStem(doc_id) for doc_id in expected_doc_stems
+        }
 
-    for key in labels:
-        s3 = boto3.client("s3", region_name=test_config.bucket_region)
-        response = s3.get_object(Bucket=test_config.cache_bucket, Key=key)
-        data = json.loads(response["Body"].read().decode("utf-8"))
+        assert inference_result.failed_classifier_specs == []
 
-        # Some spans where identified
-        with_spans = [d for d in data if len(d["spans"]) > 0]
-        assert len(with_spans) > 0
+        assert inference_result.classifier_specs == [expected_classifier_spec]
 
 
 def test_get_latest_ingest_documents(
@@ -458,23 +490,22 @@ def test_remove_sabin_file_stems(
 
 
 def test_group_inference_results_into_states(snapshot):
+    batch_document_stems = [
+        DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
+        DocumentStem("CCLW.executive.10512.5360"),
+    ]
+
     # Test data separated into successes and failures as expected by the new signature
     successes = [
         BatchInferenceResult(
-            successful_document_stems=[
-                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-                DocumentStem("CCLW.executive.10512.5360"),
-            ],
-            failed_document_stems=[],
+            batch_document_stems=batch_document_stems,
+            successful_document_stems=batch_document_stems,
             classifier_name="Q200",
             classifier_alias="v5",
         ),
         BatchInferenceResult(
-            successful_document_stems=[
-                DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-                DocumentStem("CCLW.executive.10512.5360"),
-            ],
-            failed_document_stems=[],
+            batch_document_stems=batch_document_stems,
+            successful_document_stems=batch_document_stems,
             classifier_name="Q201",
             classifier_alias="v6",
         ),
@@ -507,7 +538,7 @@ async def test_inference_batch_of_documents(
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
-    mock_prefect_blocks,
+    mock_prefect_s3_block,
     snapshot,
 ):
     """Test successful batch processing of documents."""
@@ -559,8 +590,8 @@ async def test_inference_batch_of_documents(
 
     result = await result_state.result()
     assert isinstance(result, BatchInferenceResult)
+    assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
-    assert result.failed_document_stems == []
     assert result.classifier_name == classifier_name
     assert result.classifier_alias == classifier_alias
 
@@ -623,7 +654,7 @@ async def test_inference_batch_of_documents_with_failures(
     mock_wandb,
     mock_bucket,
     snapshot,
-    mock_prefect_blocks,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with some document failures."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -695,7 +726,7 @@ async def test_inference_batch_of_documents_empty_batch(
     mock_wandb,
     mock_bucket,
     snapshot,
-    mock_prefect_blocks,
+    mock_prefect_s3_block,
 ):
     """Test batch processing with empty batch."""
     mock_wandb_init, mock_run, _ = mock_wandb
@@ -745,67 +776,111 @@ async def test_inference_batch_of_documents_empty_batch(
     # Since batch is empty, we don't need to check any specific files - there should be none created
 
 
-def test_batch_inference_result_properties() -> None:
-    """Test the InferenceResult object."""
+def test_inference_result_all_successful() -> None:
+    """Test InferenceResult when all documents are successful for all classifiers."""
 
-    batch_inference_result_1 = BatchInferenceResult(
-        successful_document_stems=[
-            DocumentStem("TEST.executive.1.1"),
-            DocumentStem("TEST.executive.2.2"),
-        ],
+    # Setup: 5 documents, 2 classifiers
+    all_documents = [
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
+    ]
+
+    # Classifier Q100: All documents succeed
+    all_successful_batch_1 = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
         classifier_name="Q100",
         classifier_alias="v1",
     )
 
-    result = InferenceResult(
-        batch_inference_results=[
-            batch_inference_result_1,
-        ],
+    # Classifier Q101: All documents succeed
+    all_successful_batch_2 = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_name="Q101",
+        classifier_alias="v1",
     )
 
-    assert not result.failed
-    assert result.successful_document_stems == {
+    # Create inference result with both classifiers
+    result = InferenceResult(
+        document_stems=all_documents,
+        classifier_specs=[
+            ClassifierSpec(name="Q100", alias="v1"),
+            ClassifierSpec(name="Q101", alias="v1"),
+        ],
+        batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
+    )
+
+    # All documents are successful as we have successes for all documents
+    # and all classifiers in the InferenceResult
+    assert not result.failed, (
+        "Should fail when some documents fail for some classifiers"
+    )
+
+    # Only documents that succeeded for both classifiers should be in
+    # fully_successfully_classified_document_stems
+    assert result.fully_successfully_classified_document_stems == set(all_documents), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+
+def test_inference_result_partial_failures() -> None:
+    """Test InferenceResult when some documents fail for some classifiers."""
+
+    # Setup: 5 documents, 2 classifiers
+    all_documents = [
         DocumentStem("TEST.executive.1.1"),
         DocumentStem("TEST.executive.2.2"),
-    }
-    assert result.failed_document_stems == set()
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
+    ]
 
-    batch_inference_result_2 = BatchInferenceResult(
+    # Classifier Q100: All documents succeed
+    all_successful_batch = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_name="Q100",
+        classifier_alias="v1",
+    )
+
+    # Classifier Q101: Only 2 documents succeed
+    partial_success_batch = BatchInferenceResult(
+        batch_document_stems=all_documents,
         successful_document_stems=[
             DocumentStem("TEST.executive.3.3"),
             DocumentStem("TEST.executive.4.4"),
-        ],
-        failed_document_stems=[
-            (
-                DocumentStem("TEST.executive.1.1"),
-                Exception("Failed to run inference on TEST.executive.1.1"),
-            ),
-            (
-                DocumentStem("TEST.executive.5.5"),
-                Exception("Failed to run inference on TEST.executive.5.5"),
-            ),
         ],
         classifier_name="Q101",
         classifier_alias="v1",
     )
 
+    # Create inference result with both classifiers
     result = InferenceResult(
-        batch_inference_results=[
-            batch_inference_result_1,
-            batch_inference_result_2,
+        document_stems=all_documents,
+        classifier_specs=[
+            ClassifierSpec(name="Q100", alias="v1"),
+            ClassifierSpec(name="Q101", alias="v1"),
         ],
+        batch_inference_results=[all_successful_batch, partial_success_batch],
     )
 
-    assert result.failed
-    assert result.successful_document_stems == {
-        DocumentStem("TEST.executive.2.2"),
+    # A document is only considered successful if it succeeds for ALL classifiers
+    # Since Q101 failed on 3 documents, those documents are considered failed overall
+    assert result.failed, "Should fail when some documents fail for some classifiers"
+
+    # Only documents that succeeded for both classifiers should be in
+    # fully_successfully_classified_document_stems
+    expected_successful = {
         DocumentStem("TEST.executive.3.3"),
         DocumentStem("TEST.executive.4.4"),
     }
-    assert result.failed_document_stems == {
-        DocumentStem("TEST.executive.1.1"),
-        DocumentStem("TEST.executive.5.5"),
-    }
+    assert result.fully_successfully_classified_document_stems == expected_successful, (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
 
 
 def test_jsonl_serialization_roundtrip():
