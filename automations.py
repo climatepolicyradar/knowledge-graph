@@ -144,6 +144,7 @@ async def a_triggers_b(
     description: str,
     ignore: list[AwsEnv],
     aws_env: AwsEnv,
+    expect_state: StateType = StateType.COMPLETED,
 ) -> None:
     """Automation to after Deployment A completes trigger Deployment B."""
     client = get_client()
@@ -190,6 +191,7 @@ async def a_triggers_b(
         description=description,
         parameters=b_parameters,
         enabled=enabled,
+        expect_state=expect_state,
     )
 
     print("deleting, if already exists...")
@@ -213,6 +215,7 @@ async def main() -> None:
         description="Start the knowledge graph full pipeline.",
         enabled=False,
         aws_env=aws_env,
+        expect_state=StateType.RUNNING,
         ignore=[AwsEnv.labs],
     )
 
