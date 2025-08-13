@@ -108,7 +108,7 @@ To run the tests and exclude known problematic tests in the CI environment run
 
 ## Pipelines
 
-Within this Knowledge Graph repo we have a full pipeline at `flows/full_pipeline.py:full_pipeline` that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
+Within this Knowledge Graph repo we have a full pipeline at [flows/full_pipeline.py:full_pipeline](./flows/full_pipeline.py) that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
 
 This solution calls inference -> aggregation -> indexing in series for all documents in the run as opposed to running single documents through concurrently. Eg. we wait for all inference jobs to complete before progressing. This was chosen for simplicity and to rely on the concurrency functionality and limits already integrated in to the sub flows / pipelines.
 
@@ -127,6 +127,20 @@ This consists of aggregating (collating) the inference results for a document fr
 3. Indexing
 
 This consists of indexing the spans identified from inference in to our passage index's concepts field and concept counts to our family index within our vespa database.
+
+## Deployment and flows with Prefect
+
+Prefect Deployments are defined in [deployments.py](./deployments.py)
+
+Flows can be run via in [/flows](./flows)
+
+# Scripts
+
+Scripts which support [justfile](./justfile) commands can be found in their own [/scripts directory](./scripts)
+
+# Documentation generation
+
+Can be found in [/docs](./docs)
 
 ## Static sites 
 We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
