@@ -128,9 +128,11 @@ This consists of aggregating (collating) the inference results for a document fr
 
 This consists of indexing the spans identified from inference in to our passage index's concepts field and concept counts to our family index within our vespa database.
 
-## Deployment is done via Prefect Flows
+## Deployment and flows with Prefect
 
-Flows are defined in [/flows](./flows)
+Prefect Deployments are defined in [deployments.py](./deployments.py)
+
+Flows can be run via in [/flows](./flows)
 
 # Scripts
 
