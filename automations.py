@@ -10,11 +10,12 @@ import prefect.events.schemas.automations as automations
 import prefect.events.schemas.events as events
 from prefect.automations import Automation
 from prefect.client.orchestration import get_client
+from prefect.client.schemas.objects import StateType
 from prefect.client.schemas.responses import DeploymentResponse
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
-from flows.inference import inference
+from flows.full_pipeline import full_pipeline
 from scripts.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
@@ -30,12 +31,12 @@ logger.addHandler(ch)
 
 
 def create_target_automation(
-    a_flow_name: str,
     a_deployment: DeploymentResponse,
     b_deployment: DeploymentResponse,
     description: str,
     parameters: dict,
     enabled: bool,
+    expect_state: StateType = StateType.COMPLETED,
 ) -> Automation:
     """
     Create a copy of the `Automation` that triggers another `Deployment`.
@@ -84,7 +85,7 @@ def create_target_automation(
             # > event.
             #
             # NB: Currently a set due to the Prefect Python class used
-            expect=set(["prefect.flow-run.Completed"]),
+            expect=set([f"prefect.flow-run.{expect_state.title()}"]),
         ),
         actions=[
             RunDeployment(
@@ -143,6 +144,7 @@ async def a_triggers_b(
     description: str,
     ignore: list[AwsEnv],
     aws_env: AwsEnv,
+    expect_state: StateType = StateType.COMPLETED,
 ) -> None:
     """Automation to after Deployment A completes trigger Deployment B."""
     client = get_client()
@@ -184,12 +186,12 @@ async def a_triggers_b(
     )
 
     target = create_target_automation(
-        a_flow_name=a_flow_name,
         a_deployment=a_deployment,
         b_deployment=b_deployment,
         description=description,
         parameters=b_parameters,
         enabled=enabled,
+        expect_state=expect_state,
     )
 
     print("deleting, if already exists...")
@@ -207,12 +209,13 @@ async def main() -> None:
     await a_triggers_b(
         a_flow_name="navigator-data-s3-backup",
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
-        b_flow_name=inference.name,
-        b_deployment_name=generate_deployment_name(inference.name, aws_env),
-        b_parameters={"use_new_and_updated": True},
-        description="Start concept store inference with classifiers.",
+        b_flow_name=full_pipeline.name,
+        b_deployment_name=generate_deployment_name(full_pipeline.name, aws_env),
+        b_parameters={"inference_use_new_and_updated": True},
+        description="Start the knowledge graph full pipeline.",
         enabled=False,
         aws_env=aws_env,
+        expect_state=StateType.RUNNING,
         ignore=[AwsEnv.labs],
     )
 
