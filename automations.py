@@ -14,7 +14,7 @@ from prefect.client.schemas.responses import DeploymentResponse
 from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
-from flows.inference import inference
+from flows.full_pipeline import full_pipeline
 from scripts.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
@@ -207,10 +207,10 @@ async def main() -> None:
     await a_triggers_b(
         a_flow_name="navigator-data-s3-backup",
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
-        b_flow_name=inference.name,
-        b_deployment_name=generate_deployment_name(inference.name, aws_env),
+        b_flow_name=full_pipeline.name,
+        b_deployment_name=generate_deployment_name(full_pipeline.name, aws_env),
         b_parameters={"use_new_and_updated": True},
-        description="Start concept store inference with classifiers.",
+        description="Start the knowledge graph full pipeline.",
         enabled=False,
         aws_env=aws_env,
         ignore=[AwsEnv.labs],
