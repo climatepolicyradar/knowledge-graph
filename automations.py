@@ -84,7 +84,7 @@ def create_target_automation(
             # > event.
             #
             # NB: Currently a set due to the Prefect Python class used
-            expect=set(["prefect.flow-run.Completed"]),
+            expect=set(["prefect.flow-run.Running"]),
         ),
         actions=[
             RunDeployment(
