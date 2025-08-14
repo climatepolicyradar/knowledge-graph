@@ -1076,7 +1076,8 @@ async def inference(
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
             # The typing doesn't pick up the Flow decorator
-            fn=inference_batch_of_documents_cpu,
+            # TODO: CPU or GPU
+            fn=inference_batch_of_documents_gpu,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,
