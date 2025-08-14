@@ -94,6 +94,7 @@ def create_deployment(
         default_job_variables = JSON.load(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
         ).value
+        default_job_variables["image"] = f"{image_name}:{version}"
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
         work_queue_name = f"mvp-{aws_env}"
@@ -148,6 +149,7 @@ create_deployment(
     description="Run concept classifier inference on a batch of documents with GPU compute",
     extra_tags=["type:sub"],
     gpu=True,
+    flow_variables={},
 )
 
 # Aggregate inference results
