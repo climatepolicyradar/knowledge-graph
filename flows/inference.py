@@ -8,7 +8,7 @@ from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Iterable, Optional, TypeAlias, TypeVar
+from typing import Any, Final, Iterable, Optional, TypeAlias
 
 import boto3
 import coiled
@@ -25,7 +25,7 @@ from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.logging import get_run_logger
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
+from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
@@ -427,10 +427,7 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
-T = TypeVar("T", bound=BaseModel)
-
-
-def serialise_pydantic_list_as_jsonl(models: Sequence[T]) -> BytesIO:
+def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> BytesIO:
     """
     Serialize a list of Pydantic models as JSONL (JSON Lines) format.
 
@@ -440,7 +437,7 @@ def serialise_pydantic_list_as_jsonl(models: Sequence[T]) -> BytesIO:
     return BytesIO(jsonl_content.encode("utf-8"))
 
 
-def deserialise_pydantic_list_from_jsonl(
+def deserialise_pydantic_list_from_jsonl[T: BaseModel](
     jsonl_content: str, model_class: type[T]
 ) -> list[T]:
     """
@@ -456,7 +453,7 @@ def deserialise_pydantic_list_from_jsonl(
     return models
 
 
-def deserialise_pydantic_list_with_fallback(
+def deserialise_pydantic_list_with_fallback[T: BaseModel](
     content: str, model_class: type[T]
 ) -> list[T]:
     """
@@ -464,8 +461,6 @@ def deserialise_pydantic_list_with_fallback(
 
     First tries JSONL format, then falls back to original format (JSON array of JSON strings).
     """
-    from pydantic import ValidationError
-
     # Try JSONL format first
     try:
         return deserialise_pydantic_list_from_jsonl(content, model_class)
