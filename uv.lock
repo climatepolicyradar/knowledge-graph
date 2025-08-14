@@ -1957,7 +1957,7 @@ wheels = [
 
 [[package]]
 name = "knowledge-graph"
-version = "0.10.0"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "aioboto3" },
@@ -1993,6 +1993,15 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+coiled = [
+    { name = "cloudpickle" },
+    { name = "coiled" },
+    { name = "dask" },
+    { name = "distributed" },
+    { name = "msgpack" },
+    { name = "prefect-coiled" },
+    { name = "tornado" },
+]
 dev = [
     { name = "azure-pdf-parser" },
     { name = "boto3" },
@@ -2027,9 +2036,13 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35.31" },
     { name = "boto3", marker = "extra == 'dev'", specifier = ">=1.35.32" },
     { name = "boto3-stubs", extras = ["s3"], specifier = ">=1.35.93" },
+    { name = "cloudpickle", marker = "extra == 'coiled'", specifier = ">=3.1.1" },
     { name = "coiled", specifier = ">=1.115.0" },
+    { name = "coiled", marker = "extra == 'coiled'", specifier = ">=1.117.0" },
     { name = "cpr-sdk", specifier = "==1.19.1" },
+    { name = "dask", marker = "extra == 'coiled'", specifier = ">=2025.7.0" },
     { name = "datasets", specifier = ">=2.18.0" },
+    { name = "distributed", marker = "extra == 'coiled'", specifier = ">=2025.7.0" },
     { name = "griffe", specifier = "==1.5.7" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.112.2" },
@@ -2038,11 +2051,13 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.5.39" },
     { name = "more-itertools", specifier = ">=10.3.0" },
     { name = "moto", extras = ["s3"], marker = "extra == 'dev'", specifier = ">=5.0.16" },
+    { name = "msgpack", marker = "extra == 'coiled'", specifier = ">=1.1.1" },
     { name = "neomodel", specifier = ">=5.3.3" },
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "prefect", extras = ["aws", "slack"], specifier = ">=3.4.7" },
     { name = "prefect-coiled", specifier = ">=0.0.4" },
+    { name = "prefect-coiled", marker = "extra == 'coiled'", specifier = ">=0.0.4" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.145.0" },
     { name = "pulumi-aws", marker = "extra == 'dev'", specifier = ">=6.66.2" },
     { name = "pydantic-ai", specifier = ">=0.0.53" },
@@ -2063,13 +2078,14 @@ requires-dist = [
     { name = "syrupy", marker = "extra == 'dev'", specifier = ">=4.7.1" },
     { name = "tenacity", specifier = ">=9.1.2" },
     { name = "torch", marker = "extra == 'transformers'", specifier = ">=2.8.0" },
+    { name = "tornado", marker = "extra == 'coiled'", specifier = ">=6.5.1" },
     { name = "tqdm", specifier = ">=4.66.2" },
     { name = "transformers", extras = ["torch"], marker = "extra == 'transformers'", specifier = ">=4.55.0" },
     { name = "typer", specifier = "==0.15.1" },
     { name = "types-aioboto3", extras = ["s3"], specifier = ">=14.3.0" },
     { name = "wandb", specifier = ">=0.21.0" },
 ]
-provides-extras = ["transformers", "dev"]
+provides-extras = ["transformers", "coiled", "dev"]
 
 [[package]]
 name = "langdetect"
