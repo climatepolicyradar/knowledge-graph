@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import shutil
@@ -326,6 +327,11 @@ def generate_concept_html(
 
 @app.command()
 def main():
+    """CLI entry point to generate the vibe check static site."""
+    asyncio.run(async_main())
+
+
+async def async_main():
     """Generate the vibe check static site with persistent experimental results support."""
 
     # Copy static assets
@@ -367,32 +373,34 @@ def main():
 
     # Load concepts from Wikibase (with graceful handling for missing concepts)
     try:
-        wikibase = WikibaseSession()
+        async with WikibaseSession() as wikibase:
+            # Try to load all concepts, but handle failures gracefully
+            concepts: dict[WikibaseID, Concept] = {}
+            valid_concept_ids = []
 
-        # Try to load all concepts, but handle failures gracefully
-        concepts: dict[WikibaseID, Concept] = {}
-        valid_concept_ids = []
-
-        for concept_id in all_concept_ids:
-            try:
-                if concept := wikibase.get_concept(
-                    wikibase_id=concept_id,
-                    include_recursive_has_subconcept=True,
-                    include_labels_from_subconcepts=True,
-                ):
-                    concepts[concept_id] = concept
-                    valid_concept_ids.append(concept_id)
-                else:
+            for concept_id in all_concept_ids:
+                try:
+                    if concept := await wikibase.get_concept_async(
+                        wikibase_id=concept_id,
+                        include_recursive_has_subconcept=True,
+                        include_labels_from_subconcepts=True,
+                    ):
+                        concepts[concept_id] = concept
+                        valid_concept_ids.append(concept_id)
+                    else:
+                        console.log(
+                            f"⚠️  Concept {concept_id} not found in Wikibase",
+                            style="yellow",
+                        )
+                except Exception as e:
                     console.log(
-                        f"⚠️  Concept {concept_id} not found in Wikibase", style="yellow"
+                        f"⚠️  Failed to load concept {concept_id}: {e}", style="yellow"
                     )
-            except Exception as e:
-                console.log(
-                    f"⚠️  Failed to load concept {concept_id}: {e}", style="yellow"
-                )
-                continue
+                    continue
 
-        console.log(f"✅ Successfully loaded {len(concepts)} concepts from Wikibase")
+            console.log(
+                f"✅ Successfully loaded {len(concepts)} concepts from Wikibase"
+            )
 
     except Exception as e:
         console.log(f"❌ Failed to connect to Wikibase: {e}", style="red")
@@ -418,6 +426,10 @@ def main():
         console.log(f"🔄 Processing concept {concept_id}: {concept}")
         concept_predictions = {}
 
+        # Create concept directory early for saving predictions
+        concept_dir = dist_dir / str(concept_id)
+        concept_dir.mkdir(exist_ok=True)
+
         # Generate predictions from default classifier (if this concept is in production)
         if concept_id in concept_ids_from_config:
             try:
@@ -428,6 +440,9 @@ def main():
                     classifier, sample_passages
                 ):
                     concept_predictions[classifier.id] = predictions
+                    # Save predictions immediately after generation
+                    save_predictions_json(concept_dir, classifier.id, predictions)
+                    console.log(f"💾 Saved predictions for {classifier.id}")
 
             except Exception as e:
                 console.log(
@@ -478,9 +493,11 @@ def main():
         concept_dir = dist_dir / str(concept_id)
         concept_dir.mkdir(exist_ok=True)
 
-        # Save all JSON files
+        # Save all JSON files (skip if already saved during generation)
         for classifier_id, predictions in concept_predictions.items():
-            save_predictions_json(concept_dir, classifier_id, predictions)
+            json_path = concept_dir / f"{classifier_id}.json"
+            if not json_path.exists():
+                save_predictions_json(concept_dir, classifier_id, predictions)
 
         # Generate HTML files
         generate_concept_html(concept_dir, concept, concept_predictions)
@@ -504,4 +521,4 @@ def main():
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()
