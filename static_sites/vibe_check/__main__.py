@@ -426,6 +426,10 @@ async def async_main():
         console.log(f"🔄 Processing concept {concept_id}: {concept}")
         concept_predictions = {}
 
+        # Create concept directory early for saving predictions
+        concept_dir = dist_dir / str(concept_id)
+        concept_dir.mkdir(exist_ok=True)
+
         # Generate predictions from default classifier (if this concept is in production)
         if concept_id in concept_ids_from_config:
             try:
@@ -436,6 +440,9 @@ async def async_main():
                     classifier, sample_passages
                 ):
                     concept_predictions[classifier.id] = predictions
+                    # Save predictions immediately after generation
+                    save_predictions_json(concept_dir, classifier.id, predictions)
+                    console.log(f"💾 Saved predictions for {classifier.id}")
 
             except Exception as e:
                 console.log(
@@ -486,9 +493,11 @@ async def async_main():
         concept_dir = dist_dir / str(concept_id)
         concept_dir.mkdir(exist_ok=True)
 
-        # Save all JSON files
+        # Save all JSON files (skip if already saved during generation)
         for classifier_id, predictions in concept_predictions.items():
-            save_predictions_json(concept_dir, classifier_id, predictions)
+            json_path = concept_dir / f"{classifier_id}.json"
+            if not json_path.exists():
+                save_predictions_json(concept_dir, classifier_id, predictions)
 
         # Generate HTML files
         generate_concept_html(concept_dir, concept, concept_predictions)
