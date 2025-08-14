@@ -102,9 +102,13 @@ In the longer term, we expect the graph to be a useful artefact in its own right
 * Install [Git LFS](https://git-lfs.com)
 * Start Docker (Desktop) locally and follow instructions in [Vespa README.md](./tests/local_vespa/README.md)
 
-To run the tests and exclude known problematic tests in the CI environment run
+To run the tests
 
-``just test -v -m "'not transformers'" ``
+`just test -v`
+
+If you experience test failures for target transformer tests in [test_targets.py](./tests/test_targets.py) you can exclude them by running
+
+`just test -v -m "'not transformers'"`
 
 ## Pipelines
 

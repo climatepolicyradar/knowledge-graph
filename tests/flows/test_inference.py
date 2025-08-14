@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import boto3
@@ -13,6 +13,7 @@ import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
 from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.context import FlowRunContext
 from prefect.results import ResultRecord
 from prefect.states import Completed
 
@@ -23,6 +24,7 @@ from flows.inference import (
     DocumentStem,
     InferenceResult,
     SingleDocumentInferenceResult,
+    _inference_batch_of_documents,
     _stringify,
     deserialise_pydantic_list_from_jsonl,
     deserialise_pydantic_list_with_fallback,
@@ -32,7 +34,7 @@ from flows.inference import (
     get_latest_ingest_documents,
     group_inference_results_into_states,
     inference,
-    inference_batch_of_documents,
+    inference_batch_of_documents_cpu,
     list_bucket_file_stems,
     load_classifier,
     load_document,
@@ -532,7 +534,7 @@ def test_group_inference_results_into_states(snapshot):
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents(
+async def test_inference_batch_of_documents_cpu(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -580,7 +582,7 @@ async def test_inference_batch_of_documents(
         ),
     ):
         # Should not raise any exceptions for successful processing
-        result_state = await inference_batch_of_documents(
+        result_state = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
@@ -648,7 +650,7 @@ async def test_inference_batch_of_documents(
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents_with_failures(
+async def test_inference_batch_of_documents_cpu_with_failures(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -674,7 +676,7 @@ async def test_inference_batch_of_documents_with_failures(
     }
 
     with pytest.raises(Fault) as exc_info:
-        _ = await inference_batch_of_documents(
+        _ = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
@@ -720,7 +722,7 @@ async def test_inference_batch_of_documents_with_failures(
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents_empty_batch(
+async def test_inference_batch_of_documents_cpu_empty_batch(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -745,7 +747,7 @@ async def test_inference_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    _ = await inference_batch_of_documents(
+    _ = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
@@ -774,6 +776,81 @@ async def test_inference_batch_of_documents_empty_batch(
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
+
+
+@pytest.mark.asyncio
+async def test__inference_batch_of_documents(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    mock_prefect_s3_block,
+):
+    """Test the inner _inference_batch_of_documents function with mocked flow context."""
+    mock_wandb_init, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+
+    # Prepare test data - use only the PDF document which has languages field
+    batch = [
+        DocumentStem(Path(mock_bucket_documents[0]).stem)
+    ]  # PDF.document.0.1 has languages
+    classifier_name = "Q788"
+    classifier_alias = "v7"
+    config_json = {
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
+    }
+
+    # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
+    def mock_generate_assets(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-asset-1.json",
+            "s3://dummy-bucket/dummy-asset-2.json",
+        ]
+
+    def mock_generate_asset_deps(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-dep-1.json",
+            "s3://dummy-bucket/dummy-dep-2.json",
+        ]
+
+    # Still needed since there's an inner function that uses this.
+    mock_flow_run = MagicMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch("flows.inference.generate_assets", side_effect=mock_generate_assets),
+        patch(
+            "flows.inference.generate_asset_deps", side_effect=mock_generate_asset_deps
+        ),
+        patch("flows.inference.get_run_context", return_value=mock_context),
+    ):
+        # Should not raise any exceptions for successful processing
+        result = await _inference_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
+
+    assert isinstance(result, BatchInferenceResult)
+    assert result.batch_document_stems == batch
+    assert result.successful_document_stems == batch
+    assert result.classifier_name == classifier_name
+    assert result.classifier_alias == classifier_alias
+
+    # Verify W&B was initialized
+    mock_wandb_init.assert_called_once_with(
+        entity=test_config.wandb_entity,
+        job_type="concept_inference",
+    )
 
 
 def test_inference_result_all_successful() -> None:
