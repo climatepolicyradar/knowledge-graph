@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import json
 import os
 from collections.abc import Generator, Sequence
@@ -30,9 +31,16 @@ from flows.classifier_specs.spec_interface import (
     load_classifier_specs,
     should_skip_doc,
 )
+
+class Compute(str, enum.Enum):
+    """Available compute platforms."""
+
+    CPU = "cpu"
+    GPU = "gpu"
+
+
 from flows.config import Config
 from flows.utils import (
-    DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
     DocumentStem,
     Fault,
@@ -762,8 +770,8 @@ async def _inference_batch_of_documents(
     """
     Run classifier inference on a batch of documents.
 
-    This reflects the unit of work that should be run in one of many paralellised
-    docker containers.
+    This reflects the unit of work that should be run in one of many
+    parallelised Docker containers.
     """
     logger = get_run_logger()
 
@@ -892,7 +900,15 @@ async def inference_batch_of_documents_cpu(
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
-    vm_type=DEFAULT_GPU_VM_TYPES,
+    # vm_type=DEFAULT_GPU_VM_TYPES,
+    gpu=True,
+    container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
+    # > Number of threads to run concurrent tasks in for each VM. -1 can
+    # > be used to run as many concurrent tasks as there are CPU cores.
+    # > Default is 1.
+    #
+    # [1]: https://docs.coiled.io/user_guide/functions.html#vm-lifecycle
+    threads_per_worker=-1,
 )
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
@@ -1004,13 +1020,22 @@ async def inference(
     all_raw_successes = []
     all_raw_failures = []
 
+    compute = Compute.GPU
+
+    # TODO: Get from the classifier spec., or somewhere
+    match compute:
+        case Compute.CPU:
+            fn = inference_batch_of_documents_cpu
+        case Compute.GPU:
+            fn = inference_batch_of_documents_gpu
+
     with Profiler(
         printer=print,
         name="running classifier inference with map_as_sub_flow",
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
             # The typing doesn't pick up the Flow decorator
-            fn=inference_batch_of_documents_cpu,
+            fn=fn,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,
@@ -1020,11 +1045,21 @@ async def inference(
         all_raw_successes.extend(raw_successes)
         all_raw_failures.extend(raw_failures)
 
-    # The type of response when running as a sub deployment is:
-    #   <class 'inference.BatchInferenceResult'>
-    all_successes = [
-        BatchInferenceResult(**result.model_dump()) for result in all_raw_successes
-    ]
+    # When using Coiled/remote execution, results may have different
+    # module paths so we need to handle both local and remote
+    # execution results.
+    all_successes = []
+    for result in all_raw_successes:
+        print(f"Result type: {type(result)}")
+        try:
+            # Try to dump and reconstruct
+            reconstructed = BatchInferenceResult(**result.model_dump())
+            all_successes.append(reconstructed)
+            print("Successfully reconstructed from model_dump")
+        except Exception as e:
+            # If that fails, just append the result directly
+            print(f"Failed to reconstruct: {e}, appending directly")
+            all_successes.append(result)
 
     successful_classifier_specs = []
     failed_classifier_specs = []
@@ -1034,6 +1069,7 @@ async def inference(
             successful_classifier_specs.append(spec)
         else:
             failed_classifier_specs.append(spec)
+
 
     inference_result = InferenceResult(
         requested_document_stems=list(validated_file_stems),
