@@ -106,6 +106,10 @@ To run the tests
 
 `just test -v`
 
+If you experience test failures for target transformer tests in [test_targets.py](./tests/test_targets.py) you can exclude them by running
+
+`just test -v -m "'not transformers'"`
+
 ## Pipelines
 
 Within this Knowledge Graph repo we have a full pipeline at [flows/full_pipeline.py:full_pipeline](./flows/full_pipeline.py) that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
