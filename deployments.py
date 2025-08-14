@@ -89,7 +89,13 @@ def create_deployment(
     image_name = os.path.join(docker_registry, docker_repository)
 
     if gpu:
-        work_pool_name = f"coiled-{AwsEnv(os.getenv('AWS_ENV', 'sandbox'))}"
+        aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
+        if aws_env == AwsEnv.production:
+            aws_env_str = AwsEnv.production.name
+        else:
+            aws_env_str = str(aws_env)
+
+        work_pool_name = f"coiled-{aws_env_str}"
         work_queue_name = "default"
         default_variables = JSON.load(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
