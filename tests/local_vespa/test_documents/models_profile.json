@@ -2,6 +2,17 @@
     {
         "id": "id:doc_search:models_profile::primaries",
         "fields": {
+            "id": "primaries",
+            "concepts_versions": {
+                "q880": "kx7m3p9w",
+                "q730": "w3kb7x1s"
+            }
+        }
+    },
+    {
+        "id": "id:doc_search:models_profile::experimentals",
+        "fields": {
+            "id": "experimentals",
             "concepts_versions": {
                 "q880": "r5n8qz2t",
                 "q730": "w3kb7x1s"

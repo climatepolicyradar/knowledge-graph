@@ -180,6 +180,7 @@ schema family_document {
             struct-field value { indexing: attribute }
         }
 
+        # Optional reference to models profile, defaults to "primaries"
         field models_profile_ref type reference<models_profile> {
             indexing: attribute | summary
         }
