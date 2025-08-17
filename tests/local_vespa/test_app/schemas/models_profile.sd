@@ -4,6 +4,11 @@ schema models_profile {
         field id type string {
             indexing: attribute | summary | index
         }
+
+        # E.g. "primaries", "experimentals"
+        field name type string {
+            indexing: attribute | summary
+        }
         
         # E.g. <Q990, n2nuerdn>
         field concepts_versions type map<string, string> {
