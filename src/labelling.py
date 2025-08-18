@@ -170,6 +170,9 @@ class ArgillaSession:
         :param kDataset dataset: The Argilla Dataset to convert
         :return list[LabelledPassage]: A list of LabelledPassage objects
         """
+        if not hasattr(dataset, "records"):
+            return []
+
         return [
             LabelledPassage.from_argilla_record(record, self.client)
             for record in dataset.records
