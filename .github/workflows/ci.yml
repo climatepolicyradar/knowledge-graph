@@ -134,8 +134,16 @@ jobs:
       - name: Confirm Prefect binary availability
         run: docker run --rm dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} prefect version
 
+      - name: Confirm Coiled binary availability
+        run: docker run --rm dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} coiled --version
+
       - name: Confirm dependencies availability
         run: docker run --rm dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} python -c "import aioboto3; print('aioboto3 imported successfully')"
+
+      # AWS_ENV is needed, for now, since there's a module with a
+      # side-effect that calls the OS environment.
+      - name: Confirm package availability
+        run: docker run --rm -e AWS_ENV=sandbox dummy/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} python -c "import flows.inference; print('flows.inference imported successfully')"
 
   deploy_prefect_sandbox:
     name: "Deploy"
