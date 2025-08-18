@@ -97,12 +97,19 @@ def new(
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
 ):
     """Deploy new models by training and promoting them."""
+
+    failed_wikibase_ids = []
     for wikibase_id in wikibase_ids:
         print(f"\nprocessing {wikibase_id}")
 
         if get:
             print("getting concept")
-            scripts.get_concept.main(wikibase_id=wikibase_id)
+            try:
+                scripts.get_concept.main(wikibase_id=wikibase_id)
+            except Exception as e:
+                print(f"Error getting concept: {e}")
+                failed_wikibase_ids.append(wikibase_id)
+                continue
 
         if train:
             print("training")
@@ -123,6 +130,12 @@ def new(
                 )
 
     get_all_available_classifiers([aws_env])
+
+    if failed_wikibase_ids:
+        print(
+            f"Failed to get concepts for the following Wikibase IDs: {failed_wikibase_ids}"
+        )
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

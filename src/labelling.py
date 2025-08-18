@@ -170,8 +170,6 @@ class ArgillaSession:
         :param kDataset dataset: The Argilla Dataset to convert
         :return list[LabelledPassage]: A list of LabelledPassage objects
         """
-        if not hasattr(dataset, "records"):
-            return []
 
         return [
             LabelledPassage.from_argilla_record(record, self.client)
@@ -246,9 +244,12 @@ class ArgillaSession:
         """
         # First, see whether the dataset exists with the name we expect
 
-        dataset = self.client.datasets(  # type: ignore
+        dataset: Dataset | None = self.client.datasets(
             self._concept_to_dataset_name(concept), workspace=workspace
         )
+
+        if not dataset:
+            return []
 
         labelled_passages = self.dataset_to_labelled_passages(dataset)  # type: ignore
         if min_timestamp or max_timestamp:
