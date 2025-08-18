@@ -2,41 +2,43 @@
     {
         "id": "id:doc_search:concept::q880",
         "fields": {
-            "name": "air pollution",
             "id": "q880",
-            "parents": ["q110", "q290"]
+            "description": "air pollution",
+            "version": "2025-08-18_11:40",
+            "preferred_label": "air pollution",
+            "subconcept_of": ["q110", "q290"]
         }
     },
     {
         "id": "id:doc_search:concept::q730",
         "fields": {
-            "name": "fishing sector",
+            "preferred_label": "fishing sector",
             "id": "q730",
-            "parents": ["q500"]
+            "subconcept_of": ["q500"]
         }
     },
     {
         "id": "id:doc_search:concept::q110",
         "fields": {
-            "name": "environmental issues",
+            "preferred_label": "environmental issues",
             "id": "q110",
-            "parents": []
+            "subconcept_of": []
         }
     },
     {
         "id": "id:doc_search:concept::q290",
         "fields": {
-            "name": "pollution",
+            "preferred_label": "pollution",
             "id": "q290",
-            "parents": ["q110"]
+            "subconcept_of": ["q110"]
         }
     },
     {
         "id": "id:doc_search:concept::q500",
         "fields": {
-            "name": "economic sectors",
+            "preferred_label": "economic sectors",
             "id": "q500",
-            "parents": []
+            "subconcept_of": []
         }
     }
 ]
