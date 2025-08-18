@@ -251,7 +251,7 @@ class ArgillaSession:
         if not dataset:
             return []
 
-        labelled_passages = self.dataset_to_labelled_passages(dataset)  # type: ignore
+        labelled_passages = self.dataset_to_labelled_passages(dataset)
         if min_timestamp or max_timestamp:
             labelled_passages = self._filter_labelled_passages_by_timestamp(
                 labelled_passages, min_timestamp, max_timestamp
