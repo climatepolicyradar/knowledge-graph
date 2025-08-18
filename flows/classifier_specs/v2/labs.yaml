@@ -65,6 +65,9 @@
 - classifier_id: e6fzwwmh
   wandb_registry_version: 15
   wikibase_id: Q818
+- classifier_id: f2ug8k2n
+  wandb_registry_version: 18
+  wikibase_id: Q857
 - classifier_id: xv5c3mxd
   wandb_registry_version: 15
   wikibase_id: Q954

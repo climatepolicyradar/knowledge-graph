@@ -104,6 +104,9 @@
 - classifier_id: uz2ns2yj
   wandb_registry_version: 9
   wikibase_id: Q856
+- classifier_id: f2ug8k2n
+  wandb_registry_version: 17
+  wikibase_id: Q857
 - classifier_id: xv5c3mxd
   wandb_registry_version: 18
   wikibase_id: Q954
