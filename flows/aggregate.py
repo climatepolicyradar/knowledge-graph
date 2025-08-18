@@ -14,7 +14,7 @@ from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, Field, PositiveInt
+from pydantic import PositiveInt
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -23,8 +23,8 @@ from flows.boundary import (
     s3_copy_file,
     s3_object_write_text_async,
 )
+from flows.config import Config
 from flows.inference import (
-    DOCUMENT_TARGET_PREFIX_DEFAULT,
     deserialise_pydantic_list_with_fallback,
 )
 from flows.utils import (
@@ -38,7 +38,6 @@ from flows.utils import (
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
-    get_prefect_job_variable,
     parse_spec_file,
 )
 from src.labelled_passage import LabelledPassage
@@ -46,8 +45,6 @@ from src.labelled_passage import LabelledPassage
 T = TypeVar("T")
 R = TypeVar("R")
 
-# Constant, S3 prefix for the aggregated results
-INFERENCE_RESULTS_PREFIX = "inference_results"
 
 DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
 DEFAULT_N_BATCHES: PositiveInt = 5
@@ -72,46 +69,6 @@ class AggregationFailure(Exception):
         self.document_stem = document_stem
         self.exception = exception
         self.context = context
-
-
-class Config(BaseModel):
-    """Configuration used across flow runs."""
-
-    cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
-    document_source_prefix: str = Field(
-        default=DOCUMENT_TARGET_PREFIX_DEFAULT,
-        description="S3 prefix for source documents",
-    )
-    aggregate_inference_results_prefix: str = Field(
-        default=INFERENCE_RESULTS_PREFIX,
-        description="S3 prefix for aggregated inference results",
-    )
-    bucket_region: str = Field(
-        default="eu-west-1", description="AWS region for S3 bucket"
-    )
-    aws_env: AwsEnv = Field(
-        default_factory=lambda: AwsEnv(os.environ["AWS_ENV"]),
-        description="AWS environment",
-    )
-
-    @classmethod
-    async def create(cls) -> "Config":
-        """Create a new Config instance with initialized values."""
-        config = cls()
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
-            )
-        return config
-
-    @property
-    def cache_bucket_str(self) -> str:
-        """Return the cache bucket, raising an error if not set."""
-        if not self.cache_bucket:
-            raise ValueError(
-                "Cache bucket is not set in config, consider calling the `create` method first."
-            )
-        return self.cache_bucket
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
