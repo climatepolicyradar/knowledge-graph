@@ -197,3 +197,12 @@
 - classifier_id: v76y24qd
   wandb_registry_version: 8
   wikibase_id: Q1371
+- classifier_id: 7sctqpmw
+  wandb_registry_version: 8
+  wikibase_id: Q1651
+- classifier_id: phet8mvv
+  wandb_registry_version: 6
+  wikibase_id: Q1652
+- classifier_id: u86a8p2d
+  wandb_registry_version: 6
+  wikibase_id: Q1653
