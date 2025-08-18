@@ -100,34 +100,34 @@ def new(
 
     failed_wikibase_ids = []
     for wikibase_id in wikibase_ids:
-        print(f"\nprocessing {wikibase_id}")
+        try:
+            print(f"\nprocessing {wikibase_id}")
 
-        if get:
-            print("getting concept")
-            try:
+            if get:
+                print("getting concept")
                 scripts.get_concept.main(wikibase_id=wikibase_id)
-            except Exception as e:
-                print(f"Error getting concept: {e}")
-                failed_wikibase_ids.append(wikibase_id)
-                continue
 
-        if train:
-            print("training")
-            classifier = scripts.train.main(
-                wikibase_id=wikibase_id,
-                track=True,
-                upload=True,
-                aws_env=aws_env,
-            )
-
-            if promote:
-                print("promoting")
-                scripts.promote.main(
+            if train:
+                print("training")
+                classifier = scripts.train.main(
                     wikibase_id=wikibase_id,
-                    classifier_id=classifier.id,
+                    track=True,
+                    upload=True,
                     aws_env=aws_env,
-                    primary=True,
                 )
+
+                if promote:
+                    print("promoting")
+                    scripts.promote.main(
+                        wikibase_id=wikibase_id,
+                        classifier_id=classifier.id,
+                        aws_env=aws_env,
+                        primary=True,
+                    )
+        except Exception as e:
+            print(f"Error getting concept: {e}")
+            failed_wikibase_ids.append(wikibase_id)
+            continue
 
     get_all_available_classifiers([aws_env])
 
