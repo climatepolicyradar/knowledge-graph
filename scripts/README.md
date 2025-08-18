@@ -83,7 +83,7 @@ docker run \
   -v ~/.aws/sso/cache:/root/.aws/sso/cache:ro \
   -v $(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2 \
   -e AWS_PROFILE=staging \
-  -it kg-bumped-pytorch:latest /bin/sh
+  -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} /bin/sh
 ```
 
 **Mount Points:**
