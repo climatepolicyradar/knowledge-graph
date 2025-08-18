@@ -136,6 +136,19 @@ This consists of indexing the spans identified from inference in to our passage 
 
 Prefect Deployments are defined in [deployments.py](./deployments.py)
 
+### Monitoring Deployment status
+
+The [Prefect Dashboard shows all deployments, flows and runs](https://app.prefect.cloud/account/4b1558a0-3c61-4849-8b18-3e97e0516d78/workspace/1753b4f0-6221-4f6a-9233-b146518b4545/deployments?g_range={%22type%22:%22span%22,%22seconds%22:-2592000}),
+which you can filter by name and date of last deployment.
+
+The name of the knowlege graph deployments all have the same prefix of `kg-` and they are programmatically generated following the format:
+
+`kg-<flow_name>-<environment>`
+
+**or**
+
+`kg-full-pipeline-<env>`
+
 Flows can be run via in [/flows](./flows)
 
 # Scripts
