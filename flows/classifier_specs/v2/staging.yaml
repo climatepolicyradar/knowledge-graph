@@ -1,6 +1,6 @@
 ---
 - classifier_id: 255brqws
-  wandb_registry_version: 15
+  wandb_registry_version: 18
   wikibase_id: Q218
 - classifier_id: zahr3y3c
   wandb_registry_version: 12
@@ -182,3 +182,12 @@
 - classifier_id: 7gfwgebe
   wandb_registry_version: 9
   wikibase_id: Q1286
+- classifier_id: 7sctqpmw
+  wandb_registry_version: 7
+  wikibase_id: Q1651
+- classifier_id: phet8mvv
+  wandb_registry_version: 5
+  wikibase_id: Q1652
+- classifier_id: u86a8p2d
+  wandb_registry_version: 5
+  wikibase_id: Q1653
