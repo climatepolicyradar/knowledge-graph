@@ -1,4 +1,7 @@
 ---
+- classifier_id: 8np4shsw
+  wandb_registry_version: 14
+  wikibase_id: Q123
 - classifier_id: 255brqws
   wandb_registry_version: 18
   wikibase_id: Q218
@@ -116,6 +119,9 @@
 - classifier_id: e6fzwwmh
   wandb_registry_version: 17
   wikibase_id: Q818
+- classifier_id: uz2ns2yj
+  wandb_registry_version: 10
+  wikibase_id: Q856
 - classifier_id: f2ug8k2n
   wandb_registry_version: 16
   wikibase_id: Q857
@@ -185,6 +191,33 @@
 - classifier_id: 7gfwgebe
   wandb_registry_version: 9
   wikibase_id: Q1286
+- classifier_id: pqvbefjq
+  wandb_registry_version: 9
+  wikibase_id: Q1343
+- classifier_id: g8veubg3
+  wandb_registry_version: 9
+  wikibase_id: Q1344
+- classifier_id: wy3a2h5x
+  wandb_registry_version: 9
+  wikibase_id: Q1345
+- classifier_id: aqrcdtxx
+  wandb_registry_version: 9
+  wikibase_id: Q1346
+- classifier_id: wev7mzga
+  wandb_registry_version: 9
+  wikibase_id: Q1362
+- classifier_id: 9n9xsymu
+  wandb_registry_version: 9
+  wikibase_id: Q1368
+- classifier_id: wyaugrjm
+  wandb_registry_version: 9
+  wikibase_id: Q1369
+- classifier_id: 6dxvusb9
+  wandb_registry_version: 9
+  wikibase_id: Q1370
+- classifier_id: v76y24qd
+  wandb_registry_version: 9
+  wikibase_id: Q1371
 - classifier_id: 7sctqpmw
   wandb_registry_version: 7
   wikibase_id: Q1651
