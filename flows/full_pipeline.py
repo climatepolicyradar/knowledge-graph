@@ -7,9 +7,6 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
-    AggregateConfig as AggregationConfig,
-)
-from flows.aggregate import (
     RunOutputIdentifier,
     aggregate,
 )
@@ -28,7 +25,12 @@ from flows.inference import (
     InferenceResult,
     inference,
 )
-from flows.inference import Config as InferenceConfig
+from flows.pipeline_config import (
+    AggregateConfig as AggregationConfig,
+)
+from flows.pipeline_config import (
+    InferenceConfig as InferenceConfig,
+)
 from flows.utils import DocumentImportId, Fault
 from scripts.cloud import ClassifierSpec, get_prefect_job_variable
 
