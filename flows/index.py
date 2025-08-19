@@ -26,7 +26,6 @@ from vespa.application import Vespa, VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate import (
-    AggregateConfig,
     RunOutputIdentifier,
     SerialisedVespaConcept,
 )
@@ -41,6 +40,7 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
+from flows.pipeline_config import AggregateConfig
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     DocumentImportId,
