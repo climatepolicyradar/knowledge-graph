@@ -9,8 +9,8 @@ from scripts.cloud import AwsEnv, get_prefect_job_variable
 INFERENCE_RESULTS_PREFIX = "inference_results"
 
 
-class Config(BaseModel):
-    """Configuration used across flow runs."""
+class AggregateConfig(BaseModel):
+    """Shared Configuration used across flow runs."""
 
     cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
     document_source_prefix: str = Field(
@@ -30,7 +30,7 @@ class Config(BaseModel):
     )
 
     @classmethod
-    async def create(cls) -> "Config":
+    async def create(cls) -> "AggregateConfig":
         """Create a new Config instance with initialized values."""
         config = cls()
         if not config.cache_bucket:
