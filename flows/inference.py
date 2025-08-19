@@ -28,6 +28,11 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    disallow_latest_alias,
+    load_classifier_specs,
+)
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
@@ -46,14 +51,12 @@ from flows.utils import (
 )
 from scripts.cloud import (
     AwsEnv,
-    ClassifierSpec,
-    disallow_latest_alias,
     get_prefect_job_variable,
-    parse_spec_file,
 )
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from src.version import Version
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
@@ -133,8 +136,7 @@ class BatchInferenceResult(BaseModel):
 
     batch_document_stems: list[DocumentStem]
     successful_document_stems: list[DocumentStem]
-    classifier_name: str
-    classifier_alias: str
+    classifier_spec: ClassifierSpec
 
     @property
     def failed(self) -> bool:
@@ -181,13 +183,10 @@ class InferenceResult(BaseModel):
         )
 
         for batch_inference_result in self.batch_inference_results:
-            classifier_spec = ClassifierSpec(
-                name=batch_inference_result.classifier_name,
-                alias=batch_inference_result.classifier_alias,
-            )
-
             for document_stem in batch_inference_result.successful_document_stems:
-                document_classifier_mapping[document_stem].add(classifier_spec)
+                document_classifier_mapping[document_stem].add(
+                    batch_inference_result.classifier_spec
+                )
 
         expected_classifier_specs = set(self.classifier_specs)
 
@@ -329,7 +328,7 @@ def remove_sabin_file_stems(
 
 
 def download_classifier_from_wandb_to_local(
-    run: Run, config: Config, classifier_name: str, alias: str
+    run: Run, config: Config, wikibase_id: str, wandb_registry_version: Version
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -339,7 +338,10 @@ def download_classifier_from_wandb_to_local(
     to both the s3 bucket via iam in your environment and WanDB via
     the api key.
     """
-    artifact = os.path.join(config.wandb_model_registry, f"{classifier_name}:{alias}")
+    artifact = os.path.join(
+        config.wandb_model_registry,
+        f"{wikibase_id}:{wandb_registry_version}",
+    )
     print(f"Downloading artifact from W&B: {artifact}")
     artifact = run.use_artifact(artifact, type="model")
     classifier = artifact.download()
@@ -347,7 +349,7 @@ def download_classifier_from_wandb_to_local(
 
 
 async def load_classifier(
-    run: Run, config: Config, classifier_name: str, alias: str
+    run: Run, config: Config, classifier_spec: ClassifierSpec
 ) -> Classifier:
     """
     Load a classifier into memory.
@@ -356,11 +358,16 @@ async def load_classifier(
     classifier will be downloaded from W&B (Once implemented)
     """
     async with concurrency("load_classifier", occupy=5):
-        local_classifier_path: Path = config.local_classifier_dir / classifier_name
+        local_classifier_path: Path = (
+            config.local_classifier_dir / classifier_spec.wikibase_id
+        )
 
         if not local_classifier_path.exists():
             model_cache_dir = download_classifier_from_wandb_to_local(
-                run, config, classifier_name, alias
+                run,
+                config,
+                classifier_spec.wikibase_id,
+                classifier_spec.wandb_registry_version,
             )
             local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
@@ -475,8 +482,7 @@ class SingleDocumentInferenceResult(BaseModel):
 
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
-    classifier_name: str
-    classifier_alias: str
+    classifier_spec: ClassifierSpec
 
 
 def generate_s3_uri_output(
@@ -486,17 +492,11 @@ def generate_s3_uri_output(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
             config.document_target_prefix,
-            inference.classifier_name,
-            inference.classifier_alias,
+            inference.classifier_spec.wikibase_id,
+            inference.classifier_spec.classifier_id,
             f"{inference.document_stem}.json",
         ),
     )
-
-
-def generate_s3_uri_input(
-    config: Config, inference: SingleDocumentInferenceResult
-) -> Path:
-    return config.local_classifier_dir / inference.classifier_name
 
 
 @materialize(
@@ -656,8 +656,7 @@ def _get_labelled_passage_from_prediction(
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec: ClassifierSpec,
     classifier: Classifier,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
@@ -679,8 +678,7 @@ async def run_classifier_inference_on_document(
         return SingleDocumentInferenceResult(
             labelled_passages=[],
             document_stem=file_stem,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            classifier_spec=classifier_spec,
         )
 
     # Raise on non-English documents
@@ -700,8 +698,7 @@ async def run_classifier_inference_on_document(
     return SingleDocumentInferenceResult(
         labelled_passages=doc_labels,
         document_stem=file_stem,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+        classifier_spec=classifier_spec,
     )
 
 
@@ -780,7 +777,7 @@ def generate_asset_deps(
         flatten(
             [
                 (
-                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}/{inference.classifier_name}:{inference.classifier_alias}",
+                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}/{inference.classifier_spec.wikibase_id}:{inference.classifier_spec.wandb_registry_version}",
                     str(
                         generate_document_source_key(
                             config=config,
@@ -797,8 +794,7 @@ def generate_asset_deps(
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     """
     Run classifier inference on a batch of documents.
@@ -822,17 +818,14 @@ async def _inference_batch_of_documents(
         job_type="concept_inference",
     )
 
+    classifier_spec = ClassifierSpec(**classifier_spec_json)
+
     logger.info(
-        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+        f"Loading classifier with wikibase id: {classifier_spec.wikibase_id}, classifier id: {classifier_spec.classifier_id}, and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
     )
-    classifier = await load_classifier(
-        run,
-        config,
-        classifier_name,
-        classifier_alias,
-    )
+    classifier = await load_classifier(run, config, classifier_spec)
     logger.info(
-        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
+        f"Loaded classifier with wikibase id: {classifier_spec.wikibase_id}, classifier id: {classifier_spec.classifier_id}, and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
     )
 
     tasks = [
@@ -841,8 +834,7 @@ async def _inference_batch_of_documents(
             run_classifier_inference_on_document(
                 config=config,
                 file_stem=file_stem,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
+                classifier_spec=classifier_spec,
                 classifier=classifier,
             ),
         )
@@ -906,8 +898,7 @@ async def _inference_batch_of_documents(
     batch_inference_result = BatchInferenceResult(
         batch_document_stems=batch,
         successful_document_stems=[i.document_stem for i in store_labels_successes],
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+        classifier_spec=classifier_spec,
     )
 
     if batch_inference_result.failed:
@@ -933,21 +924,21 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
+# TODO: Update  to use v2 spec.
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
-        classifier_name,
-        classifier_alias,
+        classifier_spec_json,
     )
 
 
+# TODO: Update to use v2 spec.
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
@@ -955,14 +946,12 @@ async def inference_batch_of_documents_cpu(
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
-        classifier_name,
-        classifier_alias,
+        classifier_spec_json,
     )
 
 
@@ -981,11 +970,7 @@ def group_inference_results_into_states(
     successes: dict[ClassifierSpec, BatchInferenceResult] = {}
 
     for success in successes_in:
-        classifier_spec = ClassifierSpec(
-            name=success.classifier_name,
-            alias=success.classifier_alias,
-        )
-        successes[classifier_spec] = success
+        successes[success.classifier_spec] = success
 
     return list(failures_in), successes
 
@@ -1039,7 +1024,7 @@ async def inference(
     )
 
     if classifier_specs is None:
-        classifier_specs = parse_spec_file(config.aws_env)
+        classifier_specs = load_classifier_specs(config.aws_env)
 
     disallow_latest_alias(classifier_specs)
 
@@ -1055,8 +1040,7 @@ async def inference(
         return {
             "batch": document_batch,
             "config_json": config.to_json(),
-            "classifier_name": classifier_spec.name,
-            "classifier_alias": classifier_spec.alias,
+            "classifier_spec_json": classifier_spec.model_dump(),
         }
 
     document_batches = iterate_batch(filtered_file_stems, batch_size)
@@ -1144,13 +1128,20 @@ async def create_inference_summary_artifact(
 - **Successful classifiers**: {successful_classifiers}
 - **Failed classifiers**: {failed_classifiers}
 """
-
     # Create classifier details table
     classifier_details = [
-        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
+        {
+            "Classifier": spec.wikibase_id,
+            "Alias": spec.wandb_registry_version,
+            "Status": "✓",
+        }
         for spec in successes.keys()
     ] + [
-        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
+        {
+            "Classifier": spec.wikibase_id,
+            "Alias": spec.wandb_registry_version,
+            "Status": "✗",
+        }
         for spec in failures_classifier_specs
     ]
 
