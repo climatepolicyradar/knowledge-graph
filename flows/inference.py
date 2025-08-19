@@ -3,7 +3,6 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Generator, Sequence
-from dataclasses import dataclass
 from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
@@ -14,7 +13,6 @@ import boto3
 import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
-from cpr_sdk.ssm import get_aws_ssm_param
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow
@@ -28,6 +26,7 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
+from flows.pipeline_config import InferenceConfig
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
@@ -45,10 +44,8 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from scripts.cloud import (
-    AwsEnv,
     ClassifierSpec,
     disallow_latest_alias,
-    get_prefect_job_variable,
     parse_spec_file,
 )
 from src.classifier import Classifier
@@ -60,68 +57,17 @@ PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
 # A singular task doing one thing
 TASK_TIMEOUT_S: int = int(timedelta(minutes=60).total_seconds())
 
-DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
 BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.PAGE_NUMBER,
     BlockType.TABLE,
     BlockType.FIGURE,
 }
-DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
-
-
-@dataclass()
-class Config:
-    """Configuration used across flow runs."""
-
-    cache_bucket: Optional[str] = None
-    document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
-    document_target_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
-    pipeline_state_prefix: str = "input"
-    bucket_region: str = "eu-west-1"
-    local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
-    wandb_model_registry: str = "wandb-registry-model"
-    wandb_entity: str = "climatepolicyradar"
-    wandb_api_key: Optional[SecretStr] = None
-    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-
-    @classmethod
-    async def create(cls) -> "Config":
-        """Create a new Config instance with initialized values."""
-        config = cls()
-
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
-            )
-        if not config.wandb_api_key:
-            config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
-
-        return config
-
-    def to_json(self) -> dict:
-        """Convert the config to a JSON serializable dictionary."""
-        return {
-            "cache_bucket": self.cache_bucket if self.cache_bucket else None,
-            "document_source_prefix": self.document_source_prefix,
-            "document_target_prefix": self.document_target_prefix,
-            "pipeline_state_prefix": self.pipeline_state_prefix,
-            "bucket_region": self.bucket_region,
-            "local_classifier_dir": self.local_classifier_dir,
-            "wandb_model_org": self.wandb_model_org,
-            "wandb_model_registry": self.wandb_model_registry,
-            "wandb_entity": self.wandb_entity,
-            "wandb_api_key": (
-                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
-            ),
-            "aws_env": self.aws_env,
-        }
 
 
 class BatchInferenceResult(BaseModel):
@@ -196,7 +142,7 @@ class InferenceResult(BaseModel):
         }
 
 
-def get_bucket_paginator(config: Config, prefix: str):
+def get_bucket_paginator(config: InferenceConfig, prefix: str):
     """Returns an s3 paginator for the pipeline cache bucket"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
@@ -206,7 +152,7 @@ def get_bucket_paginator(config: Config, prefix: str):
     )
 
 
-def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+def list_bucket_file_stems(config: InferenceConfig) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
 
@@ -225,7 +171,7 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
-def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
+def get_latest_ingest_documents(config: InferenceConfig) -> Sequence[DocumentImportId]:
     """
     Get IDs of changed documents from the latest ingest run
 
@@ -261,7 +207,7 @@ def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
 
 
 def determine_file_stems(
-    config: Config,
+    config: InferenceConfig,
     use_new_and_updated: bool,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
     current_bucket_file_stems: list[DocumentStem],
@@ -327,7 +273,7 @@ def remove_sabin_file_stems(
 
 
 def download_classifier_from_wandb_to_local(
-    run: Run, config: Config, classifier_name: str, alias: str
+    run: Run, config: InferenceConfig, classifier_name: str, alias: str
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -345,7 +291,7 @@ def download_classifier_from_wandb_to_local(
 
 
 async def load_classifier(
-    run: Run, config: Config, classifier_name: str, alias: str
+    run: Run, config: InferenceConfig, classifier_name: str, alias: str
 ) -> Classifier:
     """
     Load a classifier into memory.
@@ -367,7 +313,7 @@ async def load_classifier(
         return classifier
 
 
-def download_s3_file(config: Config, key: str):
+def download_s3_file(config: InferenceConfig, key: str):
     """Retrieve an s3 file from the pipeline cache"""
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
@@ -379,7 +325,9 @@ def download_s3_file(config: Config, key: str):
     return content
 
 
-def generate_document_source_key(config: Config, document_stem: DocumentStem) -> S3Uri:
+def generate_document_source_key(
+    config: InferenceConfig, document_stem: DocumentStem
+) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
@@ -389,7 +337,7 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
     )
 
 
-def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
+def load_document(config: InferenceConfig, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = generate_document_source_key(
         config=config,
@@ -468,7 +416,7 @@ class SingleDocumentInferenceResult(BaseModel):
 
 
 def generate_s3_uri_output(
-    config: Config, inference: SingleDocumentInferenceResult
+    config: InferenceConfig, inference: SingleDocumentInferenceResult
 ) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
@@ -482,7 +430,7 @@ def generate_s3_uri_output(
 
 
 def generate_s3_uri_input(
-    config: Config, inference: SingleDocumentInferenceResult
+    config: InferenceConfig, inference: SingleDocumentInferenceResult
 ) -> Path:
     return config.local_classifier_dir / inference.classifier_name
 
@@ -493,7 +441,7 @@ def generate_s3_uri_input(
     persist_result=False,
 )
 async def store_labels(
-    config: Config,
+    config: InferenceConfig,
     inferences: Sequence[SingleDocumentInferenceResult],
 ) -> tuple[
     list[SingleDocumentInferenceResult],
@@ -642,7 +590,7 @@ def _get_labelled_passage_from_prediction(
 
 
 async def run_classifier_inference_on_document(
-    config: Config,
+    config: InferenceConfig,
     file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
@@ -754,14 +702,14 @@ async def create_inference_on_batch_summary_artifact(
 
 
 def generate_assets(
-    config: Config,
+    config: InferenceConfig,
     inferences: Sequence[SingleDocumentInferenceResult],
 ) -> Sequence[str]:
     return [str(generate_s3_uri_output(config, inference)) for inference in inferences]
 
 
 def generate_asset_deps(
-    config: Config,
+    config: InferenceConfig,
     inferences: Sequence[SingleDocumentInferenceResult],
 ) -> Sequence[str]:
     return list(
@@ -802,7 +750,7 @@ async def _inference_batch_of_documents(
         else None
     )
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
-    config = Config(**config_json)
+    config = InferenceConfig(**config_json)
 
     wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
@@ -987,7 +935,7 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
-    config: Config | None = None,
+    config: InferenceConfig | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ) -> InferenceResult | Fault:
@@ -1007,7 +955,7 @@ async def inference(
       there is no need to change this outside of local dev
     """
     if not config:
-        config = await Config.create()
+        config = await InferenceConfig.create()
 
     print(f"Running with config: {config}")
 
@@ -1108,7 +1056,7 @@ async def inference(
 
 
 async def create_inference_summary_artifact(
-    config: Config,
+    config: InferenceConfig,
     filtered_file_stems: Sequence[DocumentStem],
     classifier_specs: Sequence[ClassifierSpec],
     successes: dict[ClassifierSpec, FlowRun],
