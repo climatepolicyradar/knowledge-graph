@@ -88,6 +88,27 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
 
+      - name: Remove unused software
+        # This is a "works for now" step. The underlying runner may
+        # change. Don't block CI on this.
+        continue-on-error: true
+        run: |
+          # Space before
+          df -h
+          # .Net
+          sudo rm -rf /usr/share/dotnet || true &
+          # Android
+          sudo rm -rf /usr/local/lib/android || true &
+          # GHC
+          sudo rm -rf /opt/ghc || true &
+          sudo rm -rf /usr/local/.ghcup || true &
+          # CodeQL
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true &
+          # Wait for all removlas
+          wait
+          # Space after
+          df -h
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
