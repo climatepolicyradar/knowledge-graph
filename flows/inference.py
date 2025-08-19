@@ -777,7 +777,9 @@ def generate_asset_deps(
         flatten(
             [
                 (
-                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}/{inference.classifier_spec.wikibase_id}:{inference.classifier_spec.wandb_registry_version}",
+                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}"
+                    f"/{inference.classifier_spec.wikibase_id}"
+                    f":{inference.classifier_spec.wandb_registry_version}",
                     str(
                         generate_document_source_key(
                             config=config,
@@ -821,11 +823,15 @@ async def _inference_batch_of_documents(
     classifier_spec = ClassifierSpec(**classifier_spec_json)
 
     logger.info(
-        f"Loading classifier with wikibase id: {classifier_spec.wikibase_id}, classifier id: {classifier_spec.classifier_id}, and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
+        f"Loading classifier with wikibase id: {classifier_spec.wikibase_id}, "
+        f"classifier id: {classifier_spec.classifier_id}, "
+        f"and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
     )
     classifier = await load_classifier(run, config, classifier_spec)
     logger.info(
-        f"Loaded classifier with wikibase id: {classifier_spec.wikibase_id}, classifier id: {classifier_spec.classifier_id}, and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
+        f"Loaded classifier with wikibase id: {classifier_spec.wikibase_id}, "
+        f"classifier id: {classifier_spec.classifier_id}, "
+        f"and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
     )
 
     tasks = [
