@@ -114,7 +114,7 @@ push-image:
     docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
 
 get-version:
-    uv run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
+    @grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'
 
 export-env-vars:
 	export $(cat .env | xargs)
