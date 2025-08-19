@@ -58,10 +58,10 @@ The training process uses a locally built Docker image with volume mounts to mai
 
 ## Building the Docker Image
 
-First, build the Docker image from the repository root:
+First, build the Docker image from the repository root using the `with-aws-cli` multistage build option. This installs the aws cli for use:
 
 ```bash
-just build-image
+docker build --progress=plain --target with-aws-cli -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
 ```
 
 ## Running the Training Container
@@ -92,27 +92,8 @@ docker run \
 - `~/.aws/sso/cache:/root/.aws/sso/cache:ro` - Read-only AWS SSO cache
 - `$(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2` - Classifier specifications
 
-### 2. Install Dependencies
 
-Once inside the container, install required system packages:
-
-```bash
-# Update package list and install unzip
-apt-get update && apt-get install -y unzip
-```
-
-### 3. Install AWS CLI
-
-Install the AWS CLI for S3 access:
-
-```bash
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
-    && unzip awscliv2.zip \
-    && ./aws/install \
-    && rm -rf awscliv2.zip aws
-```
-
-### 4. Validate Installation
+### 3. Validate Installation + Authentication against AWS
 
 Verify AWS CLI is working correctly:
 
@@ -132,14 +113,6 @@ python scripts/deploy.py new \
   --promote \
   --wikibase-id Q1651
 ```
-
-**Parameters:**
-
-- `--aws-env staging` - The AWS environment to use
-- `--get` - Fetch concept data from Wikibase
-- `--train` - Train the classifier model
-- `--promote` - Promote the trained model
-- `--wikibase-id Q1651` - Specific concept ID to train
 
 
 ## Troubleshooting
