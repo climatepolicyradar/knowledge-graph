@@ -26,7 +26,7 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
-from flows.pipeline_config import InferenceConfig
+from flows.pipeline_config import Config
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
@@ -144,7 +144,7 @@ class InferenceResult(BaseModel):
         }
 
 
-def get_bucket_paginator(config: InferenceConfig, prefix: str):
+def get_bucket_paginator(config: Config, prefix: str):
     """Returns an s3 paginator for the pipeline cache bucket"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
@@ -154,7 +154,7 @@ def get_bucket_paginator(config: InferenceConfig, prefix: str):
     )
 
 
-def list_bucket_file_stems(config: InferenceConfig) -> list[DocumentStem]:
+def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
 
@@ -173,7 +173,7 @@ def list_bucket_file_stems(config: InferenceConfig) -> list[DocumentStem]:
     return file_stems
 
 
-def get_latest_ingest_documents(config: InferenceConfig) -> Sequence[DocumentImportId]:
+def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     """
     Get IDs of changed documents from the latest ingest run
 
@@ -209,7 +209,7 @@ def get_latest_ingest_documents(config: InferenceConfig) -> Sequence[DocumentImp
 
 
 def determine_file_stems(
-    config: InferenceConfig,
+    config: Config,
     use_new_and_updated: bool,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
     current_bucket_file_stems: list[DocumentStem],
@@ -275,7 +275,7 @@ def remove_sabin_file_stems(
 
 
 def download_classifier_from_wandb_to_local(
-    run: Run, config: InferenceConfig, classifier_name: str, alias: str
+    run: Run, config: Config, classifier_name: str, alias: str
 ) -> str:
     """
     Download a classifier from W&B to local.
@@ -293,7 +293,7 @@ def download_classifier_from_wandb_to_local(
 
 
 async def load_classifier(
-    run: Run, config: InferenceConfig, classifier_name: str, alias: str
+    run: Run, config: Config, classifier_name: str, alias: str
 ) -> Classifier:
     """
     Load a classifier into memory.
@@ -315,7 +315,7 @@ async def load_classifier(
         return classifier
 
 
-def download_s3_file(config: InferenceConfig, key: str):
+def download_s3_file(config: Config, key: str):
     """Retrieve an s3 file from the pipeline cache"""
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
@@ -327,9 +327,7 @@ def download_s3_file(config: InferenceConfig, key: str):
     return content
 
 
-def generate_document_source_key(
-    config: InferenceConfig, document_stem: DocumentStem
-) -> S3Uri:
+def generate_document_source_key(config: Config, document_stem: DocumentStem) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
@@ -339,7 +337,7 @@ def generate_document_source_key(
     )
 
 
-def load_document(config: InferenceConfig, file_stem: DocumentStem) -> BaseParserOutput:
+def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = generate_document_source_key(
         config=config,
@@ -428,7 +426,7 @@ class SingleDocumentInferenceResult(BaseModel):
 
 
 def generate_s3_uri_output(
-    config: InferenceConfig, inference: SingleDocumentInferenceResult
+    config: Config, inference: SingleDocumentInferenceResult
 ) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
@@ -442,7 +440,7 @@ def generate_s3_uri_output(
 
 
 def generate_s3_uri_input(
-    config: InferenceConfig, inference: SingleDocumentInferenceResult
+    config: Config, inference: SingleDocumentInferenceResult
 ) -> Path:
     return config.local_classifier_dir / inference.classifier_name
 
@@ -453,7 +451,7 @@ def generate_s3_uri_input(
     persist_result=False,
 )
 async def store_labels(
-    config: InferenceConfig,
+    config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
 ) -> tuple[
     list[SingleDocumentInferenceResult],
@@ -602,7 +600,7 @@ def _get_labelled_passage_from_prediction(
 
 
 async def run_classifier_inference_on_document(
-    config: InferenceConfig,
+    config: Config,
     file_stem: DocumentStem,
     classifier_name: str,
     classifier_alias: str,
@@ -714,14 +712,14 @@ async def create_inference_on_batch_summary_artifact(
 
 
 def generate_assets(
-    config: InferenceConfig,
+    config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
 ) -> Sequence[str]:
     return [str(generate_s3_uri_output(config, inference)) for inference in inferences]
 
 
 def generate_asset_deps(
-    config: InferenceConfig,
+    config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
 ) -> Sequence[str]:
     return list(
@@ -762,7 +760,7 @@ async def _inference_batch_of_documents(
         else None
     )
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
-    config = InferenceConfig(**config_json)
+    config = Config(**config_json)
 
     wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
@@ -947,7 +945,7 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
-    config: InferenceConfig | None = None,
+    config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ) -> InferenceResult | Fault:
@@ -967,7 +965,7 @@ async def inference(
       there is no need to change this outside of local dev
     """
     if not config:
-        config = await InferenceConfig.create()
+        config = await Config.create()
 
     print(f"Running with config: {config}")
 
@@ -1068,7 +1066,7 @@ async def inference(
 
 
 async def create_inference_summary_artifact(
-    config: InferenceConfig,
+    config: Config,
     filtered_file_stems: Sequence[DocumentStem],
     classifier_specs: Sequence[ClassifierSpec],
     successes: dict[ClassifierSpec, FlowRun],

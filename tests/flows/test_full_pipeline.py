@@ -21,7 +21,7 @@ from flows.inference import (
     BatchInferenceResult,
     InferenceResult,
 )
-from flows.pipeline_config import InferenceConfig as InferenceConfig
+from flows.pipeline_config import Config as InferenceConfig
 from flows.utils import DocumentImportId, DocumentStem, Fault
 from scripts.cloud import AwsEnv, ClassifierSpec
 

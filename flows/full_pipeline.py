@@ -25,11 +25,9 @@ from flows.inference import (
     InferenceResult,
     inference,
 )
+from flows.pipeline_config import Config
 from flows.pipeline_config import (
     Config as AggregationConfig,
-)
-from flows.pipeline_config import (
-    InferenceConfig as InferenceConfig,
 )
 from flows.utils import DocumentImportId, Fault
 from scripts.cloud import ClassifierSpec
@@ -37,7 +35,7 @@ from scripts.cloud import ClassifierSpec
 
 def validate_aggregation_inference_configs(
     aggregation_config: AggregationConfig,
-    inference_config: InferenceConfig,
+    inference_config: Config,
 ) -> None:
     """
     Check that the aggregation and inference config fields match.
@@ -80,7 +78,7 @@ def validate_aggregation_inference_configs(
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    inference_config: InferenceConfig | None = None,
+    inference_config: Config | None = None,
     inference_use_new_and_updated: bool = False,
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -130,7 +128,7 @@ async def full_pipeline(
 
     if not inference_config:
         logger.info("No inference config provided, creating default...")
-        inference_config = await InferenceConfig.create()
+        inference_config = await Config.create()
 
     validate_aggregation_inference_configs(aggregation_config, inference_config)
 

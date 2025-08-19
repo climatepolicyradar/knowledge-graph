@@ -1,5 +1,4 @@
 import os
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -81,52 +80,3 @@ class Config(BaseModel):
                 "Cache bucket is not set in config, consider calling the `create` method first."
             )
         return self.cache_bucket
-
-
-@dataclass()
-class InferenceConfig:
-    """Configuration used across flow runs."""
-
-    cache_bucket: Optional[str] = None
-    document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
-    document_target_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
-    pipeline_state_prefix: str = "input"
-    bucket_region: str = "eu-west-1"
-    local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
-    wandb_model_registry: str = "wandb-registry-model"
-    wandb_entity: str = "climatepolicyradar"
-    wandb_api_key: Optional[SecretStr] = None
-    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-
-    @classmethod
-    async def create(cls) -> "InferenceConfig":
-        """Create a new Config instance with initialized values."""
-        config = cls()
-
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
-            )
-        if not config.wandb_api_key:
-            config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
-
-        return config
-
-    def to_json(self) -> dict:
-        """Convert the config to a JSON serializable dictionary."""
-        return {
-            "cache_bucket": self.cache_bucket if self.cache_bucket else None,
-            "document_source_prefix": self.document_source_prefix,
-            "document_target_prefix": self.document_target_prefix,
-            "pipeline_state_prefix": self.pipeline_state_prefix,
-            "bucket_region": self.bucket_region,
-            "local_classifier_dir": self.local_classifier_dir,
-            "wandb_model_org": self.wandb_model_org,
-            "wandb_model_registry": self.wandb_model_registry,
-            "wandb_entity": self.wandb_entity,
-            "wandb_api_key": (
-                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
-            ),
-            "aws_env": self.aws_env,
-        }
