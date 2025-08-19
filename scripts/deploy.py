@@ -124,7 +124,7 @@ def new(
                         aws_env=aws_env,
                         primary=True,
                     )
-        except Exception as e:
+        except AttributeError as e:
             print(f"Error getting concept: {e}")
             failed_wikibase_ids.append(wikibase_id)
             continue
