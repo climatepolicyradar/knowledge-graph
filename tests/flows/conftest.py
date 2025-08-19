@@ -39,7 +39,7 @@ from vespa.io import VespaQueryResponse
 
 from flows.aggregate import AggregateConfig as AggregateInferenceResultsConfig
 from flows.inference import S3_BLOCK_RESULTS_CACHE
-from flows.inference import Config as InferenceConfig
+from flows.pipeline_config import InferenceConfig as InferenceConfig
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
