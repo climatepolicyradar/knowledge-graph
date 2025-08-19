@@ -1,5 +1,6 @@
 """The whole pipeline to deploy classifier models."""
 
+import traceback
 from pathlib import Path
 from typing import Annotated
 
@@ -126,15 +127,17 @@ def new(
                     )
         except AttributeError as e:
             print(f"Error getting concept: {e}")
-            failed_wikibase_ids.append(wikibase_id)
+            failed_wikibase_ids.append((wikibase_id, e))
             continue
 
     get_all_available_classifiers([aws_env])
 
     if failed_wikibase_ids:
-        print(
-            f"Failed to get concepts for the following Wikibase IDs: {failed_wikibase_ids}"
-        )
+        for wikibase_id, e in failed_wikibase_ids:
+            print(f"Failed to deploy classifier for {wikibase_id}:")
+            print("".join(traceback.format_exception(e)))
+            print("-" * 100 + "\n")
+
         raise typer.Exit(code=1)
 
 
