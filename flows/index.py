@@ -26,6 +26,7 @@ from vespa.application import Vespa, VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate import (
+    AggregateConfig,
     RunOutputIdentifier,
     SerialisedVespaConcept,
 )
@@ -40,7 +41,6 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
-from flows.config import Config
 from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     DocumentImportId,
@@ -134,7 +134,7 @@ async def _update_vespa_passage_concepts(
 
 
 async def create_aggregate_indexing_summary_artifact(
-    config: Config,
+    config: AggregateConfig,
     document_stems: Sequence[DocumentStem],
     successes: Sequence[None],
     failures: Sequence[FlowRun | BaseException],
@@ -206,7 +206,7 @@ def generate_s3_uri_output_family_document(
 
 
 async def index_document_passages(
-    config: Config,
+    config: AggregateConfig,
     run_output_identifier: RunOutputIdentifier,
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
@@ -388,7 +388,7 @@ async def index_family_document(
 
 
 async def create_indexing_batch_summary_artifact(
-    config: Config,
+    config: AggregateConfig,
     run_output_identifier: RunOutputIdentifier,
     documents_stems: list[DocumentStem],
     fault_per_document: dict[DocumentStem, Fault],
@@ -470,7 +470,7 @@ def task_run_name(parameters: dict[str, Any]) -> str:
 )
 async def index_all(
     document_stem: DocumentStem,
-    config: Config,
+    config: AggregateConfig,
     run_output_identifier: RunOutputIdentifier,
     indexer_document_passages_concurrency_limit: PositiveInt,
     indexer_max_vespa_connections: PositiveInt,
@@ -601,7 +601,7 @@ async def index_batch_of_documents(
         )
 
     # This doesn't correctly parse the values into the dataclass.
-    config = Config.model_validate(config_json)
+    config = AggregateConfig.model_validate(config_json)
     config.aws_env = AwsEnv(config.aws_env)
 
     logger.info(
@@ -675,7 +675,7 @@ async def index_batch_of_documents(
 async def index(
     run_output_identifier: RunOutputIdentifier,
     document_stems: Sequence[DocumentStem] | None = None,
-    config: Config | None = None,
+    config: AggregateConfig | None = None,
     batch_size: int = DEFAULT_DOCUMENTS_BATCH_SIZE,
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
@@ -716,7 +716,7 @@ async def index(
     logger = get_run_logger()
 
     if config is None:
-        config = await Config.create()
+        config = await AggregateConfig.create()
 
     logger.info(f"Running indexing with config: {config}")
 
