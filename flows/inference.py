@@ -930,7 +930,6 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
-# TODO: Update  to use v2 spec.
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
@@ -944,7 +943,6 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-# TODO: Update to use v2 spec.
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
