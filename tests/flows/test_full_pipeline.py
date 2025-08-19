@@ -134,7 +134,7 @@ async def test_full_pipeline_no_config_provided(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.full_pipeline.inference_with_result_cache",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -233,7 +233,7 @@ async def test_full_pipeline_with_full_config(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.full_pipeline.inference_with_result_cache",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -339,7 +339,7 @@ async def test_full_pipeline_with_inference_failure(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.full_pipeline.inference_with_result_cache",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
