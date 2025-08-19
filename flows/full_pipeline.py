@@ -7,7 +7,7 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
-    Config as AggregationConfig,
+    AggregateConfig as AggregationConfig,
 )
 from flows.aggregate import (
     RunOutputIdentifier,
