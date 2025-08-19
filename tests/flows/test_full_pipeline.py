@@ -10,7 +10,7 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH,
     RunOutputIdentifier,
 )
-from flows.aggregate import AggregateConfig as AggregationConfig
+from flows.aggregate import Config as AggregationConfig
 from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
 from flows.full_pipeline import (
     full_pipeline,

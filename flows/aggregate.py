@@ -26,7 +26,7 @@ from flows.boundary import (
 from flows.inference import (
     deserialise_pydantic_list_with_fallback,
 )
-from flows.pipeline_config import AggregateConfig
+from flows.pipeline_config import Config
 from flows.utils import (
     DocumentStem,
     S3Uri,
@@ -94,7 +94,7 @@ async def get_all_labelled_passages_for_one_document(
     s3: S3Client,
     document_stem: DocumentStem,
     classifier_specs: Sequence[ClassifierSpec],
-    config: AggregateConfig,
+    config: Config,
 ) -> AsyncGenerator[tuple[ClassifierSpec, list[LabelledPassage]], None]:
     """Get the labelled passages from s3."""
 
@@ -201,7 +201,7 @@ async def process_document(
     document_stem: DocumentStem,
     session: aioboto3.Session,
     classifier_specs: Sequence[ClassifierSpec],
-    config: AggregateConfig,
+    config: Config,
     run_output_identifier: RunOutputIdentifier,
 ) -> DocumentStem:
     """Process a single document and return its status."""
@@ -303,7 +303,7 @@ def handle_results(
 
 
 async def create_aggregate_inference_summary_artifact(
-    config: AggregateConfig,
+    config: Config,
     success_stems: list[DocumentStem],
     failures: list[AggregationFailure],
 ) -> None:
@@ -359,7 +359,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     )
 
 
-def collect_stems_by_specs(config: AggregateConfig) -> list[DocumentStem]:
+def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     """Collect the stems for the given specs."""
     document_stems = []
     specs = parse_spec_file(config.aws_env)
@@ -392,7 +392,7 @@ async def aggregate_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
-    config = AggregateConfig.model_validate(config_json)
+    config = Config.model_validate(config_json)
 
     session = aioboto3.Session(region_name=config.bucket_region)
 
@@ -469,14 +469,14 @@ async def aggregate_batch_of_documents(
 )
 async def aggregate(
     document_stems: None | Sequence[DocumentStem] = None,
-    config: AggregateConfig | None = None,
+    config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     if not config:
         print("no config provided, creating one")
-        config = await AggregateConfig.create()
+        config = await Config.create()
 
     if not document_stems:
         print(

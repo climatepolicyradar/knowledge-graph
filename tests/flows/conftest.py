@@ -37,8 +37,8 @@ from types_aiobotocore_s3.client import S3Client
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
-from flows.aggregate import AggregateConfig as AggregateInferenceResultsConfig
 from flows.inference import S3_BLOCK_RESULTS_CACHE
+from flows.pipeline_config import Config as AggregateInferenceResultsConfig
 from flows.pipeline_config import InferenceConfig as InferenceConfig
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
