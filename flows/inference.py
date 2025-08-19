@@ -8,9 +8,10 @@ from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Iterable, Optional, TypeAlias, TypeVar
+from typing import Any, Final, Iterable, Optional, TypeAlias
 
 import boto3
+import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from cpr_sdk.ssm import get_aws_ssm_param
@@ -24,13 +25,15 @@ from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.logging import get_run_logger
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr
+from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
 from flows.utils import (
+    DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
     DocumentStem,
     Fault,
+    JsonDict,
     Profiler,
     S3Uri,
     SlackNotify,
@@ -422,10 +425,7 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
-T = TypeVar("T", bound=BaseModel)
-
-
-def serialise_pydantic_list_as_jsonl(models: Sequence[T]) -> BytesIO:
+def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> BytesIO:
     """
     Serialize a list of Pydantic models as JSONL (JSON Lines) format.
 
@@ -435,7 +435,7 @@ def serialise_pydantic_list_as_jsonl(models: Sequence[T]) -> BytesIO:
     return BytesIO(jsonl_content.encode("utf-8"))
 
 
-def deserialise_pydantic_list_from_jsonl(
+def deserialise_pydantic_list_from_jsonl[T: BaseModel](
     jsonl_content: str, model_class: type[T]
 ) -> list[T]:
     """
@@ -451,7 +451,7 @@ def deserialise_pydantic_list_from_jsonl(
     return models
 
 
-def deserialise_pydantic_list_with_fallback(
+def deserialise_pydantic_list_with_fallback[T: BaseModel](
     content: str, model_class: type[T]
 ) -> list[T]:
     """
@@ -459,8 +459,6 @@ def deserialise_pydantic_list_with_fallback(
 
     First tries JSONL format, then falls back to original format (JSON array of JSON strings).
     """
-    from pydantic import ValidationError
-
     # Try JSONL format first
     try:
         return deserialise_pydantic_list_from_jsonl(content, model_class)
@@ -794,10 +792,9 @@ def generate_asset_deps(
     )
 
 
-@flow(log_prints=True)
-async def inference_batch_of_documents(
+async def _inference_batch_of_documents(
     batch: list[DocumentStem],
-    config_json: dict,
+    config_json: JsonDict,
     classifier_name: str,
     classifier_alias: str,
 ) -> BatchInferenceResult | Fault:
@@ -929,6 +926,44 @@ async def inference_batch_of_documents(
     return batch_inference_result
 
 
+# The default serialiser is cloudpickle, which can handle basic Pydantic types.
+# Should the complexity of the returned objects become more complex
+# then a custom serialiser should be considered.
+
+
+@flow(log_prints=True)
+async def inference_batch_of_documents_cpu(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_name: str,
+    classifier_alias: str,
+) -> BatchInferenceResult | Fault:
+    return await _inference_batch_of_documents(
+        batch,
+        config_json,
+        classifier_name,
+        classifier_alias,
+    )
+
+
+@flow(log_prints=True)
+@coiled.function(  # pyright: ignore[reportUnknownMemberType]
+    vm_type=DEFAULT_GPU_VM_TYPES,
+)
+async def inference_batch_of_documents_gpu(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_name: str,
+    classifier_alias: str,
+) -> BatchInferenceResult | Fault:
+    return await _inference_batch_of_documents(
+        batch,
+        config_json,
+        classifier_name,
+        classifier_alias,
+    )
+
+
 @Profiler(
     printer=print,
     name="processing results",
@@ -1039,7 +1074,7 @@ async def inference(
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
             # The typing doesn't pick up the Flow decorator
-            fn=inference_batch_of_documents,  # pyright: ignore[reportArgumentType]
+            fn=inference_batch_of_documents_cpu,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,

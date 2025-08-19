@@ -7,7 +7,7 @@ See: https://docs-2.prefect.io/latest/concepts/deployments/
 
 import importlib.metadata
 import os
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 from prefect.blocks.system import JSON
 from prefect.client.schemas.actions import DeploymentScheduleCreate
@@ -29,7 +29,8 @@ from flows.index import (
 )
 from flows.inference import (
     inference,
-    inference_batch_of_documents,
+    inference_batch_of_documents_cpu,
+    inference_batch_of_documents_gpu,
 )
 from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
@@ -63,9 +64,18 @@ def get_schedule_for_env(
         return None
 
 
+# Match what Prefect uses for Flows:
+#
+# > .. we use the generic type variables `P` and `R` for "Parameters"
+# > and "Returns" respectively.
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
 def create_deployment(
-    flow: Flow,
+    flow: Flow[P, R],
     description: str,
+    gpu: bool = False,
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
     env_schedules: dict[AwsEnv, str] | None = None,
     extra_tags: list[str] = [],
@@ -78,21 +88,39 @@ def create_deployment(
     docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
     image_name = os.path.join(docker_registry, docker_repository)
 
-    default_variables = JSON.load(f"default-job-variables-prefect-mvp-{aws_env}").value
+    if gpu:
+        aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
+        if aws_env == AwsEnv.production:
+            aws_env_str = AwsEnv.production.name
+        else:
+            aws_env_str = str(aws_env)
+
+        work_pool_name = f"coiled-{aws_env_str}"
+        work_queue_name = "default"
+        default_variables = JSON.load(
+            f"coiled-default-job-variables-prefect-mvp-{aws_env}"
+        ).value
+    else:
+        work_pool_name = f"mvp-{aws_env}-ecs"
+        work_queue_name = f"mvp-{aws_env}"
+        default_variables = JSON.load(
+            f"default-job-variables-prefect-mvp-{aws_env}"
+        ).value
+
     job_variables = {**default_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
     schedule = get_schedule_for_env(aws_env, env_schedules)
 
     _ = flow.deploy(
         generate_deployment_name(flow_name, aws_env),
-        work_pool_name=f"mvp-{aws_env}-ecs",
+        work_pool_name=work_pool_name,
+        work_queue_name=work_queue_name,
         version=version,
         image=DockerImage(
             name=image_name,
             tag=version,
             dockerfile="Dockerfile",
         ),
-        work_queue_name=f"mvp-{aws_env}",
         job_variables=job_variables,
         tags=tags,
         description=description,
@@ -111,9 +139,19 @@ create_deployment(
 )
 
 create_deployment(
-    flow=inference_batch_of_documents,
-    description="Run concept classifier inference on a batch of documents",
+    flow=inference_batch_of_documents_cpu,
+    description="Run concept classifier inference on a batch of documents with CPU compute",
     extra_tags=["type:sub"],
+    gpu=False,
+    flow_variables={},
+)
+
+create_deployment(
+    flow=inference_batch_of_documents_gpu,
+    description="Run concept classifier inference on a batch of documents with GPU compute",
+    extra_tags=["type:sub"],
+    gpu=True,
+    flow_variables={},
 )
 
 # Aggregate inference results
