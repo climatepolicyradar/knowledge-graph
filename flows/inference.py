@@ -66,8 +66,6 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
-AWS_ENV: str = os.environ["AWS_ENV"]
-S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 
@@ -879,7 +877,7 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(log_prints=True)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -894,7 +892,7 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(log_prints=True)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
 )
