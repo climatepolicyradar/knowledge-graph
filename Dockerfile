@@ -4,12 +4,20 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_SYSTEM_PYTHON=1
 
+WORKDIR /app
+
 # This allows the dependencies of the project (which do not change
 # often) to be cached separately from the project itself (which
 # changes very frequently).
-COPY pyproject.toml .
+COPY pyproject.toml README.md ./
 RUN uv pip install -r pyproject.toml --extra transformers --extra coiled
-COPY . .
+
+# Copy the project into the image
+COPY src ./src/
+COPY flows ./flows/
+COPY scripts ./scripts/
+
+# Install the project
 RUN uv pip install -e .
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
