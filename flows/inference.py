@@ -751,8 +751,8 @@ async def _inference_batch_of_documents(
     """
     Run classifier inference on a batch of documents.
 
-    This reflects the unit of work that should be run in one of many paralellised
-    docker containers.
+    This reflects the unit of work that should be run in one of many
+    parallelised Docker containers.
     """
     logger = get_run_logger()
 
@@ -900,7 +900,7 @@ async def inference_batch_of_documents_cpu(
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     # vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
-    container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
+    # container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
 )
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
