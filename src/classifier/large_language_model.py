@@ -185,9 +185,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             text,
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
-        self._validate_response(input_text=text, response=response.data.marked_up_text)
+        self._validate_response(
+            input_text=text, response=response.output.marked_up_text
+        )
         return Span.from_xml(
-            xml=response.data.marked_up_text,
+            xml=response.output.marked_up_text,
             concept_id=self.concept.wikibase_id,
             labellers=[str(self)],
         )
@@ -227,11 +229,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         for text, response in zip(texts, responses):
             try:
                 self._validate_response(
-                    input_text=text, response=response.data.marked_up_text
+                    input_text=text, response=response.output.marked_up_text
                 )
 
                 spans = Span.from_xml(
-                    xml=response.data.marked_up_text,
+                    xml=response.output.marked_up_text,
                     concept_id=self.concept.wikibase_id,
                     labellers=[str(self)],
                 )

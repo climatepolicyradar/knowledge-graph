@@ -33,7 +33,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         except ImportError:
             raise ImportError(
                 f"The `sentence-transformers` library is required to run {self.name}s. "
-                "Install it with 'poetry install --with transformers'"
+                "Install it with 'uv install --extra transformers'"
             )
 
         self.threshold = threshold

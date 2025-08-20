@@ -4,22 +4,22 @@ The documentation site is built with [Material for MkDocs](https://squidfunk.git
 
 ## Local development
 
-To build the documentation, you should have installed dev dependencies with poetry:
+To build the documentation, you should have installed dev dependencies with uv:
 
 ```sh
-poetry install --with dev
+uv install --extra dev
 ```
 
 Then you can serve the documentation locally with:
 
 ```sh
-poetry run mkdocs serve
+uv run mkdocs serve
 ```
 
 To build the documentation, you can run:
 
 ```sh
-poetry run mkdocs build
+uv run mkdocs build
 ```
 
 ## Deploying the documentation

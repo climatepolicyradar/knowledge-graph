@@ -2,6 +2,7 @@ import tempfile
 import textwrap
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -87,7 +88,8 @@ def test_load_classifier_specs():
         with open(spec_file, "w") as f:
             f.write(sample_data)
 
-        specs = load_classifier_specs(AwsEnv("sandbox"), spec_dir=temp_spec_dir)
+        with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_spec_dir):
+            specs = load_classifier_specs(AwsEnv("sandbox"))
 
         assert len(specs) == 3
         assert specs[0].compute_environment.gpu

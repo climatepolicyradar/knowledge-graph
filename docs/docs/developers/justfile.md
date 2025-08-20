@@ -45,7 +45,7 @@ just evaluate Q992 --track
 You can promote a model to be the primary used in that environment using its ClassifierID.
 
 ```bash
-poetry run promote Q992 --classifier_id abcd2345  --aws-env labs --primary
+uv run promote Q992 --classifier_id abcd2345  --aws-env labs --primary
 ```
 
 You can also demote (aka disable) a promoted model in an AWS account/environment, for a concept.

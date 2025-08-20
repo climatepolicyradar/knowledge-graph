@@ -47,6 +47,8 @@ from scripts.cloud import (
 T = TypeVar("T")
 U = TypeVar("U")
 
+JsonDict = NewType("JsonDict", dict[str, Any])
+
 # Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
 DocumentImportId = NewType("DocumentImportId", str)
@@ -60,6 +62,13 @@ DocumentStem = NewType("DocumentStem", str)
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
+DEFAULT_GPU_VM_TYPES: list[str] = [
+    "g5.xlarge",
+    "g6.xlarge",
+    "g5.2xlarge",
+    "g6.2xlarge",
+]
 
 
 def file_name_from_path(path: str) -> str:
@@ -186,7 +195,10 @@ def s3_file_exists(bucket_name: str, file_key: str) -> bool:
         s3_client.head_object(Bucket=bucket_name, Key=file_key)
         return True
     except ClientError as e:
-        if e.response["Error"]["Code"] in ["404", "403"]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
+        if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            "404",
+            "403",
+        ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
             return False
         raise
 
@@ -635,7 +647,12 @@ class Fault(Exception):
         """Return a string representation"""
         if self.metadata is None:
             return self.msg
-        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)}"
+        try:
+            data_str = str(self.data)
+        except Exception as e:
+            print(f"could not represent fault's data as a string: {e}")
+            data_str = ""
+        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)} | data: {data_str}"
 
 
 def default_desc(tasks, results) -> str:

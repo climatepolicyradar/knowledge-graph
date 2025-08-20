@@ -375,7 +375,11 @@ def main():
 
         for concept_id in all_concept_ids:
             try:
-                if concept := wikibase.get_concept(wikibase_id=concept_id):
+                if concept := wikibase.get_concept(
+                    wikibase_id=concept_id,
+                    include_recursive_has_subconcept=True,
+                    include_labels_from_subconcepts=True,
+                ):
                     concepts[concept_id] = concept
                     valid_concept_ids.append(concept_id)
                 else:

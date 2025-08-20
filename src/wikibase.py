@@ -761,3 +761,57 @@ class WikibaseSession:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit"""
         await self.close()
+
+    async def add_alternative_labels_async(
+        self,
+        wikibase_id: WikibaseID,
+        alternative_labels: list[str],
+        language: str = "en",
+    ):
+        """Add a list of alternative labels to a Wikibase item, preserving existing ones"""
+        existing_alternative_labels = (
+            await self.get_concept_async(wikibase_id)
+        ).alternative_labels
+
+        all_alternative_labels = list(
+            set(existing_alternative_labels + alternative_labels)
+        )
+
+        client = await self._get_client()
+        response = await client.post(
+            url=self.api_url,
+            data={
+                "action": "wbeditentity",
+                "format": "json",
+                "id": wikibase_id,
+                "token": self._csrf_token,
+                "data": json.dumps(
+                    {
+                        "aliases": {
+                            language: [
+                                {"language": language, "value": alias}
+                                for alias in all_alternative_labels
+                            ]
+                        }
+                    }
+                ),
+            },
+        )
+        response_data = response.json()
+        if "error" in response_data:
+            raise Exception(
+                f"Error adding alternative labels: {response_data['error']}"
+            )
+        return response_data
+
+    @async_to_sync
+    async def add_alternative_labels(
+        self,
+        wikibase_id: WikibaseID,
+        alternative_labels: list[str],
+        language: str = "en",
+    ):
+        """Sync wrapper for add_alternative_labels_async"""
+        return await self.add_alternative_labels_async(
+            wikibase_id, alternative_labels, language
+        )

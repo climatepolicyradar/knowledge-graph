@@ -42,7 +42,7 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
         except ImportError:
             raise ImportError(
                 f"The `transformers` library is required to run {self.name}s. "
-                "Install it with 'poetry install --with transformers'"
+                "Install it with 'uv install --extra transformers'"
             )
 
         self.pipeline: Callable = pipeline(

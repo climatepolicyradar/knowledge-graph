@@ -1,12 +1,42 @@
-FROM prefecthq/prefect:3.3.7-python3.10
+# Builder stage with full image, as we need compilation software
+FROM python:3.13-bookworm AS builder
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN pip install --upgrade pip
-RUN pip install poetry
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_SYSTEM_PYTHON=1
 
-WORKDIR /opt/prefect/knowledge-graph
+WORKDIR /app
+
+# This allows the dependencies of the project (which do not change
+# often) to be cached separately from the project itself (which
+# changes very frequently).
+COPY pyproject.toml README.md ./
+RUN uv pip install -r pyproject.toml --extra transformers --extra coiled
+
+# Copy the project into the image
+COPY src ./src/
+COPY flows ./flows/
+COPY scripts ./scripts/
+
+# Install the project
+RUN uv pip install -e .
+
+# Runtime stage with slim image
+FROM python:3.13-slim-bookworm
+
+WORKDIR /app
+
+# Copy Python packages from builder stage
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code to runtime stage
+COPY --from=builder /app/src ./src/
+COPY --from=builder /app/flows ./flows/
+COPY --from=builder /app/scripts ./scripts/
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
-# Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and stderr streams are sent straight to terminal (e.g. your container log) without being first buffered and that you can see the output of your application (e.g. django logs) in real time.
+# Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and
 ENV PYTHONUNBUFFERED=1
 # Example of a segmentation fault on Linux with and without enabling the fault handler:
 #
@@ -23,15 +53,3 @@ ENV PYTHONUNBUFFERED=1
 #   File "<stdin>", line 1 in <module>
 # Segmentation fault
 ENV PYTHONFAULTHANDLER=1
-
-# Set up environment
-COPY ./poetry.lock ./pyproject.toml ./
-RUN poetry config virtualenvs.create false
-RUN poetry install --no-root --no-interaction --with transformers --without dev
-
-# Set up package
-COPY ./flows ./flows/
-COPY ./src ./src/
-COPY ./scripts ./scripts
-COPY ./static_sites ./static_sites/
-RUN poetry install --no-interaction --only-root

@@ -38,7 +38,6 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.aggregate import Config as AggregateInferenceResultsConfig
-from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -325,8 +324,12 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_bucket_documents_b(mock_s3_client, mock_bucket_b):
-    fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
+def mock_bucket_containing_some_sabin_documents(mock_s3_client, mock_bucket):
+    fixture_files = [
+        "PDF.document.0.1.json",
+        "HTML.document.0.1.json",
+        "Sabin.document.16944.17490.json",
+    ]
     for file_name in fixture_files:
         data = load_fixture(file_name)
         body = BytesIO(data.encode("utf-8"))
@@ -861,7 +864,7 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
 @asynccontextmanager
 async def s3_block_context():
     """Context manager for creating and cleaning up S3 blocks."""
-    bucket_name = S3_BLOCK_RESULTS_CACHE.replace("s3-bucket/", "")
+    bucket_name = f"cpr-{os.environ['AWS_ENV']}-prefect-results-cache"
 
     test_block = S3Bucket(bucket_name=bucket_name)
 

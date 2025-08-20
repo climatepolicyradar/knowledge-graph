@@ -102,13 +102,17 @@ In the longer term, we expect the graph to be a useful artefact in its own right
 * Install [Git LFS](https://git-lfs.com)
 * Start Docker (Desktop) locally and follow instructions in [Vespa README.md](./tests/local_vespa/README.md)
 
-To run the tests and exclude known problematic tests in the CI environment run
+To run the tests
 
-``just test -v -m "'not flaky_on_ci and not transformers'" ``
+`just test -v`
+
+If you experience test failures for target transformer tests in [test_targets.py](./tests/test_targets.py) you can exclude them by running
+
+`just test -v -m "'not transformers'"`
 
 ## Pipelines
 
-Within this Knowledge Graph repo we have a full pipeline at `flows/full_pipeline.py:full_pipeline` that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
+Within this Knowledge Graph repo we have a full pipeline at [flows/full_pipeline.py:full_pipeline](./flows/full_pipeline.py) that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
 
 This solution calls inference -> aggregation -> indexing in series for all documents in the run as opposed to running single documents through concurrently. Eg. we wait for all inference jobs to complete before progressing. This was chosen for simplicity and to rely on the concurrency functionality and limits already integrated in to the sub flows / pipelines.
 
@@ -127,3 +131,59 @@ This consists of aggregating (collating) the inference results for a document fr
 3. Indexing
 
 This consists of indexing the spans identified from inference in to our passage index's concepts field and concept counts to our family index within our vespa database.
+
+## Deployment and flows with Prefect
+
+Prefect Deployments are defined in [deployments.py](./deployments.py)
+
+### Monitoring Deployment status
+
+The [Prefect Dashboard shows all deployments, flows and runs](https://app.prefect.cloud/account/4b1558a0-3c61-4849-8b18-3e97e0516d78/workspace/1753b4f0-6221-4f6a-9233-b146518b4545/deployments?g_range={%22type%22:%22span%22,%22seconds%22:-2592000}),
+which you can filter by name and date of last deployment.
+
+The name of the knowlege graph deployments all have the same prefix of `kg-` and they are programmatically generated following the format:
+
+`kg-<flow_name>-<environment>`
+
+**or**
+
+`kg-full-pipeline-<env>`
+
+Flows can be run via in [/flows](./flows)
+
+
+## Scripts
+
+All helper scripts are located in [/scripts directory](./scripts) directory
+
+
+## Classifier training, promotion and deployment 
+
+These are performed via helper scripts run by the [justfile](./justfile) commands. These are currently excecuted manually on a local laptop are are not part of a CI/CD pipeline.
+
+They can be found in the [/scripts directory](./scripts) directory
+
+Here is the implementation of Classifier [training](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/train.py), [promotion](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/promote.py) and [deployment](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/deploy.py) processes.
+
+
+
+## Documentation generation
+
+Can be found in [/docs](./docs)
+
+## Static sites 
+We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
+
+* [Vibe Checker](./static_sites/vibe_check/)
+* [labelling_librarian](./static_sites/labelling_librarian/)
+* [concept_librarian](./static_sites/concept_librarian/)
+
+  These can be created by the `justfile` commands
+
+### Run a static site locally
+
+``just serve-static-site``
+
+### Generate a static site
+
+``just generate-static-site``

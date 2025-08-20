@@ -1,10 +1,11 @@
 import json
 import os
 import tempfile
+import uuid
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import boto3
@@ -12,7 +13,9 @@ import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
 from prefect.client.schemas.objects import FlowRun, State, StateType
-from prefect.testing.utilities import prefect_test_harness
+from prefect.context import FlowRunContext
+from prefect.results import ResultRecord
+from prefect.states import Completed
 
 from flows.inference import (
     BatchInferenceResult,
@@ -21,6 +24,7 @@ from flows.inference import (
     DocumentStem,
     InferenceResult,
     SingleDocumentInferenceResult,
+    _inference_batch_of_documents,
     _stringify,
     deserialise_pydantic_list_from_jsonl,
     deserialise_pydantic_list_with_fallback,
@@ -30,7 +34,7 @@ from flows.inference import (
     get_latest_ingest_documents,
     group_inference_results_into_states,
     inference,
-    inference_batch_of_documents,
+    inference_batch_of_documents_cpu,
     list_bucket_file_stems,
     load_classifier,
     load_document,
@@ -248,44 +252,74 @@ async def test_text_block_inference_without_results(
 
 
 @pytest.mark.asyncio
-@pytest.mark.flaky_on_ci
-async def test_inference(
-    test_config, mock_classifiers_dir, mock_wandb, mock_bucket, mock_bucket_documents
+async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    mock_bucket_containing_some_sabin_documents,
 ):
-    mock_wandb_init, _, _ = mock_wandb
-    doc_ids = [
-        DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    """Test inference flow when creating batches of inference results"""
+    input_doc_ids = [
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_bucket_containing_some_sabin_documents
     ]
-    with prefect_test_harness():
-        filtered_file_stems = await inference(
-            # FIXME: ValueError: `latest` is not allowed
-            classifier_specs=[ClassifierSpec(name="Q788", alias="latest")],
-            document_ids=doc_ids,
+
+    # expect Sabin documents to be filtered out
+    expected_doc_stems = [
+        DocumentStem(Path(doc_file).stem) for doc_file in mock_bucket_documents
+    ]
+    expected_classifier_spec = ClassifierSpec(name="Q788", alias="v13")
+
+    with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
+
+        async def mock_awaitable(*args, **kwargs):
+            # mock the expected List of BatchInferenceResults when map_as_subflow is called
+            return FlowRun(
+                flow_id=uuid.uuid4(),
+                name="mock-run-any-run-count",
+                state=Completed(
+                    data=ResultRecord(
+                        result=BatchInferenceResult(
+                            batch_document_stems=list(expected_doc_stems),
+                            successful_document_stems=list(
+                                expected_doc_stems
+                            ),  # all documents were classified successfully
+                            classifier_name=expected_classifier_spec.name,
+                            classifier_alias=expected_classifier_spec.alias,
+                        )
+                    )
+                ),
+            )
+
+        mock_inference_run_deployment.side_effect = mock_awaitable
+
+        # run the inference flow
+
+        inference_result = await inference(
+            classifier_specs=[expected_classifier_spec],
+            document_ids=input_doc_ids,
             config=test_config,
         )
 
-        assert filtered_file_stems == [DocumentStem(doc_id) for doc_id in doc_ids]
+        mock_inference_run_deployment.assert_called_once()
 
-    mock_wandb_init.assert_called_once_with(
-        entity="test_entity",
-        job_type="concept_inference",
-    )
+        assert type(inference_result) is InferenceResult
 
-    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
+        assert inference_result.batch_inference_results != InferenceResult.failed
 
-    assert sorted(labels) == [
-        "labelled_passages/Q788/latest/HTML.document.0.1.json",
-        "labelled_passages/Q788/latest/PDF.document.0.1.json",
-    ]
+        # Check the document filtering works
+        filtered_file_stems = (
+            inference_result.fully_successfully_classified_document_stems
+        )
+        assert filtered_file_stems == {
+            DocumentStem(doc_id) for doc_id in expected_doc_stems
+        }
 
-    for key in labels:
-        s3 = boto3.client("s3", region_name=test_config.bucket_region)
-        response = s3.get_object(Bucket=test_config.cache_bucket, Key=key)
-        data = json.loads(response["Body"].read().decode("utf-8"))
+        assert inference_result.failed_classifier_specs == []
 
-        # Some spans where identified
-        with_spans = [d for d in data if len(d["spans"]) > 0]
-        assert len(with_spans) > 0
+        assert inference_result.classifier_specs == [expected_classifier_spec]
 
 
 def test_get_latest_ingest_documents(
@@ -500,7 +534,7 @@ def test_group_inference_results_into_states(snapshot):
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents(
+async def test_inference_batch_of_documents_cpu(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -548,7 +582,7 @@ async def test_inference_batch_of_documents(
         ),
     ):
         # Should not raise any exceptions for successful processing
-        result_state = await inference_batch_of_documents(
+        result_state = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
@@ -616,7 +650,7 @@ async def test_inference_batch_of_documents(
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents_with_failures(
+async def test_inference_batch_of_documents_cpu_with_failures(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -642,7 +676,7 @@ async def test_inference_batch_of_documents_with_failures(
     }
 
     with pytest.raises(Fault) as exc_info:
-        _ = await inference_batch_of_documents(
+        _ = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
             classifier_name=classifier_name,
@@ -688,7 +722,7 @@ async def test_inference_batch_of_documents_with_failures(
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents_empty_batch(
+async def test_inference_batch_of_documents_cpu_empty_batch(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -713,7 +747,7 @@ async def test_inference_batch_of_documents_empty_batch(
     }
 
     # Should complete successfully with empty batch
-    _ = await inference_batch_of_documents(
+    _ = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
         classifier_name=classifier_name,
@@ -742,6 +776,81 @@ async def test_inference_batch_of_documents_empty_batch(
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
+
+
+@pytest.mark.asyncio
+async def test__inference_batch_of_documents(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_documents,
+    mock_prefect_s3_block,
+):
+    """Test the inner _inference_batch_of_documents function with mocked flow context."""
+    mock_wandb_init, mock_run, _ = mock_wandb
+    test_config.local_classifier_dir = mock_classifiers_dir
+
+    # Prepare test data - use only the PDF document which has languages field
+    batch = [
+        DocumentStem(Path(mock_bucket_documents[0]).stem)
+    ]  # PDF.document.0.1 has languages
+    classifier_name = "Q788"
+    classifier_alias = "v7"
+    config_json = {
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
+    }
+
+    # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
+    def mock_generate_assets(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-asset-1.json",
+            "s3://dummy-bucket/dummy-asset-2.json",
+        ]
+
+    def mock_generate_asset_deps(config, inferences):
+        return [
+            "s3://dummy-bucket/dummy-dep-1.json",
+            "s3://dummy-bucket/dummy-dep-2.json",
+        ]
+
+    # Still needed since there's an inner function that uses this.
+    mock_flow_run = MagicMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch("flows.inference.generate_assets", side_effect=mock_generate_assets),
+        patch(
+            "flows.inference.generate_asset_deps", side_effect=mock_generate_asset_deps
+        ),
+        patch("flows.inference.get_run_context", return_value=mock_context),
+    ):
+        # Should not raise any exceptions for successful processing
+        result = await _inference_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_name=classifier_name,
+            classifier_alias=classifier_alias,
+        )
+
+    assert isinstance(result, BatchInferenceResult)
+    assert result.batch_document_stems == batch
+    assert result.successful_document_stems == batch
+    assert result.classifier_name == classifier_name
+    assert result.classifier_alias == classifier_alias
+
+    # Verify W&B was initialized
+    mock_wandb_init.assert_called_once_with(
+        entity=test_config.wandb_entity,
+        job_type="concept_inference",
+    )
 
 
 def test_inference_result_all_successful() -> None:
