@@ -96,7 +96,9 @@ visualise-labels id:
 analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id)
 
 build-image:
+    @echo "Building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}..."
     docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+    @echo "Built ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}"
 
 run-image cmd="sh":
     docker run --rm -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} {{cmd}}
