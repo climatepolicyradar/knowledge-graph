@@ -26,7 +26,7 @@ from flows.inference import (
     inference,
 )
 from flows.pipeline_config import (
-    AggregateConfig as AggregationConfig,
+    Config as AggregationConfig,
 )
 from flows.pipeline_config import (
     InferenceConfig as InferenceConfig,
