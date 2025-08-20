@@ -27,6 +27,8 @@ vespa_deploy_schema:
 
 # Feeds some test data into local Vespa instance
 vespa_feed_data:
+	#!/usr/bin/env bash
+	set -e
 	vespa config set target local
 	vespa feed --target local tests/local_vespa/test_documents/search_weights.json
 	# vespa feed --target local tests/local_vespa/test_documents/family_document.json

@@ -4,12 +4,12 @@ schema concept {
         field id type string {
             indexing: attribute | summary | index
         }
-        # E.g. 2025-08-18_11:40
-        field version type string {
+        # E.g. 14696
+        field revision type string {
             indexing: attribute | summary | index
         }
         # E.g. fishing sector
-        field prefered_label type string {
+        field preferred_label type string {
             indexing: attribute | summary | index
         }
         field description type string {
@@ -18,7 +18,6 @@ schema concept {
         field definition type string {
             indexing: attribute | summary
         }
-        field preferred_label type string {}
         field alternative_labels type array<string> {
             indexing: attribute | summary
         }

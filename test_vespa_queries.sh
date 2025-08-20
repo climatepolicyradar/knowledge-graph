@@ -70,12 +70,30 @@ run_query "Get document passage with new schema" \
 # Test concept queries
 echo "=== Concept-Specific Tests ==="
 run_query "Get air pollution concept" \
-    'yql=select * from concept where name contains "air pollution"' \
+    'yql=select * from concept where preferred_label contains "air pollution"' \
     '"q880"'
 
 run_query "Get concept with parents" \
-    'yql=select * from concept where parents contains "q110"' \
+    'yql=select * from concept where subconcept_of contains "q110"' \
     '"q880"'
+
+run_query "Get concept by revision and ID" \
+    'yql=select * from concept where revision contains "1402" and id contains "q880"' \
+    '"q880"'
+
+echo -e "${BLUE}Testing: Get multiple concepts by revision and ID pairs${NC}"
+echo "Query: yql=select * from concept where (id contains \"q880\" and revision contains \"1402\") or (id contains \"q290\" and revision contains \"1099\")"
+result=$(vespa query 'yql=select * from concept where (id contains "q880" and revision contains "1402") or (id contains "q290" and revision contains "1099")' 2>/dev/null || echo "QUERY_FAILED")
+
+if [[ "$result" == "QUERY_FAILED" ]]; then
+    echo -e "${RED}❌ FAILED: Query execution failed${NC}"
+elif echo "$result" | grep -q '"q880"' && echo "$result" | grep -q '"q290"'; then
+    echo -e "${GREEN}✅ PASSED: Found both q880 and q290 in results${NC}"
+else
+    echo -e "${RED}❌ FAILED: Expected both q880 and q290 in results${NC}"
+    echo "Result: $result"
+fi
+echo
 
 # Test model queries
 echo "=== Model-Specific Tests ==="

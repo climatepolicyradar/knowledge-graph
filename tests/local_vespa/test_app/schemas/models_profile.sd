@@ -9,9 +9,15 @@ schema models_profile {
         field name type string {
             indexing: attribute | summary
         }
+
+        struct concept_version {
+            field concept_id type string {}
+            field wikibase_revision_id type string {}
+            field canonical_id type string {}
+        }
         
-        # E.g. <Q990, n2nuerdn>
-        field concepts_versions type map<string, string> {
+        # E.g. <Q990, <Q990, 1610, n2nuerdn>>
+        field concepts_versions type map<string, concept_version> {
             indexing: summary
 
             struct-field key {
