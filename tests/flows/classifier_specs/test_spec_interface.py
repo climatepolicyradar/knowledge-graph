@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
+from scripts.classifier_metadata import DontRunOnEnum
 from scripts.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 
@@ -80,6 +81,9 @@ def test_load_classifier_specs():
         - wikibase_id: Q999
           classifier_id: abcd2345
           wandb_registry_version: v2
+          dont_run_on:
+            - sabin
+            - cpr
     """).lstrip()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -94,3 +98,4 @@ def test_load_classifier_specs():
         assert len(specs) == 3
         assert specs[0].compute_environment.gpu
         assert not specs[1].compute_environment
+        assert specs[2].dont_run_on == [DontRunOnEnum("sabin"), DontRunOnEnum("cpr")]
