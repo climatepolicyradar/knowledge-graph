@@ -95,10 +95,25 @@ visualise-labels id:
 
 analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id)
 
-build-image:
-    @echo "Building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}..."
-    docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
-    @echo "Built ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}"
+build-image platform="":
+    #!/bin/bash
+    set -e
+    COMMIT_SHA=$(git rev-parse --short HEAD)
+    
+    # Set platform - default to current platform if not specified
+    if [ "{{platform}}" = "" ]; then
+        PLATFORM_ARG=""
+        echo "Building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} and ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${COMMIT_SHA} (autodetect platform)..."
+    else
+        PLATFORM_ARG="--platform {{platform}}"
+        echo "Building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} and ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${COMMIT_SHA} for {{platform}}..."
+    fi
+    
+    docker build $PLATFORM_ARG --progress=plain \
+        -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} \
+        -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${COMMIT_SHA} \
+        .
+    echo "Built ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} and ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${COMMIT_SHA}"
 
 run-image cmd="sh":
     docker run --rm -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} {{cmd}}
@@ -107,7 +122,18 @@ ecr-login:
   aws ecr --profile prod get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
 
 push-image:
+    #!/bin/bash
+    set -e
+    COMMIT_SHA=$(git rev-parse --short HEAD)
     docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
+    docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${COMMIT_SHA}
+
+# Clean up Docker to free space
+docker-cleanup:
+    @echo "Cleaning up Docker..."
+    docker system prune -a -f
+    docker builder prune -a -f
+    @echo "Docker cleanup complete"
 
 get-version:
     @grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'
