@@ -248,6 +248,10 @@ class ArgillaSession:
             self._concept_to_dataset_name(concept), workspace=workspace
         )
 
+        # Note: No dataset being found in Argilla is an acceptable scenario during training.
+        # Many of our classifiers are zero-shot classifiers that are only based on data from
+        # the concept store, not Argilla. We currently have evaluation datasets for most
+        # (but not all) of our classifiers, but only have training data for a select few.
         if not dataset:
             return []
 

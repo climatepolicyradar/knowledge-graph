@@ -58,10 +58,10 @@ The training process uses a locally built Docker image with volume mounts to mai
 
 ## Building the Docker Image
 
-First, build the Docker image from the repository root using the `with-aws-cli` multistage build option. This installs the aws cli for use:
+First, build the Docker image from the repository root:
 
 ```bash
-docker build --progress=plain --target with-aws-cli -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+just build-image
 ```
 
 ## Running the Training Container
@@ -98,7 +98,7 @@ docker run \
 Verify AWS CLI is working correctly:
 
 ```bash
-aws s3 ls
+awsv2 s3 ls
 ```
 
 ## Running the Training Script

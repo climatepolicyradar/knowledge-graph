@@ -5,6 +5,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_SYSTEM_PYTHON=1
 
+# Install the aws cli at v2 to assist with training classifiers within the docker container.
+RUN pip3 install awscliv2
+
 WORKDIR /app
 
 # This allows the dependencies of the project (which do not change
@@ -53,14 +56,3 @@ ENV PYTHONUNBUFFERED=1
 #   File "<stdin>", line 1 in <module>
 # Segmentation fault
 ENV PYTHONFAULTHANDLER=1
-
-# Conditionally install aws-cli by providing the --target flag to docker build
-FROM builder AS with-aws-cli
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
-    && unzip awscliv2.zip \
-    && ./aws/install \
-    && rm -rf awscliv2.zip aws
-
-
-FROM builder AS final
-RUN echo "no-op" 
