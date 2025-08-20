@@ -151,11 +151,23 @@ The name of the knowlege graph deployments all have the same prefix of `kg-` and
 
 Flows can be run via in [/flows](./flows)
 
-# Scripts
 
-Scripts which support [justfile](./justfile) commands can be found in their own [/scripts directory](./scripts)
+## Scripts
 
-# Documentation generation
+All helper scripts are located in [/scripts directory](./scripts) directory
+
+
+## Classifier training, promotion and deployment 
+
+These are performed via helper scripts run by the [justfile](./justfile) commands. These are currently excecuted manually on a local laptop are are not part of a CI/CD pipeline.
+
+They can be found in the [/scripts directory](./scripts) directory
+
+Here is the implementation of Classifier [training](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/train.py), [promotion](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/promote.py) and [deployment](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/deploy.py) processes.
+
+
+
+## Documentation generation
 
 Can be found in [/docs](./docs)
 
