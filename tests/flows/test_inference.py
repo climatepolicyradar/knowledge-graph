@@ -14,7 +14,6 @@ from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext
-from prefect.results import ResultRecord
 from prefect.states import Completed
 
 from flows.inference import (
@@ -44,9 +43,11 @@ from flows.inference import (
     store_labels,
     text_block_inference,
 )
-from flows.utils import Fault
+from flows.utils import Fault, JsonDict
+from src.identifiers import ClassifierID, WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+from src.version import Version
 
 
 def helper_list_labels_in_bucket(test_config, bucket_name):
@@ -111,8 +112,15 @@ async def test_load_classifier__existing_classifier(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
     _, mock_run, _ = mock_wandb
+
     classifier = await load_classifier(
-        mock_run, test_config, local_classifier_id, alias="latest"
+        mock_run,
+        test_config,
+        ClassifierSpec(
+            wikibase_id=local_classifier_id,
+            classifier_id=ClassifierID.generate(local_classifier_id, "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
     assert local_classifier_id == classifier.concept.wikibase_id
 
@@ -121,7 +129,7 @@ def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
     _, mock_run, _ = mock_wandb
     classifier_id = "Qtest"
     _ = download_classifier_from_wandb_to_local(
-        mock_run, test_config, classifier_id, alias="latest"
+        mock_run, test_config, classifier_id, wandb_registry_version=Version("v1")
     )
 
 
@@ -190,8 +198,11 @@ async def test_store_labels(test_config, mock_bucket, snapshot):
             SingleDocumentInferenceResult(
                 labelled_passages=labels,
                 document_stem=DocumentStem("TEST.DOC.0.1"),
-                classifier_name="Q9081",
-                classifier_alias="v3",
+                classifier_spec=ClassifierSpec(
+                    wikibase_id=WikibaseID("Q9081"),
+                    classifier_id=ClassifierID.generate("Q9081", "v3"),
+                    wandb_registry_version=Version("v3"),
+                ),
             )
         ],
     )
@@ -203,7 +214,7 @@ async def test_store_labels(test_config, mock_bucket, snapshot):
     labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/v3/TEST.DOC.0.1.json"
+    assert labels[0] == "labelled_passages/Q9081/2tnmbxaw/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -213,7 +224,13 @@ async def test_text_block_inference_with_results(
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
     classifier = await load_classifier(
-        mock_run, test_config, local_classifier_id, "latest"
+        mock_run,
+        test_config,
+        ClassifierSpec(
+            wikibase_id=local_classifier_id,
+            classifier_id=ClassifierID.generate(local_classifier_id, "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
 
     text = "I love fishing. Aquaculture is the best."
@@ -239,7 +256,13 @@ async def test_text_block_inference_without_results(
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
     classifier = await load_classifier(
-        mock_run, test_config, local_classifier_id, "latest"
+        mock_run,
+        test_config,
+        ClassifierSpec(
+            wikibase_id=local_classifier_id,
+            classifier_id=ClassifierID.generate(local_classifier_id, "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
 
     text = "Rockets are cool. We should build more rockets."
@@ -270,7 +293,11 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
     expected_doc_stems = [
         DocumentStem(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
-    expected_classifier_spec = ClassifierSpec(name="Q788", alias="v13")
+    expected_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v13"),
+        wandb_registry_version=Version("v13"),
+    )
 
     with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
 
@@ -280,15 +307,12 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
                 flow_id=uuid.uuid4(),
                 name="mock-run-any-run-count",
                 state=Completed(
-                    data=ResultRecord(
-                        result=BatchInferenceResult(
-                            batch_document_stems=list(expected_doc_stems),
-                            successful_document_stems=list(
-                                expected_doc_stems
-                            ),  # all documents were classified successfully
-                            classifier_name=expected_classifier_spec.name,
-                            classifier_alias=expected_classifier_spec.alias,
-                        )
+                    data=BatchInferenceResult(
+                        batch_document_stems=list(expected_doc_stems),
+                        successful_document_stems=list(
+                            expected_doc_stems
+                        ),  # all documents were classified successfully
+                        classifier_spec=expected_classifier_spec,
                     )
                 ),
             )
@@ -354,12 +378,18 @@ async def test_run_classifier_inference_on_document(
     # Setup
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier_name = "Q788"
-    classifier_alias = "v5"
+
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v5"),
+        wandb_registry_version=Version("v5"),
+    )
 
     # Load classifier
     classifier = await load_classifier(
-        mock_run, test_config, classifier_name, classifier_alias
+        mock_run,
+        test_config,
+        classifier_spec,
     )
 
     # Run the function on a document with no language
@@ -368,8 +398,7 @@ async def test_run_classifier_inference_on_document(
         result = await run_classifier_inference_on_document(
             config=test_config,
             file_stem=DocumentStem(document_stem),
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            classifier_spec=classifier_spec,
             classifier=classifier,
         )
 
@@ -409,8 +438,7 @@ async def test_run_classifier_inference_on_document(
         result = await run_classifier_inference_on_document(
             config=test_config,
             file_stem=DocumentStem(document_stem),
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            classifier_spec=classifier_spec,
             classifier=classifier,
         )
 
@@ -421,8 +449,7 @@ async def test_run_classifier_inference_on_document(
     result = await run_classifier_inference_on_document(
         config=test_config,
         file_stem=DocumentStem(document_stem),
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+        classifier_spec=classifier_spec,
         classifier=classifier,
     )
 
@@ -439,21 +466,21 @@ async def test_run_classifier_inference_on_document_missing(
     # Setup
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    classifier_name = "Q788"
-    classifier_alias = "latest"
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v1"),
+        wandb_registry_version=Version("v1"),
+    )
 
     # Load classifier
-    classifier = await load_classifier(
-        mock_run, test_config, classifier_name, classifier_alias
-    )
+    classifier = await load_classifier(mock_run, test_config, classifier_spec)
 
     document_stem = DocumentStem("CCLW.executive.8133.0")
     with pytest.raises(ClientError) as excinfo:
         await run_classifier_inference_on_document(
             config=test_config,
             file_stem=document_stem,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            classifier_spec=classifier_spec,
             classifier=classifier,
         )
     assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
@@ -502,14 +529,20 @@ def test_group_inference_results_into_states(snapshot):
         BatchInferenceResult(
             batch_document_stems=batch_document_stems,
             successful_document_stems=batch_document_stems,
-            classifier_name="Q200",
-            classifier_alias="v5",
+            classifier_spec=ClassifierSpec(
+                wikibase_id=WikibaseID("Q200"),
+                classifier_id=ClassifierID.generate("Q200", "v5"),
+                wandb_registry_version=Version("v5"),
+            ),
         ),
         BatchInferenceResult(
             batch_document_stems=batch_document_stems,
             successful_document_stems=batch_document_stems,
-            classifier_name="Q201",
-            classifier_alias="v6",
+            classifier_spec=ClassifierSpec(
+                wikibase_id=WikibaseID("Q201"),
+                classifier_id=ClassifierID.generate("Q201", "v6"),
+                wandb_registry_version=Version("v6"),
+            ),
         ),
     ]
 
@@ -551,16 +584,21 @@ async def test_inference_batch_of_documents_cpu(
     batch = [
         DocumentStem(Path(mock_bucket_documents[0]).stem)
     ]  # PDF.document.0.1 has languages
-    classifier_name = "Q788"
-    classifier_alias = "v7"
-    config_json = {
-        "cache_bucket": test_config.cache_bucket,
-        "wandb_model_registry": test_config.wandb_model_registry,
-        "wandb_entity": test_config.wandb_entity,
-        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_config.aws_env.value,
-        "local_classifier_dir": str(test_config.local_classifier_dir),
-    }
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v7"),
+        wandb_registry_version=Version("v7"),
+    )
+    config_json = JsonDict(
+        {
+            "cache_bucket": test_config.cache_bucket,
+            "wandb_model_registry": test_config.wandb_model_registry,
+            "wandb_entity": test_config.wandb_entity,
+            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+            "aws_env": test_config.aws_env.value,
+            "local_classifier_dir": str(test_config.local_classifier_dir),
+        }
+    )
 
     # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
     def mock_generate_assets(config, inferences):
@@ -585,17 +623,14 @@ async def test_inference_batch_of_documents_cpu(
         result_state = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
-            return_state=True,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
         )
 
     result = await result_state.result()
     assert isinstance(result, BatchInferenceResult)
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
-    assert result.classifier_name == classifier_name
-    assert result.classifier_alias == classifier_alias
+    assert result.classifier_spec == classifier_spec
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -624,9 +659,7 @@ async def test_inference_batch_of_documents_cpu(
 
     # Verify that inference outputs were stored in S3
     s3 = boto3.client("s3", region_name=test_config.bucket_region)
-    expected_key = (
-        f"labelled_passages/{classifier_name}/{classifier_alias}/{batch[0]}.json"
-    )
+    expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.wandb_registry_version}/{batch[0]}.json"
 
     # Check that the S3 object exists
     response = s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
@@ -664,23 +697,27 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 
     # Use non-existent document IDs to trigger failures
     batch = [DocumentStem("NonExistent.doc.1"), DocumentStem("AnotherMissing.doc.2")]
-    classifier_name = "Q788"
-    classifier_alias = "v8"
-    config_json = {
-        "cache_bucket": test_config.cache_bucket,
-        "wandb_model_registry": test_config.wandb_model_registry,
-        "wandb_entity": test_config.wandb_entity,
-        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_config.aws_env.value,
-        "local_classifier_dir": str(test_config.local_classifier_dir),
-    }
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v8"),
+        wandb_registry_version=Version("v8"),
+    )
+    config_json = JsonDict(
+        {
+            "cache_bucket": test_config.cache_bucket,
+            "wandb_model_registry": test_config.wandb_model_registry,
+            "wandb_entity": test_config.wandb_entity,
+            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+            "aws_env": test_config.aws_env.value,
+            "local_classifier_dir": str(test_config.local_classifier_dir),
+        }
+    )
 
     with pytest.raises(Fault) as exc_info:
         _ = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
         )
 
         assert exc_info.value.msg == "Failed to run inference on 2/2 documents."
@@ -713,9 +750,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 
     # Check that no labels were stored for the non-existent documents
     for doc_stem in batch:
-        expected_key = (
-            f"labelled_passages/{classifier_name}/{classifier_alias}/{doc_stem}.json"
-        )
+        expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.wandb_registry_version}/{doc_stem}.json"
         with pytest.raises(ClientError) as exc_info:
             s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
         assert exc_info.value.response["Error"]["Code"] == "404"
@@ -735,23 +770,27 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
     test_config.local_classifier_dir = mock_classifiers_dir
 
     batch: list[DocumentStem] = []
-    classifier_name = "Q788"
-    classifier_alias = "v12"
-    config_json = {
-        "cache_bucket": test_config.cache_bucket,
-        "wandb_model_registry": test_config.wandb_model_registry,
-        "wandb_entity": test_config.wandb_entity,
-        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_config.aws_env.value,
-        "local_classifier_dir": str(test_config.local_classifier_dir),
-    }
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v12"),
+        wandb_registry_version=Version("v12"),
+    )
+    config_json = JsonDict(
+        {
+            "cache_bucket": test_config.cache_bucket,
+            "wandb_model_registry": test_config.wandb_model_registry,
+            "wandb_entity": test_config.wandb_entity,
+            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+            "aws_env": test_config.aws_env.value,
+            "local_classifier_dir": str(test_config.local_classifier_dir),
+        }
+    )
 
     # Should complete successfully with empty batch
     _ = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+        classifier_spec_json=JsonDict(classifier_spec.model_dump()),
     )
 
     # Verify W&B was still initialized
@@ -795,16 +834,21 @@ async def test__inference_batch_of_documents(
     batch = [
         DocumentStem(Path(mock_bucket_documents[0]).stem)
     ]  # PDF.document.0.1 has languages
-    classifier_name = "Q788"
-    classifier_alias = "v7"
-    config_json = {
-        "cache_bucket": test_config.cache_bucket,
-        "wandb_model_registry": test_config.wandb_model_registry,
-        "wandb_entity": test_config.wandb_entity,
-        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_config.aws_env.value,
-        "local_classifier_dir": str(test_config.local_classifier_dir),
-    }
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID.generate("Q788", "v7"),
+        wandb_registry_version=Version("v7"),
+    )
+    config_json = JsonDict(
+        {
+            "cache_bucket": test_config.cache_bucket,
+            "wandb_model_registry": test_config.wandb_model_registry,
+            "wandb_entity": test_config.wandb_entity,
+            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+            "aws_env": test_config.aws_env.value,
+            "local_classifier_dir": str(test_config.local_classifier_dir),
+        }
+    )
 
     # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
     def mock_generate_assets(config, inferences):
@@ -836,15 +880,13 @@ async def test__inference_batch_of_documents(
         result = await _inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
         )
 
     assert isinstance(result, BatchInferenceResult)
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
-    assert result.classifier_name == classifier_name
-    assert result.classifier_alias == classifier_alias
+    assert result.classifier_spec == classifier_spec
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -869,24 +911,38 @@ def test_inference_result_all_successful() -> None:
     all_successful_batch_1 = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_name="Q100",
-        classifier_alias="v1",
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id=ClassifierID.generate("Q100", "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
 
     # Classifier Q101: All documents succeed
     all_successful_batch_2 = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_name="Q101",
-        classifier_alias="v1",
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q101"),
+            classifier_id=ClassifierID.generate("Q101", "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
 
     # Create inference result with both classifiers
     result = InferenceResult(
         document_stems=all_documents,
         classifier_specs=[
-            ClassifierSpec(name="Q100", alias="v1"),
-            ClassifierSpec(name="Q101", alias="v1"),
+            ClassifierSpec(
+                wikibase_id=WikibaseID("Q100"),
+                classifier_id=ClassifierID.generate("Q100", "v1"),
+                wandb_registry_version=Version("v1"),
+            ),
+            ClassifierSpec(
+                wikibase_id=WikibaseID("Q101"),
+                classifier_id=ClassifierID.generate("Q101", "v1"),
+                wandb_registry_version=Version("v1"),
+            ),
         ],
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
     )
@@ -920,8 +976,11 @@ def test_inference_result_partial_failures() -> None:
     all_successful_batch = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_name="Q100",
-        classifier_alias="v1",
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id=ClassifierID.generate("Q100", "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
 
     # Classifier Q101: Only 2 documents succeed
@@ -931,16 +990,27 @@ def test_inference_result_partial_failures() -> None:
             DocumentStem("TEST.executive.3.3"),
             DocumentStem("TEST.executive.4.4"),
         ],
-        classifier_name="Q101",
-        classifier_alias="v1",
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q101"),
+            classifier_id=ClassifierID.generate("Q101", "v1"),
+            wandb_registry_version=Version("v1"),
+        ),
     )
 
     # Create inference result with both classifiers
     result = InferenceResult(
         document_stems=all_documents,
         classifier_specs=[
-            ClassifierSpec(name="Q100", alias="v1"),
-            ClassifierSpec(name="Q101", alias="v1"),
+            ClassifierSpec(
+                wikibase_id=WikibaseID("Q100"),
+                classifier_id=ClassifierID.generate("Q100", "v1"),
+                wandb_registry_version=Version("v1"),
+            ),
+            ClassifierSpec(
+                wikibase_id=WikibaseID("Q101"),
+                classifier_id=ClassifierID.generate("Q101", "v1"),
+                wandb_registry_version=Version("v1"),
+            ),
         ],
         batch_inference_results=[all_successful_batch, partial_success_batch],
     )

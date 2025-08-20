@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import yaml
 from pydantic import BaseModel, Field
@@ -54,9 +54,7 @@ def determine_spec_file_path(aws_env: AwsEnv) -> Path:
     return SPEC_DIR / f"{aws_env}.yaml"
 
 
-def load_classifier_specs(
-    aws_env: AwsEnv, spec_dir: Path = SPEC_DIR
-) -> list[ClassifierSpec]:
+def load_classifier_specs(aws_env: AwsEnv) -> list[ClassifierSpec]:
     """Load classifier specs into python for a given environment."""
     file_path = determine_spec_file_path(aws_env)
 
@@ -68,3 +66,12 @@ def load_classifier_specs(
         classifier_specs.append(ClassifierSpec.model_validate(spec))
 
     return classifier_specs
+
+
+def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
+    if any(
+        classifier_spec.wandb_registry_version == "latest"
+        for classifier_spec in classifier_specs
+    ):
+        raise ValueError("`latest` is not allowed")
+    return None
