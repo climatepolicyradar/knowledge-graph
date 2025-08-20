@@ -99,18 +99,12 @@ def create_deployment(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
         ).value
         default_variables["image"] = f"{image_name}:{version}"
-        image = None
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
         work_queue_name = f"mvp-{aws_env}"
         default_job_variables = JSON.load(
             f"default-job-variables-prefect-mvp-{aws_env}"
         ).value
-        image = DockerImage(
-            name=image_name,
-            tag=version,
-            dockerfile="Dockerfile",
-        )
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
@@ -125,7 +119,11 @@ def create_deployment(
         work_pool_name=work_pool_name,
         work_queue_name=work_queue_name,
         version=version,
-        image=image,
+        image=DockerImage(
+            name=image_name,
+            tag=version,
+            dockerfile="Dockerfile",
+        ),
         job_variables=job_variables,
         tags=tags,
         description=description,
