@@ -29,7 +29,7 @@ from wandb.sdk.wandb_run import Run
 
 
 class Compute(str, enum.Enum):
-    """Source of the classifier model."""
+    """Available compute platforms."""
 
     CPU = "cpu"
     GPU = "gpu"
@@ -1052,11 +1052,16 @@ async def inference(
     # execution results.
     all_successes = []
     for result in all_raw_successes:
-        match compute:
-            case Compute.CPU:
-                all_successes.append(BatchInferenceResult(**result.model_dump()))
-            case Compute.GPU:
-                all_successes.append(result)
+        print(f"Result type: {type(result)}")
+        try:
+            # Try to dump and reconstruct
+            reconstructed = BatchInferenceResult(**result.model_dump())
+            all_successes.append(reconstructed)
+            print("Successfully reconstructed from model_dump")
+        except Exception as e:
+            # If that fails, just append the result directly
+            print(f"Failed to reconstruct: {e}, appending directly")
+            all_successes.append(result)
 
     _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
