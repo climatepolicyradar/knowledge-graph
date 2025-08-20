@@ -159,7 +159,9 @@ def list_bucket_file_stems(config: InferenceConfig) -> list[DocumentStem]:
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    page_iterator = get_bucket_paginator(config, config.document_source_prefix)
+    page_iterator = get_bucket_paginator(
+        config, config.inference_document_source_prefix
+    )
     file_stems = []
 
     for p in page_iterator:
@@ -242,7 +244,9 @@ def determine_file_stems(
 
     requested_document_stems = []
     for doc_id in requested_document_ids:
-        document_key = os.path.join(config.document_source_prefix, f"{doc_id}.json")
+        document_key = os.path.join(
+            config.inference_document_source_prefix, f"{doc_id}.json"
+        )
         requested_document_stems += get_file_stems_for_document_id(
             doc_id, config.cache_bucket, document_key
         )
@@ -331,7 +335,7 @@ def generate_document_source_key(
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
-            config.document_source_prefix,
+            config.inference_document_source_prefix,
             f"{document_stem}.json",
         ),
     )

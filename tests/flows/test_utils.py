@@ -107,7 +107,7 @@ def test_s3_file_exists(test_inference_config, mock_bucket_documents) -> None:
     """Test that we can check if a file exists in an S3 bucket."""
 
     key = os.path.join(
-        test_inference_config.document_source_prefix, "PDF.document.0.1.json"
+        test_inference_config.inference_document_source_prefix, "PDF.document.0.1.json"
     )
 
     s3_file_exists(test_inference_config.cache_bucket, key)
@@ -125,14 +125,14 @@ def test_get_file_stems_for_document_id(
     file_stems = get_file_stems_for_document_id(
         document_id,
         test_inference_config.cache_bucket,
-        test_inference_config.document_source_prefix,
+        test_inference_config.inference_document_source_prefix,
     )
 
     assert file_stems == [document_id]
 
     body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
     key = os.path.join(
-        test_inference_config.document_source_prefix,
+        test_inference_config.inference_document_source_prefix,
         f"{document_id}_translated_en.json",
     )
     s3_client = boto3.client("s3")
@@ -148,7 +148,8 @@ def test_get_file_stems_for_document_id(
         document_id=document_id,
         bucket_name=test_inference_config.cache_bucket,
         document_key=os.path.join(
-            test_inference_config.document_source_prefix, f"{document_id}.json"
+            test_inference_config.inference_document_source_prefix,
+            f"{document_id}.json",
         ),
     )
 
