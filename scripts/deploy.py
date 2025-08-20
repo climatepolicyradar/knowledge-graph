@@ -1,5 +1,6 @@
 """The whole pipeline to deploy classifier models."""
 
+import traceback
 from pathlib import Path
 from typing import Annotated
 
@@ -97,32 +98,47 @@ def new(
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
 ):
     """Deploy new models by training and promoting them."""
+
+    failed_wikibase_ids = []
     for wikibase_id in wikibase_ids:
-        print(f"\nprocessing {wikibase_id}")
+        try:
+            print(f"\nprocessing {wikibase_id}")
 
-        if get:
-            print("getting concept")
-            scripts.get_concept.main(wikibase_id=wikibase_id)
+            if get:
+                print("getting concept")
+                scripts.get_concept.main(wikibase_id=wikibase_id)
 
-        if train:
-            print("training")
-            classifier = scripts.train.main(
-                wikibase_id=wikibase_id,
-                track=True,
-                upload=True,
-                aws_env=aws_env,
-            )
-
-            if promote:
-                print("promoting")
-                scripts.promote.main(
+            if train:
+                print("training")
+                classifier = scripts.train.main(
                     wikibase_id=wikibase_id,
-                    classifier_id=classifier.id,
+                    track=True,
+                    upload=True,
                     aws_env=aws_env,
-                    primary=True,
                 )
 
+                if promote:
+                    print("promoting")
+                    scripts.promote.main(
+                        wikibase_id=wikibase_id,
+                        classifier_id=classifier.id,
+                        aws_env=aws_env,
+                        primary=True,
+                    )
+        except AttributeError as e:
+            print(f"Error getting concept: {e}")
+            failed_wikibase_ids.append((wikibase_id, e))
+            continue
+
     get_all_available_classifiers([aws_env])
+
+    if failed_wikibase_ids:
+        for wikibase_id, e in failed_wikibase_ids:
+            print(f"Failed to deploy classifier for {wikibase_id}:")
+            print("".join(traceback.format_exception(e)))
+            print("-" * 100 + "\n")
+
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

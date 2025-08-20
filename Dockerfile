@@ -5,6 +5,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_SYSTEM_PYTHON=1
 
+# Install the aws cli at v2 to assist with training classifiers within the docker container.
+RUN pip3 install awscliv2
+
 WORKDIR /app
 
 # This allows the dependencies of the project (which do not change

@@ -260,11 +260,11 @@ def main(
             include_recursive_has_subconcept=True,
             include_labels_from_subconcepts=True,
         )
-
+        # To handle redirects where the wikibase_id is overwritten
+        concept.wikibase_id = wikibase_id
         # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
-
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
         )
