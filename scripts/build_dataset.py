@@ -26,7 +26,7 @@ def get_world_bank_region(geo_array):
         if hasattr(geo_array, "tolist"):
             geo_list = geo_array.tolist()
         elif isinstance(geo_array, (list, tuple)):
-            geo_list = list(geo_array)
+            geo_list = geo_array
         else:
             return None
 
@@ -36,7 +36,7 @@ def get_world_bank_region(geo_array):
 
         # Get the first ISO code
         iso_code = geo_list[0]
-        region = iso_to_world_bank_region.get(iso_code, None)
+        region = iso_to_world_bank_region.get(iso_code)
 
         return region
 
