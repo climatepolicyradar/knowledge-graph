@@ -57,7 +57,7 @@ def prefect_test_fixture():
 
 
 @pytest.fixture
-def test_infererence_config():
+def test_inference_config():
     yield InferenceConfig(
         cache_bucket="test_bucket",
         wandb_model_registry="test_org/test_wandb_model_registry",
@@ -274,13 +274,13 @@ async def mock_async_bucket(
 
 @pytest.fixture
 def mock_bucket(
-    mock_aws_creds, mock_s3_client, test_infererence_config
+    mock_aws_creds, mock_s3_client, test_inference_config
 ) -> Generator[str, Any, Any]:
     mock_s3_client.create_bucket(
-        Bucket=test_infererence_config.cache_bucket,
+        Bucket=test_inference_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
-    yield test_infererence_config.cache_bucket
+    yield test_inference_config.cache_bucket
 
 
 @pytest.fixture
@@ -380,9 +380,9 @@ def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_classifiers_dir(test_infererence_config):
+def mock_classifiers_dir(test_inference_config):
     mock_dir = Path(FIXTURE_DIR) / "classifiers"
-    with patch.object(test_infererence_config, "local_classifier_dir", new=mock_dir):
+    with patch.object(test_inference_config, "local_classifier_dir", new=mock_dir):
         yield mock_dir
 
 
