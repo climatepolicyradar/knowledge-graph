@@ -506,13 +506,6 @@ async def async_main():
             f'📄 Generated pages for "{concept}" with {len(concept_predictions)} classifiers'
         )
 
-    # Save the sample dataset to the dist directory for reference
-    try:
-        sample_passages.to_feather(dist_dir / "passages_dataset.feather")
-        console.log("💾 Saved sample dataset to dist directory")
-    except Exception as e:
-        console.log(f"⚠️  Failed to save sample dataset: {e}", style="yellow")
-
     console.log(f"✅ Successfully generated static site in {dist_dir}", style="green")
     console.log(
         "🚀 You can now run the site locally using `just serve-static-site vibe_check`",
