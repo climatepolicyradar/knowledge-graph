@@ -29,7 +29,7 @@ from flows.pipeline_config import (
     Config as AggregationConfig,
 )
 from flows.pipeline_config import (
-    InferenceConfig as InferenceConfig,
+    Config as InferenceConfig,
 )
 from flows.utils import DocumentImportId, Fault
 from scripts.cloud import ClassifierSpec, get_prefect_job_variable
