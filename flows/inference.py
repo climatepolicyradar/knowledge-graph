@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import json
 import os
 from collections import defaultdict
@@ -25,6 +26,14 @@ from prefect.logging import get_run_logger
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
+
+
+class Compute(str, enum.Enum):
+    """Source of the classifier model."""
+
+    CPU = "cpu"
+    GPU = "gpu"
+
 
 from flows.config import Config
 from flows.utils import (
@@ -1010,14 +1019,22 @@ async def inference(
     all_raw_successes = []
     all_raw_failures = []
 
+    compute = Compute.GPU
+
+    # TODO: Get from the classifier spec., or somewhere
+    match compute:
+        case Compute.CPU:
+            fn = inference_batch_of_documents_cpu
+        case Compute.GPU:
+            fn = inference_batch_of_documents_gpu
+
     with Profiler(
         printer=print,
         name="running classifier inference with map_as_sub_flow",
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
             # The typing doesn't pick up the Flow decorator
-            # TODO: CPU or GPU
-            fn=inference_batch_of_documents_gpu,
+            fn=fn,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,
@@ -1029,15 +1046,17 @@ async def inference(
 
     # The type of response when running as a sub deployment is:
     #   <class 'inference.BatchInferenceResult'>
-    # When using Coiled/remote execution, results may have different module paths
-    # so we need to handle both local and remote execution results
+    #
+    # When using Coiled/remote execution, results may have different
+    # module paths so we need to handle both local and remote
+    # execution results.
     all_successes = []
     for result in all_raw_successes:
-        if isinstance(result, BatchInferenceResult):
-            all_successes.append(result)
-        else:
-            # Handle results from remote execution that may have different module paths
-            all_successes.append(BatchInferenceResult(**result.model_dump()))
+        match compute:
+            case Compute.CPU:
+                all_successes.append(BatchInferenceResult(**result.model_dump()))
+            case Compute.GPU:
+                all_successes.append(result)
 
     _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
