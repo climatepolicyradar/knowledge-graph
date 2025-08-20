@@ -9,7 +9,7 @@ default:
 
 # install dependencies and set up the project
 install +OPTS="":
-    uv sync --locked --extra dev --extra transformers {{OPTS}}
+    uv sync --locked --extra dev --extra transformers --extra coiled {{OPTS}}
     uv run pre-commit install
     uv run ipython kernel install --user
 
@@ -38,14 +38,8 @@ lint-all:
     uv run pre-commit run --all-files --show-diff-on-failure
 
 # build a dataset of passages for sampling
-build-dataset:
-    uv run python scripts/build_dataset/01_download_corporate_disclosures.py
-    uv run python scripts/build_dataset/02_download_litigation.py
-    uv run python scripts/build_dataset/03_parse.py
-    uv run python scripts/build_dataset/04_translate.py
-    uv run python scripts/build_dataset/05_add_geography.py
-    uv run python scripts/build_dataset/06_merge.py
-    uv run python scripts/build_dataset/07_create_balanced_dataset_for_sampling.py
+build-dataset n="10000":
+    poetry run python scripts/build_dataset.py --n {{n}}
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
@@ -114,7 +108,7 @@ push-image:
     docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
 
 get-version:
-    uv run python -c "import importlib.metadata; print(importlib.metadata.version('knowledge-graph'))"
+    @grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'
 
 export-env-vars:
 	export $(cat .env | xargs)

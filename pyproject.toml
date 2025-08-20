@@ -1,13 +1,13 @@
 [project]
 name = "knowledge-graph"
-version = "0.10.0"
+version = "0.12.0"
 description = ""
 authors = [
     {name = "CPR Data Science", email = "dsci@climatepolicyradar.org"}
 ]
 license = {text = "Apache 2.0"}
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.13,<3.14"
 
 dependencies = [
     "pydantic-ai>=0.0.53",
@@ -49,6 +49,17 @@ transformers = [
     "transformers[torch]>=4.55.0",
     "scikit-learn>=1.6.1",
     "accelerate>=1.6.0",
+]
+# https://docs.coiled.io/user_guide/software/docker.html
+# https://docs.coiled.io/user_guide/software/package-sync-advanced.html
+coiled = [
+    "cloudpickle>=3.1.1",
+    "coiled>=1.117.0",
+    "dask>=2025.7.0",
+    "distributed>=2025.7.0",
+    "msgpack>=1.1.1",
+    "prefect-coiled>=0.0.4",
+    "tornado>=6.5.1",
 ]
 dev = [
     "azure-pdf-parser @ git+https://github.com/climatepolicyradar/azure-pdf-parser.git@v0.4.3",
