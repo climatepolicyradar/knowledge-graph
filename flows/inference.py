@@ -1029,9 +1029,16 @@ async def inference(
 
     # The type of response when running as a sub deployment is:
     #   <class 'inference.BatchInferenceResult'>
-    all_successes = [
-        BatchInferenceResult(**result.model_dump()) for result in all_raw_successes
-    ]
+    # When using Coiled/remote execution, results may have different module paths
+    # so we need to handle both local and remote execution results
+    all_successes = []
+    for result in all_raw_successes:
+        if isinstance(result, BatchInferenceResult):
+            all_successes.append(result)
+        else:
+            # Handle results from remote execution that may have different module paths
+            all_successes.append(BatchInferenceResult(**result.model_dump()))
+
     _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
