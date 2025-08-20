@@ -10,7 +10,7 @@ from scripts.cloud import AwsEnv, get_prefect_job_variable
 
 # Constant, S3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
-DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
+INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 
@@ -60,7 +60,7 @@ class InferenceConfig:
     """Configuration used across flow runs."""
 
     cache_bucket: Optional[str] = None
-    document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
+    inference_document_source_prefix: str = INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT
     inference_document_target_prefix: str = INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT
     pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
@@ -89,7 +89,7 @@ class InferenceConfig:
         """Convert the config to a JSON serializable dictionary."""
         return {
             "cache_bucket": self.cache_bucket if self.cache_bucket else None,
-            "document_source_prefix": self.document_source_prefix,
+            "document_source_prefix": self.inference_document_source_prefix,
             "document_target_prefix": self.inference_document_target_prefix,
             "pipeline_state_prefix": self.pipeline_state_prefix,
             "bucket_region": self.bucket_region,
