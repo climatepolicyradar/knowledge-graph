@@ -55,12 +55,12 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONFAULTHANDLER=1
 
 # Conditionally install aws-cli by providing the --target flag to docker build
-FROM builder as with-aws-cli
+FROM builder AS with-aws-cli
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \
     && ./aws/install \
     && rm -rf awscliv2.zip aws
 
 
-FROM builder as final
+FROM builder AS final
 RUN echo "no-op" 
