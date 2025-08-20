@@ -11,15 +11,16 @@ from scripts.cloud import AwsEnv, get_prefect_job_variable
 # Constant, S3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
 DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
-DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
+AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 
 
 class AggregateConfig(BaseModel):
     """Shared Configuration used across flow runs."""
 
     cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
-    document_source_prefix: str = Field(
-        default=DOCUMENT_TARGET_PREFIX_DEFAULT,
+    aggregate_document_source_prefix: str = Field(
+        default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="S3 prefix for source documents",
     )
     aggregate_inference_results_prefix: str = Field(
@@ -60,7 +61,7 @@ class InferenceConfig:
 
     cache_bucket: Optional[str] = None
     document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
-    document_target_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
+    inference_document_target_prefix: str = INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT
     pipeline_state_prefix: str = "input"
     bucket_region: str = "eu-west-1"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
@@ -89,7 +90,7 @@ class InferenceConfig:
         return {
             "cache_bucket": self.cache_bucket if self.cache_bucket else None,
             "document_source_prefix": self.document_source_prefix,
-            "document_target_prefix": self.document_target_prefix,
+            "document_target_prefix": self.inference_document_target_prefix,
             "pipeline_state_prefix": self.pipeline_state_prefix,
             "bucket_region": self.bucket_region,
             "local_classifier_dir": self.local_classifier_dir,

@@ -101,7 +101,7 @@ async def get_all_labelled_passages_for_one_document(
     for spec in classifier_specs:
         s3_uri = generate_s3_uri_input(
             cache_bucket=config.cache_bucket_str,
-            document_source_prefix=config.document_source_prefix,
+            document_source_prefix=config.aggregate_document_source_prefix,
             classifier_spec=spec,
             document_stem=document_stem,
         )
@@ -364,7 +364,9 @@ def collect_stems_by_specs(config: AggregateConfig) -> list[DocumentStem]:
     document_stems = []
     specs = parse_spec_file(config.aws_env)
     for spec in specs:
-        prefix = os.path.join(config.document_source_prefix, spec.name, spec.alias)
+        prefix = os.path.join(
+            config.aggregate_document_source_prefix, spec.name, spec.alias
+        )
         document_stems.extend(
             collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
@@ -414,7 +416,7 @@ async def aggregate_batch_of_documents(
             str(
                 generate_s3_uri_input(
                     cache_bucket=config.cache_bucket_str,
-                    document_source_prefix=config.document_source_prefix,
+                    document_source_prefix=config.aggregate_document_source_prefix,
                     classifier_spec=spec,
                     document_stem=document_stem,
                 )
@@ -481,7 +483,7 @@ async def aggregate(
     if not document_stems:
         print(
             "no document stems provided, collecting all available from s3 under prefix: "
-            + f"{config.document_source_prefix}"
+            + f"{config.aggregate_document_source_prefix}"
         )
         document_stems = collect_stems_by_specs(config)
 

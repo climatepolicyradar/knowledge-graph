@@ -55,13 +55,13 @@ def validate_aggregation_inference_configs(
             + f"{inference_config.cache_bucket}"
         )
     if (
-        aggregation_config.document_source_prefix
-        != inference_config.document_target_prefix
+        aggregation_config.aggregate_document_source_prefix
+        != inference_config.inference_document_target_prefix
     ):
         raise ValueError(
             "Inference target prefix does not match aggregation source prefix: "
-            + f"{inference_config.document_target_prefix} != "
-            + f"{aggregation_config.document_source_prefix}"
+            + f"{inference_config.inference_document_target_prefix} != "
+            + f"{aggregation_config.aggregate_document_source_prefix}"
         )
     if aggregation_config.bucket_region != inference_config.bucket_region:
         raise ValueError(

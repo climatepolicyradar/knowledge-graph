@@ -431,7 +431,7 @@ def generate_s3_uri_output(
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
-            config.document_target_prefix,
+            config.inference_document_target_prefix,
             inference.classifier_name,
             inference.classifier_alias,
             f"{inference.document_stem}.json",

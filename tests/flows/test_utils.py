@@ -103,37 +103,42 @@ def test_iterate_batch(data, expected_lengths):
         assert len(batch) == expected
 
 
-def test_s3_file_exists(test_config, mock_bucket_documents) -> None:
+def test_s3_file_exists(test_infererence_config, mock_bucket_documents) -> None:
     """Test that we can check if a file exists in an S3 bucket."""
 
-    key = os.path.join(test_config.document_source_prefix, "PDF.document.0.1.json")
+    key = os.path.join(
+        test_infererence_config.document_source_prefix, "PDF.document.0.1.json"
+    )
 
-    s3_file_exists(test_config.cache_bucket, key)
+    s3_file_exists(test_infererence_config.cache_bucket, key)
 
-    assert not s3_file_exists(test_config.cache_bucket, "non_existent_key")
+    assert not s3_file_exists(test_infererence_config.cache_bucket, "non_existent_key")
 
 
-def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> None:
+def test_get_file_stems_for_document_id(
+    test_infererence_config, mock_bucket_documents
+) -> None:
     """Test that we can get the file stems for a document ID."""
 
     document_id = Path(mock_bucket_documents[0]).stem
 
     file_stems = get_file_stems_for_document_id(
         document_id,
-        test_config.cache_bucket,
-        test_config.document_source_prefix,
+        test_infererence_config.cache_bucket,
+        test_infererence_config.document_source_prefix,
     )
 
     assert file_stems == [document_id]
 
     body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
     key = os.path.join(
-        test_config.document_source_prefix, f"{document_id}_translated_en.json"
+        test_infererence_config.document_source_prefix,
+        f"{document_id}_translated_en.json",
     )
     s3_client = boto3.client("s3")
 
     s3_client.put_object(
-        Bucket=test_config.cache_bucket,
+        Bucket=test_infererence_config.cache_bucket,
         Key=key,
         Body=body,
         ContentType="application/json",
@@ -141,16 +146,16 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
 
     file_stems = get_file_stems_for_document_id(
         document_id=document_id,
-        bucket_name=test_config.cache_bucket,
+        bucket_name=test_infererence_config.cache_bucket,
         document_key=os.path.join(
-            test_config.document_source_prefix, f"{document_id}.json"
+            test_infererence_config.document_source_prefix, f"{document_id}.json"
         ),
     )
 
     assert file_stems == [f"{document_id}_translated_en"]
 
 
-def test_collect_file_stems_under_prefix(test_config, mock_bucket) -> None:
+def test_collect_file_stems_under_prefix(test_infererence_config, mock_bucket) -> None:
     """Test that we can collect file stems under a prefix."""
 
     s3_paths = [
@@ -168,10 +173,10 @@ def test_collect_file_stems_under_prefix(test_config, mock_bucket) -> None:
     ]
     s3_client = boto3.client("s3")
     for s3_path in s3_paths:
-        s3_client.put_object(Bucket=test_config.cache_bucket, Key=s3_path)
+        s3_client.put_object(Bucket=test_infererence_config.cache_bucket, Key=s3_path)
 
     file_stems = collect_unique_file_stems_under_prefix(
-        bucket_name=test_config.cache_bucket,
+        bucket_name=test_infererence_config.cache_bucket,
         prefix="test_prefix",
     )
 
@@ -185,7 +190,9 @@ def test_collect_file_stems_under_prefix(test_config, mock_bucket) -> None:
     )
 
 
-def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) -> None:
+def test_get_labelled_passage_paths(
+    test_infererence_config, mock_s3_client, mock_bucket
+) -> None:
     """Test that we can get all document paths from a list of document IDs."""
 
     classifier_spec = ClassifierSpec(name="Q123", alias="v1")
@@ -199,9 +206,9 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
     s3_client = boto3.client("s3")
     for file_name in s3_file_names:
         s3_client.put_object(
-            Bucket=test_config.cache_bucket,
+            Bucket=test_infererence_config.cache_bucket,
             Key=os.path.join(
-                test_config.document_target_prefix,
+                test_infererence_config.inference_document_target_prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
                 file_name,
@@ -214,13 +221,13 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
     document_paths = get_labelled_passage_paths(
         document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
         classifier_specs=[classifier_spec],
-        cache_bucket=test_config.cache_bucket,
-        labelled_passages_prefix=test_config.document_target_prefix,
+        cache_bucket=test_infererence_config.cache_bucket,
+        labelled_passages_prefix=test_infererence_config.inference_document_target_prefix,
     )
     assert sorted(document_paths) == sorted(
         [
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
+            f"s3://{test_infererence_config.cache_bucket}/{test_infererence_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
+            f"s3://{test_infererence_config.cache_bucket}/{test_infererence_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )
 
