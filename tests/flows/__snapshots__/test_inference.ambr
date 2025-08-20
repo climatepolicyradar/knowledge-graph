@@ -34,7 +34,7 @@
 # ---
 # name: test_store_labels[successes]
   list([
-    SingleDocumentInferenceResult(labelled_passages=[LabelledPassage(id='2r7fcnmj', text='This is a test text block')], document_stem='TEST.DOC.0.1', classifier_name='Q9081', classifier_alias='v3'),
+    SingleDocumentInferenceResult(labelled_passages=[LabelledPassage(id='2r7fcnmj', text='This is a test text block')], document_stem='TEST.DOC.0.1', classifier_spec=ClassifierSpec(wikibase_id='Q9081', classifier_id='2tnmbxaw', wandb_registry_version=3, compute_environment=None)),
   ])
 # ---
 # name: test_store_labels[unknown_failures]
