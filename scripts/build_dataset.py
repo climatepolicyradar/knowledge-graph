@@ -31,7 +31,7 @@ def get_world_bank_region(geo_array):
             return None
 
         # Check if we have any elements
-        if not geo_list or len(geo_list) == 0:
+        if not geo_list :
             return None
 
         # Get the first ISO code
