@@ -44,12 +44,32 @@ class Config(BaseModel):
         description="AWS environment",
     )
 
-    pipeline_state_prefix: str = "input"
-    local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
-    wandb_model_registry: str = "wandb-registry-model"
-    wandb_entity: str = "climatepolicyradar"
-    wandb_api_key: Optional[SecretStr] = None
+    pipeline_state_prefix: str = Field(default="input")
+
+    local_classifier_dir: Path = Field(
+        default=Path("data") / "processed" / "classifiers",
+        description="path to classifiers",
+    )
+
+    wandb_model_org: str = Field(
+        default="climatepolicyradar_UZODYJSN66HCQ",
+        description="Weights & Biases organisation for CPR",
+    )
+
+    wandb_model_registry: str = Field(
+        default="wandb-registry-model",
+        description="Weights & Biases model registry for CPR",
+    )
+
+    wandb_entity: str = Field(
+        default="climatepolicyradar",
+        description="Weights & Biases entity login credentials",
+    )
+
+    wandb_api_key: Optional[SecretStr] = Field(
+        default=None,
+        description="Weights & Biases API Key",
+    )
 
     @classmethod
     async def create(cls) -> "Config":
