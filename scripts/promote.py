@@ -35,7 +35,7 @@ def find_artifact_in_registry(
     Find an artifact with the specified alias in the model collection.
 
     This runs through artifacts in the collection and inspects them, checking if they
-    have the id we are looking for, and also inspecting the alias for the aws_env.
+    have the ID we are looking for, and also inspecting the alias for the `aws_env`.
     """
     for art in model_collection.artifacts():
         found_classifier_id, _ = art.source_name.split(":")
@@ -51,9 +51,9 @@ def check_existing_artifact_aliases(
     aws_env: AwsEnv,
 ) -> None:
     """
-    Review current state of the model in the wandb registry.
+    Review current state of the model in the W&B registry.
 
-    This means first checking wether the collection itself exists (/Q123).
+    This means first checking whether the collection itself exists (/Q123).
     Then if found, will look if the artifact already exists within the collection.
     If the artifact exists, will check the aliases to see if there are any conflicts.
 
@@ -168,7 +168,7 @@ def main(
         # Regardless of the promotion, we'll always be using some artifact.
         #
         # This also validates that the classifier exists. It relies on an
-        # artifiact not existing. That is, when trying to `use_artifact`
+        # artifact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
         model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
         artifact_id = f"{model_path}:{aws_env.value}"

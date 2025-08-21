@@ -73,7 +73,7 @@ def test_vespa_search_adapter_from_aws_secrets(
     mock_vespa_credentials,
     tmp_path,
 ) -> None:
-    """Test that we can successfully instantiate the VespaSearchAdpater from ssm params."""
+    """Test that we can successfully instantiate the VespaSearchAdapter from ssm params."""
     vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
         cert_dir=str(tmp_path),
         vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
