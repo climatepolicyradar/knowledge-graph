@@ -35,6 +35,25 @@ just deploy-classifiers sandbox "Q374 Q473"
 
 This is useful when you are already resolved that the trained model will become the new primary.
 
+### Prevent a model from running on specific sources
+
+You can add a source to the classifiers metadata with the following, this will prevent documents with the source from having inference run with this classifier:
+
+```shell
+just classifier_metadata Q123 abcd2345 sandbox --add-dont-run-on sabin
+```
+
+Add and override the current list:
+
+```shell
+just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on --add-dont-run-on sabin --add-dont-run-on gef
+```
+
+Clear the list to allow the classifier to run on anything
+
+```shell
+just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on
+```
 
 ## Training Classifiers in Docker
 

@@ -14,6 +14,7 @@ from scripts.cloud import (
     parse_aws_env,
     throw_not_logged_in,
 )
+from scripts.config import WANDB_ENTITY
 from scripts.utils import ModelPath
 from src.identifiers import ClassifierID, WikibaseID
 
@@ -21,9 +22,7 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 # This magic value was from the W&B webapp.
-ORG_ENTITY = "climatepolicyradar_UZODYJSN66HCQ"
 REGISTRY_NAME = "model"
-ENTITY = "climatepolicyradar"
 JOB_TYPE = "promote_model"
 
 app = typer.Typer()
@@ -165,7 +164,7 @@ def main(
     log.info(f"Using model collection: {target_path}...")
 
     log.info("Initializing Weights & Biases run...")
-    with wandb.init(entity=ENTITY, project=wikibase_id, job_type=JOB_TYPE) as run:
+    with wandb.init(entity=WANDB_ENTITY, project=wikibase_id, job_type=JOB_TYPE) as run:
         # Regardless of the promotion, we'll always be using some artifact.
         #
         # This also validates that the classifier exists. It relies on an
