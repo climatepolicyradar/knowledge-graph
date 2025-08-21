@@ -69,6 +69,7 @@ def test_classifier_metadata(mock_wandb_context, test_case: MetadataTestCase):
         clear_dont_run_on=test_case.clear_dont_run_on,
         add_dont_run_on=test_case.add_dont_run_on,
         aws_env=AwsEnv.labs,
+        update_specs=False,
     )
 
     # Check we updated the classifiers metadata
