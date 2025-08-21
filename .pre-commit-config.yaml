@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-json
       - id: detect-aws-credentials
@@ -10,9 +10,10 @@ repos:
     hooks:
       - id: nbstripout
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.2
+    # Ruff version.
+    rev: v0.12.9
     hooks:
-      - id: ruff
+      - id: ruff-check
         types_or: [ python, pyi, jupyter ]
         args: [ --fix ]
       - id: ruff-format
@@ -27,11 +28,11 @@ repos:
         types: [python]
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.8.5
+    rev: 0.8.12
     hooks:
       - id: uv-lock
   - repo: https://github.com/boidolr/ast-grep-pre-commit
-    rev: 0.39.1
+    rev: 0.39.4
     hooks:
       - id: ast-grep
   - repo: https://github.com/crate-ci/typos
