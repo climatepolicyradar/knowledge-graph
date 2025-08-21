@@ -900,7 +900,7 @@ async def inference_batch_of_documents_cpu(
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     # vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
-    # container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
+    container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
 )
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
