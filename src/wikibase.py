@@ -27,6 +27,8 @@ dotenv.load_dotenv()
 
 T = TypeVar("T")
 MAX_RETRIES = 5
+RETRY_INITIAL_WAIT = 1.0
+RETRY_MAX_WAIT = 60.0
 
 
 def async_to_sync(
@@ -142,7 +144,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(HTTPStatusError),
     )
     async def _login(self):
@@ -201,7 +203,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(HTTPStatusError),
     )
     async def _get_all_redirects(
@@ -244,7 +246,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(HTTPStatusError),
     )
     async def _get_pages(self, extra_params: dict[str, str]) -> list[dict]:
@@ -294,7 +296,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(HTTPStatusError),
     )
     async def _fetch_concept_async(
@@ -450,7 +452,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
@@ -682,7 +684,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
@@ -704,7 +706,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
@@ -726,7 +728,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
@@ -833,7 +835,7 @@ class WikibaseSession:
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=1.0, max=60.0),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
