@@ -10,6 +10,7 @@ import wandb.apis.public.api
 from rich.console import Console
 
 from scripts.cloud import AwsEnv
+from scripts.update_classifier_spec import get_all_available_classifiers
 from scripts.utils import ModelPath
 from src.identifiers import ClassifierID, WikibaseID
 
@@ -71,6 +72,12 @@ def main(
         AwsEnv,
         typer.Option(help="AWS environment the classifier belongs to"),
     ] = AwsEnv.labs,
+    update_specs: Annotated[
+        bool,
+        typer.Option(
+            help="Also update the classifier specs for the environment following changes"
+        ),
+    ] = True,
 ):
     """
     Updates the metadata for a classifier to determine behaviour at inference time.
@@ -101,6 +108,9 @@ def main(
             artifact.metadata["dont_run_on"] = update
 
         artifact.save()
+
+    if update_specs:
+        get_all_available_classifiers([aws_env])
 
 
 if __name__ == "__main__":
