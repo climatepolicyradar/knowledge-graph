@@ -8,13 +8,8 @@ import typer
 import wandb
 import wandb.apis.public.api
 
-from scripts.cloud import (
-    AwsEnv,
-    is_logged_in,
-    parse_aws_env,
-    throw_not_logged_in,
-)
-from scripts.utils import ModelPath
+from src.classifier import ModelPath
+from src.cloud import AwsEnv, is_logged_in, parse_aws_env, throw_not_logged_in
 from src.identifiers import ClassifierID, WikibaseID
 
 log = logging.getLogger(__name__)

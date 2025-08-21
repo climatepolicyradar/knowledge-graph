@@ -28,7 +28,7 @@ from flows.utils import (
     remove_translated_suffix,
     s3_file_exists,
 )
-from scripts.cloud import AwsEnv, ClassifierSpec
+from src.cloud import AwsEnv, ClassifierSpec
 
 
 @pytest.mark.parametrize(

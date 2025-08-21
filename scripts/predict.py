@@ -5,8 +5,7 @@ import typer
 from rich.console import Console
 from rich.progress import track
 
-from scripts.utils import ModelPath, get_local_classifier_path
-from src.classifier import Classifier
+from src.classifier import Classifier, ModelPath, get_local_classifier_path
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier

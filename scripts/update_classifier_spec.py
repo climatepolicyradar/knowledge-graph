@@ -11,7 +11,7 @@ from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     determine_spec_file_path,
 )
-from scripts.cloud import AwsEnv
+from src.cloud import AwsEnv
 from src.identifiers import WikibaseID
 
 load_dotenv()

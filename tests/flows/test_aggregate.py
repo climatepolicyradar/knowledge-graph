@@ -22,7 +22,7 @@ from flows.aggregate import (
     validate_passages_are_same_except_concepts,
 )
 from flows.utils import DocumentStem
-from scripts.cloud import ClassifierSpec, write_spec_file
+from src.cloud import ClassifierSpec, write_spec_file
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 

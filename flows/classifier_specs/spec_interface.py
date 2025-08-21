@@ -4,7 +4,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, Field
 
-from scripts.cloud import AwsEnv
+from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 

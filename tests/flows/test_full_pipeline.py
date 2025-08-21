@@ -25,7 +25,7 @@ from flows.inference import (
     Config as InferenceConfig,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
-from scripts.cloud import AwsEnv, ClassifierSpec
+from src.cloud import AwsEnv, ClassifierSpec
 
 
 def test_validate_aggregation_inference_configs() -> None:

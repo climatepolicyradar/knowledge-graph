@@ -33,7 +33,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.wikibase_to_s3 import wikibase_to_s3
-from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
+from src.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {

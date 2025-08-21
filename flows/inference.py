@@ -44,14 +44,14 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from scripts.cloud import (
+from src.classifier import Classifier
+from src.cloud import (
     AwsEnv,
     ClassifierSpec,
     disallow_latest_alias,
     get_prefect_job_variable,
     parse_spec_file,
 )
-from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 

@@ -30,7 +30,7 @@ from flows.inference import (
 )
 from flows.inference import Config as InferenceConfig
 from flows.utils import DocumentImportId, Fault
-from scripts.cloud import ClassifierSpec, get_prefect_job_variable
+from src.cloud import ClassifierSpec, get_prefect_job_variable
 
 
 def validate_aggregation_inference_configs(
