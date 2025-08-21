@@ -13,6 +13,7 @@ from flows.aggregate import (
 from flows.boundary import (
     DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
 )
+from flows.config import Config
 from flows.index import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
@@ -25,7 +26,6 @@ from flows.inference import (
     InferenceResult,
     inference,
 )
-from flows.pipeline_config import Config
 from flows.utils import DocumentImportId, Fault
 from scripts.cloud import ClassifierSpec, get_prefect_job_variable
 
@@ -90,7 +90,7 @@ async def full_pipeline(
     Args:
         classifier_specs: Classifier specifications to use for inference.
         document_ids: Specific document IDs to process. If None, processes all.
-        config: Configuration for the inference and aggregation stages. If None, creates default.
+        config: Configuration for the inference, aggregation and index flows. If None, creates default.
         inference_use_new_and_updated: Whether to process only new/updated documents.
         inference_batch_size: Number of documents to process in each batch.
         inference_classifier_concurrency_limit: Maximum concurrent classifiers.

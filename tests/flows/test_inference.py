@@ -59,9 +59,9 @@ def helper_list_labels_in_bucket(test_config, bucket_name):
     return labels
 
 
-def test_list_bucket_file_stems(test_pipeline_config, mock_bucket_documents):
+def test_list_bucket_file_stems(test_config, mock_bucket_documents):
     expected_ids = [Path(d).stem for d in mock_bucket_documents]
-    got_ids = list_bucket_file_stems(test_pipeline_config)
+    got_ids = list_bucket_file_stems(test_config)
     assert sorted(expected_ids) == sorted(got_ids)
 
 
@@ -80,9 +80,9 @@ def test_list_bucket_file_stems(test_pipeline_config, mock_bucket_documents):
         (None, ["AF.document.002MMUCR.n0000"], ["AF.document.002MMUCR.n0000"]),
     ],
 )
-def test_determine_file_stems(test_pipeline_config, doc_ids, bucket_ids, expected):
+def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
     got = determine_file_stems(
-        config=test_pipeline_config,
+        config=test_config,
         use_new_and_updated=False,
         requested_document_ids=doc_ids,
         current_bucket_file_stems=bucket_ids,
@@ -90,10 +90,10 @@ def test_determine_file_stems(test_pipeline_config, doc_ids, bucket_ids, expecte
     assert got == expected
 
 
-def test_determine_file_stems__error(test_pipeline_config):
+def test_determine_file_stems__error(test_config):
     with pytest.raises(ValueError):
         _ = determine_file_stems(
-            config=test_pipeline_config,
+            config=test_config,
             use_new_and_updated=False,
             requested_document_ids=[
                 DocumentImportId("AF.document.002MMUCR.n0000"),
@@ -108,27 +108,27 @@ def test_determine_file_stems__error(test_pipeline_config):
 
 @pytest.mark.asyncio
 async def test_load_classifier__existing_classifier(
-    mock_wandb, test_pipeline_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
     _, mock_run, _ = mock_wandb
     classifier = await load_classifier(
-        mock_run, test_pipeline_config, local_classifier_id, alias="latest"
+        mock_run, test_config, local_classifier_id, alias="latest"
     )
     assert local_classifier_id == classifier.concept.wikibase_id
 
 
-def test_download_classifier_from_wandb_to_local(mock_wandb, test_pipeline_config):
+def test_download_classifier_from_wandb_to_local(mock_wandb, test_config):
     _, mock_run, _ = mock_wandb
     classifier_id = "Qtest"
     _ = download_classifier_from_wandb_to_local(
-        mock_run, test_pipeline_config, classifier_id, alias="latest"
+        mock_run, test_config, classifier_id, alias="latest"
     )
 
 
-def test_load_document(test_pipeline_config, mock_bucket_documents):
+def test_load_document(test_config, mock_bucket_documents):
     for doc_file_name in mock_bucket_documents:
         file_stem = Path(doc_file_name).stem
-        doc = load_document(test_pipeline_config, file_stem=file_stem)
+        doc = load_document(test_config, file_stem=file_stem)
         assert file_stem == doc.document_id
 
 
@@ -179,13 +179,13 @@ def test_document_passages__pdf(parser_output_pdf):
 
 
 @pytest.mark.asyncio
-async def test_store_labels(test_pipeline_config, mock_bucket, snapshot):
+async def test_store_labels(test_config, mock_bucket, snapshot):
     text = "This is a test text block"
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
     successes, failures, unknown_failures = await store_labels.fn(
-        test_pipeline_config,
+        test_config,
         [
             SingleDocumentInferenceResult(
                 labelled_passages=labels,
@@ -200,7 +200,7 @@ async def test_store_labels(test_pipeline_config, mock_bucket, snapshot):
     assert failures == snapshot(name="failures")
     assert unknown_failures == snapshot(name="unknown_failures")
 
-    labels = helper_list_labels_in_bucket(test_pipeline_config, mock_bucket)
+    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
 
     assert len(labels) == 1
     assert labels[0] == "labelled_passages/Q9081/v3/TEST.DOC.0.1.json"
@@ -208,12 +208,12 @@ async def test_store_labels(test_pipeline_config, mock_bucket, snapshot):
 
 @pytest.mark.asyncio
 async def test_text_block_inference_with_results(
-    mock_wandb, test_pipeline_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
     _, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
     classifier = await load_classifier(
-        mock_run, test_pipeline_config, local_classifier_id, "latest"
+        mock_run, test_config, local_classifier_id, "latest"
     )
 
     text = "I love fishing. Aquaculture is the best."
@@ -234,12 +234,12 @@ async def test_text_block_inference_with_results(
 
 @pytest.mark.asyncio
 async def test_text_block_inference_without_results(
-    mock_wandb, test_pipeline_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
     _, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
     classifier = await load_classifier(
-        mock_run, test_pipeline_config, local_classifier_id, "latest"
+        mock_run, test_config, local_classifier_id, "latest"
     )
 
     text = "Rockets are cool. We should build more rockets."
@@ -253,7 +253,7 @@ async def test_text_block_inference_without_results(
 
 @pytest.mark.asyncio
 async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
@@ -300,7 +300,7 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         inference_result = await inference(
             classifier_specs=[expected_classifier_spec],
             document_ids=input_doc_ids,
-            config=test_pipeline_config,
+            config=test_config,
         )
 
         mock_inference_run_deployment.assert_called_once()
@@ -323,15 +323,15 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
 
 def test_get_latest_ingest_documents(
-    test_pipeline_config, mock_bucket_new_and_updated_documents_json
+    test_config, mock_bucket_new_and_updated_documents_json
 ):
     _, latest_docs = mock_bucket_new_and_updated_documents_json
-    doc_ids = get_latest_ingest_documents(test_pipeline_config)
+    doc_ids = get_latest_ingest_documents(test_config)
     assert set(doc_ids) == latest_docs
 
 
 def test_get_latest_ingest_documents_no_latest(
-    test_pipeline_config,
+    test_config,
     # Setup the empty bucket
     mock_bucket,
 ):
@@ -339,12 +339,12 @@ def test_get_latest_ingest_documents_no_latest(
         ValueError,
         match="failed to find",
     ):
-        get_latest_ingest_documents(test_pipeline_config)
+        get_latest_ingest_documents(test_config)
 
 
 @pytest.mark.asyncio
 async def test_run_classifier_inference_on_document(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
@@ -353,20 +353,20 @@ async def test_run_classifier_inference_on_document(
 ):
     # Setup
     _, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
     classifier_name = "Q788"
     classifier_alias = "v5"
 
     # Load classifier
     classifier = await load_classifier(
-        mock_run, test_pipeline_config, classifier_name, classifier_alias
+        mock_run, test_config, classifier_name, classifier_alias
     )
 
     # Run the function on a document with no language
     document_stem = Path(mock_bucket_documents[1]).stem
     with pytest.raises(ValueError) as exc_info:
         result = await run_classifier_inference_on_document(
-            config=test_pipeline_config,
+            config=test_config,
             file_stem=DocumentStem(document_stem),
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
@@ -407,7 +407,7 @@ async def test_run_classifier_inference_on_document(
         mock_load_document.return_value = html_document_invalid_text
 
         result = await run_classifier_inference_on_document(
-            config=test_pipeline_config,
+            config=test_config,
             file_stem=DocumentStem(document_stem),
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
@@ -419,7 +419,7 @@ async def test_run_classifier_inference_on_document(
     # Run the function on a document with English language
     document_stem = Path(mock_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
-        config=test_pipeline_config,
+        config=test_config,
         file_stem=DocumentStem(document_stem),
         classifier_name=classifier_name,
         classifier_alias=classifier_alias,
@@ -431,26 +431,26 @@ async def test_run_classifier_inference_on_document(
 
 @pytest.mark.asyncio
 async def test_run_classifier_inference_on_document_missing(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
     classifier_name = "Q788"
     classifier_alias = "latest"
 
     # Load classifier
     classifier = await load_classifier(
-        mock_run, test_pipeline_config, classifier_name, classifier_alias
+        mock_run, test_config, classifier_name, classifier_alias
     )
 
     document_stem = DocumentStem("CCLW.executive.8133.0")
     with pytest.raises(ClientError) as excinfo:
         await run_classifier_inference_on_document(
-            config=test_pipeline_config,
+            config=test_config,
             file_stem=document_stem,
             classifier_name=classifier_name,
             classifier_alias=classifier_alias,
@@ -535,7 +535,7 @@ def test_group_inference_results_into_states(snapshot):
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_cpu(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
@@ -545,7 +545,7 @@ async def test_inference_batch_of_documents_cpu(
 ):
     """Test successful batch processing of documents."""
     mock_wandb_init, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
 
     # Prepare test data - use only the PDF document which has languages field
     batch = [
@@ -554,12 +554,12 @@ async def test_inference_batch_of_documents_cpu(
     classifier_name = "Q788"
     classifier_alias = "v7"
     config_json = {
-        "cache_bucket": test_pipeline_config.cache_bucket,
-        "wandb_model_registry": test_pipeline_config.wandb_model_registry,
-        "wandb_entity": test_pipeline_config.wandb_entity,
-        "wandb_api_key": str(test_pipeline_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_pipeline_config.aws_env.value,
-        "local_classifier_dir": str(test_pipeline_config.local_classifier_dir),
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
     # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
@@ -599,7 +599,7 @@ async def test_inference_batch_of_documents_cpu(
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
-        entity=test_pipeline_config.wandb_entity,
+        entity=test_config.wandb_entity,
         job_type="concept_inference",
     )
 
@@ -623,21 +623,19 @@ async def test_inference_batch_of_documents_cpu(
         assert snapshot == artifact.data
 
     # Verify that inference outputs were stored in S3
-    s3 = boto3.client("s3", region_name=test_pipeline_config.bucket_region)
+    s3 = boto3.client("s3", region_name=test_config.bucket_region)
     expected_key = (
         f"labelled_passages/{classifier_name}/{classifier_alias}/{batch[0]}.json"
     )
 
     # Check that the S3 object exists
-    response = s3.head_object(
-        Bucket=test_pipeline_config.cache_bucket, Key=expected_key
-    )
+    response = s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
     assert response["ContentLength"] > 0, (
         f"Expected S3 object {expected_key} to have content"
     )
 
     # Verify the content of the stored labels
-    response = s3.get_object(Bucket=test_pipeline_config.cache_bucket, Key=expected_key)
+    response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
     jsonl_content = response["Body"].read().decode("utf-8")
 
     # Parse JSONL format - each line is a JSON object
@@ -653,7 +651,7 @@ async def test_inference_batch_of_documents_cpu(
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_cpu_with_failures(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
@@ -662,19 +660,19 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 ):
     """Test batch processing with some document failures."""
     mock_wandb_init, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
 
     # Use non-existent document IDs to trigger failures
     batch = [DocumentStem("NonExistent.doc.1"), DocumentStem("AnotherMissing.doc.2")]
     classifier_name = "Q788"
     classifier_alias = "v8"
     config_json = {
-        "cache_bucket": test_pipeline_config.cache_bucket,
-        "wandb_model_registry": test_pipeline_config.wandb_model_registry,
-        "wandb_entity": test_pipeline_config.wandb_entity,
-        "wandb_api_key": str(test_pipeline_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_pipeline_config.aws_env.value,
-        "local_classifier_dir": str(test_pipeline_config.local_classifier_dir),
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
     with pytest.raises(Fault) as exc_info:
@@ -711,7 +709,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 
     # For failed documents, no S3 files should be created since the documents don't exist
     # The failure happens before store_labels is called
-    s3 = boto3.client("s3", region_name=test_pipeline_config.bucket_region)
+    s3 = boto3.client("s3", region_name=test_config.bucket_region)
 
     # Check that no labels were stored for the non-existent documents
     for doc_stem in batch:
@@ -719,13 +717,13 @@ async def test_inference_batch_of_documents_cpu_with_failures(
             f"labelled_passages/{classifier_name}/{classifier_alias}/{doc_stem}.json"
         )
         with pytest.raises(ClientError) as exc_info:
-            s3.head_object(Bucket=test_pipeline_config.cache_bucket, Key=expected_key)
+            s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
         assert exc_info.value.response["Error"]["Code"] == "404"
 
 
 @pytest.mark.asyncio
 async def test_inference_batch_of_documents_cpu_empty_batch(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
@@ -734,18 +732,18 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
 ):
     """Test batch processing with empty batch."""
     mock_wandb_init, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
 
     batch: list[DocumentStem] = []
     classifier_name = "Q788"
     classifier_alias = "v12"
     config_json = {
-        "cache_bucket": test_pipeline_config.cache_bucket,
-        "wandb_model_registry": test_pipeline_config.wandb_model_registry,
-        "wandb_entity": test_pipeline_config.wandb_entity,
-        "wandb_api_key": str(test_pipeline_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_pipeline_config.aws_env.value,
-        "local_classifier_dir": str(test_pipeline_config.local_classifier_dir),
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
     # Should complete successfully with empty batch
@@ -782,7 +780,7 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
 
 @pytest.mark.asyncio
 async def test__inference_batch_of_documents(
-    test_pipeline_config,
+    test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
@@ -791,7 +789,7 @@ async def test__inference_batch_of_documents(
 ):
     """Test the inner _inference_batch_of_documents function with mocked flow context."""
     mock_wandb_init, mock_run, _ = mock_wandb
-    test_pipeline_config.local_classifier_dir = mock_classifiers_dir
+    test_config.local_classifier_dir = mock_classifiers_dir
 
     # Prepare test data - use only the PDF document which has languages field
     batch = [
@@ -800,12 +798,12 @@ async def test__inference_batch_of_documents(
     classifier_name = "Q788"
     classifier_alias = "v7"
     config_json = {
-        "cache_bucket": test_pipeline_config.cache_bucket,
-        "wandb_model_registry": test_pipeline_config.wandb_model_registry,
-        "wandb_entity": test_pipeline_config.wandb_entity,
-        "wandb_api_key": str(test_pipeline_config.wandb_api_key.get_secret_value()),
-        "aws_env": test_pipeline_config.aws_env.value,
-        "local_classifier_dir": str(test_pipeline_config.local_classifier_dir),
+        "cache_bucket": test_config.cache_bucket,
+        "wandb_model_registry": test_config.wandb_model_registry,
+        "wandb_entity": test_config.wandb_entity,
+        "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
+        "aws_env": test_config.aws_env.value,
+        "local_classifier_dir": str(test_config.local_classifier_dir),
     }
 
     # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
@@ -850,7 +848,7 @@ async def test__inference_batch_of_documents(
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
-        entity=test_pipeline_config.wandb_entity,
+        entity=test_config.wandb_entity,
         job_type="concept_inference",
     )
 

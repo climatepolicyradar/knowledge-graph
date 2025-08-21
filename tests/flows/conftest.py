@@ -37,7 +37,7 @@ from types_aiobotocore_s3.client import S3Client
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
-from flows.pipeline_config import Config
+from flows.config import Config
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -56,7 +56,7 @@ def prefect_test_fixture():
 
 
 @pytest.fixture
-def test_pipeline_config():
+def test_config():
     yield Config(
         cache_bucket="test_bucket",
         wandb_model_registry="test_org/test_wandb_model_registry",
@@ -231,47 +231,45 @@ def local_vespa_search_adapter(
 
 @pytest_asyncio.fixture
 async def mock_async_bucket(
-    mock_aws_creds, mock_s3_async_client, test_pipeline_config
+    mock_aws_creds, mock_s3_async_client, test_config
 ) -> AsyncGenerator[tuple[str, S3Client], None]:
     await mock_s3_async_client.create_bucket(
-        Bucket=test_pipeline_config.cache_bucket,
+        Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
-    yield test_pipeline_config.cache_bucket, mock_s3_async_client
+    yield test_config.cache_bucket, mock_s3_async_client
 
     # Teardown
     try:
         response = await mock_s3_async_client.list_objects_v2(
-            Bucket=test_pipeline_config.cache_bucket
+            Bucket=test_config.cache_bucket
         )
         for obj in response.get("Contents", []):
             try:
                 await mock_s3_async_client.delete_object(
-                    Bucket=test_pipeline_config.cache_bucket, Key=obj["Key"]
+                    Bucket=test_config.cache_bucket, Key=obj["Key"]
                 )
             except Exception as e:
                 print(
                     f"Warning: Failed to delete object {obj['Key']} during teardown: {e}"
                 )
 
-        await mock_s3_async_client.delete_bucket(
-            Bucket=test_pipeline_config.cache_bucket
-        )
+        await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
     except Exception as e:
         print(
-            f"Warning: Failed to clean up bucket {test_pipeline_config.cache_bucket} during teardown: {e}"
+            f"Warning: Failed to clean up bucket {test_config.cache_bucket} during teardown: {e}"
         )
 
 
 @pytest.fixture
 def mock_bucket(
-    mock_aws_creds, mock_s3_client, test_pipeline_config
+    mock_aws_creds, mock_s3_client, test_config
 ) -> Generator[str, Any, Any]:
     mock_s3_client.create_bucket(
-        Bucket=test_pipeline_config.cache_bucket,
+        Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
-    yield test_pipeline_config.cache_bucket
+    yield test_config.cache_bucket
 
 
 @pytest.fixture
@@ -287,9 +285,9 @@ def mock_cdn_bucket(
 
 @pytest.fixture
 def mock_bucket_b(
-    mock_aws_creds, mock_s3_client, test_pipeline_config
+    mock_aws_creds, mock_s3_client, test_config
 ) -> Generator[str, Any, Any]:
-    bucket = test_pipeline_config.cache_bucket + "b"
+    bucket = test_config.cache_bucket + "b"
     mock_s3_client.create_bucket(
         Bucket=bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
@@ -371,9 +369,9 @@ def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_classifiers_dir(test_pipeline_config):
+def mock_classifiers_dir(test_config):
     mock_dir = Path(FIXTURE_DIR) / "classifiers"
-    with patch.object(test_pipeline_config, "local_classifier_dir", new=mock_dir):
+    with patch.object(test_config, "local_classifier_dir", new=mock_dir):
         yield mock_dir
 
 

@@ -23,10 +23,10 @@ from flows.boundary import (
     s3_copy_file,
     s3_object_write_text_async,
 )
+from flows.config import Config
 from flows.inference import (
     deserialise_pydantic_list_with_fallback,
 )
-from flows.pipeline_config import Config
 from flows.utils import (
     DocumentStem,
     S3Uri,
