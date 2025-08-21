@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, SecretStr
 
 from scripts.cloud import AwsEnv, get_prefect_job_variable
 
-# Constant, S3 prefix for the aggregated results
+# Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
 INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
@@ -17,14 +17,14 @@ AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 class Config(BaseModel):
     """Shared Configuration used across flow runs."""
 
-    cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
+    cache_bucket: str | None = Field(default=None, description="s3 bucket for caching")
     aggregate_document_source_prefix: str = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
-        description="S3 prefix for source documents are read from",
+        description="s3 prefix for source documents are read from",
     )
     aggregate_inference_results_prefix: str = Field(
         default=INFERENCE_RESULTS_PREFIX,
-        description="S3 prefix for aggregated inference results are written to",
+        description="s3 prefix for aggregated inference results are written to",
     )
     inference_document_source_prefix: str = Field(
         default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
@@ -37,7 +37,7 @@ class Config(BaseModel):
     )
 
     bucket_region: str = Field(
-        default="eu-west-1", description="AWS region for S3 bucket"
+        default="eu-west-1", description="AWS region for s3 bucket"
     )
     aws_env: AwsEnv = Field(
         default_factory=lambda: AwsEnv(os.environ["AWS_ENV"]),

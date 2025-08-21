@@ -34,7 +34,7 @@ async def inference_with_result_cache(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     use_new_and_updated: bool = False,
-    pipeline_config: Config | None = None,
+    config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
 ) -> State:
@@ -54,7 +54,7 @@ async def inference_with_result_cache(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
         use_new_and_updated=use_new_and_updated,
-        config=pipeline_config,
+        config=config,
         batch_size=batch_size,
         classifier_concurrency_limit=classifier_concurrency_limit,
         return_state=True,
@@ -120,7 +120,7 @@ async def full_pipeline(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
         use_new_and_updated=inference_use_new_and_updated,
-        pipeline_config=config,
+        config=config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
     )
