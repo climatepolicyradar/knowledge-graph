@@ -170,6 +170,7 @@ class ArgillaSession:
         :param kDataset dataset: The Argilla Dataset to convert
         :return list[LabelledPassage]: A list of LabelledPassage objects
         """
+
         return [
             LabelledPassage.from_argilla_record(record, self.client)
             for record in dataset.records
@@ -243,11 +244,18 @@ class ArgillaSession:
         """
         # First, see whether the dataset exists with the name we expect
 
-        dataset = self.client.datasets(  # type: ignore
+        dataset: Dataset | None = self.client.datasets(
             self._concept_to_dataset_name(concept), workspace=workspace
         )
 
-        labelled_passages = self.dataset_to_labelled_passages(dataset)  # type: ignore
+        # Note: No dataset being found in Argilla is an acceptable scenario during training.
+        # Many of our classifiers are zero-shot classifiers that are only based on data from
+        # the concept store, not Argilla. We currently have evaluation datasets for most
+        # (but not all) of our classifiers, but only have training data for a select few.
+        if not dataset:
+            return []
+
+        labelled_passages = self.dataset_to_labelled_passages(dataset)
         if min_timestamp or max_timestamp:
             labelled_passages = self._filter_labelled_passages_by_timestamp(
                 labelled_passages, min_timestamp, max_timestamp
