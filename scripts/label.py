@@ -3,8 +3,8 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from scripts.config import classifier_dir
 from src.classifier import Classifier
+from src.config import classifier_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 

@@ -8,7 +8,7 @@ from prefect import flow, get_run_logger
 from pydantic import SecretStr
 
 from flows.utils import SlackNotify, file_name_from_path
-from scripts.cloud import AwsEnv
+from src.cloud import AwsEnv
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.wikibase import WikibaseSession

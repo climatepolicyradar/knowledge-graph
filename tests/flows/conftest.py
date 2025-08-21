@@ -40,7 +40,7 @@ from vespa.io import VespaQueryResponse
 from flows.config import Config
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
-from scripts.cloud import AwsEnv
+from src.cloud import AwsEnv
 from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage

@@ -35,7 +35,7 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
 )
-from scripts.cloud import (
+from src.cloud import (
     AwsEnv,
     ClassifierSpec,
     parse_spec_file,

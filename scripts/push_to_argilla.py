@@ -8,8 +8,8 @@ from argilla._exceptions._api import ConflictError, UnprocessableEntityError
 from rich.console import Console
 from tqdm.auto import tqdm  # type: ignore
 
-from scripts.config import concept_dir, processed_data_dir
 from src.concept import Concept
+from src.config import concept_dir, processed_data_dir
 from src.identifiers import Identifier, WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.labelling import ArgillaSession

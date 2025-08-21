@@ -5,7 +5,7 @@ import pytest
 import yaml
 from moto import mock_aws
 
-from scripts.cloud import (
+from src.cloud import (
     AwsEnv,
     ClassifierSpec,
     function_to_flow_name,

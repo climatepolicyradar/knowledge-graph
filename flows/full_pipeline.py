@@ -27,7 +27,7 @@ from flows.inference import (
     inference,
 )
 from flows.utils import DocumentImportId, Fault
-from scripts.cloud import ClassifierSpec, get_prefect_job_variable
+from src.cloud import ClassifierSpec, get_prefect_job_variable
 
 
 async def inference_with_result_cache(

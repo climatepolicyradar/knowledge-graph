@@ -19,9 +19,9 @@ import pandas as pd
 import typer
 from typing_extensions import Annotated
 
-from scripts.config import classifier_dir, concept_dir, metrics_dir
 from src.classifier import Classifier
 from src.concept import Concept
+from src.config import classifier_dir, concept_dir, metrics_dir
 from src.labelled_passage import LabelledPassage
 
 app = typer.Typer()

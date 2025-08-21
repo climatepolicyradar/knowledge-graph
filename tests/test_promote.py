@@ -6,11 +6,11 @@ import pytest
 import typer
 from moto import mock_aws
 
-from scripts.cloud import AwsEnv
 from scripts.promote import (
     check_existing_artifact_aliases,
     find_artifact_in_registry,
 )
+from src.cloud import AwsEnv
 from src.identifiers import ClassifierID
 
 

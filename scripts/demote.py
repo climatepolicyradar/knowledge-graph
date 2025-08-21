@@ -8,7 +8,7 @@ import typer
 import wandb
 from rich.logging import RichHandler
 
-from scripts.cloud import (
+from src.cloud import (
     AwsEnv,
     is_logged_in,
     parse_aws_env,

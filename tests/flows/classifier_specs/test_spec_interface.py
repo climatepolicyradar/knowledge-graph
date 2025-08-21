@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
-from scripts.cloud import AwsEnv
+from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 
 

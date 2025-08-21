@@ -32,7 +32,7 @@ from flows.inference import (
 )
 from flows.utils import JsonDict
 from flows.wikibase_to_s3 import wikibase_to_s3
-from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
+from src.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {

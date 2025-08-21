@@ -12,7 +12,7 @@ from rich.progress import (
     track,
 )
 
-from scripts.config import processed_data_dir
+from src.config import processed_data_dir
 from src.neo4j import get_neo4j_session
 from src.wikibase import WikibaseSession
 

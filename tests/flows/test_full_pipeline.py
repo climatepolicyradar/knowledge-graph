@@ -19,7 +19,101 @@ from flows.inference import (
     InferenceResult,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
-from scripts.cloud import ClassifierSpec
+from src.cloud import AwsEnv, ClassifierSpec
+
+
+def test_validate_aggregation_inference_configs() -> None:
+    """Test the validate_aggregation_inference_configs function."""
+
+    config = validate_aggregation_inference_configs(
+        inference_config=InferenceConfig(
+            cache_bucket="test",
+            bucket_region="test",
+            document_target_prefix="test",
+        ),
+        aggregation_config=AggregationConfig(
+            cache_bucket="test",
+            bucket_region="test",
+            document_source_prefix="test",
+        ),
+    )
+    assert config is None
+
+
+@pytest.mark.parametrize(
+    "inference_config, aggregation_config, expected_error",
+    [
+        # Cache bucket mismatch
+        (
+            InferenceConfig(
+                cache_bucket="bucket-does-not-exist",
+                bucket_region="test",
+                document_target_prefix="test",
+            ),
+            AggregationConfig(
+                cache_bucket="test", bucket_region="test", document_source_prefix="test"
+            ),
+            "Cache bucket mismatch",
+        ),
+        # Prefix mismatch
+        (
+            InferenceConfig(
+                cache_bucket="test",
+                bucket_region="test",
+                document_target_prefix="inference_target",
+            ),
+            AggregationConfig(
+                cache_bucket="test",
+                bucket_region="test",
+                document_source_prefix="aggregation_source",
+            ),
+            "Inference target prefix does not match aggregation source prefix",
+        ),
+        # Region mismatch
+        (
+            InferenceConfig(
+                cache_bucket="test",
+                bucket_region="eu-west-1",
+                document_target_prefix="test",
+            ),
+            AggregationConfig(
+                cache_bucket="test",
+                bucket_region="us-east-1",
+                document_source_prefix="test",
+            ),
+            "Bucket region mismatch",
+        ),
+        # AWS env mismatch
+        (
+            InferenceConfig(
+                cache_bucket="test",
+                bucket_region="test",
+                document_target_prefix="test",
+                aws_env=AwsEnv.sandbox,
+            ),
+            AggregationConfig(
+                cache_bucket="test",
+                bucket_region="test",
+                document_source_prefix="test",
+                aws_env=AwsEnv.production,
+            ),
+            "AWS environment mismatch",
+        ),
+    ],
+)
+def test_validate_aggregation_inference_configs_raises_value_error(
+    inference_config: InferenceConfig,
+    aggregation_config: AggregationConfig,
+    expected_error: str,
+) -> None:
+    """Test the validate_aggregation_inference_configs function raises a ValueError."""
+
+    with pytest.raises(ValueError) as e:
+        validate_aggregation_inference_configs(
+            inference_config=inference_config,
+            aggregation_config=aggregation_config,
+        )
+    assert expected_error in str(e.value)
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,39 @@
 import importlib
+from pathlib import Path
+
+from pydantic import BaseModel
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
-from src.identifiers import WikibaseID
+from src.identifiers import ClassifierID, WikibaseID
+
+
+class ModelPath(BaseModel):
+    """Represents the expected path to a model artifact locally or in S3."""
+
+    wikibase_id: WikibaseID
+    classifier_id: ClassifierID
+
+    def __str__(self) -> str:
+        """
+        Return the path to the model artifact.
+
+        e.g. 'Q123/v4prnc54'
+        """
+        return f"{self.wikibase_id}/{self.classifier_id}"
+
+    def __fspath__(self) -> str:
+        """Return the filesystem path representation for use with pathlib."""
+        return str(self)
+
+
+def get_local_classifier_path(target_path: ModelPath, version: str) -> Path:
+    """Returns a path for a classifier file."""
+    from src.config import classifier_dir, model_artifact_name
+
+    return classifier_dir / target_path / version / model_artifact_name
 
 
 def __getattr__(name):
@@ -50,6 +79,8 @@ __all__ = [
     "BertBasedClassifier",  # type: ignore
     "LLMClassifier",  # type: ignore
     "LocalLLMClassifier",  # type: ignore
+    "ModelPath",
+    "get_local_classifier_path",
 ]
 
 

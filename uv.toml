@@ -1,8 +1,0 @@
-[pip]
-# PyTorch CPU-only index for Linux/Windows (non-macOS platforms)
-extra-index-url = ["https://download.pytorch.org/whl/cpu"]
-
-resolution = "highest"
-prerelease = "if-necessary"
-
-compile-bytecode = true
