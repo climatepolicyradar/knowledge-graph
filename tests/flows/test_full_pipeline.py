@@ -10,19 +10,13 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH,
     RunOutputIdentifier,
 )
-from flows.aggregate import Config as AggregationConfig
 from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
-from flows.full_pipeline import (
-    full_pipeline,
-    validate_aggregation_inference_configs,
-)
+from flows.config import Config
+from flows.full_pipeline import full_pipeline
 from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
     BatchInferenceResult,
     InferenceResult,
-)
-from flows.inference import (
-    Config as InferenceConfig,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
 from src.cloud import AwsEnv, ClassifierSpec
@@ -124,10 +118,9 @@ def test_validate_aggregation_inference_configs_raises_value_error(
 
 @pytest.mark.asyncio
 async def test_full_pipeline_no_config_provided(
-    test_config: InferenceConfig,
-    test_aggregate_config: AggregationConfig,
-    aggregate_inference_results_document_stems,
+    test_config: Config,
     mock_run_output_identifier_str,
+    aggregate_inference_results_document_stems,
 ) -> None:
     """Test the flow when no aggregation or inference config is provided - should create default configs."""
 
@@ -146,17 +139,12 @@ async def test_full_pipeline_no_config_provided(
             new_callable=AsyncMock,
         ) as mock_indexing,
         patch(
-            "flows.full_pipeline.InferenceConfig.create",
+            "flows.full_pipeline.Config.create",
             new_callable=AsyncMock,
-        ) as mock_inference_create,
-        patch(
-            "flows.full_pipeline.AggregationConfig.create",
-            new_callable=AsyncMock,
-        ) as mock_aggregate_create,
+        ) as mock_pipeline_config_create,
     ):
         # Setup mocks
-        mock_inference_create.return_value = test_config
-        mock_aggregate_create.return_value = test_aggregate_config
+        mock_pipeline_config_create.return_value = test_config
 
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
@@ -191,13 +179,12 @@ async def test_full_pipeline_no_config_provided(
         await full_pipeline()
 
         # Verify default configs were created
-        mock_inference_create.assert_called_once()
-        mock_aggregate_create.assert_called_once()
+        mock_pipeline_config_create.assert_called_once()
 
         # Verify sub-flows were called with correct parameters
         mock_inference.assert_called_once()
         call_args = mock_inference.call_args
-        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["pipeline_config"] == test_config
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["use_new_and_updated"] is False
@@ -208,7 +195,7 @@ async def test_full_pipeline_no_config_provided(
         assert sorted(call_args.kwargs["document_stems"]) == sorted(
             aggregate_inference_results_document_stems
         )
-        assert call_args.kwargs["config"] == test_aggregate_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
         assert call_args.kwargs["n_batches"] == DEFAULT_N_BATCHES
 
@@ -217,14 +204,13 @@ async def test_full_pipeline_no_config_provided(
         assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
             mock_run_output_identifier_str
         )
-        assert call_args.kwargs["config"] == test_aggregate_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
 
 
 @pytest.mark.asyncio
 async def test_full_pipeline_with_full_config(
     test_config,
-    test_aggregate_config,
     aggregate_inference_results_document_stems,
     mock_run_output_identifier_str,
 ):
@@ -273,8 +259,7 @@ async def test_full_pipeline_with_full_config(
 
         # Run the flow
         await full_pipeline(
-            inference_config=test_config,
-            aggregation_config=test_aggregate_config,
+            config=test_config,
             classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
             document_ids=[
                 DocumentImportId("test.doc.1"),
@@ -304,7 +289,7 @@ async def test_full_pipeline_with_full_config(
             ]
         )
         assert call_args.kwargs["use_new_and_updated"] is True
-        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["pipeline_config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
 
@@ -313,13 +298,13 @@ async def test_full_pipeline_with_full_config(
         assert sorted(call_args.kwargs["document_stems"]) == sorted(
             aggregate_inference_results_document_stems
         )
-        assert call_args.kwargs["config"] == test_aggregate_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
 
         mock_indexing.assert_called_once_with(
             run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
-            config=test_aggregate_config,
+            config=test_config,
             batch_size=200,
             indexer_concurrency_limit=2,
             indexer_document_passages_concurrency_limit=4,
@@ -331,7 +316,6 @@ async def test_full_pipeline_with_full_config(
 @pytest.mark.asyncio
 async def test_full_pipeline_with_inference_failure(
     test_config,
-    test_aggregate_config,
     mock_run_output_identifier_str,
 ):
     """Test the flows handling of inference failures modes."""
@@ -392,8 +376,7 @@ async def test_full_pipeline_with_inference_failure(
 
         # Run the flow expecting aggregation and indexing to run on successful documents.
         await full_pipeline(
-            inference_config=test_config,
-            aggregation_config=test_aggregate_config,
+            config=test_config,
             classifier_specs=[classifier_spec],
             document_ids=document_ids,
             inference_use_new_and_updated=True,
@@ -418,7 +401,7 @@ async def test_full_pipeline_with_inference_failure(
             ]
         )
         assert call_args.kwargs["use_new_and_updated"] is True
-        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["pipeline_config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
 
@@ -427,13 +410,12 @@ async def test_full_pipeline_with_inference_failure(
         assert sorted(call_args.kwargs["document_stems"]) == sorted(
             document_stems_successful
         )
-        assert call_args.kwargs["config"] == test_aggregate_config
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
 
         mock_indexing.assert_called_once_with(
             run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
-            config=test_aggregate_config,
+            config=test_config,
             batch_size=200,
             indexer_concurrency_limit=2,
             indexer_document_passages_concurrency_limit=4,
@@ -452,8 +434,7 @@ async def test_full_pipeline_with_inference_failure(
 
         with pytest.raises(FailedRun, match="Test error"):
             await full_pipeline(
-                inference_config=test_config,
-                aggregation_config=test_aggregate_config,
+                config=test_config,
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
                 inference_use_new_and_updated=True,

@@ -143,7 +143,6 @@ create_deployment(
     description="Run concept classifier inference on a batch of documents with CPU compute",
     extra_tags=["type:sub"],
     gpu=False,
-    flow_variables={},
 )
 
 create_deployment(
@@ -151,7 +150,6 @@ create_deployment(
     description="Run concept classifier inference on a batch of documents with GPU compute",
     extra_tags=["type:sub"],
     gpu=True,
-    flow_variables={},
 )
 
 # Aggregate inference results

@@ -37,8 +37,7 @@ from types_aiobotocore_s3.client import S3Client
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
-from flows.aggregate import Config as AggregateInferenceResultsConfig
-from flows.inference import Config as InferenceConfig
+from flows.config import Config
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from src.cloud import AwsEnv
@@ -58,7 +57,7 @@ def prefect_test_fixture():
 
 @pytest.fixture
 def test_config():
-    yield InferenceConfig(
+    yield Config(
         cache_bucket="test_bucket",
         wandb_model_registry="test_org/test_wandb_model_registry",
         wandb_entity="test_entity",
@@ -75,14 +74,6 @@ def test_wikibase_to_s3_config():
         wikibase_password=SecretStr("test_password"),
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
-    )
-
-
-@pytest.fixture
-def test_aggregate_config():
-    yield AggregateInferenceResultsConfig(
-        cache_bucket="test_bucket",
-        aws_env=AwsEnv.sandbox,
     )
 
 
