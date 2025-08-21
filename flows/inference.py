@@ -408,18 +408,8 @@ def document_passages(
     document: BaseParserOutput,
 ) -> Generator[tuple[str, str], None, None]:
     """Yield the text block irrespective of content type."""
-    match document.document_content_type:
-        case "application/pdf":
-            text_blocks = document.pdf_data.text_blocks  # type: ignore
-        case "text/html":
-            text_blocks = document.html_data.text_blocks  # type: ignore
-        case _:
-            text_blocks = []
-            print(
-                "Unsupported document content type: "
-                f"{document.document_content_type}, for "
-                f"document: {document.document_id}"
-            )
+    text_blocks = document.get_text_blocks()
+
     for text_block in text_blocks:
         if text_block.type not in BLOCKED_BLOCK_TYPES:
             yield _stringify(text_block.text), text_block.text_block_id
