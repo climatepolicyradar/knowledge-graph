@@ -1,9 +1,9 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Any, Optional
 
 from cpr_sdk.ssm import get_aws_ssm_param
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, BeforeValidator, Field, SecretStr
 
 from scripts.cloud import AwsEnv, get_prefect_job_variable
 
@@ -14,10 +14,20 @@ INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 
 
+def ensure_not_none(value: Any) -> Any:
+    if value is None:
+        return False
+    else:
+        return value
+
+
 class Config(BaseModel):
     """Shared Configuration used across flow runs."""
 
-    cache_bucket: str | None = Field(default=None, description="s3 bucket for caching")
+    cache_bucket: Annotated[str, BeforeValidator(ensure_not_none)] = Field(
+        description="s3 bucket for caching"
+    )
+
     aggregate_document_source_prefix: str = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="s3 prefix for source documents are read from",
@@ -44,7 +54,10 @@ class Config(BaseModel):
         description="AWS environment",
     )
 
-    pipeline_state_prefix: str = Field(default="input")
+    pipeline_state_prefix: str = Field(
+        default="input",
+        description="s3 prefix for where new & updated documents from ingestion are located",
+    )
 
     local_classifier_dir: Path = Field(
         default=Path("data") / "processed" / "classifiers",
@@ -74,22 +87,12 @@ class Config(BaseModel):
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
-        config = cls()
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
-            )
+
+        config = cls(
+            cache_bucket=await get_prefect_job_variable("pipeline_cache_bucket_name")
+        )
 
         if not config.wandb_api_key:
             config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
 
         return config
-
-    @property
-    def cache_bucket_str(self) -> str:
-        """Return the cache bucket, raising an error if not set."""
-        if not self.cache_bucket:
-            raise ValueError(
-                "Cache bucket is not set in config, consider calling the `create` method first."
-            )
-        return self.cache_bucket
