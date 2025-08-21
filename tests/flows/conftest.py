@@ -393,7 +393,7 @@ def local_classifier_id(mock_classifiers_dir):
 
 
 @pytest.fixture
-def parser_output():
+def parser_output() -> Generator[BaseParserOutput, None, None]:
     yield BaseParserOutput(
         document_id="test id",
         document_metadata={},
@@ -404,7 +404,8 @@ def parser_output():
 
 
 @pytest.fixture
-def parser_output_html(parser_output):
+def parser_output_html(parser_output) -> Generator[BaseParserOutput, None, None]:
+    parser_output = parser_output.model_copy()
     parser_output.document_content_type = "text/html"
     parser_output.html_data = HTMLData(
         has_valid_text=True,
@@ -419,9 +420,35 @@ def parser_output_html(parser_output):
 
 
 @pytest.fixture
-def parser_output_pdf(parser_output):
+def parser_output_pdf(parser_output) -> Generator[BaseParserOutput, None, None]:
+    parser_output = parser_output.model_copy()
     # When the content type is pdf
     parser_output.document_content_type = "application/pdf"
+    parser_output.html_data = None
+    parser_output.pdf_data = PDFData(
+        page_metadata=[],
+        md5sum="",
+        text_blocks=[
+            PDFTextBlock(
+                text=["test pdf text"],
+                text_block_id="2",
+                page_number=1,
+                coords=[],
+                type=BlockType.TEXT,
+                type_confidence=0.5,
+            )
+        ],
+    )
+    yield parser_output
+
+
+@pytest.fixture
+def parser_output_html_converted_to_pdf(
+    parser_output,
+) -> Generator[BaseParserOutput, None, None]:
+    """A parser output that has been converted from html to pdf."""
+    parser_output = parser_output.model_copy()
+    parser_output.document_content_type = "text/html"
     parser_output.html_data = None
     parser_output.pdf_data = PDFData(
         page_metadata=[],

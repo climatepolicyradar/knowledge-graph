@@ -1058,3 +1058,25 @@ def test_original_format_fallback():
         finally:
             # Clean up
             os.unlink(f.name)
+
+
+def test_document_passages(
+    parser_output_pdf,
+    parser_output_html,
+    parser_output_html_converted_to_pdf,
+) -> None:
+    """Test that the document_passages function works correctly."""
+
+    passages = list(document_passages(parser_output_pdf))
+    assert parser_output_pdf.pdf_data is not None
+    assert len(passages) == len(parser_output_pdf.pdf_data.text_blocks)
+
+    passages = list(document_passages(parser_output_html))
+    assert parser_output_html.html_data is not None
+    assert len(passages) == len(parser_output_html.html_data.text_blocks)
+
+    passages = list(document_passages(parser_output_html_converted_to_pdf))
+    assert parser_output_html_converted_to_pdf.pdf_data is not None
+    assert len(passages) == len(
+        parser_output_html_converted_to_pdf.pdf_data.text_blocks
+    )
