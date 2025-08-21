@@ -493,11 +493,9 @@ async def async_main():
         concept_dir = dist_dir / str(concept_id)
         concept_dir.mkdir(exist_ok=True)
 
-        # Save all JSON files (skip if already saved during generation)
+        # Save all JSON files
         for classifier_id, predictions in concept_predictions.items():
-            json_path = concept_dir / f"{classifier_id}.json"
-            if not json_path.exists():
-                save_predictions_json(concept_dir, classifier_id, predictions)
+            save_predictions_json(concept_dir, classifier_id, predictions)
 
         # Generate HTML files
         generate_concept_html(concept_dir, concept, concept_predictions)
