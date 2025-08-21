@@ -24,3 +24,15 @@ updates:
     directory: /
     schedule:
       interval: monthly
+  - package-ecosystem: "docker"
+    commit-message:
+      prefix: feat
+      include: scope
+    groups:
+      all:
+        applies-to: version-updates
+        patterns:
+          - "*"
+    directory: /
+    schedule:
+      interval: monthly

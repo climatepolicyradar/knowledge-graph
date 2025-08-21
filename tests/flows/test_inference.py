@@ -53,7 +53,7 @@ def helper_list_labels_in_bucket(test_config, bucket_name):
     # Find out what is now in the spans bucket
     s3 = boto3.client("s3", region_name=test_config.bucket_region)
     response = s3.list_objects_v2(
-        Bucket=bucket_name, Prefix=test_config.document_target_prefix
+        Bucket=bucket_name, Prefix=test_config.inference_document_target_prefix
     )
     labels = [c.get("Key") for c in response.get("Contents", [])]
     return labels

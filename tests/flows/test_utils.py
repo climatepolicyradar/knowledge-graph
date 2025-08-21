@@ -106,7 +106,9 @@ def test_iterate_batch(data, expected_lengths):
 def test_s3_file_exists(test_config, mock_bucket_documents) -> None:
     """Test that we can check if a file exists in an S3 bucket."""
 
-    key = os.path.join(test_config.document_source_prefix, "PDF.document.0.1.json")
+    key = os.path.join(
+        test_config.inference_document_source_prefix, "PDF.document.0.1.json"
+    )
 
     s3_file_exists(test_config.cache_bucket, key)
 
@@ -121,14 +123,15 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
     file_stems = get_file_stems_for_document_id(
         document_id,
         test_config.cache_bucket,
-        test_config.document_source_prefix,
+        test_config.inference_document_source_prefix,
     )
 
     assert file_stems == [document_id]
 
     body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
     key = os.path.join(
-        test_config.document_source_prefix, f"{document_id}_translated_en.json"
+        test_config.inference_document_source_prefix,
+        f"{document_id}_translated_en.json",
     )
     s3_client = boto3.client("s3")
 
@@ -143,7 +146,8 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
         document_id=document_id,
         bucket_name=test_config.cache_bucket,
         document_key=os.path.join(
-            test_config.document_source_prefix, f"{document_id}.json"
+            test_config.inference_document_source_prefix,
+            f"{document_id}.json",
         ),
     )
 
@@ -201,7 +205,7 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
         s3_client.put_object(
             Bucket=test_config.cache_bucket,
             Key=os.path.join(
-                test_config.document_target_prefix,
+                test_config.inference_document_target_prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
                 file_name,
@@ -215,12 +219,12 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
         document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
         classifier_specs=[classifier_spec],
         cache_bucket=test_config.cache_bucket,
-        labelled_passages_prefix=test_config.document_target_prefix,
+        labelled_passages_prefix=test_config.inference_document_target_prefix,
     )
     assert sorted(document_paths) == sorted(
         [
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
+            f"s3://{test_config.cache_bucket}/{test_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
+            f"s3://{test_config.cache_bucket}/{test_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )
 
