@@ -27,9 +27,7 @@ logging.basicConfig(
 
 log = logging.getLogger("rich")
 
-ORG_ENTITY = "climatepolicyradar_UZODYJSN66HCQ"
 REGISTRY_NAME = "model"
-ENTITY = "climatepolicyradar"
 JOB_TYPE = "demote_model"
 
 REGION_NAME = "eu-west-1"
