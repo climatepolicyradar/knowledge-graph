@@ -620,9 +620,11 @@ async def map_as_sub_flow(
                             # the return.
                             raise_on_failure=True,
                         )
+                        breakpoint()
                         flow_result: R = (
                             await result_fn() if fn_is_async(fn) else result_fn()
                         )
+                        breakpoint()
                         successes.append(flow_result)
                     else:
                         successes.append(result)
