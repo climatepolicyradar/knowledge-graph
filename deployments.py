@@ -10,11 +10,9 @@ import os
 from typing import Any, ParamSpec, TypeVar
 
 from prefect.blocks.system import JSON
-from prefect.client.schemas.actions import DeploymentScheduleCreate
-from prefect.client.schemas.schedules import construct_schedule
-from prefect.deployments.schedules import create_deployment_schedule_create
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
+from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import (
     aggregate,
@@ -32,6 +30,7 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.utils import JsonDict
 from flows.wikibase_to_s3 import wikibase_to_s3
 from scripts.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -44,22 +43,21 @@ DEFAULT_FLOW_VARIABLES = {
 
 
 def get_schedule_for_env(
-    aws_env: AwsEnv, env_schedules: dict[AwsEnv, str] | None
-) -> list[DeploymentScheduleCreate] | None:
+    aws_env: AwsEnv,
+    env_schedules: dict[AwsEnv, str] | None,
+    env_parameters: dict[AwsEnv, JsonDict],
+) -> Schedule | None:
     """Creates a cron schedule from a env schedule mapping"""
     if not env_schedules:
         return None
 
-    if env_schedules.get(aws_env):
-        return [
-            create_deployment_schedule_create(
-                construct_schedule(
-                    cron=env_schedules.get(aws_env),
-                    timezone="Europe/London",
-                ),
-                active=True,
-            )
-        ]
+    if env_schedule := env_schedules.get(aws_env):
+        return Cron(
+            env_schedule,
+            timezone="Europe/London",
+            active=True,
+            parameters=env_parameters.get(aws_env),
+        )
     else:
         return None
 
@@ -79,9 +77,10 @@ def create_deployment(
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
     env_schedules: dict[AwsEnv, str] | None = None,
     extra_tags: list[str] = [],
+    env_parameters: dict[AwsEnv, JsonDict] = {},
 ) -> None:
     """Create a deployment for the specified flow"""
-    aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
+    aws_env = AwsEnv(os.environ["AWS_ENV"])
     version = importlib.metadata.version(PROJECT_NAME)
     flow_name = flow.name
     docker_registry = os.environ["DOCKER_REGISTRY"]
@@ -89,7 +88,6 @@ def create_deployment(
     image_name = os.path.join(docker_registry, docker_repository)
 
     if gpu:
-        aws_env = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
         if aws_env == AwsEnv.production:
             aws_env_str = AwsEnv.production.name
         else:
@@ -97,19 +95,23 @@ def create_deployment(
 
         work_pool_name = f"coiled-{aws_env_str}"
         work_queue_name = "default"
-        default_variables = JSON.load(
+        default_job_variables = JSON.load(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
         ).value
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
         work_queue_name = f"mvp-{aws_env}"
-        default_variables = JSON.load(
+        default_job_variables = JSON.load(
             f"default-job-variables-prefect-mvp-{aws_env}"
         ).value
 
-    job_variables = {**default_variables, **flow_variables}
+    job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
-    schedule = get_schedule_for_env(aws_env, env_schedules)
+    schedule = get_schedule_for_env(
+        aws_env,
+        env_schedules,
+        env_parameters,
+    )
 
     _ = flow.deploy(
         generate_deployment_name(flow_name, aws_env),
@@ -124,7 +126,7 @@ def create_deployment(
         job_variables=job_variables,
         tags=tags,
         description=description,
-        schedules=schedule,
+        schedule=schedule,
         build=False,
         push=False,
     )
@@ -190,6 +192,27 @@ create_deployment(
     flow=full_pipeline,
     description="Run the full Knowledge Graph Pipeline",
     extra_tags=["type:end_to_end"],
+    env_schedules={
+        # Run it daily, on work days, to validate it works, or to
+        # surface issues.
+        AwsEnv.staging: "0 7 * * MON-THU",
+    },
+    env_parameters={
+        AwsEnv.staging: JsonDict(
+            {
+                "document_ids": [
+                    "AF.document.061MCLAR.n0000_translated_en",
+                    "CCLW.executive.10512.5360",
+                ],
+                "classifier_specs": [
+                    # CPU-based
+                    {"name": "Q708", "alias": "v6"},
+                    # GPU-based
+                    {"name": "Q1651", "alias": "v1"},
+                ],
+            }
+        ),
+    },
 )
 
 # Wikibase
