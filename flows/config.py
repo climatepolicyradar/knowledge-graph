@@ -20,12 +20,22 @@ class Config(BaseModel):
     cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
     aggregate_document_source_prefix: str = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
-        description="S3 prefix for source documents",
+        description="S3 prefix for source documents are read from",
     )
     aggregate_inference_results_prefix: str = Field(
         default=INFERENCE_RESULTS_PREFIX,
-        description="S3 prefix for aggregated inference results",
+        description="S3 prefix for aggregated inference results are written to",
     )
+    inference_document_source_prefix: str = Field(
+        default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
+        description="s3 prefix of documents read as source for inference",
+    )
+
+    inference_document_target_prefix: str = Field(
+        default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
+        description="s3 prefix for where inference targets are written to",
+    )
+
     bucket_region: str = Field(
         default="eu-west-1", description="AWS region for S3 bucket"
     )
@@ -34,8 +44,6 @@ class Config(BaseModel):
         description="AWS environment",
     )
 
-    inference_document_source_prefix: str = INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT
-    inference_document_target_prefix: str = INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT
     pipeline_state_prefix: str = "input"
     local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
     wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
@@ -70,8 +78,10 @@ class Config(BaseModel):
         """Convert the config to a JSON serializable dictionary."""
         return {
             "cache_bucket": self.cache_bucket if self.cache_bucket else None,
-            "document_source_prefix": self.inference_document_source_prefix,
-            "document_target_prefix": self.inference_document_target_prefix,
+            "aggregate_document_source_prefix": self.aggregate_document_source_prefix,
+            "aggregate_inference_results_prefix": self.aggregate_inference_results_prefix,
+            "inference_document_source_prefix": self.inference_document_source_prefix,
+            "inference_document_target_prefix": self.inference_document_target_prefix,
             "pipeline_state_prefix": self.pipeline_state_prefix,
             "bucket_region": self.bucket_region,
             "local_classifier_dir": self.local_classifier_dir,
