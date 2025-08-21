@@ -4,8 +4,8 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, Field
 
-from scripts.classifier_metadata import DontRunOnEnum
 from scripts.cloud import AwsEnv
+from scripts.utils import DontRunOnEnum
 from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 

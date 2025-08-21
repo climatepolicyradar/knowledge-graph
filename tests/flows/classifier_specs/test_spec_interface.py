@@ -8,8 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
-from scripts.classifier_metadata import DontRunOnEnum
 from scripts.cloud import AwsEnv
+from scripts.utils import DontRunOnEnum
 from src.identifiers import ClassifierID, WikibaseID
 
 

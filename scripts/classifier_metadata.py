@@ -1,7 +1,6 @@
 """A script for editing classifier metadata in wandb."""
 
 import logging
-from enum import Enum
 from typing import Annotated
 
 import typer
@@ -11,7 +10,7 @@ from rich.console import Console
 
 from scripts.cloud import AwsEnv
 from scripts.update_classifier_spec import get_all_available_classifiers
-from scripts.utils import ModelPath
+from scripts.utils import DontRunOnEnum, ModelPath
 from src.identifiers import ClassifierID, WikibaseID
 
 log = logging.getLogger(__name__)
@@ -25,24 +24,6 @@ JOB_TYPE = "configure_model"
 
 app = typer.Typer()
 console = Console()
-
-
-class DontRunOnEnum(Enum):
-    """A `source` that will be filtered out in inference."""
-
-    sabin = "sabin"
-    cclw = "cclw"
-    cpr = "cpr"
-    af = "af"
-    cif = "cif"
-    gcf = "gcf"
-    gef = "gef"
-    oep = "oep"
-    unfccc = "unfccc"
-
-    def __str__(self) -> str:
-        """Return a string representation"""
-        return self.value
 
 
 @app.command()
