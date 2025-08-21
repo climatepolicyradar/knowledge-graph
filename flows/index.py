@@ -214,7 +214,7 @@ async def index_document_passages(
 ) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
     aggregated_results_s3_uri = generate_s3_uri_input_document_passages(
-        cache_bucket=config.cache_bucket_str,
+        cache_bucket=config.cache_bucket,
         aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
         run_output_identifier=run_output_identifier,
         document_stem=document_stem,
@@ -627,7 +627,7 @@ async def index_batch_of_documents(
                     document_stem=document_stem,
                 ),
                 asset_deps=generate_asset_deps(
-                    cache_bucket=config.cache_bucket_str,
+                    cache_bucket=config.cache_bucket,
                     aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
                     run_output_identifier=run_output_identifier,
                     document_stem=document_stem,
@@ -726,7 +726,7 @@ async def index(
         )
         collected_document_stems: list[DocumentStem] = (
             collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket_str,
+                bucket_name=config.cache_bucket,
                 prefix=os.path.join(
                     config.aggregate_inference_results_prefix, run_output_identifier
                 ),

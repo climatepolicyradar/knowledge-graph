@@ -100,7 +100,7 @@ async def get_all_labelled_passages_for_one_document(
 
     for spec in classifier_specs:
         s3_uri = generate_s3_uri_input(
-            cache_bucket=config.cache_bucket_str,
+            cache_bucket=config.cache_bucket,
             document_source_prefix=config.aggregate_document_source_prefix,
             classifier_spec=spec,
             document_stem=document_stem,
@@ -251,7 +251,7 @@ async def process_document(
 
             # Write to s3
             s3_uri = generate_s3_uri_output(
-                cache_bucket=config.cache_bucket_str,
+                cache_bucket=config.cache_bucket,
                 aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
@@ -263,7 +263,7 @@ async def process_document(
                 s3,
                 source=s3_uri,
                 target=S3Uri(
-                    bucket=config.cache_bucket_str,
+                    bucket=config.cache_bucket,
                     key=os.path.join(
                         config.aggregate_inference_results_prefix,
                         "latest",
@@ -369,7 +369,7 @@ def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
         )
         document_stems.extend(
             collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket_str,
+                bucket_name=config.cache_bucket,
                 prefix=prefix,
             )
         )
@@ -405,7 +405,7 @@ async def aggregate_batch_of_documents(
         assets: Sequence[str] = [
             str(
                 generate_s3_uri_output(
-                    cache_bucket=config.cache_bucket_str,
+                    cache_bucket=config.cache_bucket,
                     aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
                     run_output_identifier=run_output_identifier,
                     document_stem=document_stem,
@@ -415,7 +415,7 @@ async def aggregate_batch_of_documents(
         asset_deps: list[str] = [
             str(
                 generate_s3_uri_input(
-                    cache_bucket=config.cache_bucket_str,
+                    cache_bucket=config.cache_bucket,
                     document_source_prefix=config.aggregate_document_source_prefix,
                     classifier_spec=spec,
                     document_stem=document_stem,
