@@ -93,23 +93,3 @@ class Config(BaseModel):
                 "Cache bucket is not set in config, consider calling the `create` method first."
             )
         return self.cache_bucket
-
-    def to_json(self) -> dict:
-        """Convert the config to a JSON serializable dictionary."""
-        return {
-            "cache_bucket": self.cache_bucket if self.cache_bucket else None,
-            "aggregate_document_source_prefix": self.aggregate_document_source_prefix,
-            "aggregate_inference_results_prefix": self.aggregate_inference_results_prefix,
-            "inference_document_source_prefix": self.inference_document_source_prefix,
-            "inference_document_target_prefix": self.inference_document_target_prefix,
-            "pipeline_state_prefix": self.pipeline_state_prefix,
-            "bucket_region": self.bucket_region,
-            "local_classifier_dir": self.local_classifier_dir,
-            "wandb_model_org": self.wandb_model_org,
-            "wandb_model_registry": self.wandb_model_registry,
-            "wandb_entity": self.wandb_entity,
-            "wandb_api_key": (
-                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
-            ),
-            "aws_env": self.aws_env,
-        }
