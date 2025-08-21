@@ -13,9 +13,9 @@ from jinja2 import Environment, FileSystemLoader
 from pydantic import ValidationError
 from rich.console import Console
 
-from scripts.config import processed_data_dir
 from src.classifier import Classifier, ClassifierFactory
 from src.concept import Concept
+from src.config import processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession

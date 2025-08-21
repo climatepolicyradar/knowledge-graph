@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from scripts.config import classifier_dir
+from src.config import classifier_dir
 from src.identifiers import ClassifierID, WikibaseID
 
 

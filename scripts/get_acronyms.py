@@ -10,8 +10,8 @@ from pathlib import Path
 import pandas as pd
 from rich.console import Console
 
-from scripts.config import get_git_root
 from src.concept import Concept
+from src.config import get_git_root
 from src.wikibase import WikibaseSession
 
 console = Console()
