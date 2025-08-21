@@ -44,7 +44,7 @@ async def test_index_document_passages(
     mock_bucket_inference_results: dict[str, dict[str, Any]],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
-    test_pipeline_config,
+    test_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
@@ -70,7 +70,7 @@ async def test_index_document_passages(
 
             # Index the aggregated inference results from S3 to Vespa
             await index_document_passages(
-                config=test_pipeline_config,
+                config=test_config,
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
@@ -135,7 +135,7 @@ async def test_index_document_passages__error_handling(
     mock_bucket_inference_results: dict[str, dict[str, Any]],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
-    test_pipeline_config,
+    test_config,
     snapshot,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
@@ -160,7 +160,7 @@ async def test_index_document_passages__error_handling(
                 # Index the aggregated inference results from S3 to Vespa
                 assert snapshot == await index_document_passages(
                     run_output_identifier=run_output_identifier,
-                    config=test_pipeline_config,
+                    config=test_config,
                     document_stem=document_stem,
                     vespa_connection_pool=vespa_connection_pool,
                 )
@@ -177,7 +177,7 @@ async def test_index_batch_of_documents(
     aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
-    test_pipeline_config,
+    test_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
 
@@ -196,7 +196,7 @@ async def test_index_batch_of_documents(
         await index_batch_of_documents(
             run_output_identifier=run_output_identifier,
             document_stems=aggregate_inference_results_document_stems,
-            config_json=test_pipeline_config.model_dump(),
+            config_json=test_config.model_dump(),
         )
 
         # Verify that the final data in vespa matches the expected results
@@ -295,7 +295,7 @@ async def test_index_batch_of_documents__failure(
     aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
-    test_pipeline_config,
+    test_config,
 ) -> None:
     """Test that we handled the exception correctly during passage indexing."""
 
@@ -318,7 +318,7 @@ async def test_index_batch_of_documents__failure(
         with pytest.raises(ValueError) as excinfo:
             await index_batch_of_documents(
                 run_output_identifier=run_output_identifier,
-                config_json=test_pipeline_config.model_dump(),
+                config_json=test_config.model_dump(),
                 document_stems=document_stems,
             )
 
@@ -335,7 +335,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
     mock_bucket_inference_results: dict[str, dict[str, Any]],
     aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
-    test_pipeline_config,
+    test_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated results."""
 
@@ -363,7 +363,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
             await index(
                 run_output_identifier=run_output_identifier,
                 document_stems=aggregate_inference_results_document_stems,
-                config=test_pipeline_config,
+                config=test_config,
                 batch_size=1,
             )
         except ValueError:
@@ -383,7 +383,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
                 call_params["document_stems"][0]
                 in aggregate_inference_results_document_stems
             )
-            assert call_params["config_json"] == test_pipeline_config.model_dump()
+            assert call_params["config_json"] == test_config.model_dump()
 
         # Reset the mock_run_deployment call count
         mock_run_deployment.reset_mock()
@@ -393,7 +393,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
             await index(
                 run_output_identifier=run_output_identifier,
                 document_stems=None,
-                config=test_pipeline_config,
+                config=test_config,
                 batch_size=1,
             )
         except ValueError:
@@ -412,7 +412,7 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
                 call_params["document_stems"][0]
                 in aggregate_inference_results_document_stems
             )
-            assert call_params["config_json"] == test_pipeline_config.model_dump()
+            assert call_params["config_json"] == test_config.model_dump()
 
 
 @pytest.mark.vespa
@@ -426,7 +426,7 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
     mock_run_output_identifier_str: str,
     aggregate_inference_results_document_stems: list[DocumentStem],
     s3_prefix_inference_results: str,
-    test_pipeline_config,
+    test_config,
 ) -> None:
     """Test that run passage level indexing correctly from aggregated restuls."""
 
@@ -445,7 +445,7 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
             await index(
                 run_output_identifier=run_output_identifier,
                 document_stems=document_stems,
-                config=test_pipeline_config,
+                config=test_config,
                 batch_size=1,
             )
 

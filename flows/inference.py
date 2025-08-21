@@ -26,7 +26,7 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
-from flows.pipeline_config import Config
+from flows.config import Config
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
