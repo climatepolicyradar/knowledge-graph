@@ -5,8 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from scripts.classifier_metadata import DontRunOnEnum, main
+from scripts.classifier_metadata import main
 from scripts.cloud import AwsEnv
+from scripts.utils import DontRunOnEnum
 from src.identifiers import ClassifierID, WikibaseID
 
 
