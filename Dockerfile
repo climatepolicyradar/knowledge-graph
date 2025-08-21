@@ -5,8 +5,9 @@ COPY --from=ghcr.io/astral-sh/uv@sha256:f64ad69940b634e75d2e4d799eb5238066c5eeda
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_SYSTEM_PYTHON=1
 
-# Install the aws cli at v2 to assist with training classifiers within the docker container.
-RUN pip3 install awscliv2
+# Install the AWS CLI at v2 to assist with training classifiers within
+# the Docker container.
+RUN uv pip install awscliv2==2.3.1
 
 WORKDIR /app
 
@@ -15,14 +16,6 @@ WORKDIR /app
 # changes very frequently).
 COPY pyproject.toml README.md ./
 RUN uv pip install -r pyproject.toml --extra transformers --extra coiled
-
-# Copy the project into the image
-COPY src ./src/
-COPY flows ./flows/
-COPY scripts ./scripts/
-
-# Install the project
-RUN uv pip install -e .
 
 # Runtime stage with slim image
 FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d13b2fbfb514e20f84f5e386
@@ -33,10 +26,16 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code to runtime stage
-COPY --from=builder /app/src ./src/
-COPY --from=builder /app/flows ./flows/
-COPY --from=builder /app/scripts ./scripts/
+COPY --from=builder /app/pyproject.toml ./
+COPY --from=builder /app/README.md ./
+
+# Copy the project into the image
+COPY src ./src/
+COPY flows ./flows/
+COPY scripts ./scripts/
+
+# Install the project
+RUN uv pip install --system -e .
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
 # Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and
