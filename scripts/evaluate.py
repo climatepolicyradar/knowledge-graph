@@ -90,9 +90,9 @@ def load_classifier_remote(
     os.environ["AWS_PROFILE"] = aws_env
 
     artifact_dir = artifact.download()
-    artifiact_path = Path(artifact_dir) / model_artifact_name
+    artifact_path = Path(artifact_dir) / model_artifact_name
 
-    return Classifier.load(artifiact_path)
+    return Classifier.load(artifact_path)
 
 
 def add_artifact_to_run_lineage_local(

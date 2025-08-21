@@ -130,7 +130,7 @@ async def delete_if_exists(name: str) -> None:
             print("automation doesn't exist already, so nothing to do")
             return None
         else:
-            # It was a real problem, re-raise the excpetion
+            # It was a real problem, re-raise the exception
             raise
 
 
