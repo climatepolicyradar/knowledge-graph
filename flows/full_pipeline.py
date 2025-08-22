@@ -87,7 +87,7 @@ async def full_pipeline(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
         use_new_and_updated=inference_use_new_and_updated,
-        pipeline_config=config,
+        config=config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
         return_state=True,
