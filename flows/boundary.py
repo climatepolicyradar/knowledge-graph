@@ -543,7 +543,7 @@ async def get_document_passages_from_vespa__generator(
     - vespa_connection_pool: The vespa connection pool to use as the query client.
     - continuation_tokens: The tokens used to paginate over the vespa hits.
     - grouping_max: The maximum amount of grouping subquery hits to return at once.
-    - grouping_precision: How much do we want to value accuracy over bandiwdth.
+    - grouping_precision: How much do we want to value accuracy over bandwidth.
     - query_profile: The query profile to use for the query. This is defined in the
         search/query-profiles/ subdirectory of the application package for vespa.
     """

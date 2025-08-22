@@ -521,7 +521,7 @@ class Percentage(
 
     @staticmethod
     def from_lists(r: Sequence[T], t: Sequence[U]) -> "Percentage":
-        """Relative size of 2 lists as a precentage."""
+        """Relative size of 2 lists as a percentage."""
         return Percentage((len(r) / len(t)) * 100.0)
 
 

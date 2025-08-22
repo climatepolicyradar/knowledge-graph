@@ -23,7 +23,7 @@ console = Console()
 
 
 def relevant_spans(hf_spans: list[list], concept_id: WikibaseID | None) -> list[list]:
-    """Filters the spans that are irrelevent for the given concept"""
+    """Filters the spans that are irrelevant for the given concept"""
     concept_to_label_map = {
         "Q1651": {"NZT", "Reduction", "Other", "Conditional"},
         "Q1652": {"NZT", "Reduction"},
