@@ -1,6 +1,8 @@
 ---
 - classifier_id: 8np4shsw
-  wandb_registry_version: 11
+  dont_run_on:
+  - sabin
+  wandb_registry_version: 12
   wikibase_id: Q123
 - classifier_id: 58br2fy7
   wandb_registry_version: 17
