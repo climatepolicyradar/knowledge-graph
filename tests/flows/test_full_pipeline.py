@@ -33,7 +33,7 @@ async def test_full_pipeline_no_config_provided(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference_with_result_cache",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -90,7 +90,7 @@ async def test_full_pipeline_no_config_provided(
         # Verify sub-flows were called with correct parameters
         mock_inference.assert_called_once()
         call_args = mock_inference.call_args
-        assert call_args.kwargs["pipeline_config"] == test_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["use_new_and_updated"] is False
@@ -125,7 +125,7 @@ async def test_full_pipeline_with_full_config(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference_with_result_cache",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -195,7 +195,7 @@ async def test_full_pipeline_with_full_config(
             ]
         )
         assert call_args.kwargs["use_new_and_updated"] is True
-        assert call_args.kwargs["pipeline_config"] == test_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
 
@@ -229,7 +229,7 @@ async def test_full_pipeline_with_inference_failure(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference_with_result_cache",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -307,7 +307,7 @@ async def test_full_pipeline_with_inference_failure(
             ]
         )
         assert call_args.kwargs["use_new_and_updated"] is True
-        assert call_args.kwargs["pipeline_config"] == test_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
 

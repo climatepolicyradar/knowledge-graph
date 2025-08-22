@@ -38,6 +38,7 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.config import Config
+from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -882,7 +883,7 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
 @asynccontextmanager
 async def s3_block_context():
     """Context manager for creating and cleaning up S3 blocks."""
-    bucket_name = f"cpr-{os.environ['AWS_ENV']}-prefect-results-cache"
+    bucket_name = S3_BLOCK_RESULTS_CACHE.replace("s3-bucket/", "")
 
     test_block = S3Bucket(bucket_name=bucket_name)
 
