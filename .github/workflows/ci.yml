@@ -63,7 +63,7 @@ jobs:
           python-version-file: pyproject.toml
 
       - name: Install dependencies
-        run: just install
+        run: just install-transformers
 
       - name: Install latest Vespa CLI
         env:
@@ -77,9 +77,11 @@ jobs:
       - name: Setup local Vespa
         run: just vespa_dev_setup
 
-      - name: Run tests
-        run: just test
+      - name: Run tests excl. Vespa
+        run: just test-without-vespa
 
+      - name: Run tests only Vespa
+        run: just test-with-vespa
 
   deploy_prefect_sandbox:
     name: "Deploy"
