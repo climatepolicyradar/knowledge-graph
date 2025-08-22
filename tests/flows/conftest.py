@@ -709,6 +709,13 @@ def mock_prefect_slack_webhook():
     """Patch the SlackWebhook class to return a mock object."""
     with patch("flows.utils.SlackWebhook") as mock_SlackWebhook:
         mock_prefect_slack_block = MagicMock()
+        mock_client = MagicMock()
+        mock_result = MagicMock()
+        mock_result.status_code = 200
+        mock_result.body = "success"
+
+        mock_client.send.return_value = mock_result
+        mock_prefect_slack_block.get_client.return_value = mock_client
         mock_SlackWebhook.load.return_value = mock_prefect_slack_block
         yield mock_SlackWebhook, mock_prefect_slack_block
 
