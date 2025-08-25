@@ -3,6 +3,11 @@ name = "pyru_rust"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "pyru_rust"
+crate-type = ["cdylib"]
+
 [dependencies]
+pyo3 = { version = "0.25", features = ["extension-module"] }
 regex = "1.11"
 serde_json = "1.0"
