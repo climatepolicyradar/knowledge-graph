@@ -1,7 +1,9 @@
 import json
 import os
 import tempfile
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -12,6 +14,7 @@ import boto3
 import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
+from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext
 from prefect.results import ResultRecord
@@ -45,6 +48,7 @@ from flows.inference import (
     text_block_inference,
 )
 from flows.utils import Fault
+from src.classifier.classifier import Classifier
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -1080,3 +1084,114 @@ def test_document_passages(
     assert len(passages) == len(
         parser_output_html_converted_to_pdf.pdf_data.text_blocks
     )
+
+
+@pytest.mark.asyncio
+async def test_predict_large(
+    local_vespa_search_adapter: VespaSearchAdapter,
+    document_passages_test_data_file_path: str,
+):
+    model_path = Path("data/processed/classifiers/Q763/s3cc4cdt/v0/model.pickle")
+    classifier = Classifier.load(path=model_path)
+
+    print(f"Case sensitive labels: {classifier.case_sensitive_labels}")
+    print(f"Case insensitive labels: {classifier.case_insensitive_labels}")
+    print(f"CS pattern: {classifier.case_sensitive_pattern.pattern}")
+    print(f"CI pattern: {classifier.case_insensitive_pattern.pattern}")
+
+    document_import_id = "CCLW.executive.10014.4470"
+    inference_input_path = (
+        f"cpr-prod-data-pipeline-cache/embeddings_input/{document_import_id}.json"
+    )
+
+    with open(inference_input_path, "r") as f:
+        content = f.read()
+
+    document = BaseParserOutput.model_validate_json(content)
+
+    # Extract and save document passages for isolated benchmarking
+    passages = list(document_passages(document))
+    passages_data = {
+        "document_id": document_import_id,
+        "total_blocks": len(passages),
+        "passages": [
+            {"text": text, "block_id": block_id} for text, block_id in passages
+        ],
+        "classifier_labels": {
+            "case_sensitive": classifier.case_sensitive_labels,
+            "case_insensitive": classifier.case_insensitive_labels,
+        },
+    }
+
+    benchmark_output_path = f"benchmark_data_{document_import_id}.json"
+    with open(benchmark_output_path, "w") as f:
+        json.dump(passages_data, f, indent=2)
+    print(f"Saved {len(passages)} passages to {benchmark_output_path}")
+
+    # Benchmark inference performance - single threaded
+    print("Running single-threaded benchmark...")
+    start_time = time.time()
+
+    doc_labels: list[LabelledPassage] = []
+    block_times = []
+    for text, block_id in document_passages(document):
+        block_start_time = time.time()
+        labelled_passages = text_block_inference(
+            classifier=classifier, block_id=block_id, text=text
+        )
+        block_end_time = time.time()
+        block_time = block_end_time - block_start_time
+        block_times.append(block_time)
+        doc_labels.append(labelled_passages)
+
+    end_time = time.time()
+    total_time = end_time - start_time
+
+    print(f"Single-threaded inference time: {total_time:.4f}s")
+    print(f"Total blocks processed: {len(doc_labels)}")
+    print(f"Fastest block: {min(block_times):.4f}s")
+    print(f"Slowest block: {max(block_times):.4f}s")
+    print(f"Average block time: {sum(block_times) / len(block_times):.4f}s")
+    print(f"Total spans found: {sum(len(label.spans) for label in doc_labels)}")
+
+    # Benchmark inference performance - 2 threads
+    print("\nRunning multi-threaded benchmark (2 threads)...")
+    start_time_mt = time.time()
+
+    def process_block_timed(text_block_pair):
+        text, block_id = text_block_pair
+        block_start = time.time()
+        result = text_block_inference(
+            classifier=classifier, block_id=block_id, text=text
+        )
+        block_end = time.time()
+        return result, block_end - block_start
+
+    doc_labels_mt: list[LabelledPassage] = []
+    block_times_mt = []
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(process_block_timed, (text, block_id))
+            for text, block_id in document_passages(document)
+        ]
+        for future in futures:
+            result, block_time = future.result()
+            doc_labels_mt.append(result)
+            block_times_mt.append(block_time)
+
+    end_time_mt = time.time()
+    total_time_mt = end_time_mt - start_time_mt
+
+    print(f"Multi-threaded (2 threads) inference time: {total_time_mt:.4f}s")
+    print(f"Fastest block: {min(block_times_mt):.4f}s")
+    print(f"Slowest block: {max(block_times_mt):.4f}s")
+    print(f"Average block time: {sum(block_times_mt) / len(block_times_mt):.4f}s")
+    speedup = total_time / total_time_mt
+    improvement_percent = (speedup - 1) * 100
+    print(f"Speedup: {speedup:.2f}x ({improvement_percent:.1f}% faster)")
+    print(f"Total spans found (MT): {sum(len(label.spans) for label in doc_labels_mt)}")
+
+    # Verify results are consistent
+    single_spans = sum(len(label.spans) for label in doc_labels)
+    multi_spans = sum(len(label.spans) for label in doc_labels_mt)
+    print(f"Results consistent: {single_spans == multi_spans}")

@@ -10,6 +10,7 @@ import botocore
 import botocore.client
 import typer
 import yaml
+from botocore.session import ProfileNotFound
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
@@ -128,7 +129,13 @@ def function_to_flow_name(fn: Callable[..., Any]) -> str:
 
 def get_session(aws_env: AwsEnv) -> boto3.session.Session:
     """Create an AWS session using the specified AWS environment."""
-    return boto3.Session(profile_name=aws_env.value)
+    try:
+        boto3.Session(profile_name=aws_env.value)
+    except ProfileNotFound:
+        print(f"couldn't find AWS profile `{aws_env}`. Trying environment override")
+        if aws_env := os.getenv("AWS_PROFILE"):
+            print(f"trying AWS profile `{aws_env}`")
+            return boto3.Session(profile_name=aws_env)
 
 
 def get_s3_client(

@@ -41,6 +41,10 @@ def existing(
     get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
     train: Annotated[bool, typer.Option(help="Whether to train models")] = True,
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
+    track: Annotated[
+        bool, typer.Option(help="Whether to track this run in W&B")
+    ] = True,
+    upload: Annotated[bool, typer.Option(help="Whether to upload the model")] = True,
 ):
     """Deploy existing models from one environment to another."""
     validate_transition(from_aws_env, to_aws_env)
@@ -59,8 +63,8 @@ def existing(
             print("training")
             classifier = scripts.train.main(
                 wikibase_id=WikibaseID(spec.name),
-                track=True,
-                upload=True,
+                track=track,
+                upload=upload,
                 aws_env=to_aws_env,
             )
 
@@ -96,6 +100,10 @@ def new(
     get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
     train: Annotated[bool, typer.Option(help="Whether to train models")] = True,
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
+    track: Annotated[
+        bool, typer.Option(help="Whether to track this run in W&B")
+    ] = True,
+    upload: Annotated[bool, typer.Option(help="Whether to upload the model")] = True,
 ):
     """Deploy new models by training and promoting them."""
 
@@ -112,8 +120,8 @@ def new(
                 print("training")
                 classifier = scripts.train.main(
                     wikibase_id=wikibase_id,
-                    track=True,
-                    upload=True,
+                    track=track,
+                    upload=upload,
                     aws_env=aws_env,
                 )
 
