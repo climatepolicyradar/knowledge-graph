@@ -327,7 +327,8 @@ async def test_process_single_document__value_error(
 def test_collect_stems_by_specs(
     mock_classifier_specs, mock_bucket_labelled_passages_large, test_config
 ):
-    stems = collect_stems_by_specs(test_config)
+    _, classifier_specs = mock_classifier_specs
+    stems = collect_stems_by_specs(test_config, classifier_specs)
     assert set(stems) == set(
         [
             "UNFCCC.non-party.467.0",

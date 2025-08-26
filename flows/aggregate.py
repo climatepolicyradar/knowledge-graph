@@ -336,7 +336,7 @@ async def create_aggregate_inference_summary_artifact(
 async def create_aggregate_inference_overall_summary_artifact(
     aws_env: AwsEnv,
     document_stems: Sequence[DocumentStem],
-    classifier_specs: list[ClassifierSpec],
+    classifier_specs: Sequence[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
     successes: Sequence[FlowRun],
     failures: Sequence[BaseException | FlowRun],
@@ -359,11 +359,12 @@ async def create_aggregate_inference_overall_summary_artifact(
     )
 
 
-def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
+def collect_stems_by_specs(
+    config: Config, classifier_specs: Sequence[ClassifierSpec]
+) -> list[DocumentStem]:
     """Collect the stems for the given specs."""
     document_stems = []
-    specs = parse_spec_file(config.aws_env)
-    for spec in specs:
+    for spec in classifier_specs:
         prefix = os.path.join(
             config.aggregate_document_source_prefix, spec.name, spec.alias
         )
@@ -471,6 +472,7 @@ async def aggregate_batch_of_documents(
 )
 async def aggregate(
     document_stems: None | Sequence[DocumentStem] = None,
+    classifier_specs: None | Sequence[ClassifierSpec] = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
@@ -480,15 +482,18 @@ async def aggregate(
         print("no config provided, creating one")
         config = await Config.create()
 
+    if not classifier_specs:
+        print("no classifier specs provided, using all available from spec file")
+        classifier_specs = parse_spec_file(config.aws_env)
+
     if not document_stems:
         print(
             "no document stems provided, collecting all available from s3 under prefix: "
             + f"{config.aggregate_document_source_prefix}"
         )
-        document_stems = collect_stems_by_specs(config)
+        document_stems = collect_stems_by_specs(config, classifier_specs)
 
     run_output_identifier = build_run_output_identifier()
-    classifier_specs = parse_spec_file(config.aws_env)
 
     print(
         f"Aggregating inference results for {len(document_stems)} documents, using "
