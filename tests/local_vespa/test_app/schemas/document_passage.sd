@@ -115,7 +115,7 @@ schema document_passage {
              #
              # These aren't all model IDs, but all model IDs that
              # produced labelled spans for this document passage.
-             field model_id_all type string {}
+             field models_ids_flat type string {}
              # E.g. string is the model ID
              field spans_by_model_version type map<string, array<span>> {}
              # From the concepts v1
@@ -129,12 +129,15 @@ schema document_passage {
 
             struct-field key {
                 indexing: attribute
+                attribute: fast-search
             }
             struct-field value.concept_id {
                 indexing: attribute
+                attribute: fast-search
             }
-            struct-field value.model_id_all {
-                indexing: attribute | summary
+            struct-field value.models_ids_flat {
+                indexing: attribute
+                attribute: fast-search
             }
         }
     }

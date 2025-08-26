@@ -29,7 +29,7 @@
             "concepts_instances": {
                 "q880": {
                     "concept_id": "q880",
-                    "model_id_all": "kx7m3p9w,r5n8qz2t",
+                    "models_ids_flat": "kx7m3p9w,r5n8qz2t",
                     "spans_by_model_version": {
                         "kx7m3p9w": [{ "start": 45, "end": 58 }],
                         "r5n8qz2t": [
@@ -47,7 +47,7 @@
                 },
                 "q730": {
                     "concept_id": "q730",
-                    "model_id_all": "d9fg4j6m,w3kb7x1s",
+                    "models_ids_flat": "d9fg4j6m,w3kb7x1s",
                     "spans_by_model_version": {
                         "d9fg4j6m": [{ "start": 6, "end": 27 }],
                         "w3kb7x1s": [{ "start": 6, "end": 27 }]
