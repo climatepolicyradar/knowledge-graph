@@ -17,27 +17,27 @@ AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 class Config(BaseModel):
     """Shared Configuration used across flow runs."""
 
-    cache_bucket: str | None = Field(default=None, description="s3 bucket for caching")
+    cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
     aggregate_document_source_prefix: str = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
-        description="s3 prefix for source documents are read from",
+        description="S3 prefix for source documents are read from",
     )
     aggregate_inference_results_prefix: str = Field(
         default=INFERENCE_RESULTS_PREFIX,
-        description="s3 prefix for aggregated inference results are written to",
+        description="S3 prefix for aggregated inference results are written to",
     )
     inference_document_source_prefix: str = Field(
         default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
-        description="s3 prefix of documents read as source for inference",
+        description="S3 prefix of documents read as source for inference",
     )
 
     inference_document_target_prefix: str = Field(
         default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
-        description="s3 prefix for where inference targets are written to",
+        description="S3 prefix for where inference targets are written to",
     )
 
     bucket_region: str = Field(
-        default="eu-west-1", description="AWS region for s3 bucket"
+        default="eu-west-1", description="AWS region for S3 bucket"
     )
     aws_env: AwsEnv = Field(
         default_factory=lambda: AwsEnv(os.environ["AWS_ENV"]),
@@ -46,7 +46,7 @@ class Config(BaseModel):
 
     pipeline_state_prefix: str = Field(
         default="input",
-        description="s3 prefix for where new & updated documents from ingestion are located",
+        description="S3 prefix for where new & updated documents from ingestion are located",
     )
 
     local_classifier_dir: Path = Field(
