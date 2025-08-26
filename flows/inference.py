@@ -994,7 +994,7 @@ async def inference(
     ) -> dict[str, Any]:
         return {
             "batch": document_batch,
-            "config_json": config.model_dump_json(),
+            "config_json": config.to_json(),
             "classifier_name": classifier_spec.name,
             "classifier_alias": classifier_spec.alias,
         }
