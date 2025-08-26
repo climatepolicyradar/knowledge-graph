@@ -51,12 +51,16 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         """
         super().__init__(concept)
 
-        def create_pattern(labels: list[str]) -> str:
+        def create_pattern(
+            labels: list[str], case_sensitive: bool = False
+        ) -> re.Pattern:
             """Create a regex pattern from a list of labels."""
-            return r"\b(?:" + "|".join(labels) + r")\b"
+            pattern = r"\b(?:" + "|".join(labels) + r")\b" if labels else ""
+            flags = re.IGNORECASE if not case_sensitive else 0
+            return re.compile(pattern, flags)
 
-        def categorise_labels(labels: list[str]) -> tuple[list[str], list[str]]:
-            """Categorise labels into case-sensitive and case-insensitive lists."""
+        def split_by_case_handling(labels: list[str]) -> tuple[list[str], list[str]]:
+            """Partition labels into case-sensitive and case-insensitive lists."""
             case_sensitive_labels = []
             case_insensitive_labels = []
 
@@ -78,42 +82,30 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
 
         # Process positive labels
         self.case_sensitive_positive_labels, self.case_insensitive_positive_labels = (
-            categorise_labels(self.concept.all_labels)
+            split_by_case_handling(self.concept.all_labels)
         )
 
         # Process negative labels
         self.case_sensitive_negative_labels, self.case_insensitive_negative_labels = (
-            categorise_labels(self.concept.negative_labels)
+            split_by_case_handling(self.concept.negative_labels)
         )
 
         # Create positive patterns
-        self.case_sensitive_positive_pattern = (
-            re.compile(create_pattern(self.case_sensitive_positive_labels))
-            if self.case_sensitive_positive_labels
-            else None
+        self.case_sensitive_positive_pattern = create_pattern(
+            self.case_sensitive_positive_labels, case_sensitive=True
         )
 
-        self.case_insensitive_positive_pattern = (
-            re.compile(
-                create_pattern(self.case_insensitive_positive_labels), re.IGNORECASE
-            )
-            if self.case_insensitive_positive_labels
-            else None
+        self.case_insensitive_positive_pattern = create_pattern(
+            self.case_insensitive_positive_labels, case_sensitive=False
         )
 
         # Create negative patterns
-        self.case_sensitive_negative_pattern = (
-            re.compile(create_pattern(self.case_sensitive_negative_labels))
-            if self.case_sensitive_negative_labels
-            else None
+        self.case_sensitive_negative_pattern = create_pattern(
+            self.case_sensitive_negative_labels, case_sensitive=True
         )
 
-        self.case_insensitive_negative_pattern = (
-            re.compile(
-                create_pattern(self.case_insensitive_negative_labels), re.IGNORECASE
-            )
-            if self.case_insensitive_negative_labels
-            else None
+        self.case_insensitive_negative_pattern = create_pattern(
+            self.case_insensitive_negative_labels, case_sensitive=False
         )
 
     @property
