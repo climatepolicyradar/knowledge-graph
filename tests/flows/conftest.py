@@ -463,7 +463,7 @@ def parser_output_html_converted_to_pdf(
 def s3_prefix_mock_bucket(
     mock_bucket: str,
 ) -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return f"s3://{mock_bucket}"
 
 
@@ -472,13 +472,13 @@ def s3_prefix_mock_bucket_labelled_passages(
     mock_bucket: str,
     s3_prefix_labelled_passages: str,
 ) -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
 
 
 @pytest.fixture
 def s3_prefix_labelled_passages() -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return "labelled_passages/Q788/v4"
 
 
@@ -534,7 +534,7 @@ def mock_run_output_identifier_str() -> str:
 
 @pytest.fixture
 def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
-    """Returns the s3 prefix for the inference results."""
+    """Returns the S3 prefix for the inference results."""
 
     return f"inference_results/{mock_run_output_identifier_str}/"
 
