@@ -6,7 +6,6 @@ from hypothesis import strategies as st
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID, WikibaseID
@@ -84,7 +83,6 @@ def positive_text_strategy(
 
 classifier_classes: list[Type[Classifier]] = [
     KeywordClassifier,
-    RulesBasedClassifier,
     StemmedKeywordClassifier,
 ]
 
@@ -122,9 +120,6 @@ def test_whether_classifier_finds_no_spans_in_negative_text(
 def test_whether_classifier_respects_negative_labels(
     classifier_class: Type[Classifier], data: st.DataObject
 ):
-    if not issubclass(classifier_class, RulesBasedClassifier):
-        pytest.skip("This test only applies to RulesBasedClassifiers")
-
     # Create a positive label and a negative which contains the positive label.
     positive_label = data.draw(concept_label_strategy)
     negative_label = positive_label + " a_modifier_which_changes_its_meaning"
@@ -214,9 +209,6 @@ def test_concrete_negative_label_examples(
     should_match: bool,
 ):
     """Test specific examples of positive and negative label matching."""
-    if not issubclass(classifier_class, RulesBasedClassifier):
-        pytest.skip("This test only applies to RulesBasedClassifiers")
-
     concept = Concept(wikibase_id="Q123", **concept_data)
     classifier = classifier_class(concept)
     spans = classifier.predict(test_text)
