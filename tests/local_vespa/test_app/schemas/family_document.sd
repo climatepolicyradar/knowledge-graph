@@ -193,7 +193,7 @@ schema family_document {
              # Use a similar flattened approach, as
              # parent_concept_ids_flat, due to Vespa limitations and
              # how we've chosen to model this.
-             field model_id_all type string {}
+             field models_ids_flat type string {}
              # E.g. string is the model ID
              field counts_by_model_version type map<string, int> {}
         }
@@ -204,12 +204,15 @@ schema family_document {
 
             struct-field key {
                 indexing: attribute
+                attribute: fast-search
             }
             struct-field value.concept_id {
                 indexing: attribute
+                attribute: fast-search
             }
-            struct-field value.model_id_all {
+            struct-field value.models_ids_flat {
                 indexing: attribute
+                attribute: fast-search
             }
         }
     }

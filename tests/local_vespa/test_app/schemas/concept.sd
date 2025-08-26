@@ -4,43 +4,48 @@ schema concept {
         field id type string {
             indexing: attribute | summary | index
         }
-        # E.g. 14696
-        field revision type string {
-            indexing: attribute | summary | index
-        }
-        # E.g. fishing sector
-        field preferred_label type string {
-            indexing: attribute | summary | index
-        }
-        field description type string {
-            indexing: attribute | summary
-        }
-        field definition type string {
-            indexing: attribute | summary
-        }
-        field alternative_labels type array<string> {
-            indexing: attribute | summary
-        }
-        field negative_labels type array<string> {
-            indexing: attribute | summary
-        }
-        # E.g. Q110, 290
+        # Used for searching.
         #
-        # We can't do self-references, so use strings for the IDs.
-        field subconcept_of type array<string> {
-            indexing: attribute | summary
+        # E.g. 14696,15037
+        field revisions_ids_flat type string {
+            indexing: attribute | summary | index
         }
-        field has_subconcept type array<string> {
-            indexing: attribute | summary
+
+        struct instance {
+            # E.g. fishing sector
+            field preferred_label type string {}
+            field description type string {}
+            field definition type string {}
+            field alternative_labels type array<string> {}
+            field negative_labels type array<string> {}
+            # E.g. Q110, 290
+            #
+            # We can't do self-references for documents in Vespa, so
+            # use strings for the IDs.
+            field subconcept_of type array<string> {}
+            field subconcept_of_flat type string {}
+            field has_subconcept type array<string> {}
+            field relative_concepts type array<string> {}
+            field recursive_subconcept_of type array<string> {}
+            field recursive_has_subconcept type bool {}
         }
-        field relative_concepts type array<string> {
-            indexing: attribute | summary
-        }
-        field recursive_subconcept_of type array<string> {
-            indexing: attribute | summary
-        }
-        field recursive_has_subconcept type bool {
-            indexing: attribute | summary
+
+        # E.g <14696, <..>>
+        field revisions type map<string, instance> {
+            indexing: summary
+
+            struct-field key {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field value.preferred_label {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field value.subconcept_of_flat {
+                indexing: attribute
+                attribute: fast-search
+            }
         }
     }
 }

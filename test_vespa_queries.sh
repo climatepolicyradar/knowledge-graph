@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test script for Vespa queries with new schema
-# Run this after: just vespa_feed_data
+# Run this after: just vespa_dev_down vespa_dev_setup vespa_feed_data
 
 set -e
 
@@ -70,20 +70,20 @@ run_query "Get document passage with new schema" \
 # Test concept queries
 echo "=== Concept-Specific Tests ==="
 run_query "Get air pollution concept" \
-    'yql=select * from concept where preferred_label contains "air pollution"' \
+    'yql=select * from concept where revisions contains sameElement(value.preferred_label contains "air pollution")' \
     '"q880"'
 
 run_query "Get concept with parents" \
-    'yql=select * from concept where subconcept_of contains "q110"' \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110")' \
     '"q880"'
 
 run_query "Get concept by revision and ID" \
-    'yql=select * from concept where revision contains "1402" and id contains "q880"' \
+    'yql=select * from concept where revisions contains sameElement(key contains "1402") and id contains "q880"' \
     '"q880"'
 
 echo -e "${BLUE}Testing: Get multiple concepts by revision and ID pairs${NC}"
-echo "Query: yql=select * from concept where (id contains \"q880\" and revision contains \"1402\") or (id contains \"q290\" and revision contains \"1099\")"
-result=$(vespa query 'yql=select * from concept where (id contains "q880" and revision contains "1402") or (id contains "q290" and revision contains "1099")' 2>/dev/null || echo "QUERY_FAILED")
+echo "Query: yql=select * from concept where (id contains \"q880\" and revisions contains sameElement(key contains \"1402\")) or (id contains \"q290\" and revisions contains sameElement(key contains \"1099\"))"
+result=$(vespa query 'yql=select * from concept where (id contains "q880" and revisions contains sameElement(key contains "1402")) or (id contains "q290" and revisions contains sameElement(key contains "1099"))' 2>/dev/null || echo "QUERY_FAILED")
 
 if [[ "$result" == "QUERY_FAILED" ]]; then
     echo -e "${RED}❌ FAILED: Query execution failed${NC}"
@@ -107,8 +107,16 @@ run_query "Family documents with concept q880" \
     'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880")' \
     '"q880"'
 
+run_query "Family documents with concept q880 and model kx7m3p9w" \
+    'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880") and concepts_instances contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
+    '"q880"'
+
 run_query "Document passages with concept q880" \
     'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880")' \
+    '"q880"'
+
+run_query "Document passages with concept q880 and model kx7m3p9w" \
+    'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880") and concepts_instances contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
     '"q880"'
 
 run_query "Document passages with concept q880 and default models profile" \
