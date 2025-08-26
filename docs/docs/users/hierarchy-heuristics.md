@@ -41,7 +41,7 @@ Nevertheless, we should be prepared to adjust the hierarchical representations w
 
 We should aim to keep our hierarchies relatively shallow. Doing so will (hopefully) keep the concepts abstract enough to be useful to users, while making it easier for us to maintain the hierarchy as the world changes.
 
-The concepts inhereted from [GST](https://gst1.org) worked over three levels of abstraction, and we should aim to keep our future hierarchies at a similar depth.
+The concepts inherited from [GST](https://gst1.org) worked over three levels of abstraction, and we should aim to keep our future hierarchies at a similar depth.
 
 ## Hierarchies can overlap
 

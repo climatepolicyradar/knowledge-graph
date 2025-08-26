@@ -59,7 +59,7 @@ just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on
 
 This guide explains how to train classifiers using Docker containers with AWS integration. This may be desirable for developers as installing transformers (which is required for training our neural network based models) locally can be difficult; with system incompatibilities and version support issues being common.
 
-## How It Works
+### How It Works
 
 The training process uses a locally built Docker image with volume mounts to maintain persistence and connectivity:
 
@@ -68,14 +68,14 @@ The training process uses a locally built Docker image with volume mounts to mai
 - **YAML Persistence**: Classifier specification updates are persisted back to the knowledge-graph repository
 - **AWS Integration**: AWS CLI authentication is maintained through mounted credential volumes
 
-## Prerequisites
+### Prerequisites
 
 - Docker installed and running
 - AWS credentials configured locally
 - Environment file (`.env`) with necessary configuration
 - Access to the knowledge-graph repository
 
-## Building the Docker Image
+### Building the Docker Image
 
 First, build the Docker image from the repository root:
 
@@ -83,15 +83,17 @@ First, build the Docker image from the repository root:
 just build-image
 ```
 
-## Running the Training Container
+### Running the Training Container
 
-### 1. Authenticate your CLI & Start the Container
+#### 1. Authenticate your CLI & Start the Container
 
 This step will cache your token in `.aws/sso/cache`; this can be utilised by the aws cli when mounted into the container.
 
 ```bash
 aws sso login --profile staging
 ```
+
+#### 2. Run the docker container
 
 Run the Docker container with the following command, mounting AWS credentials and classifier specs:
 
@@ -112,7 +114,7 @@ docker run \
 - `$(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2` - Classifier specifications
 
 
-### 3. Validate Installation + Authentication against AWS
+#### 3. Validate Installation + Authentication against AWS
 
 Verify AWS CLI is working correctly:
 
@@ -132,6 +134,10 @@ python scripts/deploy.py new \
   --promote \
   --wikibase-id Q1651
 ```
+
+## Remove a Classifier Spec
+
+Within the Knowledge Graph full-pipeline the Aggregation step is designed to run on all classifiers as defined in the classifier spec file. Should you want to omit a classifier from running due to an issue with inference, then the classifier should be demoted and then the classifier spec updated. This can be done using the `just demote` command followed by the `just update-inference-classifiers` command.
 
 
 ## Troubleshooting
