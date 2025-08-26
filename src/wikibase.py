@@ -100,6 +100,9 @@ class WikibaseSession:
         "WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID", "P9"
     )
     definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID", "P7")
+    negative_concept_property_id = os.getenv(
+        "WIKIBASE_NEGATIVE_CONCEPT_PROPERTY_ID", "P11"
+    )
 
     def __init__(
         self,
@@ -374,6 +377,8 @@ class WikibaseSession:
                 # Parse concept data
                 concept = self._parse_wikibase_entity(wikibase_id, entity)
 
+                concept = await self._incorporate_negative_concepts(concept)
+
                 # Small delay to be gentle on the server
                 await asyncio.sleep(self.REQUEST_DELAY_SECONDS)
 
@@ -449,6 +454,53 @@ class WikibaseSession:
                         concept.negative_labels.append(value)
                     elif property_id == self.definition_property_id:
                         concept.definition = value
+                    elif property_id == self.negative_concept_property_id:
+                        concept.negative_concepts.append(
+                            self._resolve_redirect(value["id"])
+                        )
+
+    async def _incorporate_negative_concepts(self, concept: Concept) -> Concept:
+        """
+        Add positive labels from negative concepts
+
+        For the given concept, fetch all negative concepts and add their positive
+        labels to the concept's negative labels, returning a new concept with the
+        additional negative labels.
+        """
+        # If there are no negative concepts, return the concept unchanged
+        if not concept.negative_concepts:
+            return concept
+
+        try:
+            # Fetch all negative concepts
+            negative_concepts = await self.get_concepts_async(
+                wikibase_ids=concept.negative_concepts
+            )
+
+            # Combine existing negative labels with new negative labels
+            existing_negative_labels = set(concept.negative_labels)
+            new_negative_labels = set(
+                label
+                for negative_concept in negative_concepts
+                for label in negative_concept.all_labels
+            )
+            combined_negative_labels = list(
+                existing_negative_labels | new_negative_labels
+            )
+
+            updated_concept = concept.model_copy(
+                update={"negative_labels": combined_negative_labels},
+                deep=True,
+            )
+            return updated_concept
+
+        except (ConceptNotFoundError, HTTPStatusError, ValidationError) as e:
+            logger.warning(
+                "Failed to merge negative concept labels for %s: %s",
+                concept.wikibase_id,
+                e,
+            )
+            return concept
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
