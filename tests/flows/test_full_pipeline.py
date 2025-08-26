@@ -101,6 +101,7 @@ async def test_full_pipeline_no_config_provided(
         assert sorted(call_args.kwargs["document_stems"]) == sorted(
             aggregate_inference_results_document_stems
         )
+        assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
         assert call_args.kwargs["n_batches"] == DEFAULT_N_BATCHES
@@ -204,6 +205,9 @@ async def test_full_pipeline_with_full_config(
         assert sorted(call_args.kwargs["document_stems"]) == sorted(
             aggregate_inference_results_document_stems
         )
+        assert call_args.kwargs["classifier_specs"] == [
+            ClassifierSpec(name="Q123", alias="v1")
+        ]
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
@@ -316,6 +320,7 @@ async def test_full_pipeline_with_inference_failure(
         assert sorted(call_args.kwargs["document_stems"]) == sorted(
             document_stems_successful
         )
+        assert call_args.kwargs["classifier_specs"] == [classifier_spec]
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
 

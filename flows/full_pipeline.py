@@ -131,6 +131,7 @@ async def full_pipeline(
         document_stems=list(
             inference_result.fully_successfully_classified_document_stems
         ),
+        classifier_specs=classifier_specs,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
