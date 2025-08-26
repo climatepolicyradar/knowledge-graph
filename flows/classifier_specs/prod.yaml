@@ -66,6 +66,10 @@
 - Q1369:v7
 - Q1370:v7
 - Q1371:v7
-- Q1651:v3
-- Q1652:v2
-- Q1653:v2
+# Targets classifiers are currently broken. We want to omit them from the knowledge graph full-pipeline.
+# This would typically be done following the documentation below, however we are mid migration
+# to the version 2 of the classifier spec yaml:
+# scripts/README.md#remove-a-classifier-spec
+# - Q1651:v3
+# - Q1652:v2
+# - Q1653:v2
