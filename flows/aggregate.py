@@ -96,7 +96,7 @@ async def get_all_labelled_passages_for_one_document(
     classifier_specs: Sequence[ClassifierSpec],
     config: Config,
 ) -> AsyncGenerator[tuple[ClassifierSpec, list[LabelledPassage]], None]:
-    """Get the labelled passages from s3."""
+    """Get the labelled passages from S3."""
 
     for spec in classifier_specs:
         s3_uri = generate_s3_uri_input(
@@ -482,7 +482,7 @@ async def aggregate(
 
     if not document_stems:
         print(
-            "no document stems provided, collecting all available from s3 under prefix: "
+            "no document stems provided, collecting all available from S3 under prefix: "
             + f"{config.aggregate_document_source_prefix}"
         )
         document_stems = collect_stems_by_specs(config)

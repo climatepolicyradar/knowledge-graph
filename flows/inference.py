@@ -66,6 +66,8 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
+AWS_ENV: str = os.environ["AWS_ENV"]
+S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 
@@ -143,7 +145,7 @@ class InferenceResult(BaseModel):
 
 
 def get_bucket_paginator(config: Config, prefix: str):
-    """Returns an s3 paginator for the pipeline cache bucket"""
+    """Returns an S3 paginator for the pipeline cache bucket"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
     return paginator.paginate(
@@ -282,9 +284,9 @@ def download_classifier_from_wandb_to_local(
     """
     Download a classifier from W&B to local.
 
-    Models referenced by weights and biases are stored in s3. This
+    Models referenced by weights and biases are stored in S3. This
     means that to download the model via the W&B API, we need access
-    to both the s3 bucket via iam in your environment and WanDB via
+    to both the S3 bucket via iam in your environment and WanDB via
     the api key.
     """
     artifact = os.path.join(config.wandb_model_registry, f"{classifier_name}:{alias}")
@@ -318,7 +320,7 @@ async def load_classifier(
 
 
 def download_s3_file(config: Config, key: str):
-    """Retrieve an s3 file from the pipeline cache"""
+    """Retrieve an S3 file from the pipeline cache"""
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     response = s3.get_object(
@@ -871,7 +873,7 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
-@flow(log_prints=True)
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -886,7 +888,7 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-@flow(log_prints=True)
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
 )
@@ -947,7 +949,7 @@ async def inference(
     Default behaviour is to run on everything, pass document_ids to
     limit to specific files.
 
-    Iterates: classifiers > documents > passages. Loading output into s3
+    Iterates: classifiers > documents > passages. Loading output into S3
 
     params:
     - document_ids: List of document ids to run inference on

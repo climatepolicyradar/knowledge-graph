@@ -38,6 +38,7 @@ from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
 from flows.config import Config
+from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -462,7 +463,7 @@ def parser_output_html_converted_to_pdf(
 def s3_prefix_mock_bucket(
     mock_bucket: str,
 ) -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return f"s3://{mock_bucket}"
 
 
@@ -471,13 +472,13 @@ def s3_prefix_mock_bucket_labelled_passages(
     mock_bucket: str,
     s3_prefix_labelled_passages: str,
 ) -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
 
 
 @pytest.fixture
 def s3_prefix_labelled_passages() -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return "labelled_passages/Q788/v4"
 
 
@@ -533,7 +534,7 @@ def mock_run_output_identifier_str() -> str:
 
 @pytest.fixture
 def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
-    """Returns the s3 prefix for the inference results."""
+    """Returns the S3 prefix for the inference results."""
 
     return f"inference_results/{mock_run_output_identifier_str}/"
 
@@ -708,6 +709,13 @@ def mock_prefect_slack_webhook():
     """Patch the SlackWebhook class to return a mock object."""
     with patch("flows.utils.SlackWebhook") as mock_SlackWebhook:
         mock_prefect_slack_block = MagicMock()
+        mock_client = MagicMock()
+        mock_result = MagicMock()
+        mock_result.status_code = 200
+        mock_result.body = "success"
+
+        mock_client.send.return_value = mock_result
+        mock_prefect_slack_block.get_client.return_value = mock_client
         mock_SlackWebhook.load.return_value = mock_prefect_slack_block
         yield mock_SlackWebhook, mock_prefect_slack_block
 
@@ -882,7 +890,7 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
 @asynccontextmanager
 async def s3_block_context():
     """Context manager for creating and cleaning up S3 blocks."""
-    bucket_name = f"cpr-{os.environ['AWS_ENV']}-prefect-results-cache"
+    bucket_name = S3_BLOCK_RESULTS_CACHE.replace("s3-bucket/", "")
 
     test_block = S3Bucket(bucket_name=bucket_name)
 

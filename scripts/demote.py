@@ -27,9 +27,7 @@ logging.basicConfig(
 
 log = logging.getLogger("rich")
 
-ORG_ENTITY = "climatepolicyradar_UZODYJSN66HCQ"
 REGISTRY_NAME = "model"
-ENTITY = "climatepolicyradar"
 JOB_TYPE = "demote_model"
 
 REGION_NAME = "eu-west-1"
@@ -67,7 +65,7 @@ def main(
     """
     Demote a model within an AWS environment.
 
-    This removes the environment alias from the specified model in the registery,
+    This removes the environment alias from the specified model in the registry,
     effectively making it no longer the primary version for that environment.
     """
     log.info("Starting model demotion process")

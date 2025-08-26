@@ -203,3 +203,11 @@ audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PRO
 # Check if passages in S3 align with Vespa
 audit-s3-vespa-alignment +OPTS="":
     uv run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}
+
+# Update the metadata for a classifier
+classifier_metadata wikibase_id classifier_id aws_env +OPTS="":
+    uv run python -m scripts.classifier_metadata \
+        --wikibase-id {{wikibase_id}} \
+        --classifier-id {{classifier_id}} \
+        --aws-env {{aws_env}} \
+        {{OPTS}}
