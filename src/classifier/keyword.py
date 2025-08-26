@@ -4,7 +4,7 @@ from datetime import datetime
 from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID
-from src.span import Span
+from src.span import Span, merge_overlapping_spans
 
 
 class KeywordClassifier(Classifier, ZeroShotClassifier):
@@ -31,6 +31,16 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
 
     This distinction is particularly useful for differentiating between common words
     and specific entities (e.g., "who" vs "WHO" for the World Health Organization).
+
+    If the concept has negative labels, the classifier will also match these negative
+    terms and filter out any positive matches that overlap with negative matches.
+
+    For example, given a concept like:
+        Concept(preferred_label="gas", negative_labels=["greenhouse gas"])
+    the classifier will match
+        "I need to fill up my gas tank"
+    but not
+        "The greenhouse gas emissions are a major contributor to climate change."
     """
 
     def __init__(self, concept: Concept):
@@ -41,40 +51,102 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         """
         super().__init__(concept)
 
-        def create_pattern(labels):
+        def create_pattern(labels: list[str]) -> str:
+            """Create a regex pattern from a list of labels."""
             return r"\b(?:" + "|".join(labels) + r")\b"
 
-        self.case_sensitive_labels = []
-        self.case_insensitive_labels = []
+        def categorise_labels(labels: list[str]) -> tuple[list[str], list[str]]:
+            """Categorise labels into case-sensitive and case-insensitive lists."""
+            case_sensitive_labels = []
+            case_insensitive_labels = []
 
-        # Sort labels by length in descending order so that longer labels are matched first
-        sorted_labels = sorted(self.concept.all_labels, key=len, reverse=True)
+            # Sort labels by length in descending order so that longer labels are matched first
+            sorted_labels = sorted(labels, key=len, reverse=True)
 
-        for label in sorted_labels:
-            if label.strip():  # Ensure the label is not just whitespace
-                if any(char.isupper() for char in label) or any(
-                    ord(char) > 127 for char in label
-                ):
-                    # Labels including uppercase or non-ASCII characters are added to the case-sensitive list
-                    self.case_sensitive_labels.append(re.escape(label))
-                else:
-                    # Only pure ASCII lowercase labels are added to the case-insensitive list
-                    self.case_insensitive_labels.append(re.escape(label))
+            for label in sorted_labels:
+                if label.strip():
+                    if any(char.isupper() for char in label) or any(
+                        ord(char) > 127 for char in label
+                    ):
+                        # Labels including uppercase or non-ASCII characters are added to the case-sensitive list
+                        case_sensitive_labels.append(re.escape(label))
+                    else:
+                        # Only pure ASCII lowercase labels are added to the case-insensitive list
+                        case_insensitive_labels.append(re.escape(label))
 
-        # Case-sensitive pattern: matches exactly as provided
-        self.case_sensitive_pattern = re.compile(
-            create_pattern(self.case_sensitive_labels)
+            return case_sensitive_labels, case_insensitive_labels
+
+        # Process positive labels
+        self.case_sensitive_positive_labels, self.case_insensitive_positive_labels = (
+            categorise_labels(self.concept.all_labels)
         )
 
-        # Case-insensitive pattern: matches regardless of case
-        self.case_insensitive_pattern = re.compile(
-            create_pattern(self.case_insensitive_labels), re.IGNORECASE
+        # Process negative labels
+        self.case_sensitive_negative_labels, self.case_insensitive_negative_labels = (
+            categorise_labels(self.concept.negative_labels)
+        )
+
+        # Create positive patterns
+        self.case_sensitive_positive_pattern = (
+            re.compile(create_pattern(self.case_sensitive_positive_labels))
+            if self.case_sensitive_positive_labels
+            else None
+        )
+
+        self.case_insensitive_positive_pattern = (
+            re.compile(
+                create_pattern(self.case_insensitive_positive_labels), re.IGNORECASE
+            )
+            if self.case_insensitive_positive_labels
+            else None
+        )
+
+        # Create negative patterns
+        self.case_sensitive_negative_pattern = (
+            re.compile(create_pattern(self.case_sensitive_negative_labels))
+            if self.case_sensitive_negative_labels
+            else None
+        )
+
+        self.case_insensitive_negative_pattern = (
+            re.compile(
+                create_pattern(self.case_insensitive_negative_labels), re.IGNORECASE
+            )
+            if self.case_insensitive_negative_labels
+            else None
         )
 
     @property
     def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
         return ClassifierID.generate(self.name, self.concept.id)
+
+    def _match_spans(self, text: str, pattern: re.Pattern | None) -> list[Span]:
+        """
+        Find spans in text using the provided pattern.
+
+        :param str text: The text to search in
+        :param re.Pattern | None pattern: The compiled regex pattern (can be None)
+        :return list[Span]: List of spans found by the pattern
+        """
+        if not pattern:
+            return []
+
+        spans = []
+        for match in pattern.finditer(text):
+            start, end = match.span()
+            if start != end:
+                spans.append(
+                    Span(
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
+                        start_index=start,
+                        end_index=end,
+                        labellers=[str(self)],
+                        timestamps=[datetime.now()],
+                    )
+                )
+        return spans
 
     def predict(self, text: str) -> list[Span]:
         """
@@ -87,43 +159,40 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         2. No overlapping matches are returned
         3. Case-sensitive matches are found exactly as provided
         4. Case-insensitive matches can be found regardless of casing
+        5. Positive matches that overlap with negative matches are filtered out
 
         :param str text: The text to predict on
         :return list[Span]: A list of spans in the text
         """
-        spans = []
-        matched_positions = set()
+        # Find all positive matches (allowing overlaps for now)
+        positive_spans = []
+        positive_spans.extend(
+            self._match_spans(text, self.case_sensitive_positive_pattern)
+        )
+        positive_spans.extend(
+            self._match_spans(text, self.case_insensitive_positive_pattern)
+        )
 
-        # Case-sensitive matching
-        for match in self.case_sensitive_pattern.finditer(text):
-            start, end = match.span()
-            if start != end and not any(start <= p < end for p in matched_positions):
-                spans.append(
-                    Span(
-                        text=text,
-                        concept_id=self.concept.wikibase_id,
-                        start_index=start,
-                        end_index=end,
-                        labellers=[str(self)],
-                        timestamps=[datetime.now()],
-                    )
-                )
-                matched_positions.update(range(start, end))
+        # Merge overlapping positive spans
+        positive_spans = merge_overlapping_spans(positive_spans)
 
-        # Case-insensitive matching
-        for match in self.case_insensitive_pattern.finditer(text):
-            start, end = match.span()
-            if start != end and not any(start <= p < end for p in matched_positions):
-                spans.append(
-                    Span(
-                        text=text,
-                        concept_id=self.concept.wikibase_id,
-                        start_index=start,
-                        end_index=end,
-                        labellers=[str(self)],
-                        timestamps=[datetime.now()],
-                    )
-                )
-                matched_positions.update(range(start, end))
+        # Find all negative matches (allowing overlaps for now)
+        negative_spans = []
+        negative_spans.extend(
+            self._match_spans(text, self.case_sensitive_negative_pattern)
+        )
+        negative_spans.extend(
+            self._match_spans(text, self.case_insensitive_negative_pattern)
+        )
 
-        return spans
+        # Merge overlapping negative spans
+        negative_spans = merge_overlapping_spans(negative_spans)
+
+        # Filter out positive matches that overlap with negative matches
+        filtered_spans = [
+            span
+            for span in positive_spans
+            if not any(span.overlaps(negative_span) for negative_span in negative_spans)
+        ]
+
+        return filtered_spans
