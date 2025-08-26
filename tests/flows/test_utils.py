@@ -1,6 +1,5 @@
 import asyncio
 import os
-import re
 import time
 from io import BytesIO
 from pathlib import Path
@@ -46,9 +45,11 @@ def test_file_name_from_path(path, expected):
 @pytest.mark.asyncio
 async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
     with (
-        patch.object(SlackNotify, "environment", "prod"),
+        patch.object(SlackNotify, "environment", AwsEnv.production),
         patch.object(
-            SlackNotify, "slack_block_name", "slack-webhook-platform-prefect-mvp-prod"
+            SlackNotify,
+            "slack_block_name",
+            "slack-webhook-platform-prefect-mvp-prod",
         ),
     ):
         await SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
@@ -60,14 +61,35 @@ async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
         "slack-webhook-platform-prefect-mvp-prod"
     )
 
-    # `.notify`
-    mock_prefect_slack_block.notify.assert_called_once()
-    kwargs = mock_prefect_slack_block.notify.call_args.kwargs
-    message = kwargs.get("body", "")
-    assert re.match(
-        r"Flow run TestFlow/TestFlowRun observed in state `Completed` at 2025-01-28T12:00:00\+00:00\. For environment: prod\. Flow run URL: http://127\.0\.0\.1:\d+/flow-runs/flow-run/test-flow-run-id\. State message: message",
-        message,
-    )
+    # `.get_client().send()`
+    mock_prefect_slack_block.get_client.assert_called_once()
+    mock_prefect_slack_block.get_client().send.assert_called_once()
+
+    # Verify the blocks parameter was passed to send()
+    call_args = mock_prefect_slack_block.get_client().send.call_args
+    assert call_args is not None
+    assert "blocks" in call_args.kwargs
+
+    # Check the blocks structure without the dynamic URL
+    blocks = call_args.kwargs["blocks"]
+    assert len(blocks) == 5  # Should have 5 main blocks
+
+    # Check first block structure (with button)
+    assert blocks[0]["type"] == "section"
+    assert "accessory" in blocks[0]
+    assert blocks[0]["accessory"]["type"] == "button"
+    assert blocks[0]["accessory"]["text"]["text"] == "View in Prefect"
+    # URL will be dynamic, but should contain the flow run id
+    assert "test-flow-run-id" in blocks[0]["accessory"]["url"]
+
+    # Check other blocks exist
+    assert blocks[1]["type"] == "divider"
+    assert blocks[2]["type"] == "section"  # Fields section
+    assert blocks[3]["type"] == "divider"
+    assert blocks[4]["type"] == "section"  # State message section
+
+    # Verify state message is included
+    assert "message" in blocks[4]["text"]["text"]
 
 
 @pytest.mark.parametrize(
