@@ -19,101 +19,7 @@ from flows.inference import (
     InferenceResult,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
-from src.cloud import AwsEnv, ClassifierSpec
-
-
-def test_validate_aggregation_inference_configs() -> None:
-    """Test the validate_aggregation_inference_configs function."""
-
-    config = validate_aggregation_inference_configs(
-        inference_config=InferenceConfig(
-            cache_bucket="test",
-            bucket_region="test",
-            document_target_prefix="test",
-        ),
-        aggregation_config=AggregationConfig(
-            cache_bucket="test",
-            bucket_region="test",
-            document_source_prefix="test",
-        ),
-    )
-    assert config is None
-
-
-@pytest.mark.parametrize(
-    "inference_config, aggregation_config, expected_error",
-    [
-        # Cache bucket mismatch
-        (
-            InferenceConfig(
-                cache_bucket="bucket-does-not-exist",
-                bucket_region="test",
-                document_target_prefix="test",
-            ),
-            AggregationConfig(
-                cache_bucket="test", bucket_region="test", document_source_prefix="test"
-            ),
-            "Cache bucket mismatch",
-        ),
-        # Prefix mismatch
-        (
-            InferenceConfig(
-                cache_bucket="test",
-                bucket_region="test",
-                document_target_prefix="inference_target",
-            ),
-            AggregationConfig(
-                cache_bucket="test",
-                bucket_region="test",
-                document_source_prefix="aggregation_source",
-            ),
-            "Inference target prefix does not match aggregation source prefix",
-        ),
-        # Region mismatch
-        (
-            InferenceConfig(
-                cache_bucket="test",
-                bucket_region="eu-west-1",
-                document_target_prefix="test",
-            ),
-            AggregationConfig(
-                cache_bucket="test",
-                bucket_region="us-east-1",
-                document_source_prefix="test",
-            ),
-            "Bucket region mismatch",
-        ),
-        # AWS env mismatch
-        (
-            InferenceConfig(
-                cache_bucket="test",
-                bucket_region="test",
-                document_target_prefix="test",
-                aws_env=AwsEnv.sandbox,
-            ),
-            AggregationConfig(
-                cache_bucket="test",
-                bucket_region="test",
-                document_source_prefix="test",
-                aws_env=AwsEnv.production,
-            ),
-            "AWS environment mismatch",
-        ),
-    ],
-)
-def test_validate_aggregation_inference_configs_raises_value_error(
-    inference_config: InferenceConfig,
-    aggregation_config: AggregationConfig,
-    expected_error: str,
-) -> None:
-    """Test the validate_aggregation_inference_configs function raises a ValueError."""
-
-    with pytest.raises(ValueError) as e:
-        validate_aggregation_inference_configs(
-            inference_config=inference_config,
-            aggregation_config=aggregation_config,
-        )
-    assert expected_error in str(e.value)
+from src.cloud import ClassifierSpec
 
 
 @pytest.mark.asyncio
@@ -127,7 +33,7 @@ async def test_full_pipeline_no_config_provided(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference_with_result_cache",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -184,7 +90,7 @@ async def test_full_pipeline_no_config_provided(
         # Verify sub-flows were called with correct parameters
         mock_inference.assert_called_once()
         call_args = mock_inference.call_args
-        assert call_args.kwargs["pipeline_config"] == test_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["use_new_and_updated"] is False
@@ -219,7 +125,7 @@ async def test_full_pipeline_with_full_config(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference_with_result_cache",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -289,7 +195,7 @@ async def test_full_pipeline_with_full_config(
             ]
         )
         assert call_args.kwargs["use_new_and_updated"] is True
-        assert call_args.kwargs["pipeline_config"] == test_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
 
@@ -323,7 +229,7 @@ async def test_full_pipeline_with_inference_failure(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference_with_result_cache",
+            "flows.full_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
@@ -401,7 +307,7 @@ async def test_full_pipeline_with_inference_failure(
             ]
         )
         assert call_args.kwargs["use_new_and_updated"] is True
-        assert call_args.kwargs["pipeline_config"] == test_config
+        assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
 

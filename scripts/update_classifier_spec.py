@@ -78,6 +78,9 @@ def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
             wandb_registry_version=wandb_registry_version,
         )
 
+        if dont_run_on := art.metadata.get("dont_run_on"):
+            spec.dont_run_on = dont_run_on
+
         # Placeholder for possible implementation
         if compute_environment := art.metadata.get("compute_environment"):
             print(compute_environment)

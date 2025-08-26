@@ -18,6 +18,7 @@ from src.classifier import (
     get_local_classifier_path,
 )
 from src.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
+from src.config import WANDB_ENTITY
 from src.identifiers import WikibaseID
 from src.version import Version
 from src.wikibase import WikibaseSession
@@ -242,9 +243,8 @@ def main(
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     """
-    entity = "climatepolicyradar"
     project = wikibase_id
-    namespace = Namespace(project=project, entity=entity)
+    namespace = Namespace(project=project, entity=WANDB_ENTITY)
     job_type = "train_model"
 
     # Validate parameter dependencies

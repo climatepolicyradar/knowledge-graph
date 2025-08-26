@@ -96,7 +96,7 @@ async def get_all_labelled_passages_for_one_document(
     classifier_specs: Sequence[ClassifierSpec],
     config: Config,
 ) -> AsyncGenerator[tuple[ClassifierSpec, list[LabelledPassage]], None]:
-    """Get the labelled passages from s3."""
+    """Get the labelled passages from S3."""
 
     for spec in classifier_specs:
         s3_uri = generate_s3_uri_input(
@@ -199,13 +199,13 @@ def task_run_name(parameters: dict[str, Any]) -> str:
 )
 async def process_document(
     document_stem: DocumentStem,
-    session: aioboto3.Session,
     classifier_specs: Sequence[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
 ) -> DocumentStem:
     """Process a single document and return its status."""
     try:
+        session = aioboto3.Session(region_name=config.bucket_region)
         async with session.client("s3") as s3:
             print("Fetching labelled passages for", document_stem)
 
@@ -396,8 +396,6 @@ async def aggregate_batch_of_documents(
     """Aggregate the inference results for the given document ids."""
     config = Config.model_validate(config_json)
 
-    session = aioboto3.Session(region_name=config.bucket_region)
-
     tasks: list[PrefectFuture[DocumentStem]] = []
 
     print("submitting tasks")
@@ -430,7 +428,6 @@ async def aggregate_batch_of_documents(
                 asset_deps=asset_deps,  # pyright: ignore[reportArgumentType]
             ).submit(
                 document_stem=document_stem,
-                session=session,
                 classifier_specs=classifier_specs,
                 config=config,
                 run_output_identifier=run_output_identifier,
@@ -482,7 +479,7 @@ async def aggregate(
 
     if not document_stems:
         print(
-            "no document stems provided, collecting all available from s3 under prefix: "
+            "no document stems provided, collecting all available from S3 under prefix: "
             + f"{config.aggregate_document_source_prefix}"
         )
         document_stems = collect_stems_by_specs(config)

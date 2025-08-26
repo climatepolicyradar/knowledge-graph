@@ -26,7 +26,12 @@ def mock_wandb_api():
         for model_data in [
             {"name": "Q111:v1", "env": "sandbox", "id": "abcd2345"},
             {"name": "Q444:v2", "env": "labs", "id": "efgh6789"},
-            {"name": "Q222:v1", "env": "sandbox", "id": "2345abcd"},
+            {
+                "name": "Q222:v1",
+                "env": "sandbox",
+                "id": "2345abcd",
+                "dont_run_on": ["sabin"],
+            },
         ]:
             mock_artifact = Mock()
             mock_artifact.name = model_data["name"]
@@ -34,6 +39,9 @@ def mock_wandb_api():
                 "aws_env": model_data["env"],
                 "classifier_name": "TestClassifier",
             }
+            if dont_run_on := model_data.get("dont_run_on"):
+                mock_artifact.metadata["dont_run_on"] = dont_run_on
+
             mock_artifact.source_name = f"{model_data['id']}:v1"
             mock_artifacts.append(mock_artifact)
 
@@ -65,6 +73,8 @@ def test_get_all_available_classifiers(mock_wandb_api):
                   wandb_registry_version: 1
                   wikibase_id: Q111
                 - classifier_id: 2345abcd
+                  dont_run_on:
+                  - sabin
                   wandb_registry_version: 1
                   wikibase_id: Q222
                 """).lstrip()

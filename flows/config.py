@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, SecretStr
 
 from scripts.cloud import AwsEnv, get_prefect_job_variable
 
-# Constant, S3 prefix for the aggregated results
+# Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"
 INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
@@ -28,12 +28,12 @@ class Config(BaseModel):
     )
     inference_document_source_prefix: str = Field(
         default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
-        description="s3 prefix of documents read as source for inference",
+        description="S3 prefix of documents read as source for inference",
     )
 
     inference_document_target_prefix: str = Field(
         default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
-        description="s3 prefix for where inference targets are written to",
+        description="S3 prefix for where inference targets are written to",
     )
 
     bucket_region: str = Field(
@@ -44,12 +44,35 @@ class Config(BaseModel):
         description="AWS environment",
     )
 
-    pipeline_state_prefix: str = "input"
-    local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
-    wandb_model_registry: str = "wandb-registry-model"
-    wandb_entity: str = "climatepolicyradar"
-    wandb_api_key: Optional[SecretStr] = None
+    pipeline_state_prefix: str = Field(
+        default="input",
+        description="S3 prefix for where new & updated documents from ingestion are located",
+    )
+
+    local_classifier_dir: Path = Field(
+        default=Path("data") / "processed" / "classifiers",
+        description="path to classifiers",
+    )
+
+    wandb_model_org: str = Field(
+        default="climatepolicyradar_UZODYJSN66HCQ",
+        description="Weights & Biases organisation for CPR",
+    )
+
+    wandb_model_registry: str = Field(
+        default="wandb-registry-model",
+        description="Weights & Biases model registry for CPR",
+    )
+
+    wandb_entity: str = Field(
+        default="climatepolicyradar",
+        description="Weights & Biases entity login credentials",
+    )
+
+    wandb_api_key: Optional[SecretStr] = Field(
+        default=None,
+        description="Weights & Biases API Key",
+    )
 
     @classmethod
     async def create(cls) -> "Config":

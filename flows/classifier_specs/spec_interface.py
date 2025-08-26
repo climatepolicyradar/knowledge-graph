@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +10,24 @@ from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
+
+
+class DontRunOnEnum(Enum):
+    """A `source` that will be filtered out in inference."""
+
+    sabin = "sabin"
+    cclw = "cclw"
+    cpr = "cpr"
+    af = "af"
+    cif = "cif"
+    gcf = "gcf"
+    gef = "gef"
+    oep = "oep"
+    unfccc = "unfccc"
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        return self.value
 
 
 class ClassifierSpec(BaseModel):
@@ -37,6 +56,10 @@ class ClassifierSpec(BaseModel):
     )
     compute_environment: Optional[ComputeEnvironment] = Field(
         description=ComputeEnvironment.__doc__,
+        default=None,
+    )
+    dont_run_on: list[DontRunOnEnum] | None = Field(
+        description="A list of `source`'s that will be filtered out in inference.",
         default=None,
     )
 

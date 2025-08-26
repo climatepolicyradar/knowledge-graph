@@ -4,6 +4,7 @@ import inspect
 import json
 import os
 import re
+import textwrap
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
@@ -28,7 +29,7 @@ from prefect.artifacts import (
     create_progress_artifact,
     update_progress_artifact,
 )
-from prefect.client.schemas.objects import FlowRun, StateType
+from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL
@@ -79,23 +80,26 @@ def file_name_from_path(path: str) -> str:
 class SlackNotify:
     """Notify a Slack channel through a Prefect Slack webhook."""
 
+    # Must be ≤ this length
+    MAX_SLACK_TEXT_LENGTH = 3000
+
     # Message templates
     FLOW_RUN_URL = "{prefect_base_url}/flow-runs/flow-run/{flow_run.id}"
-    BASE_MESSAGE = (
-        "Flow run {flow.name}/{flow_run.name} observed in "
-        "state `{flow_run.state.name}` at {flow_run.state.timestamp}. "
-        "For environment: {environment}. "
-        "Flow run URL: {ui_url}. "
-        "State message: {state.message}"
-    )
 
     # Block name
     slack_channel_name = "alerts-platform"
-    environment = os.getenv("AWS_ENV", "sandbox")
-    slack_block_name = f"slack-webhook-{slack_channel_name}-prefect-mvp-{environment}"
+    environment = AwsEnv(os.getenv("AWS_ENV", "sandbox"))
+    slack_block_name = (
+        f"slack-webhook-{slack_channel_name}-prefect-mvp-{environment.value}"
+    )
 
     @classmethod
-    async def message(cls, flow, flow_run, state):
+    async def message(
+        cls,
+        flow: Flow,
+        flow_run: FlowRun,
+        state: State,
+    ):
         """
         Send a notification to a Slack channel about the state of a Prefect flow run.
 
@@ -108,28 +112,146 @@ class SlackNotify:
         ```
         """
 
-        if cls.environment != "prod":
+        if cls.environment != AwsEnv.production:
+            print(
+                f"Not sending Slack notification as in {cls.environment.name} and now {AwsEnv.production.name}"
+            )
             return None
 
         ui_url = cls.FLOW_RUN_URL.format(
             prefect_base_url=PREFECT_UI_URL.value(), flow_run=flow_run
         )
-        msg = cls.BASE_MESSAGE.format(
-            flow=flow,
-            flow_run=flow_run,
-            state=state,
-            ui_url=ui_url,
-            environment=cls.environment,
+
+        slack_webhook = SlackWebhook.load(cls.slack_block_name)
+        if inspect.isawaitable(slack_webhook):
+            slack_webhook = await slack_webhook
+
+        blocks = cls.slack_blocks(flow_run, state, ui_url)
+
+        client = slack_webhook.get_client()
+        result = client.send(
+            blocks=blocks,
+        )
+        if inspect.isawaitable(result):
+            result = await result
+
+        print(
+            f"Posted message to provided webhook: {result.status_code=} | {result.body=}"
         )
 
-        slack = SlackWebhook.load(cls.slack_block_name)
-        if inspect.isawaitable(slack):
-            slack = await slack
-        result = slack.notify(body=msg)
-        if inspect.isawaitable(result):
-            _ = await result
-
         return None
+
+    @classmethod
+    def slack_blocks(
+        cls,
+        flow_run: FlowRun,
+        state: State,
+        ui_url: str,
+    ):
+        """Create all Slack Blocks"""
+
+        header = (
+            "{cls.state_type_to_emoji(state.type)} Flow run *{flow.name}/{flow_run.name}* observed state `{state.name}`.",
+        )  # pyright: ignore[reportOptionalMemberAccess]
+
+        state_message = textwrap.shorten(
+            state.message or "No message",
+            width=cls.MAX_SLACK_TEXT_LENGTH,
+            placeholder="...",
+        )
+
+        return [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": header,
+                },
+                "accessory": {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "View in Prefect",
+                        "emoji": True,
+                    },
+                    "value": "view_in_prefect",
+                    "url": ui_url,
+                    "action_id": "button-action",
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Environment*\n`{cls.environment}`",
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Version*\n`{flow_run.deployment_version}`",
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Work Pool*\n`{flow_run.work_pool_name}`",
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Timestamp*\n`{state.timestamp}`",
+                    },
+                    cls.slack_runtime_block(flow_run),
+                ],
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "expand": False,
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*State message:*\n\n>{state_message}",
+                },
+            },
+        ]
+
+    @staticmethod
+    def slack_runtime_block(flow_run: FlowRun):
+        """Create the runtime Slack Block"""
+
+        match (flow_run.start_time, flow_run.end_time):
+            case (start, end) if start is not None and end is not None:
+                return {
+                    "type": "mrkdwn",
+                    "text": f"*Duration*\n`{flow_run.total_run_time}` from {flow_run.start_time} → {flow_run.end_time}",
+                }
+            case _:
+                # At least one is imissing
+                return {
+                    "type": "mrkdwn",
+                    "text": f"*Duration*\n`{flow_run.total_run_time}`",
+                }
+
+    @staticmethod
+    def state_type_to_emoji(state_type: StateType) -> str:
+        """Convert a Prefect StateType to an emoji."""
+        match state_type:
+            case StateType.SCHEDULED:
+                return "⏰"
+            case StateType.PENDING:
+                return "⏳"
+            case StateType.RUNNING:
+                return "🏃"
+            case StateType.COMPLETED:
+                return "✅"
+            case StateType.FAILED:
+                return "❌"
+            case StateType.CANCELLED:
+                return "🚫"
+            case StateType.CRASHED:
+                return "💥"
+            case StateType.PAUSED:
+                return "⏸️"
+            case StateType.CANCELLING:
+                return "🛑"
 
 
 class S3Uri:
@@ -521,7 +643,7 @@ class Percentage(
 
     @staticmethod
     def from_lists(r: Sequence[T], t: Sequence[U]) -> "Percentage":
-        """Relative size of 2 lists as a precentage."""
+        """Relative size of 2 lists as a percentage."""
         return Percentage((len(r) / len(t)) * 100.0)
 
 
