@@ -13,6 +13,15 @@
     }),
   )
 # ---
+# name: test_inference_batch_of_documents_cpu
+  '[{"Document stem": "PDF.document.0.1", "Status": "\\u2713", "Exception": "N/A"}]'
+# ---
+# name: test_inference_batch_of_documents_cpu_empty_batch
+  '[]'
+# ---
+# name: test_inference_batch_of_documents_cpu_with_failures
+  '[{"Document stem": "NonExistent.doc.1", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}, {"Document stem": "AnotherMissing.doc.2", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}]'
+# ---
 # name: test_run_classifier_inference_on_document
   SingleDocumentInferenceResult(labelled_passages=[], document_stem='HTML.document.0.1', classifier_spec=ClassifierSpec(wikibase_id='Q788', classifier_id='gbhffqx8', wandb_registry_version=5, compute_environment=None, dont_run_on=None))
 # ---

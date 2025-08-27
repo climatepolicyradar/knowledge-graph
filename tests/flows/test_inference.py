@@ -16,10 +16,10 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext
 from prefect.states import Completed
 
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.inference import (
     PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
     BatchInferenceResult,
-    ClassifierSpec,
     DocumentImportId,
     DocumentStem,
     InferenceResult,
@@ -624,6 +624,7 @@ async def test_inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
             classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+            return_state=True,
         )
 
     result = await result_state.result()
