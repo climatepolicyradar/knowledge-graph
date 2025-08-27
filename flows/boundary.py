@@ -826,18 +826,3 @@ class ConceptModel(BaseModel):
         raise ValueError(
             f"Could not extract concept name from model name '{self.model_name}'"
         )
-
-
-def save_labelled_passages_by_uri(
-    document_object_uri: DocumentObjectUri,
-    labelled_passages: list[LabelledPassage],
-) -> None:
-    """Save LabelledPassages objects to S3."""
-    object_json = json.dumps(
-        [labelled_passage.model_dump_json() for labelled_passage in labelled_passages]
-    )
-
-    s3_object_write_text(
-        s3_uri=document_object_uri,
-        text=object_json,
-    )
