@@ -185,7 +185,7 @@ schema family_document {
             indexing: attribute | summary
         }
 
-        struct concept_instance {
+        struct concept_v2 {
              # E.g. Q880
              field concept_id type string {}
              # E.g. n2nuerdn, 9dgp6jgz
@@ -199,7 +199,7 @@ schema family_document {
         }
 
         # The string is the concept ID, e.g. Q880
-        field concepts_instances type map<string, concept_instance> {
+        field concepts_v2 type map<string, concept_v2> {
             indexing: summary
 
             struct-field key {
@@ -321,7 +321,7 @@ schema family_document {
         summary corpus_type_name {}
         summary collection_title {}
         summary collection_summary {}
-        summary concepts_instances {}
+        summary concepts_v2 {}
         summary concepts_versions {}
     }
 
