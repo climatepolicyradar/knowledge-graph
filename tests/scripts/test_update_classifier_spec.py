@@ -31,6 +31,7 @@ def mock_wandb_api():
                 "env": "sandbox",
                 "id": "2345abcd",
                 "dont_run_on": ["sabin"],
+                "compute_environment": {"gpu": True},
             },
         ]:
             mock_artifact = Mock()
@@ -41,6 +42,9 @@ def mock_wandb_api():
             }
             if dont_run_on := model_data.get("dont_run_on"):
                 mock_artifact.metadata["dont_run_on"] = dont_run_on
+
+            if compute_environment := model_data.get("compute_environment"):
+                mock_artifact.metadata["compute_environment"] = compute_environment
 
             mock_artifact.source_name = f"{model_data['id']}:v1"
             mock_artifacts.append(mock_artifact)
@@ -73,6 +77,8 @@ def test_get_all_available_classifiers(mock_wandb_api):
                   wandb_registry_version: v1
                   wikibase_id: Q111
                 - classifier_id: 2345abcd
+                  compute_environment:
+                    gpu: true
                   dont_run_on:
                   - sabin
                   wandb_registry_version: v1
