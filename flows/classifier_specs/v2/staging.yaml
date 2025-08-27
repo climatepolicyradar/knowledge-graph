@@ -1,229 +1,381 @@
 ---
 - classifier_id: 8np4shsw
+  dont_run_on:
+  - sabin
   wandb_registry_version: v14
   wikibase_id: Q123
 - classifier_id: 255brqws
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q218
 - classifier_id: zahr3y3c
+  dont_run_on:
+  - sabin
   wandb_registry_version: v12
   wikibase_id: Q221
 - classifier_id: dntrzvg4
+  dont_run_on:
+  - sabin
   wandb_registry_version: v10
   wikibase_id: Q223
 - classifier_id: epdr39n7
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q226
 - classifier_id: 58br2fy7
+  dont_run_on:
+  - sabin
   wandb_registry_version: v19
   wikibase_id: Q368
 - classifier_id: 82s9rtjv
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q374
 - classifier_id: 67n38m49
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q404
 - classifier_id: qgz45jfc
+  dont_run_on:
+  - sabin
   wandb_registry_version: v22
   wikibase_id: Q412
 - classifier_id: w4arsmvw
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q639
 - classifier_id: jhgfgshh
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q650
 - classifier_id: hcpew9v7
+  dont_run_on:
+  - sabin
   wandb_registry_version: v11
   wikibase_id: Q661
 - classifier_id: vte9xumt
+  dont_run_on:
+  - sabin
   wandb_registry_version: v11
   wikibase_id: Q676
 - classifier_id: cksv4jk4
+  dont_run_on:
+  - sabin
   wandb_registry_version: v14
   wikibase_id: Q684
 - classifier_id: eq9x9wsr
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q690
 - classifier_id: kttz6tyb
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q695
 - classifier_id: z4tamvb8
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q701
 - classifier_id: nvec7dth
+  dont_run_on:
+  - sabin
   wandb_registry_version: v11
   wikibase_id: Q704
 - classifier_id: 4jscafp3
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q708
 - classifier_id: 55pbpnmz
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q715
 - classifier_id: z3j4g6px
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q757
 - classifier_id: vxny5gsq
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q760
 - classifier_id: npc4pp5n
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q761
 - classifier_id: 9hnhbpes
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q762
 - classifier_id: q9kh5gfp
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q763
 - classifier_id: r28pbvv2
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q764
 - classifier_id: q8zfu7rc
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q765
 - classifier_id: w6xfq29a
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q766
 - classifier_id: rztuppjr
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q767
 - classifier_id: jv22xmma
+  dont_run_on:
+  - sabin
   wandb_registry_version: v16
   wikibase_id: Q768
 - classifier_id: a5tnpkpe
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q769
 - classifier_id: 55pcc99h
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q774
 - classifier_id: qpyqxcym
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q775
 - classifier_id: ztvmwv92
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q777
 - classifier_id: j7c3ktev
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q778
 - classifier_id: uup6gz2z
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q779
 - classifier_id: 7j8qct6e
+  dont_run_on:
+  - sabin
   wandb_registry_version: v16
   wikibase_id: Q786
 - classifier_id: c9m9dwk2
+  dont_run_on:
+  - sabin
   wandb_registry_version: v20
   wikibase_id: Q787
 - classifier_id: 6vxrmcuf
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q788
 - classifier_id: e6fzwwmh
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q818
 - classifier_id: uz2ns2yj
+  dont_run_on:
+  - sabin
   wandb_registry_version: v10
   wikibase_id: Q856
 - classifier_id: f2ug8k2n
+  dont_run_on:
+  - sabin
   wandb_registry_version: v16
   wikibase_id: Q857
 - classifier_id: xv5c3mxd
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q954
 - classifier_id: qc44yqfx
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q955
 - classifier_id: dtq9dpkm
+  dont_run_on:
+  - sabin
   wandb_registry_version: v20
   wikibase_id: Q956
 - classifier_id: 443bfadh
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q973
 - classifier_id: uexqqh87
+  dont_run_on:
+  - sabin
   wandb_registry_version: v17
   wikibase_id: Q983
 - classifier_id: q8ryh8wh
+  dont_run_on:
+  - sabin
   wandb_registry_version: v18
   wikibase_id: Q986
 - classifier_id: nukvehn5
+  dont_run_on:
+  - sabin
   wandb_registry_version: v11
   wikibase_id: Q1016
 - classifier_id: bty2kmuy
+  dont_run_on:
+  - sabin
   wandb_registry_version: v11
   wikibase_id: Q1167
 - classifier_id: 95f8de2e
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1269
 - classifier_id: ffnxsnf4
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1273
 - classifier_id: w88xqhbr
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1274
 - classifier_id: 2t88txrh
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1275
 - classifier_id: s5v8pfuy
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1276
 - classifier_id: a4k7athn
+  dont_run_on:
+  - sabin
   wandb_registry_version: v11
   wikibase_id: Q1277
 - classifier_id: 3752qcjb
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1278
 - classifier_id: ugxnewcz
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1279
 - classifier_id: sq6rjbnp
+  dont_run_on:
+  - sabin
   wandb_registry_version: v10
   wikibase_id: Q1280
 - classifier_id: tanyaukb
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1281
 - classifier_id: zgw85v58
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1282
 - classifier_id: cqbteqbg
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1284
 - classifier_id: gcez9g6p
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1285
 - classifier_id: 7gfwgebe
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1286
 - classifier_id: pqvbefjq
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1343
 - classifier_id: g8veubg3
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1344
 - classifier_id: wy3a2h5x
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1345
 - classifier_id: aqrcdtxx
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1346
 - classifier_id: wev7mzga
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1362
 - classifier_id: 9n9xsymu
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1368
 - classifier_id: wyaugrjm
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1369
 - classifier_id: 6dxvusb9
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1370
 - classifier_id: v76y24qd
+  dont_run_on:
+  - sabin
   wandb_registry_version: v9
   wikibase_id: Q1371
 - classifier_id: 7sctqpmw
+  dont_run_on:
+  - sabin
   wandb_registry_version: v7
   wikibase_id: Q1651
 - classifier_id: phet8mvv
+  dont_run_on:
+  - sabin
   wandb_registry_version: v5
   wikibase_id: Q1652
 - classifier_id: u86a8p2d
+  dont_run_on:
+  - sabin
   wandb_registry_version: v5
   wikibase_id: Q1653
