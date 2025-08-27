@@ -22,6 +22,7 @@ from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.logging import get_run_logger
+from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
@@ -67,6 +68,9 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 AWS_ENV: str = os.environ["AWS_ENV"]
+PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE: int = (
+    PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES.value()
+)
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
@@ -708,14 +712,44 @@ async def create_inference_on_batch_summary_artifact(
 def generate_assets(
     config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
+    max_related_resources: int = PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
 ) -> Sequence[str]:
+    """
+    Generate assets for the inference results.
+
+    The maximum number of related resources to a prefect event is 100 and thus we
+    truncate the assets.
+    - https://github.com/PrefectHQ/prefect/blob/main/src/prefect/events/schemas/events.py#L127
+    """
+
+    if len(inferences) > max_related_resources:
+        print(
+            f"Too many assets to store: {len(inferences)} > {max_related_resources}, truncating to {max_related_resources}."
+        )
+        inferences = inferences[:max_related_resources]
+
     return [str(generate_s3_uri_output(config, inference)) for inference in inferences]
 
 
 def generate_asset_deps(
     config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
+    max_related_resources: int = PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
 ) -> Sequence[str]:
+    """
+    Generate asset deps for the inference results.
+
+    The maximum number of related resources to a prefect event is 100 and thus we
+    truncate the assets.
+    - https://github.com/PrefectHQ/prefect/blob/main/src/prefect/events/schemas/events.py#L127
+    """
+
+    if len(inferences) > max_related_resources:
+        print(
+            f"Too many asset deps to store: {len(inferences)} > {max_related_resources}, truncating to {max_related_resources}."
+        )
+        inferences = inferences[:max_related_resources]
+
     return list(
         flatten(
             [
