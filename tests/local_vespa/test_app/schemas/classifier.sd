@@ -1,5 +1,5 @@
-schema model {
-    document model {
+schema classifier {
+    document classifier {
         # E.g. RulesBasedClassifier
         field name type string {
             indexing: attribute | summary | index
@@ -7,6 +7,10 @@ schema model {
         }
         # E.g. kx7m3p9w
         field id type string {
+            indexing: attribute | summary | index
+        }
+        # E.g. 940389
+        field revision_id type string {
             indexing: attribute | summary | index
         }
     }
