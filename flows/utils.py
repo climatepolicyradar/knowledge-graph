@@ -112,12 +112,6 @@ class SlackNotify:
         ```
         """
 
-        if cls.environment != AwsEnv.production:
-            print(
-                f"Not sending Slack notification as in {cls.environment.name} and now {AwsEnv.production.name}"
-            )
-            return None
-
         ui_url = cls.FLOW_RUN_URL.format(
             prefect_base_url=PREFECT_UI_URL.value(), flow_run=flow_run
         )
