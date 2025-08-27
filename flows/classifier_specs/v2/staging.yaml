@@ -365,16 +365,22 @@
   wandb_registry_version: v9
   wikibase_id: Q1371
 - classifier_id: 7sctqpmw
+  compute_environment:
+    gpu: true
   dont_run_on:
   - sabin
   wandb_registry_version: v7
   wikibase_id: Q1651
 - classifier_id: phet8mvv
+  compute_environment:
+    gpu: true
   dont_run_on:
   - sabin
   wandb_registry_version: v5
   wikibase_id: Q1652
 - classifier_id: u86a8p2d
+  compute_environment:
+    gpu: true
   dont_run_on:
   - sabin
   wandb_registry_version: v5
