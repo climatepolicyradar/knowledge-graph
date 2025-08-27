@@ -15,10 +15,10 @@ from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTex
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext
 from prefect.results import ResultRecord
-from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.states import Completed
 
 from flows.inference import (
+    PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
     BatchInferenceResult,
     ClassifierSpec,
     DocumentImportId,
@@ -1106,7 +1106,7 @@ def test_generate_assets_and_asset_deps(test_config) -> None:
     assert (
         len(assets)
         == len(asset_deps) / 2
-        == PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES.value()
+        == PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE
     )
 
     assets = generate_assets(test_config, inferences * 1000, 500)
