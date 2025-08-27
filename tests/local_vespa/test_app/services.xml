@@ -22,6 +22,11 @@
                 <disk>0.98</disk>
             </resource-limits>
         </tuning>
+        <search>
+            <!-- Value in seconds -->
+            <!-- https://docs.vespa.ai/en/reference/services-content.html#visibility-delay -->
+            <visibility-delay>0.1</visibility-delay>
+        </search>
         <min-redundancy>2</min-redundancy>
         <documents>
             <document type="search_weights" mode="index" global="true" />

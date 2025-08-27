@@ -130,14 +130,17 @@ schema document_passage {
             struct-field key {
                 indexing: attribute
                 attribute: fast-search
+                rank: filter
             }
             struct-field value.concept_id {
                 indexing: attribute
                 attribute: fast-search
+                rank: filter
             }
             struct-field value.models_ids_flat {
                 indexing: attribute
                 attribute: fast-search
+                rank: filter
             }
         }
     }
