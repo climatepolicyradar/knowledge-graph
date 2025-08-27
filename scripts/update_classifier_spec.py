@@ -29,7 +29,7 @@ def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     """Save a classifier spec YAML"""
     serialised_data = [d.model_dump(exclude_none=True) for d in data]
     with open(file_path, "w") as file:
-        yaml.dump(serialised_data, file, explicit_start=True)
+        yaml.dump(serialised_data, file, explicit_start=True, sort_keys=False)
 
 
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
