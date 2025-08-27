@@ -9,21 +9,28 @@ default:
 
 # install dependencies and set up the project
 install +OPTS="":
-    uv sync --locked --extra dev --extra transformers --extra coiled {{OPTS}}
+    uv sync --locked --extra dev --extra coiled {{OPTS}}
     uv run pre-commit install
     uv run ipython kernel install --user
+
+install-transformers:
+  just install --extra transformers
 
 # test the project
 test +OPTS="":
     uv run pytest --disable-pytest-warnings --color=yes {{OPTS}}
 
+test-concurrently +OPTS="":
+    just test-without-vespa {{OPTS}}
+    just test-with-vespa {{OPTS}}
+
+# test the project, excluding tests that rely on a local Vespa instance
+test-with-vespa +OPTS="":
+    uv run pytest --disable-pytest-warnings --color=yes -m 'vespa' {{OPTS}}
+
 # test the project, excluding tests that rely on a local Vespa instance
 test-without-vespa +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not vespa'
-
-# test the project, excluding slow tests
-test-without-slow +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}} -m 'not slow'
+    uv run pytest -n logical --disable-pytest-warnings --color=yes -m 'not vespa' {{OPTS}}
 
 # update the snapshots for the tests
 test-snapshot-update +OPTS="":
@@ -38,14 +45,8 @@ lint-all:
     uv run pre-commit run --all-files --show-diff-on-failure
 
 # build a dataset of passages for sampling
-build-dataset:
-    uv run python scripts/build_dataset/01_download_corporate_disclosures.py
-    uv run python scripts/build_dataset/02_download_litigation.py
-    uv run python scripts/build_dataset/03_parse.py
-    uv run python scripts/build_dataset/04_translate.py
-    uv run python scripts/build_dataset/05_add_geography.py
-    uv run python scripts/build_dataset/06_merge.py
-    uv run python scripts/build_dataset/07_create_balanced_dataset_for_sampling.py
+build-dataset n="10000":
+    poetry run python scripts/build_dataset.py --n {{n}}
 
 # fetch metadata and labelled passages for a specific wikibase ID
 get-concept id:
@@ -209,3 +210,11 @@ audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PRO
 # Check if passages in S3 align with Vespa
 audit-s3-vespa-alignment +OPTS="":
     uv run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}
+
+# Update the metadata for a classifier
+classifier_metadata wikibase_id classifier_id aws_env +OPTS="":
+    uv run python -m scripts.classifier_metadata \
+        --wikibase-id {{wikibase_id}} \
+        --classifier-id {{classifier_id}} \
+        --aws-env {{aws_env}} \
+        {{OPTS}}

@@ -37,8 +37,8 @@ from types_aiobotocore_s3.client import S3Client
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
-from flows.aggregate import Config as AggregateInferenceResultsConfig
-from flows.inference import Config as InferenceConfig
+from flows.config import Config
+from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from scripts.cloud import AwsEnv
@@ -58,7 +58,7 @@ def prefect_test_fixture():
 
 @pytest.fixture
 def test_config():
-    yield InferenceConfig(
+    yield Config(
         cache_bucket="test_bucket",
         wandb_model_registry="test_org/test_wandb_model_registry",
         wandb_entity="test_entity",
@@ -75,14 +75,6 @@ def test_wikibase_to_s3_config():
         wikibase_password=SecretStr("test_password"),
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
-    )
-
-
-@pytest.fixture
-def test_aggregate_config():
-    yield AggregateInferenceResultsConfig(
-        cache_bucket="test_bucket",
-        aws_env=AwsEnv.sandbox,
     )
 
 
@@ -393,7 +385,7 @@ def local_classifier_id(mock_classifiers_dir):
 
 
 @pytest.fixture
-def parser_output():
+def parser_output() -> Generator[BaseParserOutput, None, None]:
     yield BaseParserOutput(
         document_id="test id",
         document_metadata={},
@@ -404,7 +396,8 @@ def parser_output():
 
 
 @pytest.fixture
-def parser_output_html(parser_output):
+def parser_output_html(parser_output) -> Generator[BaseParserOutput, None, None]:
+    parser_output = parser_output.model_copy()
     parser_output.document_content_type = "text/html"
     parser_output.html_data = HTMLData(
         has_valid_text=True,
@@ -419,9 +412,35 @@ def parser_output_html(parser_output):
 
 
 @pytest.fixture
-def parser_output_pdf(parser_output):
+def parser_output_pdf(parser_output) -> Generator[BaseParserOutput, None, None]:
+    parser_output = parser_output.model_copy()
     # When the content type is pdf
     parser_output.document_content_type = "application/pdf"
+    parser_output.html_data = None
+    parser_output.pdf_data = PDFData(
+        page_metadata=[],
+        md5sum="",
+        text_blocks=[
+            PDFTextBlock(
+                text=["test pdf text"],
+                text_block_id="2",
+                page_number=1,
+                coords=[],
+                type=BlockType.TEXT,
+                type_confidence=0.5,
+            )
+        ],
+    )
+    yield parser_output
+
+
+@pytest.fixture
+def parser_output_html_converted_to_pdf(
+    parser_output,
+) -> Generator[BaseParserOutput, None, None]:
+    """A parser output that has been converted from html to pdf."""
+    parser_output = parser_output.model_copy()
+    parser_output.document_content_type = "text/html"
     parser_output.html_data = None
     parser_output.pdf_data = PDFData(
         page_metadata=[],
@@ -444,7 +463,7 @@ def parser_output_pdf(parser_output):
 def s3_prefix_mock_bucket(
     mock_bucket: str,
 ) -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return f"s3://{mock_bucket}"
 
 
@@ -453,13 +472,13 @@ def s3_prefix_mock_bucket_labelled_passages(
     mock_bucket: str,
     s3_prefix_labelled_passages: str,
 ) -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return f"s3://{mock_bucket}/{s3_prefix_labelled_passages}"
 
 
 @pytest.fixture
 def s3_prefix_labelled_passages() -> str:
-    """Returns the s3 prefix for the concepts."""
+    """Returns the S3 prefix for the concepts."""
     return "labelled_passages/Q788/v4"
 
 
@@ -515,7 +534,7 @@ def mock_run_output_identifier_str() -> str:
 
 @pytest.fixture
 def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
-    """Returns the s3 prefix for the inference results."""
+    """Returns the S3 prefix for the inference results."""
 
     return f"inference_results/{mock_run_output_identifier_str}/"
 
@@ -690,6 +709,13 @@ def mock_prefect_slack_webhook():
     """Patch the SlackWebhook class to return a mock object."""
     with patch("flows.utils.SlackWebhook") as mock_SlackWebhook:
         mock_prefect_slack_block = MagicMock()
+        mock_client = MagicMock()
+        mock_result = MagicMock()
+        mock_result.status_code = 200
+        mock_result.body = "success"
+
+        mock_client.send.return_value = mock_result
+        mock_prefect_slack_block.get_client.return_value = mock_client
         mock_SlackWebhook.load.return_value = mock_prefect_slack_block
         yield mock_SlackWebhook, mock_prefect_slack_block
 
@@ -864,7 +890,7 @@ def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str)
 @asynccontextmanager
 async def s3_block_context():
     """Context manager for creating and cleaning up S3 blocks."""
-    bucket_name = f"cpr-{os.environ['AWS_ENV']}-prefect-results-cache"
+    bucket_name = S3_BLOCK_RESULTS_CACHE.replace("s3-bucket/", "")
 
     test_block = S3Bucket(bucket_name=bucket_name)
 

@@ -14,7 +14,7 @@ from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, Field, PositiveInt
+from pydantic import PositiveInt
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -23,8 +23,8 @@ from flows.boundary import (
     s3_copy_file,
     s3_object_write_text_async,
 )
+from flows.config import Config
 from flows.inference import (
-    DOCUMENT_TARGET_PREFIX_DEFAULT,
     deserialise_pydantic_list_with_fallback,
 )
 from flows.utils import (
@@ -38,7 +38,6 @@ from flows.utils import (
 from scripts.cloud import (
     AwsEnv,
     ClassifierSpec,
-    get_prefect_job_variable,
     parse_spec_file,
 )
 from src.labelled_passage import LabelledPassage
@@ -46,8 +45,6 @@ from src.labelled_passage import LabelledPassage
 T = TypeVar("T")
 R = TypeVar("R")
 
-# Constant, S3 prefix for the aggregated results
-INFERENCE_RESULTS_PREFIX = "inference_results"
 
 DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
 DEFAULT_N_BATCHES: PositiveInt = 5
@@ -72,46 +69,6 @@ class AggregationFailure(Exception):
         self.document_stem = document_stem
         self.exception = exception
         self.context = context
-
-
-class Config(BaseModel):
-    """Configuration used across flow runs."""
-
-    cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
-    document_source_prefix: str = Field(
-        default=DOCUMENT_TARGET_PREFIX_DEFAULT,
-        description="S3 prefix for source documents",
-    )
-    aggregate_inference_results_prefix: str = Field(
-        default=INFERENCE_RESULTS_PREFIX,
-        description="S3 prefix for aggregated inference results",
-    )
-    bucket_region: str = Field(
-        default="eu-west-1", description="AWS region for S3 bucket"
-    )
-    aws_env: AwsEnv = Field(
-        default_factory=lambda: AwsEnv(os.environ["AWS_ENV"]),
-        description="AWS environment",
-    )
-
-    @classmethod
-    async def create(cls) -> "Config":
-        """Create a new Config instance with initialized values."""
-        config = cls()
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
-            )
-        return config
-
-    @property
-    def cache_bucket_str(self) -> str:
-        """Return the cache bucket, raising an error if not set."""
-        if not self.cache_bucket:
-            raise ValueError(
-                "Cache bucket is not set in config, consider calling the `create` method first."
-            )
-        return self.cache_bucket
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
@@ -139,12 +96,12 @@ async def get_all_labelled_passages_for_one_document(
     classifier_specs: Sequence[ClassifierSpec],
     config: Config,
 ) -> AsyncGenerator[tuple[ClassifierSpec, list[LabelledPassage]], None]:
-    """Get the labelled passages from s3."""
+    """Get the labelled passages from S3."""
 
     for spec in classifier_specs:
         s3_uri = generate_s3_uri_input(
             cache_bucket=config.cache_bucket_str,
-            document_source_prefix=config.document_source_prefix,
+            document_source_prefix=config.aggregate_document_source_prefix,
             classifier_spec=spec,
             document_stem=document_stem,
         )
@@ -242,13 +199,13 @@ def task_run_name(parameters: dict[str, Any]) -> str:
 )
 async def process_document(
     document_stem: DocumentStem,
-    session: aioboto3.Session,
     classifier_specs: Sequence[ClassifierSpec],
     config: Config,
     run_output_identifier: RunOutputIdentifier,
 ) -> DocumentStem:
     """Process a single document and return its status."""
     try:
+        session = aioboto3.Session(region_name=config.bucket_region)
         async with session.client("s3") as s3:
             print("Fetching labelled passages for", document_stem)
 
@@ -407,7 +364,9 @@ def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     document_stems = []
     specs = parse_spec_file(config.aws_env)
     for spec in specs:
-        prefix = os.path.join(config.document_source_prefix, spec.name, spec.alias)
+        prefix = os.path.join(
+            config.aggregate_document_source_prefix, spec.name, spec.alias
+        )
         document_stems.extend(
             collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
@@ -437,8 +396,6 @@ async def aggregate_batch_of_documents(
     """Aggregate the inference results for the given document ids."""
     config = Config.model_validate(config_json)
 
-    session = aioboto3.Session(region_name=config.bucket_region)
-
     tasks: list[PrefectFuture[DocumentStem]] = []
 
     print("submitting tasks")
@@ -457,7 +414,7 @@ async def aggregate_batch_of_documents(
             str(
                 generate_s3_uri_input(
                     cache_bucket=config.cache_bucket_str,
-                    document_source_prefix=config.document_source_prefix,
+                    document_source_prefix=config.aggregate_document_source_prefix,
                     classifier_spec=spec,
                     document_stem=document_stem,
                 )
@@ -471,7 +428,6 @@ async def aggregate_batch_of_documents(
                 asset_deps=asset_deps,  # pyright: ignore[reportArgumentType]
             ).submit(
                 document_stem=document_stem,
-                session=session,
                 classifier_specs=classifier_specs,
                 config=config,
                 run_output_identifier=run_output_identifier,
@@ -523,8 +479,8 @@ async def aggregate(
 
     if not document_stems:
         print(
-            "no document stems provided, collecting all available from s3 under prefix: "
-            + f"{config.document_source_prefix}"
+            "no document stems provided, collecting all available from S3 under prefix: "
+            + f"{config.aggregate_document_source_prefix}"
         )
         document_stems = collect_stems_by_specs(config)
 

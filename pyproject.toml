@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.12.0"
+version = "0.12.1"
 description = ""
 authors = [
     {name = "CPR Data Science", email = "dsci@climatepolicyradar.org"}
@@ -76,6 +76,8 @@ dev = [
     "pulumi-aws>=6.66.2",
     "jinja2>=3.1.4",
     "pyright>=1.1.403",
+    "duckdb>=1.3.2",
+    "pytest-xdist[psutil]>=3.8.0",
 ]
 
 [project.scripts]
@@ -98,7 +100,7 @@ env = [
   "ARGILLA_API_KEY=argilla.apikey",
   "WANDB_API_KEY=test_wandb_api_key"
 ]
-markers = ["vespa", "transformers", "slow"]
+markers = ["vespa", "transformers"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]

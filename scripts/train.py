@@ -12,6 +12,7 @@ from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 from scripts.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
+from scripts.config import WANDB_ENTITY
 from scripts.utils import ModelPath, get_local_classifier_path
 from src.classifier import Classifier, ClassifierFactory
 from src.identifiers import WikibaseID
@@ -238,9 +239,8 @@ def main(
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     """
-    entity = "climatepolicyradar"
     project = wikibase_id
-    namespace = Namespace(project=project, entity=entity)
+    namespace = Namespace(project=project, entity=WANDB_ENTITY)
     job_type = "train_model"
 
     # Validate parameter dependencies
@@ -260,11 +260,11 @@ def main(
             include_recursive_has_subconcept=True,
             include_labels_from_subconcepts=True,
         )
-
+        # To handle redirects where the wikibase_id is overwritten
+        concept.wikibase_id = wikibase_id
         # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
-
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
         )

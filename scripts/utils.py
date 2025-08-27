@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -28,3 +29,21 @@ class ModelPath(BaseModel):
 def get_local_classifier_path(target_path: ModelPath, version: str) -> Path:
     """Returns a path for a classifier file."""
     return classifier_dir / target_path / version / "model.pickle"
+
+
+class DontRunOnEnum(Enum):
+    """A `source` that will be filtered out in inference."""
+
+    sabin = "sabin"
+    cclw = "cclw"
+    cpr = "cpr"
+    af = "af"
+    cif = "cif"
+    gcf = "gcf"
+    gef = "gef"
+    oep = "oep"
+    unfccc = "unfccc"
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        return self.value

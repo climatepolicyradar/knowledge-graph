@@ -34,3 +34,115 @@ just deploy-classifiers sandbox "Q374 Q473"
 ```
 
 This is useful when you are already resolved that the trained model will become the new primary.
+
+### Prevent a model from running on specific sources
+
+You can add a source to the classifiers metadata with the following, this will prevent documents with the source from having inference run with this classifier:
+
+```shell
+just classifier_metadata Q123 abcd2345 sandbox --add-dont-run-on sabin
+```
+
+Add and override the current list:
+
+```shell
+just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on --add-dont-run-on sabin --add-dont-run-on gef
+```
+
+Clear the list to allow the classifier to run on anything
+
+```shell
+just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on
+```
+
+## Training Classifiers in Docker
+
+This guide explains how to train classifiers using Docker containers with AWS integration. This may be desirable for developers as installing transformers (which is required for training our neural network based models) locally can be difficult; with system incompatibilities and version support issues being common.
+
+### How It Works
+
+The training process uses a locally built Docker image with volume mounts to maintain persistence and connectivity:
+
+- **Local Image**: The Docker image is built locally using the `just build-image` command
+- **Volume Mounts**: Key directories are mounted as volumes to persist changes and maintain access to external services
+- **YAML Persistence**: Classifier specification updates are persisted back to the knowledge-graph repository
+- **AWS Integration**: AWS CLI authentication is maintained through mounted credential volumes
+
+### Prerequisites
+
+- Docker installed and running
+- AWS credentials configured locally
+- Environment file (`.env`) with necessary configuration
+- Access to the knowledge-graph repository
+
+### Building the Docker Image
+
+First, build the Docker image from the repository root:
+
+```bash
+just build-image
+```
+
+### Running the Training Container
+
+#### 1. Authenticate your CLI & Start the Container
+
+This step will cache your token in `.aws/sso/cache`; this can be utilised by the aws cli when mounted into the container.
+
+```bash
+aws sso login --profile staging
+```
+
+#### 2. Run the docker container
+
+Run the Docker container with the following command, mounting AWS credentials and classifier specs:
+
+```bash
+docker run \
+  --env-file .env \
+  -v ~/.aws:/root/.aws:ro \
+  -v ~/.aws/sso/cache:/root/.aws/sso/cache:ro \
+  -v $(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2 \
+  -e AWS_PROFILE=staging \
+  -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} /bin/sh
+```
+
+**Mount Points:**
+
+- `~/.aws:/root/.aws:ro` - Read-only AWS credentials
+- `~/.aws/sso/cache:/root/.aws/sso/cache:ro` - Read-only AWS SSO cache
+- `$(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2` - Classifier specifications
+
+
+#### 3. Validate Installation + Authentication against AWS
+
+Verify AWS CLI is working correctly:
+
+```bash
+awsv2 s3 ls
+```
+
+## Running the Training Script
+
+Execute the training pipeline using the deploy script:
+
+```bash
+python scripts/deploy.py new \
+  --aws-env prod \
+  --get \
+  --train \
+  --promote \
+  --wikibase-id Q1651
+```
+
+## Remove a Classifier Spec
+
+Within the Knowledge Graph full-pipeline the Aggregation step is designed to run on all classifiers as defined in the classifier spec file. Should you want to omit a classifier from running due to an issue with inference, then the classifier should be demoted and then the classifier spec updated. This can be done using the `just demote` command followed by the `just update-inference-classifiers` command.
+
+
+## Troubleshooting
+
+- Ensure AWS credentials are properly configured locally prior to running the container
+- Verify the `.env` file contains all required environment variables
+- Check that the classifier specs directory is accessible from the container
+- Confirm the target Wikibase ID exists and has associated training data

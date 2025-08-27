@@ -3,7 +3,6 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Generator, Sequence
-from dataclasses import dataclass
 from datetime import timedelta
 from functools import cached_property
 from io import BytesIO
@@ -14,7 +13,6 @@ import boto3
 import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
-from cpr_sdk.ssm import get_aws_ssm_param
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow
@@ -28,11 +26,15 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
+<<<<<<< HEAD
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     disallow_latest_alias,
     load_classifier_specs,
 )
+=======
+from flows.config import Config
+>>>>>>> main
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
@@ -50,8 +52,14 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from scripts.cloud import (
+<<<<<<< HEAD
     AwsEnv,
     get_prefect_job_variable,
+=======
+    ClassifierSpec,
+    disallow_latest_alias,
+    parse_spec_file,
+>>>>>>> main
 )
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
@@ -63,68 +71,19 @@ PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
 # A singular task doing one thing
 TASK_TIMEOUT_S: int = int(timedelta(minutes=60).total_seconds())
 
-DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
 BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.PAGE_NUMBER,
     BlockType.TABLE,
     BlockType.FIGURE,
 }
-DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
+AWS_ENV: str = os.environ["AWS_ENV"]
+S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
-
-
-@dataclass()
-class Config:
-    """Configuration used across flow runs."""
-
-    cache_bucket: Optional[str] = None
-    document_source_prefix: str = DOCUMENT_SOURCE_PREFIX_DEFAULT
-    document_target_prefix: str = DOCUMENT_TARGET_PREFIX_DEFAULT
-    pipeline_state_prefix: str = "input"
-    bucket_region: str = "eu-west-1"
-    local_classifier_dir: Path = Path("data") / "processed" / "classifiers"
-    wandb_model_org: str = "climatepolicyradar_UZODYJSN66HCQ"
-    wandb_model_registry: str = "wandb-registry-model"
-    wandb_entity: str = "climatepolicyradar"
-    wandb_api_key: Optional[SecretStr] = None
-    aws_env: AwsEnv = AwsEnv(os.environ["AWS_ENV"])
-
-    @classmethod
-    async def create(cls) -> "Config":
-        """Create a new Config instance with initialized values."""
-        config = cls()
-
-        if not config.cache_bucket:
-            config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
-            )
-        if not config.wandb_api_key:
-            config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
-
-        return config
-
-    def to_json(self) -> dict:
-        """Convert the config to a JSON serializable dictionary."""
-        return {
-            "cache_bucket": self.cache_bucket if self.cache_bucket else None,
-            "document_source_prefix": self.document_source_prefix,
-            "document_target_prefix": self.document_target_prefix,
-            "pipeline_state_prefix": self.pipeline_state_prefix,
-            "bucket_region": self.bucket_region,
-            "local_classifier_dir": self.local_classifier_dir,
-            "wandb_model_org": self.wandb_model_org,
-            "wandb_model_registry": self.wandb_model_registry,
-            "wandb_entity": self.wandb_entity,
-            "wandb_api_key": (
-                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
-            ),
-            "aws_env": self.aws_env,
-        }
 
 
 class BatchInferenceResult(BaseModel):
@@ -196,7 +155,7 @@ class InferenceResult(BaseModel):
 
 
 def get_bucket_paginator(config: Config, prefix: str):
-    """Returns an s3 paginator for the pipeline cache bucket"""
+    """Returns an S3 paginator for the pipeline cache bucket"""
     s3 = boto3.client("s3", region_name=config.bucket_region)
     paginator = s3.get_paginator("list_objects_v2")
     return paginator.paginate(
@@ -212,7 +171,9 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    page_iterator = get_bucket_paginator(config, config.document_source_prefix)
+    page_iterator = get_bucket_paginator(
+        config, config.inference_document_source_prefix
+    )
     file_stems = []
 
     for p in page_iterator:
@@ -295,7 +256,9 @@ def determine_file_stems(
 
     requested_document_stems = []
     for doc_id in requested_document_ids:
-        document_key = os.path.join(config.document_source_prefix, f"{doc_id}.json")
+        document_key = os.path.join(
+            config.inference_document_source_prefix, f"{doc_id}.json"
+        )
         requested_document_stems += get_file_stems_for_document_id(
             doc_id, config.cache_bucket, document_key
         )
@@ -331,9 +294,9 @@ def download_classifier_from_wandb_to_local(
     """
     Download a classifier from W&B to local.
 
-    Models referenced by weights and biases are stored in s3. This
+    Models referenced by weights and biases are stored in S3. This
     means that to download the model via the W&B API, we need access
-    to both the s3 bucket via iam in your environment and WanDB via
+    to both the S3 bucket via iam in your environment and WanDB via
     the api key.
     """
     artifact = os.path.join(
@@ -375,7 +338,7 @@ async def load_classifier(
 
 
 def download_s3_file(config: Config, key: str):
-    """Retrieve an s3 file from the pipeline cache"""
+    """Retrieve an S3 file from the pipeline cache"""
 
     s3 = boto3.client("s3", region_name=config.bucket_region)
     response = s3.get_object(
@@ -390,7 +353,7 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
-            config.document_source_prefix,
+            config.inference_document_source_prefix,
             f"{document_stem}.json",
         ),
     )
@@ -415,18 +378,8 @@ def document_passages(
     document: BaseParserOutput,
 ) -> Generator[tuple[str, str], None, None]:
     """Yield the text block irrespective of content type."""
-    match document.document_content_type:
-        case "application/pdf":
-            text_blocks = document.pdf_data.text_blocks  # type: ignore
-        case "text/html":
-            text_blocks = document.html_data.text_blocks  # type: ignore
-        case _:
-            text_blocks = []
-            print(
-                "Unsupported document content type: "
-                f"{document.document_content_type}, for "
-                f"document: {document.document_id}"
-            )
+    text_blocks = document.get_text_blocks()
+
     for text_block in text_blocks:
         if text_block.type not in BLOCKED_BLOCK_TYPES:
             yield _stringify(text_block.text), text_block.text_block_id
@@ -489,9 +442,15 @@ def generate_s3_uri_output(
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
+<<<<<<< HEAD
             config.document_target_prefix,
             inference.classifier_spec.wikibase_id,
             inference.classifier_spec.classifier_id,
+=======
+            config.inference_document_target_prefix,
+            inference.classifier_name,
+            inference.classifier_alias,
+>>>>>>> main
             f"{inference.document_stem}.json",
         ),
     )
@@ -928,7 +887,7 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
-@flow(log_prints=True)
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -941,7 +900,7 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-@flow(log_prints=True)
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
 )
@@ -996,7 +955,7 @@ async def inference(
     Default behaviour is to run on everything, pass document_ids to
     limit to specific files.
 
-    Iterates: classifiers > documents > passages. Loading output into s3
+    Iterates: classifiers > documents > passages. Loading output into S3
 
     params:
     - document_ids: List of document ids to run inference on

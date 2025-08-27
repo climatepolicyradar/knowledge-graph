@@ -15,6 +15,9 @@ def get_git_root() -> Path:
         return Path(__file__).parent.parent
 
 
+# Wandb
+WANDB_ENTITY = "climatepolicyradar"
+
 # directories
 DEFAULT_DATA_DIR_NAME = "data"
 root_dir = get_git_root()

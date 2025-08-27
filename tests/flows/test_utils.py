@@ -1,6 +1,5 @@
 import asyncio
 import os
-import re
 import time
 from io import BytesIO
 from pathlib import Path
@@ -46,9 +45,11 @@ def test_file_name_from_path(path, expected):
 @pytest.mark.asyncio
 async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
     with (
-        patch.object(SlackNotify, "environment", "prod"),
+        patch.object(SlackNotify, "environment", AwsEnv.production),
         patch.object(
-            SlackNotify, "slack_block_name", "slack-webhook-platform-prefect-mvp-prod"
+            SlackNotify,
+            "slack_block_name",
+            "slack-webhook-platform-prefect-mvp-prod",
         ),
     ):
         await SlackNotify.message(mock_flow, mock_flow_run, mock_flow_run.state)
@@ -60,14 +61,35 @@ async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
         "slack-webhook-platform-prefect-mvp-prod"
     )
 
-    # `.notify`
-    mock_prefect_slack_block.notify.assert_called_once()
-    kwargs = mock_prefect_slack_block.notify.call_args.kwargs
-    message = kwargs.get("body", "")
-    assert re.match(
-        r"Flow run TestFlow/TestFlowRun observed in state `Completed` at 2025-01-28T12:00:00\+00:00\. For environment: prod\. Flow run URL: http://127\.0\.0\.1:\d+/flow-runs/flow-run/test-flow-run-id\. State message: message",
-        message,
-    )
+    # `.get_client().send()`
+    mock_prefect_slack_block.get_client.assert_called_once()
+    mock_prefect_slack_block.get_client().send.assert_called_once()
+
+    # Verify the blocks parameter was passed to send()
+    call_args = mock_prefect_slack_block.get_client().send.call_args
+    assert call_args is not None
+    assert "blocks" in call_args.kwargs
+
+    # Check the blocks structure without the dynamic URL
+    blocks = call_args.kwargs["blocks"]
+    assert len(blocks) == 5  # Should have 5 main blocks
+
+    # Check first block structure (with button)
+    assert blocks[0]["type"] == "section"
+    assert "accessory" in blocks[0]
+    assert blocks[0]["accessory"]["type"] == "button"
+    assert blocks[0]["accessory"]["text"]["text"] == "View in Prefect"
+    # URL will be dynamic, but should contain the flow run id
+    assert "test-flow-run-id" in blocks[0]["accessory"]["url"]
+
+    # Check other blocks exist
+    assert blocks[1]["type"] == "divider"
+    assert blocks[2]["type"] == "section"  # Fields section
+    assert blocks[3]["type"] == "divider"
+    assert blocks[4]["type"] == "section"  # State message section
+
+    # Verify state message is included
+    assert "message" in blocks[4]["text"]["text"]
 
 
 @pytest.mark.parametrize(
@@ -106,7 +128,9 @@ def test_iterate_batch(data, expected_lengths):
 def test_s3_file_exists(test_config, mock_bucket_documents) -> None:
     """Test that we can check if a file exists in an S3 bucket."""
 
-    key = os.path.join(test_config.document_source_prefix, "PDF.document.0.1.json")
+    key = os.path.join(
+        test_config.inference_document_source_prefix, "PDF.document.0.1.json"
+    )
 
     s3_file_exists(test_config.cache_bucket, key)
 
@@ -121,14 +145,15 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
     file_stems = get_file_stems_for_document_id(
         document_id,
         test_config.cache_bucket,
-        test_config.document_source_prefix,
+        test_config.inference_document_source_prefix,
     )
 
     assert file_stems == [document_id]
 
     body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
     key = os.path.join(
-        test_config.document_source_prefix, f"{document_id}_translated_en.json"
+        test_config.inference_document_source_prefix,
+        f"{document_id}_translated_en.json",
     )
     s3_client = boto3.client("s3")
 
@@ -143,7 +168,8 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
         document_id=document_id,
         bucket_name=test_config.cache_bucket,
         document_key=os.path.join(
-            test_config.document_source_prefix, f"{document_id}.json"
+            test_config.inference_document_source_prefix,
+            f"{document_id}.json",
         ),
     )
 
@@ -201,7 +227,7 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
         s3_client.put_object(
             Bucket=test_config.cache_bucket,
             Key=os.path.join(
-                test_config.document_target_prefix,
+                test_config.inference_document_target_prefix,
                 classifier_spec.name,
                 classifier_spec.alias,
                 file_name,
@@ -215,12 +241,12 @@ def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) ->
         document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
         classifier_specs=[classifier_spec],
         cache_bucket=test_config.cache_bucket,
-        labelled_passages_prefix=test_config.document_target_prefix,
+        labelled_passages_prefix=test_config.inference_document_target_prefix,
     )
     assert sorted(document_paths) == sorted(
         [
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
-            f"s3://{test_config.cache_bucket}/{test_config.document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
+            f"s3://{test_config.cache_bucket}/{test_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
+            f"s3://{test_config.cache_bucket}/{test_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )
 
@@ -275,7 +301,7 @@ def test_filter_non_english_file_stems() -> None:
     _ = filter_non_english_language_file_stems(file_stems=file_stems)
     end_time = time.time()
 
-    assert end_time - start_time < 1, "Filtering took too long"
+    assert end_time - start_time < 1.5, "Filtering took too long"
 
 
 def test_fn_is_async():

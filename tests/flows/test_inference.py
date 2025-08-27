@@ -54,7 +54,7 @@ def helper_list_labels_in_bucket(test_config, bucket_name):
     # Find out what is now in the spans bucket
     s3 = boto3.client("s3", region_name=test_config.bucket_region)
     response = s3.list_objects_v2(
-        Bucket=bucket_name, Prefix=test_config.document_target_prefix
+        Bucket=bucket_name, Prefix=test_config.inference_document_target_prefix
     )
     labels = [c.get("Key") for c in response.get("Contents", [])]
     return labels
@@ -1128,3 +1128,25 @@ def test_original_format_fallback():
         finally:
             # Clean up
             os.unlink(f.name)
+
+
+def test_document_passages(
+    parser_output_pdf,
+    parser_output_html,
+    parser_output_html_converted_to_pdf,
+) -> None:
+    """Test that the document_passages function works correctly."""
+
+    passages = list(document_passages(parser_output_pdf))
+    assert parser_output_pdf.pdf_data is not None
+    assert len(passages) == len(parser_output_pdf.pdf_data.text_blocks)
+
+    passages = list(document_passages(parser_output_html))
+    assert parser_output_html.html_data is not None
+    assert len(passages) == len(parser_output_html.html_data.text_blocks)
+
+    passages = list(document_passages(parser_output_html_converted_to_pdf))
+    assert parser_output_html_converted_to_pdf.pdf_data is not None
+    assert len(passages) == len(
+        parser_output_html_converted_to_pdf.pdf_data.text_blocks
+    )

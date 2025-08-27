@@ -8,9 +8,15 @@ from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
 
 import dotenv
 import httpx
-from httpx import HTTPError
+from httpx import HTTPError, HTTPStatusError, RequestError
 from more_itertools import chunked
 from pydantic import ValidationError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from src.concept import Concept
 from src.exceptions import ConceptNotFoundError, RevisionNotFoundError
@@ -20,6 +26,9 @@ logger = getLogger(__name__)
 dotenv.load_dotenv()
 
 T = TypeVar("T")
+MAX_RETRIES = 5
+RETRY_INITIAL_WAIT = 1.0
+RETRY_MAX_WAIT = 60.0
 
 
 def async_to_sync(
@@ -76,8 +85,8 @@ class WikibaseSession:
     DEFAULT_BATCH_SIZE = 50
     PAGE_REQUEST_SIZE = 500
     MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
-    MAX_CONCURRENT_REQUESTS = 10  # Limit concurrent requests to avoid rate limiting
-    REQUEST_DELAY_SECONDS = 0.1  # Small delay between requests to be gentle on server
+    MAX_CONCURRENT_REQUESTS = 3  # Limit concurrent requests to avoid rate limiting
+    REQUEST_DELAY_SECONDS = 0.5  # Small delay between requests to be gentle on server
     ITEM_NAMESPACE = 120
     ITEM_PREFIX = "Item:"
 
@@ -91,6 +100,9 @@ class WikibaseSession:
         "WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID", "P9"
     )
     definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID", "P7")
+    negative_concept_property_id = os.getenv(
+        "WIKIBASE_NEGATIVE_CONCEPT_PROPERTY_ID", "P11"
+    )
 
     def __init__(
         self,
@@ -133,6 +145,11 @@ class WikibaseSession:
 
         return self._client
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(HTTPStatusError),
+    )
     async def _login(self):
         """Log in to Wikibase and get a CSRF token"""
         if not self._client:
@@ -148,11 +165,12 @@ class WikibaseSession:
                 "format": "json",
             },
         )
+        login_token_response.raise_for_status()
         login_token_data = login_token_response.json()
         login_token = login_token_data["query"]["tokens"]["logintoken"]
 
         # Login
-        await self._client.post(
+        login_response = await self._client.post(
             url=self.api_url,
             data={
                 "action": "login",
@@ -162,12 +180,18 @@ class WikibaseSession:
                 "format": "json",
             },
         )
+        login_response.raise_for_status()
 
         # Get CSRF token
         csrf_token_response = await self._client.get(
             url=self.api_url,
-            params={"action": "query", "meta": "tokens", "format": "json"},
+            params={
+                "action": "query",
+                "meta": "tokens",
+                "format": "json",
+            },
         )
+        csrf_token_response.raise_for_status()
         csrf_token_data = csrf_token_response.json()
         self._csrf_token = csrf_token_data["query"]["tokens"]["csrftoken"]
         logger.debug("Got session CSRF token: %s", self._csrf_token)
@@ -180,6 +204,11 @@ class WikibaseSession:
             )
         return self._redirects.get(wikibase_id, wikibase_id)
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(HTTPStatusError),
+    )
     async def _get_all_redirects(
         self, batch_size: Optional[int] = None
     ) -> dict[WikibaseID, WikibaseID]:
@@ -207,6 +236,7 @@ class WikibaseSession:
                 },
                 timeout=self.DEFAULT_TIMEOUT,
             )
+            response.raise_for_status()
             data = response.json()
 
             for wikibase_id, entity in data.get("entities", {}).items():
@@ -217,25 +247,28 @@ class WikibaseSession:
 
         return redirects
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(HTTPStatusError),
+    )
     async def _get_pages(self, extra_params: dict[str, str]) -> list[dict]:
         """Helper method to get pages from Wikibase with pagination."""
         client = await self._get_client()
-
-        PAGE_REQUEST_SIZE = self.PAGE_REQUEST_SIZE
-        MAX_PAGE_REQUESTS = self.MAX_PAGE_REQUESTS
 
         base_params = {
             "action": "query",
             "format": "json",
             "list": "allpages",  # See https://www.mediawiki.org/wiki/API:Allpages
             "apnamespace": self.ITEM_NAMESPACE,
-            "aplimit": PAGE_REQUEST_SIZE,
+            "aplimit": self.PAGE_REQUEST_SIZE,
         }
         base_params.update(extra_params)
 
         pages = []
-        for i in range(MAX_PAGE_REQUESTS):
+        for i in range(self.MAX_PAGE_REQUESTS):
             response = await client.get(url=self.api_url, params=base_params)
+            response.raise_for_status()
             data = response.json()
 
             if "error" in data:
@@ -264,6 +297,11 @@ class WikibaseSession:
         """Sync wrapper for get_all_concept_ids_async"""
         return await self.get_all_concept_ids_async()
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(HTTPStatusError),
+    )
     async def _fetch_concept_async(
         self,
         wikibase_id: WikibaseID,
@@ -297,18 +335,15 @@ class WikibaseSession:
                     },
                 )
 
-                # Check for HTTP errors (rate limiting, etc.)
-                if revisions_response.status_code != 200:
-                    truncated_text = revisions_response.text
-                    if len(truncated_text) > 200:
-                        truncated_text = truncated_text[:200] + "..."
-                    logger.warning(
-                        "❌ HTTP %s for concept %s: %s",
-                        revisions_response.status_code,
-                        wikibase_id,
-                        truncated_text,
-                    )
-                    return None
+                try:
+                    revisions_response.raise_for_status()
+                except HTTPStatusError as e:
+                    if e.response.status_code == 404:
+                        # 404 is not transient, just return None
+                        logger.warning("Concept %s not found (404)", wikibase_id)
+                        return None
+                    # Re-raise for retry logic to handle
+                    raise
 
                 try:
                     revisions_data = revisions_response.json()
@@ -341,6 +376,8 @@ class WikibaseSession:
 
                 # Parse concept data
                 concept = self._parse_wikibase_entity(wikibase_id, entity)
+
+                concept = await self._incorporate_negative_concepts(concept)
 
                 # Small delay to be gentle on the server
                 await asyncio.sleep(self.REQUEST_DELAY_SECONDS)
@@ -417,7 +454,61 @@ class WikibaseSession:
                         concept.negative_labels.append(value)
                     elif property_id == self.definition_property_id:
                         concept.definition = value
+                    elif property_id == self.negative_concept_property_id:
+                        concept.negative_concepts.append(
+                            self._resolve_redirect(value["id"])
+                        )
 
+    async def _incorporate_negative_concepts(self, concept: Concept) -> Concept:
+        """
+        Add positive labels from negative concepts
+
+        For the given concept, fetch all negative concepts and add their positive
+        labels to the concept's negative labels, returning a new concept with the
+        additional negative labels.
+        """
+        # If there are no negative concepts, return the concept unchanged
+        if not concept.negative_concepts:
+            return concept
+
+        try:
+            # Fetch all negative concepts
+            negative_concepts = await self.get_concepts_async(
+                wikibase_ids=concept.negative_concepts
+            )
+
+            # Combine existing negative labels with new negative labels
+            existing_negative_labels = set(concept.negative_labels)
+            new_negative_labels = set(
+                label
+                for negative_concept in negative_concepts
+                for label in negative_concept.all_labels
+            )
+            combined_negative_labels = list(
+                existing_negative_labels | new_negative_labels
+            )
+
+            updated_concept = concept.model_copy(
+                update={"negative_labels": combined_negative_labels},
+                deep=True,
+            )
+            return updated_concept
+
+        except (ConceptNotFoundError, HTTPStatusError, ValidationError) as e:
+            logger.warning(
+                "Failed to merge negative concept labels for %s: %s",
+                concept.wikibase_id,
+                e,
+            )
+            return concept
+
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(
+            (HTTPStatusError, RequestError, json.JSONDecodeError)
+        ),
+    )
     async def get_concepts_async(
         self,
         limit: Optional[int] = None,
@@ -484,6 +575,7 @@ class WikibaseSession:
                     "props": "info",
                 },
             )
+            entity_response.raise_for_status()
             entity_data = entity_response.json()
 
             if "error" in entity_data:
@@ -642,6 +734,13 @@ class WikibaseSession:
             include_recursive_has_subconcept,
         )
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(
+            (HTTPStatusError, RequestError, json.JSONDecodeError)
+        ),
+    )
     async def get_recursive_has_subconcept_relationships_async(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
@@ -657,6 +756,13 @@ class WikibaseSession:
         """Sync wrapper for get_recursive_has_subconcept_relationships_async"""
         return await self.get_recursive_has_subconcept_relationships_async(wikibase_id)
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(
+            (HTTPStatusError, RequestError, json.JSONDecodeError)
+        ),
+    )
     async def get_recursive_subconcept_of_relationships_async(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
@@ -672,6 +778,13 @@ class WikibaseSession:
         """Sync wrapper for get_recursive_subconcept_of_relationships_async"""
         return await self.get_recursive_subconcept_of_relationships_async(wikibase_id)
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(
+            (HTTPStatusError, RequestError, json.JSONDecodeError)
+        ),
+    )
     async def _get_recursive_relationships_async(
         self,
         wikibase_id: WikibaseID,
@@ -708,7 +821,17 @@ class WikibaseSession:
                 "props": "claims",
             },
         )
-        data = response.json()
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            logger.warning(
+                "❌ Invalid JSON response for concept %s: %s",
+                wikibase_id,
+                response.text,
+            )
+            raise
 
         entity = data["entities"][str(wikibase_id)]
         related_concepts = []
@@ -762,6 +885,13 @@ class WikibaseSession:
         """Async context manager exit"""
         await self.close()
 
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(
+            (HTTPStatusError, RequestError, json.JSONDecodeError)
+        ),
+    )
     async def add_alternative_labels_async(
         self,
         wikibase_id: WikibaseID,
@@ -797,9 +927,10 @@ class WikibaseSession:
                 ),
             },
         )
+        response.raise_for_status()
         response_data = response.json()
         if "error" in response_data:
-            raise Exception(
+            raise HTTPError(
                 f"Error adding alternative labels: {response_data['error']}"
             )
         return response_data
