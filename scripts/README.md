@@ -55,6 +55,12 @@ Clear the list to allow the classifier to run on anything
 just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on
 ```
 
+For times when its necessary to update every promoted classifier that is mentioned in the spec for an environment, you can run the following:
+
+```shell
+just classifier_metadata_entire_env sandbox --add-dont-run-on sabin
+```
+
 ## Training Classifiers in Docker
 
 This guide explains how to train classifiers using Docker containers with AWS integration. This may be desirable for developers as installing transformers (which is required for training our neural network based models) locally can be difficult; with system incompatibilities and version support issues being common.
