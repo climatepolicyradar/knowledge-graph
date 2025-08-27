@@ -70,12 +70,12 @@ def test_get_all_available_classifiers(mock_wandb_api):
             expected = textwrap.dedent("""
                 ---
                 - classifier_id: abcd2345
-                  wandb_registry_version: 1
+                  wandb_registry_version: v1
                   wikibase_id: Q111
                 - classifier_id: 2345abcd
                   dont_run_on:
                   - sabin
-                  wandb_registry_version: 1
+                  wandb_registry_version: v1
                   wikibase_id: Q222
                 """).lstrip()
 
