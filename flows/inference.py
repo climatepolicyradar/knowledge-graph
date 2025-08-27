@@ -717,9 +717,9 @@ def generate_assets(
     """
     Generate assets for the inference results.
 
-    The maximum number of related resources to a prefect event is 100 and thus we
-    truncate the assets.
-    - https://github.com/PrefectHQ/prefect/blob/main/src/prefect/events/schemas/events.py#L127
+    There is a maximum number of related resources for a Prefect event, thus we
+    truncate the assets
+    - https://github.com/PrefectHQ/prefect/blob/4a2335d/src/prefect/events/schemas/events.py#L103-L111
     """
 
     if len(inferences) > max_related_resources:
@@ -739,9 +739,9 @@ def generate_asset_deps(
     """
     Generate asset deps for the inference results.
 
-    The maximum number of related resources to a prefect event is 100 and thus we
-    truncate the assets.
-    - https://github.com/PrefectHQ/prefect/blob/main/src/prefect/events/schemas/events.py#L127
+    There is a maximum number of related resources for a Prefect event, thus we
+    truncate the assets
+    - https://github.com/PrefectHQ/prefect/blob/4a2335d/src/prefect/events/schemas/events.py#L103-L111
     """
 
     if len(inferences) > max_related_resources:

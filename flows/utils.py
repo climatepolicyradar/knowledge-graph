@@ -775,11 +775,18 @@ class Fault(Exception):
             print(f"could not represent fault's data as a string: {e}")
             data_str = ""
 
-        fault_str = f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)} | data: {data_str}"
-
-        # Prefect logs should have no more than 25000 characters, so truncate
+        # Prefect logs should have no more than 25,000 characters, so truncate
         # the fault string if it's too long.
-        fault_str = fault_str[:20_000] + "..." if len(fault_str) > 20_000 else fault_str
+        message_str = textwrap.shorten(self.msg, width=8_000, placeholder="...")
+        metadata_str = textwrap.shorten(
+            json.dumps(self.metadata, default=str), width=8_000, placeholder="..."
+        )
+        data_str = textwrap.shorten(data_str, width=8_000, placeholder="...")
+
+        fault_str = f"{message_str} | metadata: {metadata_str} | data: {data_str}"
+
+        # Also truncate the total string as a safety precaution.
+        fault_str = textwrap.shorten(fault_str, width=24_997, placeholder="...")
 
         return fault_str
 
