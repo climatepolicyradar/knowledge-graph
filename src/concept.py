@@ -58,6 +58,12 @@ class Concept(BaseModel):
     related_concepts: list[WikibaseID] = Field(
         default_factory=list, description="List of related concept IDs"
     )
+    negative_concepts: list[WikibaseID] = Field(
+        default_factory=list,
+        description=(
+            "List of concept IDs for concepts this should not be confused with"
+        ),
+    )
     recursive_subconcept_of: Optional[list[WikibaseID]] = Field(
         default=None,
         description="List of all parent concept IDs, recursively up the hierarchy",
