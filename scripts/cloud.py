@@ -1,7 +1,6 @@
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from enum import Enum
-from pathlib import Path
 from typing import Any, Optional
 
 import boto3
@@ -9,49 +8,12 @@ import boto3.session
 import botocore
 import botocore.client
 import typer
-import yaml
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
 from src.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
-SPEC_DIR = Path("flows") / "classifier_specs"
-
-
-# Version 1 classifier spec, to be cleaned up and replaced
-# with model from `flows/classifier_specs/spec_interface.py`
-class ClassifierSpec(BaseModel):
-    """Details for a classifier to run."""
-
-    name: str = Field(
-        description="The reference of the classifier in wandb. e.g. 'Q992'",
-        min_length=1,
-    )
-    alias: str = Field(
-        description=(
-            "The alias tag for the version to use for inference. e.g 'latest' or 'v2'"
-        ),
-        min_length=1,
-    )
-
-    def __hash__(self):
-        """Make ClassifierSpec hashable for use in sets and as dict keys."""
-        return hash((self.name, self.alias))
-
-    def __str__(self):
-        """Return a string representation of the classifier spec."""
-        return f"{self.name}:{self.alias}"
-
-    def __repr__(self):
-        """Return a string representation of the classifier spec."""
-        return f"{self.name}:{self.alias}"
-
-
-def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
-    if any(classifier_spec.alias == "latest" for classifier_spec in classifier_specs):
-        raise ValueError("`latest` is not allowed")
-    return None
 
 
 async def get_prefect_job_variable(param_name: str) -> str:
@@ -203,42 +165,3 @@ def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
     ) as e:
         print(f"determining that not logged in due to exception: {e}")
         return False
-
-
-# Version 1 classifier spec helper, to be cleaned up and replaced
-# with model from `flows/classifier_specs/spec_interface.py`
-def build_spec_file_path(aws_env: AwsEnv) -> Path:
-    file_path = SPEC_DIR / f"{aws_env}.yaml"
-    return file_path
-
-
-# Version 1 classifier spec helper, to be cleaned up and replaced
-# with model from `flows/classifier_specs/spec_interface.py`
-def read_spec_file(aws_env: AwsEnv) -> list[str]:
-    file_path = build_spec_file_path(aws_env)
-    with open(file_path, "r") as file:
-        return yaml.load(file, Loader=yaml.FullLoader)
-
-
-# Version 1 classifier spec helper, to be cleaned up and replaced
-# with model from `flows/classifier_specs/spec_interface.py`
-def parse_spec_file(aws_env: AwsEnv) -> list[ClassifierSpec]:
-    contents = read_spec_file(aws_env)
-    classifier_specs: list[ClassifierSpec] = []
-    for item in contents:
-        try:
-            name, alias = item.split(":")
-            classifier_specs.append(ClassifierSpec(name=name, alias=alias))
-        except ValueError:
-            raise ValueError(f"Invalid format in spec file: {item}")
-
-    return classifier_specs
-
-
-# Version 1 classifier spec helper, to be cleaned up and replaced
-# with model from `flows/classifier_specs/spec_interface.py`
-def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
-    """Save a classifier spec YAML"""
-    serialised_data = list(map(lambda spec: str(spec), data))
-    with open(file_path, "w") as file:
-        yaml.dump(serialised_data, file, explicit_start=True)
