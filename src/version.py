@@ -1,8 +1,7 @@
 import re
 
 
-# FIXME: Bug when instantiating a ClassifierSpec v2 with a Version object.
-class Version(str):
+class Version:
     """A version as mandated by W&B."""
 
     regex = r"^v\d+$"

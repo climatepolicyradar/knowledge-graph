@@ -16,10 +16,10 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext
 from prefect.states import Completed
 
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.inference import (
     PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
     BatchInferenceResult,
-    ClassifierSpec,
     DocumentImportId,
     DocumentStem,
     InferenceResult,
@@ -624,6 +624,7 @@ async def test_inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
             classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+            return_state=True,
         )
 
     result = await result_state.result()
@@ -1159,8 +1160,11 @@ def test_generate_assets_and_asset_deps(test_config) -> None:
         SingleDocumentInferenceResult(
             labelled_passages=[],
             document_stem=DocumentStem("TEST.DOC.0.1"),
-            classifier_name="Q9081",
-            classifier_alias="v3",
+            classifier_spec=ClassifierSpec(
+                wikibase_id=WikibaseID("Q9081"),
+                classifier_id=ClassifierID.generate("Q9081", "v3"),
+                wandb_registry_version=Version("v3"),
+            ),
         )
     ]
 

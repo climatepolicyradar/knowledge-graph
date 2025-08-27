@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from scripts.cloud import AwsEnv
 from scripts.utils import DontRunOnEnum
@@ -52,6 +52,17 @@ class ClassifierSpec(BaseModel):
     def __str__(self):
         """Return a string representation of the classifier spec."""
         return f"{self.wikibase_id}:{self.classifier_id}"
+
+    @field_validator("wandb_registry_version", mode="before")
+    @classmethod
+    def _validate_version(cls, value: Any) -> str:
+        if isinstance(value, Version):
+            return value.__str__()
+        if isinstance(value, str):
+            return Version(value=value).__str__()
+        if isinstance(value, int):
+            return Version(value=f"v{value}").__str__()
+        raise ValueError(f"Expected Version or string, got {type(value)}")
 
 
 def determine_spec_file_path(aws_env: AwsEnv) -> Path:
