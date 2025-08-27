@@ -27,15 +27,12 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
-<<<<<<< HEAD
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     disallow_latest_alias,
     load_classifier_specs,
 )
-=======
 from flows.config import Config
->>>>>>> main
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
@@ -51,16 +48,6 @@ from flows.utils import (
     map_as_sub_flow,
     return_with,
     wait_for_semaphore,
-)
-from scripts.cloud import (
-<<<<<<< HEAD
-    AwsEnv,
-    get_prefect_job_variable,
-=======
-    ClassifierSpec,
-    disallow_latest_alias,
-    parse_spec_file,
->>>>>>> main
 )
 from src.classifier import Classifier
 from src.labelled_passage import LabelledPassage
@@ -446,15 +433,9 @@ def generate_s3_uri_output(
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
-<<<<<<< HEAD
-            config.document_target_prefix,
+            config.inference_document_target_prefix,
             inference.classifier_spec.wikibase_id,
             inference.classifier_spec.classifier_id,
-=======
-            config.inference_document_target_prefix,
-            inference.classifier_name,
-            inference.classifier_alias,
->>>>>>> main
             f"{inference.document_stem}.json",
         ),
     )
