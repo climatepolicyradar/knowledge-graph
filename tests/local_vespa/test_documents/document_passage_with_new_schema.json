@@ -15,14 +15,7 @@
                     "start": 45,
                     "end": 58,
                     "model": "r5n8qz2t",
-                    "timestamp": "2024-09-26T16:15:39.817896",
-                    "parent_concepts": [
-                        {
-                            "id": "q110",
-                            "name": "environmental issues"
-                        }
-                    ],
-                    "parent_concept_ids_flat": "q110,"
+                    "timestamp": "2024-09-26T16:15:39.817896"
                 }
             ],
             "models_profile_ref": "id:doc_search:models_profile::primaries",
@@ -36,14 +29,7 @@
                             { "start": 45, "end": 58 },
                             { "start": 63, "end": 84 }
                         ]
-                    },
-                    "parent_concept_ids_flat": "q110,",
-                    "parent_concepts": [
-                        {
-                            "id": "q110",
-                            "name": "environmental issues"
-                        }
-                    ]
+                    }
                 },
                 "q730": {
                     "concept_id": "q730",
@@ -51,14 +37,7 @@
                     "spans_by_model_version": {
                         "d9fg4j6m": [{ "start": 6, "end": 27 }],
                         "w3kb7x1s": [{ "start": 6, "end": 27 }]
-                    },
-                    "parent_concept_ids_flat": "q110,",
-                    "parent_concepts": [
-                        {
-                            "id": "q110",
-                            "name": "environmental issues"
-                        }
-                    ]
+                    }
                 }
             }
         }

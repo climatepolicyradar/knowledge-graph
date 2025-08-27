@@ -11,6 +11,11 @@ schema concept {
             indexing: attribute | summary | index
         }
 
+        struct concept_ref {
+            field id type string {}
+            field revision_id type string {}
+        }
+
         struct instance {
             # E.g. fishing sector
             field preferred_label type string {}
@@ -22,11 +27,15 @@ schema concept {
             #
             # We can't do self-references for documents in Vespa, so
             # use strings for the IDs.
-            field subconcept_of type array<string> {}
+            field subconcept_of type array<concept_ref> {}
+            # E.g. Q110:1601
             field subconcept_of_flat type string {}
-            field has_subconcept type array<string> {}
-            field relative_concepts type array<string> {}
-            field recursive_subconcept_of type array<string> {}
+            field has_subconcept type array<concept_ref> {}
+            field has_subconcept_flat type string {}
+            field relative_concepts type array<concept_ref> {}
+            field relative_concepts_flat type string {}
+            field recursive_subconcept_of type array<concept_ref> {}
+            field recursive_subconcept_of_flat type string {}
             field recursive_has_subconcept type bool {}
         }
 
@@ -43,6 +52,18 @@ schema concept {
                 attribute: fast-search
             }
             struct-field value.subconcept_of_flat {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field value.has_subconcept_flat {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field value.relative_concepts_flat {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field value.recursive_subconcept_of_flat {
                 indexing: attribute
                 attribute: fast-search
             }

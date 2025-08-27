@@ -118,9 +118,6 @@ schema document_passage {
              field models_ids_flat type string {}
              # E.g. string is the model ID
              field spans_by_model_version type map<string, array<span>> {}
-             # From the concepts v1
-             field parent_concepts            type array<parent_concept> {}
-             field parent_concept_ids_flat    type string {}
         }
 
         # The string is the concept ID, e.g. Q880
