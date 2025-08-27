@@ -73,16 +73,16 @@ def test_refresh_all_available_classifiers(mock_wandb_api):
 
             expected = textwrap.dedent("""
                 ---
-                - classifier_id: abcd2345
+                - wikibase_id: Q111
+                  classifier_id: abcd2345
                   wandb_registry_version: v1
-                  wikibase_id: Q111
-                - classifier_id: 2345abcd
+                - wikibase_id: Q222
+                  classifier_id: 2345abcd
+                  wandb_registry_version: v1
                   compute_environment:
                     gpu: true
                   dont_run_on:
                   - sabin
-                  wandb_registry_version: v1
-                  wikibase_id: Q222
                 """).lstrip()
 
             assert results == expected
