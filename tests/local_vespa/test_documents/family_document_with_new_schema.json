@@ -416,22 +416,38 @@
                 "q880": 1,
                 "q730": 1
             },
-            "models_profile_ref": "id:doc_search:models_profile::primaries",
+            "classifiers_profile_ref": "id:doc_search:classifiers_profile::primaries",
             "concepts_v2": {
                 "q880": {
                     "concept_id": "q880",
-                    "models_ids_flat": "kx7m3p9w,r5n8qz2t",
-                    "counts_by_model_version": {
-                        "kx7m3p9w": 1,
-                        "r5n8qz2t": 2
+                    "classifiers_ids_flat": "kx7m3p9w,r5n8qz2t",
+                    "counts_by_version": {
+                        "kx7m3p9w": {
+                            "classifier_id": "kx7m3p9w",
+                            "revision_id": "9092",
+                            "count": 1
+                        },
+                        "r5n8qz2t": {
+                            "classifier_id": "r5n8qz2t",
+                            "revision_id": "28013",
+                            "count": 2
+                        }
                     }
                 },
                 "q730": {
                     "concept_id": "q730",
-                    "models_ids_flat": "d9fg4j6m,w3kb7x1s",
-                    "counts_by_model_version": {
-                        "d9fg4j6m": 1,
-                        "w3kb7x1s": 1
+                    "classifiers_ids_flat": "d9fg4j6m,w3kb7x1s",
+                    "counts_by_version": {
+                        "d9fg4j6m": {
+                            "classifier_id": "d9fg4j6m",
+                            "revision_id": "90",
+                            "count": 1
+                        },
+                        "w3kb7x1s": {
+                            "classifier_id": "w3kb7x1s",
+                            "revision_id": "289",
+                            "count": 1
+                        }
                     }
                 }
             }

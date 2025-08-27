@@ -18,25 +18,41 @@
                     "timestamp": "2024-09-26T16:15:39.817896"
                 }
             ],
-            "models_profile_ref": "id:doc_search:models_profile::primaries",
+            "classifiers_profile_ref": "id:doc_search:classifiers_profile::primaries",
             "concepts_v2": {
                 "q880": {
                     "concept_id": "q880",
-                    "models_ids_flat": "kx7m3p9w,r5n8qz2t",
-                    "spans_by_model_version": {
-                        "kx7m3p9w": [{ "start": 45, "end": 58 }],
-                        "r5n8qz2t": [
-                            { "start": 45, "end": 58 },
-                            { "start": 63, "end": 84 }
-                        ]
+                    "classifiers_ids_flat": "kx7m3p9w,r5n8qz2t",
+                    "spans_by_version": {
+                        "kx7m3p9w": {
+                            "classifier_id": "kx7m3p9w",
+                            "revision_id": "9092",
+                            "spans": [{ "start": 45, "end": 58 }]
+                        },
+                        "r5n8qz2t": {
+                            "classifier_id": "r5n8qz2t",
+                            "revision_id": "28013",
+                            "spans": [
+                                { "start": 45, "end": 58 },
+                                { "start": 63, "end": 84 }
+                            ]
+                        }
                     }
                 },
                 "q730": {
                     "concept_id": "q730",
-                    "models_ids_flat": "d9fg4j6m,w3kb7x1s",
-                    "spans_by_model_version": {
-                        "d9fg4j6m": [{ "start": 6, "end": 27 }],
-                        "w3kb7x1s": [{ "start": 6, "end": 27 }]
+                    "classifiers_ids_flat": "d9fg4j6m,w3kb7x1s",
+                    "spans_by_version": {
+                        "d9fg4j6m": {
+                            "classifier_id": "d9fg4j6m",
+                            "revision_id": "90",
+                            "spans": [{ "start": 6, "end": 27 }]
+                        },
+                        "w3kb7x1s": {
+                            "classifier_id": "w3kb7x1s",
+                            "revision_id": "289",
+                            "spans": [{ "start": 6, "end": 27 }]
+                        }
                     }
                 }
             }

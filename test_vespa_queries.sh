@@ -59,8 +59,8 @@ run_query "Get all concepts" \
     'yql=select * from concept where true' \
     'q880'
 
-run_query "Get all models" \
-    'yql=select * from model where true' \
+run_query "Get all classifiers" \
+    'yql=select * from classifier where true' \
     'kx7m3p9w'
 
 run_query "Get family document with new schema" \
@@ -135,10 +135,10 @@ else
 fi
 echo
 
-# Test model queries
-echo "=== Model-Specific Tests ==="
-run_query "Get air pollution models" \
-    'yql=select * from model where name contains "AirPollution"' \
+# Test classifier queries
+echo "=== Classifier-Specific Tests ==="
+run_query "Get air pollution classifiers" \
+    'yql=select * from classifier where name contains "AirPollution"' \
     '"kx7m3p9w"'
 
 # Test new concepts_v2 functionality
@@ -147,29 +147,29 @@ run_query "Family documents with concept q880" \
     'yql=select * from family_document where concepts_v2 contains sameElement(key contains "q880")' \
     '"q880"'
 
-run_query "Family documents with concept q880 and model kx7m3p9w" \
-    'yql=select * from family_document where concepts_v2 contains sameElement(key contains "q880") and concepts_v2 contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
+run_query "Family documents with concept q880 and classifier kx7m3p9w" \
+    'yql=select * from family_document where concepts_v2 contains sameElement(key contains "q880") and concepts_v2 contains sameElement(value.classifiers_ids_flat matches "kx7m3p9w")' \
     '"q880"'
 
 run_query "Document passages with concept q880" \
     'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880")' \
     '"q880"'
 
-run_query "Document passages with concept q880 and model kx7m3p9w" \
-    'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880") and concepts_v2 contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
+run_query "Document passages with concept q880 and classifier kx7m3p9w" \
+    'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880") and concepts_v2 contains sameElement(value.classifiers_ids_flat matches "kx7m3p9w")' \
     '"q880"'
 
-run_query "Document passages with concept q880 and default models profile" \
+run_query "Document passages with concept q880 and default classifiers profile" \
     'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880")' \
     '"concepts_versions"' \
     'presentation.summary=search_summary'
 
-run_query "Get all models profiles separately (if needed)" \
-    'yql=select * from models_profile where true' \
+run_query "Get all classifiers profiles separately (if needed)" \
+    'yql=select * from classifiers_profile where true' \
     '"concepts_versions"'
 
-run_query "Get specific models profile by ID (override approach)" \
-    'yql=select * from models_profile where id contains "experimentals"' \
+run_query "Get specific classifiers profile by ID (override approach)" \
+    'yql=select * from classifiers_profile where id contains "experimentals"' \
     '"experimentals"'
 
 echo "🎉 All tests completed!"
@@ -180,9 +180,9 @@ echo "# Basic queries:"
 echo "vespa query 'yql=select * from concept where true'"
 echo "vespa query 'yql=select * from document_passage where concepts_v2 contains sameElement(key contains \"q880\")'"
 echo ""
-echo "# Single query with default models profile (primaries):"
+echo "# Single query with default classifiers profile (primaries):"
 echo "vespa query 'yql=select * from document_passage where concepts_v2 contains sameElement(key contains \"q880\")' 'presentation.summary=search_summary'"
 echo ""
-echo "# Separate models profile queries (for overrides):"
-echo "vespa query 'yql=select * from models_profile where id contains \"primaries\"'"
-echo "vespa query 'yql=select * from models_profile where id contains \"experimentals\"'"
+echo "# Separate classifiers profile queries (for overrides):"
+echo "vespa query 'yql=select * from classifiers_profile where id contains \"primaries\"'"
+echo "vespa query 'yql=select * from classifiers_profile where id contains \"experimentals\"'"

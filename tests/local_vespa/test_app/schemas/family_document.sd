@@ -181,8 +181,14 @@ schema family_document {
         }
 
         # Optional reference to models profile, defaults to "primaries"
-        field models_profile_ref type reference<models_profile> {
+        field classifiers_profile_ref type reference<classifiers_profile> {
             indexing: attribute | summary
+        }
+
+        struct count {
+            field classifier_id type string {}
+            field revision_id type string {}
+            field count type int {}
         }
 
         struct concept_v2 {
@@ -193,9 +199,9 @@ schema family_document {
              # Use a similar flattened approach, as
              # parent_concept_ids_flat, due to Vespa limitations and
              # how we've chosen to model this.
-             field models_ids_flat type string {}
-             # E.g. string is the model ID
-             field counts_by_model_version type map<string, int> {}
+             field classifiers_ids_flat type string {}
+             # E.g. string is the classifier ID
+             field counts_by_version type map<string, count> {}
         }
 
         # The string is the concept ID, e.g. Q880
@@ -212,7 +218,7 @@ schema family_document {
                 attribute: fast-search
                 rank: filter
             }
-            struct-field value.models_ids_flat {
+            struct-field value.classifiers_ids_flat {
                 indexing: attribute
                 attribute: fast-search
                 rank: filter
@@ -220,7 +226,7 @@ schema family_document {
         }
     }
 
-    import field models_profile_ref.concepts_versions as concepts_versions {}
+    import field classifiers_profile_ref.concepts_versions as concepts_versions {}
 
     fieldset default {
         fields: family_name_index, family_description_index
