@@ -2,6 +2,8 @@
 
 # Test script for Vespa queries with new schema
 # Run this after: just vespa_dev_down vespa_dev_setup vespa_feed_data
+# `matches` vs `contains`:
+# [1] https://docs.vespa.ai/en/reference/query-language-reference.html
 
 set -e
 
@@ -49,6 +51,10 @@ run_query() {
 
 # Test basic document retrieval
 echo "=== Basic Document Tests ==="
+run_query "Get ALL concepts (no filters)" \
+    'yql=select * from concept where true' \
+    '"totalCount": 5'
+
 run_query "Get all concepts" \
     'yql=select * from concept where true' \
     'q880'
@@ -80,6 +86,40 @@ run_query "Get concept with parents" \
 run_query "Get concept by revision and ID" \
     'yql=select * from concept where revisions contains sameElement(key contains "1402") and id contains "q880"' \
     '"q880"'
+
+# Test *_flat relationship fields
+echo "=== Flat Relationship Tests ==="
+run_query "Get concepts with subconcept_of_flat q110" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110")' \
+    '"q880"'
+
+run_query "Get concepts with subconcept_of_flat q110:1902" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110:1902")' \
+    '"q880"'
+
+run_query "Get concepts with subconcept_of_flat q110:1902,q290:1903" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110:1902,q290:1903")' \
+    '"q880"'
+
+run_query "Get concepts with subconcept_of_flat q110:1902,q290" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110:1902,q290")' \
+    '"q880"'
+
+run_query "Get concepts with subconcept_of_flat q500" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q500")' \
+    '"q730"'
+
+run_query "Get concepts with subconcept_of_flat q500:1904" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat contains "q500:1904")' \
+    '"q730"'
+
+run_query "Get concepts with subconcept_of_flat q730" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q730")' \
+    '"q290"'
+
+run_query "Get concepts with subconcept_of_flat q730:1905" \
+    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat contains "q730:1905")' \
+    '"q290"'
 
 echo -e "${BLUE}Testing: Get multiple concepts by revision and ID pairs${NC}"
 echo "Query: yql=select * from concept where (id contains \"q880\" and revisions contains sameElement(key contains \"1402\")) or (id contains \"q290\" and revisions contains sameElement(key contains \"1099\"))"

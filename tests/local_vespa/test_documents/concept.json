@@ -11,8 +11,11 @@
                     "definition": "",
                     "alternative_labels": [],
                     "negative_labels": [],
-                    "subconcept_of": ["q110", "q290"],
-                    "subconcept_of_flat": "q110,q290",
+                    "subconcept_of": [
+                        { "id": "q110", "revision_id": "1902" },
+                        { "id": "q290", "revision_id": "1903" }
+                    ],
+                    "subconcept_of_flat": "q110:1902,q290:1903",
                     "has_subconcept": [],
                     "relative_concepts": [],
                     "recursive_subconcept_of": [],
@@ -27,14 +30,14 @@
             "id": "q730",
             "revisions_ids_flat": "3982",
             "revisions": {
-                "3982": {
+                "1905": {
                     "preferred_label": "fishing sector",
                     "description": "",
                     "definition": "",
                     "alternative_labels": [],
                     "negative_labels": [],
-                    "subconcept_of": ["q500"],
-                    "subconcept_of_flat": "q500",
+                    "subconcept_of": [{ "id": "q500", "revision_id": "1904" }],
+                    "subconcept_of_flat": "q500:1904",
                     "has_subconcept": [],
                     "relative_concepts": [],
                     "recursive_subconcept_of": [],
@@ -77,8 +80,8 @@
                     "definition": "",
                     "alternative_labels": [],
                     "negative_labels": [],
-                    "subconcept_of": ["q730"],
-                    "subconcept_of_flat": "q730",
+                    "subconcept_of": [{ "id": "q730", "revision_id": "1905" }],
+                    "subconcept_of_flat": "q730:1905",
                     "has_subconcept": [],
                     "relative_concepts": [],
                     "recursive_subconcept_of": [],
@@ -93,7 +96,7 @@
             "id": "q500",
             "revisions_ids_flat": "4700",
             "revisions": {
-                "4700": {
+                "1904": {
                     "preferred_label": "economic sectors",
                     "description": "",
                     "definition": "",
