@@ -1,6 +1,7 @@
 """A script for editing classifier metadata in wandb."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated
 
 import typer
@@ -44,17 +45,30 @@ def update_entire_env(
             help="Also update the classifier specs for the environment following changes"
         ),
     ] = True,
+    max_workers: Annotated[
+        int,
+        typer.Option(help="Max number of threads to use, one classifier per thread."),
+    ] = 8,
 ):
+    """Update classifier metadata for every classifier in an envs spec."""
     specs = load_classifier_specs(aws_env)
-    for spec in specs:
-        update(
-            wikibase_id=spec.wikibase_id,
-            classifier_id=spec.classifier_id,
-            clear_dont_run_on=clear_dont_run_on,
-            add_dont_run_on=add_dont_run_on,
-            aws_env=aws_env,
-            update_specs=False,  # since we'll only update once all are done
-        )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for spec in specs:
+            future = executor.submit(
+                update,
+                wikibase_id=spec.wikibase_id,
+                classifier_id=spec.classifier_id,
+                clear_dont_run_on=clear_dont_run_on,
+                add_dont_run_on=add_dont_run_on,
+                aws_env=aws_env,
+                update_specs=False,  # since we'll only update once all are done
+            )
+            futures.append(future)
+
+        for future in as_completed(futures):
+            future.result()
 
     if update_specs:
         get_all_available_classifiers([aws_env])
