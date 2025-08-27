@@ -13,6 +13,7 @@ from flows.aggregate import (
 from flows.boundary import (
     DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
 )
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
 from flows.index import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
@@ -27,7 +28,6 @@ from flows.inference import (
     inference,
 )
 from flows.utils import DocumentImportId, Fault
-from scripts.cloud import ClassifierSpec
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
