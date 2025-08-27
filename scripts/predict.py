@@ -10,7 +10,6 @@ from scripts.utils import ModelPath, get_local_classifier_path
 from src.classifier import Classifier
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
@@ -69,7 +68,6 @@ def main(
 
     classifiers: list[Classifier] = [
         KeywordClassifier(concept),
-        RulesBasedClassifier(concept),
         StemmedKeywordClassifier(concept),
         EmbeddingClassifier(concept, threshold=0.6),
         EmbeddingClassifier(concept, threshold=0.625),

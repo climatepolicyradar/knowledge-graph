@@ -3,19 +3,19 @@ import os
 
 from anthropic import Anthropic
 
-from src.classifier.rules_based import RulesBasedClassifier
+from src.classifier.keyword import KeywordClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID
 
 
-class KeywordExpansionClassifier(RulesBasedClassifier):
+class KeywordExpansionClassifier(KeywordClassifier):
     """
     A classifier that uses an LLM to expand the set of keywords used for matching.
 
     This classifier takes the initial concept keywords and uses an LLM to generate
     additional related terms. For example, if given the concept "horse", it might
     expand to include terms like "pony", "mare", "stallion", etc. It then uses these
-    expanded terms for matching using the logic of the parent RulesBasedClassifier.
+    expanded terms for matching using the logic of the parent KeywordClassifier.
     """
 
     def __init__(
