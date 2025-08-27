@@ -595,8 +595,8 @@ def test_fault() -> None:
     """Test the Fault class."""
 
     fault = Fault(msg="test_msg", metadata={"key": "value"}, data="test_data")
-    assert str(fault) == "test_msg | metadata: {'key': 'value'} | data: test_data"
+    assert str(fault) == 'test_msg | metadata: {"key": "value"} | data: test_data'
 
     fault.data = "a" * 30_000  # 30_000 characters
-    assert len(str(fault)) == 20_000
+    assert len(str(fault)) == 20_003  # 20_000 + 3 for the "..."
     assert str(fault).endswith("...")
