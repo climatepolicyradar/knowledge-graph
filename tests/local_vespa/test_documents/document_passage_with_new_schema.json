@@ -26,7 +26,7 @@
                 }
             ],
             "models_profile_ref": "id:doc_search:models_profile::primaries",
-            "concepts_instances": {
+            "concepts_v2": {
                 "q880": {
                     "concept_id": "q880",
                     "models_ids_flat": "kx7m3p9w,r5n8qz2t",

@@ -59,12 +59,12 @@ run_query "Get all models" \
 
 run_query "Get family document with new schema" \
     'yql=select * from family_document where document_import_id contains "CCLW.document.i00000005.n0000"' \
-    '"concepts_instances"' \
+    '"concepts_v2"' \
     'hits=1'
 
 run_query "Get document passage with new schema" \
     'yql=select * from document_passage where family_document_ref contains "id:doc_search:family_document::CCLW.document.i00000005.n0000"' \
-    '"concepts_instances"' \
+    '"concepts_v2"' \
     'hits=1'
 
 # Test concept queries
@@ -101,26 +101,26 @@ run_query "Get air pollution models" \
     'yql=select * from model where name contains "AirPollution"' \
     '"kx7m3p9w"'
 
-# Test new concepts_instances functionality
+# Test new concepts_v2 functionality
 echo "=== New Schema Tests ==="
 run_query "Family documents with concept q880" \
-    'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880")' \
+    'yql=select * from family_document where concepts_v2 contains sameElement(key contains "q880")' \
     '"q880"'
 
 run_query "Family documents with concept q880 and model kx7m3p9w" \
-    'yql=select * from family_document where concepts_instances contains sameElement(key contains "q880") and concepts_instances contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
+    'yql=select * from family_document where concepts_v2 contains sameElement(key contains "q880") and concepts_v2 contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
     '"q880"'
 
 run_query "Document passages with concept q880" \
-    'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880")' \
+    'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880")' \
     '"q880"'
 
 run_query "Document passages with concept q880 and model kx7m3p9w" \
-    'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880") and concepts_instances contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
+    'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880") and concepts_v2 contains sameElement(value.models_ids_flat matches "kx7m3p9w")' \
     '"q880"'
 
 run_query "Document passages with concept q880 and default models profile" \
-    'yql=select * from document_passage where concepts_instances contains sameElement(key contains "q880")' \
+    'yql=select * from document_passage where concepts_v2 contains sameElement(key contains "q880")' \
     '"concepts_versions"' \
     'presentation.summary=search_summary'
 
@@ -138,10 +138,10 @@ echo
 echo "To run individual queries manually:"
 echo "# Basic queries:"
 echo "vespa query 'yql=select * from concept where true'"
-echo "vespa query 'yql=select * from document_passage where concepts_instances contains sameElement(key contains \"q880\")'"
+echo "vespa query 'yql=select * from document_passage where concepts_v2 contains sameElement(key contains \"q880\")'"
 echo ""
 echo "# Single query with default models profile (primaries):"
-echo "vespa query 'yql=select * from document_passage where concepts_instances contains sameElement(key contains \"q880\")' 'presentation.summary=search_summary'"
+echo "vespa query 'yql=select * from document_passage where concepts_v2 contains sameElement(key contains \"q880\")' 'presentation.summary=search_summary'"
 echo ""
 echo "# Separate models profile queries (for overrides):"
 echo "vespa query 'yql=select * from models_profile where id contains \"primaries\"'"
