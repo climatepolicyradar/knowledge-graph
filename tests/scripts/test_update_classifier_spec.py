@@ -8,7 +8,7 @@ import pytest
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from scripts.cloud import AwsEnv
 from scripts.update_classifier_spec import (
-    get_all_available_classifiers,
+    refresh_all_available_classifiers,
     sort_specs,
 )
 from src.identifiers import WikibaseID
@@ -61,11 +61,11 @@ def mock_wandb_api():
         yield mock_api
 
 
-def test_get_all_available_classifiers(mock_wandb_api):
+def test_refresh_all_available_classifiers(mock_wandb_api):
     with TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
         with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_dir):
-            get_all_available_classifiers(aws_envs=[AwsEnv.sandbox])
+            refresh_all_available_classifiers(aws_envs=[AwsEnv.sandbox])
             output_path = temp_dir / "sandbox.yaml"
 
             with open(output_path, "r") as file:

@@ -41,7 +41,7 @@ def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
 
 
 @app.command()
-def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
+def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
     """Refreshes the classifier specs with the latest state of wandb."""
     if not aws_envs:
         aws_envs = [e for e in AwsEnv]
