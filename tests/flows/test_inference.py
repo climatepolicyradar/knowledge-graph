@@ -18,6 +18,7 @@ from prefect.results import ResultRecord
 from prefect.states import Completed
 
 from flows.inference import (
+    PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
     BatchInferenceResult,
     ClassifierSpec,
     DocumentImportId,
@@ -31,6 +32,8 @@ from flows.inference import (
     determine_file_stems,
     document_passages,
     download_classifier_from_wandb_to_local,
+    generate_asset_deps,
+    generate_assets,
     get_latest_ingest_documents,
     group_inference_results_into_states,
     inference,
@@ -1080,3 +1083,32 @@ def test_document_passages(
     assert len(passages) == len(
         parser_output_html_converted_to_pdf.pdf_data.text_blocks
     )
+
+
+def test_generate_assets_and_asset_deps(test_config) -> None:
+    """Test that the generate_assets and generate_asset_deps functions work correctly."""
+
+    inferences = [
+        SingleDocumentInferenceResult(
+            labelled_passages=[],
+            document_stem=DocumentStem("TEST.DOC.0.1"),
+            classifier_name="Q9081",
+            classifier_alias="v3",
+        )
+    ]
+
+    assets = generate_assets(test_config, inferences)
+    asset_deps = generate_asset_deps(test_config, inferences)
+    assert len(assets) == len(asset_deps) / 2 == len(inferences)
+
+    assets = generate_assets(test_config, inferences * 1000)
+    asset_deps = generate_asset_deps(test_config, inferences * 1000)
+    assert (
+        len(assets)
+        == len(asset_deps) / 2
+        == PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE
+    )
+
+    assets = generate_assets(test_config, inferences * 1000, 500)
+    asset_deps = generate_asset_deps(test_config, inferences * 1000, 500)
+    assert len(assets) == len(asset_deps) / 2 == 500
