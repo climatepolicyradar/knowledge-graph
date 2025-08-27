@@ -774,7 +774,14 @@ class Fault(Exception):
         except Exception as e:
             print(f"could not represent fault's data as a string: {e}")
             data_str = ""
-        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)} | data: {data_str}"
+
+        fault_str = f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)} | data: {data_str}"
+
+        # Prefect logs should have no more than 25000 characters, so truncate
+        # the fault string if it's too long.
+        fault_str = fault_str[:20_000] + "..." if len(fault_str) > 20_000 else fault_str
+
+        return fault_str
 
 
 def default_desc(tasks, results) -> str:
