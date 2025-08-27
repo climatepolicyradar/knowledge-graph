@@ -12,7 +12,7 @@ from rich.console import Console
 from flows.classifier_specs.spec_interface import load_classifier_specs
 from scripts.cloud import AwsEnv
 from scripts.config import WANDB_ENTITY
-from scripts.update_classifier_spec import get_all_available_classifiers
+from scripts.update_classifier_spec import refresh_all_available_classifiers
 from scripts.utils import DontRunOnEnum, ModelPath
 from src.identifiers import ClassifierID, WikibaseID
 
@@ -82,7 +82,7 @@ def update_entire_env(
             future.result()
 
     if update_specs:
-        get_all_available_classifiers([aws_env])
+        refresh_all_available_classifiers([aws_env])
 
 
 @app.command()
@@ -183,7 +183,7 @@ def update(
         artifact.save()
 
     if update_specs:
-        get_all_available_classifiers([aws_env])
+        refresh_all_available_classifiers([aws_env])
 
 
 if __name__ == "__main__":
