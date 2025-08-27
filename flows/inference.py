@@ -301,7 +301,7 @@ def download_classifier_from_wandb_to_local(
 
 
 async def load_classifier(
-    run: Run, config: Config, classifier_spec: ClassifierSpec
+    run: Run, config: Config, wikibase_id: str, wandb_registry_version: Version
 ) -> Classifier:
     """
     Load a classifier into memory.
@@ -310,16 +310,14 @@ async def load_classifier(
     classifier will be downloaded from W&B (Once implemented)
     """
     async with concurrency("load_classifier", occupy=5):
-        local_classifier_path: Path = (
-            config.local_classifier_dir / classifier_spec.wikibase_id
-        )
+        local_classifier_path: Path = config.local_classifier_dir / wikibase_id
 
         if not local_classifier_path.exists():
             model_cache_dir = download_classifier_from_wandb_to_local(
                 run,
                 config,
-                classifier_spec.wikibase_id,
-                classifier_spec.wandb_registry_version,
+                wikibase_id,
+                wandb_registry_version,
             )
             local_classifier_path = Path(model_cache_dir) / "model.pickle"
 
@@ -799,7 +797,9 @@ async def _inference_batch_of_documents(
         f"classifier id: {classifier_spec.classifier_id}, "
         f"and wandb registry version: {classifier_spec.wandb_registry_version}"  # noqa: E501
     )
-    classifier = await load_classifier(run, config, classifier_spec)
+    classifier = await load_classifier(
+        run, config, classifier_spec.wikibase_id, classifier_spec.wandb_registry_version
+    )
     logger.info(
         f"Loaded classifier with wikibase id: {classifier_spec.wikibase_id}, "
         f"classifier id: {classifier_spec.classifier_id}, "

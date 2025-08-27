@@ -119,11 +119,8 @@ async def test_load_classifier__existing_classifier(
     classifier = await load_classifier(
         mock_run,
         test_config,
-        ClassifierSpec(
-            wikibase_id=local_classifier_id,
-            classifier_id=ClassifierID.generate(local_classifier_id, "v1"),
-            wandb_registry_version=Version("v1"),
-        ),
+        local_classifier_id,
+        Version("v1"),
     )
     assert local_classifier_id == classifier.concept.wikibase_id
 
@@ -229,11 +226,8 @@ async def test_text_block_inference_with_results(
     classifier = await load_classifier(
         mock_run,
         test_config,
-        ClassifierSpec(
-            wikibase_id=local_classifier_id,
-            classifier_id=ClassifierID.generate(local_classifier_id, "v1"),
-            wandb_registry_version=Version("v1"),
-        ),
+        local_classifier_id,
+        Version("v1"),
     )
 
     text = "I love fishing. Aquaculture is the best."
@@ -261,11 +255,8 @@ async def test_text_block_inference_without_results(
     classifier = await load_classifier(
         mock_run,
         test_config,
-        ClassifierSpec(
-            wikibase_id=local_classifier_id,
-            classifier_id=ClassifierID.generate(local_classifier_id, "v1"),
-            wandb_registry_version=Version("v1"),
-        ),
+        local_classifier_id,
+        Version("v1"),
     )
 
     text = "Rockets are cool. We should build more rockets."
@@ -392,7 +383,8 @@ async def test_run_classifier_inference_on_document(
     classifier = await load_classifier(
         mock_run,
         test_config,
-        classifier_spec,
+        classifier_spec.wikibase_id,
+        classifier_spec.wandb_registry_version,
     )
 
     # Run the function on a document with no language
@@ -476,7 +468,12 @@ async def test_run_classifier_inference_on_document_missing(
     )
 
     # Load classifier
-    classifier = await load_classifier(mock_run, test_config, classifier_spec)
+    classifier = await load_classifier(
+        mock_run,
+        test_config,
+        classifier_spec.wikibase_id,
+        classifier_spec.wandb_registry_version,
+    )
 
     document_stem = DocumentStem("CCLW.executive.8133.0")
     with pytest.raises(ClientError) as excinfo:
