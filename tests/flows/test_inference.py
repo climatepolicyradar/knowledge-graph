@@ -1159,8 +1159,11 @@ def test_generate_assets_and_asset_deps(test_config) -> None:
         SingleDocumentInferenceResult(
             labelled_passages=[],
             document_stem=DocumentStem("TEST.DOC.0.1"),
-            classifier_name="Q9081",
-            classifier_alias="v3",
+            classifier_spec=ClassifierSpec(
+                wikibase_id=WikibaseID("Q9081"),
+                classifier_id=ClassifierID.generate("Q9081", "v3"),
+                wandb_registry_version=Version("v3"),
+            ),
         )
     ]
 

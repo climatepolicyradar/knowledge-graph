@@ -12,6 +12,7 @@ from src.version import Version
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
 
 
+# FIXME: Bug when instantiating a ClassifierSpec v2 with a Version object.
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
 
