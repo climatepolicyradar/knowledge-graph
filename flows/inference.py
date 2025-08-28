@@ -16,7 +16,7 @@ from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow
-from prefect.artifacts import create_table_artifact
+from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
@@ -268,6 +268,7 @@ def determine_file_stems(
     return requested_document_stems
 
 
+# TODO: retire this function in favour of dynamic filtering
 def remove_sabin_file_stems(
     file_stems: Sequence[DocumentStem],
 ) -> Sequence[DocumentStem]:
@@ -702,7 +703,7 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
-    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    await acreate_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"batch-inference-{flow_run_name}",
         table=document_details,
         description=overview_description,
@@ -964,6 +965,20 @@ def group_inference_results_into_states(
     return list(failures_in), successes
 
 
+def filter_document_batch(
+    file_stems: Sequence[DocumentStem], spec: ClassifierSpec
+) -> tuple[Sequence[DocumentStem], Sequence[DocumentStem]]:
+    removed_file_stems = []
+    accepted_file_stems = []
+    for stem in file_stems:
+        source = stem.split(".")[0]
+        if source.lower() in spec.dont_run_on:
+            removed_file_stems.append(stem)
+        else:
+            accepted_file_stems.append(stem)
+    return removed_file_stems, accepted_file_stems
+
+
 @flow(
     log_prints=True,
     on_failure=[SlackNotify.message],
@@ -1004,13 +1019,6 @@ async def inference(
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
     )
-    filtered_file_stems = remove_sabin_file_stems(validated_file_stems)
-
-    removed_sabin_file_count = len(validated_file_stems) - len(filtered_file_stems)
-
-    print(
-        f"excluded: {removed_sabin_file_count} Sabin files from being processed by the pipeline"
-    )
 
     if classifier_specs is None:
         classifier_specs = parse_spec_file(config.aws_env)
@@ -1018,7 +1026,7 @@ async def inference(
     disallow_latest_alias(classifier_specs)
 
     print(
-        f"Running with {len(filtered_file_stems)} documents and "
+        f"Running with {len(validated_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )
 
@@ -1033,12 +1041,20 @@ async def inference(
             "classifier_alias": classifier_spec.alias,
         }
 
-    document_batches = iterate_batch(filtered_file_stems, batch_size)
+    parameterised_batches: Iterable[dict[str, Any]] = []
+    removal_details: dict[ClassifierSpec, int] = []
 
-    parameterised_batches: Iterable[dict[str, Any]] = (
-        parameters(classifier_spec, document_batch)
-        for document_batch in document_batches
-        for classifier_spec in classifier_specs
+    for classifier_spec in classifier_specs:
+        removed_file_stems, accepted_file_stems = filter_document_batch(
+            validated_file_stems, classifier_spec
+        )
+        removal_details[classifier_spec] = len(removed_file_stems)
+
+        for document_batch in iterate_batch(accepted_file_stems, batch_size):
+            parameterised_batches.append(parameters(classifier_spec, document_batch))
+
+    await create_dont_run_on_docs_summary_artifact(
+        config=config, removal_details=removal_details
     )
 
     all_raw_successes = []
@@ -1069,7 +1085,7 @@ async def inference(
     failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
 
     inference_result = InferenceResult(
-        document_stems=list(filtered_file_stems),
+        document_stems=list(validated_file_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
         successful_classifier_specs=successes.keys(),
@@ -1078,10 +1094,11 @@ async def inference(
 
     await create_inference_summary_artifact(
         config=config,
-        filtered_file_stems=filtered_file_stems,
+        validated_file_stems=validated_file_stems,
         classifier_specs=classifier_specs,
         successes=successes,
         failures_classifier_specs=set(failures_classifier_specs),
+        removal_details=removal_details,
     )
 
     if inference_result.failed:
@@ -1093,17 +1110,41 @@ async def inference(
     return inference_result
 
 
+async def create_dont_run_on_docs_summary_artifact(
+    config: Config,
+    removal_details: dict[ClassifierSpec, int],
+) -> None:
+    """Create an artifact with a summary about the inference run."""
+
+    description = "# Document removals per classifier"
+    table = [
+        {
+            "Wikibase ID": spec.wikibase_id,
+            "Classifier ID": spec.classifier_id,
+            "Dont Run Ons": spec.dont_run_on,
+            "Removals": count,
+        }
+        for spec, count in removal_details.items()
+    ]
+    await acreate_table_artifact(
+        key=f"classifier-inference-{config.aws_env.value}",
+        table=table,
+        description=description,
+    )
+
+
 async def create_inference_summary_artifact(
     config: Config,
-    filtered_file_stems: Sequence[DocumentStem],
+    validated_file_stems: Sequence[DocumentStem],
     classifier_specs: Sequence[ClassifierSpec],
     successes: dict[ClassifierSpec, FlowRun],
     failures_classifier_specs: set[ClassifierSpec],
+    removal_details: dict[ClassifierSpec, int],
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
     # Prepare summary data for the artifact
-    total_documents = len(filtered_file_stems)
+    original_documents = len(validated_file_stems)
     total_classifiers = len(classifier_specs)
     successful_classifiers = len(successes)
     failed_classifiers = len(failures_classifier_specs)
@@ -1113,10 +1154,11 @@ async def create_inference_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Total documents processed**: {total_documents}
+- **Total documents requested**: {original_documents}
 - **Total classifiers**: {total_classifiers}
 - **Successful classifiers**: {successful_classifiers}
 - **Failed classifiers**: {failed_classifiers}
+- **Classifiers with removals: {len(removal_details)}  # be better
 """
 
     # Create classifier details table
@@ -1128,7 +1170,7 @@ async def create_inference_summary_artifact(
         for spec in failures_classifier_specs
     ]
 
-    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    await acreate_table_artifact(
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,
