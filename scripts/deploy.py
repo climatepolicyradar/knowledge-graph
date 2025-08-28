@@ -76,9 +76,6 @@ def existing(
     refresh_all_available_classifiers([to_aws_env])
 
 
-# TODO: For sandbox add a targets classifier
-
-
 @app.command()
 def new(
     aws_env: Annotated[
