@@ -131,7 +131,7 @@ docker run \
 Verify AWS CLI is working correctly:
 
 ```bash
-awsv2 s3 ls
+aws s3 ls
 ```
 
 ## Running the Training Script
