@@ -12,7 +12,6 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "pydantic-ai>=0.0.53",
     "rich>=13.7.0",
-    "tqdm>=4.66.2",
     "ipykernel>=6.29.3",
     "neomodel>=5.3.3",
     "rapidfuzz>=3.10.0",
