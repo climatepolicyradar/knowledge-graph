@@ -129,3 +129,10 @@
   wandb_registry_version: v21
   dont_run_on:
   - sabin
+- wikibase_id: Q1651
+  classifier_id: 7sctqpmw
+  wandb_registry_version: v11
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
