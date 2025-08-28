@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+import random
 import shutil
 from pathlib import Path
 
@@ -209,6 +210,9 @@ def generate_predictions_for_classifier(
         console.log(
             f"❌ Failed to generate predictions for {classifier}: {e}", style="red"
         )
+
+    # shuffle the predictions
+    random.shuffle(predictions)
 
     return predictions
 
