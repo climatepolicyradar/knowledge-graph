@@ -29,7 +29,7 @@ def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     """Save a classifier spec YAML"""
     serialised_data = [d.model_dump(exclude_none=True) for d in data]
     with open(file_path, "w") as file:
-        yaml.dump(serialised_data, file, explicit_start=True)
+        yaml.dump(serialised_data, file, explicit_start=True, sort_keys=False)
 
 
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
@@ -41,7 +41,7 @@ def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
 
 
 @app.command()
-def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
+def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
     """Refreshes the classifier specs with the latest state of wandb."""
     if not aws_envs:
         aws_envs = [e for e in AwsEnv]
@@ -81,9 +81,8 @@ def get_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> None:
         if dont_run_on := art.metadata.get("dont_run_on"):
             spec.dont_run_on = dont_run_on
 
-        # Placeholder for possible implementation
         if compute_environment := art.metadata.get("compute_environment"):
-            print(compute_environment)
+            spec.compute_environment = compute_environment
 
         specs[env].append(spec)
 

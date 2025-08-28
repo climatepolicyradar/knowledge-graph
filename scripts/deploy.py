@@ -12,7 +12,7 @@ import scripts.promote
 import scripts.train
 from scripts.cloud import AwsEnv, parse_aws_env, parse_spec_file, validate_transition
 from scripts.update_classifier_spec import (
-    get_all_available_classifiers,
+    refresh_all_available_classifiers,
 )
 from src.identifiers import WikibaseID
 
@@ -73,7 +73,7 @@ def existing(
                     primary=True,
                 )
 
-    get_all_available_classifiers([to_aws_env])
+    refresh_all_available_classifiers([to_aws_env])
 
 
 @app.command()
@@ -130,7 +130,7 @@ def new(
             failed_wikibase_ids.append((wikibase_id, e))
             continue
 
-    get_all_available_classifiers([aws_env])
+    refresh_all_available_classifiers([aws_env])
 
     if failed_wikibase_ids:
         for wikibase_id, e in failed_wikibase_ids:
