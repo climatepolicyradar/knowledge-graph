@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from scripts.cloud import AwsEnv
 from scripts.utils import DontRunOnEnum
@@ -44,6 +44,11 @@ class ClassifierSpec(BaseModel):
         description="A list of `source`'s that will be filtered out in inference.",
         default=None,
     )
+
+    @field_serializer("wandb_registry_version")
+    def serialize_version(self, value: Version) -> str:
+        """Serialize Version as string."""
+        return str(value)
 
     def __hash__(self):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""

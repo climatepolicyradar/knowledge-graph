@@ -660,7 +660,7 @@ async def test_inference_batch_of_documents_cpu(
 
     # Verify that inference outputs were stored in S3
     s3 = boto3.client("s3", region_name=test_config.bucket_region)
-    expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.wandb_registry_version}/{batch[0]}.json"
+    expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
 
     # Check that the S3 object exists
     response = s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)

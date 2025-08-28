@@ -213,8 +213,14 @@ audit-s3-vespa-alignment +OPTS="":
 
 # Update the metadata for a classifier
 classifier_metadata wikibase_id classifier_id aws_env +OPTS="":
-    uv run python -m scripts.classifier_metadata \
+    uv run python -m scripts.classifier_metadata update \
         --wikibase-id {{wikibase_id}} \
         --classifier-id {{classifier_id}} \
+        --aws-env {{aws_env}} \
+        {{OPTS}}
+
+# Update the same metadata for multiple classifiers in one aws env
+classifier_metadata_entire_env aws_env +OPTS="":
+    uv run python -m scripts.classifier_metadata update-entire-env \
         --aws-env {{aws_env}} \
         {{OPTS}}

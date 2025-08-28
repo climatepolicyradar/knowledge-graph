@@ -112,12 +112,6 @@ class SlackNotify:
         ```
         """
 
-        if cls.environment != AwsEnv.production:
-            print(
-                f"Not sending Slack notification as in {cls.environment.name} and now {AwsEnv.production.name}"
-            )
-            return None
-
         ui_url = cls.FLOW_RUN_URL.format(
             prefect_base_url=PREFECT_UI_URL.value(), flow_run=flow_run
         )
@@ -126,7 +120,7 @@ class SlackNotify:
         if inspect.isawaitable(slack_webhook):
             slack_webhook = await slack_webhook
 
-        blocks = cls.slack_blocks(flow_run, state, ui_url)
+        blocks = cls.slack_blocks(flow, flow_run, state, ui_url)
 
         client = slack_webhook.get_client()
         result = client.send(
@@ -144,15 +138,14 @@ class SlackNotify:
     @classmethod
     def slack_blocks(
         cls,
+        flow: Flow,
         flow_run: FlowRun,
         state: State,
         ui_url: str,
     ):
         """Create all Slack Blocks"""
 
-        header = (
-            "{cls.state_type_to_emoji(state.type)} Flow run *{flow.name}/{flow_run.name}* observed state `{state.name}`.",
-        )  # pyright: ignore[reportOptionalMemberAccess]
+        header = f"{cls.state_type_to_emoji(state.type)} Flow run *{flow.name}/{flow_run.name}* observed state `{state.name}`."  # pyright: ignore[reportOptionalMemberAccess]
 
         state_message = textwrap.shorten(
             state.message or "No message",
