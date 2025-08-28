@@ -4,7 +4,6 @@ from unittest.mock import ANY, Mock, patch
 import pytest
 from wandb.errors.errors import CommError
 
-from scripts.cloud import AwsEnv
 from scripts.train import (
     Namespace,
     StorageLink,
@@ -14,6 +13,7 @@ from scripts.train import (
     main,
     upload_model_artifact,
 )
+from src.cloud import AwsEnv
 from src.identifiers import WikibaseID
 
 

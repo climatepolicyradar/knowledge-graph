@@ -9,7 +9,7 @@ from scripts.audit.do_classifier_specs_have_results import (
     collect_file_names,
     write_result,
 )
-from scripts.cloud import AwsEnv
+from src.cloud import AwsEnv
 
 # the flows conftest wouldn't be in scope here (yet?) but it does have what we need
 from tests.flows.conftest import *  # noqa: F403

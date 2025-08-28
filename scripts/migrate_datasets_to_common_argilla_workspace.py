@@ -4,7 +4,7 @@ import pickle
 import argilla as rg
 from rich.console import Console
 
-from scripts.config import data_dir
+from src.config import data_dir
 from src.identifiers import WikibaseID
 
 console = Console()

@@ -6,10 +6,7 @@ from pydantic import PositiveInt
 from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
-from flows.aggregate import (
-    RunOutputIdentifier,
-    aggregate,
-)
+from flows.aggregate import RunOutputIdentifier, aggregate
 from flows.boundary import (
     DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
 )
@@ -27,7 +24,7 @@ from flows.inference import (
     inference,
 )
 from flows.utils import DocumentImportId, Fault
-from scripts.cloud import ClassifierSpec
+from src.cloud import ClassifierSpec
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false

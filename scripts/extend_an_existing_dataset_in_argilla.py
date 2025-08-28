@@ -4,7 +4,7 @@ import argilla as rg
 import typer
 from rich.console import Console
 
-from scripts.config import processed_data_dir
+from src.config import processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.labelling import ArgillaSession

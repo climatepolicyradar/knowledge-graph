@@ -5,7 +5,7 @@ from typing import Optional
 from cpr_sdk.ssm import get_aws_ssm_param
 from pydantic import BaseModel, Field, SecretStr
 
-from scripts.cloud import AwsEnv, get_prefect_job_variable
+from src.cloud import AwsEnv, get_prefect_job_variable
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results"

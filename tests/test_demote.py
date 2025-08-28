@@ -5,8 +5,8 @@ import pytest
 import typer
 from moto import mock_aws
 
-from scripts.cloud import AwsEnv
 from scripts.demote import main
+from src.cloud import AwsEnv
 
 
 @pytest.mark.parametrize(

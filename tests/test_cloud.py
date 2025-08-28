@@ -5,7 +5,7 @@ import pytest
 import yaml
 from moto import mock_aws
 
-from scripts.cloud import (
+from src.cloud import (
     AwsEnv,
     ClassifierSpec,
     function_to_flow_name,
@@ -37,7 +37,7 @@ def test_init_awsenv():
 )
 @mock_aws
 def test_is_logged_in(aws_env, use_aws_profiles, is_logged_in_result):
-    with patch("scripts.cloud.get_sts_client") as mock_get_sts_client:
+    with patch("src.cloud.get_sts_client") as mock_get_sts_client:
         mock_sts = Mock()
         mock_get_sts_client.return_value = mock_sts
 
@@ -106,7 +106,7 @@ def test_parse_spec_file(spec_contents, expected_specs, tmp_path):
         yaml.dump(spec_contents, f)
 
     # Patch the SPEC_DIR to use our temporary directory
-    with patch("scripts.cloud.SPEC_DIR", spec_dir):
+    with patch("src.cloud.SPEC_DIR", spec_dir):
         result = parse_spec_file(test_env)
         assert result == expected_specs
 
@@ -135,6 +135,6 @@ def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
         yaml.dump(invalid_contents, f)
 
     # Patch the SPEC_DIR to use our temporary directory
-    with patch("scripts.cloud.SPEC_DIR", spec_dir):
+    with patch("src.cloud.SPEC_DIR", spec_dir):
         with pytest.raises(ValueError):
             parse_spec_file(test_env)

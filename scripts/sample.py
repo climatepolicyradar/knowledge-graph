@@ -13,9 +13,9 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from scripts.config import equity_columns, processed_data_dir
 from src.classifier import EmbeddingClassifier, KeywordClassifier
 from src.classifier.classifier import Classifier
+from src.config import equity_columns, processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.sampling import create_balanced_sample, split_evenly

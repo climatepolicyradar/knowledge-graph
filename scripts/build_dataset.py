@@ -5,7 +5,7 @@ import typer
 from datasets import Dataset, disable_progress_bars, load_dataset
 from rich.console import Console
 
-from scripts.config import processed_data_dir
+from src.config import processed_data_dir
 from src.geography import iso_to_world_bank_region
 from src.sampling import create_balanced_sample
 

@@ -17,13 +17,13 @@ from rich.progress import (
 from rich.table import Table
 from sklearn.model_selection import train_test_split  # type: ignore[import-untyped]
 
-from scripts.config import classifier_dir, equity_columns, processed_data_dir
 from src.classifier import (
     BertBasedClassifier,
     Classifier,
     EmbeddingClassifier,
     LLMClassifier,
 )
+from src.config import classifier_dir, equity_columns, processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.metrics import count_passage_level_metrics

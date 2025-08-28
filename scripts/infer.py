@@ -8,7 +8,7 @@ from rich.console import Console
 from typing_extensions import Annotated
 
 from flows.inference import inference
-from scripts.cloud import (
+from src.cloud import (
     AwsEnv,
     ClassifierSpec,
     generate_deployment_name,

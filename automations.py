@@ -16,7 +16,7 @@ from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
 from flows.full_pipeline import full_pipeline
-from scripts.cloud import AwsEnv, generate_deployment_name
+from src.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
 logger = logging.getLogger(__name__)
