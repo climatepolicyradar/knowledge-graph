@@ -336,21 +336,21 @@
   - sabin
 - wikibase_id: Q1651
   classifier_id: 7sctqpmw
-  wandb_registry_version: v8
+  wandb_registry_version: v10
   compute_environment:
     gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1652
   classifier_id: phet8mvv
-  wandb_registry_version: v6
+  wandb_registry_version: v8
   compute_environment:
     gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1653
   classifier_id: u86a8p2d
-  wandb_registry_version: v6
+  wandb_registry_version: v8
   compute_environment:
     gpu: true
   dont_run_on:

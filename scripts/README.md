@@ -147,6 +147,8 @@ python scripts/deploy.py new \
   --wikibase-id Q1651
 ```
 
+Note: If the classifier spec files in the local repo do not update after running the deploy script in docker then simply come out of the docker container and run `just update-inference-classifiers`.
+
 ## Remove a Classifier Spec
 
 Within the Knowledge Graph full-pipeline the Aggregation step is designed to run on all classifiers as defined in the classifier spec file. Should you want to omit a classifier from running due to an issue with inference, then the classifier should be demoted and then the classifier spec updated. This can be done using the `just demote` command followed by the `just update-inference-classifiers` command.
