@@ -80,17 +80,13 @@ predict id +OPTS="":
 sample id:
     uv run python scripts/sample.py --wikibase-id {{id}}
 
-# push a sampled set of passages to argilla for a specific wikibase ID
-push-to-argilla id usernames workspace:
-    uv run python scripts/push_to_argilla.py --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
+# extend an existing dataset in argilla with additional passages for a specific wikibase ID
+extend-dataset id workspace:
+    uv run python scripts/extend_an_existing_dataset_in_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
-# run the full pipeline for a specific wikibase ID
-create-labelling-task id usernames workspace:
-    just get-concept --wikibase-id {{id}}
-    just train --wikibase-id {{id}}
-    just predict --wikibase-id {{id}}
-    just sample --wikibase-id {{id}}
-    just push-to-argilla --wikibase-id {{id}} --usernames {{usernames}} --workspace {{workspace}}
+# push a sampled set of passages to argilla for a specific wikibase ID
+push-to-argilla id workspace:
+    uv run python scripts/push_a_fresh_dataset_to_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:
