@@ -41,7 +41,7 @@ def mock_classifier_specs():
         spec_file_path = temp_spec_dir / "sandbox.yaml"
         write_spec_file(spec_file_path, classifier_specs)
 
-        with patch("scripts.cloud.SPEC_DIR", temp_spec_dir):
+        with patch("src.cloud.SPEC_DIR", temp_spec_dir):
             yield spec_file_path, classifier_specs
 
 

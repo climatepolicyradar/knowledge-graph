@@ -9,11 +9,11 @@ import wandb
 import wandb.apis.public.api
 from rich.console import Console
 
-from flows.classifier_specs.spec_interface import load_classifier_specs
-from scripts.cloud import AwsEnv
-from scripts.config import WANDB_ENTITY
+from flows.classifier_specs.spec_interface import DontRunOnEnum, load_classifier_specs
 from scripts.update_classifier_spec import refresh_all_available_classifiers
-from scripts.utils import DontRunOnEnum, ModelPath
+from src.classifier import ModelPath
+from src.cloud import AwsEnv
+from src.config import WANDB_ENTITY
 from src.identifiers import ClassifierID, WikibaseID
 
 log = logging.getLogger(__name__)
