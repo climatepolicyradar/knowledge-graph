@@ -1108,14 +1108,14 @@ async def create_inference_summary_artifact(
     classifier_details = [
         {
             "Classifier": spec.wikibase_id,
-            "Alias": spec.wandb_registry_version,
+            "Alias": spec.wandb_registry_version.__str__(),
             "Status": "✓",
         }
         for spec in successes.keys()
     ] + [
         {
             "Classifier": spec.wikibase_id,
-            "Alias": spec.wandb_registry_version,
+            "Alias": spec.wandb_registry_version.__str__(),
             "Status": "✗",
         }
         for spec in failures_classifier_specs
