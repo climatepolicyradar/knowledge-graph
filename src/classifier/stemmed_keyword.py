@@ -4,17 +4,17 @@ import nltk  # type: ignore
 from nltk.stem import PorterStemmer  # type: ignore
 from nltk.tokenize import word_tokenize  # type: ignore
 
-from src.classifier.rules_based import RulesBasedClassifier
+from src.classifier.keyword import KeywordClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.span import Span
 
 
-class StemmedKeywordClassifier(RulesBasedClassifier):
+class StemmedKeywordClassifier(KeywordClassifier):
     """
     Uses positive and negative keywords to find concepts in lightly-analysed text.
 
-    This classifier is a modified version of the RulesBasedClassifier that uses stemmed
+    This classifier is a modified version of the KeywordClassifier that uses stemmed
     keywords to match concepts in stemmed text, allowing for variations in word forms.
     For example, looking for the term "horse" will match "horse","horses", "horsing",
     "horsed", etc.
@@ -60,7 +60,7 @@ class StemmedKeywordClassifier(RulesBasedClassifier):
             negative_labels=negative_labels,
         )
 
-        # initialise the parent RulesBasedClassifier with the stemmed concept so that it
+        # initialise the parent KeywordClassifier with the stemmed concept so that it
         # uses the stemmed forms of the labels in its regex patterns
         super().__init__(self.stemmed_concept)
 

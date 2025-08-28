@@ -1,5 +1,8 @@
 import re
 
+from pydantic import GetCoreSchemaHandler
+from pydantic_core import core_schema
+
 
 class Version:
     """A version as mandated by W&B."""
@@ -58,9 +61,16 @@ class Version:
         return str(self) < other
 
     @classmethod
-    def __get_validators__(cls):
-        """Return a generator of validators for Pydantic compatibility."""
-        yield cls._validate
+    def __get_pydantic_core_schema__(
+        cls, source_type, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """Return a generator of validators for Pydantic v2 compatibility."""
+        return core_schema.no_info_after_validator_function(
+            cls,
+            core_schema.union_schema(
+                [core_schema.int_schema(), core_schema.str_schema(pattern=cls.regex)]
+            ),
+        )
 
     def increment(self) -> "Version":
         """Increment the version number by 1."""

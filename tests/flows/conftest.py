@@ -28,6 +28,7 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
+from prefect.client.schemas import StateType
 from prefect.logging import disable_run_logger
 from prefect.testing.utilities import prefect_test_harness
 from prefect_aws.s3 import S3Bucket
@@ -744,6 +745,7 @@ def mock_flow_run():
     mock_flow_run.state.name = "Completed"
     mock_flow_run.state.message = "message"
     mock_flow_run.state.timestamp = "2025-01-28T12:00:00+00:00"
+    mock_flow_run.state.type = StateType.COMPLETED
 
     yield mock_flow_run
 

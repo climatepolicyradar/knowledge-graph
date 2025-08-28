@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from src.classifier.classifier import Classifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.rules_based import RulesBasedClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID, WikibaseID
 
@@ -70,7 +69,6 @@ def __getattr__(name):
 __all__ = [
     "Classifier",
     "KeywordClassifier",
-    "RulesBasedClassifier",
     "EmbeddingClassifier",  # type: ignore
     "StemmedKeywordClassifier",  # type: ignore
     "EmissionsReductionTargetClassifier",  # type: ignore
@@ -108,7 +106,4 @@ class ClassifierFactory:
             return classifier_class(concept)
 
         # Then handle more generic cases
-        if concept.negative_labels:
-            return RulesBasedClassifier(concept)
-
         return KeywordClassifier(concept)

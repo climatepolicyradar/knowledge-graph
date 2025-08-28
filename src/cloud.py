@@ -178,6 +178,12 @@ def get_sts_client(
 
     Uses the specified AWS environment.
     """
+    use_aws_profiles: bool = (
+        os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    )
+    if not use_aws_profiles:
+        aws_env = None
+
     match aws_env:
         case None:
             return boto3.client("sts")

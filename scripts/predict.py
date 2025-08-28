@@ -8,7 +8,6 @@ from rich.progress import track
 from src.classifier import Classifier, ModelPath, get_local_classifier_path
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
-from src.classifier.rules_based import RulesBasedClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.config import processed_data_dir
 from src.identifiers import WikibaseID
@@ -68,7 +67,6 @@ def main(
 
     classifiers: list[Classifier] = [
         KeywordClassifier(concept),
-        RulesBasedClassifier(concept),
         StemmedKeywordClassifier(concept),
         EmbeddingClassifier(concept, threshold=0.6),
         EmbeddingClassifier(concept, threshold=0.625),

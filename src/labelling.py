@@ -10,6 +10,7 @@ from argilla import (
     Record,
     Settings,
     SpanQuestion,
+    TaskDistribution,
     TermsMetadataProperty,
     TextField,
     Workspace,
@@ -81,6 +82,10 @@ class ArgillaSession:
                         allow_overlapping=False,
                     )
                 ],
+                # We want to ensure that at least 2 experts have annotated each passage
+                # before it's considered ready for submission.
+                # See https://docs.argilla.io/dev/how_to_guides/distribution
+                distribution=TaskDistribution(min_submitted=2),
                 # Argilla has the following regex for metadata field names: {"pattern":"^(?=.*[a-z0-9])[a-z0-9_-]+$"}
                 # changing the dots to hyphens.
                 # Also, it doesn't allow capital characters, so lowercasing everything

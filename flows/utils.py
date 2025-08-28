@@ -112,12 +112,6 @@ class SlackNotify:
         ```
         """
 
-        if cls.environment != AwsEnv.production:
-            print(
-                f"Not sending Slack notification as in {cls.environment.name} and now {AwsEnv.production.name}"
-            )
-            return None
-
         ui_url = cls.FLOW_RUN_URL.format(
             prefect_base_url=PREFECT_UI_URL.value(), flow_run=flow_run
         )
@@ -126,7 +120,7 @@ class SlackNotify:
         if inspect.isawaitable(slack_webhook):
             slack_webhook = await slack_webhook
 
-        blocks = cls.slack_blocks(flow_run, state, ui_url)
+        blocks = cls.slack_blocks(flow, flow_run, state, ui_url)
 
         client = slack_webhook.get_client()
         result = client.send(
@@ -144,15 +138,14 @@ class SlackNotify:
     @classmethod
     def slack_blocks(
         cls,
+        flow: Flow,
         flow_run: FlowRun,
         state: State,
         ui_url: str,
     ):
         """Create all Slack Blocks"""
 
-        header = (
-            "{cls.state_type_to_emoji(state.type)} Flow run *{flow.name}/{flow_run.name}* observed state `{state.name}`.",
-        )  # pyright: ignore[reportOptionalMemberAccess]
+        header = f"{cls.state_type_to_emoji(state.type)} Flow run *{flow.name}/{flow_run.name}* observed state `{state.name}`."  # pyright: ignore[reportOptionalMemberAccess]
 
         state_message = textwrap.shorten(
             state.message or "No message",
@@ -774,7 +767,21 @@ class Fault(Exception):
         except Exception as e:
             print(f"could not represent fault's data as a string: {e}")
             data_str = ""
-        return f"{self.msg} | metadata: {json.dumps(self.metadata, default=str)} | data: {data_str}"
+
+        # Prefect logs should have no more than 25,000 characters, so truncate
+        # the fault string if it's too long.
+        message_str = textwrap.shorten(self.msg, width=8_000, placeholder="...")
+        metadata_str = textwrap.shorten(
+            json.dumps(self.metadata, default=str), width=8_000, placeholder="..."
+        )
+        data_str = textwrap.shorten(data_str, width=8_000, placeholder="...")
+
+        fault_str = f"{message_str} | metadata: {metadata_str} | data: {data_str}"
+
+        # Also truncate the total string as a safety precaution.
+        fault_str = textwrap.shorten(fault_str, width=24_997, placeholder="...")
+
+        return fault_str
 
 
 def default_desc(tasks, results) -> str:

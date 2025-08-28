@@ -14,6 +14,7 @@ from prefect.flows import flow
 
 from flows.utils import (
     DocumentStem,
+    Fault,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
@@ -588,3 +589,14 @@ async def test_map_as_sub_flow__on_flow_failure(
     assert all(isinstance(failure, FlowRun) for failure in failures)
     assert len(failures) == batches_count
     assert not successes
+
+
+def test_fault() -> None:
+    """Test the Fault class."""
+
+    fault = Fault(msg="test_msg", metadata={"key": "value"}, data="test_data")
+    assert str(fault) == 'test_msg | metadata: {"key": "value"} | data: test_data'
+
+    fault.data = "a" * 30_000  # 30_000 characters
+    assert len(str(fault)) <= 25_000
+    assert str(fault).endswith("...")
