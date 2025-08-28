@@ -131,7 +131,7 @@ docker run \
 Verify AWS CLI is working correctly:
 
 ```bash
-awsv2 s3 ls
+aws s3 ls
 ```
 
 ## Running the Training Script
@@ -146,6 +146,8 @@ python scripts/deploy.py new \
   --promote \
   --wikibase-id Q1651
 ```
+
+Note: If the classifier spec files in the local repo do not update after running the deploy script in docker then simply come out of the docker container and run `just update-inference-classifiers`.
 
 ## Remove a Classifier Spec
 
