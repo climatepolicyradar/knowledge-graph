@@ -4,13 +4,14 @@ import typer
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment  # type: ignore
 from prefect.settings import PREFECT_UI_URL
+from pydantic import ValidationError
 from rich.console import Console
 from typing_extensions import Annotated
 
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.inference import inference
 from src.cloud import (
     AwsEnv,
-    ClassifierSpec,
     generate_deployment_name,
     parse_aws_env,
 )
@@ -20,26 +21,26 @@ console = Console()
 
 
 def convert_classifier_specs(
-    requested_classifiers: list[str],
-) -> list[ClassifierSpec]:
+    requested_classifiers: list[str] | None,
+) -> list[ClassifierSpec] | None:
     """
     Prepare the requested classifiers.
 
     Validates the classifier parameter and converts it to json ready
     to submit to prefect cloud
     """
-    classifier_specs = []
-    for i, classifier in enumerate(requested_classifiers):
-        match classifier.count(":"):
-            case 1:
-                name, alias = classifier.split(":")
-                spec = ClassifierSpec(name=name, alias=alias)
-            case _:
-                raise typer.BadParameter(
-                    f"Incorrect classifier specification for item {i}: {classifier}"
-                )
-        classifier_specs.append(spec.model_dump())
-    return classifier_specs
+    if not requested_classifiers:
+        return []
+
+    specs = []
+    for i, classifier in enumerate(requested_classifiers, 1):
+        try:
+            specs.append(ClassifierSpec.model_validate_json(classifier))
+        except ValidationError as e:
+            raise typer.BadParameter(
+                f"Incorrect classifier specification for item {i}: {classifier}: {e}"
+            )
+    return specs
 
 
 async def _trigger_deployment(
@@ -79,15 +80,17 @@ def main(
         ),
     ],
     classifiers: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option(
             "--classifier",
             "-c",
             help=(
-                "Select which classifiers and their aliases to run with "
-                "Specify they alias by appending it after a ':'. "
-                "Add more of this option to run on multiple. For example: "
-                "-c Q787:v0 -c Q787:v1"
+                "JSON string specifying a classifier. The JSON should contain "
+                "classifier specification fields like wikibase_id, classifier_id, "
+                "and wandb_registry_version. Add more of this option to run "
+                "multiple classifiers. For example: "
+                '--classifier \'{"wikibase_id": "Q787", "classifier_id": "393fk3km", "wandb_registry_version": "v2"}\' '
+                '--classifier \'{"wikibase_id": "Q123", "classifier_id": "aaaabbbb", "wandb_registry_version": "v1"}\''
             ),
             callback=convert_classifier_specs,
         ),
@@ -108,6 +111,7 @@ def main(
     # Set to None if empty as Typer reads it as a list
     documents_or_default = documents or None  # type: ignore
     # Set to None if empty as Typer reads it as a list
+
     classifiers_or_default: list[ClassifierSpec] | None = classifiers or None  # type: ignore
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
