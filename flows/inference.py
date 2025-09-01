@@ -27,6 +27,11 @@ from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from wandb.sdk.wandb_run import Run
 
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    disallow_latest_alias,
+    load_classifier_specs,
+)
 from flows.config import Config
 from flows.utils import (
     DEFAULT_GPU_VM_TYPES,
@@ -44,12 +49,7 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from src.classifier import Classifier
-from src.cloud import (
-    ClassifierSpec,
-    disallow_latest_alias,
-    parse_spec_file,
-)
+from src.classifier import Classifier, ModelPath
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -83,8 +83,7 @@ class BatchInferenceResult(BaseModel):
 
     batch_document_stems: list[DocumentStem]
     successful_document_stems: list[DocumentStem]
-    classifier_name: str
-    classifier_alias: str
+    classifier_spec: ClassifierSpec
 
     @property
     def failed(self) -> bool:
@@ -125,27 +124,14 @@ class InferenceResult(BaseModel):
         This is as the document would fail aggregation if there was a missing inference
         result for a classifier.
         """
-
-        document_classifier_mapping: dict[DocumentStem, set[ClassifierSpec]] = (
+        classifier_document_mapping: dict[ClassifierSpec, set[DocumentStem]] = (
             defaultdict(set)
         )
-
-        for batch_inference_result in self.batch_inference_results:
-            classifier_spec = ClassifierSpec(
-                name=batch_inference_result.classifier_name,
-                alias=batch_inference_result.classifier_alias,
+        for result in self.batch_inference_results:
+            classifier_document_mapping[result.classifier_spec].update(
+                result.successful_document_stems
             )
-
-            for document_stem in batch_inference_result.successful_document_stems:
-                document_classifier_mapping[document_stem].add(classifier_spec)
-
-        expected_classifier_specs = set(self.classifier_specs)
-
-        return {
-            document_stem
-            for document_stem, successful_classifiers in document_classifier_mapping.items()
-            if successful_classifiers >= expected_classifier_specs
-        }
+        return set.intersection(*classifier_document_mapping.values())
 
 
 def get_bucket_paginator(config: Config, prefix: str):
@@ -282,26 +268,8 @@ def remove_sabin_file_stems(
     ]
 
 
-def download_classifier_from_wandb_to_local(
-    run: Run, config: Config, classifier_name: str, alias: str
-) -> str:
-    """
-    Download a classifier from W&B to local.
-
-    Models referenced by weights and biases are stored in S3. This
-    means that to download the model via the W&B API, we need access
-    to both the S3 bucket via iam in your environment and WanDB via
-    the api key.
-    """
-    artifact = os.path.join(config.wandb_model_registry, f"{classifier_name}:{alias}")
-    print(f"Downloading artifact from W&B: {artifact}")
-    artifact = run.use_artifact(artifact, type="model")
-    classifier = artifact.download()
-    return classifier
-
-
 async def load_classifier(
-    run: Run, config: Config, classifier_name: str, alias: str
+    run: Run, config: Config, classifier_spec: ClassifierSpec
 ) -> Classifier:
     """
     Load a classifier into memory.
@@ -310,16 +278,14 @@ async def load_classifier(
     classifier will be downloaded from W&B (Once implemented)
     """
     async with concurrency("load_classifier", occupy=5):
-        local_classifier_path: Path = config.local_classifier_dir / classifier_name
+        wandb_classifier_path = ModelPath(
+            wikibase_id=classifier_spec.wikibase_id,
+            classifier_id=classifier_spec.classifier_id,
+        )
 
-        if not local_classifier_path.exists():
-            model_cache_dir = download_classifier_from_wandb_to_local(
-                run, config, classifier_name, alias
-            )
-            local_classifier_path = Path(model_cache_dir) / "model.pickle"
-
-        classifier = Classifier.load(local_classifier_path)
-
+        artifact_id = f"{wandb_classifier_path}:{config.aws_env}"
+        artifact = run.use_artifact(artifact_id, type="model")
+        classifier = Classifier.load(artifact.download())
         return classifier
 
 
@@ -419,8 +385,8 @@ class SingleDocumentInferenceResult(BaseModel):
 
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
-    classifier_name: str
-    classifier_alias: str
+    wikibase_id: str
+    classifier_id: str
 
 
 def generate_s3_uri_output(
@@ -430,17 +396,11 @@ def generate_s3_uri_output(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
             config.inference_document_target_prefix,
-            inference.classifier_name,
-            inference.classifier_alias,
+            inference.wikibase_id,
+            inference.classifier_id,
             f"{inference.document_stem}.json",
         ),
     )
-
-
-def generate_s3_uri_input(
-    config: Config, inference: SingleDocumentInferenceResult
-) -> Path:
-    return config.local_classifier_dir / inference.classifier_name
 
 
 @materialize(
@@ -600,14 +560,14 @@ def _get_labelled_passage_from_prediction(
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
-    classifier_name: str,
-    classifier_alias: str,
     classifier: Classifier,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with file stem {file_stem}")
     document = load_document(config, file_stem)
-    print(f"Loaded document with file stem {file_stem}")
+
+    # Resolve typing issue as wikibase_id is optional (though required here)
+    assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
 
     # Don't run inference on documents that have no text or languages as well as HTML
     # documents with no valid text.
@@ -623,8 +583,8 @@ async def run_classifier_inference_on_document(
         return SingleDocumentInferenceResult(
             labelled_passages=[],
             document_stem=file_stem,
-            classifier_name=classifier_name,
-            classifier_alias=classifier_alias,
+            wikibase_id=classifier.concept.wikibase_id,
+            classifier_id=classifier.id,
         )
 
     # Raise on non-English documents
@@ -644,8 +604,8 @@ async def run_classifier_inference_on_document(
     return SingleDocumentInferenceResult(
         labelled_passages=doc_labels,
         document_stem=file_stem,
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+        wikibase_id=classifier.concept.wikibase_id,
+        classifier_id=classifier.id,
     )
 
 
@@ -754,7 +714,9 @@ def generate_asset_deps(
         flatten(
             [
                 (
-                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}/{inference.classifier_name}:{inference.classifier_alias}",
+                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}"
+                    f"/{inference.wikibase_id}"
+                    f":{inference.classifier_id}",
                     str(
                         generate_document_source_key(
                             config=config,
@@ -771,8 +733,7 @@ def generate_asset_deps(
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     """
     Run classifier inference on a batch of documents.
@@ -796,18 +757,10 @@ async def _inference_batch_of_documents(
         job_type="concept_inference",
     )
 
-    logger.info(
-        f"Loading classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-    )
-    classifier = await load_classifier(
-        run,
-        config,
-        classifier_name,
-        classifier_alias,
-    )
-    logger.info(
-        f"Loaded classifier with name: {classifier_name}, and alias: {classifier_alias}"  # noqa: E501
-    )
+    classifier_spec = ClassifierSpec(**classifier_spec_json)
+
+    logger.info(f"Loading classifier {classifier_spec}")
+    classifier = await load_classifier(run, config, classifier_spec)
 
     tasks = [
         return_with(
@@ -815,8 +768,6 @@ async def _inference_batch_of_documents(
             run_classifier_inference_on_document(
                 config=config,
                 file_stem=file_stem,
-                classifier_name=classifier_name,
-                classifier_alias=classifier_alias,
                 classifier=classifier,
             ),
         )
@@ -880,8 +831,7 @@ async def _inference_batch_of_documents(
     batch_inference_result = BatchInferenceResult(
         batch_document_stems=batch,
         successful_document_stems=[i.document_stem for i in store_labels_successes],
-        classifier_name=classifier_name,
-        classifier_alias=classifier_alias,
+        classifier_spec=classifier_spec,
     )
 
     if batch_inference_result.failed:
@@ -911,14 +861,12 @@ async def _inference_batch_of_documents(
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
-        classifier_name,
-        classifier_alias,
+        classifier_spec_json,
     )
 
 
@@ -929,14 +877,12 @@ async def inference_batch_of_documents_cpu(
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
-    classifier_name: str,
-    classifier_alias: str,
+    classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
-        classifier_name,
-        classifier_alias,
+        classifier_spec_json,
     )
 
 
@@ -949,17 +895,13 @@ def group_inference_results_into_states(
     failures_in: Sequence[BaseException | FlowRun],
 ) -> tuple[
     list[FlowRun | BaseException],
-    dict[ClassifierSpec, BatchInferenceResult],
+    dict[str, BatchInferenceResult],
 ]:
     """Group results of sub-runs into the different states of success and failure."""
-    successes: dict[ClassifierSpec, BatchInferenceResult] = {}
+    successes: dict[SpecStr, BatchInferenceResult] = {}
 
     for success in successes_in:
-        classifier_spec = ClassifierSpec(
-            name=success.classifier_name,
-            alias=success.classifier_alias,
-        )
-        successes[classifier_spec] = success
+        successes[str(success.classifier_spec)] = success
 
     return list(failures_in), successes
 
@@ -1013,7 +955,7 @@ async def inference(
     )
 
     if classifier_specs is None:
-        classifier_specs = parse_spec_file(config.aws_env)
+        classifier_specs = load_classifier_specs(config.aws_env)
 
     disallow_latest_alias(classifier_specs)
 
@@ -1029,8 +971,7 @@ async def inference(
         return {
             "batch": document_batch,
             "config_json": config.to_json(),
-            "classifier_name": classifier_spec.name,
-            "classifier_alias": classifier_spec.alias,
+            "classifier_spec_json": classifier_spec.model_dump(),
         }
 
     document_batches = iterate_batch(filtered_file_stems, batch_size)
@@ -1066,13 +1007,20 @@ async def inference(
         BatchInferenceResult(**result.model_dump()) for result in all_raw_successes
     ]
     _, successes = group_inference_results_into_states(all_successes, all_raw_failures)
-    failures_classifier_specs = list(set(classifier_specs) - set(successes.keys()))
+
+    success_classifier_specs = []
+    failures_classifier_specs = []
+    for spec in classifier_specs:
+        if str(spec) in successes.keys():
+            success_classifier_specs.append(spec)
+        else:
+            failures_classifier_specs.append(spec)
 
     inference_result = InferenceResult(
         document_stems=list(filtered_file_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
-        successful_classifier_specs=successes.keys(),
+        successful_classifier_specs=success_classifier_specs,
         failed_classifier_specs=failures_classifier_specs,
     )
 
@@ -1118,13 +1066,18 @@ async def create_inference_summary_artifact(
 - **Successful classifiers**: {successful_classifiers}
 - **Failed classifiers**: {failed_classifiers}
 """
-
     # Create classifier details table
     classifier_details = [
-        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✓"}
+        {
+            "Classifier": str(spec),
+            "Status": "✓",
+        }
         for spec in successes.keys()
     ] + [
-        {"Classifier": spec.name, "Alias": spec.alias, "Status": "✗"}
+        {
+            "Classifier": spec.wikibase_id,
+            "Status": "✗",
+        }
         for spec in failures_classifier_specs
     ]
 

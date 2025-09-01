@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import yaml
 from pydantic import BaseModel, Field, field_serializer
@@ -96,3 +96,12 @@ def load_classifier_specs(
         classifier_specs.append(ClassifierSpec.model_validate(spec))
 
     return classifier_specs
+
+
+def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
+    if any(
+        classifier_spec.wandb_registry_version == "latest"
+        for classifier_spec in classifier_specs
+    ):
+        raise ValueError("`latest` is not allowed")
+    return None

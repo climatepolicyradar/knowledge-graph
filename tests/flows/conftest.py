@@ -372,17 +372,17 @@ def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
 
 @pytest.fixture
 def mock_classifiers_dir(test_config):
-    mock_dir = Path(FIXTURE_DIR) / "classifiers"
+    mock_dir = Path(FIXTURE_DIR) / "classifiers" / "aaaa2222"
     with patch.object(test_config, "local_classifier_dir", new=mock_dir):
         yield mock_dir
 
 
 @pytest.fixture
 def local_classifier_id(mock_classifiers_dir):
-    classifier_id = WikibaseID("Q788")
-    full_path = mock_classifiers_dir / classifier_id
+    wikibase_id = WikibaseID("Q788")
+    full_path = mock_classifiers_dir / wikibase_id
     assert full_path.exists()
-    yield classifier_id
+    yield wikibase_id
 
 
 @pytest.fixture
@@ -671,18 +671,17 @@ def example_labelled_passages_1_doc(
 
 
 @pytest.fixture
-def mock_wandb(mock_s3_client):
+def mock_wandb(mock_s3_client, mock_classifiers_dir, local_classifier_id):
     with (
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
         mock_artifact = Mock()
+        mock_artifact.download.return_value = mock_classifiers_dir / local_classifier_id
 
-        class StubbedRun:
-            def use_artifact(self, *args, **kwargs):
-                return mock_artifact
+        mock_run = Mock()
+        mock_run.use_artifact.return_value = mock_artifact
 
-        mock_run = StubbedRun()
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
 
