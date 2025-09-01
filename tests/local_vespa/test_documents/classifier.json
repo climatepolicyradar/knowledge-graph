@@ -4,6 +4,7 @@
         "fields": {
             "name": "AirPollution_RulesBasedClassifier_v1",
             "id": "kx7m3p9w",
+            "concept_id": "Q290",
             "revision_id": 3090
         }
     },
@@ -11,6 +12,7 @@
         "id": "id:doc_search:classifier::r5n8qz2t",
         "fields": {
             "name": "AirPollution_BertClassifier_v2",
+            "concept_id": "Q290",
             "id": "r5n8qz2t"
         }
     },
@@ -18,6 +20,7 @@
         "id": "id:doc_search:classifier::d9fg4j6m",
         "fields": {
             "name": "FishingSector_RulesBasedClassifier_v1",
+            "concept_id": "Q730",
             "id": "d9fg4j6m"
         }
     },
@@ -25,6 +28,7 @@
         "id": "id:doc_search:classifier::w3kb7x1s",
         "fields": {
             "name": "FishingSector_LLMClassifier_v2",
+            "concept_id": "Q730",
             "id": "w3kb7x1s"
         }
     }

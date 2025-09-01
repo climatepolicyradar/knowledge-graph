@@ -1,115 +1,95 @@
 [
     {
-        "id": "id:doc_search:concept::q880",
+        "id": "id:doc_search:concept::q880.1402",
         "fields": {
             "id": "q880",
-            "revisions_ids_flat": "1402",
-            "revisions": {
-                "1402": {
-                    "preferred_label": "air pollution",
-                    "description": "air pollution",
-                    "definition": "",
-                    "alternative_labels": [],
-                    "negative_labels": [],
-                    "subconcept_of": [
-                        { "id": "q110", "revision_id": "1902" },
-                        { "id": "q290", "revision_id": "1903" }
-                    ],
-                    "subconcept_of_flat": "q110:1902,q290:1903",
-                    "has_subconcept": [],
-                    "relative_concepts": [],
-                    "recursive_subconcept_of": [],
-                    "recursive_has_subconcept": false
-                }
-            }
+            "revision_id": "1402",
+            "preferred_label": "air pollution",
+            "description": "air pollution",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [
+                { "id": "q110", "revision_id": "1902" },
+                { "id": "q290", "revision_id": "1903" }
+            ],
+            "subconcept_of_flat": "q110:1902,q290:1903",
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
-        "id": "id:doc_search:concept::q730",
+        "id": "id:doc_search:concept::q730.1905",
         "fields": {
             "id": "q730",
-            "revisions_ids_flat": "3982",
-            "revisions": {
-                "1905": {
-                    "preferred_label": "fishing sector",
-                    "description": "",
-                    "definition": "",
-                    "alternative_labels": [],
-                    "negative_labels": [],
-                    "subconcept_of": [{ "id": "q500", "revision_id": "1904" }],
-                    "subconcept_of_flat": "q500:1904",
-                    "has_subconcept": [],
-                    "relative_concepts": [],
-                    "recursive_subconcept_of": [],
-                    "recursive_has_subconcept": false
-                }
-            }
+            "revision_id": "1905",
+            "preferred_label": "fishing sector",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [{ "id": "q500", "revision_id": "1904" }],
+            "subconcept_of_flat": "q500:1904",
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
-        "id": "id:doc_search:concept::q110",
+        "id": "id:doc_search:concept::q110.223",
         "fields": {
             "id": "q110",
-            "revisions_ids_flat": "223",
-            "revisions": {
-                "223": {
-                    "preferred_label": "environmental issues",
-                    "description": "",
-                    "definition": "",
-                    "alternative_labels": [],
-                    "negative_labels": [],
-                    "subconcept_of": [],
-                    "subconcept_of_flat": "",
-                    "has_subconcept": [],
-                    "relative_concepts": [],
-                    "recursive_subconcept_of": [],
-                    "recursive_has_subconcept": false
-                }
-            }
+            "revision_id": "223",
+            "preferred_label": "environmental issues",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [],
+            "subconcept_of_flat": "",
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
-        "id": "id:doc_search:concept::q290",
+        "id": "id:doc_search:concept::q290.1099",
         "fields": {
             "id": "q290",
-            "revisions_ids_flat": "1099",
-            "revisions": {
-                "1099": {
-                    "preferred_label": "pollution",
-                    "description": "",
-                    "definition": "",
-                    "alternative_labels": [],
-                    "negative_labels": [],
-                    "subconcept_of": [{ "id": "q730", "revision_id": "1905" }],
-                    "subconcept_of_flat": "q730:1905",
-                    "has_subconcept": [],
-                    "relative_concepts": [],
-                    "recursive_subconcept_of": [],
-                    "recursive_has_subconcept": false
-                }
-            }
+            "revision_id": "1099",
+            "preferred_label": "pollution",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [{ "id": "q730", "revision_id": "1905" }],
+            "subconcept_of_flat": "q730:1905",
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     },
     {
-        "id": "id:doc_search:concept::q500",
+        "id": "id:doc_search:concept::q500.4700",
         "fields": {
             "id": "q500",
-            "revisions_ids_flat": "4700",
-            "revisions": {
-                "4700": {
-                    "preferred_label": "economic sectors",
-                    "description": "",
-                    "definition": "",
-                    "alternative_labels": [],
-                    "negative_labels": [],
-                    "subconcept_of": [],
-                    "subconcept_of_flat": "",
-                    "has_subconcept": [],
-                    "relative_concepts": [],
-                    "recursive_subconcept_of": [],
-                    "recursive_has_subconcept": false
-                }
-            }
+            "revision_id": "4700",
+            "preferred_label": "economic sectors",
+            "description": "",
+            "definition": "",
+            "alternative_labels": [],
+            "negative_labels": [],
+            "subconcept_of": [],
+            "subconcept_of_flat": "",
+            "has_subconcept": [],
+            "relative_concepts": [],
+            "recursive_subconcept_of": [],
+            "recursive_has_subconcept": false
         }
     }
 ]

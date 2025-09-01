@@ -6,67 +6,64 @@ schema concept {
         }
         # Used for searching.
         #
-        # E.g. 14696,15037
-        field revisions_ids_flat type string {
+        # E.g. 15037
+        field revision_id type string {
             indexing: attribute | summary | index
         }
 
+        # E.g. <Q300, 31082>
         struct concept_ref {
             field id type string {}
             field revision_id type string {}
         }
 
-        struct instance {
-            # E.g. fishing sector
-            field preferred_label type string {}
-            field description type string {}
-            field definition type string {}
-            field alternative_labels type array<string> {}
-            field negative_labels type array<string> {}
-            # E.g. Q110, 290
-            #
-            # We can't do self-references for documents in Vespa, so
-            # use strings for the IDs.
-            field subconcept_of type array<concept_ref> {}
-            # E.g. Q110:1601
-            field subconcept_of_flat type string {}
-            field has_subconcept type array<concept_ref> {}
-            field has_subconcept_flat type string {}
-            field relative_concepts type array<concept_ref> {}
-            field relative_concepts_flat type string {}
-            field recursive_subconcept_of type array<concept_ref> {}
-            field recursive_subconcept_of_flat type string {}
-            field recursive_has_subconcept type bool {}
+        # E.g. fishing sector
+        field preferred_label type string {
+            indexing: attribute | summary | index
         }
-
-        # E.g <14696, <..>>
-        field revisions type map<string, instance> {
+        field description type string {
+            indexing: attribute | summary | index
+        }
+        field definition type string {
+            indexing: attribute | summary | index
+        }
+        field alternative_labels type array<string> {
+            indexing: attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
+        }
+        # E.g. Q110, 290
+        #
+        # We can't do self-references for documents in Vespa, so
+        # use strings for the IDs.
+        field subconcept_of type array<concept_ref> {
             indexing: summary
-
-            struct-field key {
-                indexing: attribute
-                attribute: fast-search
-            }
-            struct-field value.preferred_label {
-                indexing: attribute
-                attribute: fast-search
-            }
-            struct-field value.subconcept_of_flat {
-                indexing: attribute
-                attribute: fast-search
-            }
-            struct-field value.has_subconcept_flat {
-                indexing: attribute
-                attribute: fast-search
-            }
-            struct-field value.relative_concepts_flat {
-                indexing: attribute
-                attribute: fast-search
-            }
-            struct-field value.recursive_subconcept_of_flat {
-                indexing: attribute
-                attribute: fast-search
-            }
+        }
+        # E.g. Q110:1601
+        field subconcept_of_flat type string {
+            indexing: attribute | summary | index
+        }
+        field has_subconcept type array<concept_ref> {
+            indexing: summary
+        }
+        field has_subconcept_flat type string {
+            indexing: attribute | summary | index
+        }
+        field relative_concepts type array<concept_ref> {
+            indexing: summary
+        }
+        field relative_concepts_flat type string {
+            indexing: attribute | summary | index
+        }
+        field recursive_subconcept_of type array<concept_ref> {
+            indexing: summary
+        }
+        field recursive_subconcept_of_flat type string {
+            indexing: attribute | summary | index
+        }
+        field recursive_has_subconcept type bool {
+            indexing: attribute | summary
         }
     }
 }

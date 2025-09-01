@@ -9,6 +9,10 @@ schema classifier {
         field id type string {
             indexing: attribute | summary | index
         }
+        # E.g. Q910
+        field concept_id type string {
+            indexing: attribute | summary | index
+        }
         # E.g. 940389
         field revision_id type string {
             indexing: attribute | summary | index

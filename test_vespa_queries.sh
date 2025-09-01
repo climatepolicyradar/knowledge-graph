@@ -76,54 +76,54 @@ run_query "Get document passage with new schema" \
 # Test concept queries
 echo "=== Concept-Specific Tests ==="
 run_query "Get air pollution concept" \
-    'yql=select * from concept where revisions contains sameElement(value.preferred_label contains "air pollution")' \
+    'yql=select * from concept where preferred_label contains "air pollution"' \
     '"q880"'
 
 run_query "Get concept with parents" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110")' \
+    'yql=select * from concept where subconcept_of_flat matches "q110"' \
     '"q880"'
 
 run_query "Get concept by revision and ID" \
-    'yql=select * from concept where revisions contains sameElement(key contains "1402") and id contains "q880"' \
+    'yql=select * from concept where id contains "q880" and revision_id contains "1402"' \
     '"q880"'
 
 # Test *_flat relationship fields
 echo "=== Flat Relationship Tests ==="
 run_query "Get concepts with subconcept_of_flat q110" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110")' \
+    'yql=select * from concept where subconcept_of_flat matches "q110"' \
     '"q880"'
 
 run_query "Get concepts with subconcept_of_flat q110:1902" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110:1902")' \
+    'yql=select * from concept where subconcept_of_flat contains "q110:1902"' \
     '"q880"'
 
 run_query "Get concepts with subconcept_of_flat q110:1902,q290:1903" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110:1902,q290:1903")' \
+    'yql=select * from concept where subconcept_of_flat contains "q110:1902,q290:1903"' \
     '"q880"'
 
 run_query "Get concepts with subconcept_of_flat q110:1902,q290" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q110:1902,q290")' \
+    'yql=select * from concept where subconcept_of_flat contains "q110:1902" and subconcept_of_flat contains "q290"' \
     '"q880"'
 
 run_query "Get concepts with subconcept_of_flat q500" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q500")' \
+    'yql=select * from concept where subconcept_of_flat matches "q500"' \
     '"q730"'
 
 run_query "Get concepts with subconcept_of_flat q500:1904" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat contains "q500:1904")' \
+    'yql=select * from concept where subconcept_of_flat contains "q500:1904"' \
     '"q730"'
 
 run_query "Get concepts with subconcept_of_flat q730" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat matches "q730")' \
+    'yql=select * from concept where subconcept_of_flat matches "q730"' \
     '"q290"'
 
 run_query "Get concepts with subconcept_of_flat q730:1905" \
-    'yql=select * from concept where revisions contains sameElement(value.subconcept_of_flat contains "q730:1905")' \
+    'yql=select * from concept where subconcept_of_flat contains "q730:1905"' \
     '"q290"'
 
-echo -e "${BLUE}Testing: Get multiple concepts by revision and ID pairs${NC}"
-echo "Query: yql=select * from concept where (id contains \"q880\" and revisions contains sameElement(key contains \"1402\")) or (id contains \"q290\" and revisions contains sameElement(key contains \"1099\"))"
-result=$(vespa query 'yql=select * from concept where (id contains "q880" and revisions contains sameElement(key contains "1402")) or (id contains "q290" and revisions contains sameElement(key contains "1099"))' 2>/dev/null || echo "QUERY_FAILED")
+echo -e "${BLUE}Testing: Get multiple concepts by ID and revision${NC}"
+echo "Query: yql=select * from concept where (id contains \"q880\" and revision_id contains \"1402\") or (id contains \"q290\" and revision_id contains \"1099\")"
+result=$(vespa query 'yql=select * from concept where (id contains "q880" and revision_id contains "1402") or (id contains "q290" and revision_id contains "1099")' 2>/dev/null || echo "QUERY_FAILED")
 
 if [[ "$result" == "QUERY_FAILED" ]]; then
     echo -e "${RED}❌ FAILED: Query execution failed${NC}"
@@ -178,7 +178,13 @@ echo
 echo "To run individual queries manually:"
 echo "# Basic queries:"
 echo "vespa query 'yql=select * from concept where true'"
+echo "vespa query 'yql=select * from concept where preferred_label contains \"air pollution\"'"
+echo "vespa query 'yql=select * from concept where id contains \"q880\" and revision_id contains \"1402\"'"
 echo "vespa query 'yql=select * from document_passage where concepts_v2 contains sameElement(key contains \"q880\")'"
+echo ""
+echo "# ID and revision-based queries (separate documents):"
+echo "vespa query 'yql=select * from concept where id contains \"q880\" and revision_id contains \"1402\"'"
+echo "vespa query 'yql=select * from concept where id contains \"q880\"'  # All versions of q880"
 echo ""
 echo "# Single query with default classifiers profile (primaries):"
 echo "vespa query 'yql=select * from document_passage where concepts_v2 contains sameElement(key contains \"q880\")' 'presentation.summary=search_summary'"
