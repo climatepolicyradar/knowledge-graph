@@ -3,7 +3,6 @@
         "id": "id:doc_search:classifiers_profile::primaries",
         "fields": {
             "id": "primaries",
-            "name": "primaries",
             "concepts_versions": {
                 "q880": {
                     "concept_id": "q880",
@@ -22,7 +21,6 @@
         "id": "id:doc_search:classifiers_profile::experimentals",
         "fields": {
             "id": "experimentals",
-            "name": "experimentals",
             "concepts_versions": {
                 "q880": {
                     "concept_id": "q880",

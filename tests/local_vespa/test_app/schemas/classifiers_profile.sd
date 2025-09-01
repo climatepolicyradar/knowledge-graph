@@ -5,11 +5,7 @@ schema classifiers_profile {
             indexing: attribute | summary | index
         }
 
-        # E.g. "primaries", "experimentals"
-        field name type string {
-            indexing: attribute | summary
-        }
-
+        # E.g<Q990, 1610, n2nuerdn>
         struct concept_version {
             field concept_id type string {}
             field revision_id type string {}
