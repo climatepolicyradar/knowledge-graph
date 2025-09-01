@@ -11,6 +11,10 @@ from flows.aggregate import (
     RunOutputIdentifier,
 )
 from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    WikibaseID,
+)
 from flows.config import Config
 from flows.full_pipeline import full_pipeline
 from flows.inference import (
@@ -19,7 +23,6 @@ from flows.inference import (
     InferenceResult,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
-from src.cloud import ClassifierSpec
 
 
 @pytest.mark.asyncio
@@ -52,13 +55,17 @@ async def test_full_pipeline_no_config_provided(
         # Setup mocks
         mock_pipeline_config_create.return_value = test_config
 
+        classifier_spec = ClassifierSpec(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id="zzzz9999",
+            wandb_registry_version="v1",
+        )
+
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
                 document_stems=list(aggregate_inference_results_document_stems),
-                classifier_specs=[
-                    ClassifierSpec(name="Q100", alias="v1"),
-                ],
+                classifier_specs=[classifier_spec],
                 batch_inference_results=[
                     BatchInferenceResult(
                         batch_document_stems=list(
@@ -67,8 +74,7 @@ async def test_full_pipeline_no_config_provided(
                         successful_document_stems=list(
                             aggregate_inference_results_document_stems
                         ),
-                        classifier_name="Q100",
-                        classifier_alias="v1",
+                        classifier_spec=classifier_spec,
                     ),
                 ],
             ),
@@ -137,20 +143,24 @@ async def test_full_pipeline_with_full_config(
             new_callable=AsyncMock,
         ) as mock_indexing,
     ):
+        classifier_spec = ClassifierSpec(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id="zzzz9999",
+            wandb_registry_version="v1",
+        )
         # Setup mocks
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
                 document_stems=list(aggregate_inference_results_document_stems),
                 classifier_specs=[
-                    ClassifierSpec(name="Q100", alias="v1"),
+                    classifier_spec,
                 ],
                 batch_inference_results=[
                     BatchInferenceResult(
                         batch_document_stems=aggregate_inference_results_document_stems,
                         successful_document_stems=aggregate_inference_results_document_stems,
-                        classifier_name="Q100",
-                        classifier_alias="v1",
+                        classifier_spec=classifier_spec,
                     ),
                 ],
             ),
@@ -166,7 +176,7 @@ async def test_full_pipeline_with_full_config(
         # Run the flow
         await full_pipeline(
             config=test_config,
-            classifier_specs=[ClassifierSpec(name="Q123", alias="v1")],
+            classifier_specs=[classifier_spec],
             document_ids=[
                 DocumentImportId("test.doc.1"),
                 DocumentImportId("test.doc.2"),
@@ -185,9 +195,7 @@ async def test_full_pipeline_with_full_config(
         # Verify sub-flows were called with correct parameters
         mock_inference.assert_called_once()
         call_args = mock_inference.call_args
-        assert call_args.kwargs["classifier_specs"] == [
-            ClassifierSpec(name="Q123", alias="v1")
-        ]
+        assert call_args.kwargs["classifier_specs"] == [classifier_spec]
         assert sorted(call_args.kwargs["document_ids"]) == sorted(
             [
                 DocumentImportId("test.doc.1"),
@@ -250,7 +258,11 @@ async def test_full_pipeline_with_inference_failure(
             DocumentStem("CCLW.executive.2.2"),
         ]
         document_stems_successful = [DocumentStem("CCLW.executive.2.2")]
-        classifier_spec = ClassifierSpec(name="Q100", alias="v1")
+        classifier_spec = ClassifierSpec(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id="zzzz9999",
+            wandb_registry_version="v1",
+        )
 
         # Setup mocks
         mock_inference.return_value = Failed(
@@ -265,8 +277,7 @@ async def test_full_pipeline_with_inference_failure(
                         BatchInferenceResult(
                             batch_document_stems=document_stems_batch,
                             successful_document_stems=document_stems_successful,
-                            classifier_name=classifier_spec.name,
-                            classifier_alias=classifier_spec.alias,
+                            classifier_spec=classifier_spec,
                         ),
                     ],
                 ),
