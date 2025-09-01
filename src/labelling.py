@@ -139,7 +139,6 @@ class ArgillaSession:
                     TermsMetadataProperty("pipeline_metadata-parser_metadata"),
                     TermsMetadataProperty("text_block-index"),
                     TermsMetadataProperty("world_bank_region"),
-                    # TermsMetadataProperty("keywordclassifier"),
                 ],
             ),
             workspace=workspace,
@@ -164,8 +163,9 @@ class ArgillaSession:
     @staticmethod
     def _reformat_metadata_keys(metadata: dict) -> dict:
         """Changes dots to hyphens in the key name"""
-        # Dropping this, as it can't be serialised into the metadata field by Argilla...
+        # Dropping these, as they can't be serialised into the metadata field by Argilla...
         metadata.pop("KeywordClassifier", None)
+        metadata.pop("EmbeddingClassifier", None)
         return {key.replace(".", "-").lower(): value for key, value in metadata.items()}
 
     def dataset_to_labelled_passages(self, dataset: Dataset) -> list[LabelledPassage]:

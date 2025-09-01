@@ -38,7 +38,7 @@ from prefect_slack.credentials import SlackWebhook
 from pydantic import Field, PositiveInt, RootModel
 from typing_extensions import Self
 
-from scripts.cloud import (
+from src.cloud import (
     AwsEnv,
     ClassifierSpec,
     function_to_flow_name,

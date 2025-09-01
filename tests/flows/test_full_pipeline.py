@@ -19,7 +19,7 @@ from flows.inference import (
     InferenceResult,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
-from scripts.cloud import ClassifierSpec
+from src.cloud import ClassifierSpec
 
 
 @pytest.mark.asyncio

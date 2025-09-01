@@ -1,15 +1,33 @@
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_serializer
 
-from scripts.cloud import AwsEnv
-from scripts.utils import DontRunOnEnum
+from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
+
+
+class DontRunOnEnum(Enum):
+    """A `source` that will be filtered out in inference."""
+
+    sabin = "sabin"
+    cclw = "cclw"
+    cpr = "cpr"
+    af = "af"
+    cif = "cif"
+    gcf = "gcf"
+    gef = "gef"
+    oep = "oep"
+    unfccc = "unfccc"
+
+    def __str__(self) -> str:
+        """Return a string representation"""
+        return self.value
 
 
 class ClassifierSpec(BaseModel):

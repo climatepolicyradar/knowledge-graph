@@ -5,12 +5,11 @@ import typer
 from rich.console import Console
 from rich.progress import track
 
-from scripts.config import processed_data_dir
-from scripts.utils import ModelPath, get_local_classifier_path
-from src.classifier import Classifier
+from src.classifier import Classifier, ModelPath, get_local_classifier_path
 from src.classifier.embedding import EmbeddingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
+from src.config import processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.wikibase import WikibaseSession

@@ -3,7 +3,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from scripts.config import concept_dir
+from src.config import concept_dir
 from src.identifiers import WikibaseID
 from src.labelling import ArgillaSession
 from src.wikibase import WikibaseSession

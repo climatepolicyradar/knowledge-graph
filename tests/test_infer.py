@@ -4,8 +4,8 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from scripts.cloud import AwsEnv
 from scripts.infer import app, convert_classifier_specs, main
+from src.cloud import AwsEnv
 
 runner = CliRunner()
 

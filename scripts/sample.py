@@ -3,12 +3,19 @@ from typing import Annotated
 
 import pandas as pd
 import typer
+from more_itertools import chunked
 from rich.console import Console
-from rich.progress import track
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+)
 
-from scripts.config import equity_columns, processed_data_dir
 from src.classifier import EmbeddingClassifier, KeywordClassifier
 from src.classifier.classifier import Classifier
+from src.config import equity_columns, processed_data_dir
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.sampling import create_balanced_sample, split_evenly
@@ -78,27 +85,28 @@ def main(
     # Run inference with all classifiers
     raw_text_passages = balanced_dataset["text_block.text"].tolist()
 
-    model_classes = [KeywordClassifier]
+    model_classes = [KeywordClassifier, EmbeddingClassifier]
     models: list[Classifier] = [model_class(concept) for model_class in model_classes]
 
     for model in models:
         model.fit()
         console.log(f"🤖 Created a {model}")
 
-        if isinstance(model, EmbeddingClassifier):
-            console.log(f"Predicting spans for {model}")
-            predictions = model.predict_batch(raw_text_passages)
-        else:
-            # Keeping other classifiers using stock 'predict' as logging is better
-            # and the classifiers are manually selected just above here.
-            predictions = [
-                model.predict(text)
-                for text in track(
-                    raw_text_passages,
-                    description=f"Predicting spans for {model}",
-                    transient=True,
-                )
-            ]
+        progress_bar = Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+        )
+        with progress_bar:
+            task = progress_bar.add_task(
+                description=f"Predicting spans for {model}",
+                total=len(raw_text_passages),
+            )
+            predictions = []
+            for text_chunk in chunked(raw_text_passages, 100):
+                predictions.extend(model.predict_batch(text_chunk))
+                progress_bar.update(task, advance=len(text_chunk))
 
         # Add a column to the dataset for each classifier's predictions
         balanced_dataset[model.name] = predictions

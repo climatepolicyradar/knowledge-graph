@@ -16,7 +16,7 @@ from prefect.events.actions import RunDeployment
 from prefect.exceptions import ObjectNotFound
 
 from flows.full_pipeline import full_pipeline
-from scripts.cloud import AwsEnv, generate_deployment_name
+from src.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
 logger = logging.getLogger(__name__)
@@ -207,7 +207,7 @@ async def main() -> None:
     aws_env = AwsEnv(os.getenv("AWS_ENV"))
 
     await a_triggers_b(
-        a_flow_name="navigator-data-s3-backup",
+        a_flow_name="backup",
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
         b_flow_name=full_pipeline.name,
         b_deployment_name=generate_deployment_name(full_pipeline.name, aws_env),

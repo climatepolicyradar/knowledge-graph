@@ -10,9 +10,9 @@ import httpx
 import pandas as pd
 import pytest
 
-from scripts.config import get_git_root
 from src.classifier.classifier import Classifier
 from src.concept import Concept
+from src.config import get_git_root
 from src.wikibase import WikibaseSession
 
 

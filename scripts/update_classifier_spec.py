@@ -9,10 +9,10 @@ from rich.console import Console
 
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
+    DontRunOnEnum,
     determine_spec_file_path,
 )
-from scripts.cloud import AwsEnv
-from scripts.utils import DontRunOnEnum
+from src.cloud import AwsEnv
 from src.identifiers import WikibaseID
 
 load_dotenv()

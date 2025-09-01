@@ -12,16 +12,16 @@ from rich.console import Console
 from rich.table import Table
 from wandb.wandb_run import Run
 
-from scripts.cloud import Namespace
-from scripts.config import (
+from src.classifier import Classifier
+from src.cloud import Namespace
+from src.concept import Concept
+from src.config import (
     classifier_dir,
     concept_dir,
     equity_columns,
     metrics_dir,
     model_artifact_name,
 )
-from src.classifier import Classifier
-from src.concept import Concept
 from src.identifiers import WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.metrics import (

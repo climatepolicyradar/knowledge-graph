@@ -7,9 +7,12 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
-from scripts.cloud import AwsEnv
-from scripts.utils import DontRunOnEnum
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    DontRunOnEnum,
+    load_classifier_specs,
+)
+from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 
 

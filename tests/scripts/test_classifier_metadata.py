@@ -7,9 +7,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from flows.classifier_specs.spec_interface import DontRunOnEnum
 from scripts.classifier_metadata import update, update_entire_env
-from scripts.cloud import AwsEnv
-from scripts.utils import DontRunOnEnum
+from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 
 
