@@ -372,7 +372,7 @@ def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
 
 @pytest.fixture
 def mock_classifiers_dir(test_config):
-    mock_dir = Path(FIXTURE_DIR) / "classifiers" / "aaaa2222"
+    mock_dir = Path(FIXTURE_DIR) / "classifiers"
     with patch.object(test_config, "local_classifier_dir", new=mock_dir):
         yield mock_dir
 
@@ -380,9 +380,10 @@ def mock_classifiers_dir(test_config):
 @pytest.fixture
 def local_classifier_id(mock_classifiers_dir):
     wikibase_id = WikibaseID("Q788")
-    full_path = mock_classifiers_dir / wikibase_id
+    classifier_id = "6vxrmcuf"
+    full_path = mock_classifiers_dir / wikibase_id / classifier_id / "model.pickle"
     assert full_path.exists()
-    yield wikibase_id
+    yield wikibase_id, classifier_id
 
 
 @pytest.fixture
@@ -676,8 +677,11 @@ def mock_wandb(mock_s3_client, mock_classifiers_dir, local_classifier_id):
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
+        wikibase_id, classifier_id = local_classifier_id
         mock_artifact = Mock()
-        mock_artifact.download.return_value = mock_classifiers_dir / local_classifier_id
+        mock_artifact.download.return_value = (
+            mock_classifiers_dir / wikibase_id / classifier_id
+        )
 
         mock_run = Mock()
         mock_run.use_artifact.return_value = mock_artifact

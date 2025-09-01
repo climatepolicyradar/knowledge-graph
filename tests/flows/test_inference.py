@@ -120,10 +120,11 @@ def test_determine_file_stems__error(
 async def test_load_classifier__existing_classifier(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
+    wikibase_id, classifier_id = local_classifier_id
     _, mock_run, mock_artifact = mock_wandb
     spec = ClassifierSpec(
-        wikibase_id=local_classifier_id,
-        classifier_id="6vxrmcuf",
+        wikibase_id=wikibase_id,
+        classifier_id=classifier_id,
         wandb_registry_version="v1",
     )
     classifier = await load_classifier(
@@ -132,8 +133,8 @@ async def test_load_classifier__existing_classifier(
         spec,
     )
 
-    assert local_classifier_id == classifier.concept.wikibase_id
-    assert classifier.id == "6vxrmcuf"
+    assert wikibase_id == classifier.concept.wikibase_id
+    assert classifier.id == classifier_id
 
 
 def test_load_document(test_config, mock_bucket_documents):
@@ -219,7 +220,7 @@ async def test_store_labels(test_config, mock_bucket, snapshot):
 
 @pytest.mark.asyncio
 async def test_text_block_inference_with_results(
-    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir
 ):
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
@@ -252,7 +253,7 @@ async def test_text_block_inference_with_results(
 
 @pytest.mark.asyncio
 async def test_text_block_inference_without_results(
-    mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
+    mock_wandb, test_config, mock_classifiers_dir
 ):
     _, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
