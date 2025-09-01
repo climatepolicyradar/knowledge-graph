@@ -125,6 +125,9 @@ class InferenceResult(BaseModel):
         This is as the document would fail aggregation if there was a missing inference
         result for a classifier.
         """
+        if not self.batch_inference_results:
+            return set()
+
         classifier_document_mapping: dict[SpecStr, set[DocumentStem]] = defaultdict(set)
         for result in self.batch_inference_results:
             classifier_document_mapping[str(result.classifier_spec)].update(

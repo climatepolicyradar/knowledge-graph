@@ -965,6 +965,25 @@ def test_inference_result_all_successful() -> None:
     )
 
 
+def test_inference_result_all_failures() -> None:
+    """Test InferenceResult when some documents fail for some classifiers."""
+
+    documents = [DocumentStem("TEST.executive.1.1")]
+    spec_q100 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v1",
+    )
+
+    # Inference result should fail but not crash
+    result = InferenceResult(
+        document_stems=documents,
+        classifier_specs=[spec_q100],
+        batch_inference_results=[],  # No successes
+    )
+    assert result.failed
+
+
 def test_inference_result_partial_failures() -> None:
     """Test InferenceResult when some documents fail for some classifiers."""
 
