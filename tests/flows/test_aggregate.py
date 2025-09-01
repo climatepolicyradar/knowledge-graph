@@ -304,7 +304,6 @@ async def test_process_single_document__client_error(
     )
 
 
-@pytest.mark.skip(reason="inexplicably hanging")
 @pytest.mark.asyncio
 async def test_process_single_document__value_error(
     mock_bucket_labelled_passages_large,
