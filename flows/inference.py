@@ -270,21 +270,17 @@ def remove_sabin_file_stems(
 async def load_classifier(
     run: Run, config: Config, classifier_spec: ClassifierSpec
 ) -> Classifier:
-    """
-    Load a classifier into memory.
-
-    If the classifier is available locally, this will be used. Otherwise the
-    classifier will be downloaded from W&B (Once implemented)
-    """
+    """Load a classifier into memory."""
     async with concurrency("load_classifier", occupy=5):
         wandb_classifier_path = ModelPath(
             wikibase_id=classifier_spec.wikibase_id,
             classifier_id=classifier_spec.classifier_id,
         )
-
         artifact_id = f"{wandb_classifier_path}:{config.aws_env}"
         artifact = run.use_artifact(artifact_id, type="model")
-        classifier = Classifier.load(artifact.download())
+        download_folder = artifact.download()
+        model_path = Path(download_folder) / "model.pickle"
+        classifier = Classifier.load(model_path)
         return classifier
 
 
