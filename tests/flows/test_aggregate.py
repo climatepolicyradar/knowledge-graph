@@ -341,15 +341,16 @@ async def test_process_single_document__value_error(
         Body=json.dumps(new_data_short),
     )
 
-    result = await asyncio.gather(
-        process_document.fn(
-            document_stem,
-            classifier_specs,
-            test_config,
-            "run_output_identifier",
-        ),
-        return_exceptions=True,
-    )
+    async with asyncio.timeout(5):
+        result = await asyncio.gather(
+            process_document.fn(
+                document_stem,
+                classifier_specs,
+                test_config,
+                "run_output_identifier",
+            ),
+            return_exceptions=True,
+        )
     assert result == snapshot
 
 
