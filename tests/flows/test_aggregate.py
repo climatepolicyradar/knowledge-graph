@@ -20,8 +20,9 @@ from flows.aggregate import (
     process_document,
     validate_passages_are_same_except_concepts,
 )
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.utils import DocumentStem
-from src.cloud import ClassifierSpec, write_spec_file
+from scripts.update_classifier_spec import write_spec_file
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -32,16 +33,35 @@ def mock_classifier_specs():
         # Write the concept specs to a YAML file
         temp_spec_dir = Path(spec_dir)
         classifier_specs = [
-            ClassifierSpec(name="Q123", alias="v4"),
-            ClassifierSpec(name="Q223", alias="v3"),
-            ClassifierSpec(name="Q218", alias="v5"),
-            ClassifierSpec(name="Q767", alias="v3"),
-            ClassifierSpec(name="Q1286", alias="v3"),
+            ClassifierSpec(
+                wikibase_id="Q123",
+                classifier_id="g29kcna9",
+                wandb_registry_version="v4",
+            ),
+            ClassifierSpec(
+                wikibase_id="Q218",
+                classifier_id="6z4pufsm",
+                wandb_registry_version="v5",
+            ),
+            ClassifierSpec(
+                wikibase_id="Q223",
+                classifier_id="36bhx4mu",
+                wandb_registry_version="v3",
+            ),
+            ClassifierSpec(
+                wikibase_id="Q767",
+                classifier_id="mgwutbqx",
+                wandb_registry_version="v3",
+            ),
+            ClassifierSpec(
+                wikibase_id="Q1286",
+                classifier_id="7bt99yeu",
+                wandb_registry_version="v3",
+            ),
         ]
         spec_file_path = temp_spec_dir / "sandbox.yaml"
         write_spec_file(spec_file_path, classifier_specs)
-
-        with patch("src.cloud.SPEC_DIR", temp_spec_dir):
+        with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_spec_dir):
             yield spec_file_path, classifier_specs
 
 
@@ -86,7 +106,9 @@ async def test_aggregate_batch_of_documents(
         except Exception as e:
             pytest.fail(f"Unexpected error: {e}")
 
-        wikibase_ids = [classifier_spec.name for classifier_spec in classifier_specs]
+        wikibase_ids = [
+            classifier_spec.wikibase_id for classifier_spec in classifier_specs
+        ]
 
         document_inference_output = list(data.values())
         for concepts in document_inference_output:
@@ -167,9 +189,15 @@ async def test_get_all_labelled_passages_for_one_document(
     _, _, s3_async_client = mock_bucket_labelled_passages_large
     document_stem = DocumentStem("CCLW.executive.10061.4515")
     classifier_specs = [
-        ClassifierSpec(name="Q218", alias="v5"),
-        ClassifierSpec(name="Q767", alias="v3"),
-        ClassifierSpec(name="Q1286", alias="v3"),
+        ClassifierSpec(
+            wikibase_id="Q218", classifier_id="6z4pufsm", wandb_registry_version="v5"
+        ),
+        ClassifierSpec(
+            wikibase_id="Q767", classifier_id="mgwutbqx", wandb_registry_version="v3"
+        ),
+        ClassifierSpec(
+            wikibase_id="Q1286", classifier_id="7bt99yeu", wandb_registry_version="v3"
+        ),
     ]
     all_labelled_passages = []
     async for spec, labelled_passages in get_all_labelled_passages_for_one_document(
@@ -248,7 +276,13 @@ async def test_process_single_document__client_error(
 ):
     document_stem = DocumentStem("CCLW.executive.10061.4515")
     spec_file_path, classifier_specs = mock_classifier_specs
-    classifier_specs.append(ClassifierSpec(name="Q9999999999", alias="v99"))
+    classifier_specs.append(
+        ClassifierSpec(
+            wikibase_id="Q9999999999",
+            classifier_id="zzzzzzzz",
+            wandb_registry_version="v99",
+        )
+    )
     write_spec_file(spec_file_path, classifier_specs)
 
     result = await asyncio.gather(
@@ -265,7 +299,9 @@ async def test_process_single_document__client_error(
     code = result[0].exception.response["Error"]["Code"]
     assert code == "NoSuchKey"
     key = result[0].exception.response["Error"]["Key"]
-    assert key == "labelled_passages/Q9999999999/v99/CCLW.executive.10061.4515.json"
+    assert (
+        key == "labelled_passages/Q9999999999/zzzzzzzz/CCLW.executive.10061.4515.json"
+    )
 
 
 @pytest.mark.asyncio
@@ -282,7 +318,7 @@ async def test_process_single_document__value_error(
     #
     # Those classifiers are setup in the fixtures.
     classifier_specs = [
-        spec for spec in classifier_specs if spec.name in ["Q223", "Q767"]
+        spec for spec in classifier_specs if spec.wikibase_id in ["Q223", "Q767"]
     ]
 
     document_stem = DocumentStem("CCLW.executive.10061.4515")
@@ -296,24 +332,25 @@ async def test_process_single_document__value_error(
 
     # Find and replace the Q767 file to have only 2 passages, while
     # Q223 keeps its 27.
-    q767_key = [k for k in keys if "CCLW.executive.10061.4515" in k and "Q767/v3" in k][
-        0
-    ]
+    q767_key = [
+        k for k in keys if "CCLW.executive.10061.4515" in k and "Q767/mgwutbqx" in k
+    ][0]
     await s3_async_client.put_object(
         Bucket=bucket,
         Key=q767_key,
         Body=json.dumps(new_data_short),
     )
 
-    result = await asyncio.gather(
-        process_document.fn(
-            document_stem,
-            classifier_specs,
-            test_config,
-            "run_output_identifier",
-        ),
-        return_exceptions=True,
-    )
+    async with asyncio.timeout(5):
+        result = await asyncio.gather(
+            process_document.fn(
+                document_stem,
+                classifier_specs,
+                test_config,
+                "run_output_identifier",
+            ),
+            return_exceptions=True,
+        )
     assert result == snapshot
 
 
