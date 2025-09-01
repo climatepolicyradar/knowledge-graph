@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-import boto3
+import aioboto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, unmapped
@@ -65,13 +65,17 @@ DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 
 
-def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
+async def load_json_data_from_s3(
+    bucket: str, key: str, config: Config
+) -> dict[str, Any]:
     """Load JSON data from an S3 URI."""
 
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket, Key=key)
-    body = response["Body"].read().decode("utf-8")
-    return json.loads(body)
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3client:
+        response = await s3client.get_object(Bucket=bucket, Key=key)
+        body = await response["Body"].read()
+        decoded_body = body.decode("utf-8")
+        return json.loads(decoded_body)
 
 
 async def _update_vespa_passage_concepts(
@@ -222,8 +226,10 @@ async def index_document_passages(
 
     print(f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}")
 
-    raw_data = load_json_data_from_s3(
-        bucket=aggregated_results_s3_uri.bucket, key=aggregated_results_s3_uri.key
+    raw_data = await load_json_data_from_s3(
+        bucket=aggregated_results_s3_uri.bucket,
+        key=aggregated_results_s3_uri.key,
+        config=config,
     )
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
