@@ -40,7 +40,6 @@ from typing_extensions import Self
 
 from src.cloud import (
     AwsEnv,
-    ClassifierSpec,
     function_to_flow_name,
     generate_deployment_name,
 )
@@ -367,55 +366,6 @@ def collect_unique_file_stems_under_prefix(
             if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
                 file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return list(set(file_stems))
-
-
-def get_labelled_passage_paths(
-    document_ids: Sequence[DocumentImportId],
-    classifier_specs: Sequence[ClassifierSpec],
-    cache_bucket: str,
-    labelled_passages_prefix: str,
-) -> list[str]:
-    """
-    Get document paths from a list of document IDs with translated paths if they exist.
-
-    This function is used to get all document paths from a list of document IDs. For
-    example CCLW.executive.1.1 is a document id that may have multiple files associated
-    with it. This function will return all the paths to those files.
-
-    Namely the translated versions of the file. This is done by checking whether a
-    translated file exists in the target language.
-    """
-
-    document_paths = []
-
-    for classifier_spec in classifier_specs:
-        for document_id in document_ids:
-            document_key = os.path.join(
-                labelled_passages_prefix,
-                classifier_spec.name,
-                classifier_spec.alias,
-                f"{document_id}.json",
-            )
-
-            document_stems = get_file_stems_for_document_id(
-                document_id=document_id,
-                bucket_name=cache_bucket,
-                document_key=document_key,
-            )
-
-            for file_stem in document_stems:
-                document_paths.append(
-                    "s3://"
-                    + os.path.join(
-                        cache_bucket,
-                        labelled_passages_prefix,
-                        classifier_spec.name,
-                        classifier_spec.alias,
-                        f"{file_stem}.json",
-                    )
-                )
-
-    return document_paths
 
 
 def _s3_object_write_text(s3_uri: str, text: str) -> None:
