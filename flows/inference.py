@@ -14,7 +14,7 @@ from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow
-from prefect.artifacts import create_table_artifact
+from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.concurrency.asyncio import concurrency
@@ -671,7 +671,7 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
-    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    await acreate_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"batch-inference-{flow_run_name}",
         table=document_details,
         description=overview_description,
@@ -1086,7 +1086,7 @@ async def create_inference_summary_artifact(
         for spec in failures_classifier_specs
     ]
 
-    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    await acreate_table_artifact(
         key=f"classifier-inference-{config.aws_env.value}",
         table=classifier_details,
         description=overview_description,
