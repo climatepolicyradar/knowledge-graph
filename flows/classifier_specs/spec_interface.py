@@ -9,6 +9,7 @@ from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 
+type SpecStr = str
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
 
 
@@ -72,7 +73,7 @@ class ClassifierSpec(BaseModel):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""
         return hash(self.classifier_id)
 
-    def __str__(self):
+    def __str__(self) -> SpecStr:
         """Return a string representation of the classifier spec."""
         return f"{self.wikibase_id}:{self.classifier_id}"
 
