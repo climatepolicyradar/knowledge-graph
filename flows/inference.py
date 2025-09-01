@@ -29,6 +29,7 @@ from wandb.sdk.wandb_run import Run
 
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
+    SpecStr,
     disallow_latest_alias,
     load_classifier_specs,
 )
@@ -124,11 +125,9 @@ class InferenceResult(BaseModel):
         This is as the document would fail aggregation if there was a missing inference
         result for a classifier.
         """
-        classifier_document_mapping: dict[ClassifierSpec, set[DocumentStem]] = (
-            defaultdict(set)
-        )
+        classifier_document_mapping: dict[SpecStr, set[DocumentStem]] = defaultdict(set)
         for result in self.batch_inference_results:
-            classifier_document_mapping[result.classifier_spec].update(
+            classifier_document_mapping[str(result.classifier_spec)].update(
                 result.successful_document_stems
             )
         return set.intersection(*classifier_document_mapping.values())
@@ -895,7 +894,7 @@ def group_inference_results_into_states(
     failures_in: Sequence[BaseException | FlowRun],
 ) -> tuple[
     list[FlowRun | BaseException],
-    dict[str, BatchInferenceResult],
+    dict[SpecStr, BatchInferenceResult],
 ]:
     """Group results of sub-runs into the different states of success and failure."""
     successes: dict[SpecStr, BatchInferenceResult] = {}
