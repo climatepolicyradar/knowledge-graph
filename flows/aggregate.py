@@ -23,6 +23,10 @@ from flows.boundary import (
     s3_copy_file,
     s3_object_write_text_async,
 )
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    load_classifier_specs,
+)
 from flows.config import Config
 from flows.inference import (
     deserialise_pydantic_list_with_fallback,
@@ -35,11 +39,7 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
 )
-from src.cloud import (
-    AwsEnv,
-    ClassifierSpec,
-    parse_spec_file,
-)
+from src.cloud import AwsEnv
 from src.labelled_passage import LabelledPassage
 
 T = TypeVar("T")
@@ -162,8 +162,8 @@ def generate_s3_uri_input(
         bucket=cache_bucket,
         key=os.path.join(
             document_source_prefix,
-            classifier_spec.name,
-            classifier_spec.alias,
+            classifier_spec.wikibase_id,
+            classifier_spec.classifier_id,
             f"{document_stem}.json",
         ),
     )
@@ -362,10 +362,12 @@ async def create_aggregate_inference_overall_summary_artifact(
 def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     """Collect the stems for the given specs."""
     document_stems = []
-    specs = parse_spec_file(config.aws_env)
+    specs = load_classifier_specs(config.aws_env)
     for spec in specs:
         prefix = os.path.join(
-            config.aggregate_document_source_prefix, spec.name, spec.alias
+            config.aggregate_document_source_prefix,
+            spec.wikibase_id,
+            spec.classifier_id,
         )
         document_stems.extend(
             collect_unique_file_stems_under_prefix(
@@ -485,7 +487,7 @@ async def aggregate(
         document_stems = collect_stems_by_specs(config)
 
     run_output_identifier = build_run_output_identifier()
-    classifier_specs = parse_spec_file(config.aws_env)
+    classifier_specs = load_classifier_specs(config.aws_env)
 
     print(
         f"Aggregating inference results for {len(document_stems)} documents, using "

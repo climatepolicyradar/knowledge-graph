@@ -1,1 +1,1 @@
-tests/flows/fixtures/labelled_passages/Q218/v4/UNFCCC.party.309.0_translated_en.json filter=lfs diff=lfs merge=lfs -text
+tests/flows/fixtures/labelled_passages/Q218/bavawka9/UNFCCC.party.309.0_translated_en.json filter=lfs diff=lfs merge=lfs -text
