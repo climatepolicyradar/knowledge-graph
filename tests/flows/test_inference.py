@@ -82,7 +82,13 @@ def test_list_bucket_file_stems(test_config, mock_bucket_documents):
         (None, ["AF.document.002MMUCR.n0000"], ["AF.document.002MMUCR.n0000"]),
     ],
 )
-def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
+def test_determine_file_stems(
+    mock_bucket_new_and_updated_documents_json,
+    test_config,
+    doc_ids,
+    bucket_ids,
+    expected,
+):
     got = determine_file_stems(
         config=test_config,
         use_new_and_updated=False,
@@ -92,7 +98,9 @@ def test_determine_file_stems(test_config, doc_ids, bucket_ids, expected):
     assert got == expected
 
 
-def test_determine_file_stems__error(test_config):
+def test_determine_file_stems__error(
+    mock_bucket_new_and_updated_documents_json, test_config
+):
     with pytest.raises(ValueError):
         _ = determine_file_stems(
             config=test_config,
