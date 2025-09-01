@@ -65,7 +65,7 @@ DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 
 
-async def load_json_data_from_s3(
+async def load_async_json_data_from_s3(
     bucket: str, key: str, config: Config
 ) -> dict[str, Any]:
     """Load JSON data from an S3 URI."""
@@ -226,7 +226,7 @@ async def index_document_passages(
 
     print(f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}")
 
-    raw_data = await load_json_data_from_s3(
+    raw_data = await load_async_json_data_from_s3(
         bucket=aggregated_results_s3_uri.bucket,
         key=aggregated_results_s3_uri.key,
         config=config,
