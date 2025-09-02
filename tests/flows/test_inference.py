@@ -1178,18 +1178,36 @@ def test_generate_assets_and_asset_deps(test_config) -> None:
 
 
 @pytest.mark.parametrize(
-    ("dont_run_on", "expected_remove_count", "expected_accept_count"),
+    ("dont_run_on", "removed"),
     [
-        (None, 0, 8),
-        ([], 0, 8),
-        (["gef"], 1, 7),
-        (["cpr", "sabin"], 2, 6),
-        (DontRunOnEnum.__members__.keys(), 8, 0),
+        (None, []),
+        ([], []),
+        (
+            ["gef"],
+            [
+                "GEF.document.787.n0000.json",
+            ],
+        ),
+        (
+            ["cpr", "sabin"],
+            ["Sabin.document.9869.10352.json", "CPR.document.i00003835.n0000.json"],
+        ),
+        (
+            DontRunOnEnum.__members__.keys(),
+            [
+                "GCF.document.FP181_24530.13164.json",
+                "CCLW.document.i00000300.n0000.json",
+                "GEF.document.787.n0000.json",
+                "AF.document.AFRDG00005.n0000.json",
+                "CIF.document.XCTFMB030A.n0000_translated_en.json",
+                "OEP.document.i00000231.n0000.json",
+                "Sabin.document.9869.10352.json",
+                "CPR.document.i00003835.n0000.json",
+            ],
+        ),
     ],
 )
-def test_filter_document_batch(
-    dont_run_on, expected_remove_count, expected_accept_count
-):
+def test_filter_document_batch(dont_run_on, removed):
     file_stems = [
         "GCF.document.FP181_24530.13164.json",
         "CCLW.document.i00000300.n0000.json",
@@ -1200,8 +1218,9 @@ def test_filter_document_batch(
         "Sabin.document.9869.10352.json",
         "CPR.document.i00003835.n0000.json",
     ]
+    accepted = [f for f in file_stems if f not in removed]
 
-    removed, accepted = filter_document_batch(
+    got_removed, got_accepted = filter_document_batch(
         file_stems=file_stems,
         spec=ClassifierSpec(
             wikibase_id=WikibaseID("Q788"),
@@ -1210,6 +1229,5 @@ def test_filter_document_batch(
             dont_run_on=dont_run_on,
         ),
     )
-
-    assert len(removed) == expected_remove_count
-    assert len(accepted) == expected_accept_count
+    assert got_removed == removed
+    assert got_accepted == accepted
