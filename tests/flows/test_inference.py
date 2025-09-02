@@ -1220,7 +1220,7 @@ def test_filter_document_batch(dont_run_on, removed):
     ]
     accepted = [f for f in file_stems if f not in removed]
 
-    got_removed, got_accepted = filter_document_batch(
+    filter_result = filter_document_batch(
         file_stems=file_stems,
         spec=ClassifierSpec(
             wikibase_id=WikibaseID("Q788"),
@@ -1229,5 +1229,5 @@ def test_filter_document_batch(dont_run_on, removed):
             dont_run_on=dont_run_on,
         ),
     )
-    assert got_removed == removed
-    assert got_accepted == accepted
+    assert filter_result.removed == removed
+    assert filter_result.accepted == accepted

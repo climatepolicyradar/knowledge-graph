@@ -5,7 +5,7 @@ from collections.abc import Generator, Sequence
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, Optional, TypeAlias
+from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import boto3
 import coiled
@@ -71,6 +71,10 @@ PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE: int = (
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
+FilterResult = NamedTuple(
+    "FilterResult",
+    [("removed", Sequence[DocumentStem]), ("accepted", Sequence[DocumentStem])],
+)
 
 
 class BatchInferenceResult(BaseModel):
@@ -903,7 +907,7 @@ async def inference_batch_of_documents_gpu(
 
 def filter_document_batch(
     file_stems: Sequence[DocumentStem], spec: ClassifierSpec
-) -> tuple[Sequence[DocumentStem], Sequence[DocumentStem]]:
+) -> FilterResult:
     removed_file_stems = []
     accepted_file_stems = []
     for stem in file_stems:
@@ -912,7 +916,7 @@ def filter_document_batch(
             removed_file_stems.append(stem)
         else:
             accepted_file_stems.append(stem)
-    return removed_file_stems, accepted_file_stems
+    return FilterResult(removed=removed_file_stems, accepted=accepted_file_stems)
 
 
 @flow(
@@ -981,12 +985,10 @@ async def inference(
     removal_details: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
-        removed_file_stems, accepted_file_stems = filter_document_batch(
-            validated_file_stems, classifier_spec
-        )
-        removal_details[classifier_spec] = len(removed_file_stems)
+        filter_result = filter_document_batch(validated_file_stems, classifier_spec)
+        removal_details[classifier_spec] = len(filter_result.removed)
 
-        for document_batch in iterate_batch(accepted_file_stems, batch_size):
+        for document_batch in iterate_batch(filter_result.accepted, batch_size):
             filtered_batches.append((classifier_spec, document_batch))
 
     # Create flow params from filtered batches
