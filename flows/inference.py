@@ -1,10 +1,8 @@
 import asyncio
 import json
 import os
-from collections import defaultdict
 from collections.abc import Generator, Sequence
 from datetime import timedelta
-from functools import cached_property
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, Iterable, Optional, TypeAlias
@@ -123,34 +121,30 @@ class InferenceResult(BaseModel):
 
     @property
     def failed(self) -> bool:
-        """Whether the inference failed, True if failed."""
-
-        return any([result.failed for result in self.batch_inference_results]) or len(
-            self.document_stems
-        ) != len(self.fully_successfully_classified_document_stems)
-
-    @cached_property
-    def fully_successfully_classified_document_stems(self) -> set[DocumentStem]:
-        """
-        The set of document stems that were successfully processed.
-
-        A document stem is considered successful if it was successful across all
-        classifiers. For example, if a document successfully had inference run in one
-        batch for classifier A, but failed for classifier B, then the document stem is
-        considered unsuccessful.
-
-        This is as the document would fail aggregation if there was a missing inference
-        result for a classifier.
-        """
+        """Whether the inference failed."""
         if not self.batch_inference_results:
-            return set()
+            return True
+        else:
+            return any([result.failed for result in self.batch_inference_results])
 
-        classifier_document_mapping: dict[SpecStr, set[DocumentStem]] = defaultdict(set)
-        for result in self.batch_inference_results:
-            classifier_document_mapping[str(result.classifier_spec)].update(
-                result.successful_document_stems
+    @property
+    def successful_document_stems(self) -> set[DocumentStem]:
+        """
+        The documents that succeeded within every batch they where sent to.
+
+        This means removing any that had a failure in any batch.
+        """
+        cross_batch_failures = set()
+        cross_batch_successes = set()
+
+        for batch_result in self.batch_inference_results:
+            cross_batch_failures = cross_batch_failures.union(
+                batch_result.failed_document_stems
             )
-        return set.intersection(*classifier_document_mapping.values())
+            cross_batch_successes = cross_batch_successes.union(
+                batch_result.successful_document_stems
+            )
+        return cross_batch_successes - cross_batch_failures
 
 
 def get_bucket_paginator(config: Config, prefix: str):

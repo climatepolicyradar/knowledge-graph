@@ -336,13 +336,7 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         assert inference_result.batch_inference_results != InferenceResult.failed
 
-        # Check the document filtering works
-        filtered_file_stems = (
-            inference_result.fully_successfully_classified_document_stems
-        )
-        assert filtered_file_stems == {
-            DocumentStem(doc_id) for doc_id in expected_doc_stems
-        }
+        assert inference_result.successful_document_stems == set(expected_doc_stems)
 
         assert inference_result.failed_classifier_specs == []
 
@@ -959,9 +953,8 @@ def test_inference_result_all_successful() -> None:
         "Should fail when some documents fail for some classifiers"
     )
 
-    # Only documents that succeeded for both classifiers should be in
-    # fully_successfully_classified_document_stems
-    assert result.fully_successfully_classified_document_stems == set(all_documents), (
+    # Only documents that succeeded for both classifiers should have succeeded
+    assert result.successful_document_stems == set(all_documents), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
 
@@ -983,7 +976,7 @@ def test_inference_result_all_failures() -> None:
         batch_inference_results=[],  # No successes
     )
     assert result.failed
-    assert result.failed_document_count == 1
+    assert len(result.successful_document_stems) == 0
 
 
 def test_inference_result_partial_failures() -> None:
@@ -1045,13 +1038,12 @@ def test_inference_result_partial_failures() -> None:
     # Since Q101 failed on 3 documents, those documents are considered failed overall
     assert result.failed, "Should fail when some documents fail for some classifiers"
 
-    # Only documents that succeeded for both classifiers should be in
-    # fully_successfully_classified_document_stems
+    # Only documents that succeeded for both classifiers should have succeeded
     expected_successful = {
         DocumentStem("TEST.executive.3.3"),
         DocumentStem("TEST.executive.4.4"),
     }
-    assert result.fully_successfully_classified_document_stems == expected_successful, (
+    assert result.successful_document_stems == expected_successful, (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
 
