@@ -26,6 +26,7 @@ from wandb.sdk.wandb_run import Run
 
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
+    DontRunOnEnum,
     disallow_latest_alias,
     load_classifier_specs,
 )
@@ -912,7 +913,7 @@ def filter_document_batch(
     accepted_file_stems = []
     for stem in file_stems:
         source = stem.split(".")[0]
-        if source.lower() in (spec.dont_run_on or []):
+        if DontRunOnEnum(source.lower()) in (spec.dont_run_on or []):
             removed_file_stems.append(stem)
         else:
             accepted_file_stems.append(stem)

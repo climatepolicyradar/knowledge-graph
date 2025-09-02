@@ -305,7 +305,7 @@ def load_fixture(file_name) -> str:
 
 @pytest.fixture
 def mock_bucket_documents(mock_s3_client, mock_bucket):
-    fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
+    fixture_files = ["GEF.document.0.1.json", "CPR.document.0.1.json"]
     for file_name in fixture_files:
         data = load_fixture(file_name)
         body = BytesIO(data.encode("utf-8"))
