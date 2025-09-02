@@ -1,18 +1,4 @@
 # serializer version: 1
-# name: test_group_inference_results_into_states[failures]
-  list([
-    FlowRun(id=UUID('09b81f2b-13c3-4d82-8afe-9d4a58971ef7'), name='1', flow_id=UUID('09b81f2b-13c3-4d82-8afe-9d4a58971ef7'), state_id=None, deployment_id=None, deployment_version=None, work_queue_name=None, flow_version=None, parameters={}, idempotency_key=None, context={}, empirical_policy=FlowRunPolicy(max_retries=0, retry_delay_seconds=0, retries=None, retry_delay=None, pause_keys=set(), resuming=False, retry_type=None), tags=[], labels={}, parent_task_run_id=None, run_count=0, expected_start_time=None, next_scheduled_start_time=None, start_time=None, end_time=None, total_run_time=datetime.timedelta(0), estimated_run_time=datetime.timedelta(0), estimated_start_time_delta=datetime.timedelta(0), auto_scheduled=False, infrastructure_document_id=None, infrastructure_pid=None, created_by=None, work_queue_id=None, work_pool_id=None, work_pool_name=None, state=None, job_variables=None, state_type=None, state_name=None),
-    FlowRun(id=UUID('5c31d5a1-824f-42b2-ba7e-dab366ca5904'), name='2', flow_id=UUID('5c31d5a1-824f-42b2-ba7e-dab366ca5904'), state_id=None, deployment_id=None, deployment_version=None, work_queue_name=None, flow_version=None, parameters={}, idempotency_key=None, context={}, empirical_policy=FlowRunPolicy(max_retries=0, retry_delay_seconds=0, retries=None, retry_delay=None, pause_keys=set(), resuming=False, retry_type=None), tags=[], labels={}, parent_task_run_id=None, run_count=0, expected_start_time=None, next_scheduled_start_time=None, start_time=None, end_time=None, total_run_time=datetime.timedelta(0), estimated_run_time=datetime.timedelta(0), estimated_start_time_delta=datetime.timedelta(0), auto_scheduled=False, infrastructure_document_id=None, infrastructure_pid=None, created_by=None, work_queue_id=None, work_pool_id=None, work_pool_name=None, state=Cancelled(message=None, type=CANCELLED, result=None), job_variables=None, state_type=None, state_name=None),
-    ValueError('2'),
-    ValueError('3'),
-  ])
-# ---
-# name: test_group_inference_results_into_states[successes]
-  dict({
-    'Q200:bbbb3333': BatchInferenceResult(batch_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], successful_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], classifier_spec=ClassifierSpec(wikibase_id='Q200', classifier_id='bbbb3333', wandb_registry_version=Version('v5'), compute_environment=None, dont_run_on=None)),
-    'Q201:aaaa2222': BatchInferenceResult(batch_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], successful_document_stems=['AF.document.061MCLAR.n0000_translated_en', 'CCLW.executive.10512.5360'], classifier_spec=ClassifierSpec(wikibase_id='Q201', classifier_id='aaaa2222', wandb_registry_version=Version('v6'), compute_environment=None, dont_run_on=None)),
-  })
-# ---
 # name: test_inference_batch_of_documents_cpu
   '[{"Document stem": "PDF.document.0.1", "Status": "\\u2713", "Exception": "N/A"}]'
 # ---

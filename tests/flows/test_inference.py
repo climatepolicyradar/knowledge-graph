@@ -6,22 +6,20 @@ from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from uuid import UUID
 
 import boto3
 import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
-from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.artifacts import Artifact
+from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
 from prefect.states import Completed
 
-from flows.classifier_specs.spec_interface import ClassifierSpec
+from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
     BatchInferenceResult,
-    DocumentImportId,
-    DocumentStem,
     InferenceResult,
     SingleDocumentInferenceResult,
     _inference_batch_of_documents,
@@ -30,22 +28,21 @@ from flows.inference import (
     deserialise_pydantic_list_with_fallback,
     determine_file_stems,
     document_passages,
+    filter_document_batch,
     generate_asset_deps,
     generate_assets,
     get_latest_ingest_documents,
-    group_inference_results_into_states,
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
     load_classifier,
     load_document,
-    remove_sabin_file_stems,
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
     store_labels,
     text_block_inference,
 )
-from flows.utils import Fault, JsonDict
+from flows.utils import DocumentImportId, DocumentStem, Fault, JsonDict
 from src.identifiers import ClassifierID, WikibaseID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
@@ -307,25 +304,71 @@ async def test_text_block_inference_without_results(
 
 
 @pytest.mark.asyncio
+async def test_inference_with_dont_run_on_filter(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_multiple_sources,
+    mock_deployment,
+):
+    input_doc_ids = [
+        DocumentImportId(Path(doc).stem) for doc in mock_bucket_multiple_sources
+    ]
+    gef_doc_id, cpr_doc_id, sabin_doc_id = input_doc_ids
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+        dont_run_on=["cpr", "sabin"],
+    )
+
+    state = Completed(
+        data=BatchInferenceResult(
+            batch_document_stems=[gef_doc_id],
+            successful_document_stems=[gef_doc_id],
+            classifier_spec=spec,
+        ),
+    )
+    with mock_deployment(state) as mock_inference_run_deployment:
+        # run the inference flow
+        _ = await inference(
+            classifier_specs=[spec],
+            document_ids=input_doc_ids,
+            config=test_config,
+        )
+
+        mock_inference_run_deployment.call_args.kwargs["parameters"]["batch"] == [
+            gef_doc_id
+        ]
+
+        summary_artifact = await Artifact.get("removal-details-sandbox")
+        assert summary_artifact and summary_artifact.description
+        assert json.loads(summary_artifact.data) == [
+            {
+                "Wikibase ID": spec.wikibase_id,
+                "Classifier ID": spec.classifier_id,
+                "Dont Run Ons": ["cpr", "sabin"],
+                "Removals": 2,
+            }
+        ]
+
+
+@pytest.mark.asyncio
 async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
     mock_bucket_documents,
-    mock_bucket_containing_some_sabin_documents,
     mock_deployment,
 ):
     """Test inference flow when creating batches of inference results"""
     input_doc_ids = [
-        DocumentImportId(Path(doc_file).stem)
-        for doc_file in mock_bucket_containing_some_sabin_documents
+        DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
     ]
 
-    # expect Sabin documents to be filtered out
-    expected_doc_stems = [
-        DocumentStem(Path(doc_file).stem) for doc_file in mock_bucket_documents
-    ]
     expected_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),
         classifier_id="bvaw9xxm",
@@ -334,8 +377,8 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
     state = Completed(
         data=BatchInferenceResult(
-            batch_document_stems=list(expected_doc_stems),
-            successful_document_stems=list(expected_doc_stems),
+            batch_document_stems=list(input_doc_ids),
+            successful_document_stems=list(input_doc_ids),
             classifier_spec=expected_classifier_spec,
         )
     )
@@ -353,7 +396,7 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         assert inference_result.batch_inference_results != InferenceResult.failed
 
-        assert inference_result.successful_document_stems == set(expected_doc_stems)
+        assert inference_result.successful_document_stems == set(input_doc_ids)
 
         assert inference_result.failed_classifier_specs == []
 
@@ -498,88 +541,6 @@ async def test_run_classifier_inference_on_document_missing(
             classifier=classifier,
         )
     assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
-
-
-@pytest.mark.parametrize(
-    "input_stems,expected_output",
-    [
-        ([], []),
-        (
-            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
-            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
-        ),
-        (["Sabin.document.16944.17490", "Sabin.document.16945.17491"], []),
-        (
-            [
-                "CCLW.executive.12345.6789",
-                "Sabin.document.16944.17490",
-                "UNFCCC.document.1234.5678",
-                "Sabin.document.16945.17491",
-            ],
-            ["CCLW.executive.12345.6789", "UNFCCC.document.1234.5678"],
-        ),
-        (["sabin.document.16944.17490", "SABIN.document.16945.17491"], []),
-        (
-            ["SabinIndustries.document.1234.5678", "DocumentSabin.12345.6789"],
-            ["DocumentSabin.12345.6789"],
-        ),
-    ],
-)
-def test_remove_sabin_file_stems(
-    input_stems: list[DocumentStem], expected_output: list[DocumentStem]
-):
-    result = remove_sabin_file_stems(input_stems)
-    assert result == expected_output
-
-
-def test_group_inference_results_into_states(snapshot):
-    batch_document_stems = [
-        DocumentStem("AF.document.061MCLAR.n0000_translated_en"),
-        DocumentStem("CCLW.executive.10512.5360"),
-    ]
-
-    # Test data separated into successes and failures as expected by the new signature
-    successes = [
-        BatchInferenceResult(
-            batch_document_stems=batch_document_stems,
-            successful_document_stems=batch_document_stems,
-            classifier_spec=ClassifierSpec(
-                wikibase_id=WikibaseID("Q200"),
-                classifier_id="bbbb3333",
-                wandb_registry_version="v5",
-            ),
-        ),
-        BatchInferenceResult(
-            batch_document_stems=batch_document_stems,
-            successful_document_stems=batch_document_stems,
-            classifier_spec=ClassifierSpec(
-                wikibase_id=WikibaseID("Q201"),
-                classifier_id="aaaa2222",
-                wandb_registry_version="v6",
-            ),
-        ),
-    ]
-
-    failures = [
-        FlowRun(
-            name="1",
-            id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-            flow_id=UUID("09b81f2b-13c3-4d82-8afe-9d4a58971ef7"),
-            state=None,
-        ),
-        FlowRun(
-            name="2",
-            id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-            flow_id=UUID("5c31d5a1-824f-42b2-ba7e-dab366ca5904"),
-            state=State(type=StateType.CANCELLED),
-        ),
-        ValueError("2"),
-        ValueError("3"),
-    ]
-
-    failures, successes = group_inference_results_into_states(successes, failures)
-    assert failures == snapshot(name="failures")
-    assert successes == snapshot(name="successes")
 
 
 @pytest.mark.asyncio
@@ -1214,3 +1175,41 @@ def test_generate_assets_and_asset_deps(test_config) -> None:
     assets = generate_assets(test_config, inferences * 1000, 500)
     asset_deps = generate_asset_deps(test_config, inferences * 1000, 500)
     assert len(assets) == len(asset_deps) / 2 == 500
+
+
+@pytest.mark.parametrize(
+    ("dont_run_on", "expected_remove_count", "expected_accept_count"),
+    [
+        (None, 0, 8),
+        ([], 0, 8),
+        (["gef"], 1, 7),
+        (["cpr", "sabin"], 2, 6),
+        (DontRunOnEnum.__members__.keys(), 8, 0),
+    ],
+)
+def test_filter_document_batch(
+    dont_run_on, expected_remove_count, expected_accept_count
+):
+    file_stems = [
+        "GCF.document.FP181_24530.13164.json",
+        "CCLW.document.i00000300.n0000.json",
+        "GEF.document.787.n0000.json",
+        "AF.document.AFRDG00005.n0000.json",
+        "CIF.document.XCTFMB030A.n0000_translated_en.json",
+        "OEP.document.i00000231.n0000.json",
+        "Sabin.document.9869.10352.json",
+        "CPR.document.i00003835.n0000.json",
+    ]
+
+    removed, accepted = filter_document_batch(
+        file_stems=file_stems,
+        spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q788"),
+            classifier_id="bvaw9xxm",
+            wandb_registry_version="v13",
+            dont_run_on=dont_run_on,
+        ),
+    )
+
+    assert len(removed) == expected_remove_count
+    assert len(accepted) == expected_accept_count

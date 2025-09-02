@@ -317,14 +317,14 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_bucket_containing_some_sabin_documents(mock_s3_client, mock_bucket):
+def mock_bucket_multiple_sources(mock_s3_client, mock_bucket):
     fixture_files = [
-        "PDF.document.0.1.json",
-        "HTML.document.0.1.json",
+        "GEF.document.0.1.json",
+        "CPR.document.0.1.json",
         "Sabin.document.16944.17490.json",
     ]
     for file_name in fixture_files:
-        data = load_fixture(file_name)
+        data = load_fixture("PDF.document.0.1.json")  # content not used, just the key
         body = BytesIO(data.encode("utf-8"))
         key = os.path.join("embeddings_input", file_name)
         mock_s3_client.put_object(
