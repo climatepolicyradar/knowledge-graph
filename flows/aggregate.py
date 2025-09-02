@@ -26,6 +26,7 @@ from flows.boundary import (
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     load_classifier_specs,
+    should_skip_doc,
 )
 from flows.config import Config
 from flows.inference import (
@@ -71,6 +72,10 @@ class AggregationFailure(Exception):
         self.context = context
 
 
+class AllSkippedFailure(Exception):
+    """Every classifier was skipped for this document."""
+
+
 def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""
     run_context = get_run_context()
@@ -99,6 +104,9 @@ async def get_all_labelled_passages_for_one_document(
     """Get the labelled passages from S3."""
 
     for spec in classifier_specs:
+        if should_skip_doc(document_stem, spec):
+            continue
+
         s3_uri = generate_s3_uri_input(
             cache_bucket=config.cache_bucket_str,
             document_source_prefix=config.aggregate_document_source_prefix,
@@ -249,6 +257,10 @@ async def process_document(
                         serialised_concepts
                     )
 
+            # Validation, checking if we skipped all concepts for a document
+            if not concepts_for_vespa:
+                raise AllSkippedFailure
+
             # Write to s3
             s3_uri = generate_s3_uri_output(
                 cache_bucket=config.cache_bucket_str,
@@ -272,6 +284,10 @@ async def process_document(
                 ),
             )
             return document_stem
+    except AllSkippedFailure as e:
+        raise AggregationFailure(
+            document_stem=document_stem, exception=e, context=repr(e)
+        )
     except ClientError as e:
         print(f"ClientError: {e.response}")
         raise AggregationFailure(
