@@ -324,8 +324,7 @@ def mock_bucket_multiple_sources(mock_s3_client, mock_bucket):
         "Sabin.document.16944.17490.json",
     ]
     for file_name in fixture_files:
-        data = load_fixture("PDF.document.0.1.json")  # content not used, just the key
-        body = BytesIO(data.encode("utf-8"))
+        body = BytesIO("".encode("utf-8"))
         key = os.path.join("embeddings_input", file_name)
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"

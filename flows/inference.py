@@ -79,8 +79,17 @@ class BatchInferenceResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     batch_document_stems: list[DocumentStem]
+    """List of document stems that were included in this batch for processing.
+    
+    These represent all the documents that were assigned to this batch,
+    regardless of whether processing succeeded or failed.
+    """
+
     successful_document_stems: list[DocumentStem]
+    """List of document stems that were processed successfully in this batch."""
+
     classifier_spec: ClassifierSpec
+    """The classifier specification used to process this batch of documents."""
 
     @property
     def all_document_count(self) -> int:
@@ -112,10 +121,27 @@ class InferenceResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     requested_document_stems: list[DocumentStem]
+    """List of document stems that were requested for inference processing.
+    
+    These represent the file names (without extensions) of documents that were 
+    intended to be processed, regardless of whether processing succeeded or failed.
+    """
+
     classifier_specs: list[ClassifierSpec]
+    """List of classifier specifications that were used in this inference run.
+    
+    These define which classifiers (models) were intended to be used for processing
+    the documents, regardless of whether they succeeded or failed.
+    """
+
     batch_inference_results: list[BatchInferenceResult] = []
+    """All the batches that made up this inference run."""
+
     successful_classifier_specs: list[ClassifierSpec] = []
+    """List of classifier specifications that completed all processing successfully."""
+
     failed_classifier_specs: list[ClassifierSpec] = []
+    """List of classifier specifications that failed for one or more document."""
 
     @property
     def failed(self) -> bool:
@@ -655,7 +681,7 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
-    await acreate_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    await acreate_table_artifact(
         key=f"batch-inference-{flow_run_name}",
         table=document_details,
         description=overview_description,
@@ -1069,7 +1095,7 @@ async def create_inference_summary_artifact(
 - **Total classifiers**: {len(inference_result.classifier_specs)}
 - **Successful classifiers**: {len(inference_result.successful_classifier_specs)}
 - **Failed classifiers**: {len(inference_result.failed_classifier_specs)}
-- **Classifiers with removals: {len(removal_details)}  # be better
+- **Classifiers with removals: {len(removal_details)}
 """
     # Create classifier details table
     classifier_details = [
