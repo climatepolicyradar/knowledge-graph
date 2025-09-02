@@ -51,6 +51,35 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
+@pytest.fixture
+def mock_deployment():
+    """A `run_deployment` mock wrapper that lets result state be customised."""
+
+    class MockDeployment:
+        def __init__(self, state, name="test-flow-run"):
+            """Mock run deployment, a state per call"""
+            self.state = state
+            self.name = name
+            self._mock_patch = None
+
+        async def mock_awaitable(self, *args, **kwargs):
+            """Generate FlowRun with next state from the iterator"""
+            flow_id = uuid.uuid4()
+            flow_name = f"{self.name}-{str(flow_id)[:8]}"
+            return FlowRun(flow_id=flow_id, name=flow_name, state=self.state)
+
+        def __enter__(self):
+            self._mock_patch = patch("flows.utils.run_deployment")
+            mock_instance = self._mock_patch.__enter__()
+            mock_instance.side_effect = self.mock_awaitable
+            return mock_instance
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return self._mock_patch.__exit__(exc_type, exc_val, exc_tb)
+
+    return MockDeployment
+
+
 def helper_list_labels_in_bucket(test_config, bucket_name):
     # Find out what is now in the spans bucket
     s3 = boto3.client("s3", region_name=test_config.bucket_region)
@@ -285,6 +314,7 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
     mock_bucket,
     mock_bucket_documents,
     mock_bucket_containing_some_sabin_documents,
+    mock_deployment,
 ):
     """Test inference flow when creating batches of inference results"""
     input_doc_ids = [
@@ -302,28 +332,15 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         wandb_registry_version="v13",
     )
 
-    with patch("flows.utils.run_deployment") as mock_inference_run_deployment:
+    state = Completed(
+        data=BatchInferenceResult(
+            batch_document_stems=list(expected_doc_stems),
+            successful_document_stems=list(expected_doc_stems),
+            classifier_spec=expected_classifier_spec,
+        )
+    )
 
-        async def mock_awaitable(*args, **kwargs):
-            # mock the expected List of BatchInferenceResults when map_as_subflow is called
-            return FlowRun(
-                flow_id=uuid.uuid4(),
-                name="mock-run-any-run-count",
-                state=Completed(
-                    data=BatchInferenceResult(
-                        batch_document_stems=list(expected_doc_stems),
-                        successful_document_stems=list(
-                            expected_doc_stems
-                        ),  # all documents were classified successfully
-                        classifier_spec=expected_classifier_spec,
-                    )
-                ),
-            )
-
-        mock_inference_run_deployment.side_effect = mock_awaitable
-
-        # run the inference flow
-
+    with mock_deployment(state) as mock_inference_run_deployment:
         inference_result = await inference(
             classifier_specs=[expected_classifier_spec],
             document_ids=input_doc_ids,
