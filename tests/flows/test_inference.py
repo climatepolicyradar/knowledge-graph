@@ -948,7 +948,7 @@ def test_inference_result_all_successful() -> None:
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        document_stems=all_documents,
+        requested_document_stems=all_documents,
         classifier_specs=[
             ClassifierSpec(
                 wikibase_id=WikibaseID("Q100"),
@@ -988,7 +988,7 @@ def test_inference_result_all_failures() -> None:
 
     # Inference result should fail but not crash
     result = InferenceResult(
-        document_stems=documents,
+        requested_document_stems=documents,
         classifier_specs=[spec_q100],
         batch_inference_results=[],  # No successes
     )
@@ -1035,7 +1035,7 @@ def test_inference_result_partial_failures() -> None:
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        document_stems=all_documents,
+        requested_document_stems=all_documents,
         classifier_specs=[
             ClassifierSpec(
                 wikibase_id=WikibaseID("Q100"),
