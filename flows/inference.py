@@ -87,6 +87,23 @@ class BatchInferenceResult(BaseModel):
     classifier_spec: ClassifierSpec
 
     @property
+    def all_document_count(self) -> int:
+        """Count of all document stems"""
+        return len(self.batch_document_stems)
+
+    @property
+    def failed_document_count(self) -> int:
+        """Count of failed document stems"""
+        return len(self.failed_document_stems)
+
+    @property
+    def failed_document_stems(self) -> list[DocumentStem]:
+        """List of requested document stems that where not successful."""
+        return list(
+            set(self.batch_document_stems) - set(self.successful_document_stems)
+        )
+
+    @property
     def failed(self) -> bool:
         """Whether the batch failed, True if failed."""
 
@@ -833,14 +850,10 @@ async def _inference_batch_of_documents(
     )
 
     if batch_inference_result.failed:
-        failed_document_count: int = len(
-            batch_inference_result.batch_document_stems
-        ) - len(batch_inference_result.successful_document_stems)
-        all_document_count: int = len(batch_inference_result.batch_document_stems)
-
         message = (
-            f"Failed to run inference on {failed_document_count}/{all_document_count} "
-            + "documents."
+            "Failed to run inference on "
+            f"{batch_inference_result.failed_document_count}/"
+            f"{batch_inference_result.all_document_count} documents."
         )
         raise Fault(
             msg=message,

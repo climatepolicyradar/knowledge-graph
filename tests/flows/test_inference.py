@@ -983,6 +983,7 @@ def test_inference_result_all_failures() -> None:
         batch_inference_results=[],  # No successes
     )
     assert result.failed
+    assert result.failed_document_count == 1
 
 
 def test_inference_result_partial_failures() -> None:
