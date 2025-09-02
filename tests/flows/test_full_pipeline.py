@@ -64,7 +64,9 @@ async def test_full_pipeline_no_config_provided(
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
-                document_stems=list(aggregate_inference_results_document_stems),
+                requested_document_stems=list(
+                    aggregate_inference_results_document_stems
+                ),
                 classifier_specs=[classifier_spec],
                 batch_inference_results=[
                     BatchInferenceResult(
@@ -152,7 +154,9 @@ async def test_full_pipeline_with_full_config(
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
-                document_stems=list(aggregate_inference_results_document_stems),
+                requested_document_stems=list(
+                    aggregate_inference_results_document_stems
+                ),
                 classifier_specs=[
                     classifier_spec,
                 ],
@@ -271,7 +275,7 @@ async def test_full_pipeline_with_inference_failure(
                 msg="Some inference batches had failures!",
                 metadata={},
                 data=InferenceResult(
-                    document_stems=list(document_stems_batch),
+                    requested_document_stems=list(document_stems_batch),
                     classifier_specs=[classifier_spec],
                     batch_inference_results=[
                         BatchInferenceResult(

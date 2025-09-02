@@ -113,7 +113,7 @@ async def full_pipeline(
 
     success_ratio: str = (
         f"{len(inference_result.successful_document_stems)}/"
-        + f"{len(inference_result.document_stems)}"
+        + f"{len(inference_result.requested_document_stems)}"
     )
     logger.info(
         f"Inference complete. Successfully classified {success_ratio} documents."

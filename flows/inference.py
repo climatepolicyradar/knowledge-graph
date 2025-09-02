@@ -113,7 +113,7 @@ class InferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    document_stems: list[DocumentStem]
+    requested_document_stems: list[DocumentStem]
     classifier_specs: list[ClassifierSpec]
     batch_inference_results: list[BatchInferenceResult] = []
     successful_classifier_specs: list[ClassifierSpec] = []
@@ -1022,7 +1022,7 @@ async def inference(
             failures_classifier_specs.append(spec)
 
     inference_result = InferenceResult(
-        document_stems=list(filtered_file_stems),
+        requested_document_stems=list(filtered_file_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
         successful_classifier_specs=success_classifier_specs,
