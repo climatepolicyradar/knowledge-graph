@@ -37,26 +37,31 @@ def mock_classifier_specs():
                 wikibase_id="Q123",
                 classifier_id="g29kcna9",
                 wandb_registry_version="v4",
+                dont_run_on=["sabin"],
             ),
             ClassifierSpec(
                 wikibase_id="Q218",
                 classifier_id="6z4pufsm",
                 wandb_registry_version="v5",
+                dont_run_on=["sabin"],
             ),
             ClassifierSpec(
                 wikibase_id="Q223",
                 classifier_id="36bhx4mu",
                 wandb_registry_version="v3",
+                dont_run_on=["sabin"],
             ),
             ClassifierSpec(
                 wikibase_id="Q767",
                 classifier_id="mgwutbqx",
                 wandb_registry_version="v3",
+                dont_run_on=["sabin"],
             ),
             ClassifierSpec(
                 wikibase_id="Q1286",
                 classifier_id="7bt99yeu",
                 wandb_registry_version="v3",
+                dont_run_on=["sabin", "cclw"],
             ),
         ]
         spec_file_path = temp_spec_dir / "sandbox.yaml"
@@ -87,8 +92,6 @@ async def test_aggregate_batch_of_documents(
     )
 
     all_collected_ids = []
-    collected_ids_for_document = []
-
     for document_stem in document_stems:
         s3_path = os.path.join(
             test_config.aggregate_inference_results_prefix,
@@ -111,6 +114,7 @@ async def test_aggregate_batch_of_documents(
         ]
 
         document_inference_output = list(data.values())
+        collected_ids_for_document = []
         for concepts in document_inference_output:
             for concept in concepts:
                 try:
@@ -121,6 +125,9 @@ async def test_aggregate_batch_of_documents(
                         f"Unable to deserialise concept: {concept} with error: {e}"
                     )
 
+        # Q1286 should not be on CCLW.executive.10061.4515 because of dont_run_on
+        if "CCLW" in document_stem:
+            assert "Q1286" not in collected_ids_for_document
         assert len(collected_ids_for_document) > 0, (
             f"No concepts found for document: {document_stem}"
         )
@@ -129,7 +136,7 @@ async def test_aggregate_batch_of_documents(
     assert set(all_collected_ids) == set(wikibase_ids), (
         f"Outputted: {set(all_collected_ids)} which doesnt match those in the specs: {set(wikibase_ids)}"
     )
-    COUNT = 329
+    COUNT = 139
     assert len(all_collected_ids) == COUNT, (
         f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
     )
@@ -145,8 +152,9 @@ async def test_aggregate_batch_of_documents__with_failures(
 ):
     _, classifier_specs = mock_classifier_specs
     expect_failure_stems = [
-        DocumentStem("Some.Made.Up.Document.ID"),
-        DocumentStem("Another.One.That.Should.Fail"),
+        DocumentStem("CCLW.Made.Up.Document.ID"),
+        DocumentStem("OEP.One.That.Should.Fail"),
+        DocumentStem("sabin.document.1.1"),
     ]
     document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
 
@@ -165,6 +173,7 @@ async def test_aggregate_batch_of_documents__with_failures(
     assert set(failure_stems) == set(expect_failure_stems)
     assert "NoSuchKey" in artifact_data[0]["Context"]
     assert "NoSuchKey" in artifact_data[1]["Context"]
+    assert "AllSkippedFailure" in artifact_data[2]["Context"]
 
 
 def test_build_run_output_prefix():
@@ -198,13 +207,19 @@ async def test_get_all_labelled_passages_for_one_document(
         ClassifierSpec(
             wikibase_id="Q1286", classifier_id="7bt99yeu", wandb_registry_version="v3"
         ),
+        ClassifierSpec(
+            wikibase_id="Q1400",
+            classifier_id="7bt99yeu",
+            wandb_registry_version="v3",
+            dont_run_on=["cclw"],
+        ),
     ]
     all_labelled_passages = []
     async for spec, labelled_passages in get_all_labelled_passages_for_one_document(
         s3_async_client, document_stem, classifier_specs, test_config
     ):
         all_labelled_passages.append(labelled_passages)
-    assert len(all_labelled_passages) == len(classifier_specs)
+    assert len(all_labelled_passages) == 3
 
 
 def test_validate_passages_are_same_except_concepts():

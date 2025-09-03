@@ -166,9 +166,11 @@ def test_classifier_metadata__update_entire_env(mock_wandb_context):
             for use_artifact_calls in mock_run.use_artifact.call_args_list:
                 artifacts_used.extend(use_artifact_calls.args)
 
-            assert artifacts_used == [
-                "Q368/abcd2345:sandbox",
-                "Q123/efgh2345:sandbox",
-                "Q999/jkmn2345:sandbox",
-            ]
+            assert set(artifacts_used) == set(
+                [
+                    "Q368/abcd2345:sandbox",
+                    "Q123/efgh2345:sandbox",
+                    "Q999/jkmn2345:sandbox",
+                ]
+            )
             assert mock_artifact.save.call_count == 3
