@@ -5,8 +5,8 @@ from datasets import Dataset, load_dataset
 from huggingface_hub import add_collection_item
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 
 class HuggingfaceSession:

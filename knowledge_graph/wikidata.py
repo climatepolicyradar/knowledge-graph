@@ -4,9 +4,9 @@ from typing import Optional
 import httpx
 from pydantic import ValidationError
 
-from src.concept import Concept
-from src.exceptions import ConceptNotFoundError
-from src.identifiers import WikibaseID
+from knowledge_graph.concept import Concept
+from knowledge_graph.exceptions import ConceptNotFoundError
+from knowledge_graph.identifiers import WikibaseID
 
 logger = logging.getLogger(__name__)
 

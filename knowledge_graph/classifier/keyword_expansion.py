@@ -3,9 +3,9 @@ import os
 
 from anthropic import Anthropic
 
-from src.classifier.keyword import KeywordClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID
+from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
 
 
 class KeywordExpansionClassifier(KeywordClassifier):

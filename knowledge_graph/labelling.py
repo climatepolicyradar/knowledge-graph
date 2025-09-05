@@ -17,8 +17,8 @@ from argilla import (
 )
 from dotenv import find_dotenv, load_dotenv
 
-from src.labelled_passage import LabelledPassage
-from src.wikibase import Concept
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.wikibase import Concept
 
 load_dotenv(find_dotenv())
 
