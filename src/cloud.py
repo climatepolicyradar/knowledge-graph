@@ -10,6 +10,8 @@ import botocore
 import botocore.client
 import typer
 import yaml
+from mypy_boto3_cloudwatch.client import CloudWatchClient
+from mypy_boto3_ssm.client import SSMClient
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
@@ -147,6 +149,42 @@ def get_s3_client(
         case aws_env:
             session = get_session(aws_env)
             return session.client("s3", region_name=region_name)
+
+
+def get_cloudwatch_client(
+    aws_env: Optional[AwsEnv],
+    region_name: str,
+) -> CloudWatchClient:
+    """
+    Create an AWS CloudWatch client.
+
+    Uses the specified AWS environment and region.
+    """
+    match aws_env:
+        case None:
+            return boto3.client("cloudwatch", region_name=region_name)
+
+        case aws_env:
+            session = get_session(aws_env)
+            return session.client("cloudwatch", region_name=region_name)
+
+
+def get_ssm_client(
+    aws_env: Optional[AwsEnv],
+    region_name: str,
+) -> SSMClient:
+    """
+    Create an AWS SSM client.
+
+    Uses the specified AWS environment and region.
+    """
+    match aws_env:
+        case None:
+            return boto3.client("ssm", region_name=region_name)
+
+        case aws_env:
+            session = get_session(aws_env)
+            return session.client("ssm", region_name=region_name)
 
 
 def parse_aws_env(value: str) -> str:
