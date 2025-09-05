@@ -179,6 +179,45 @@ schema family_document {
             struct-field key { indexing: attribute }
             struct-field value { indexing: attribute }
         }
+
+        struct concepts_counts_v2 {
+            field version_id type string {}
+            field count type int {}
+        }
+
+        struct concept_v2 {
+             # E.g. Q880
+             field concept_id type string {}
+             # E.g. n2nuerdn, 9dgp6jgz
+             #
+             # Use a similar flattened approach, as
+             # parent_concept_ids_flat, due to Vespa limitations and
+             # how we've chosen to model this.
+             field classifiers_ids_flat type string {}
+             # E.g. string is the classifier ID
+             field counts_by_version type map<string, concepts_counts_v2> {}
+        }
+
+        # The string is the concept ID, e.g. Q880
+        field concepts_v2 type map<string, concept_v2> {
+            indexing: summary
+
+            struct-field key {
+                indexing: attribute
+                attribute: fast-search
+                rank: filter
+            }
+            struct-field value.concept_id {
+                indexing: attribute
+                attribute: fast-search
+                rank: filter
+            }
+            struct-field value.classifiers_ids_flat {
+                indexing: attribute
+                attribute: fast-search
+                rank: filter
+            }
+        }
     }
 
     fieldset default {
@@ -280,6 +319,7 @@ schema family_document {
         summary corpus_type_name {}
         summary collection_title {}
         summary collection_summary {}
+        summary concepts_v2 {}
     }
 
     document-summary search_summary_with_tokens inherits search_summary {
