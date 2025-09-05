@@ -554,8 +554,14 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+cloudwatch = [
+    { name = "mypy-boto3-cloudwatch" },
+]
 s3 = [
     { name = "mypy-boto3-s3" },
+]
+ssm = [
+    { name = "mypy-boto3-ssm" },
 ]
 
 [[package]]
@@ -2010,7 +2016,7 @@ dependencies = [
     { name = "argilla" },
     { name = "awscli" },
     { name = "boto3" },
-    { name = "boto3-stubs", extra = ["s3"] },
+    { name = "boto3-stubs", extra = ["cloudwatch", "s3", "ssm"] },
     { name = "coiled" },
     { name = "cpr-sdk" },
     { name = "datasets" },
@@ -2082,7 +2088,7 @@ requires-dist = [
     { name = "azure-pdf-parser", marker = "extra == 'dev'", git = "https://github.com/climatepolicyradar/azure-pdf-parser.git?rev=v0.4.3" },
     { name = "boto3", specifier = ">=1.35.31" },
     { name = "boto3", marker = "extra == 'dev'", specifier = ">=1.35.32" },
-    { name = "boto3-stubs", extras = ["s3"], specifier = ">=1.35.93" },
+    { name = "boto3-stubs", extras = ["s3", "cloudwatch", "ssm"], specifier = ">=1.35.93" },
     { name = "cloudpickle", marker = "extra == 'coiled'", specifier = ">=3.1.1" },
     { name = "coiled", specifier = ">=1.115.0" },
     { name = "coiled", marker = "extra == 'coiled'", specifier = ">=1.117.0" },
@@ -2553,6 +2559,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mypy-boto3-cloudwatch"
+version = "1.40.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/f2/f5f85993e65cdaf2bce0723712939c34d96d69fa40861092cd4140a1a9ab/mypy_boto3_cloudwatch-1.40.0.tar.gz", hash = "sha256:49b10a6c65e392f93e8c85d01d3a138fecb38545f5a1bf15cd3e1ac1b594016b", size = 32843, upload-time = "2025-07-31T19:38:51.284Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/ff/ebdd019210f01ee3874b3e0b6c3f6fe0012c86faef49165e6222d3d98416/mypy_boto3_cloudwatch-1.40.0-py3-none-any.whl", hash = "sha256:5be89084cfeed6d5bfc34b27b4312010e60e5d69cd584df57272acb122e5080f", size = 44265, upload-time = "2025-07-31T19:38:49.801Z" },
+]
+
+[[package]]
 name = "mypy-boto3-s3"
 version = "1.40.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2568,6 +2583,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c5/d4/046dd85e0914a924ec95449d698e1ae15e698ed880e1a95ae8bf8c8d8a1b/mypy_boto3_secretsmanager-1.40.0.tar.gz", hash = "sha256:f6509365d5d4fe3260703badcef5a1c45455ed454e5f03f3573a5023cc176644", size = 19829, upload-time = "2025-07-31T19:50:41.504Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/96/aa/647f9acd061022a5f03791ec631fef69c186f3362d9445e3a8e1d6edf734/mypy_boto3_secretsmanager-1.40.0-py3-none-any.whl", hash = "sha256:be624629e76d929c952e80e45faabfd7b512652ce1270c7e03c3ae247738eef6", size = 26826, upload-time = "2025-07-31T19:50:39.598Z" },
+]
+
+[[package]]
+name = "mypy-boto3-ssm"
+version = "1.40.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/64/c9e4830574c2e3e0027cd7158464cab26029dac371f7209cbdd6c4349f1e/mypy_boto3_ssm-1.40.0.tar.gz", hash = "sha256:4a656240ead29ffcfb28e95ce7c7ab6c9bbad71bbe7ce81f328ff9b214ff114b", size = 94639, upload-time = "2025-07-31T19:52:00.42Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/59/b93f0a87a11fc126141ddb92d2d29b074d3a26e95c87b2ce204572661b3a/mypy_boto3_ssm-1.40.0-py3-none-any.whl", hash = "sha256:9f7d03feac4d5eb3e551871d49814994a216539845e5a223ea3f6c17945bcf05", size = 96071, upload-time = "2025-07-31T19:51:58.214Z" },
 ]
 
 [[package]]
