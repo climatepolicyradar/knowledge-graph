@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import time
 from collections.abc import Generator, Sequence
 from datetime import timedelta
@@ -56,12 +57,60 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-def record_inference_metric(config: Config, duration_ms: float) -> None:
-    """
-    Record text block inference duration metrics to CloudWatch.
+def get_text_length_bucket(text_length: int) -> str:
+    """Categorize text into length buckets for metrics dimensions."""
+    if text_length < 100:
+        return "short"
+    elif text_length < 500:
+        return "medium"
+    elif text_length < 1500:
+        return "long"
+    else:
+        return "very_long"
 
-    Fails gracefully with Prefect logging if metrics collection fails.
+
+def should_sample_metric(
+    text_length: int, sample_rates: dict[str, float] | None = None
+) -> bool:
     """
+    Intelligent sampling based on text length buckets.
+
+    Ensures good representation across different text sizes with higher
+    sampling rates for less common text lengths.
+    """
+    if sample_rates is None:
+        sample_rates = {
+            # Higher sampling for short texts as they're often edge cases
+            # and may have different performance characteristics
+            "short": 0.05,  # 5% of short texts (< 100 chars)
+            # Medium texts are typically the most common, so lower sampling
+            # is sufficient for statistical significance
+            "medium": 0.02,  # 2% of medium texts (100-500 chars)
+            # Long texts are moderately common, moderate sampling
+            "long": 0.01,  # 1% of long texts (500-1500 chars)
+            # Very long texts are rare but computationally expensive,
+            # higher sampling ensures we capture their performance impact
+            "very_long": 0.005,  # 0.5% of very long texts (> 1500 chars)
+        }
+
+    bucket = get_text_length_bucket(text_length)
+    return random.random() < sample_rates[bucket]
+
+
+def record_inference_metric(
+    config: Config, duration_ms: float, text_length: int
+) -> None:
+    """
+    Record text block inference duration metrics to CloudWatch with stratified sampling.
+
+    Uses intelligent sampling based on text length to ensure good representation
+    across different text sizes while controlling costs. Fails gracefully with
+    Prefect logging if metrics collection fails.
+    """
+    # Apply stratified sampling
+    if not should_sample_metric(text_length):
+        return
+
     logger = get_run_logger()
 
     try:
@@ -77,6 +126,8 @@ def record_inference_metric(config: Config, duration_ms: float) -> None:
             raise ValueError("SSM parameter missing Value field")
         namespace = parameter["Value"]
 
+        text_bucket = get_text_length_bucket(text_length)
+
         cloudwatch.put_metric_data(
             Namespace=namespace,
             MetricData=[
@@ -84,11 +135,12 @@ def record_inference_metric(config: Config, duration_ms: float) -> None:
                     "MetricName": "TextBlockInferenceDuration",
                     "Value": duration_ms,
                     "Unit": "Milliseconds",
+                    "Dimensions": [{"Name": "TextLengthBucket", "Value": text_bucket}],
                 }
             ],
         )
         logger.debug(
-            f"Recorded inference metric: {duration_ms}ms to namespace: {namespace}"
+            f"Recorded inference metric: {duration_ms}ms (text_length: {text_length}, bucket: {text_bucket}) to namespace: {namespace}"
         )
 
     except Exception as exc:
@@ -672,7 +724,7 @@ async def run_classifier_inference_on_document(
 
         # Record metric for inference duration
         duration_ms = (time.time() - start_time) * 1000
-        record_inference_metric(config, duration_ms)
+        record_inference_metric(config, duration_ms, len(text))
 
         doc_labels.append(labelled_passages)
 
