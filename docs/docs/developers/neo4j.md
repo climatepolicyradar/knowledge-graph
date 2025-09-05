@@ -16,4 +16,4 @@ uv run python scripts/neo4j/populate.py
 
 The script will fetch all concepts from wikibase and add them (and their relationships) to the knowledge graph. It will then use the predicted passages in the `data/processed/predictions` directory to create the relationships between each concept and the passages where they're mentioned, and between each passage and the documents where they're found.
 
-Rather than writing raw cypher, the script uses [neomodel](https://neomodel.readthedocs.io/en/stable/) to handle interactions with the database, with `Concept`, `Passage`, and `Document` nodes defined as python classes in `src/neo4j/models.py`. You can also use those classes to query the database in subsequent scripts/notebooks.
+Rather than writing raw cypher, the script uses [neomodel](https://neomodel.readthedocs.io/en/stable/) to handle interactions with the database, with `Concept`, `Passage`, and `Document` nodes defined as python classes in `knowledge_graph/neo4j/models.py`. You can also use those classes to query the database in subsequent scripts/notebooks.

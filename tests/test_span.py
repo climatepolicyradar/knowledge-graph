@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.span import Span, group_overlapping_spans, jaccard_similarity
+from knowledge_graph.span import Span, group_overlapping_spans, jaccard_similarity
 from tests.common_strategies import (
     labeller_strategy,
     span_strategy,

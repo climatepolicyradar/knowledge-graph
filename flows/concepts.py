@@ -1,6 +1,6 @@
 from prefect import flow, get_run_logger
 
-from src.concept import Concept
+from knowledge_graph.concept import Concept
 
 
 @flow(log_prints=True)

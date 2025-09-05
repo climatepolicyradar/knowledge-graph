@@ -5,8 +5,8 @@ import typer
 from typer.testing import CliRunner
 
 from flows.classifier_specs.spec_interface import ClassifierSpec
+from knowledge_graph.cloud import AwsEnv
 from scripts.infer import app, convert_classifier_specs, main
-from src.cloud import AwsEnv
 
 runner = CliRunner()
 

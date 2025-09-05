@@ -5,9 +5,9 @@ from typing import Optional, Sequence
 import yaml
 from pydantic import BaseModel, Field, field_serializer
 
-from src.cloud import AwsEnv
-from src.identifiers import ClassifierID, WikibaseID
-from src.version import Version
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.version import Version
 
 type SpecStr = str
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"

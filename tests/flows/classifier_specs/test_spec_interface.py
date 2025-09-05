@@ -12,8 +12,8 @@ from flows.classifier_specs.spec_interface import (
     DontRunOnEnum,
     load_classifier_specs,
 )
-from src.cloud import AwsEnv
-from src.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 
 
 @pytest.mark.parametrize(

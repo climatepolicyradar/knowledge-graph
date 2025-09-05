@@ -8,10 +8,10 @@ from prefect import flow, get_run_logger
 from pydantic import SecretStr
 
 from flows.utils import SlackNotify, file_name_from_path
-from src.cloud import AwsEnv
-from src.concept import Concept
-from src.identifiers import WikibaseID
-from src.wikibase import WikibaseSession
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.wikibase import WikibaseSession
 
 CDN_BUCKET_NAME_SSM_NAME = "/S3/CDNBucketName"
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"

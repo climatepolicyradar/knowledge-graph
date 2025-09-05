@@ -8,13 +8,13 @@ import typer
 import wandb
 from rich.logging import RichHandler
 
-from src.cloud import (
+from knowledge_graph.cloud import (
     AwsEnv,
     is_logged_in,
     parse_aws_env,
     throw_not_logged_in,
 )
-from src.identifiers import WikibaseID
+from knowledge_graph.identifiers import WikibaseID
 
 logging.basicConfig(
     level="INFO",
