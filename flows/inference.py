@@ -98,7 +98,10 @@ def should_sample_metric(
 
 
 def record_inference_metric(
-    config: Config, duration_ms: float, text_length: int
+    config: Config,
+    duration_ms: float,
+    text_length: int,
+    classifier: Classifier,
 ) -> None:
     """
     Record text block inference duration metrics to CloudWatch with stratified sampling.
@@ -127,6 +130,7 @@ def record_inference_metric(
         namespace = parameter["Value"]
 
         text_bucket = get_text_length_bucket(text_length)
+        model_architecture = classifier.name
 
         cloudwatch.put_metric_data(
             Namespace=namespace,
@@ -135,12 +139,15 @@ def record_inference_metric(
                     "MetricName": "TextBlockInferenceDuration",
                     "Value": duration_ms,
                     "Unit": "Milliseconds",
-                    "Dimensions": [{"Name": "TextLengthBucket", "Value": text_bucket}],
+                    "Dimensions": [
+                        {"Name": "TextLengthBucket", "Value": text_bucket},
+                        {"Name": "ModelArchitecture", "Value": model_architecture},
+                    ],
                 }
             ],
         )
         logger.debug(
-            f"Recorded inference metric: {duration_ms}ms (text_length: {text_length}, bucket: {text_bucket}) to namespace: {namespace}"
+            f"Recorded inference metric: {duration_ms}ms (text_length: {text_length}, bucket: {text_bucket}, model: {model_architecture}) to namespace: {namespace}"
         )
 
     except Exception as exc:
@@ -724,7 +731,7 @@ async def run_classifier_inference_on_document(
 
         # Record metric for inference duration
         duration_ms = (time.time() - start_time) * 1000
-        record_inference_metric(config, duration_ms, len(text))
+        record_inference_metric(config, duration_ms, len(text), classifier)
 
         doc_labels.append(labelled_passages)
 
