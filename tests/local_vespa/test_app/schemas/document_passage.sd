@@ -89,6 +89,36 @@ schema document_passage {
                 indexing: attribute
             }
         }
+
+        struct concept_v2 {
+             # E.g. Q880
+             field concept_id    type string {}
+             # E.g. 3220
+             field version_id    type string {}
+             # E.g. n2nuerdn
+             field classifier_id type string {}
+        }
+
+        struct document_reference {
+            field document_id type string {}
+        }
+
+        struct span {
+            field start               type int {}
+            field end                 type int {}
+            field concepts_v2         type array<concept_v2> {}
+            field document_references type array<document_reference> {}
+        }
+
+        field spans type array<span> {}
+
+        field all_concept_ids type array<string> {
+            indexing: summary | attribute
+        }
+
+        field all_classifier_ids type array<string> {
+            indexing: summary | attribute
+        }
     }
 
     import field family_document_ref.family_name as family_name {}
@@ -140,6 +170,9 @@ schema document_passage {
         summary text_block_page {}
         summary text_block_coords {}
         summary concepts {}
+        summary spans {}
+        summary all_concept_ids {}
+        summary all_classifier_ids {}
     }
 
     document-summary search_summary_with_tokens inherits search_summary {

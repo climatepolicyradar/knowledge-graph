@@ -1,0 +1,80 @@
+schema concept {
+    document concept {
+        # Will be in the document ID.
+        #
+        # AKA Wikibase ID.
+        #
+        # E.g. Q880
+        field id type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        # Will be in the document ID.
+        #
+        # E.g. 15037
+        field version_id type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+
+        # E.g. <Q300, 31082>
+        struct concept_ref {
+            field id type string {}
+            field version_id type string {}
+        }
+
+        # E.g. fishing sector
+        field preferred_label type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field description type string {
+            indexing: attribute | summary | index
+        }
+        field definition type string {
+            indexing: attribute | summary | index
+        }
+        field alternative_labels type array<string> {
+            indexing: attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
+        }
+        # E.g. Q110, 290
+        #
+        # We can't do self-references for documents in Vespa, so
+        # use strings for the IDs.
+        field subconcept_of type array<concept_ref> {
+            indexing: summary
+        }
+        # E.g. Q110:1601
+        field subconcept_of_flat type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field has_subconcept type array<concept_ref> {
+            indexing: summary
+        }
+        field has_subconcept_flat type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field related_concepts type array<concept_ref> {
+            indexing: summary
+        }
+        field related_concepts_flat type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field recursive_subconcept_of type array<concept_ref> {
+            indexing: summary
+        }
+        field recursive_subconcept_of_flat type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field recursive_has_subconcept type bool {
+            indexing: attribute | summary
+        }
+    }
+}

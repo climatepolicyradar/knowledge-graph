@@ -1,0 +1,42 @@
+schema classifiers_profile {
+    document classifiers_profile {
+        # Will be in the document ID.
+        #
+        # E.g. "primaries", "experimentals"
+        field id type string {
+            indexing: attribute | summary | index
+        }
+
+        # Will optionally be in the document ID. The latest version
+        # will not have it. There will be a copy of the latest
+        # document though, with it in the docuiment ID.
+        #
+        # E.g. 9
+        field version type int {
+            indexing: attribute | summary
+        }
+
+        # E.g. <Q990, 1610, n2nuerdn>
+        struct mapping {
+            field concept_id type string {}
+            field version_id type string {}
+            field classifier_id type string {}
+        }
+
+        # If a concept has no entry in the profile, that means it's
+        # not to be displayed, if it does actually exist in our
+        # systems.
+        #
+        # E.g. <Q990, <Q990, 1610, n2nuerdn>>
+        field mappings type map<string, mapping> {
+            indexing: summary
+
+            struct-field key {
+                indexing: summary
+            }
+            struct-field value {
+                indexing: summary
+            }
+        }
+    }
+}
