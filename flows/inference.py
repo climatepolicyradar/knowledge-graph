@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 from collections.abc import Generator, Sequence
 from datetime import timedelta
 from io import BytesIO
@@ -12,7 +13,9 @@ import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
+from mypy_boto3_cloudwatch.client import CloudWatchClient
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
+from mypy_boto3_ssm.client import SSMClient
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
@@ -48,8 +51,49 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from src.classifier import Classifier, ModelPath
+from src.cloud import get_cloudwatch_client, get_ssm_client
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+
+def record_inference_metric(config: Config, duration_ms: float) -> None:
+    """
+    Record text block inference duration metrics to CloudWatch.
+
+    Fails gracefully with Prefect logging if metrics collection fails.
+    """
+    logger = get_run_logger()
+
+    try:
+        cloudwatch: CloudWatchClient = get_cloudwatch_client(
+            aws_env=config.aws_env, region_name=config.bucket_region
+        )
+        ssm: SSMClient = get_ssm_client(
+            aws_env=config.aws_env, region_name=config.bucket_region
+        )
+        namespace_response = ssm.get_parameter(Name="/KnowledgeGraph/Metrics/Namespace")
+        parameter = namespace_response["Parameter"]
+        if "Value" not in parameter:
+            raise ValueError("SSM parameter missing Value field")
+        namespace = parameter["Value"]
+
+        cloudwatch.put_metric_data(
+            Namespace=namespace,
+            MetricData=[
+                {
+                    "MetricName": "TextBlockInferenceDuration",
+                    "Value": duration_ms,
+                    "Unit": "Milliseconds",
+                }
+            ],
+        )
+        logger.debug(
+            f"Recorded inference metric: {duration_ms}ms to namespace: {namespace}"
+        )
+
+    except Exception as exc:
+        logger.warning(f"Failed to record inference metrics: {exc}", exc_info=True)
+
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
@@ -620,9 +664,16 @@ async def run_classifier_inference_on_document(
 
     doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
+        start_time = time.time()
+
         labelled_passages = text_block_inference(
             classifier=classifier, block_id=block_id, text=text
         )
+
+        # Record metric for inference duration
+        duration_ms = (time.time() - start_time) * 1000
+        record_inference_metric(config, duration_ms)
+
         doc_labels.append(labelled_passages)
 
     return SingleDocumentInferenceResult(
