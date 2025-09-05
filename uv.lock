@@ -2060,7 +2060,7 @@ dev = [
     { name = "hypothesis" },
     { name = "jinja2" },
     { name = "mkdocs-material" },
-    { name = "moto", extra = ["s3"] },
+    { name = "moto", extra = ["s3", "ssm"] },
     { name = "pre-commit" },
     { name = "pulumi" },
     { name = "pulumi-aws" },
@@ -2104,7 +2104,7 @@ requires-dist = [
     { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1.4" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.5.39" },
     { name = "more-itertools", specifier = ">=10.3.0" },
-    { name = "moto", extras = ["s3"], marker = "extra == 'dev'", specifier = ">=5.0.16" },
+    { name = "moto", extras = ["s3", "cloudwatch", "ssm"], marker = "extra == 'dev'", specifier = ">=5.0.16" },
     { name = "msgpack", marker = "extra == 'coiled'", specifier = ">=1.1.1" },
     { name = "neomodel", specifier = ">=5.3.3" },
     { name = "nltk", specifier = ">=3.9.1" },
@@ -2452,6 +2452,9 @@ server = [
     { name = "pyparsing" },
     { name = "pyyaml" },
     { name = "setuptools" },
+]
+ssm = [
+    { name = "pyyaml" },
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -11,6 +11,7 @@ import boto3
 import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
+from moto import mock_aws
 from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
@@ -37,6 +38,7 @@ from flows.inference import (
     list_bucket_file_stems,
     load_classifier,
     load_document,
+    record_inference_metric,
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
     store_labels,
@@ -1231,3 +1233,51 @@ def test_filter_document_batch(dont_run_on, removed):
     )
     assert filter_result.removed == removed
     assert filter_result.accepted == accepted
+
+
+def test_record_inference_metric(mock_aws_creds, test_config):
+    # Force this, since it tries to use the value for getting the AWS
+    # clients, which isn't working with how we mock AWS.
+    test_config.aws_env = None
+
+    namespace = "TestNamespace"
+    classifier_name = "test_classifier"
+
+    with mock_aws():
+        ssm = boto3.client("ssm", region_name=test_config.bucket_region)
+        ssm.put_parameter(
+            Name="/KnowledgeGraph/Metrics/Namespace",
+            Value=namespace,
+            Type="String",
+        )
+
+        cloudwatch = boto3.client("cloudwatch", region_name=test_config.bucket_region)
+
+        mock_classifier = MagicMock()
+        mock_classifier.name = classifier_name
+
+        duration = timedelta(milliseconds=123)
+        text_length = 100
+        record_inference_metric(
+            test_config,
+            duration,
+            text_length,
+            mock_classifier,
+            force_sample=True,
+        )
+
+        response = cloudwatch.list_metrics(Namespace=namespace)
+
+        assert response["Metrics"] == [
+            {
+                "Namespace": namespace,
+                "MetricName": "TextBlockInferenceDuration",
+                "Dimensions": [
+                    {
+                        "Name": "TextLengthBucket",
+                        "Value": "TextBlockLengthBucket.BUCKET_51_100",
+                    },
+                    {"Name": "ModelArchitecture", "Value": classifier_name},
+                ],
+            }
+        ]

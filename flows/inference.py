@@ -5,6 +5,7 @@ import random
 import time
 from collections.abc import Generator, Sequence
 from datetime import timedelta
+from enum import Enum
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
@@ -57,61 +58,78 @@ from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 
-def get_text_length_bucket(text_length: int) -> str:
-    """Categorize text into length buckets for metrics dimensions."""
-    if text_length < 100:
-        return "short"
-    elif text_length < 500:
-        return "medium"
-    elif text_length < 1500:
-        return "long"
+class TextBlockLengthBucket(Enum):
+    """Distribution buckets for text block lengths."""
+
+    BUCKET_1_10 = "1-10"
+    BUCKET_11_50 = "11-50"
+    BUCKET_51_100 = "51-100"
+    BUCKET_101_500 = "101-500"
+    BUCKET_501_1000 = "501-1000"
+    BUCKET_1001_2000 = "1001-2000"
+    BUCKET_2000_PLUS = "2000+"
+
+
+def get_text_length_bucket(text_length: int) -> TextBlockLengthBucket:
+    """Categorise text into length buckets for metrics dimensions."""
+    if text_length <= 10:
+        return TextBlockLengthBucket.BUCKET_1_10
+    elif text_length <= 50:
+        return TextBlockLengthBucket.BUCKET_11_50
+    elif text_length <= 100:
+        return TextBlockLengthBucket.BUCKET_51_100
+    elif text_length <= 500:
+        return TextBlockLengthBucket.BUCKET_101_500
+    elif text_length <= 1000:
+        return TextBlockLengthBucket.BUCKET_501_1000
+    elif text_length <= 2000:
+        return TextBlockLengthBucket.BUCKET_1001_2000
     else:
-        return "very_long"
+        return TextBlockLengthBucket.BUCKET_2000_PLUS
 
 
-def should_sample_metric(
-    text_length: int, sample_rates: dict[str, float] | None = None
-) -> bool:
+# This is based on passage length analysis on 2025-09-05. It
+# excluded the same text block types that we exclude for inference.
+#
+# 1-10: 19,014,827 passages (55.63%)
+# 11-50: 7,715,698 passages (22.57%)
+# 51-100: 2,637,400 passages (7.72%)
+# 101-500: 4,019,951 passages (11.76%)
+# 501-1000: 679,933 passages (1.99%)
+# 1001-2000: 109,012 passages (0.32%)
+# 2000+: 5,783 passages (0.02%)
+SAMPLE_RATES = {
+    TextBlockLengthBucket.BUCKET_1_10: 0.001,
+    TextBlockLengthBucket.BUCKET_11_50: 0.005,
+    TextBlockLengthBucket.BUCKET_51_100: 0.01,
+    TextBlockLengthBucket.BUCKET_101_500: 0.02,
+    TextBlockLengthBucket.BUCKET_501_1000: 0.1,
+    TextBlockLengthBucket.BUCKET_1001_2000: 0.3,
+    TextBlockLengthBucket.BUCKET_2000_PLUS: 0.8,
+}
+
+
+def should_sample_metric(text_length: int) -> bool:
     """
-    Intelligent sampling based on text length buckets.
+    Use stratified sampling, with inverse percentages.
 
-    Ensures good representation across different text sizes with higher
-    sampling rates for less common text lengths.
+    Ensures good representation across different text sizes with
+    higher sampling rates for less common text lengths.
     """
-    if sample_rates is None:
-        sample_rates = {
-            # Higher sampling for short texts as they're often edge cases
-            # and may have different performance characteristics
-            "short": 0.05,  # 5% of short texts (< 100 chars)
-            # Medium texts are typically the most common, so lower sampling
-            # is sufficient for statistical significance
-            "medium": 0.02,  # 2% of medium texts (100-500 chars)
-            # Long texts are moderately common, moderate sampling
-            "long": 0.01,  # 1% of long texts (500-1500 chars)
-            # Very long texts are rare but computationally expensive,
-            # higher sampling ensures we capture their performance impact
-            "very_long": 0.005,  # 0.5% of very long texts (> 1500 chars)
-        }
 
     bucket = get_text_length_bucket(text_length)
-    return random.random() < sample_rates[bucket]
+    return random.random() < SAMPLE_RATES[bucket]
 
 
 def record_inference_metric(
     config: Config,
-    duration_ms: float,
+    duration: timedelta,
     text_length: int,
     classifier: Classifier,
+    force_sample: bool = False,
 ) -> None:
-    """
-    Record text block inference duration metrics to CloudWatch with stratified sampling.
-
-    Uses intelligent sampling based on text length to ensure good representation
-    across different text sizes while controlling costs. Fails gracefully with
-    Prefect logging if metrics collection fails.
-    """
-    # Apply stratified sampling
-    if not should_sample_metric(text_length):
+    """Record text block inference duration metrics to CloudWatch."""
+    if not force_sample and not should_sample_metric(text_length):
         return
 
     logger = get_run_logger()
@@ -132,7 +150,9 @@ def record_inference_metric(
         text_bucket = get_text_length_bucket(text_length)
         model_architecture = classifier.name
 
-        cloudwatch.put_metric_data(
+        duration_ms = duration.total_seconds() * 1000
+
+        response = cloudwatch.put_metric_data(
             Namespace=namespace,
             MetricData=[
                 {
@@ -140,12 +160,21 @@ def record_inference_metric(
                     "Value": duration_ms,
                     "Unit": "Milliseconds",
                     "Dimensions": [
-                        {"Name": "TextLengthBucket", "Value": text_bucket},
-                        {"Name": "ModelArchitecture", "Value": model_architecture},
+                        {
+                            "Name": "TextLengthBucket",
+                            "Value": str(text_bucket),
+                        },
+                        {
+                            "Name": "ModelArchitecture",
+                            "Value": model_architecture,
+                        },
                     ],
                 }
             ],
         )
+        print("put response", response)
+        if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+            raise ValueError(f"put request failed: {response=}")
         logger.debug(
             f"Recorded inference metric: {duration_ms}ms (text_length: {text_length}, bucket: {text_bucket}, model: {model_architecture}) to namespace: {namespace}"
         )
@@ -729,9 +758,8 @@ async def run_classifier_inference_on_document(
             classifier=classifier, block_id=block_id, text=text
         )
 
-        # Record metric for inference duration
-        duration_ms = (time.time() - start_time) * 1000
-        record_inference_metric(config, duration_ms, len(text), classifier)
+        duration = timedelta(seconds=time.time() - start_time)
+        record_inference_metric(config, duration, len(text), classifier)
 
         doc_labels.append(labelled_passages)
 
