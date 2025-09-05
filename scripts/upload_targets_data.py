@@ -10,10 +10,10 @@ from datasets import DatasetDict, load_dataset
 from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 
-# from src.argilla_legacy import concept_to_dataset_name
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+# from knowledge_graph.argilla_legacy import concept_to_dataset_name
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 load_dotenv(find_dotenv())
 

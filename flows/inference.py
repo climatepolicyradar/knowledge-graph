@@ -47,9 +47,9 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from src.classifier import Classifier, ModelPath
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.classifier import Classifier, ModelPath
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())

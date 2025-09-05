@@ -7,11 +7,11 @@ import argilla as rg
 from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelling import ArgillaSession
+from knowledge_graph.metrics import count_span_level_metrics
+from knowledge_graph.span import Span
 from scripts.evaluate import create_gold_standard_labelled_passages
-from src.labelled_passage import LabelledPassage
-from src.labelling import ArgillaSession
-from src.metrics import count_span_level_metrics
-from src.span import Span
 
 DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
 argilla_session = ArgillaSession()

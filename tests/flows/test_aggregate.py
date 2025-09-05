@@ -22,9 +22,9 @@ from flows.aggregate import (
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.utils import DocumentStem
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 from scripts.update_classifier_spec import write_spec_file
-from src.labelled_passage import LabelledPassage
-from src.span import Span
 
 
 @pytest.fixture

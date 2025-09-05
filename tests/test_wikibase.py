@@ -1,7 +1,7 @@
 import pytest
 
-from src.concept import Concept
-from src.identifiers import WikibaseID
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
 
 
 def test_wikibase____init__(MockedWikibaseSession, monkeypatch, mock_wikibase_url):

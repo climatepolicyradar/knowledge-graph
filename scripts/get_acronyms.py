@@ -10,9 +10,9 @@ from pathlib import Path
 import pandas as pd
 from rich.console import Console
 
-from src.concept import Concept
-from src.config import get_git_root
-from src.wikibase import WikibaseSession
+from knowledge_graph.concept import Concept
+from knowledge_graph.config import get_git_root
+from knowledge_graph.wikibase import WikibaseSession
 
 console = Console()
 

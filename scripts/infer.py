@@ -10,7 +10,7 @@ from typing_extensions import Annotated
 
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.inference import inference
-from src.cloud import (
+from knowledge_graph.cloud import (
     AwsEnv,
     generate_deployment_name,
     parse_aws_env,

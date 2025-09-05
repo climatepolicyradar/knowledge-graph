@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from src.labelled_passage import LabelledPassage
-from src.span import jaccard_similarity
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import jaccard_similarity
 
 
 @dataclass

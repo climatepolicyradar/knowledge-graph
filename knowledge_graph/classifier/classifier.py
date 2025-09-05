@@ -5,10 +5,10 @@ from typing import Optional, Sequence, Union
 
 from typing_extensions import Self
 
-from src.concept import Concept
-from src.identifiers import ClassifierID, WikibaseID
-from src.span import Span
-from src.version import Version
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.span import Span
+from knowledge_graph.version import Version
 
 
 class Classifier(ABC):

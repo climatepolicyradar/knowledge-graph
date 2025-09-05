@@ -3,10 +3,10 @@ from abc import abstractmethod
 from datetime import datetime
 from typing import Callable
 
-from src.classifier.classifier import Classifier, GPUBoundClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID, WikibaseID
-from src.span import Span
+from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.span import Span
 
 # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
 # https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4

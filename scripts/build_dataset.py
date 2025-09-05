@@ -5,9 +5,9 @@ import typer
 from datasets import Dataset, disable_progress_bars, load_dataset
 from rich.console import Console
 
-from src.config import processed_data_dir
-from src.geography import iso_to_world_bank_region
-from src.sampling import create_balanced_sample
+from knowledge_graph.config import processed_data_dir
+from knowledge_graph.geography import iso_to_world_bank_region
+from knowledge_graph.sampling import create_balanced_sample
 
 disable_progress_bars()
 

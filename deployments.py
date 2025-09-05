@@ -14,17 +14,11 @@ from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
-from flows.aggregate import (
-    aggregate,
-    aggregate_batch_of_documents,
-)
+from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.full_pipeline import full_pipeline
-from flows.index import (
-    index,
-    index_batch_of_documents,
-)
+from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
     inference_batch_of_documents_cpu,
@@ -32,7 +26,7 @@ from flows.inference import (
 )
 from flows.utils import JsonDict
 from flows.wikibase_to_s3 import wikibase_to_s3
-from src.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
+from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {

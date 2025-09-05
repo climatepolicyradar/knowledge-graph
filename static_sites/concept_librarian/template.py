@@ -3,7 +3,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from src.concept import Concept, WikibaseID
+from knowledge_graph.concept import Concept, WikibaseID
 from static_sites.concept_librarian.checks import (
     ConceptIssue,
     ConceptStoreIssue,

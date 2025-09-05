@@ -13,12 +13,12 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from typing_extensions import Self
 
-from src.classifier.classifier import Classifier, ZeroShotClassifier
-from src.classifier.uncertainty_mixin import UncertaintyMixin
-from src.concept import Concept
-from src.identifiers import ClassifierID
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 
 class LLMResponse(BaseModel):

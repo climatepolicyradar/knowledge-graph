@@ -12,8 +12,8 @@ from flows.classifier_specs.spec_interface import (
     DontRunOnEnum,
     determine_spec_file_path,
 )
-from src.cloud import AwsEnv
-from src.identifiers import WikibaseID
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import WikibaseID
 
 load_dotenv()
 

@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.identifiers import Identifier, WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from tests.common_strategies import wikibase_id_strategy
 
 invalid_wikibase_id_strategy = st.text().filter(
@@ -97,7 +97,7 @@ def test_whether_identifier_generation_is_consistent_across_distinct_python_proc
     id_a = Identifier.generate("test")
 
     # Get id from a separate Python process
-    cmd = "python3 -c \"from src.identifiers import Identifier; print(Identifier.generate('test'))\""
+    cmd = "python3 -c \"from knowledge_graph.identifiers import Identifier; print(Identifier.generate('test'))\""
     id_b = subprocess.check_output(cmd, shell=True).decode().strip()
 
     assert id_a == id_b, (

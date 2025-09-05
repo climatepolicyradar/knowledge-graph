@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from src.identifiers import Identifier, WikibaseID
-from src.labelled_passage import LabelledPassage
+from knowledge_graph.identifiers import Identifier, WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
 
 if TYPE_CHECKING:
     # only import this circular dependency if we're running in a type-checking
     # environment, eg for pyright
-    from src.wikibase import WikibaseSession
+    from knowledge_graph.wikibase import WikibaseSession
 
 
 class Concept(BaseModel):

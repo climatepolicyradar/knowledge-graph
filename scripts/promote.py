@@ -8,10 +8,15 @@ import typer
 import wandb
 import wandb.apis.public.api
 
-from src.classifier import ModelPath
-from src.cloud import AwsEnv, is_logged_in, parse_aws_env, throw_not_logged_in
-from src.config import WANDB_ENTITY
-from src.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.classifier import ModelPath
+from knowledge_graph.cloud import (
+    AwsEnv,
+    is_logged_in,
+    parse_aws_env,
+    throw_not_logged_in,
+)
+from knowledge_graph.config import WANDB_ENTITY
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)

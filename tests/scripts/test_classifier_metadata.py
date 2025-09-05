@@ -8,9 +8,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from flows.classifier_specs.spec_interface import DontRunOnEnum
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from scripts.classifier_metadata import update, update_entire_env
-from src.cloud import AwsEnv
-from src.identifiers import ClassifierID, WikibaseID
 
 
 @dataclass

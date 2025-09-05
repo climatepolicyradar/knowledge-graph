@@ -10,11 +10,16 @@ from dotenv import load_dotenv
 import scripts.get_concept
 import scripts.promote
 import scripts.train
+from knowledge_graph.cloud import (
+    AwsEnv,
+    parse_aws_env,
+    parse_spec_file,
+    validate_transition,
+)
+from knowledge_graph.identifiers import WikibaseID
 from scripts.update_classifier_spec import (
     refresh_all_available_classifiers,
 )
-from src.cloud import AwsEnv, parse_aws_env, parse_spec_file, validate_transition
-from src.identifiers import WikibaseID
 
 # Load environment variables from .env file at Git root
 load_dotenv(Path(__file__).parent.parent / ".env")

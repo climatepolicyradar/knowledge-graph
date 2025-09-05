@@ -4,8 +4,8 @@ import pickle
 import argilla as rg
 from rich.console import Console
 
-from src.config import data_dir
-from src.identifiers import WikibaseID
+from knowledge_graph.config import data_dir
+from knowledge_graph.identifiers import WikibaseID
 
 console = Console()
 

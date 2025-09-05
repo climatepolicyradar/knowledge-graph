@@ -55,7 +55,7 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from src.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10

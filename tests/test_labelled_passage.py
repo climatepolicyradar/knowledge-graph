@@ -2,8 +2,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 from tests.common_strategies import span_strategy, text_strategy
 
 

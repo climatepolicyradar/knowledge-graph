@@ -4,11 +4,11 @@ import argilla as rg
 import typer
 from rich.console import Console
 
-from src.config import processed_data_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.labelling import ArgillaSession
-from src.wikibase import WikibaseSession
+from knowledge_graph.config import processed_data_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelling import ArgillaSession
+from knowledge_graph.wikibase import WikibaseSession
 
 app = typer.Typer()
 console = Console()

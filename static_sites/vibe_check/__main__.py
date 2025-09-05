@@ -15,12 +15,12 @@ from jinja2 import Environment, FileSystemLoader
 from pydantic import ValidationError
 from rich.console import Console
 
-from src.classifier import Classifier, ClassifierFactory
-from src.concept import Concept
-from src.config import processed_data_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.wikibase import WikibaseSession
+from knowledge_graph.classifier import Classifier, ClassifierFactory
+from knowledge_graph.concept import Concept
+from knowledge_graph.config import processed_data_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.wikibase import WikibaseSession
 
 load_dotenv()
 app = typer.Typer()

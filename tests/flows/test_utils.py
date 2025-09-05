@@ -27,7 +27,7 @@ from flows.utils import (
     remove_translated_suffix,
     s3_file_exists,
 )
-from src.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv
 
 
 @pytest.mark.parametrize(

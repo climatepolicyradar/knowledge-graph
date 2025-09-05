@@ -28,10 +28,10 @@ from flows.boundary import (
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
 )
-from src.concept import Concept
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 from tests.flows.conftest import load_fixture
 
 DOCUMENT_PASSAGE_ID_PATTERN = re.compile(

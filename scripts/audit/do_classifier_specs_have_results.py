@@ -10,8 +10,8 @@ import typer
 import yaml  # pyright: ignore[reportAttributeAccessIssue]
 from botocore.exceptions import ClientError
 
-from src.cloud import AwsEnv
-from src.config import data_dir
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.config import data_dir
 
 app = typer.Typer()
 

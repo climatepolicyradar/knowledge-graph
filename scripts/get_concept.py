@@ -3,10 +3,10 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from src.config import concept_dir
-from src.identifiers import WikibaseID
-from src.labelling import ArgillaSession
-from src.wikibase import WikibaseSession
+from knowledge_graph.config import concept_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelling import ArgillaSession
+from knowledge_graph.wikibase import WikibaseSession
 
 console = Console()
 app = typer.Typer()

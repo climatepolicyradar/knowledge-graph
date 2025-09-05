@@ -11,17 +11,17 @@ from rich.console import Console
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
-from src.classifier import (
+from knowledge_graph.classifier import (
     Classifier,
     ClassifierFactory,
     ModelPath,
     get_local_classifier_path,
 )
-from src.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
-from src.config import WANDB_ENTITY
-from src.identifiers import WikibaseID
-from src.version import Version
-from src.wikibase import WikibaseSession
+from knowledge_graph.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
+from knowledge_graph.config import WANDB_ENTITY
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.version import Version
+from knowledge_graph.wikibase import WikibaseSession
 
 console = Console()
 app = typer.Typer()

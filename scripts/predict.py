@@ -5,14 +5,14 @@ import typer
 from rich.console import Console
 from rich.progress import track
 
-from src.classifier import Classifier, ModelPath, get_local_classifier_path
-from src.classifier.embedding import EmbeddingClassifier
-from src.classifier.keyword import KeywordClassifier
-from src.classifier.stemmed_keyword import StemmedKeywordClassifier
-from src.config import processed_data_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.wikibase import WikibaseSession
+from knowledge_graph.classifier import Classifier, ModelPath, get_local_classifier_path
+from knowledge_graph.classifier.embedding import EmbeddingClassifier
+from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
+from knowledge_graph.config import processed_data_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.wikibase import WikibaseSession
 
 console = Console()
 

@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Optional
 
-from src.classifier.classifier import Classifier, ZeroShotClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID
-from src.span import Span
+from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.span import Span
 
 
 class EmbeddingClassifier(Classifier, ZeroShotClassifier):

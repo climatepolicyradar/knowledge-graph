@@ -7,6 +7,8 @@ import typer
 from syrupy.assertion import SnapshotAssertion
 from wandb.wandb_run import Run
 
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.version import Version
 from scripts.evaluate import (
     Source,
     build_metrics_path,
@@ -21,8 +23,6 @@ from scripts.evaluate import (
     validate_local_args,
     validate_remote_args,
 )
-from src.identifiers import WikibaseID
-from src.version import Version
 
 
 def test_print_metrics(capsys, metrics_df: pd.DataFrame):
