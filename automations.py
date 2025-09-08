@@ -213,7 +213,7 @@ async def main() -> None:
         b_deployment_name=generate_deployment_name(full_pipeline.name, aws_env),
         b_parameters={"inference_use_new_and_updated": True},
         description="Start the knowledge graph full pipeline.",
-        enabled=False,
+        enabled=True,
         aws_env=aws_env,
         expect_state=StateType.RUNNING,
         ignore=[AwsEnv.labs],
