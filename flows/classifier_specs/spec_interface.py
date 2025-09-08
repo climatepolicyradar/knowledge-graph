@@ -31,14 +31,6 @@ class DontRunOnEnum(Enum):
         """Return a string representation"""
         return self.value
 
-    # def __eq__(self, other) -> bool:
-    #     """Support comparison with both strings and other DontRunOnEnum."""
-    #     if isinstance(other, DontRunOnEnum):
-    #         return self.value == other.value
-    #     elif isinstance(other, str):
-    #         return self.value == other
-    #     return False
-
 
 class ClassifierSpec(BaseModel):
     """Details for a classifier to run."""
