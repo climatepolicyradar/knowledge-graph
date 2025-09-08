@@ -39,6 +39,7 @@ DEFAULT_FLOW_VARIABLES = {
     "cpu": MEGABYTES_PER_GIGABYTE * 4,
     "memory": MEGABYTES_PER_GIGABYTE * 16,
     "ephemeralStorage": {"sizeInGiB": 50},
+    "match_latest_revision_in_family": True,
 }
 
 
@@ -162,6 +163,7 @@ create_deployment(
     flow_variables={
         "cpu": MEGABYTES_PER_GIGABYTE * 16,
         "memory": MEGABYTES_PER_GIGABYTE * 64,
+        "match_latest_revision_in_family": True,
     },
     extra_tags=["type:sub"],
 )
