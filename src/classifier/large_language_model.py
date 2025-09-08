@@ -297,9 +297,9 @@ class LLMClassifier(BaseLLMClassifier):
 
     def _create_agent(self) -> Agent:  # type: ignore[type-arg]
         return Agent(  # type: ignore[return-value]
-            self.model_name,
+            model=self.model_name,
             system_prompt=self.system_prompt,
-            result_type=LLMResponse,
+            output_type=LLMResponse,
         )
 
 
@@ -367,5 +367,5 @@ class LocalLLMClassifier(BaseLLMClassifier):
         return Agent(  # type: ignore[return-value]
             model=ollama_model,
             system_prompt=self.system_prompt,
-            result_type=LLMResponse,
+            output_type=LLMResponse,
         )
