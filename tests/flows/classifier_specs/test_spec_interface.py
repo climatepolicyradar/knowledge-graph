@@ -11,6 +11,7 @@ from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     DontRunOnEnum,
     load_classifier_specs,
+    should_skip_doc,
 )
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
@@ -102,3 +103,22 @@ def test_load_classifier_specs():
         assert specs[0].compute_environment.gpu
         assert not specs[1].compute_environment
         assert specs[2].dont_run_on == [DontRunOnEnum("sabin"), DontRunOnEnum("cpr")]
+
+
+@pytest.mark.parametrize(
+    "stem, expected",
+    [
+        ("GCF.document.FP154_22820.12118", False),
+        ("CPR.document.i00003209.n0000", False),
+        ("AF.document.061MCLAR.n0000_translated_en", True),
+        ("Sabin.document.89169.89170", True),
+    ],
+)
+def test_should_skip_doc(stem, expected):
+    spec = ClassifierSpec(
+        wikibase_id="Q1",
+        classifier_id="9999zzzz",
+        wandb_registry_version="v1",
+        dont_run_on=["af", "sabin"],
+    )
+    assert expected == should_skip_doc(stem, spec)
