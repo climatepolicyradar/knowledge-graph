@@ -225,7 +225,7 @@ def main(
 
     ssm = boto3.client("ssm", region_name="eu-west-1")
     response = ssm.get_parameter(Name="/RAG/GOOGLE_API_KEY", WithDecryption=True)
-    os.environ["GEMINI_API_KEY"] = response["Parameter"]["Value"]
+    os.environ["GEMINI_API_KEY"] = response["Parameter"]["Value"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
     llm_classifier = LLMClassifier(concept, model_name=llm_model_name)
     console.log(f"🤖 Created a {llm_classifier}")
 
