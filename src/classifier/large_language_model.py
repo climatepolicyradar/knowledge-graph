@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import random
 from abc import ABC, abstractmethod
 from typing import Annotated, Optional
@@ -19,6 +20,8 @@ from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+logger = logging.getLogger(__name__)
 
 
 class LLMResponse(BaseModel):
@@ -158,6 +161,12 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
                 input_text=input_sanitised, output_text=output_sanitised
             )
 
+    def _validation_failed_error_template(
+        self, exception: LLMOutputMismatchError
+    ) -> str:
+        """A template for the error message when response validation fails"""
+        return f"LLM output mismatch: {exception}\n Any predicted spans will be lost."
+
     def get_variant_sub_classifier(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
         return type(self)(
@@ -185,9 +194,15 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             text,
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
-        self._validate_response(
-            input_text=text, response=response.output.marked_up_text
-        )
+
+        try:
+            self._validate_response(
+                input_text=text, response=response.output.marked_up_text
+            )
+        except LLMOutputMismatchError as e:
+            logger.warning(self._validation_failed_error_template(e))
+            return []
+
         return Span.from_xml(
             xml=response.output.marked_up_text,
             concept_id=self.concept.wikibase_id,
@@ -245,7 +260,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
                         for span in spans
                     ]
                 )
-            except LLMOutputMismatchError:
+            except LLMOutputMismatchError as e:
+                logger.warning(self._validation_failed_error_template(e))
                 batch_spans.append([])
 
         return batch_spans
