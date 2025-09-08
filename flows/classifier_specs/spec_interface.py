@@ -10,7 +10,6 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version
 
-
 type SpecStr = str
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
 
