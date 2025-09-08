@@ -112,22 +112,20 @@ async def full_pipeline(
             )
 
     success_ratio: str = (
-        f"{len(inference_result.fully_successfully_classified_document_stems)}/"
-        + f"{len(inference_result.document_stems)}"
+        f"{len(inference_result.successful_document_stems)}/"
+        + f"{len(inference_result.requested_document_stems)}"
     )
     logger.info(
         f"Inference complete. Successfully classified {success_ratio} documents."
     )
 
-    if len(inference_result.fully_successfully_classified_document_stems) == 0:
+    if len(inference_result.successful_document_stems) == 0:
         raise ValueError(
             "Inference successfully ran on 0 documents, skipping aggregation and indexing."
         )
 
     aggregation_run: State = await aggregate(
-        document_stems=list(
-            inference_result.fully_successfully_classified_document_stems
-        ),
+        document_stems=list(inference_result.successful_document_stems),
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,

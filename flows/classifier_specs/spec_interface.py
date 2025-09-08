@@ -5,6 +5,7 @@ from typing import Optional, Sequence
 import yaml
 from pydantic import BaseModel, Field, field_serializer
 
+from flows.utils import DocumentStem
 from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
@@ -106,3 +107,14 @@ def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
     ):
         raise ValueError("`latest` is not allowed")
     return None
+
+
+def should_skip_doc(stem: DocumentStem, spec: ClassifierSpec) -> bool:
+    """
+    Compares a document to the classifier spec for filtering out.
+
+    If the source (i.e. the first part of the id), is in the dont_tun_on field, this
+    will return true to recommend filtering out.
+    """
+    source = stem.split(".")[0]
+    return DontRunOnEnum(source.lower()) in (spec.dont_run_on or [])

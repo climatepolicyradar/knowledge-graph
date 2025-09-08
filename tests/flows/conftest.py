@@ -307,7 +307,7 @@ def load_fixture(file_name) -> str:
 
 @pytest.fixture
 def mock_bucket_documents(mock_s3_client, mock_bucket):
-    fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
+    fixture_files = ["GEF.document.0.1.json", "CPR.document.0.1.json"]
     for file_name in fixture_files:
         data = load_fixture(file_name)
         body = BytesIO(data.encode("utf-8"))
@@ -319,15 +319,14 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_bucket_containing_some_sabin_documents(mock_s3_client, mock_bucket):
+def mock_bucket_multiple_sources(mock_s3_client, mock_bucket):
     fixture_files = [
-        "PDF.document.0.1.json",
-        "HTML.document.0.1.json",
+        "GEF.document.0.1.json",
+        "CPR.document.0.1.json",
         "Sabin.document.16944.17490.json",
     ]
     for file_name in fixture_files:
-        data = load_fixture(file_name)
-        body = BytesIO(data.encode("utf-8"))
+        body = BytesIO("".encode("utf-8"))
         key = os.path.join("embeddings_input", file_name)
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
@@ -374,7 +373,7 @@ def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
 
 @pytest.fixture
 def mock_classifiers_dir(test_config):
-    mock_dir = Path(FIXTURE_DIR) / "classifiers" / "aaaa2222"
+    mock_dir = Path(FIXTURE_DIR) / "classifiers"
     with patch.object(test_config, "local_classifier_dir", new=mock_dir):
         yield mock_dir
 
@@ -382,9 +381,10 @@ def mock_classifiers_dir(test_config):
 @pytest.fixture
 def local_classifier_id(mock_classifiers_dir):
     wikibase_id = WikibaseID("Q788")
-    full_path = mock_classifiers_dir / wikibase_id
+    classifier_id = "6vxrmcuf"
+    full_path = mock_classifiers_dir / wikibase_id / classifier_id / "model.pickle"
     assert full_path.exists()
-    yield wikibase_id
+    yield wikibase_id, classifier_id
 
 
 @pytest.fixture
@@ -662,8 +662,11 @@ def mock_wandb(mock_s3_client, mock_classifiers_dir, local_classifier_id):
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
+        wikibase_id, classifier_id = local_classifier_id
         mock_artifact = Mock()
-        mock_artifact.download.return_value = mock_classifiers_dir / local_classifier_id
+        mock_artifact.download.return_value = (
+            mock_classifiers_dir / wikibase_id / classifier_id
+        )
 
         mock_run = Mock()
         mock_run.use_artifact.return_value = mock_artifact
