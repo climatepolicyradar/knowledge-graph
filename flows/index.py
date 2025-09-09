@@ -137,10 +137,10 @@ async def _update_vespa_passage_concepts(
     return response
 
 
-async def create_aggregate_indexing_summary_artifact(
+async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[None],
+    successes: Sequence[FlowRun],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -765,7 +765,7 @@ async def index(
         unwrap_result=False,
     )
 
-    await create_aggregate_indexing_summary_artifact(
+    await create_indexing_summary_artifact(
         config=config,
         document_stems=document_stems,
         successes=successes,
