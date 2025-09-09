@@ -36,7 +36,12 @@ class LLMResponse(BaseModel):
 
 
 class LLMOutputMismatchError(Exception):
-    """Raised when the LLM output text does not match the input text after removing tags."""
+    """
+    Raised when the LLM output text does not match the input text after removing tags.
+
+    DEPRECATED: this has been replaced by Span.from_xml aligning spans in
+    potentially modified text to the original text.
+    """
 
     def __init__(self, input_text: str, output_text: str):
         super().__init__(
@@ -150,7 +155,12 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         return f'{self.name}("{self.concept.preferred_label}", {values_string})'
 
     def _validate_response(self, input_text: str, response: str) -> None:
-        """Make sure the output text does not augment the input text in unexpected ways"""
+        """
+        Make sure the output text does not augment the input text in unexpected ways
+
+        DEPRECATED: this has been replaced by Span.from_xml aligning spans in
+        potentially modified text to the original text.
+        """
         input_sanitised = LabelledPassage.sanitise(input_text)
         output_sanitised = LabelledPassage.sanitise(
             # remove the concept tags from the LLM output
@@ -160,12 +170,6 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             raise LLMOutputMismatchError(
                 input_text=input_sanitised, output_text=output_sanitised
             )
-
-    def _validation_failed_error_template(
-        self, exception: LLMOutputMismatchError
-    ) -> str:
-        """A template for the error message when response validation fails"""
-        return f"LLM output mismatch: {exception}\n Any predicted spans will be lost."
 
     def get_variant_sub_classifier(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
@@ -195,18 +199,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
 
-        try:
-            self._validate_response(
-                input_text=text, response=response.output.marked_up_text
-            )
-        except LLMOutputMismatchError as e:
-            logger.warning(self._validation_failed_error_template(e))
-            return []
-
         return Span.from_xml(
             xml=response.output.marked_up_text,
             concept_id=self.concept.wikibase_id,
             labellers=[str(self)],
+            input_text=text,
         )
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
@@ -242,27 +239,20 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         batch_spans: list[list[Span]] = []
 
         for text, response in zip(texts, responses):
-            try:
-                self._validate_response(
-                    input_text=text, response=response.output.marked_up_text
-                )
+            spans = Span.from_xml(
+                xml=response.output.marked_up_text,
+                concept_id=self.concept.wikibase_id,
+                labellers=[str(self)],
+                input_text=text,
+            )
 
-                spans = Span.from_xml(
-                    xml=response.output.marked_up_text,
-                    concept_id=self.concept.wikibase_id,
-                    labellers=[str(self)],
-                )
-
-                batch_spans.append(
-                    [
-                        # Use the original input texts for the output spans
-                        span.model_copy(update={"text": text}, deep=True)
-                        for span in spans
-                    ]
-                )
-            except LLMOutputMismatchError as e:
-                logger.warning(self._validation_failed_error_template(e))
-                batch_spans.append([])
+            batch_spans.append(
+                [
+                    # Use the original input texts for the output spans
+                    span.model_copy(update={"text": text}, deep=True)
+                    for span in spans
+                ]
+            )
 
         return batch_spans
 

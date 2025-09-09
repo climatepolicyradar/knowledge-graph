@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from difflib import SequenceMatcher
 from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field, model_validator
@@ -190,9 +191,30 @@ class Span(BaseModel):
         xml: str,
         concept_id: Optional[WikibaseID],
         labellers: list[str],
+        input_text: Optional[str] = None,
     ) -> list["Span"]:
-        """Convert an XML string to a list of Spans."""
+        """
+        Convert an XML string to a list of Spans.
+
+        :param str xml: an XML string with <concept> and </concept> tags
+        :param WikibaseID concept_id: the Wikibase ID of the concept
+        :param list[str] labellers: the labellers of the spans
+        :param str input_text_to_align_with: input text to align the spans with. Useful
+        if the original text has been modified by e.g. a generative model
+        :return list[Span]: a list of Spans
+        """
+
         text_without_tags = xml.replace("<concept>", "").replace("</concept>", "")
+        span_timestamps = [datetime.now()] * len(labellers)
+
+        if input_text is not None and input_text != text_without_tags:
+            return Span._from_xml_with_alignment(
+                xml=xml,
+                concept_id=concept_id,
+                labellers=labellers,
+                input_text=input_text,
+            )
+
         spans = []
         offset = 0
         for match in re.finditer(r"<concept>(.*?)</concept>", xml):
@@ -206,9 +228,59 @@ class Span(BaseModel):
                     end_index=end_index,
                     concept_id=concept_id,
                     labellers=labellers,
-                    timestamps=[datetime.now()],
+                    timestamps=span_timestamps,
                 )
             )
+
+        return spans
+
+    @classmethod
+    def _from_xml_with_alignment(
+        cls,
+        xml: str,
+        concept_id: Optional[WikibaseID],
+        labellers: list[str],
+        input_text: Optional[str],
+    ) -> list["Span"]:
+        """
+        Convert an XML string to a list of spans which are aligned with input text.
+
+        See Span.from_xml.
+        """
+
+        span_timestamps = [datetime.now()] * len(labellers)
+
+        if input_text is None:
+            raise ValueError(
+                "Input text must be set to use `Span._from_xml_with_alignment`. You might need Span.from_xml instead."
+            )
+
+        spans = []
+        for offset, match in enumerate(re.finditer(r"<concept>(.*?)</concept>", xml)):
+            span_text = match.group(1)
+            start_index_in_original = match.start() - (
+                offset * len("<concept></concept>")
+            )
+
+            found_indices = find_span_text_in_input_text(
+                input_text=input_text,
+                span_text=span_text,
+                span_start_idx=start_index_in_original,
+            )
+
+            if found_indices is not None:
+                start_index, end_index = found_indices
+                spans.append(
+                    Span(
+                        text=input_text,
+                        start_index=start_index,
+                        end_index=end_index,
+                        concept_id=concept_id,
+                        labellers=labellers,
+                        timestamps=span_timestamps,
+                    )
+                )
+            # TODO: log a warning here if a span is not found
 
         return spans
 
@@ -313,3 +385,60 @@ def merge_overlapping_spans(
         Span.union(spans=group)
         for group in group_overlapping_spans(spans, jaccard_threshold)
     ]
+
+
+def find_span_text_in_input_text(
+    input_text: str,
+    span_text: str,
+    span_start_idx: int,
+    fuzzy_match_threshold: float = 0.9,
+    n_spans_length_to_search: int = 4,
+) -> Optional[tuple[int, int]]:
+    """
+    Find a span's text in an input text string.
+
+    Used where the text might've been modified from the original, by e.g. a
+    generative model. It first looks for an exact match at the expected location,
+    and then a fuzzier match in a window around the expected location.
+
+    :param str input_text: the text to search within
+    :param str span_text: the text of the span to find
+    :param int span_start_idx: the expected start index of the span within the input text
+    :param float fuzzy_match_threshold: the minimum similarity ratio for a fuzzy
+    match to be considered a match
+    :param int n_spans_length_to_search_either_side: the window (in units length of
+    the input span) to search. The search window is centered on `span_start_idx`
+    :return Optional[tuple[int, int]]: the start and end indices of the span in the
+    input text if found, otherwise None.
+    """
+
+    span_text = span_text.strip()
+    span_text = re.sub(r"\s+", " ", span_text)
+
+    # If an exact match is found at the expected location, return it
+    if input_text[span_start_idx : span_start_idx + len(span_text)] == span_text:
+        return span_start_idx, span_start_idx + len(span_text)
+
+    # If not, then look for a fuzzy match in a window around the expected location
+    window_length = len(span_text) * n_spans_length_to_search
+    window_start = max(0, span_start_idx - window_length // 2)
+    window_end = min(len(input_text), window_start + window_length)
+
+    best_match, best_start_index, best_end_index = None, None, None
+    best_ratio = 0.0
+    for i in range(window_start, window_end - len(span_text) + 1):
+        candidate = input_text[i : i + len(span_text)]
+        ratio = SequenceMatcher(None, span_text, candidate).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_match = candidate
+            best_start_index = i
+            best_end_index = i + len(candidate)
+
+    if (
+        all(_ is not None for _ in [best_match, best_start_index, best_end_index])
+        and best_ratio > fuzzy_match_threshold
+    ):
+        return best_start_index, best_end_index  # type: ignore
+
+    return None
