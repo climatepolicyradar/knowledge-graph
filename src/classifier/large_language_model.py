@@ -18,7 +18,6 @@ from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import ClassifierID
-from src.labelled_passage import LabelledPassage
 from src.span import Span, SpanXMLConceptFormattingError
 
 logger = logging.getLogger(__name__)

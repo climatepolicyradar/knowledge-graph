@@ -18,6 +18,7 @@ class SpanXMLConceptFormattingError(Exception):
     def __init__(self, xml: str):
         super().__init__(f"Span XML has incorrectly annotated concepts.\nXML:\t{xml}\n")
 
+
 class UnitInterval(float):
     """A validated float in the unit interval [0.0, 1.0]."""
 
