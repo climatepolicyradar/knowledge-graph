@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 from src.identifiers import WikibaseID
 from src.span import (
     Span,
-    SpanXMLConceptAnnotationError,
+    SpanXMLConceptFormattingError,
     find_span_text_in_input_text,
     group_overlapping_spans,
     jaccard_similarity,
@@ -411,5 +411,5 @@ def test_span_from_xml_invalid_concept_annotation(xml: str, is_valid: bool):
         assert spans
 
     else:
-        with pytest.raises(SpanXMLConceptAnnotationError):
+        with pytest.raises(SpanXMLConceptFormattingError):
             _ = Span.from_xml(xml, concept_id=WikibaseID("Q123"), labellers=["me"])

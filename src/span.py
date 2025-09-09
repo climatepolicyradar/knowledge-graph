@@ -9,7 +9,7 @@ from typing_extensions import Self
 from src.identifiers import Identifier, WikibaseID
 
 
-class SpanXMLConceptAnnotationError(Exception):
+class SpanXMLConceptFormattingError(Exception):
     """Raised when a span XML has incorrectly annotated concepts"""
 
     def __init__(self, xml: str):
@@ -212,7 +212,7 @@ class Span(BaseModel):
             and len(set(tags)) == 2
             and all(a != b for a, b in zip(tags, tags[1:]))
         ):
-            raise SpanXMLConceptAnnotationError(xml)
+            raise SpanXMLConceptFormattingError(xml)
 
     @classmethod
     def from_xml(

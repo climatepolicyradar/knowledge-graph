@@ -19,7 +19,7 @@ from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.labelled_passage import LabelledPassage
-from src.span import Span, SpanXMLConceptAnnotationError
+from src.span import Span, SpanXMLConceptFormattingError
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +206,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
                 labellers=[str(self)],
                 input_text=text,
             )
-        except SpanXMLConceptAnnotationError as e:
+        except SpanXMLConceptFormattingError as e:
             logger.warning(f"Prediction failed: {e}")
             return []
 
@@ -258,7 +258,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
                     ]
                 )
 
-            except SpanXMLConceptAnnotationError as e:
+            except SpanXMLConceptFormattingError as e:
                 logger.warning(f"Prediction failed: {e}")
                 batch_spans.append([])
 
