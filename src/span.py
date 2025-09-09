@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -7,6 +8,8 @@ from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
 
 from src.identifiers import Identifier, WikibaseID
+
+logger = logging.getLogger(__name__)
 
 
 class SpanXMLConceptFormattingError(Exception):
@@ -276,7 +279,12 @@ class Span(BaseModel):
         """
         Convert an XML string to a list of spans which are aligned with input text.
 
-        See Span.from_xml.
+        This is to address the fact that LLM classifiers don't reliably follow
+        instructions, so will often subtly modify the input text whilst adding concept
+        predictions. Instead of marking all of the predictions as invalid, we align
+        the predictions with the text we gave the LLM (`input_text`) instead.
+
+        See the tests for this method for real-world examples.
         """
 
         span_timestamps = [datetime.now()] * len(labellers)
@@ -296,10 +304,14 @@ class Span(BaseModel):
             found_indices = find_span_text_in_input_text(
                 input_text=input_text,
                 span_text=span_text,
-                span_start_idx=start_index_in_original,
+                span_start_index=start_index_in_original,
             )
 
-            if found_indices is not None:
+            if found_indices is None:
+                logger.warning(
+                    f"No spans found matching {span_text} near to character offset {start_index_in_original} in original.\n{xml}"
+                )
+            else:
                 start_index, end_index = found_indices
                 spans.append(
                     Span(
@@ -311,7 +323,6 @@ class Span(BaseModel):
                         timestamps=span_timestamps,
                     )
                 )
-            # TODO: log a warning here if a span is not found
 
         return spans
 
@@ -421,7 +432,7 @@ def merge_overlapping_spans(
 def find_span_text_in_input_text(
     input_text: str,
     span_text: str,
-    span_start_idx: int,
+    span_start_index: int,
     fuzzy_match_threshold: float = 0.9,
     n_spans_length_to_search: int = 4,
     span_length_error_margin: int = 1,
@@ -435,7 +446,7 @@ def find_span_text_in_input_text(
 
     :param str input_text: the text to search within
     :param str span_text: the text of the span to find
-    :param int span_start_idx: the expected start index of the span within the input text
+    :param int span_start_index: the expected start index of the span within the input text
     :param float fuzzy_match_threshold: the minimum similarity ratio for a fuzzy
     match to be considered a match
     :param int n_spans_length_to_search_either_side: the window (in units length of
@@ -450,13 +461,13 @@ def find_span_text_in_input_text(
     span_text = re.sub(r"\s+", " ", span_text)
 
     # If an exact match is found at the expected location, return it
-    if input_text[span_start_idx : span_start_idx + len(span_text)] == span_text:
-        return span_start_idx, span_start_idx + len(span_text)
+    if input_text[span_start_index : span_start_index + len(span_text)] == span_text:
+        return span_start_index, span_start_index + len(span_text)
 
     # If not, then look for a fuzzy match in a window around the expected location,
     # and with span length within the error margin.
     window_length = len(span_text) * n_spans_length_to_search
-    window_start = max(0, span_start_idx - window_length // 2)
+    window_start = max(0, span_start_index - window_length // 2)
     window_end = min(len(input_text), window_start + window_length)
     span_length_range = range(
         len(span_text) - span_length_error_margin,

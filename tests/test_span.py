@@ -303,7 +303,7 @@ def test_whether_span_intersection_returns_span_of_correct_size(text, spans):
 def test_find_span_text_in_input_text(input_text, span_start, expected_span_text):
     span_start_and_end = find_span_text_in_input_text(
         input_text=input_text,
-        span_start_idx=span_start,
+        span_start_index=span_start,
         span_text=expected_span_text,
     )
     assert span_start_and_end is not None
