@@ -356,6 +356,48 @@ async def test_inference_with_dont_run_on_filter(
 
 
 @pytest.mark.asyncio
+async def test_inference_with_gpu_enabled(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_bucket,
+    mock_bucket_multiple_sources,
+    mock_deployment,
+):
+    input_doc_ids = [
+        DocumentImportId(Path(doc).stem) for doc in mock_bucket_multiple_sources
+    ]
+    output_doc_ids = [DocumentStem(doc) for doc in input_doc_ids]
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+        compute_environment=ClassifierSpec.ComputeEnvironment(gpu=True),
+    )
+
+    state = Completed(
+        data=BatchInferenceResult(
+            batch_document_stems=output_doc_ids,
+            successful_document_stems=output_doc_ids,
+            classifier_spec=spec,
+        ),
+    )
+    with mock_deployment(state) as mock_inference_run_deployment:
+        # run the inference flow
+        _ = await inference(
+            classifier_specs=[spec],
+            document_ids=input_doc_ids,
+            config=test_config,
+        )
+        called_deployment = mock_inference_run_deployment.call_args.kwargs["name"]
+
+    assert called_deployment == (
+        "inference-batch-of-documents-gpu/kg-inference-batch-of-documents-gpu-sandbox"
+    )
+
+
+@pytest.mark.asyncio
 async def test_inference_flow_returns_successful_batch_inference_result_with_docs(
     test_config,
     mock_classifiers_dir,
