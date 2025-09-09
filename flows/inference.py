@@ -1,5 +1,4 @@
 import asyncio
-import enum
 import json
 import os
 from collections.abc import Generator, Sequence
@@ -31,20 +30,13 @@ from flows.classifier_specs.spec_interface import (
     load_classifier_specs,
     should_skip_doc,
 )
-
-class Compute(str, enum.Enum):
-    """Available compute platforms."""
-
-    CPU = "cpu"
-    GPU = "gpu"
-
-
 from flows.config import Config
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
     JsonDict,
+    ParameterisedFlow,
     Profiler,
     S3Uri,
     SlackNotify,
@@ -900,7 +892,6 @@ async def inference_batch_of_documents_cpu(
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
-    # vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
     container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
     # > Number of threads to run concurrent tasks in for each VM. -1 can
@@ -996,8 +987,8 @@ async def inference(
             "classifier_spec_json": classifier_spec.model_dump(),
         }
 
-    # Filter documents based on classifier specs
-    filtered_batches = []
+    # Prepare document batches based on classifier specs
+    parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
@@ -1005,13 +996,16 @@ async def inference(
         removal_details[classifier_spec] = len(filter_result.removed)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
-            filtered_batches.append((classifier_spec, document_batch))
+            params = parameters(classifier_spec, document_batch)
+            if (
+                classifier_spec.compute_environment
+                and classifier_spec.compute_environment.gpu
+            ):
+                fn = inference_batch_of_documents_gpu
+            else:
+                fn = inference_batch_of_documents_cpu
 
-    # Create flow params from filtered batches
-    parameterised_batches = (
-        parameters(classifier_spec, document_batch)
-        for classifier_spec, document_batch in filtered_batches
-    )
+            parameterised_batches.append(ParameterisedFlow(fn=fn, params=params))
 
     await create_dont_run_on_docs_summary_artifact(
         config=config, removal_details=removal_details
@@ -1020,22 +1014,11 @@ async def inference(
     all_raw_successes = []
     all_raw_failures = []
 
-    compute = Compute.GPU
-
-    # TODO: Get from the classifier spec., or somewhere
-    match compute:
-        case Compute.CPU:
-            fn = inference_batch_of_documents_cpu
-        case Compute.GPU:
-            fn = inference_batch_of_documents_gpu
-
     with Profiler(
         printer=print,
         name="running classifier inference with map_as_sub_flow",
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
-            # The typing doesn't pick up the Flow decorator
-            fn=fn,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,
@@ -1069,7 +1052,6 @@ async def inference(
             successful_classifier_specs.append(spec)
         else:
             failed_classifier_specs.append(spec)
-
 
     inference_result = InferenceResult(
         requested_document_stems=list(validated_file_stems),

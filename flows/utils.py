@@ -15,7 +15,9 @@ from typing import (
     Annotated,
     Any,
     Callable,
+    Generic,
     Literal,
+    NamedTuple,
     NewType,
     ParamSpec,
     TypeVar,
@@ -63,13 +65,6 @@ DocumentStem = NewType("DocumentStem", str)
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
-
-DEFAULT_GPU_VM_TYPES: list[str] = [
-    "g5.xlarge",
-    "g6.xlarge",
-    "g5.2xlarge",
-    "g6.2xlarge",
-]
 
 
 def file_name_from_path(path: str) -> str:
@@ -596,31 +591,35 @@ class Percentage(
         return Percentage((len(r) / len(t)) * 100.0)
 
 
+class ParameterisedFlow(NamedTuple, Generic[P, R]):
+    """A named tuple containing a flow and its parameters."""
+
+    fn: Flow[P, R]
+    params: dict[str, Any]
+
+
 @overload
 async def map_as_sub_flow(
-    fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    parameterised_batches: Generator[dict[str, Any], None, None],
+    parameterised_batches: Sequence[ParameterisedFlow[P, R]],
     unwrap_result: Literal[True],
 ) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]: ...
 
 
 @overload
 async def map_as_sub_flow(
-    fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    parameterised_batches: Generator[dict[str, Any], None, None],
+    parameterised_batches: Sequence[ParameterisedFlow[P, R]],
     unwrap_result: Literal[False],
 ) -> tuple[Sequence[FlowRun], Sequence[BaseException | FlowRun]]: ...
 
 
 async def map_as_sub_flow(
-    fn: Flow[P, R],
     aws_env: AwsEnv,
     counter: PositiveInt,
-    parameterised_batches: Generator[dict[str, Any], None, None],
+    parameterised_batches: Sequence[ParameterisedFlow[P, R]],
     unwrap_result: bool,
 ) -> tuple[Sequence[R | FlowRun], Sequence[BaseException | FlowRun]]:
     """
@@ -639,17 +638,23 @@ async def map_as_sub_flow(
 
     This assumes that the same parameters are used for each sub-flow run
     """
-    flow_name = function_to_flow_name(fn.fn)
-    deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-    qualified_name = f"{flow_name}/{deployment_name}"
     semaphore = asyncio.Semaphore(counter)
 
-    tasks = [
-        wait_for_semaphore(
+    tasks = []
+    qualified_names = set()
+    for batch in parameterised_batches:
+        fn = batch.fn
+        if unwrap_result and not fn_is_async(fn):
+            raise TypeError(f"fn should be async when unwrapping results: `{fn.name}`")
+        flow_name = function_to_flow_name(fn.fn)
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+        qualified_name = f"{flow_name}/{deployment_name}"
+        qualified_names.add(qualified_name)
+        task = wait_for_semaphore(
             semaphore,
             run_deployment(
                 name=qualified_name,
-                parameters=parameterised_batch,
+                parameters=batch.params,
                 # Rely on the flow's own timeout, if any, to make sure it
                 # eventually ends[1].
                 #
@@ -659,17 +664,16 @@ async def map_as_sub_flow(
                 timeout=None,
             ),
         )
-        for parameterised_batch in parameterised_batches
-    ]
+        tasks.append(task)
 
     def desc_update_fn(tasks, results) -> str:
-        return f"Finished sub-flow for {qualified_name}, progressing to {len(results)}/{len(tasks)} finished"
+        return f"Finished sub-flow for {qualified_names}, progressing to {len(results)}/{len(tasks)} finished"
 
     results: Sequence[FlowRun | BaseException] = await gather_and_report(
         tasks=tasks,
         return_exceptions=True,
         key=f"progress-sub-flows-{generate_slug(2)}",
-        desc_create=f"Starting sub-flows for {qualified_name} for {len(tasks)} tasks",
+        desc_create=f"Starting sub-flows for {qualified_names} for {len(tasks)} tasks",
         desc_update_fn=desc_update_fn,
     )
 
@@ -691,9 +695,7 @@ async def map_as_sub_flow(
                             # the return.
                             raise_on_failure=True,
                         )
-                        flow_result: R = (
-                            await result_fn() if fn_is_async(fn) else result_fn()
-                        )
+                        flow_result: R = await result_fn()
                         successes.append(flow_result)
                     else:
                         successes.append(result)
