@@ -18,7 +18,6 @@ from src.classifier.classifier import Classifier, ZeroShotClassifier
 from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import ClassifierID
-from src.labelled_passage import LabelledPassage
 from src.span import Span
 
 logger = logging.getLogger(__name__)
@@ -33,22 +32,6 @@ class LLMResponse(BaseModel):
     reasoning: str = Field(
         description="Justification for why the concept was identified in the supplied text, or why not"
     )
-
-
-class LLMOutputMismatchError(Exception):
-    """
-    Raised when the LLM output text does not match the input text after removing tags.
-
-    DEPRECATED: this has been replaced by Span.from_xml aligning spans in
-    potentially modified text to the original text.
-    """
-
-    def __init__(self, input_text: str, output_text: str):
-        super().__init__(
-            "Output text does not match input text.\n"
-            f"Input:\t{input_text}\n"
-            f"Output:\t{output_text}\n"
-        )
 
 
 DEFAULT_SYSTEM_PROMPT = """
@@ -153,23 +136,6 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             values["random_seed"] = self.random_seed
         values_string = json.dumps(values)[1:-1].replace(": ", "=")
         return f'{self.name}("{self.concept.preferred_label}", {values_string})'
-
-    def _validate_response(self, input_text: str, response: str) -> None:
-        """
-        Make sure the output text does not augment the input text in unexpected ways
-
-        DEPRECATED: this has been replaced by Span.from_xml aligning spans in
-        potentially modified text to the original text.
-        """
-        input_sanitised = LabelledPassage.sanitise(input_text)
-        output_sanitised = LabelledPassage.sanitise(
-            # remove the concept tags from the LLM output
-            response.replace("<concept>", "").replace("</concept>", "")
-        )
-        if input_sanitised != output_sanitised:
-            raise LLMOutputMismatchError(
-                input_text=input_sanitised, output_text=output_sanitised
-            )
 
     def get_variant_sub_classifier(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
