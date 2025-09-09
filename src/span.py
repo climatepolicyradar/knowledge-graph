@@ -393,6 +393,7 @@ def find_span_text_in_input_text(
     span_start_idx: int,
     fuzzy_match_threshold: float = 0.9,
     n_spans_length_to_search: int = 4,
+    span_length_error_margin: int = 1,
 ) -> Optional[tuple[int, int]]:
     """
     Find a span's text in an input text string.
@@ -408,6 +409,8 @@ def find_span_text_in_input_text(
     match to be considered a match
     :param int n_spans_length_to_search_either_side: the window (in units length of
     the input span) to search. The search window is centered on `span_start_idx`
+    :param int span_length_error_margin: during fuzzy matching, also search for spans
+    with length ± this parameter.
     :return Optional[tuple[int, int]]: the start and end indices of the span in the
     input text if found, otherwise None.
     """
@@ -419,21 +422,28 @@ def find_span_text_in_input_text(
     if input_text[span_start_idx : span_start_idx + len(span_text)] == span_text:
         return span_start_idx, span_start_idx + len(span_text)
 
-    # If not, then look for a fuzzy match in a window around the expected location
+    # If not, then look for a fuzzy match in a window around the expected location,
+    # and with span length within the error margin.
     window_length = len(span_text) * n_spans_length_to_search
     window_start = max(0, span_start_idx - window_length // 2)
     window_end = min(len(input_text), window_start + window_length)
+    span_length_range = range(
+        len(span_text) - span_length_error_margin,
+        len(span_text) + span_length_error_margin + 1,
+    )
 
     best_match, best_start_index, best_end_index = None, None, None
     best_ratio = 0.0
-    for i in range(window_start, window_end - len(span_text) + 1):
-        candidate = input_text[i : i + len(span_text)]
-        ratio = SequenceMatcher(None, span_text, candidate).ratio()
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_match = candidate
-            best_start_index = i
-            best_end_index = i + len(candidate)
+
+    for candidate_span_length in span_length_range:
+        for i in range(window_start, window_end - candidate_span_length + 1):
+            candidate = input_text[i : i + candidate_span_length]
+            ratio = SequenceMatcher(None, span_text, candidate).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_match = candidate
+                best_start_index = i
+                best_end_index = i + candidate_span_length
 
     if (
         all(_ is not None for _ in [best_match, best_start_index, best_end_index])

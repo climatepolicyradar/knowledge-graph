@@ -361,6 +361,13 @@ def test_span_from_xml_no_alignment(
             [(40, 46), (82, 89)],
             "The investments projects will include a gender strategy with actions to increase  women_s mobility,",
         ),
+        # Trickier example where small variants of the same span exist multiple times but only one is tagged as a concept.
+        # The text in the span itself has also been modified by the LLM (extra space removed)
+        (
+            "According to FAO (2018d), safeguards cover a variety of substantive areas in environmental and social management. While there is no agreement at an international level regarding what should be covered under a <concept>safeguard system</concept>, most safeguard systems",
+            [(214, 231)],
+            "According to FAO (2018d),  safeguards  cover a variety of substantive areas in  environmental and social management . While there is no agreement at an international level regarding what should be covered under a  safeguard  system, most  safeguard  systems",
+        ),
     ],
 )
 def test_span_from_xml_with_alignment(
