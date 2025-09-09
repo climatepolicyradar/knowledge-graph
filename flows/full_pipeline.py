@@ -10,6 +10,7 @@ from flows.aggregate import RunOutputIdentifier, aggregate
 from flows.boundary import (
     DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
 )
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
 from flows.index import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
@@ -24,7 +25,6 @@ from flows.inference import (
     inference,
 )
 from flows.utils import DocumentImportId, Fault
-from src.cloud import ClassifierSpec
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
@@ -112,22 +112,20 @@ async def full_pipeline(
             )
 
     success_ratio: str = (
-        f"{len(inference_result.fully_successfully_classified_document_stems)}/"
-        + f"{len(inference_result.document_stems)}"
+        f"{len(inference_result.successful_document_stems)}/"
+        + f"{len(inference_result.requested_document_stems)}"
     )
     logger.info(
         f"Inference complete. Successfully classified {success_ratio} documents."
     )
 
-    if len(inference_result.fully_successfully_classified_document_stems) == 0:
+    if len(inference_result.successful_document_stems) == 0:
         raise ValueError(
             "Inference successfully ran on 0 documents, skipping aggregation and indexing."
         )
 
     aggregation_run: State = await aggregate(
-        document_stems=list(
-            inference_result.fully_successfully_classified_document_stems
-        ),
+        document_stems=list(inference_result.successful_document_stems),
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,

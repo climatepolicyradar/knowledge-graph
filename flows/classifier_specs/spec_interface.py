@@ -1,14 +1,16 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import yaml
 from pydantic import BaseModel, Field, field_serializer
 
+from flows.utils import DocumentStem
 from src.cloud import AwsEnv
 from src.identifiers import ClassifierID, WikibaseID
 from src.version import Version
 
+type SpecStr = str
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
 
 
@@ -72,7 +74,7 @@ class ClassifierSpec(BaseModel):
         """Make ClassifierSpec hashable for use in sets and as dict keys."""
         return hash(self.classifier_id)
 
-    def __str__(self):
+    def __str__(self) -> SpecStr:
         """Return a string representation of the classifier spec."""
         return f"{self.wikibase_id}:{self.classifier_id}"
 
@@ -96,3 +98,23 @@ def load_classifier_specs(
         classifier_specs.append(ClassifierSpec.model_validate(spec))
 
     return classifier_specs
+
+
+def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
+    if any(
+        classifier_spec.wandb_registry_version == "latest"
+        for classifier_spec in classifier_specs
+    ):
+        raise ValueError("`latest` is not allowed")
+    return None
+
+
+def should_skip_doc(stem: DocumentStem, spec: ClassifierSpec) -> bool:
+    """
+    Compares a document to the classifier spec for filtering out.
+
+    If the source (i.e. the first part of the id), is in the dont_tun_on field, this
+    will return true to recommend filtering out.
+    """
+    source = stem.split(".")[0]
+    return DontRunOnEnum(source.lower()) in (spec.dont_run_on or [])

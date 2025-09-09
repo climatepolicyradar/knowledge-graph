@@ -101,7 +101,7 @@ async def mock_s3_async_client(
     with mock_aws():
         session = aioboto3.Session(region_name="eu-west-1")
         config = BotoCoreConfig(
-            read_timeout=60, connect_timeout=60, retries={"max_attempts": 3}
+            read_timeout=3, connect_timeout=3, retries={"max_attempts": 0}
         )
         async with session.client("s3", config=config) as client:
             yield client
@@ -305,7 +305,7 @@ def load_fixture(file_name) -> str:
 
 @pytest.fixture
 def mock_bucket_documents(mock_s3_client, mock_bucket):
-    fixture_files = ["PDF.document.0.1.json", "HTML.document.0.1.json"]
+    fixture_files = ["GEF.document.0.1.json", "CPR.document.0.1.json"]
     for file_name in fixture_files:
         data = load_fixture(file_name)
         body = BytesIO(data.encode("utf-8"))
@@ -317,15 +317,14 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
 
 
 @pytest.fixture
-def mock_bucket_containing_some_sabin_documents(mock_s3_client, mock_bucket):
+def mock_bucket_multiple_sources(mock_s3_client, mock_bucket):
     fixture_files = [
-        "PDF.document.0.1.json",
-        "HTML.document.0.1.json",
+        "GEF.document.0.1.json",
+        "CPR.document.0.1.json",
         "Sabin.document.16944.17490.json",
     ]
     for file_name in fixture_files:
-        data = load_fixture(file_name)
-        body = BytesIO(data.encode("utf-8"))
+        body = BytesIO("".encode("utf-8"))
         key = os.path.join("embeddings_input", file_name)
         mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
@@ -379,10 +378,11 @@ def mock_classifiers_dir(test_config):
 
 @pytest.fixture
 def local_classifier_id(mock_classifiers_dir):
-    classifier_id = WikibaseID("Q788")
-    full_path = mock_classifiers_dir / classifier_id
+    wikibase_id = WikibaseID("Q788")
+    classifier_id = "6vxrmcuf"
+    full_path = mock_classifiers_dir / wikibase_id / classifier_id / "model.pickle"
     assert full_path.exists()
-    yield classifier_id
+    yield wikibase_id, classifier_id
 
 
 @pytest.fixture
@@ -671,18 +671,20 @@ def example_labelled_passages_1_doc(
 
 
 @pytest.fixture
-def mock_wandb(mock_s3_client):
+def mock_wandb(mock_s3_client, mock_classifiers_dir, local_classifier_id):
     with (
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
+        wikibase_id, classifier_id = local_classifier_id
         mock_artifact = Mock()
+        mock_artifact.download.return_value = (
+            mock_classifiers_dir / wikibase_id / classifier_id
+        )
 
-        class StubbedRun:
-            def use_artifact(self, *args, **kwargs):
-                return mock_artifact
+        mock_run = Mock()
+        mock_run.use_artifact.return_value = mock_artifact
 
-        mock_run = StubbedRun()
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
 

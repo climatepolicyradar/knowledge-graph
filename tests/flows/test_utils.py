@@ -22,13 +22,12 @@ from flows.utils import (
     fn_is_async,
     gather_and_report,
     get_file_stems_for_document_id,
-    get_labelled_passage_paths,
     iterate_batch,
     map_as_sub_flow,
     remove_translated_suffix,
     s3_file_exists,
 )
-from src.cloud import AwsEnv, ClassifierSpec
+from src.cloud import AwsEnv
 
 
 @pytest.mark.parametrize(
@@ -208,46 +207,6 @@ def test_collect_file_stems_under_prefix(test_config, mock_bucket) -> None:
             DocumentStem("CCLW.executive.2.2"),
             DocumentStem("CCLW.executive.2.2_translated_en"),
             DocumentStem("CCLW.executive.3.3"),
-        ]
-    )
-
-
-def test_get_labelled_passage_paths(test_config, mock_s3_client, mock_bucket) -> None:
-    """Test that we can get all document paths from a list of document IDs."""
-
-    classifier_spec = ClassifierSpec(name="Q123", alias="v1")
-    body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
-    s3_file_names = [
-        "CCLW.executive.1.1_translated_en.json",
-        "CCLW.executive.1.1.json",
-        "CCLW.executive.10083.rtl_190.json",
-    ]
-
-    s3_client = boto3.client("s3")
-    for file_name in s3_file_names:
-        s3_client.put_object(
-            Bucket=test_config.cache_bucket,
-            Key=os.path.join(
-                test_config.inference_document_target_prefix,
-                classifier_spec.name,
-                classifier_spec.alias,
-                file_name,
-            ),
-            Body=body,
-            ContentType="application/json",
-        )
-
-    # Get all the document paths for classifiers and documents ids.
-    document_paths = get_labelled_passage_paths(
-        document_ids=["CCLW.executive.1.1", "CCLW.executive.10083.rtl_190"],
-        classifier_specs=[classifier_spec],
-        cache_bucket=test_config.cache_bucket,
-        labelled_passages_prefix=test_config.inference_document_target_prefix,
-    )
-    assert sorted(document_paths) == sorted(
-        [
-            f"s3://{test_config.cache_bucket}/{test_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.1.1_translated_en.json",
-            f"s3://{test_config.cache_bucket}/{test_config.inference_document_target_prefix}/{classifier_spec.name}/{classifier_spec.alias}/CCLW.executive.10083.rtl_190.json",
         ]
     )
 

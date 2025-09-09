@@ -23,6 +23,11 @@ from flows.boundary import (
     s3_copy_file,
     s3_object_write_text_async,
 )
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    load_classifier_specs,
+    should_skip_doc,
+)
 from flows.config import Config
 from flows.inference import (
     deserialise_pydantic_list_with_fallback,
@@ -35,11 +40,7 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
 )
-from src.cloud import (
-    AwsEnv,
-    ClassifierSpec,
-    parse_spec_file,
-)
+from src.cloud import AwsEnv
 from src.labelled_passage import LabelledPassage
 
 T = TypeVar("T")
@@ -71,6 +72,10 @@ class AggregationFailure(Exception):
         self.context = context
 
 
+class AllSkippedFailure(Exception):
+    """Every classifier was skipped for this document."""
+
+
 def build_run_output_identifier() -> RunOutputIdentifier:
     """Builds an identifier from the start time and name of the flow run."""
     run_context = get_run_context()
@@ -99,6 +104,9 @@ async def get_all_labelled_passages_for_one_document(
     """Get the labelled passages from S3."""
 
     for spec in classifier_specs:
+        if should_skip_doc(document_stem, spec):
+            continue
+
         s3_uri = generate_s3_uri_input(
             cache_bucket=config.cache_bucket_str,
             document_source_prefix=config.aggregate_document_source_prefix,
@@ -162,8 +170,8 @@ def generate_s3_uri_input(
         bucket=cache_bucket,
         key=os.path.join(
             document_source_prefix,
-            classifier_spec.name,
-            classifier_spec.alias,
+            classifier_spec.wikibase_id,
+            classifier_spec.classifier_id,
             f"{document_stem}.json",
         ),
     )
@@ -249,6 +257,10 @@ async def process_document(
                         serialised_concepts
                     )
 
+            # Validation, checking if we skipped all concepts for a document
+            if not concepts_for_vespa:
+                raise AllSkippedFailure
+
             # Write to s3
             s3_uri = generate_s3_uri_output(
                 cache_bucket=config.cache_bucket_str,
@@ -272,6 +284,10 @@ async def process_document(
                 ),
             )
             return document_stem
+    except AllSkippedFailure as e:
+        raise AggregationFailure(
+            document_stem=document_stem, exception=e, context=repr(e)
+        )
     except ClientError as e:
         print(f"ClientError: {e.response}")
         raise AggregationFailure(
@@ -362,10 +378,12 @@ async def create_aggregate_inference_overall_summary_artifact(
 def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     """Collect the stems for the given specs."""
     document_stems = []
-    specs = parse_spec_file(config.aws_env)
+    specs = load_classifier_specs(config.aws_env)
     for spec in specs:
         prefix = os.path.join(
-            config.aggregate_document_source_prefix, spec.name, spec.alias
+            config.aggregate_document_source_prefix,
+            spec.wikibase_id,
+            spec.classifier_id,
         )
         document_stems.extend(
             collect_unique_file_stems_under_prefix(
@@ -485,7 +503,7 @@ async def aggregate(
         document_stems = collect_stems_by_specs(config)
 
     run_output_identifier = build_run_output_identifier()
-    classifier_specs = parse_spec_file(config.aws_env)
+    classifier_specs = load_classifier_specs(config.aws_env)
 
     print(
         f"Aggregating inference results for {len(document_stems)} documents, using "
