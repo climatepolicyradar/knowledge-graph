@@ -2134,7 +2134,7 @@ requires-dist = [
     { name = "neomodel", specifier = ">=5.3.3" },
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8.0" },
-    { name = "prefect", extras = ["aws", "slack"], specifier = ">=3.4.7" },
+    { name = "prefect", extras = ["aws", "slack"], specifier = ">=3.4.17" },
     { name = "prefect-coiled", specifier = ">=0.0.4" },
     { name = "prefect-coiled", marker = "extra == 'coiled'", specifier = ">=0.0.4" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.145.0" },
@@ -3410,7 +3410,7 @@ wheels = [
 
 [[package]]
 name = "prefect"
-version = "3.4.11"
+version = "3.4.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
@@ -3467,9 +3467,9 @@ dependencies = [
     { name = "websockets" },
     { name = "whenever" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/54/ce/7ee42702f6373b10dac356e0de66ac376064a68b6b29ebf6103caff8e786/prefect-3.4.11.tar.gz", hash = "sha256:a898bf250b228711520c904310c91048bb401567168f62dffe1e59429088514a", size = 5579948 }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/fd/4b4593e29342218d020c3aa18b982afb54770746f3020707b15d4eafbd53/prefect-3.4.17.tar.gz", hash = "sha256:665225935a58e162afa4bc14aa5f880a8551d19a3f696e02f6c8dd7aba0cd5a0", size = 5597760, upload-time = "2025-09-05T19:36:16.117Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/e3/9d8af9231069f796cfd06083781b147f3a4bc8428520bcb88dfe28b702fd/prefect-3.4.11-py3-none-any.whl", hash = "sha256:332b3f2930100e168b5c0199ec6da57c38b8bac3ba7a33cb45515cb96c294fc5", size = 6081906 },
+    { url = "https://files.pythonhosted.org/packages/3c/77/5414ab4740c392aaf8e1a51ed2e7fb892b17370c9d1feba85bcb046bdc80/prefect-3.4.17-py3-none-any.whl", hash = "sha256:962fd837c76bb3ea8350c9d0a60c42a23ea9149227968b3c17c51e4bda8a69c0", size = 6110119, upload-time = "2025-09-05T19:36:12.917Z" },
 ]
 
 [package.optional-dependencies]
