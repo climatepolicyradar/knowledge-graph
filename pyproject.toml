@@ -30,7 +30,7 @@ dependencies = [
     "typer==0.15.1",
     "schedule>=1.2.2",
     "awscli>=1.37.24",
-    "prefect[aws,slack]>=3.4.7",
+    "prefect[aws,slack]>=3.4.17",
     "httpx>=0.28.1",
     "tenacity>=9.1.2",
     "requests>=2.32.3",
