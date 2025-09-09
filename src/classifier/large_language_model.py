@@ -228,7 +228,6 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             except SpanXMLConceptFormattingError as e:
                 logger.warning(f"Prediction failed: {e}")
                 batch_spans.append([])
-
         return batch_spans
 
 
