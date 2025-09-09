@@ -5,6 +5,7 @@ from hypothesis import strategies as st
 from src.identifiers import WikibaseID
 from src.span import (
     Span,
+    SpanXMLConceptAnnotationError,
     find_span_text_in_input_text,
     group_overlapping_spans,
     jaccard_similarity,
@@ -392,3 +393,23 @@ def test_span_from_xml_with_alignment(
     assert [span.start_index for span in found_spans] == expected_starts
     assert [span.end_index for span in found_spans] == expected_ends
     assert [span.text for span in found_spans] == [text_without_tags] * len(found_spans)
+
+
+@pytest.mark.parametrize(
+    ("xml,is_valid"),
+    [
+        (
+            "<concept>the Government plans to scale up programs to match up people with job opportunities and provide the unemployed people with <concept>unemployment insurance</concept>. <concept>Unemployment benefits</concept>, <concept>job training</concept> opportunities and <concept>job counselling</concept> will also be provided to strengthen the <concept>social safety net</concept>. Through such support, <concept>vulnerable populations</concept> to be affected by the transition will receive <concept>support</concept> for their livelihood and <concept>retraining opportunities</concept>.</concept>",
+            False,
+        ),
+        ("<concept>hello!</concept> :)", True),
+    ],
+)
+def test_span_from_xml_invalid_concept_annotation(xml: str, is_valid: bool):
+    if is_valid:
+        spans = Span.from_xml(xml, concept_id=WikibaseID("Q123"), labellers=["me"])
+        assert spans
+
+    else:
+        with pytest.raises(SpanXMLConceptAnnotationError):
+            _ = Span.from_xml(xml, concept_id=WikibaseID("Q123"), labellers=["me"])
