@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -7,6 +8,8 @@ from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
 
 from src.identifiers import Identifier, WikibaseID
+
+logger = logging.getLogger(__name__)
 
 
 class UnitInterval(float):
@@ -273,7 +276,11 @@ class Span(BaseModel):
                 span_start_index=start_index_in_original,
             )
 
-            if found_indices is not None:
+            if found_indices is None:
+                logger.warning(
+                    f"No spans found matching {span_text} near to character offset {start_index_in_original} in original.\n{xml}"
+                )
+            else:
                 start_index, end_index = found_indices
                 spans.append(
                     Span(
@@ -285,7 +292,6 @@ class Span(BaseModel):
                         timestamps=span_timestamps,
                     )
                 )
-            # TODO: log a warning here if a span is not found
 
         return spans
 
