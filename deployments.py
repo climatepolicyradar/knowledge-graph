@@ -14,22 +14,17 @@ from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
-from flows.aggregate import (
-    aggregate,
-    aggregate_batch_of_documents,
-)
+from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.full_pipeline import full_pipeline
-from flows.index import (
-    index,
-    index_batch_of_documents,
-)
+from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.update_neo4j import update_neo4j
 from flows.utils import JsonDict
 from flows.wikibase_to_s3 import wikibase_to_s3
 from src.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
@@ -188,6 +183,7 @@ create_deployment(
     extra_tags=["type:entry"],
 )
 
+
 # Orchestrate full pipeline
 
 create_deployment(
@@ -230,6 +226,16 @@ create_deployment(
     #         # Not needed in labs
     #         # AwsEnv.labs: "0 15 3 * *",
     #     },
+)
+
+# Sync Neo4j with Wikibase
+
+create_deployment(
+    flow=update_neo4j,
+    description="Refresh Neo4j with the latest concept graph",
+    env_schedules={
+        AwsEnv.labs: "0 3 * * * MON-THU",
+    },
 )
 
 # Deploy static sites
