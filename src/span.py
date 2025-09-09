@@ -12,6 +12,13 @@ from src.identifiers import Identifier, WikibaseID
 logger = logging.getLogger(__name__)
 
 
+class SpanXMLConceptFormattingError(Exception):
+    """Raised when a span XML has incorrectly annotated concepts"""
+
+    def __init__(self, xml: str):
+        super().__init__(f"Span XML has incorrectly annotated concepts.\nXML:\t{xml}\n")
+
+
 class UnitInterval(float):
     """A validated float in the unit interval [0.0, 1.0]."""
 
@@ -189,6 +196,28 @@ class Span(BaseModel):
         return jaccard_similarity(self, other) > 0
 
     @classmethod
+    def _validate_xml(
+        cls,
+        xml: str,
+    ) -> None:
+        """
+        Validates that <concept>, </concept> tags have been applied correctly.
+
+        This means that following every <concept> tag should be a </concept> tag.
+        Nested annotations should not be attempted, and there should be an equal number
+        of start and end tags.
+        """
+
+        tags = re.findall(r"</?concept>", xml)
+
+        if not (
+            tags[0] == "<concept>"
+            and len(set(tags)) == 2
+            and all(a != b for a, b in zip(tags, tags[1:]))
+        ):
+            raise SpanXMLConceptFormattingError(xml)
+
+    @classmethod
     def from_xml(
         cls,
         xml: str,
@@ -206,6 +235,8 @@ class Span(BaseModel):
         if the original text has been modified by e.g. a generative model
         :return list[Span]: a list of Spans
         """
+
+        cls._validate_xml(xml)
 
         text_without_tags = xml.replace("<concept>", "").replace("</concept>", "")
         span_timestamps = [datetime.now()] * len(labellers)
