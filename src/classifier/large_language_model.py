@@ -19,7 +19,7 @@ from src.classifier.uncertainty_mixin import UncertaintyMixin
 from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.labelled_passage import LabelledPassage
-from src.span import Span
+from src.span import Span, SpanXMLConceptAnnotationError
 
 logger = logging.getLogger(__name__)
 
@@ -199,12 +199,16 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
 
-        return Span.from_xml(
-            xml=response.output.marked_up_text,
-            concept_id=self.concept.wikibase_id,
-            labellers=[str(self)],
-            input_text=text,
-        )
+        try:
+            return Span.from_xml(
+                xml=response.output.marked_up_text,
+                concept_id=self.concept.wikibase_id,
+                labellers=[str(self)],
+                input_text=text,
+            )
+        except SpanXMLConceptAnnotationError as e:
+            logger.warning(f"Prediction failed: {e}")
+            return []
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
@@ -239,20 +243,24 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         batch_spans: list[list[Span]] = []
 
         for text, response in zip(texts, responses):
-            spans = Span.from_xml(
-                xml=response.output.marked_up_text,
-                concept_id=self.concept.wikibase_id,
-                labellers=[str(self)],
-                input_text=text,
-            )
+            try:
+                spans = Span.from_xml(
+                    xml=response.output.marked_up_text,
+                    concept_id=self.concept.wikibase_id,
+                    labellers=[str(self)],
+                    input_text=text,
+                )
+                batch_spans.append(
+                    [
+                        # Use the original input texts for the output spans
+                        span.model_copy(update={"text": text}, deep=True)
+                        for span in spans
+                    ]
+                )
 
-            batch_spans.append(
-                [
-                    # Use the original input texts for the output spans
-                    span.model_copy(update={"text": text}, deep=True)
-                    for span in spans
-                ]
-            )
+            except SpanXMLConceptAnnotationError as e:
+                logger.warning(f"Prediction failed: {e}")
+                batch_spans.append([])
 
         return batch_spans
 
