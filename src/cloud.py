@@ -1,3 +1,4 @@
+import importlib.metadata
 import os
 from collections.abc import Callable, Sequence
 from enum import Enum
@@ -17,6 +18,14 @@ from src.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"
+
+
+def determine_container_uri() -> str:
+    """Determine the image uri for this repo"""
+    registry = os.environ.get("DOCKER_REGISTRY")
+    repository = PROJECT_NAME
+    version = importlib.metadata.version(repository)
+    return f"{registry}/{repository}:{version}"
 
 
 # Version 1 classifier spec, to be cleaned up and replaced

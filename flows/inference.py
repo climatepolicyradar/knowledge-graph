@@ -48,6 +48,7 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from src.classifier import Classifier, ModelPath
+from src.cloud import determine_container_uri
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -893,7 +894,7 @@ async def inference_batch_of_documents_cpu(
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     gpu=True,
-    container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
+    container=determine_container_uri(),
     # > Number of threads to run concurrent tasks in for each VM. -1 can
     # > be used to run as many concurrent tasks as there are CPU cores.
     # > Default is 1.
