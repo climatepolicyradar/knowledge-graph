@@ -61,6 +61,7 @@ def prefect_test_fixture():
 def test_config():
     yield Config(
         cache_bucket="test_bucket",
+        cache_bucket_for_indexing="test_bucket_indexing",
         wandb_model_registry="test_org/test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
@@ -103,6 +104,19 @@ async def mock_s3_async_client(
         session = aioboto3.Session(region_name="eu-west-1")
         config = BotoCoreConfig(
             read_timeout=3, connect_timeout=3, retries={"max_attempts": 0}
+        )
+        async with session.client("s3", config=config) as client:
+            yield client
+
+
+@pytest_asyncio.fixture
+async def mock_s3_async_client_for_indexing(
+    mock_aws_creds, moto_patch_session
+) -> AsyncGenerator[S3Client, None]:
+    with mock_aws():
+        session = aioboto3.Session(region_name="eu-west-1")
+        config = BotoCoreConfig(
+            read_timeout=5, connect_timeout=5, retries={"max_attempts": 0}
         )
         async with session.client("s3", config=config) as client:
             yield client
@@ -265,11 +279,60 @@ async def mock_async_bucket_and_s3_client(
         )
 
 
+@pytest_asyncio.fixture
+async def mock_async_bucket_and_s3_client_for_indexing(
+    mock_aws_creds, mock_s3_async_client_for_indexing, test_config
+) -> AsyncGenerator[tuple[str, S3Client], None]:
+    """Returns a mocked s3 bucket name, and a mocked s3_async_client"""
+    print("Attempting to create the bucket")
+    await mock_s3_async_client_for_indexing.create_bucket(
+        Bucket=test_config.cache_bucket_for_indexing,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    print("Bucket created")
+    yield test_config.cache_bucket_for_indexing, mock_s3_async_client_for_indexing
+
+    # Teardown
+    try:
+        print("Attempting to list the bucket contents")
+        response = await mock_s3_async_client_for_indexing.list_objects_v2(
+            Bucket=test_config.cache_bucket_for_indexing
+        )
+        for obj in response.get("Contents", []):
+            try:
+                print(f"Attempting to delete the bucket object {0}", obj["key"])
+
+                await mock_s3_async_client_for_indexing.delete_object(
+                    Bucket=test_config.cache_bucket_for_indexing, Key=obj["Key"]
+                )
+            except asyncio.timeout:
+                print("Async timeout when trying to delete")
+
+        await mock_s3_async_client_for_indexing.delete_bucket(
+            Bucket=test_config.cache_bucket_for_indexing
+        )
+    except Exception as e:
+        print(
+            f"Warning: Failed to clean up bucket {test_config.cache_bucket_for_indexing} during teardown: {e}"
+        )
+
+
 @pytest.fixture
 def mock_bucket(
     mock_aws_creds, mock_s3_client, test_config
 ) -> Generator[str, Any, Any]:
     mock_s3_client.create_bucket(
+        Bucket=test_config.cache_bucket,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield test_config.cache_bucket
+
+
+@pytest_asyncio.fixture
+async def mock_async_bucket(
+    mock_aws_creds, mock_s3_async_client, test_config
+) -> Generator[str, Any, Any]:
+    await mock_s3_async_client.create_bucket(
         Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
@@ -544,7 +607,7 @@ def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
 
 @pytest_asyncio.fixture()
 async def mock_async_bucket_inference_results(
-    mock_async_bucket_and_s3_client,
+    mock_async_bucket_and_s3_client_for_indexing,
     s3_prefix_inference_results: str,
     aggregate_inference_results_document_stems: list[DocumentStem],
 ) -> dict[str, dict[str, Any]]:
@@ -565,7 +628,9 @@ async def mock_async_bucket_inference_results(
         key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
         inference_results[key] = json.loads(data)
 
-        mock_bucket_name, mocked_s3_async_client = mock_async_bucket_and_s3_client
+        mock_bucket_name, mocked_s3_async_client = (
+            mock_async_bucket_and_s3_client_for_indexing
+        )
 
         await mocked_s3_async_client.put_object(
             Bucket=mock_bucket_name, Key=key, Body=body, ContentType="application/json"

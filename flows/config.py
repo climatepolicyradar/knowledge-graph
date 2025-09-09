@@ -17,6 +17,10 @@ AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 class Config(BaseModel):
     """Shared Configuration used across flow runs."""
 
+    cache_bucket_for_indexing: str | None = Field(
+        default=None,
+        description="S3 bucket for indexing flow, added as pla-720 experiment",
+    )
     cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
     aggregate_document_source_prefix: str = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
