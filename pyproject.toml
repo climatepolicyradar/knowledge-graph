@@ -106,12 +106,6 @@ asyncio_default_fixture_loop_scope = "function"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[dependency-groups]
-notebook = [
-    "marimo>=0.15.2",
-    "nest-asyncio>=1.6.0",
-]
-
 [tool.hatch.metadata]
 allow-direct-references = true
 
@@ -171,6 +165,3 @@ compile-bytecode = true
 [tool.uv.workspace]
 # Empty workspace for now, can add members as needed
 members = []
-
-[tool.marimo.runtime]
-dotenv = [".env"]
