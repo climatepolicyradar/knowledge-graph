@@ -34,8 +34,7 @@ COPY src ./src/
 COPY flows ./flows/
 COPY scripts ./scripts/
 
-# Install the project
-RUN uv pip install --system -e .
+ENV PYTHONPATH="/app:/app/src:/app/flows:/app/scripts"
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
 # Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and
