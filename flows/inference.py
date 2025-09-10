@@ -1,8 +1,11 @@
 import asyncio
 import json
 import os
+import random
+import time
 from collections.abc import Generator, Sequence
 from datetime import timedelta
+from enum import Enum
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
@@ -12,7 +15,9 @@ import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
+from mypy_boto3_cloudwatch.client import CloudWatchClient
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
+from mypy_boto3_ssm.client import SSMClient
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
@@ -48,8 +53,135 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from src.classifier import Classifier, ModelPath
+from src.cloud import get_cloudwatch_client, get_ssm_client
 from src.labelled_passage import LabelledPassage
 from src.span import Span
+
+
+class TextBlockLengthBucket(Enum):
+    """Distribution buckets for text block lengths."""
+
+    BUCKET_1_10 = "1-10"
+    BUCKET_11_50 = "11-50"
+    BUCKET_51_100 = "51-100"
+    BUCKET_101_500 = "101-500"
+    BUCKET_501_1000 = "501-1000"
+    BUCKET_1001_2000 = "1001-2000"
+    BUCKET_2000_PLUS = "2000+"
+
+
+def get_text_length_bucket(text_length: int) -> TextBlockLengthBucket:
+    """Categorise text into length buckets for metrics dimensions."""
+    if text_length <= 10:
+        return TextBlockLengthBucket.BUCKET_1_10
+    elif text_length <= 50:
+        return TextBlockLengthBucket.BUCKET_11_50
+    elif text_length <= 100:
+        return TextBlockLengthBucket.BUCKET_51_100
+    elif text_length <= 500:
+        return TextBlockLengthBucket.BUCKET_101_500
+    elif text_length <= 1000:
+        return TextBlockLengthBucket.BUCKET_501_1000
+    elif text_length <= 2000:
+        return TextBlockLengthBucket.BUCKET_1001_2000
+    else:
+        return TextBlockLengthBucket.BUCKET_2000_PLUS
+
+
+# This is based on passage length analysis on 2025-09-05. It
+# excluded the same text block types that we exclude for inference.
+#
+# 1-10: 19,014,827 passages (55.63%)
+# 11-50: 7,715,698 passages (22.57%)
+# 51-100: 2,637,400 passages (7.72%)
+# 101-500: 4,019,951 passages (11.76%)
+# 501-1000: 679,933 passages (1.99%)
+# 1001-2000: 109,012 passages (0.32%)
+# 2000+: 5,783 passages (0.02%)
+SAMPLE_RATES = {
+    TextBlockLengthBucket.BUCKET_1_10: 0.001,
+    TextBlockLengthBucket.BUCKET_11_50: 0.005,
+    TextBlockLengthBucket.BUCKET_51_100: 0.01,
+    TextBlockLengthBucket.BUCKET_101_500: 0.02,
+    TextBlockLengthBucket.BUCKET_501_1000: 0.1,
+    TextBlockLengthBucket.BUCKET_1001_2000: 0.3,
+    TextBlockLengthBucket.BUCKET_2000_PLUS: 0.8,
+}
+
+
+def should_sample_metric(text_length: int) -> bool:
+    """
+    Use stratified sampling, with inverse percentages.
+
+    Ensures good representation across different text sizes with
+    higher sampling rates for less common text lengths.
+    """
+
+    bucket = get_text_length_bucket(text_length)
+    return random.random() < SAMPLE_RATES[bucket]
+
+
+def record_inference_metric(
+    config: Config,
+    duration: timedelta,
+    text_length: int,
+    classifier: Classifier,
+    force_sample: bool = False,
+) -> None:
+    """Record text block inference duration metrics to CloudWatch."""
+    if not force_sample and not should_sample_metric(text_length):
+        return
+
+    logger = get_run_logger()
+
+    try:
+        cloudwatch: CloudWatchClient = get_cloudwatch_client(
+            aws_env=config.aws_env, region_name=config.bucket_region
+        )
+        ssm: SSMClient = get_ssm_client(
+            aws_env=config.aws_env, region_name=config.bucket_region
+        )
+        namespace_response = ssm.get_parameter(Name="/KnowledgeGraph/Metrics/Namespace")
+        parameter = namespace_response["Parameter"]
+        if "Value" not in parameter:
+            raise ValueError("SSM parameter missing Value field")
+        namespace = parameter["Value"]
+
+        text_bucket = get_text_length_bucket(text_length)
+        model_architecture = classifier.name
+
+        duration_ms = duration.total_seconds() * 1000
+
+        response = cloudwatch.put_metric_data(
+            Namespace=namespace,
+            MetricData=[
+                {
+                    "MetricName": "TextBlockInferenceDuration",
+                    "Value": duration_ms,
+                    "Unit": "Milliseconds",
+                    "Dimensions": [
+                        {
+                            "Name": "TextLengthBucket",
+                            "Value": str(text_bucket),
+                        },
+                        {
+                            "Name": "ModelArchitecture",
+                            "Value": model_architecture,
+                        },
+                    ],
+                }
+            ],
+        )
+        print("put response", response)
+        if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+            raise ValueError(f"put request failed: {response=}")
+        logger.debug(
+            f"Recorded inference metric: {duration_ms}ms (text_length: {text_length}, bucket: {text_bucket}, model: {model_architecture}) to namespace: {namespace}"
+        )
+
+    except Exception as exc:
+        logger.warning(f"Failed to record inference metrics: {exc}", exc_info=True)
+
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
@@ -620,9 +752,15 @@ async def run_classifier_inference_on_document(
 
     doc_labels: list[LabelledPassage] = []
     for text, block_id in document_passages(document):
+        start_time = time.time()
+
         labelled_passages = text_block_inference(
             classifier=classifier, block_id=block_id, text=text
         )
+
+        duration = timedelta(seconds=time.time() - start_time)
+        record_inference_metric(config, duration, len(text), classifier)
+
         doc_labels.append(labelled_passages)
 
     return SingleDocumentInferenceResult(
