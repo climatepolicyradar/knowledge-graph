@@ -263,6 +263,38 @@ async def mock_async_bucket(
         )
 
 
+@pytest_asyncio.fixture
+async def get_mock_async_indexing_bucket_and_async_indexing_s3_client(
+    mock_aws_creds, mock_s3_async_client, test_config
+) -> AsyncGenerator[tuple[str, S3Client], None]:
+    await mock_s3_async_client.create_bucket(
+        Bucket=test_config.cache_bucket,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield test_config.cache_bucket, mock_s3_async_client
+
+    # Teardown
+    try:
+        response = await mock_s3_async_client.list_objects_v2(
+            Bucket=test_config.cache_bucket
+        )
+        for obj in response.get("Contents", []):
+            try:
+                await mock_s3_async_client.delete_object(
+                    Bucket=test_config.cache_bucket, Key=obj["Key"]
+                )
+            except Exception as e:
+                print(
+                    f"Warning: Failed to delete object {obj['Key']} during teardown: {e}"
+                )
+
+        await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
+    except Exception as e:
+        print(
+            f"Warning: Failed to clean up bucket {test_config.cache_bucket} during teardown: {e}"
+        )
+
+
 @pytest.fixture
 def mock_bucket(
     mock_aws_creds, mock_s3_client, test_config
@@ -571,21 +603,39 @@ def mock_bucket_inference_results(
     return inference_results
 
 
-@pytest.fixture
-def mock_bucket_labelled_passages_b(
-    mock_s3_client,
-    mock_bucket_b,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-) -> None:
-    """Puts the concept fixture files in the mock bucket."""
-    for file_name in labelled_passage_fixture_files:
-        data = load_fixture(file_name)
+@pytest_asyncio.fixture
+async def mock_async_bucket_inference_results(
+    get_mock_async_indexing_bucket_and_async_indexing_s3_client,
+    s3_prefix_inference_results: str,
+    aggregate_inference_results_document_stems: list[DocumentStem],
+) -> dict[str, dict[str, Any]]:
+    """A version of the inference results bucket with more files"""
+
+    mock_bucket, mock_s3_client = (
+        get_mock_async_indexing_bucket_and_async_indexing_s3_client
+    )
+
+    fixture_root = FIXTURE_DIR / "inference_results"
+    fixture_files = [
+        fixture_root / f"{document_stem}.json"
+        for document_stem in aggregate_inference_results_document_stems
+    ]
+
+    inference_results = {}
+    for file_path in fixture_files:
+        with open(file_path) as f:
+            data = f.read()
         body = BytesIO(data.encode("utf-8"))
-        key = os.path.join(s3_prefix_labelled_passages, file_name)
-        mock_s3_client.put_object(
-            Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
+
+        key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
+        inference_results[key] = json.loads(data)
+        print(f"trying to add object: {key} to bucket {mock_bucket}")
+        await mock_s3_client.put_object(
+            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
+        print(f"successfully added object: {key} to bucket {mock_bucket}")
+
+    return inference_results
 
 
 @pytest_asyncio.fixture
