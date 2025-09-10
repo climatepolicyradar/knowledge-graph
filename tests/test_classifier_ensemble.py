@@ -1,0 +1,99 @@
+import pytest
+from hypothesis import given
+
+from src.classifier.ensemble import VotingClassifier
+from src.classifier.keyword import KeywordClassifier
+from src.classifier.stemmed_keyword import StemmedKeywordClassifier
+from src.concept import Concept
+from src.identifiers import ClassifierID, WikibaseID
+from tests.common_strategies import concept_strategy
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_voting_classifier_rejects_classifiers_with_different_concepts():
+    """Test that VotingClassifier raises error when classifiers have different concepts."""
+    concept1 = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test1")
+    concept2 = Concept(wikibase_id=WikibaseID("Q2"), preferred_label="test2")
+
+    classifier1 = KeywordClassifier(concept1)
+    classifier2 = KeywordClassifier(concept2)
+
+    with pytest.raises(ValueError):
+        VotingClassifier(concept1, [classifier1, classifier2])
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_voting_classifier_rejects_nonunique_lists_of_classifiers():
+    """Test that VotingClassifier raises error when classifiers don't have unique IDs."""
+    concept1 = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test1")
+
+    classifier1 = KeywordClassifier(concept1)
+    classifier2 = KeywordClassifier(concept1)
+
+    with pytest.raises(ValueError):
+        VotingClassifier(concept1, [classifier1, classifier2])
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_voting_classifier_combines_predictions_with_probabilities():
+    """Test that VotingClassifier combines overlapping predictions and assigns probabilities."""
+    concept = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test")
+    text = "This is a test sentence with test words."
+
+    classifier1 = KeywordClassifier(concept)
+    classifier2 = StemmedKeywordClassifier(concept)
+
+    voting_classifier = VotingClassifier(concept, [classifier1, classifier2])
+    spans = voting_classifier.predict(text)
+
+    assert len(spans) == 2
+
+    for span in spans:
+        assert span.prediction_probability is not None
+        assert 0 <= span.prediction_probability <= 1
+        assert span.labellers == [str(voting_classifier)]
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_voting_classifier_assigns_correct_probabilities():
+    """Test that probabilities are calculated as proportion of classifiers that predicted."""
+    concept = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test")
+    text = "test"
+
+    classifiers = [
+        KeywordClassifier(concept),
+        StemmedKeywordClassifier(concept),
+    ]
+
+    voting_classifier = VotingClassifier(concept, classifiers)
+    spans = voting_classifier.predict(text)
+
+    assert len(spans) == 1
+    assert spans[0].prediction_probability == 1.0
+
+
+@pytest.mark.xdist_group(name="classifier")
+@given(concept=concept_strategy())
+def test_whether_voting_classifier_id_is_deterministic(concept: Concept):
+    """Test that VotingClassifier generates deterministic IDs."""
+    classifier1 = KeywordClassifier(concept)
+    classifier2 = StemmedKeywordClassifier(concept)
+
+    voting_classifier1 = VotingClassifier(concept, [classifier1, classifier2])
+    voting_classifier2 = VotingClassifier(concept, [classifier1, classifier2])
+
+    assert voting_classifier1.id == voting_classifier2.id
+    assert isinstance(voting_classifier1.id, ClassifierID)
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_voting_classifier_handles_no_predictions():
+    """Test that VotingClassifier returns empty list when no classifiers predict anything."""
+    concept = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="nonexistent")
+    text = "This text contains no matches."
+
+    classifier = KeywordClassifier(concept)
+    voting_classifier = VotingClassifier(concept, [classifier])
+
+    spans = voting_classifier.predict(text)
+    assert spans == []
