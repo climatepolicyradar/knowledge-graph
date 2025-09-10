@@ -71,7 +71,6 @@ PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE: int = (
     PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES.value()
 )
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
-CONTAINER = os.environ.get("IMAGE")
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 FilterResult = NamedTuple(
@@ -879,7 +878,7 @@ async def _inference_batch_of_documents(
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
-    container=CONTAINER,
+    container=os.environ.get("IMAGE"),
     threads_per_worker=-1,
 )
 async def _inference_batch_of_documents_gpu_task(
@@ -888,13 +887,15 @@ async def _inference_batch_of_documents_gpu_task(
     classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     logger = get_run_logger()
-    logger.info(f"DEBUG: Inside GPU task, CONTAINER={CONTAINER}")
+    container_image = os.environ.get("IMAGE")
+    logger.info(f"DEBUG: Inside GPU task, CONTAINER={container_image}")
     logger.info(f"DEBUG: Processing batch of {len(batch)} documents")
     return await _inference_batch_of_documents(
         batch,
         config_json,
         classifier_spec_json,
     )
+
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_gpu(
@@ -903,7 +904,8 @@ async def inference_batch_of_documents_gpu(
     classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
     logger = get_run_logger()
-    logger.info(f"DEBUG: CONTAINER={CONTAINER}")
+    container_image = os.environ.get("IMAGE")
+    logger.info(f"DEBUG: CONTAINER={container_image}")
     future = _inference_batch_of_documents_gpu_task.submit(
         batch,
         config_json,
