@@ -121,6 +121,7 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
                 span = Span(
                     text=text,
                     concept_id=self.concept.wikibase_id,
+                    prediction_probability=prediction["score"],
                     start_index=0,
                     end_index=len(text),
                     labellers=[str(self)],
