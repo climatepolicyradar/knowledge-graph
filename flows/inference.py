@@ -893,7 +893,6 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
@@ -905,11 +904,13 @@ async def inference_batch_of_documents_cpu(
     # [1]: https://docs.coiled.io/user_guide/functions.html#vm-lifecycle
     threads_per_worker=-1,
 )
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
+    print(CONTAINER)
     return await _inference_batch_of_documents(
         batch,
         config_json,

@@ -31,10 +31,15 @@ def determine_container_uri() -> str:
         version = importlib.metadata.version(repository)
         docker_image = f"{registry}/{repository}:{version}"
 
-    if not docker_image_regex(docker_image):
+    if not docker_image or not docker_image_regex(docker_image):
         raise TypeError(f"invalid uri: {docker_image=}")
 
     return docker_image
+
+
+def test_determine_container_uri():
+    pass    
+    # determine_container_uri()
 
 
 # Version 1 classifier spec, to be cleaned up and replaced
