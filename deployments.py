@@ -80,11 +80,8 @@ def create_deployment(
     extra_tags: list[str] = [],
     env_parameters: dict[AwsEnv, JsonDict] = {},
     custom_env_variables: dict[str, str] = {},
-    accept=False,
 ) -> None:
     """Create a deployment for the specified flow"""
-    if not accept:
-        return
     aws_env = AwsEnv(os.environ["AWS_ENV"])
     version = importlib.metadata.version(PROJECT_NAME)
     flow_name = flow.name
@@ -166,7 +163,6 @@ create_deployment(
     extra_tags=["type:sub"],
     gpu=True,
     flow_variables={},
-    accept=True,
 )
 
 # Aggregate inference results
