@@ -220,3 +220,9 @@ classifier_metadata_entire_env aws_env +OPTS="":
     uv run python -m scripts.classifier_metadata update-entire-env \
         --aws-env {{aws_env}} \
         {{OPTS}}
+
+
+just-local-deploy-sandbox:
+    echo 'aws login?'
+    docker build --progress=plain -t 073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0 .
+    just ecr-login

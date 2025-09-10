@@ -38,7 +38,7 @@ def determine_container_uri() -> str:
 
 
 def test_determine_container_uri():
-    pass    
+    pass
     # determine_container_uri()
 
 
