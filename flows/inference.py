@@ -32,6 +32,7 @@ from flows.classifier_specs.spec_interface import (
 )
 from flows.config import Config
 from flows.utils import (
+    DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
     DocumentStem,
     Fault,
@@ -893,6 +894,7 @@ async def inference_batch_of_documents_cpu(
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
+    vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
     container=determine_container_uri(),
     # > Number of threads to run concurrent tasks in for each VM. -1 can
