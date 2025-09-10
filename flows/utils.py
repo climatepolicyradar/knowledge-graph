@@ -67,14 +67,6 @@ DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjec
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
 
 
-DEFAULT_GPU_VM_TYPES: list[str] = [
-    "g5.xlarge",
-    "g6.xlarge",
-    "g5.2xlarge",
-    "g6.2xlarge",
-]
-
-
 def file_name_from_path(path: str) -> str:
     """Get the file name from a path without the path or extension"""
     return os.path.splitext(os.path.basename(path))[0]

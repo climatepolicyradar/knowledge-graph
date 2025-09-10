@@ -32,7 +32,6 @@ from flows.classifier_specs.spec_interface import (
 )
 from flows.config import Config
 from flows.utils import (
-    DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
     DocumentStem,
     Fault,
@@ -873,10 +872,8 @@ async def _inference_batch_of_documents(
     return batch_inference_result
 
 
-# Add this new task function right before line 896 (before the existing GPU flow function)
 @task
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
-    vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
     container=os.environ.get("IMAGE"),
     threads_per_worker=-1,
