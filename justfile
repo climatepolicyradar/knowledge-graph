@@ -222,7 +222,9 @@ classifier_metadata_entire_env aws_env +OPTS="":
         {{OPTS}}
 
 
-just-local-deploy-sandbox:
+local-deploy-to-staging:
     echo 'aws login?'
     docker build --progress=plain -t 073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0 .
     just ecr-login
+    docker push 073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0
+    just deploy-deployments

@@ -757,18 +757,6 @@ def generate_asset_deps(
     )
 
 
-@task
-@coiled.function(  # pyright: ignore[reportUnknownMemberType]
-    vm_type=DEFAULT_GPU_VM_TYPES,
-    gpu=True,
-    container=CONTAINER,
-    # > Number of threads to run concurrent tasks in for each VM. -1 can
-    # > be used to run as many concurrent tasks as there are CPU cores.
-    # > Default is 1.
-    #
-    # [1]: https://docs.coiled.io/user_guide/functions.html#vm-lifecycle
-    threads_per_worker=-1,
-)
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -887,6 +875,29 @@ async def _inference_batch_of_documents(
     return batch_inference_result
 
 
+# Add this new task function right before line 896 (before the existing GPU flow function)
+@task
+@coiled.function(  # pyright: ignore[reportUnknownMemberType]
+    vm_type=DEFAULT_GPU_VM_TYPES,
+    gpu=True,
+    container=CONTAINER,
+    threads_per_worker=-1,
+)
+async def _inference_batch_of_documents_gpu_task(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_spec_json: JsonDict,
+) -> BatchInferenceResult | Fault:
+    logger = get_run_logger()
+    logger.info(f"DEBUG: Inside GPU task, CONTAINER={CONTAINER}")
+    logger.info(f"DEBUG: Processing batch of {len(batch)} documents")
+    return await _inference_batch_of_documents(
+        batch,
+        config_json,
+        classifier_spec_json,
+    )
+
+
 # The default serialiser is cloudpickle, which can handle basic Pydantic types.
 # Should the complexity of the returned objects become more complex
 # then a custom serialiser should be considered.
@@ -911,12 +922,14 @@ async def inference_batch_of_documents_gpu(
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
 ) -> BatchInferenceResult | Fault:
-    print(CONTAINER)
-    return await _inference_batch_of_documents(
+    logger = get_run_logger()
+    logger.info(f"DEBUG: CONTAINER={CONTAINER}")
+    future = _inference_batch_of_documents_gpu_task.submit(
         batch,
         config_json,
         classifier_spec_json,
     )
+    return await future.result()
 
 
 def filter_document_batch(
