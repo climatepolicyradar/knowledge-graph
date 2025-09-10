@@ -72,6 +72,7 @@ PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE: int = (
     PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES.value()
 )
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
+CONTAINER = determine_container_uri()
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 FilterResult = NamedTuple(
@@ -896,7 +897,7 @@ async def inference_batch_of_documents_cpu(
 @coiled.function(  # pyright: ignore[reportUnknownMemberType]
     vm_type=DEFAULT_GPU_VM_TYPES,
     gpu=True,
-    container=determine_container_uri(),
+    container=CONTAINER,
     # > Number of threads to run concurrent tasks in for each VM. -1 can
     # > be used to run as many concurrent tasks as there are CPU cores.
     # > Default is 1.
