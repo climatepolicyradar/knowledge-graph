@@ -21,22 +21,6 @@ PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"
 
 
-def determine_container_uri() -> str:
-    """Determine the image uri for this repo"""
-    if os.environ.get("image"):
-        docker_image = os.environ["image"]
-    else:
-        registry = os.environ.get("DOCKER_REGISTRY")
-        repository = PROJECT_NAME
-        version = importlib.metadata.version(repository)
-        docker_image = f"{registry}/{repository}:{version}"
-
-    if not docker_image or not docker_image_regex(docker_image):
-        raise TypeError(f"invalid uri: {docker_image=}")
-
-    return docker_image
-
-
 def test_determine_container_uri():
     pass
     # determine_container_uri()

@@ -49,7 +49,6 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from src.classifier import Classifier, ModelPath
-from src.cloud import determine_container_uri
 from src.labelled_passage import LabelledPassage
 from src.span import Span
 
@@ -72,7 +71,7 @@ PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE: int = (
     PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES.value()
 )
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
-CONTAINER = determine_container_uri()
+CONTAINER = os.environ.get("IMAGE")
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 FilterResult = NamedTuple(
@@ -897,25 +896,6 @@ async def _inference_batch_of_documents_gpu_task(
         classifier_spec_json,
     )
 
-
-# The default serialiser is cloudpickle, which can handle basic Pydantic types.
-# Should the complexity of the returned objects become more complex
-# then a custom serialiser should be considered.
-
-
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
-async def inference_batch_of_documents_cpu(
-    batch: list[DocumentStem],
-    config_json: JsonDict,
-    classifier_spec_json: JsonDict,
-) -> BatchInferenceResult | Fault:
-    return await _inference_batch_of_documents(
-        batch,
-        config_json,
-        classifier_spec_json,
-    )
-
-
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
@@ -930,6 +910,19 @@ async def inference_batch_of_documents_gpu(
         classifier_spec_json,
     )
     return await future.result()
+
+
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+async def inference_batch_of_documents_cpu(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_spec_json: JsonDict,
+) -> BatchInferenceResult | Fault:
+    return await _inference_batch_of_documents(
+        batch,
+        config_json,
+        classifier_spec_json,
+    )
 
 
 def filter_document_batch(
