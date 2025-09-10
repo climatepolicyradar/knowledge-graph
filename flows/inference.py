@@ -897,7 +897,7 @@ async def inference_batch_of_documents_gpu(
         config_json,
         classifier_spec_json,
     )
-    return await future.result()
+    return future.result()
 
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
