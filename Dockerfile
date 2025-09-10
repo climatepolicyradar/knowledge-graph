@@ -34,7 +34,18 @@ COPY src ./src/
 COPY flows ./flows/
 COPY scripts ./scripts/
 
+# Set AWS_ENV for Docker build (will be overridden at runtime)
+
+# Install the project and ensure all packages are properly registered
+ENV AWS_ENV=sandbox
+RUN uv pip install --system -e . && \
+    python -c "import sys; print('Python path:', sys.path)" && \
+    python -c "import flows.inference; print('flows.inference import: SUCCESS')" && \
+    python -c "import src.cloud; print('src.cloud import: SUCCESS')"
+
+# Set PYTHONPATH to ensure modules can be found
 ENV PYTHONPATH="/app:/app/src:/app/flows:/app/scripts"
+
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
 # Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and
