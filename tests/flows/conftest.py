@@ -572,7 +572,7 @@ def mock_bucket_labelled_passages_b(
 @pytest_asyncio.fixture
 async def mock_bucket_labelled_passages_large(
     mock_async_bucket,
-) -> Generator[tuple[list[str], str, S3Client], None, None]:
+) -> AsyncGenerator[tuple[list[str], str, S3Client], None]:
     """A version of the labelled_passage bucket with more files"""
     bucket, mock_s3_async_client = mock_async_bucket
     fixture_root = FIXTURE_DIR / "labelled_passages"
