@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional, Sequence
 
@@ -5,6 +6,8 @@ from src.classifier.classifier import Classifier, ProbabilityCapableClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.span import Span, group_overlapping_spans
+
+logger = logging.getLogger(__name__)
 
 
 class EnsembleClassifier(Classifier):
@@ -71,6 +74,28 @@ class VotingClassifier(EnsembleClassifier, ProbabilityCapableClassifier):
     This can be useful to estimate probabilities for predictions for classifier types
     which can't inherently output probabilities.
     """
+
+    def __init__(self, concept: Concept, classifiers: Sequence[Classifier]):
+        super().__init__(concept, classifiers)
+        self._warn_for_any_probability_capable_classifiers(classifiers)
+
+    def _warn_for_any_probability_capable_classifiers(
+        self, classifiers: Sequence[Classifier]
+    ) -> None:
+        """
+        Log a warning if any classifiers output probabilities.
+
+        This is because this classifier ignores and overwrites these probabilities.
+        TODO: we could combine probabilities in future (see https://scikit-learn.org/stable/modules/ensemble.html#weighted-average-probabilities-soft-voting)
+        but this might get a bit messy with the way we currently combine spans.
+        """
+
+        if probability_capable_classifiers := [
+            clf for clf in classifiers if isinstance(clf, ProbabilityCapableClassifier)
+        ]:
+            logger.warning(
+                f"VotingClassifier was instantiated with classifiers which output probabilities. Any probabilities output by these classifiers will be ignored.\nRelevant classifiers: {probability_capable_classifiers}"
+            )
 
     def _combine_predictions_span_level(
         self,

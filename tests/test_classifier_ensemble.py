@@ -1,6 +1,9 @@
+import builtins
+
 import pytest
 from hypothesis import given
 
+from src.classifier.classifier import ProbabilityCapableClassifier
 from src.classifier.ensemble import VotingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
@@ -138,3 +141,33 @@ def test_whether_voting_classifier_outputs_correct_probabilities_at_passage_leve
     )
     assert len(expected_contentious_prediction) == 1
     assert expected_contentious_prediction[0].prediction_probability == 2 / 3
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_warn_for_any_probability_capable_classifiers(caplog):
+    """Test that _warn_for_any_probability_capable_classifiers logs warning for probability-capable classifiers."""
+    concept = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test")
+
+    regular_classifier = KeywordClassifier(concept)
+    voting_classifier = VotingClassifier(concept, [regular_classifier])
+
+    voting_classifier._warn_for_any_probability_capable_classifiers(
+        [regular_classifier]
+    )
+    assert len(caplog.records) == 0
+    caplog.clear()
+
+    # Patch isinstance to identify all classifiers as probability-capable
+    with pytest.MonkeyPatch().context() as m:
+        original_isinstance = builtins.isinstance
+
+        def mock_isinstance(obj, cls):
+            if cls is ProbabilityCapableClassifier:
+                return True
+            return original_isinstance(obj, cls)
+
+        m.setattr("builtins.isinstance", mock_isinstance)
+        voting_classifier = VotingClassifier(concept, [regular_classifier])
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
