@@ -3,10 +3,10 @@ from abc import abstractmethod
 from datetime import datetime
 from typing import Callable
 
-from src.classifier.classifier import Classifier, GPUBoundClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID, WikibaseID
-from src.span import Span
+from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.span import Span
 
 # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
 # https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4
@@ -66,24 +66,13 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
         )
 
     @abstractmethod
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
+    def _get_score(self, prediction: list[dict]) -> float:
         """
-        Check whether the prediction meets the conditions for this target type.
+        Get a score for the target type.
 
-        This is necessary, because we're not only using a multilabel model for prediction here,
-        but the 3 output labels are also in a hierarchical relationship with in the concept
-        store. This means, that each of the "target", "net-zero" and "emission reduction" classifiers
-        have custom logic implemented here to transform the model predictions into a binary on the concept.
-
-        Args:
-            prediction: The prediction returned by the model -- a list of dictionaries for each of
-                the 3 labels, containing the keys "label" and "score"
-            threshold: The threshold above which a prediction is considered positive.
-
-        Returns:
-            bool: Whether the prediction meets the conditions for this target type.
+        :param list[dict] prediction: the prediction returned by the model -- a list of
+            dictionaries for each of the 3 labels, containing the keys "label" and "score"
+        :return PredictionProbability: a score for the target type
         """
 
     def predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
@@ -101,19 +90,23 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
 
         results = []
         for text, prediction in zip(texts, predictions):
-            text_results = []
-            if self._check_prediction_conditions(prediction, threshold):
-                span = Span(
-                    text=text,
-                    start_index=0,
-                    end_index=len(text),
-                    concept_id=self.concept.wikibase_id,
-                    labellers=[str(self)],
-                    timestamps=[datetime.now()],
-                )
-                text_results.append(span)
+            prediction_probability = self._get_score(prediction)
+            if prediction_probability >= threshold:
+                spans = [
+                    Span(
+                        text=text,
+                        start_index=0,
+                        end_index=len(text),
+                        prediction_probability=prediction_probability,
+                        concept_id=self.concept.wikibase_id,
+                        labellers=[str(self)],
+                        timestamps=[datetime.now()],
+                    )
+                ]
+            else:
+                spans = []
 
-            results.append(text_results)
+            results.append(spans)
         return results
 
     def fit(self, **kwargs) -> "BaseTargetClassifier":
@@ -130,11 +123,14 @@ class TargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1651")]
 
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
-        """Check whether the prediction meets the conditions for a generic target."""
-        return any(label["score"] >= threshold for label in prediction)
+    def _get_score(self, prediction: list[dict]) -> float:
+        """
+        Get the score for an emissions reduction target.
+
+        This is the maximum score any target type.
+        """
+
+        return max(label["score"] for label in prediction)
 
 
 class EmissionsReductionTargetClassifier(BaseTargetClassifier):
@@ -142,13 +138,17 @@ class EmissionsReductionTargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1652")]
 
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
-        """Check whether the prediction meets the conditions for a reduction target."""
-        return any(
-            label["score"] >= threshold and label["label"] in {"NZT", "Reduction"}
+    def _get_score(self, prediction: list[dict]) -> float:
+        """
+        Get the score for an emissions reduction target.
+
+        This is the maximum score of types net-zero and reduction.
+        """
+
+        return max(
+            label["score"]
             for label in prediction
+            if label["label"] in {"NZT", "Reduction"}
         )
 
 
@@ -157,11 +157,11 @@ class NetZeroTargetClassifier(BaseTargetClassifier):
 
     allowed_concept_ids = [WikibaseID("Q1653")]
 
-    def _check_prediction_conditions(
-        self, prediction: list[dict], threshold: float = DEFAULT_THRESHOLD
-    ) -> bool:
-        """Check whether the prediction meets the conditions for a net-zero target."""
-        return any(
-            label["score"] >= threshold and label["label"] in {"NZT"}
-            for label in prediction
-        )
+    def _get_score(self, prediction: list[dict]) -> float:
+        """
+        Get the score for a net zero target.
+
+        This is the score for the class "NZT".
+        """
+
+        return [label["score"] for label in prediction if label["label"] in {"NZT"}][0]

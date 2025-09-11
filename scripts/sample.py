@@ -13,13 +13,13 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from src.classifier import EmbeddingClassifier, KeywordClassifier
-from src.classifier.classifier import Classifier
-from src.config import equity_columns, processed_data_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.sampling import create_balanced_sample, split_evenly
-from src.wikibase import WikibaseSession
+from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
+from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.config import equity_columns, processed_data_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.sampling import create_balanced_sample, split_evenly
+from knowledge_graph.wikibase import WikibaseSession
 
 app = typer.Typer()
 console = Console()

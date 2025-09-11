@@ -10,8 +10,8 @@ from flows.wikibase_to_s3 import (
     upload_to_s3,
     wikibase_to_s3,
 )
-from src.concept import Concept
-from src.identifiers import WikibaseID
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
 
 
 def helper_get_concept_from_s3(

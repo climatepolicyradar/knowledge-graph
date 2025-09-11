@@ -9,16 +9,16 @@ import httpx
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from typing_extensions import Self
 
-from src.classifier.classifier import Classifier, ZeroShotClassifier
-from src.classifier.uncertainty_mixin import UncertaintyMixin
-from src.concept import Concept
-from src.identifiers import ClassifierID
-from src.span import Span, SpanXMLConceptFormattingError
+from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.span import Span, SpanXMLConceptFormattingError
 
 logger = logging.getLogger(__name__)
 
@@ -339,7 +339,7 @@ class LocalLLMClassifier(BaseLLMClassifier):
         )
 
     def _create_agent(self) -> Agent:
-        ollama_model = OpenAIModel(
+        ollama_model = OpenAIChatModel(
             model_name=self.model_name,
             provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
         )

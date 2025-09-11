@@ -4,10 +4,10 @@ import nltk  # type: ignore
 from nltk.stem import PorterStemmer  # type: ignore
 from nltk.tokenize import word_tokenize  # type: ignore
 
-from src.classifier.keyword import KeywordClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID
-from src.span import Span
+from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.span import Span
 
 
 class StemmedKeywordClassifier(KeywordClassifier):

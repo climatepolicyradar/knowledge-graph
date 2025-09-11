@@ -2,8 +2,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.classifier.uncertainty_mixin import Uncertainty, UncertaintyMixin
-from src.span import Span
+from knowledge_graph.classifier.uncertainty_mixin import Uncertainty, UncertaintyMixin
+from knowledge_graph.span import Span
 from tests.common_strategies import text_strategy
 
 

@@ -4,8 +4,8 @@ from typing import Counter
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
-from src.identifiers import WikibaseID
-from src.wikibase import WikibaseSession
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.wikibase import WikibaseSession
 from static_sites.labelling_librarian.checks import (
     DatasetLevelIssue,
     LabellingIssue,

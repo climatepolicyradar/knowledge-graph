@@ -1,6 +1,6 @@
 import pytest
 
-from src.version import Version
+from knowledge_graph.version import Version
 
 
 @pytest.mark.parametrize("input_version", ["v1", "v10", "v0"])

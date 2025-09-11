@@ -13,7 +13,7 @@ import yaml
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
 
-from src.identifiers import WikibaseID
+from knowledge_graph.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"

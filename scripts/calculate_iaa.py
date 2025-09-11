@@ -7,11 +7,14 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from src.concept import Concept
-from src.config import concept_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.metrics import count_passage_level_metrics, count_span_level_metrics
+from knowledge_graph.concept import Concept
+from knowledge_graph.config import concept_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.metrics import (
+    count_passage_level_metrics,
+    count_span_level_metrics,
+)
 
 console = Console()
 app = typer.Typer()

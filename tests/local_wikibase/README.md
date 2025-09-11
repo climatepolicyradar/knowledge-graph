@@ -34,7 +34,7 @@ When up, you can access the various frontends at:
 
 ```python
 
-from src.wikibase import WikibaseSession
+from knowledge_graph.wikibase import WikibaseSession
 
 wikibase = WikibaseSession(
     username="admin",

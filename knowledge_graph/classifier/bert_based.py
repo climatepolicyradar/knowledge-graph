@@ -15,12 +15,12 @@ from transformers.trainer import Trainer  # type: ignore[import-untyped]
 from transformers.training_args import TrainingArguments  # type: ignore[import-untyped]
 from typing_extensions import Self
 
-from src.classifier.classifier import Classifier, GPUBoundClassifier
-from src.classifier.uncertainty_mixin import UncertaintyMixin
-from src.concept import Concept
-from src.identifiers import ClassifierID
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 
 class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
@@ -121,6 +121,7 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
                 span = Span(
                     text=text,
                     concept_id=self.concept.wikibase_id,
+                    prediction_probability=prediction["score"],
                     start_index=0,
                     end_index=len(text),
                     labellers=[str(self)],

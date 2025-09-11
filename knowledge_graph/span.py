@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
 
-from src.identifiers import Identifier, WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,13 @@ class Span(BaseModel):
     )
     end_index: int = Field(
         ..., gt=0, description="The end index of the span within the text"
+    )
+
+    prediction_probability: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Probability of prediction made by a model",
     )
     concept_id: Optional[WikibaseID] = Field(
         None,

@@ -27,7 +27,7 @@ from flows.inference import (
 from flows.update_neo4j import update_neo4j
 from flows.utils import JsonDict
 from flows.wikibase_to_s3 import wikibase_to_s3
-from src.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
+from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
