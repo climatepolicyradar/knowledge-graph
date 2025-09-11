@@ -1,0 +1,30 @@
+schema classifiers_profile {
+    document classifiers_profile {
+        field id type string {
+            indexing: attribute | summary
+        }
+        # Must be unique.
+        field name type string {
+            indexing: attribute | summary | index
+        }
+
+        struct mapping {
+            field concept_id type string {}
+            field concept_wikibase_id type string {}
+            field classifier_id   type string {}
+        }
+
+        # If a concept has no entry in the profile, that means it's
+        # not to be displayed, if it does actually exist in our
+        # systems.
+        field mappings type array<mapping> {
+            indexing: summary
+        }
+    }
+
+    document-summary search_summary {
+        summary id {}
+        summary name {}
+        summary mappings {}
+    }
+}

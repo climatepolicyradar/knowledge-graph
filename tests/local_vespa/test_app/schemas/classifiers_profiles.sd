@@ -1,0 +1,10 @@
+schema classifiers_profiles {
+    # This will be a singleton document, like search weights
+    document classifiers_profiles {
+       field mappings type map<string, string> {}
+    }
+
+    document-summary search_summary {
+        summary mappings {}
+    }
+}
