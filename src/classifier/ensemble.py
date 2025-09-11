@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Sequence
 
-from src.classifier.classifier import Classifier
+from src.classifier.classifier import Classifier, ProbabilityCapableClassifier
 from src.concept import Concept
 from src.identifiers import ClassifierID
 from src.span import Span, group_overlapping_spans
@@ -64,7 +64,7 @@ class EnsembleClassifier(Classifier):
         )
 
 
-class VotingClassifier(EnsembleClassifier):
+class VotingClassifier(EnsembleClassifier, ProbabilityCapableClassifier):
     """
     Uses voting strategies to combine predictions from several different classifiers.
 

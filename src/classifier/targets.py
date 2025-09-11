@@ -3,7 +3,11 @@ from abc import abstractmethod
 from datetime import datetime
 from typing import Callable
 
-from src.classifier.classifier import Classifier, GPUBoundClassifier
+from src.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    ProbabilityCapableClassifier,
+)
 from src.concept import Concept
 from src.identifiers import ClassifierID, WikibaseID
 from src.span import Span
@@ -13,7 +17,9 @@ from src.span import Span
 DEFAULT_THRESHOLD = 0.524
 
 
-class BaseTargetClassifier(Classifier, GPUBoundClassifier):
+class BaseTargetClassifier(
+    Classifier, GPUBoundClassifier, ProbabilityCapableClassifier
+):
     """Base class for target classifiers."""
 
     allowed_concept_ids = [
