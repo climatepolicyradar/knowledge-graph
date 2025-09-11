@@ -43,6 +43,7 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from neomodel import db
 from prefect import flow, get_run_logger
 
+from flows.utils import iterate_batch
 from src.config import processed_data_dir
 from src.neo4j import get_neo4j_session
 from src.wikibase import WikibaseSession
@@ -52,9 +53,9 @@ RELATIONSHIP_BATCH_SIZE = 1000
 DOCUMENT_BATCH_SIZE = 100
 
 
-def _setup_env_from_ssm(*, log_fn) -> None:
+def _setup_env_from_ssm() -> None:
     """
-    Ensure required secrets are available in the environment, sourcing from SSM when absent.
+    Source required secrets from SSM
 
     Expected SSM parameter names:
     - /Neo4j/ConnectionURI -> NEO4J_CONNECTION_URI
@@ -62,30 +63,31 @@ def _setup_env_from_ssm(*, log_fn) -> None:
     - /Wikibase/Cloud/ServiceAccount/Password -> WIKIBASE_PASSWORD
     - /Wikibase/Cloud/URL -> WIKIBASE_URL
     """
+    logger = get_run_logger()
 
-    def _set_if_missing(ssm_name: str, env_var: str) -> None:
-        if os.environ.get(env_var):
-            return
+    def _set_env_var_from_ssm(ssm_name: str, env_var: str) -> None:
         try:
-            if value := get_aws_ssm_param(ssm_name):
-                os.environ[env_var] = value
-                log_fn("Loaded %s from SSM (%s)", env_var, ssm_name)
+            value = get_aws_ssm_param(ssm_name)
+            os.environ[env_var] = value
+            logger.info("Loaded %s from SSM (%s)", env_var, ssm_name)
         except (
             botocore.exceptions.BotoCoreError,
             botocore.exceptions.ClientError,
             ValueError,
         ) as e:
             # Keep going; downstream code will fail fast if the secret is actually required
-            log_fn("Could not load %s from SSM %s: %s", env_var, ssm_name, e)
+            logger.warning("Could not load %s from SSM %s: %s", env_var, ssm_name, e)
 
-    _set_if_missing(ssm_name="/Neo4j/ConnectionURI", env_var="NEO4J_CONNECTION_URI")
-    _set_if_missing(
+    _set_env_var_from_ssm(
+        ssm_name="/Neo4j/ConnectionURI", env_var="NEO4J_CONNECTION_URI"
+    )
+    _set_env_var_from_ssm(
         ssm_name="/Wikibase/Cloud/ServiceAccount/Username", env_var="WIKIBASE_USERNAME"
     )
-    _set_if_missing(
+    _set_env_var_from_ssm(
         ssm_name="/Wikibase/Cloud/ServiceAccount/Password", env_var="WIKIBASE_PASSWORD"
     )
-    _set_if_missing(ssm_name="/Wikibase/Cloud/URL", env_var="WIKIBASE_URL")
+    _set_env_var_from_ssm(ssm_name="/Wikibase/Cloud/URL", env_var="WIKIBASE_URL")
 
 
 def process_in_batches(
@@ -93,19 +95,19 @@ def process_in_batches(
     batch_size: int,
     short_label_for_logging: str,
     process_fn,
-    *,
-    log_fn,
 ) -> None:
     """Run a side-effecting operation over a sequence in batches."""
+    logger = get_run_logger()
     if not items:
-        log_fn(f"{short_label_for_logging}: nothing to process")
+        logger.info(f"{short_label_for_logging}: nothing to process")
         return
-    total = len(items)
-    log_fn(f"{short_label_for_logging}: {total} items in batches of {batch_size}")
-    for i in range(0, total, batch_size):
-        batch = items[i : i + batch_size]
+
+    logger.info(
+        f"{short_label_for_logging}: {len(items)} items in batches of {batch_size}"
+    )
+    for batch in iterate_batch(data=items, batch_size=batch_size):
         process_fn(batch)
-    log_fn(f"{short_label_for_logging}: done ({total})")
+    logger.info(f"{short_label_for_logging}: done ({len(items)})")
 
 
 def get_existing_concept_ids_from_neo4j() -> set[str]:
@@ -117,7 +119,7 @@ def get_existing_concept_ids_from_neo4j() -> set[str]:
 
 
 def create_or_update_concept_nodes(
-    batch: Sequence[dict[str, Any]], *, dry_run: bool, log_fn
+    batch: Sequence[dict[str, Any]], *, dry_run: bool
 ) -> None:
     """Upsert ConceptNode nodes using `wikibase_id` as the stable key."""
     execute_cypher(
@@ -128,11 +130,10 @@ def create_or_update_concept_nodes(
         """,
         {"batch": list(batch)},
         dry_run=dry_run,
-        log_fn=log_fn,
     )
 
 
-def delete_concept_relationships(*, log_fn, dry_run: bool) -> None:
+def delete_concept_relationships(*, dry_run: bool) -> None:
     """
     Remove only concept-to-concept edges prior to rebuild.
 
@@ -142,14 +143,14 @@ def delete_concept_relationships(*, log_fn, dry_run: bool) -> None:
 
     Document-related nodes/edges are untouched.
     """
-    log_fn("Deleting existing concept-to-concept relationships...")
+    logger = get_run_logger()
+    logger.info("Deleting existing concept-to-concept relationships...")
 
     # Delete SUBCONCEPT_OF relationships
     execute_cypher(
         "MATCH ()-[r:SUBCONCEPT_OF]->() DELETE r",
         None,
         dry_run=dry_run,
-        log_fn=log_fn,
     )
 
     # Delete RELATED_TO relationships
@@ -157,21 +158,18 @@ def delete_concept_relationships(*, log_fn, dry_run: bool) -> None:
         "MATCH ()-[r:RELATED_TO]->() DELETE r",
         None,
         dry_run=dry_run,
-        log_fn=log_fn,
     )
-    log_fn("Deleted RELATED_TO and SUBCONCEPT_OF relationships")
+    logger.info("Deleted RELATED_TO and SUBCONCEPT_OF relationships")
 
 
 def create_relationships(
-    query: str, batch: Sequence[dict[str, str]], *, dry_run: bool, log_fn
+    query: str, batch: Sequence[dict[str, str]], *, dry_run: bool
 ) -> None:
     """Execute a parameterised `UNWIND` Cypher to create relationships."""
-    execute_cypher(query, {"batch": list(batch)}, dry_run=dry_run, log_fn=log_fn)
+    execute_cypher(query, {"batch": list(batch)}, dry_run=dry_run)
 
 
-def process_document_batch(
-    doc_paths_batch: Sequence[str], *, log_fn, dry_run: bool
-) -> None:
+def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> None:
     """
     Upsert document/passages and link passages to concepts for a batch of files.
 
@@ -190,6 +188,7 @@ def process_document_batch(
     - MERGE `(:DocumentNode)-[:HAS_PASSAGE]->(:PassageNode)` for each text block
     - MERGE `(:PassageNode)-[:MENTIONS]->(:ConceptNode)` for each concept mention
     """
+    logger = get_run_logger()
     all_documents: list[dict[str, str]] = []
     all_passages: list[dict[str, str]] = []
     all_doc_passage_rels: list[dict[str, str]] = []
@@ -220,11 +219,11 @@ def process_document_batch(
                             }
                         )
         except Exception as e:
-            log_fn(f"Error processing {doc_path}: {e}")
+            logger.error(f"Error processing {doc_path}: {e}")
             continue
 
     if all_documents:
-        log_fn(
+        logger.info(
             "Documents batch — docs: %s, passages: %s, concept mentions: %s",
             len(all_documents),
             len(all_passages),
@@ -238,7 +237,6 @@ def process_document_batch(
             """,
             {"docs": all_documents},
             dry_run=dry_run,
-            log_fn=log_fn,
         )
 
         if all_passages:
@@ -252,7 +250,6 @@ def process_document_batch(
                 """,
                 {"passages": unique_passages},
                 dry_run=dry_run,
-                log_fn=log_fn,
             )
 
         if all_doc_passage_rels:
@@ -265,7 +262,6 @@ def process_document_batch(
                 """,
                 {"rels": all_doc_passage_rels},
                 dry_run=dry_run,
-                log_fn=log_fn,
             )
 
         if all_passage_concept_rels:
@@ -280,14 +276,14 @@ def process_document_batch(
                     """,
                     {"rels": sub_batch},
                     dry_run=dry_run,
-                    log_fn=log_fn,
                 )
 
 
-def execute_cypher(query: str, params: dict | None, *, dry_run: bool, log_fn) -> None:
+def execute_cypher(query: str, params: dict | None, *, dry_run: bool) -> None:
     """Run a Cypher statement against Neo4j, or log it when in dry-run mode"""
+    logger = get_run_logger()
     if dry_run:
-        log_fn("DRY RUN — skipping Cypher execution: %s", " ".join(query.split()))
+        logger.info("DRY RUN — skipping Cypher execution: %s", " ".join(query.split()))
         return
     if params is None:
         db.cypher_query(query)
@@ -295,29 +291,28 @@ def execute_cypher(query: str, params: dict | None, *, dry_run: bool, log_fn) ->
         db.cypher_query(query, params)
 
 
-@flow(log_prints=True)
+@flow()
 async def update_concepts(*, dry_run: bool = False) -> None:
     """Synchronise Neo4j with the concept graph from Wikibase"""
 
     logger = get_run_logger()
-    log = logger.info
-    log("Starting concept graph update")
+    logger.info("Starting concept graph update")
 
     # Ensure required secrets are set before establishing connections to Neo4j and Wikibase
-    _setup_env_from_ssm(log_fn=log)
+    _setup_env_from_ssm()
 
     # Connect to Neo4j
     get_neo4j_session(clear=False)
-    log("Connected to Neo4j")
+    logger.info("Connected to Neo4j")
 
     existing_concept_ids = get_existing_concept_ids_from_neo4j()
-    log("Existing concepts in Neo4j: %s", len(existing_concept_ids))
+    logger.info("Existing concepts in Neo4j: %s", len(existing_concept_ids))
 
     # Connect to Wikibase and fetch all concepts
     async with WikibaseSession() as wikibase:
-        log("Connecting to Wikibase...")
+        logger.info("Connecting to Wikibase...")
         all_concepts = await wikibase.get_concepts_async()
-        log("Fetched concepts from Wikibase: %s", len(all_concepts))
+        logger.info("Fetched concepts from Wikibase: %s", len(all_concepts))
 
         concepts_data = [
             {"wikibase_id": str(c.wikibase_id), "preferred_label": c.preferred_label}
@@ -329,10 +324,7 @@ async def update_concepts(*, dry_run: bool = False) -> None:
             concepts_data,
             CONCEPT_BATCH_SIZE,
             "Upserting concept nodes...",
-            lambda batch: create_or_update_concept_nodes(
-                batch, dry_run=dry_run, log_fn=log
-            ),
-            log_fn=log,
+            lambda batch: create_or_update_concept_nodes(batch, dry_run=dry_run),
         )
 
         new_concepts = len(
@@ -341,7 +333,7 @@ async def update_concepts(*, dry_run: bool = False) -> None:
         updated_concepts = len(
             [c for c in all_concepts if str(c.wikibase_id) in existing_concept_ids]
         )
-        log(
+        logger.info(
             "Concept nodes upserted — new: %s, updated: %s",
             new_concepts,
             updated_concepts,
@@ -351,7 +343,7 @@ async def update_concepts(*, dry_run: bool = False) -> None:
         all_known_ids = {str(c.wikibase_id) for c in all_concepts}
         newly_discovered_ids: set[str] = set()
 
-        log("Scanning for referenced-but-missing concept nodes...")
+        logger.info("Scanning for referenced-but-missing concept nodes...")
         for concept in all_concepts:
             for related_id in concept.related_concepts:
                 if str(related_id) not in all_known_ids:
@@ -374,15 +366,12 @@ async def update_concepts(*, dry_run: bool = False) -> None:
                 missing_concepts,
                 CONCEPT_BATCH_SIZE,
                 f"Creating missing concept nodes ({len(missing_concepts)})",
-                lambda batch: create_or_update_concept_nodes(
-                    batch, dry_run=dry_run, log_fn=log
-                ),
-                log_fn=log,
+                lambda batch: create_or_update_concept_nodes(batch, dry_run=dry_run),
             )
-            log("Missing concept nodes created: %s", len(missing_concepts))
+            logger.info("Missing concept nodes created: %s", len(missing_concepts))
 
         # Delete all existing concept-to-concept relationships (only)
-        delete_concept_relationships(log_fn=log, dry_run=dry_run)
+        delete_concept_relationships(dry_run=dry_run)
 
         # Prepare all relationships
         all_relationships: dict[str, list[dict[str, str]]] = {
@@ -390,7 +379,7 @@ async def update_concepts(*, dry_run: bool = False) -> None:
             "subconcept_of": [],
             "has_subconcept": [],
         }
-        log("Preparing concept-to-concept relationships...")
+        logger.info("Preparing concept-to-concept relationships...")
         for concept in all_concepts:
             for related_id in concept.related_concepts:
                 all_relationships["related_to"].append(
@@ -440,61 +429,60 @@ async def update_concepts(*, dry_run: bool = False) -> None:
                     RELATIONSHIP_BATCH_SIZE,
                     f"Creating {rel_type} relationships ({len(relationships)})",
                     lambda batch: create_relationships(
-                        rel_queries[rel_type], batch, dry_run=dry_run, log_fn=log
+                        rel_queries[rel_type], batch, dry_run=dry_run
                     ),
-                    log_fn=log,
                 )
-                log("Relationships created — %s: %s", rel_type, len(relationships))
+                logger.info(
+                    "Relationships created — %s: %s", rel_type, len(relationships)
+                )
 
         # Summary
         total_relationships = sum(len(rels) for rels in all_relationships.values())
-        log("Concept graph update complete")
-        log(
+        logger.info("Concept graph update complete")
+        logger.info(
             "Summary — new concepts: %s, updated concepts: %s, missing nodes created: %s, total relationships: %s",
             new_concepts,
             updated_concepts,
             len(newly_discovered_ids),
             total_relationships,
         )
-        log(
+        logger.info(
             "Breakdown — RELATED_TO: %s, SUBCONCEPT_OF: %s",
             len(all_relationships["related_to"]),
             len(all_relationships["subconcept_of"])
             + len(all_relationships["has_subconcept"]),
         )
 
-        log("Concept update finished")
+        logger.info("Concept update finished")
 
 
-@flow(log_prints=True)
+@flow()
 async def update_documents(*, dry_run: bool = False) -> None:
     """Refresh document/passages and MENTIONS relationships using local data."""
     logger = get_run_logger()
-    log = logger.info
-    log("Starting document link refresh from local aggregated results...")
+    logger.info("Starting document link refresh from local aggregated results...")
     document_paths = [
         str(p) for p in (processed_data_dir / "aggregated").glob("*.json")
     ]
-    log("Found %s aggregated documents", len(document_paths))
+    logger.info("Found %s aggregated documents", len(document_paths))
     for i in range(0, len(document_paths), DOCUMENT_BATCH_SIZE):
         batch_paths = document_paths[i : i + DOCUMENT_BATCH_SIZE]
-        process_document_batch(batch_paths, log_fn=log, dry_run=dry_run)
-    log("Document link refresh finished")
+        process_document_batch(batch_paths, dry_run=dry_run)
+    logger.info("Document link refresh finished")
 
 
-@flow(log_prints=True)
+@flow()
 async def update_neo4j(
     refresh_documents: bool = False,
     dry_run: bool = False,
 ) -> None:
     """Refresh the Neo4j database with the latest version of the knowledge graph."""
     logger = get_run_logger()
-    log = logger.info
     # Ensure required secrets are set before establishing connections to Neo4j and Wikibase
-    _setup_env_from_ssm(log_fn=log)
+    _setup_env_from_ssm()
     # Connect to Neo4j here, for both subflows
     get_neo4j_session(clear=False)
-    log("Connected to Neo4j")
+    logger.info("Connected to Neo4j")
 
     # Always refresh the concept graph
     await update_concepts(dry_run=dry_run)
