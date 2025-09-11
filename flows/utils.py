@@ -23,6 +23,7 @@ from typing import (
 )
 from uuid import UUID
 
+import aioboto3
 import boto3
 from botocore.exceptions import ClientError
 from prefect.artifacts import (
@@ -353,18 +354,23 @@ def get_file_stems_for_document_id(
     return stems
 
 
-def collect_unique_file_stems_under_prefix(
+async def collect_unique_file_stems_under_prefix(
     bucket_name: str,
     prefix: str,
+    bucket_region: str,
 ) -> list[DocumentStem]:
     """Collect all unique file stems under a prefix."""
-    s3 = boto3.client("s3")
-    paginator = s3.get_paginator("list_objects_v2")
-    file_stems = []
-    for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-        for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
+
+    session = aioboto3.Session(region_name=bucket_region)
+    async with session.client("s3") as s3:
+        paginator = s3.get_paginator("list_objects_v2")
+        file_stems = []
+        print(f"session s3 client: {s3}")
+        async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                print(f"Files found: {obj}")
+                if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                    file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return list(set(file_stems))
 
 

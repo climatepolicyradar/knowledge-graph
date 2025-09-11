@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
+import aioboto3
 import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
@@ -72,6 +73,19 @@ def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
     response = s3.get_object(Bucket=bucket, Key=key)
     body = response["Body"].read().decode("utf-8")
     return json.loads(body)
+
+
+async def load_async_json_data_from_s3(
+    bucket: str, key: str, config: Config
+) -> dict[str, Any]:
+    """Load JSON data from an S3 URI asynchronously"""
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3client:
+        response = await s3client.get_object(Bucket=bucket, Key=key)
+        response_body = response["Body"]
+        read_body = await response_body.read()
+        decoded_body = read_body.decode("utf-8")
+        return json.loads(decoded_body)
 
 
 async def _update_vespa_passage_concepts(
@@ -222,8 +236,10 @@ async def index_document_passages(
 
     print(f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}")
 
-    raw_data = load_json_data_from_s3(
-        bucket=aggregated_results_s3_uri.bucket, key=aggregated_results_s3_uri.key
+    raw_data = await load_async_json_data_from_s3(
+        bucket=aggregated_results_s3_uri.bucket,
+        key=aggregated_results_s3_uri.key,
+        config=config,
     )
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
@@ -724,13 +740,14 @@ async def index(
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
-        collected_document_stems: list[DocumentStem] = (
-            collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket_str,
-                prefix=os.path.join(
-                    config.aggregate_inference_results_prefix, run_output_identifier
-                ),
-            )
+        collected_document_stems: list[
+            DocumentStem
+        ] = await collect_unique_file_stems_under_prefix(
+            bucket_name=config.cache_bucket_str,
+            prefix=os.path.join(
+                config.aggregate_inference_results_prefix, run_output_identifier
+            ),
+            bucket_region=config.bucket_region,
         )
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")

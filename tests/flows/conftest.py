@@ -521,15 +521,14 @@ def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
     return f"inference_results/{mock_run_output_identifier_str}/"
 
 
-@pytest.fixture
-def mock_bucket_inference_results(
-    mock_s3_client,
-    mock_bucket,
+@pytest_asyncio.fixture
+async def mock_bucket_inference_results(
+    mock_async_bucket_and_client,
     s3_prefix_inference_results: str,
     aggregate_inference_results_document_stems: list[DocumentStem],
 ) -> dict[str, dict[str, Any]]:
     """A version of the inference results bucket with more files"""
-
+    mock_bucket, mock_s3_client = mock_async_bucket_and_client
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = [
         fixture_root / f"{document_stem}.json"
@@ -545,7 +544,7 @@ def mock_bucket_inference_results(
         key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
         inference_results[key] = json.loads(data)
 
-        mock_s3_client.put_object(
+        await mock_s3_client.put_object(
             Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
         )
 
@@ -592,6 +591,27 @@ async def mock_bucket_labelled_passages_large(
         )
 
     yield (keys, bucket, mock_s3_async_client)
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=bucket, Delete={"Objects": delete_keys}
+            )
+
+
+@pytest_asyncio.fixture
+async def mock_async_bucket_and_client(
+    mock_async_bucket,
+) -> AsyncGenerator[tuple[str, S3Client], None]:
+    """Create mock async bucket"""
+    bucket, mock_s3_async_client = mock_async_bucket
+
+    yield (bucket, mock_s3_async_client)
 
     # Teardown for objects
     paginator = mock_s3_async_client.get_paginator("list_objects_v2")
