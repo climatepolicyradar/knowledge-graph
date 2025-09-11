@@ -375,7 +375,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     )
 
 
-def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
+async def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     """Collect the stems for the given specs."""
     document_stems = []
     specs = load_classifier_specs(config.aws_env)
@@ -386,9 +386,10 @@ def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
             spec.classifier_id,
         )
         document_stems.extend(
-            collect_unique_file_stems_under_prefix(
+            await collect_unique_file_stems_under_prefix(
                 bucket_name=config.cache_bucket_str,
                 prefix=prefix,
+                bucket_region=config.bucket_region,
             )
         )
 
@@ -500,7 +501,7 @@ async def aggregate(
             "no document stems provided, collecting all available from S3 under prefix: "
             + f"{config.aggregate_document_source_prefix}"
         )
-        document_stems = collect_stems_by_specs(config)
+        document_stems = await collect_stems_by_specs(config)
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = load_classifier_specs(config.aws_env)
