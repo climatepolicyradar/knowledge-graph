@@ -182,7 +182,7 @@ async def test_collect_file_stems_under_prefix(
 ) -> None:
     """Test that we can collect file stems under a prefix."""
     bucket, mock_s3_async_client = mock_async_bucket_and_client
-    print("Running test")
+
     s3_paths = [
         "test_prefix/Q1/v1/CCLW.executive.1.1.json",
         "test_prefix/Q1/v1/CCLW.executive.2.2.json",
@@ -196,11 +196,9 @@ async def test_collect_file_stems_under_prefix(
         "test_prefix/Q3/v2/CCLW.executive.3.3.json",
         "some_other_prefix/Q1/v1/CCLW.some_other_doc.4.4.json",
     ]
-    print("Creating session")
     for s3_path in s3_paths:
-        print(f"Put {s3_path} in {bucket}")
         await mock_s3_async_client.put_object(Bucket=bucket, Key=s3_path)
-    print("Running utils collect function")
+
     file_stems = await collect_unique_file_stems_under_prefix(
         bucket_name=bucket,
         prefix="test_prefix",
