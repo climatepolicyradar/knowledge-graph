@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 
 from src.classifier.classifier import ProbabilityCapableClassifier
-from src.classifier.ensemble import VotingClassifier
+from src.classifier.ensemble import IncompatibleSubClassifiersError, VotingClassifier
 from src.classifier.keyword import KeywordClassifier
 from src.classifier.stemmed_keyword import StemmedKeywordClassifier
 from src.concept import Concept
@@ -21,7 +21,7 @@ def test_whether_voting_classifier_rejects_classifiers_with_different_concepts()
     classifier1 = KeywordClassifier(concept1)
     classifier2 = KeywordClassifier(concept2)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(IncompatibleSubClassifiersError):
         VotingClassifier(concept1, [classifier1, classifier2])
 
 
@@ -33,7 +33,7 @@ def test_whether_voting_classifier_rejects_nonunique_lists_of_classifiers():
     classifier1 = KeywordClassifier(concept1)
     classifier2 = KeywordClassifier(concept1)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(IncompatibleSubClassifiersError):
         VotingClassifier(concept1, [classifier1, classifier2])
 
 

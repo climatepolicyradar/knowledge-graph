@@ -10,6 +10,14 @@ from src.span import Span, group_overlapping_spans
 logger = logging.getLogger(__name__)
 
 
+class IncompatibleSubClassifiersError(Exception):
+    """Exception raised when classifiers don't share the same concept."""
+
+    def __init__(self, reason: str):
+        self.message = f"Classifiers attempting to be ensembled are incompatible.\nReason: {reason}"
+        super().__init__(self.message)
+
+
 class EnsembleClassifier(Classifier):
     """
     Classifier which combines the predictions of several classifiers.
@@ -39,13 +47,15 @@ class EnsembleClassifier(Classifier):
         if invalid_concepts := {
             clf.concept for clf in classifiers if clf.concept != concept
         }:
-            raise ValueError(
+            raise IncompatibleSubClassifiersError(
                 f"All classifiers used in the ensemble must share the concept {concept}. Other concepts found: {invalid_concepts}"
             )
 
         unique_classifier_ids = {str(clf) for clf in classifiers}
         if len(unique_classifier_ids) < len(classifiers):
-            raise ValueError("All classifiers in the ensemble must be unique")
+            raise IncompatibleSubClassifiersError(
+                reason="All classifiers in the ensemble must be unique."
+            )
 
     def _predict(self, text: str) -> list[list[Span]]:
         """
