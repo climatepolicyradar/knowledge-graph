@@ -10,12 +10,12 @@ import httpx
 import pandas as pd
 import pytest
 
-from src.classifier.classifier import Classifier
-from src.concept import Concept
-from src.config import get_git_root
-from src.identifiers import ClassifierID
-from src.span import Span
-from src.wikibase import WikibaseSession
+from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.config import get_git_root
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.span import Span
+from knowledge_graph.wikibase import WikibaseSession
 
 
 @pytest.fixture(scope="function")

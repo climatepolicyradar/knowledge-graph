@@ -2,7 +2,7 @@ from typing import Literal, Protocol
 
 from more_itertools import pairwise
 
-from src.span import Span, UnitInterval, jaccard_similarity_for_span_lists
+from knowledge_graph.span import Span, UnitInterval, jaccard_similarity_for_span_lists
 
 
 class UncertaintyCapableClassifier(Protocol):

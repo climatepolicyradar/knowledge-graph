@@ -40,8 +40,8 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
 )
-from src.cloud import AwsEnv
-from src.labelled_passage import LabelledPassage
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.labelled_passage import LabelledPassage
 
 T = TypeVar("T")
 R = TypeVar("R")

@@ -3,10 +3,10 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from src.classifier.classifier import Classifier
-from src.classifier.keyword import KeywordClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 
 
 class ModelPath(BaseModel):
@@ -30,7 +30,7 @@ class ModelPath(BaseModel):
 
 def get_local_classifier_path(target_path: ModelPath, version: str) -> Path:
     """Returns a path for a classifier file."""
-    from src.config import classifier_dir, model_artifact_name
+    from knowledge_graph.config import classifier_dir, model_artifact_name
 
     return classifier_dir / target_path / version / model_artifact_name
 

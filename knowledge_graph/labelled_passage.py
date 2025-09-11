@@ -4,8 +4,8 @@ import re
 from argilla import Argilla, Record, Response
 from pydantic import BaseModel, Field, model_validator
 
-from src.identifiers import Identifier
-from src.span import Span, merge_overlapping_spans
+from knowledge_graph.identifiers import Identifier
+from knowledge_graph.span import Span, merge_overlapping_spans
 
 
 class LabelledPassage(BaseModel):

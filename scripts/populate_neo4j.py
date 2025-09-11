@@ -12,9 +12,9 @@ from rich.progress import (
     track,
 )
 
-from src.config import processed_data_dir
-from src.neo4j import get_neo4j_session
-from src.wikibase import WikibaseSession
+from knowledge_graph.config import processed_data_dir
+from knowledge_graph.neo4j import get_neo4j_session
+from knowledge_graph.wikibase import WikibaseSession
 
 console = Console()
 
