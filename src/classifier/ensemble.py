@@ -1,4 +1,5 @@
-from typing import Sequence
+from datetime import datetime
+from typing import Optional, Sequence
 
 from src.classifier.classifier import Classifier
 from src.concept import Concept
@@ -71,23 +72,12 @@ class VotingClassifier(EnsembleClassifier):
     which can't inherently output probabilities.
     """
 
-    def predict(
+    def _combine_predictions_span_level(
         self,
-        text: str,
+        predictions_per_classifier: list[list[Span]],
     ) -> list[Span]:
-        """
-        Predict whether the text contains an instance of a concept, with probability.
+        """Combine predictions from multiple classifiers, outputting span labels."""
 
-        Probabilities are calculated by the proportion of models that have predicted
-        each span. Prediction probabilities output by individual classifiers are ignored.
-
-        TODO: do we want to handle passage-level probabilities?
-
-        :param str text: The text to predict on
-        :returns list[Span]: List of predictions
-        """
-
-        predictions_per_classifier = self._predict(text)
         flattened_predictions = [
             prediction
             for predictions in predictions_per_classifier
@@ -106,7 +96,69 @@ class VotingClassifier(EnsembleClassifier):
                 self.classifiers
             )
             combined_span.labellers = [str(self)]
+            combined_span.timestamps = [datetime.now()]
 
             predicted_spans.append(combined_span)
 
         return predicted_spans
+
+    def _combine_predictions_passage_level(
+        self,
+        text: str,
+        predictions_per_classifier: list[list[Span]],
+    ) -> Optional[Span]:
+        """
+        Combine predictions from multiple classifiers at passage-level.
+
+        Outputs a single span for the entire text, or None if none of the classifiers
+        predicted any spans in the text.
+        """
+
+        if all(not predictions for predictions in predictions_per_classifier):
+            return None
+
+        binary_predictions = [
+            1 if predictions else 0 for predictions in predictions_per_classifier
+        ]
+        positive_ratio = sum(binary_predictions) / len(binary_predictions)
+
+        return Span(
+            text=text,
+            start_index=0,
+            end_index=len(text),
+            prediction_probability=positive_ratio,
+            concept_id=self.concept.wikibase_id,
+            labellers=[str(self)],
+            timestamps=[datetime.now()],
+        )
+
+    def predict(
+        self,
+        text: str,
+        passage_level: bool = False,
+    ) -> list[Span]:
+        """
+        Predict whether the text contains an instance of a concept, with probability.
+
+        Probabilities are calculated by the proportion of models that have predicted
+        each result. Prediction probabilities output by individual classifiers are ignored.
+
+        :param str text: The text to predict on
+        :param bool passage_level: Whether to combine predictions into passage level.
+            Otherwise will combine predictions at the span level.
+        :returns list[Span]: List of predictions
+        """
+
+        predictions_per_classifier = self._predict(text)
+
+        if passage_level:
+            prediction = self._combine_predictions_passage_level(
+                text, predictions_per_classifier
+            )
+            predictions = [prediction] if prediction is not None else []
+        else:
+            predictions = self._combine_predictions_span_level(
+                predictions_per_classifier
+            )
+
+        return predictions

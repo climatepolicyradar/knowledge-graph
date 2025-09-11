@@ -55,21 +55,31 @@ def test_whether_voting_classifier_combines_predictions_with_probabilities():
 
 
 @pytest.mark.xdist_group(name="classifier")
-def test_whether_voting_classifier_assigns_correct_probabilities():
+def test_whether_voting_classifier_assigns_correct_probabilities(
+    zero_returns_classifier,
+):
     """Test that probabilities are calculated as proportion of classifiers that predicted."""
     concept = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test")
     text = "test"
 
-    classifiers = [
+    classifiers_unanimous = [
         KeywordClassifier(concept),
         StemmedKeywordClassifier(concept),
     ]
 
-    voting_classifier = VotingClassifier(concept, classifiers)
-    spans = voting_classifier.predict(text)
+    classifiers_contentious = classifiers_unanimous + [zero_returns_classifier(concept)]
 
-    assert len(spans) == 1
-    assert spans[0].prediction_probability == 1.0
+    voting_classifier = VotingClassifier(concept, classifiers_unanimous)
+    voting_classifier_2 = VotingClassifier(concept, classifiers_contentious)
+
+    unanimous_spans = voting_classifier.predict(text)
+
+    assert len(unanimous_spans) == 1
+    assert unanimous_spans[0].prediction_probability == 1.0
+
+    contentious_spans = voting_classifier_2.predict(text)
+    assert len(contentious_spans) == 1
+    assert contentious_spans[0].prediction_probability == 2 / 3
 
 
 @pytest.mark.xdist_group(name="classifier")
@@ -97,3 +107,34 @@ def test_whether_voting_classifier_handles_no_predictions():
 
     spans = voting_classifier.predict(text)
     assert spans == []
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_voting_classifier_outputs_correct_probabilities_at_passage_level(
+    zero_returns_classifier,
+):
+    """Test that VotingClassifier outputs correct probabilities at passage level."""
+    concept = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test")
+    text = "test test sample text"
+
+    classifier1 = KeywordClassifier(concept)
+    classifier2 = StemmedKeywordClassifier(concept)
+    classifier3 = zero_returns_classifier(concept)
+
+    voting_classifier1 = VotingClassifier(
+        concept, classifiers=[classifier1, classifier2]
+    )
+    voting_classifier2 = VotingClassifier(
+        concept, classifiers=[classifier1, classifier2, classifier3]
+    )
+
+    expected_unanimous_prediction = voting_classifier1.predict(text, passage_level=True)
+
+    assert len(expected_unanimous_prediction) == 1
+    assert expected_unanimous_prediction[0].prediction_probability == 1
+
+    expected_contentious_prediction = voting_classifier2.predict(
+        text, passage_level=True
+    )
+    assert len(expected_contentious_prediction) == 1
+    assert expected_contentious_prediction[0].prediction_probability == 2 / 3
