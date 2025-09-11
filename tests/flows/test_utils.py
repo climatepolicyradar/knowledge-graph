@@ -177,30 +177,11 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
 
 
 @pytest.mark.asyncio
-async def test_collect_file_stems_under_prefix(
-    test_config, mock_async_bucket_and_client
-) -> None:
+async def test_collect_file_stems_under_prefix(test_config, mock_bucket_stem) -> None:
     """Test that we can collect file stems under a prefix."""
-    bucket, mock_s3_async_client = mock_async_bucket_and_client
-
-    s3_paths = [
-        "test_prefix/Q1/v1/CCLW.executive.1.1.json",
-        "test_prefix/Q1/v1/CCLW.executive.2.2.json",
-        "test_prefix/Q1/v1/CCLW.executive.2.2_translated_en.json",
-        "test_prefix/Q1/v2/CCLW.executive.1.1.json",
-        "test_prefix/Q1/v2/CCLW.executive.2.2.json",
-        "test_prefix/Q2/v1/CCLW.executive.1.1.json",
-        "test_prefix/Q2/v1/CCLW.executive.2.2.json",
-        "test_prefix/Q3/v2/CCLW.executive.1.1.json",
-        "test_prefix/Q3/v2/CCLW.executive.2.2.json",
-        "test_prefix/Q3/v2/CCLW.executive.3.3.json",
-        "some_other_prefix/Q1/v1/CCLW.some_other_doc.4.4.json",
-    ]
-    for s3_path in s3_paths:
-        await mock_s3_async_client.put_object(Bucket=bucket, Key=s3_path)
 
     file_stems = await collect_unique_file_stems_under_prefix(
-        bucket_name=bucket,
+        bucket_name=test_config.cache_bucket,
         prefix="test_prefix",
         bucket_region=test_config.bucket_region,
     )
