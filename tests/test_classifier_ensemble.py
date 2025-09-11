@@ -3,12 +3,15 @@ import builtins
 import pytest
 from hypothesis import given
 
-from src.classifier.classifier import ProbabilityCapableClassifier
-from src.classifier.ensemble import IncompatibleSubClassifiersError, VotingClassifier
-from src.classifier.keyword import KeywordClassifier
-from src.classifier.stemmed_keyword import StemmedKeywordClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.classifier.classifier import ProbabilityCapableClassifier
+from knowledge_graph.classifier.ensemble import (
+    IncompatibleSubClassifiersError,
+    VotingClassifier,
+)
+from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from tests.common_strategies import concept_strategy
 
 
