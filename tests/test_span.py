@@ -2,7 +2,14 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.span import Span, group_overlapping_spans, jaccard_similarity
+from src.identifiers import WikibaseID
+from src.span import (
+    Span,
+    SpanXMLConceptFormattingError,
+    find_span_text_in_input_text,
+    group_overlapping_spans,
+    jaccard_similarity,
+)
 from tests.common_strategies import (
     labeller_strategy,
     span_strategy,
@@ -271,3 +278,138 @@ def test_whether_span_intersection_returns_span_of_correct_size(text, spans):
     assert merged_span.end_index == min(span_a.end_index, span_b.end_index)
     assert merged_span.text == text
     assert merged_span.labellers == list(set(span_a.labellers + span_b.labellers))
+
+
+@pytest.mark.parametrize(
+    "input_text,span_start,expected_span_text",
+    [
+        (
+            "2) Retirement benefits.",
+            0,
+            "Retirement benefits",
+        ),  # LLM has removed the "2) "
+        (
+            "According to FAO (2018d), safeguards cover a variety of substantive areas",
+            27,
+            "safeguards",
+        ),  # LLM added a space before 'safeguards'
+        (
+            "updating the National Energy Policy; coordinating and managing the Ministry_#39;s relations on climate change",
+            13,
+            "National Energy Policy",
+        ),  # LLM removed the'#39;'
+    ],
+)
+def test_find_span_text_in_input_text(input_text, span_start, expected_span_text):
+    span_start_and_end = find_span_text_in_input_text(
+        input_text=input_text,
+        span_start_index=span_start,
+        span_text=expected_span_text,
+    )
+    assert span_start_and_end is not None
+
+    span_start_idx, span_end_idx = span_start_and_end
+    assert input_text[span_start_idx:span_end_idx] == expected_span_text
+
+
+@pytest.mark.parametrize(
+    "span_xml,expected_start_and_end_idxs",
+    [
+        (
+            "i'm a little model and i <concept>love</concept> annotating concepts",
+            [(25, 29)],
+        ),
+        (
+            "The investments projects will include a <concept>gender</concept> strategy with actions to increase <concept>women_s</concept> mobility,",
+            [(40, 46), (81, 88)],
+        ),
+    ],
+)
+def test_span_from_xml_no_alignment(
+    span_xml: str,
+    expected_start_and_end_idxs: list[tuple[int, int]],
+):
+    concept_id = WikibaseID("Q1234")
+    labellers = ["Arminel", "Siôn"]
+    text_without_tags = span_xml.replace("<concept>", "").replace("</concept>", "")
+
+    found_spans = Span.from_xml(
+        span_xml,
+        concept_id=concept_id,
+        labellers=labellers,
+    )
+
+    expected_starts = [a for a, _ in expected_start_and_end_idxs]
+    expected_ends = [b for _, b in expected_start_and_end_idxs]
+
+    assert [span.start_index for span in found_spans] == expected_starts
+    assert [span.end_index for span in found_spans] == expected_ends
+    assert [span.text for span in found_spans] == [text_without_tags] * len(found_spans)
+
+
+@pytest.mark.parametrize(
+    "span_xml,expected_start_and_end_idxs,input_text",
+    [
+        # Simulates an LLM removing a leading bullet point
+        (
+            "i'm a little model and i <concept>love</concept> annotating concepts",
+            [(29, 33)],
+            "43. i'm a little model and i love annotating concepts",
+        ),
+        # Simulates an LLM removing an extra space between words
+        (
+            "The investments projects will include a <concept>gender</concept> strategy with actions to increase <concept>women_s</concept> mobility,",
+            [(40, 46), (82, 89)],
+            "The investments projects will include a gender strategy with actions to increase  women_s mobility,",
+        ),
+        # Trickier example where small variants of the same span exist multiple times but only one is tagged as a concept.
+        # The text in the span itself has also been modified by the LLM (extra space removed)
+        (
+            "According to FAO (2018d), safeguards cover a variety of substantive areas in environmental and social management. While there is no agreement at an international level regarding what should be covered under a <concept>safeguard system</concept>, most safeguard systems",
+            [(214, 231)],
+            "According to FAO (2018d),  safeguards  cover a variety of substantive areas in  environmental and social management . While there is no agreement at an international level regarding what should be covered under a  safeguard  system, most  safeguard  systems",
+        ),
+    ],
+)
+def test_span_from_xml_with_alignment(
+    span_xml: str,
+    expected_start_and_end_idxs: list[tuple[int, int]],
+    input_text: str,
+):
+    concept_id = WikibaseID("Q1234")
+    labellers = ["Arminel", "Siôn"]
+    text_without_tags = input_text
+
+    found_spans = Span.from_xml(
+        span_xml,
+        concept_id=concept_id,
+        labellers=labellers,
+        input_text=input_text,
+    )
+
+    expected_starts = [a for a, _ in expected_start_and_end_idxs]
+    expected_ends = [b for _, b in expected_start_and_end_idxs]
+
+    assert [span.start_index for span in found_spans] == expected_starts
+    assert [span.end_index for span in found_spans] == expected_ends
+    assert [span.text for span in found_spans] == [text_without_tags] * len(found_spans)
+
+
+@pytest.mark.parametrize(
+    ("xml,is_valid"),
+    [
+        (
+            "<concept>the Government plans to scale up programs to match up people with job opportunities and provide the unemployed people with <concept>unemployment insurance</concept>. <concept>Unemployment benefits</concept>, <concept>job training</concept> opportunities and <concept>job counselling</concept> will also be provided to strengthen the <concept>social safety net</concept>. Through such support, <concept>vulnerable populations</concept> to be affected by the transition will receive <concept>support</concept> for their livelihood and <concept>retraining opportunities</concept>.</concept>",
+            False,
+        ),
+        ("<concept>hello!</concept> :)", True),
+    ],
+)
+def test_span_from_xml_invalid_concept_annotation(xml: str, is_valid: bool):
+    if is_valid:
+        spans = Span.from_xml(xml, concept_id=WikibaseID("Q123"), labellers=["me"])
+        assert spans
+
+    else:
+        with pytest.raises(SpanXMLConceptFormattingError):
+            _ = Span.from_xml(xml, concept_id=WikibaseID("Q123"), labellers=["me"])

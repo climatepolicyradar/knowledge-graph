@@ -122,7 +122,7 @@ All the sub pipelines (inference, aggregation & indexing) can be run individuall
 
 1. Inference
 
-This consists of running our classifiers over our documents to generate `LabelledPassages` which themselves contain `Spans` as listed above in this `README.md`. 
+This consists of running our classifiers over our documents to generate `LabelledPassages` which themselves contain `Spans` as listed above in this `README.md`.
 
 2. Aggregation
 
@@ -151,13 +151,11 @@ The name of the knowledge graph deployments all have the same prefix of `kg-` an
 
 Flows can be run via in [/flows](./flows)
 
-
 ## Scripts
 
 All helper scripts are located in [/scripts directory](./scripts) directory
 
-
-## Classifier training, promotion and deployment 
+## Classifier training, promotion and deployment
 
 These are performed via helper scripts run by the [justfile](./justfile) commands. These are currently executed manually on a local laptop are are not part of a CI/CD pipeline.
 
@@ -165,13 +163,8 @@ They can be found in the [/scripts directory](./scripts) directory
 
 Here is the implementation of Classifier [training](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/train.py), [promotion](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/promote.py) and [deployment](https://github.com/climatepolicyradar/knowledge-graph/blob/main/scripts/deploy.py) processes.
 
+## Static sites
 
-
-## Documentation generation
-
-Can be found in [/docs](./docs)
-
-## Static sites 
 We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
 
 * [Vibe Checker](./static_sites/vibe_check/)
