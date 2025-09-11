@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import random
 from abc import ABC, abstractmethod
 from typing import Annotated, Optional
@@ -8,7 +9,7 @@ import httpx
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from typing_extensions import Self
@@ -17,8 +18,9 @@ from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
-from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.span import Span
+from knowledge_graph.span import Span, SpanXMLConceptFormattingError
+
+logger = logging.getLogger(__name__)
 
 
 class LLMResponse(BaseModel):
@@ -30,17 +32,6 @@ class LLMResponse(BaseModel):
     reasoning: str = Field(
         description="Justification for why the concept was identified in the supplied text, or why not"
     )
-
-
-class LLMOutputMismatchError(Exception):
-    """Raised when the LLM output text does not match the input text after removing tags."""
-
-    def __init__(self, input_text: str, output_text: str):
-        super().__init__(
-            "Output text does not match input text.\n"
-            f"Input:\t{input_text}\n"
-            f"Output:\t{output_text}\n"
-        )
 
 
 DEFAULT_SYSTEM_PROMPT = """
@@ -146,18 +137,6 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
         values_string = json.dumps(values)[1:-1].replace(": ", "=")
         return f'{self.name}("{self.concept.preferred_label}", {values_string})'
 
-    def _validate_response(self, input_text: str, response: str) -> None:
-        """Make sure the output text does not augment the input text in unexpected ways"""
-        input_sanitised = LabelledPassage.sanitise(input_text)
-        output_sanitised = LabelledPassage.sanitise(
-            # remove the concept tags from the LLM output
-            response.replace("<concept>", "").replace("</concept>", "")
-        )
-        if input_sanitised != output_sanitised:
-            raise LLMOutputMismatchError(
-                input_text=input_sanitised, output_text=output_sanitised
-            )
-
     def get_variant_sub_classifier(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
         return type(self)(
@@ -185,14 +164,17 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
             text,
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
         )
-        self._validate_response(
-            input_text=text, response=response.output.marked_up_text
-        )
-        return Span.from_xml(
-            xml=response.output.marked_up_text,
-            concept_id=self.concept.wikibase_id,
-            labellers=[str(self)],
-        )
+
+        try:
+            return Span.from_xml(
+                xml=response.output.marked_up_text,
+                concept_id=self.concept.wikibase_id,
+                labellers=[str(self)],
+                input_text=text,
+            )
+        except SpanXMLConceptFormattingError as e:
+            logger.warning(f"Prediction failed: {e}")
+            return []
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
@@ -228,16 +210,12 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
 
         for text, response in zip(texts, responses):
             try:
-                self._validate_response(
-                    input_text=text, response=response.output.marked_up_text
-                )
-
                 spans = Span.from_xml(
                     xml=response.output.marked_up_text,
                     concept_id=self.concept.wikibase_id,
                     labellers=[str(self)],
+                    input_text=text,
                 )
-
                 batch_spans.append(
                     [
                         # Use the original input texts for the output spans
@@ -245,9 +223,10 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
                         for span in spans
                     ]
                 )
-            except LLMOutputMismatchError:
-                batch_spans.append([])
 
+            except SpanXMLConceptFormattingError as e:
+                logger.warning(f"Prediction failed: {e}")
+                batch_spans.append([])
         return batch_spans
 
 
@@ -297,9 +276,9 @@ class LLMClassifier(BaseLLMClassifier):
 
     def _create_agent(self) -> Agent:  # type: ignore[type-arg]
         return Agent(  # type: ignore[return-value]
-            self.model_name,
+            model=self.model_name,
             system_prompt=self.system_prompt,
-            result_type=LLMResponse,
+            output_type=LLMResponse,
         )
 
 
@@ -360,12 +339,12 @@ class LocalLLMClassifier(BaseLLMClassifier):
         )
 
     def _create_agent(self) -> Agent:
-        ollama_model = OpenAIModel(
+        ollama_model = OpenAIChatModel(
             model_name=self.model_name,
             provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
         )
         return Agent(  # type: ignore[return-value]
             model=ollama_model,
             system_prompt=self.system_prompt,
-            result_type=LLMResponse,
+            output_type=LLMResponse,
         )

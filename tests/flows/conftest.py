@@ -241,26 +241,7 @@ async def mock_async_bucket(
     )
     yield test_config.cache_bucket, mock_s3_async_client
 
-    # Teardown
-    try:
-        response = await mock_s3_async_client.list_objects_v2(
-            Bucket=test_config.cache_bucket
-        )
-        for obj in response.get("Contents", []):
-            try:
-                await mock_s3_async_client.delete_object(
-                    Bucket=test_config.cache_bucket, Key=obj["Key"]
-                )
-            except Exception as e:
-                print(
-                    f"Warning: Failed to delete object {obj['Key']} during teardown: {e}"
-                )
-
-        await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
-    except Exception as e:
-        print(
-            f"Warning: Failed to clean up bucket {test_config.cache_bucket} during teardown: {e}"
-        )
+    await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
 
 
 @pytest.fixture
@@ -591,7 +572,7 @@ def mock_bucket_labelled_passages_b(
 @pytest_asyncio.fixture
 async def mock_bucket_labelled_passages_large(
     mock_async_bucket,
-) -> tuple[list[str], str, S3Client]:
+) -> AsyncGenerator[tuple[list[str], str, S3Client], None]:
     """A version of the labelled_passage bucket with more files"""
     bucket, mock_s3_async_client = mock_async_bucket
     fixture_root = FIXTURE_DIR / "labelled_passages"
@@ -610,7 +591,18 @@ async def mock_bucket_labelled_passages_large(
             Bucket=bucket, Key=key, Body=body, ContentType="application/json"
         )
 
-    return (keys, bucket, mock_s3_async_client)
+    yield (keys, bucket, mock_s3_async_client)
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=bucket, Delete={"Objects": delete_keys}
+            )
 
 
 @pytest.fixture
