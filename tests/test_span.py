@@ -2,8 +2,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.identifiers import WikibaseID
-from src.span import (
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.span import (
     Span,
     SpanXMLConceptFormattingError,
     find_span_text_in_input_text,

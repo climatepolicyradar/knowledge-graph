@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from src.concept import WikibaseID
+from knowledge_graph.concept import WikibaseID
 
 
 class ConceptNotFoundError(Exception):

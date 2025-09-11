@@ -41,11 +41,11 @@ from flows.utils import (
     DocumentObjectUri,
     S3Uri,
 )
-from src.concept import Concept
-from src.exceptions import QueryError
-from src.identifiers import FamilyDocumentID, WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.span import Span
+from knowledge_graph.concept import Concept
+from knowledge_graph.exceptions import QueryError
+from knowledge_graph.identifiers import FamilyDocumentID, WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 # Provide a generic type to use instead of `Any` for types hints
 T = TypeVar("T")

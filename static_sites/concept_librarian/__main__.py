@@ -9,8 +9,8 @@ import typer
 from rich.highlighter import NullHighlighter
 from rich.logging import RichHandler
 
-from src.concept import Concept, WikibaseID
-from src.wikibase import WikibaseSession
+from knowledge_graph.concept import Concept, WikibaseID
+from knowledge_graph.wikibase import WikibaseSession
 from static_sites.concept_librarian.checks import (
     ConceptIssue,
     ConceptStoreIssue,

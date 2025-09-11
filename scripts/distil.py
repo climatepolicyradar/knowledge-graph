@@ -17,18 +17,18 @@ from rich.progress import (
 from rich.table import Table
 from sklearn.model_selection import train_test_split  # type: ignore[import-untyped]
 
-from src.classifier import (
+from knowledge_graph.classifier import (
     BertBasedClassifier,
     Classifier,
     EmbeddingClassifier,
     LLMClassifier,
 )
-from src.config import classifier_dir, equity_columns, processed_data_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.metrics import count_passage_level_metrics
-from src.sampling import create_balanced_sample
-from src.wikibase import WikibaseSession
+from knowledge_graph.config import classifier_dir, equity_columns, processed_data_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.metrics import count_passage_level_metrics
+from knowledge_graph.sampling import create_balanced_sample
+from knowledge_graph.wikibase import WikibaseSession
 
 app = typer.Typer()
 console = Console(highlight=False)

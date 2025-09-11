@@ -3,8 +3,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from src.concept import Concept
-from src.identifiers import WikibaseID
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
 from tests.common_strategies import concept_label_strategy, wikibase_id_strategy
 
 

@@ -4,12 +4,12 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.classifier.classifier import Classifier
-from src.classifier.keyword import KeywordClassifier
-from src.classifier.stemmed_keyword import StemmedKeywordClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID, WikibaseID
-from src.span import Span
+from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.span import Span
 from tests.common_strategies import concept_label_strategy, concept_strategy
 
 

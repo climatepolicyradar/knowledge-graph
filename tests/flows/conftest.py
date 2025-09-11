@@ -43,10 +43,10 @@ from flows.config import Config
 from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
-from src.cloud import AwsEnv
-from src.concept import Concept
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
 BUCKET_EXISTS = False

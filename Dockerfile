@@ -30,7 +30,7 @@ COPY --from=builder /app/pyproject.toml ./
 COPY --from=builder /app/README.md ./
 
 # Copy the project into the image
-COPY src ./src/
+COPY knowledge_graph ./knowledge_graph/
 COPY flows ./flows/
 COPY scripts ./scripts/
 

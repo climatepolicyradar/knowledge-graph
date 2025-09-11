@@ -3,13 +3,13 @@ from unittest.mock import MagicMock
 import pytest
 from dotenv import find_dotenv, load_dotenv
 
-from src.classifier.targets import (
+from knowledge_graph.classifier.targets import (
     EmissionsReductionTargetClassifier,
     NetZeroTargetClassifier,
     TargetClassifier,
 )
-from src.concept import Concept
-from src.identifiers import WikibaseID
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
 
 load_dotenv(find_dotenv())
 

@@ -1,10 +1,10 @@
 import re
 from datetime import datetime
 
-from src.classifier.classifier import Classifier, ZeroShotClassifier
-from src.concept import Concept
-from src.identifiers import ClassifierID
-from src.span import Span, merge_overlapping_spans
+from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.span import Span, merge_overlapping_spans
 
 
 class KeywordClassifier(Classifier, ZeroShotClassifier):

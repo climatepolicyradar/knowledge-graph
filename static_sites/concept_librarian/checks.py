@@ -5,7 +5,7 @@ from typing import MutableSequence, Optional, Union
 
 from pydantic import BaseModel
 
-from src.concept import Concept, WikibaseID
+from knowledge_graph.concept import Concept, WikibaseID
 
 # Create logger
 logger = logging.getLogger(__name__)
