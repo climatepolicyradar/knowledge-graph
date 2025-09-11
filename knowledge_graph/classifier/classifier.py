@@ -192,3 +192,12 @@ class GPUBoundClassifier(ABC):
     GPU-bound classifiers should ideally run on GPU hardware during both training and
     inference.
     """
+
+
+class ProbabilityCapableClassifier(ABC):
+    """
+    A mixin which identifies classifiers that output probabilities of predictions.
+
+    This is useful to know when we need probabilities, or want to use a process that
+    overwrites probabilities – like the VotingClassifier.
+    """

@@ -3,7 +3,11 @@ from abc import abstractmethod
 from datetime import datetime
 from typing import Callable
 
-from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    ProbabilityCapableClassifier,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
@@ -13,7 +17,9 @@ from knowledge_graph.span import Span
 DEFAULT_THRESHOLD = 0.524
 
 
-class BaseTargetClassifier(Classifier, GPUBoundClassifier):
+class BaseTargetClassifier(
+    Classifier, GPUBoundClassifier, ProbabilityCapableClassifier
+):
     """Base class for target classifiers."""
 
     allowed_concept_ids = [

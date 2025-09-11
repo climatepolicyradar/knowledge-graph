@@ -15,7 +15,11 @@ from transformers.trainer import Trainer  # type: ignore[import-untyped]
 from transformers.training_args import TrainingArguments  # type: ignore[import-untyped]
 from typing_extensions import Self
 
-from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    ProbabilityCapableClassifier,
+)
 from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
@@ -23,7 +27,9 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
 
-class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
+class BertBasedClassifier(
+    Classifier, GPUBoundClassifier, UncertaintyMixin, ProbabilityCapableClassifier
+):
     """
     Classifier that uses a fine-tuned transformer model to identify concepts in text.
 
