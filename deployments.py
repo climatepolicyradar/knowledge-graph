@@ -79,6 +79,7 @@ def create_deployment(
     env_schedules: dict[AwsEnv, str] | None = None,
     extra_tags: list[str] = [],
     env_parameters: dict[AwsEnv, JsonDict] = {},
+    custom_env_variables: dict[str, str] = {},
 ) -> None:
     """Create a deployment for the specified flow"""
     aws_env = AwsEnv(os.environ["AWS_ENV"])
@@ -87,7 +88,7 @@ def create_deployment(
     docker_registry = os.environ["DOCKER_REGISTRY"]
     docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
     image_name = os.path.join(docker_registry, docker_repository)
-
+    image = f"{image_name}:{version}"
     if gpu:
         if aws_env == AwsEnv.production:
             aws_env_str = AwsEnv.production.name
@@ -99,6 +100,7 @@ def create_deployment(
         default_job_variables = JSON.load(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
         ).value
+        default_job_variables["image"] = image
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
         work_queue_name = f"mvp-{aws_env}"
@@ -107,6 +109,13 @@ def create_deployment(
         ).value
 
     job_variables = {**default_job_variables, **flow_variables}
+    current_env_variables = job_variables.get("env", {})
+    extra_env_variables = {"IMAGE": image}
+    job_variables["env"] = {
+        **current_env_variables,
+        **custom_env_variables,
+        **extra_env_variables,
+    }
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
     schedule = get_schedule_for_env(
         aws_env,
@@ -153,6 +162,7 @@ create_deployment(
     description="Run concept classifier inference on a batch of documents with GPU compute",
     extra_tags=["type:sub"],
     gpu=True,
+    flow_variables={},
 )
 
 # Aggregate inference results

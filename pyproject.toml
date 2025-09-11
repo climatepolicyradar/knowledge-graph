@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.12.1"
+version = "0.13.0"
 description = ""
 authors = [
     {name = "CPR Data Science", email = "dsci@climatepolicyradar.org"}
@@ -110,7 +110,7 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src", "flows", "scripts"]
 
 [tool.ruff]
 lint.select = ["E", "F", "D", "I"]

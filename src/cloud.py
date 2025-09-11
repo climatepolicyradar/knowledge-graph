@@ -1,3 +1,4 @@
+import importlib.metadata
 import os
 from collections.abc import Callable, Sequence
 from enum import Enum
@@ -12,11 +13,17 @@ import typer
 import yaml
 from prefect.blocks.system import JSON
 from pydantic import BaseModel, Field
+from wandb.util import docker_image_regex
 
 from src.identifiers import WikibaseID
 
 PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"
+
+
+def test_determine_container_uri():
+    pass
+    # determine_container_uri()
 
 
 # Version 1 classifier spec, to be cleaned up and replaced

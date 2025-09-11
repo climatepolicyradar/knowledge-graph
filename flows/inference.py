@@ -13,12 +13,11 @@ import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
 from prefect.concurrency.asyncio import concurrency
-from prefect.context import FlowRunContext, get_run_context
-from prefect.logging import get_run_logger
+from prefect.context import FlowRunContext, TaskRunContext
 from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
@@ -32,11 +31,11 @@ from flows.classifier_specs.spec_interface import (
 )
 from flows.config import Config
 from flows.utils import (
-    DEFAULT_GPU_VM_TYPES,
     DocumentImportId,
     DocumentStem,
     Fault,
     JsonDict,
+    ParameterisedFlow,
     Profiler,
     S3Uri,
     SlackNotify,
@@ -441,7 +440,7 @@ async def store_labels(
     list[BaseException],
 ]:
     """Store the labels in the cache bucket."""
-    logger = get_run_logger()
+    # logger = get_run_logger()
 
     session = boto3.Session(region_name=config.bucket_region)
 
@@ -451,9 +450,7 @@ async def store_labels(
 
     async def fn(inference: SingleDocumentInferenceResult) -> PutObjectOutputTypeDef:
         s3_uri = generate_s3_uri_output(config, inference)
-        logger.info(
-            f"Storing labels for document {inference.document_stem} at {s3_uri}"
-        )
+        print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
         body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
 
@@ -494,9 +491,7 @@ async def store_labels(
         else:
             inference, value = result
             if isinstance(value, Exception):
-                logger.exception(
-                    f"Failed to store label for {inference.document_stem}: {value}"
-                )
+                print(f"Failed to store label for {inference.document_stem}: {value}")
                 failures.append((inference.document_stem, value))
             else:
                 if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
@@ -762,10 +757,10 @@ async def _inference_batch_of_documents(
     """
     Run classifier inference on a batch of documents.
 
-    This reflects the unit of work that should be run in one of many paralellised
-    docker containers.
+    This reflects the unit of work that should be run in one of many
+    parallelised Docker containers.
     """
-    logger = get_run_logger()
+    # logger = get_run_logger()
 
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
@@ -783,7 +778,7 @@ async def _inference_batch_of_documents(
 
     classifier_spec = ClassifierSpec(**classifier_spec_json)
 
-    logger.info(f"Loading classifier {classifier_spec}")
+    print(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
     tasks = [
@@ -814,7 +809,7 @@ async def _inference_batch_of_documents(
         else:
             document_stem, value = result
             if isinstance(value, Exception):
-                logger.exception(f"Failed to process document {document_stem}: {value}")
+                print(f"Failed to process document {document_stem}: {value}")
                 inferences_failures.append((document_stem, value))
             else:
                 inferences_successes.append(value)
@@ -838,7 +833,8 @@ async def _inference_batch_of_documents(
     all_unknown_failures = inferences_unknown_failures + store_labels_unknown_failures
 
     # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
-    run_context = get_run_context()
+
+    run_context = FlowRunContext.get() or TaskRunContext.get()
     flow_run_name: str | None
     if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
         flow_run_name = str(run_context.flow_run.name)
@@ -872,13 +868,13 @@ async def _inference_batch_of_documents(
     return batch_inference_result
 
 
-# The default serialiser is cloudpickle, which can handle basic Pydantic types.
-# Should the complexity of the returned objects become more complex
-# then a custom serialiser should be considered.
-
-
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
-async def inference_batch_of_documents_cpu(
+@task
+@coiled.function(  # pyright: ignore[reportUnknownMemberType]
+    gpu=True,
+    container=os.environ.get("IMAGE"),
+    threads_per_worker=-1,
+)
+async def _inference_batch_of_documents_gpu_task(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
@@ -891,10 +887,21 @@ async def inference_batch_of_documents_cpu(
 
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
-@coiled.function(  # pyright: ignore[reportUnknownMemberType]
-    vm_type=DEFAULT_GPU_VM_TYPES,
-)
 async def inference_batch_of_documents_gpu(
+    batch: list[DocumentStem],
+    config_json: JsonDict,
+    classifier_spec_json: JsonDict,
+) -> BatchInferenceResult | Fault:
+    future = _inference_batch_of_documents_gpu_task.submit(
+        batch,
+        config_json,
+        classifier_spec_json,
+    )
+    return future.result()
+
+
+@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
@@ -980,8 +987,8 @@ async def inference(
             "classifier_spec_json": classifier_spec.model_dump(),
         }
 
-    # Filter documents based on classifier specs
-    filtered_batches = []
+    # Prepare document batches based on classifier specs
+    parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
@@ -989,13 +996,16 @@ async def inference(
         removal_details[classifier_spec] = len(filter_result.removed)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
-            filtered_batches.append((classifier_spec, document_batch))
+            params = parameters(classifier_spec, document_batch)
+            if (
+                classifier_spec.compute_environment
+                and classifier_spec.compute_environment.gpu
+            ):
+                fn = inference_batch_of_documents_gpu
+            else:
+                fn = inference_batch_of_documents_cpu
 
-    # Create flow params from filtered batches
-    parameterised_batches = (
-        parameters(classifier_spec, document_batch)
-        for classifier_spec, document_batch in filtered_batches
-    )
+            parameterised_batches.append(ParameterisedFlow(fn=fn, params=params))
 
     await create_dont_run_on_docs_summary_artifact(
         config=config, removal_details=removal_details
@@ -1009,8 +1019,6 @@ async def inference(
         name="running classifier inference with map_as_sub_flow",
     ):
         raw_successes, raw_failures = await map_as_sub_flow(
-            # The typing doesn't pick up the Flow decorator
-            fn=inference_batch_of_documents_cpu,
             aws_env=config.aws_env,
             counter=classifier_concurrency_limit,
             parameterised_batches=parameterised_batches,
@@ -1020,11 +1028,21 @@ async def inference(
         all_raw_successes.extend(raw_successes)
         all_raw_failures.extend(raw_failures)
 
-    # The type of response when running as a sub deployment is:
-    #   <class 'inference.BatchInferenceResult'>
-    all_successes = [
-        BatchInferenceResult(**result.model_dump()) for result in all_raw_successes
-    ]
+    # When using Coiled/remote execution, results may have different
+    # module paths so we need to handle both local and remote
+    # execution results.
+    all_successes = []
+    for result in all_raw_successes:
+        print(f"Result type: {type(result)}")
+        try:
+            # Try to dump and reconstruct
+            reconstructed = BatchInferenceResult(**result.model_dump())
+            all_successes.append(reconstructed)
+            print("Successfully reconstructed from model_dump")
+        except Exception as e:
+            # If that fails, just append the result directly
+            print(f"Failed to reconstruct: {e}, appending directly")
+            all_successes.append(result)
 
     successful_classifier_specs = []
     failed_classifier_specs = []
