@@ -4,6 +4,8 @@ from unittest.mock import ANY, Mock, patch
 import pytest
 from wandb.errors.errors import CommError
 
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import WikibaseID
 from scripts.train import (
     Namespace,
     StorageLink,
@@ -13,8 +15,6 @@ from scripts.train import (
     main,
     upload_model_artifact,
 )
-from src.cloud import AwsEnv
-from src.identifiers import WikibaseID
 
 
 @pytest.mark.parametrize(

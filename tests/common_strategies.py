@@ -3,9 +3,9 @@ from typing import Optional
 
 from hypothesis import strategies as st
 
-from src.concept import Concept
-from src.identifiers import WikibaseID
-from src.span import Span
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.span import Span
 
 wikibase_id_strategy = st.from_regex(WikibaseID.regex, fullmatch=True)
 text_strategy = st.text(min_size=10, max_size=1000)

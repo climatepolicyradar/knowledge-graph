@@ -12,25 +12,25 @@ from rich.console import Console
 from rich.table import Table
 from wandb.wandb_run import Run
 
-from src.classifier import Classifier
-from src.cloud import Namespace
-from src.concept import Concept
-from src.config import (
+from knowledge_graph.classifier import Classifier
+from knowledge_graph.cloud import Namespace
+from knowledge_graph.concept import Concept
+from knowledge_graph.config import (
     classifier_dir,
     concept_dir,
     equity_columns,
     metrics_dir,
     model_artifact_name,
 )
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
-from src.metrics import (
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.metrics import (
     ConfusionMatrix,
     count_passage_level_metrics,
     count_span_level_metrics,
 )
-from src.span import Span, group_overlapping_spans
-from src.version import Version
+from knowledge_graph.span import Span, group_overlapping_spans
+from knowledge_graph.version import Version
 
 console = Console()
 

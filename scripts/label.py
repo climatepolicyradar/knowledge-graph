@@ -3,10 +3,10 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from src.classifier import Classifier
-from src.config import classifier_dir
-from src.identifiers import WikibaseID
-from src.labelled_passage import LabelledPassage
+from knowledge_graph.classifier import Classifier
+from knowledge_graph.config import classifier_dir
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
 
 console = Console()
 

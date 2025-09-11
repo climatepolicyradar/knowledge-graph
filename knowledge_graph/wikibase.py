@@ -18,9 +18,9 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from src.concept import Concept
-from src.exceptions import ConceptNotFoundError, RevisionNotFoundError
-from src.identifiers import WikibaseID
+from knowledge_graph.concept import Concept
+from knowledge_graph.exceptions import ConceptNotFoundError, RevisionNotFoundError
+from knowledge_graph.identifiers import WikibaseID
 
 logger = getLogger(__name__)
 dotenv.load_dotenv()

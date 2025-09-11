@@ -23,7 +23,7 @@ just --list
 Concepts are the core building blocks of our knowledge graph. They represent key ideas, terms, or topics which are important to understanding the climate policy domain. Each concept has a preferred label, optional alternative labels (synonyms, acronyms, related terms), a description, and can be linked to other concepts through hierarchical or associative relationships.
 
 ```python
-from src.concept import Concept
+from knowledge_graph.concept import Concept
 
 extreme_weather_concept = Concept(
     preferred_label="extreme weather",
@@ -41,7 +41,7 @@ Classifiers are used to identify concepts in text. We use a variety of classifie
 Each classifier is single-class, meaning there's a 1:1 mapping between a `Concept` and a `Classifier`. When you call the `predict` method on a classifier with some input text, it returns a list of `Span` objects which indicate where the concept is mentioned.
 
 ```python
-from src.classifier import KeywordClassifier
+from knowledge_graph.classifier import KeywordClassifier
 
 extreme_weather_classifier = KeywordClassifier(concept=extreme_weather_concept)
 
@@ -67,7 +67,7 @@ predicted_spans = extreme_weather_classifier.predict("This is a passage of text 
 Our `LabelledPassage` objects combine a passage of text with the spans that mention a particular concept. They can contain multiple spans, referring to multiple concepts, each labelled through a different method.
 
 ```python
-from src.labelled_passage import LabelledPassage
+from knowledge_graph.labelled_passage import LabelledPassage
 
 labelled_passage = LabelledPassage(
     text="This is a passage of text about extreme weather",

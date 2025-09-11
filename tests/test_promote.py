@@ -6,12 +6,12 @@ import pytest
 import typer
 from moto import mock_aws
 
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import ClassifierID
 from scripts.promote import (
     check_existing_artifact_aliases,
     find_artifact_in_registry,
 )
-from src.cloud import AwsEnv
-from src.identifiers import ClassifierID
 
 
 @pytest.mark.parametrize(

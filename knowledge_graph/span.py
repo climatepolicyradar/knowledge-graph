@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
 
-from src.identifiers import Identifier, WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 
 logger = logging.getLogger(__name__)
 

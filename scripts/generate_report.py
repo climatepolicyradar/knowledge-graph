@@ -19,10 +19,10 @@ import pandas as pd
 import typer
 from typing_extensions import Annotated
 
-from src.classifier import Classifier
-from src.concept import Concept
-from src.config import classifier_dir, concept_dir, metrics_dir
-from src.labelled_passage import LabelledPassage
+from knowledge_graph.classifier import Classifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.config import classifier_dir, concept_dir, metrics_dir
+from knowledge_graph.labelled_passage import LabelledPassage
 
 app = typer.Typer()
 

@@ -21,7 +21,7 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
 )
 from flows.utils import DocumentStem, remove_translated_suffix
-from src.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv
 
 app = typer.Typer()
 console = Console()
