@@ -7,6 +7,7 @@ from logging import getLogger
 from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
 
 import dotenv
+import html2text
 import httpx
 from httpx import HTTPError, HTTPStatusError, RequestError
 from more_itertools import chunked
@@ -89,6 +90,7 @@ class WikibaseSession:
     REQUEST_DELAY_SECONDS = 0.5  # Small delay between requests to be gentle on server
     ITEM_NAMESPACE = 120
     ITEM_PREFIX = "Item:"
+    HELP_NAMESPACE = 12
 
     # Property IDs
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID", "P1")
@@ -946,3 +948,49 @@ class WikibaseSession:
         return await self.add_alternative_labels_async(
             wikibase_id, alternative_labels, language
         )
+
+    async def search_help_pages_async(self, search_term: str) -> list[str]:
+        """Async method to search for help pages in Wikibase."""
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": search_term,
+                "srnamespace": self.HELP_NAMESPACE,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        return [result["title"] for result in data.get("query", {}).get("search", [])]
+
+    @async_to_sync
+    async def search_help_pages(self, search_term: str) -> list[str]:
+        """Sync wrapper for search_help_pages_async"""
+        return await self.search_help_pages_async(search_term)
+
+    async def get_help_page_content_async(self, page_title: str) -> str:
+        """Async method to get help page content as markdown."""
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={
+                "action": "parse",
+                "page": page_title,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        html_content = data.get("parse", {}).get("text", {}).get("*", "")
+        if not html_content:
+            return ""
+        markdown_content = html2text.html2text(html_content)
+        return markdown_content
+
+    @async_to_sync
+    async def get_help_page_content(self, page_title: str) -> str:
+        """Sync wrapper for get_help_page_content_async"""
+        return await self.get_help_page_content_async(page_title)
