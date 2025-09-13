@@ -39,6 +39,7 @@ dependencies = [
     "pytest-aioboto3>=0.6.0",
     "coiled>=1.115.0",
     "prefect-coiled>=0.0.4",
+    "html2text>=2025.4.15",
 ]
 
 [project.optional-dependencies]
