@@ -88,9 +88,9 @@ class WikibaseSession:
     MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
     MAX_CONCURRENT_REQUESTS = 3  # Limit concurrent requests to avoid rate limiting
     REQUEST_DELAY_SECONDS = 0.5  # Small delay between requests to be gentle on server
+    HELP_NAMESPACE = 12
     ITEM_NAMESPACE = 120
     ITEM_PREFIX = "Item:"
-    HELP_NAMESPACE = 12
 
     # Property IDs
     has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID", "P1")
@@ -971,7 +971,7 @@ class WikibaseSession:
         """Sync wrapper for search_help_pages_async"""
         return await self.search_help_pages_async(search_term)
 
-    async def get_help_page_content_async(self, page_title: str) -> str:
+    async def get_help_page_async(self, page_title: str) -> str:
         """Async method to get help page content as markdown."""
         client = await self._get_client()
         response = await client.get(
@@ -991,6 +991,53 @@ class WikibaseSession:
         return markdown_content
 
     @async_to_sync
-    async def get_help_page_content(self, page_title: str) -> str:
-        """Sync wrapper for get_help_page_content_async"""
-        return await self.get_help_page_content_async(page_title)
+    async def get_help_page(self, page_title: str) -> str:
+        """Sync wrapper for get_help_page_async"""
+        return await self.get_help_page_async(page_title)
+
+    async def search_concepts_async(
+        self,
+        search_term: str,
+        limit: Optional[int] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> list[Concept]:
+        """Async method to search for concepts and return full Concept objects."""
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": search_term,
+                "srnamespace": self.ITEM_NAMESPACE,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        item_titles = [
+            result["title"] for result in data.get("query", {}).get("search", [])
+        ]
+        wikibase_ids = [
+            WikibaseID(title.removeprefix(self.ITEM_PREFIX)) for title in item_titles
+        ]
+
+        if limit:
+            wikibase_ids = wikibase_ids[:limit]
+
+        if not wikibase_ids:
+            return []
+
+        return await self.get_concepts_async(
+            wikibase_ids=wikibase_ids, timestamp=timestamp
+        )
+
+    @async_to_sync
+    async def search_concepts(
+        self,
+        search_term: str,
+        limit: Optional[int] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> list[Concept]:
+        """Sync wrapper for search_concepts_async"""
+        return await self.search_concepts_async(search_term, limit, timestamp)
