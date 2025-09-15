@@ -279,7 +279,7 @@ async def test_index_batch_of_documents(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_batch_of_documents_failure(
+async def test_index_batch_of_documents__failure(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
