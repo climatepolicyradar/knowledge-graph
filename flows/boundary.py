@@ -18,7 +18,6 @@ from typing import (
     Union,
 )
 
-import boto3
 import tenacity
 import vespa.querybuilder as qb
 from cpr_sdk.models.search import Concept as VespaConcept
@@ -170,24 +169,6 @@ def get_vespa_search_adapter_from_aws_secrets(
         instance_url=vespa_instance_url,
         cert_directory=str(cert_dir_path),
     )
-
-
-def s3_object_write_text(s3_uri: str, text: str) -> None:
-    """Write text content to an S3 object."""
-    # Parse the S3 URI
-    s3_path: Path = Path(s3_uri)
-    if len(s3_path.parts) < 3:
-        raise ValueError(f"Invalid S3 path: {s3_path}")
-
-    bucket: str = s3_path.parts[1]
-    key = str(Path(*s3_path.parts[2:]))
-
-    # Create BytesIO buffer with the text content
-    body = BytesIO(text.encode("utf-8"))
-
-    # Upload to S3
-    s3 = boto3.client("s3")
-    s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
 
 
 async def s3_object_write_text_async(s3: S3Client, s3_uri: S3Uri, text: str) -> None:
@@ -826,18 +807,3 @@ class ConceptModel(BaseModel):
         raise ValueError(
             f"Could not extract concept name from model name '{self.model_name}'"
         )
-
-
-def save_labelled_passages_by_uri(
-    document_object_uri: DocumentObjectUri,
-    labelled_passages: list[LabelledPassage],
-) -> None:
-    """Save LabelledPassages objects to S3."""
-    object_json = json.dumps(
-        [labelled_passage.model_dump_json() for labelled_passage in labelled_passages]
-    )
-
-    s3_object_write_text(
-        s3_uri=document_object_uri,
-        text=object_json,
-    )

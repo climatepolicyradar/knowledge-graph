@@ -1,7 +1,9 @@
 import asyncio
+import atexit
 import functools
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from logging import getLogger
 from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
@@ -31,6 +33,45 @@ MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
 
+_thread_state = threading.local()
+
+
+def _get_persistent_loop() -> asyncio.AbstractEventLoop:
+    """
+    Return a persistent event loop bound to the current thread.
+
+    This ensures that synchronous wrappers always reuse the same live event loop
+    instead of creating and closing a new loop on every call. Reusing a loop
+    prevents issues where async resources (like HTTP clients) become tied to a
+    loop that has been closed, which commonly manifests as 'Event loop is
+    closed' errors for newcomers to async.
+    """
+    loop = getattr(_thread_state, "loop", None)
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
+        _thread_state.loop = loop
+        atexit.register(_shutdown_loop, loop)
+    return loop
+
+
+def _shutdown_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """
+    Cleanly shut down the persistent thread-local event loop at process exit.
+
+    This cancels any pending tasks before closing the loop.
+    """
+    if loop.is_closed():
+        return
+    try:
+        pending = asyncio.all_tasks(loop=loop)
+        for t in pending:
+            t.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+
 
 def async_to_sync(
     async_func: Callable[..., Coroutine[None, None, T]],
@@ -39,9 +80,9 @@ def async_to_sync(
     Decorator that converts async methods to synchronous interface
 
     This decorator wraps async methods to provide a synchronous interface by
-    automatically managing the event loop. It creates a new event loop if none exists,
-    or raises an error if called from within an existing async context to prevent
-    deadlocks.
+    automatically managing the event loop. It uses a per-thread loop, so async resources
+    remain bound to a live loop across calls. If there is no running loop, it creates a
+    new persistent event loop bound to the current thread.
 
     The decorator preserves the original function's return type, so type checkers should
     understand that sync wrappers return the actual objects, not coroutines.
@@ -52,11 +93,14 @@ def async_to_sync(
     Returns:
         A synchronous function that returns T (the unwrapped result type)
 
+    Raises:
+        RuntimeError: if called from an already-running event loop, it asks the caller
+        to use the async version directly
+
     Example:
         @async_to_sync
         async def get_data(self) -> MyData:
             return await self.get_data_async()
-
         # Type checker knows this returns MyData, not Awaitable[MyData]
         data = session.get_data()
     """
@@ -64,16 +108,18 @@ def async_to_sync(
     @functools.wraps(async_func)
     def wrapper(self, *args, **kwargs) -> T:
         try:
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
+            running = asyncio.get_running_loop()
+            if running.is_running():
                 raise RuntimeError(
                     f"Cannot call sync version of {async_func.__name__} from async context. "
                     f"Use {async_func.__name__}_async directly."
                 )
-        except RuntimeError as e:
-            if "Cannot call sync version" in str(e):
-                raise
-        return asyncio.run(async_func(self, *args, **kwargs))
+        except RuntimeError:
+            # Not in a running loop in this thread → OK to use our persistent loop
+            pass
+
+        loop = _get_persistent_loop()
+        return loop.run_until_complete(async_func(self, *args, **kwargs))
 
     return cast(Callable[..., T], wrapper)
 
@@ -296,7 +342,12 @@ class WikibaseSession:
 
     @async_to_sync
     async def get_all_concept_ids(self) -> list[WikibaseID]:
-        """Sync wrapper for get_all_concept_ids_async"""
+        """
+        Get a complete list of all concept IDs in the Wikibase instance.
+
+        Returns:
+            List of all WikibaseID strings for concepts in the instance
+        """
         return await self.get_all_concept_ids_async()
 
     @retry(
@@ -397,7 +448,7 @@ class WikibaseSession:
     def _parse_wikibase_entity(
         self, wikibase_id: WikibaseID, entity: dict[str, Any]
     ) -> Concept:
-        """Parse a Wikibase entity JSON into a Concept object."""
+        """Parse a Wikibase entity (given in dict format) into a Concept object."""
         # Extract basic concept information
         preferred_label = (
             entity.get("labels", {})
@@ -522,6 +573,16 @@ class WikibaseSession:
 
         This is the core async implementation that provides high performance
         through concurrent HTTP requests.
+
+        Args:
+            limit: The maximum number of concepts to return
+            wikibase_ids: The Wikibase IDs of the concepts to return
+            timestamp: If specified, the retrieved concepts will contain the data as it
+                existed at the specified timestamp. Defaults to None, and retrieves the
+                latest version of the concept.
+
+        Returns:
+            List of Concept objects
         """
         client = await self._get_client()
 
@@ -650,10 +711,21 @@ class WikibaseSession:
         timestamp: Optional[datetime] = None,
     ) -> list[Concept]:
         """
-        Sync wrapper for get_concepts_async.
+        Fetches concepts from Wikibase with optional filtering and historical data.
 
-        This provides the familiar sync interface while leveraging
-        async performance internally.
+        This provides the familiar sync interface while leveraging async performance
+        internally. Supports fetching all concepts, specific concepts by ID, or
+        limiting the number of results.
+
+        Args:
+            limit: The maximum number of concepts to return
+            wikibase_ids: The Wikibase IDs of the concepts to return
+            timestamp: If specified, the retrieved concepts will contain the data as it
+                existed at the specified timestamp. Defaults to None, and retrieves the
+                latest version of the concept.
+
+        Returns:
+            List of Concept objects
         """
         return await self.get_concepts_async(limit, wikibase_ids, timestamp)
 
@@ -665,7 +737,21 @@ class WikibaseSession:
         include_recursive_subconcept_of: bool = False,
         include_recursive_has_subconcept: bool = False,
     ) -> Concept:
-        """Async version of get_concept"""
+        """
+        Async version of get_concept
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get
+            timestamp: If specified, the retrieved concept will contain the data as it
+            existed at the specified timestamp. Defaults to None, and retrieves the
+            latest version of the concept.
+            include_labels_from_subconcepts: If True, the concept's alternative_labels
+            field will include labels from all of its subconcepts, fetched recursively.
+            include_recursive_subconcept_of: If True, the concept will include a field
+            which lists its 'ancestors', ie its parent concepts, fetched recursively.
+            include_recursive_has_subconcept: If True, the concept will include a field
+            which lists its 'descendants', ie its subconcepts, fetched recursively.
+        """
         # Get the base concept first
         concepts = await self.get_concepts_async(
             wikibase_ids=[wikibase_id], timestamp=timestamp
@@ -727,7 +813,28 @@ class WikibaseSession:
         include_recursive_subconcept_of: bool = False,
         include_recursive_has_subconcept: bool = False,
     ) -> Concept:
-        """Sync wrapper for get_concept_async"""
+        """
+        Get a single concept from Wikibase with optional hierarchical relationships.
+
+        This provides the familiar sync interface while leveraging async performance
+        internally. Can include recursive subconcept relationships and aggregate
+        labels from child concepts.
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get
+            timestamp: If specified, the retrieved concept will contain the data as it
+                existed at the specified timestamp. Defaults to None, and retrieves the
+                latest version of the concept.
+            include_labels_from_subconcepts: If True, the concept's alternative_labels
+                field will include labels from all of its subconcepts, fetched recursively.
+            include_recursive_subconcept_of: If True, the concept will include a field
+                which lists its 'ancestors', ie its parent concepts, fetched recursively.
+            include_recursive_has_subconcept: If True, the concept will include a field
+                which lists its 'descendants', ie its subconcepts, fetched recursively.
+
+        Returns:
+            Single Concept object with requested relationship data
+        """
         return await self.get_concept_async(
             wikibase_id,
             timestamp,
@@ -746,7 +853,18 @@ class WikibaseSession:
     async def get_recursive_has_subconcept_relationships_async(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
-        """Async version of recursive subconcept fetching"""
+        """
+        Get all subconcepts (descendants) of a concept recursively.
+
+        Returns a flat list of all concept IDs that are subconcepts of the given
+        concept, traversed recursively through the hierarchy.
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get subconcepts for
+
+        Returns:
+            List of WikibaseID strings representing all recursive subconcepts
+        """
         return await self._get_recursive_relationships_async(
             wikibase_id, self.has_subconcept_property_id
         )
@@ -755,7 +873,18 @@ class WikibaseSession:
     async def get_recursive_has_subconcept_relationships(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
-        """Sync wrapper for get_recursive_has_subconcept_relationships_async"""
+        """
+        Get all subconcepts (descendants) of a concept recursively.
+
+        Returns a flat list of all concept IDs that are subconcepts of the given
+        concept, traversed recursively through the hierarchy.
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get subconcepts for
+
+        Returns:
+            List of WikibaseID strings representing all recursive subconcepts
+        """
         return await self.get_recursive_has_subconcept_relationships_async(wikibase_id)
 
     @retry(
@@ -768,7 +897,18 @@ class WikibaseSession:
     async def get_recursive_subconcept_of_relationships_async(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
-        """Async version of recursive parent concept fetching"""
+        """
+        Get all parent concepts (ancestors) of a concept recursively.
+
+        Returns a flat list of all concept IDs that are parent concepts of the given
+        concept, traversed recursively through the hierarchy.
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get parent concepts for
+
+        Returns:
+            List of WikibaseID strings representing all recursive parent concepts
+        """
         return await self._get_recursive_relationships_async(
             wikibase_id, self.subconcept_of_property_id
         )
@@ -777,7 +917,18 @@ class WikibaseSession:
     async def get_recursive_subconcept_of_relationships(
         self, wikibase_id: WikibaseID
     ) -> list[WikibaseID]:
-        """Sync wrapper for get_recursive_subconcept_of_relationships_async"""
+        """
+        Get all parent concepts (ancestors) of a concept recursively.
+
+        Returns a flat list of all concept IDs that are parent concepts of the given
+        concept, traversed recursively through the hierarchy.
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get parent concepts for
+
+        Returns:
+            List of WikibaseID strings representing all recursive parent concepts
+        """
         return await self.get_recursive_subconcept_of_relationships_async(wikibase_id)
 
     @retry(
@@ -795,7 +946,16 @@ class WikibaseSession:
         current_depth: int = 0,
         visited: Optional[set[WikibaseID]] = None,
     ) -> list[WikibaseID]:
-        """Async version of recursive relationship fetching with concurrency"""
+        """
+        Async version of recursive relationship fetching with concurrency
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to get relationships for
+            property_id: The property ID of the relationship to fetch
+            max_depth: The maximum number of levels to recurse the relationships
+            current_depth: The current recursion depth, starting at 0
+            visited: The set of visited Wikibase IDs
+        """
         if visited is None:
             visited = set()
 
@@ -876,7 +1036,10 @@ class WikibaseSession:
     async def close(self):
         """Close the async client"""
         if self._client:
-            await self._client.aclose()
+            try:
+                await self._client.aclose()
+            finally:
+                self._client = None
 
     async def __aenter__(self):
         """Async context manager entry"""
@@ -900,7 +1063,14 @@ class WikibaseSession:
         alternative_labels: list[str],
         language: str = "en",
     ):
-        """Add a list of alternative labels to a Wikibase item, preserving existing ones"""
+        """
+        Add a list of alternative labels to a Wikibase item, preserving existing ones
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to add alternative labels to
+            alternative_labels: The alternative labels to add
+            language: The language of the alternative labels. Defaults to "en".
+        """
         existing_alternative_labels = (
             await self.get_concept_async(wikibase_id)
         ).alternative_labels
@@ -944,13 +1114,34 @@ class WikibaseSession:
         alternative_labels: list[str],
         language: str = "en",
     ):
-        """Sync wrapper for add_alternative_labels_async"""
+        """
+        Add alternative labels (aliases) to a Wikibase concept.
+
+        Preserves existing alternative labels and adds new ones to the concept.
+        Duplicates are automatically removed.
+
+        Args:
+            wikibase_id: The Wikibase ID of the concept to add alternative labels to
+            alternative_labels: The alternative labels to add
+            language: The language of the alternative labels. Defaults to "en".
+
+        Returns:
+            Response data from the Wikibase API
+        """
         return await self.add_alternative_labels_async(
             wikibase_id, alternative_labels, language
         )
 
     async def search_help_pages_async(self, search_term: str) -> list[str]:
-        """Async method to search for help pages in Wikibase."""
+        """
+        Search for help pages in Wikibase by matching page titles and content.
+
+        Args:
+            search_term: Terms to search for in help page titles and content
+
+        Returns:
+            List of help page titles that match the search term
+        """
         client = await self._get_client()
         response = await client.get(
             url=self.api_url,
@@ -968,11 +1159,27 @@ class WikibaseSession:
 
     @async_to_sync
     async def search_help_pages(self, search_term: str) -> list[str]:
-        """Sync wrapper for search_help_pages_async"""
+        """
+        Search for help pages in Wikibase by matching page titles and content.
+
+        Args:
+            search_term: Terms to search for in help page titles and content
+
+        Returns:
+            List of help page titles that match the search term
+        """
         return await self.search_help_pages_async(search_term)
 
     async def get_help_page_async(self, page_title: str) -> str:
-        """Async method to get help page content as markdown."""
+        """
+        Get the content of a specific help page converted from HTML to markdown.
+
+        Args:
+            page_title: The exact title of the help page to retrieve
+
+        Returns:
+            The help page content converted from HTML to markdown format
+        """
         client = await self._get_client()
         response = await client.get(
             url=self.api_url,
@@ -992,7 +1199,15 @@ class WikibaseSession:
 
     @async_to_sync
     async def get_help_page(self, page_title: str) -> str:
-        """Sync wrapper for get_help_page_async"""
+        """
+        Get the content of a specific help page, converted from HTML to markdown.
+
+        Args:
+            page_title: The exact title of the help page to retrieve
+
+        Returns:
+            The help page content converted from HTML to markdown format
+        """
         return await self.get_help_page_async(page_title)
 
     async def search_concepts_async(
@@ -1001,7 +1216,22 @@ class WikibaseSession:
         limit: Optional[int] = None,
         timestamp: Optional[datetime] = None,
     ) -> list[Concept]:
-        """Async method to search for concepts and return full Concept objects."""
+        """
+        Search for concepts by matching against labels and descriptions in Wikibase.
+
+        This performs a search in the Wikibase instance and returns full Concept
+        objects for matching items.
+
+        Args:
+            search_term: Terms to search for in concept labels/descriptions
+            limit: The maximum number of concepts to return
+            timestamp: If specified, the retrieved concepts will contain the data as it
+                existed at the specified timestamp. Defaults to None, and retrieves the
+                latest version of the concept.
+
+        Returns:
+            List of matching Concept objects, ordered by search relevance
+        """
         client = await self._get_client()
         response = await client.get(
             url=self.api_url,
@@ -1039,5 +1269,20 @@ class WikibaseSession:
         limit: Optional[int] = None,
         timestamp: Optional[datetime] = None,
     ) -> list[Concept]:
-        """Sync wrapper for search_concepts_async"""
+        """
+        Search for concepts by matching against labels and descriptions in Wikibase.
+
+        This performs a search in the Wikibase instance and returns full Concept
+        objects for matching items.
+
+        Args:
+            search_term: Terms to search for in concept labels/descriptions
+            limit: The maximum number of concepts to return
+            timestamp: If specified, the retrieved concepts will contain the data as it
+                existed at the specified timestamp. Defaults to None, and retrieves the
+                latest version of the concept.
+
+        Returns:
+            List of matching Concept objects, ordered by search relevance
+        """
         return await self.search_concepts_async(search_term, limit, timestamp)
