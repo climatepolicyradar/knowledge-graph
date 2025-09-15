@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import boto3
-import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
@@ -891,16 +890,6 @@ async def inference_batch_of_documents_cpu(
 
 
 @flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
-@coiled.function(  # pyright: ignore[reportUnknownMemberType]
-    gpu=True,
-    container="073457443605.dkr.ecr.eu-west-1.amazonaws.com/knowledge-graph:0.13.0",
-    # > Number of threads to run concurrent tasks in for each VM. -1 can
-    # > be used to run as many concurrent tasks as there are CPU cores.
-    # > Default is 1.
-    #
-    # [1]: https://docs.coiled.io/user_guide/functions.html#vm-lifecycle
-    threads_per_worker=-1,
-)
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
