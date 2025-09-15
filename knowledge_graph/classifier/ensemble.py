@@ -237,3 +237,7 @@ class VotingLLMClassifier(VotingClassifier):
         ]
 
         super().__init__(concept=concept, classifiers=llm_classifiers)
+
+    def __repr__(self):
+        """Return a string representation of the classifier."""
+        return f'{self.name}("{self.concept.preferred_label}", model_name={self.model_name}, n_classifiers={self.n_classifiers}, base_seed={self.base_seed})'
