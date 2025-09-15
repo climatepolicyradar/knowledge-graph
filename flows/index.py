@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 import aioboto3
-import boto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, unmapped
@@ -66,25 +65,16 @@ DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 
 
-def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
-    """Load JSON data from an S3 URI."""
-
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket, Key=key)
-    body = response["Body"].read().decode("utf-8")
-    return json.loads(body)
-
-
 async def load_async_json_data_from_s3(
     bucket: str, key: str, config: Config
 ) -> dict[str, Any]:
     """Load JSON data from an S3 URI asynchronously"""
+
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3client:
         response = await s3client.get_object(Bucket=bucket, Key=key)
-        response_body = response["Body"]
-        read_body = await response_body.read()
-        decoded_body = read_body.decode("utf-8")
+        body = await response["Body"].read()
+        decoded_body = body.decode("utf-8")
         return json.loads(decoded_body)
 
 

@@ -3,12 +3,12 @@ import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import Generator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncGenerator
 from unittest.mock import MagicMock, Mock, patch
 
 import aioboto3
@@ -65,6 +65,7 @@ def test_config():
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
         aws_env=AwsEnv("sandbox"),
+        bucket_region="eu-west-1",
     )
 
 
@@ -235,6 +236,7 @@ def local_vespa_search_adapter(
 async def mock_async_bucket(
     mock_aws_creds, mock_s3_async_client, test_config
 ) -> AsyncGenerator[str, None]:
+    """Returns a mocked s3 bucket name"""
     await mock_s3_async_client.create_bucket(
         Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
@@ -522,14 +524,13 @@ def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
 
 
 @pytest_asyncio.fixture
-async def mock_bucket_inference_results(
+async def mock_async_bucket_inference_results(
     mock_s3_async_client,
     mock_async_bucket,
     s3_prefix_inference_results: str,
     aggregate_inference_results_document_stems: list[DocumentStem],
-) -> AsyncGenerator[dict[str, dict[str, Any]], None]:
-    """A version of the inference results bucket with more files"""
-
+) -> AsyncGenerator[dict[Any, Any], None]:
+    """A mocked version of the inference results bucket"""
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = [
         fixture_root / f"{document_stem}.json"
@@ -561,23 +562,6 @@ async def mock_bucket_inference_results(
             await mock_s3_async_client.delete_objects(
                 Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
             )
-
-
-@pytest.fixture
-def mock_bucket_labelled_passages_b(
-    mock_s3_client,
-    mock_bucket_b,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-) -> None:
-    """Puts the concept fixture files in the mock bucket."""
-    for file_name in labelled_passage_fixture_files:
-        data = load_fixture(file_name)
-        body = BytesIO(data.encode("utf-8"))
-        key = os.path.join(s3_prefix_labelled_passages, file_name)
-        mock_s3_client.put_object(
-            Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
-        )
 
 
 @pytest_asyncio.fixture
