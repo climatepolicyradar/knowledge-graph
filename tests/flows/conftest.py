@@ -3,12 +3,11 @@ import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
-from collections.abc import Generator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Generator
 from unittest.mock import MagicMock, Mock, patch
 
 import aioboto3
