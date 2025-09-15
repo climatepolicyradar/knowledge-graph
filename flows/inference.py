@@ -17,7 +17,7 @@ from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
-from prefect.logging import get_run_logger
+from prefect.exceptions import MissingContextError
 from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
@@ -440,8 +440,6 @@ async def store_labels(
     list[BaseException],
 ]:
     """Store the labels in the cache bucket."""
-    logger = get_run_logger()
-
     session = boto3.Session(region_name=config.bucket_region)
 
     s3 = session.client("s3")
@@ -450,9 +448,7 @@ async def store_labels(
 
     async def fn(inference: SingleDocumentInferenceResult) -> PutObjectOutputTypeDef:
         s3_uri = generate_s3_uri_output(config, inference)
-        logger.info(
-            f"Storing labels for document {inference.document_stem} at {s3_uri}"
-        )
+        print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
         body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
 
@@ -493,9 +489,7 @@ async def store_labels(
         else:
             inference, value = result
             if isinstance(value, Exception):
-                logger.exception(
-                    f"Failed to store label for {inference.document_stem}: {value}"
-                )
+                print(f"Failed to store label for {inference.document_stem}: {value}")
                 failures.append((inference.document_stem, value))
             else:
                 if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
@@ -764,7 +758,6 @@ async def _inference_batch_of_documents(
     This reflects the unit of work that should be run in one of many
     parallelised Docker containers.
     """
-    logger = get_run_logger()
 
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
@@ -782,7 +775,7 @@ async def _inference_batch_of_documents(
 
     classifier_spec = ClassifierSpec(**classifier_spec_json)
 
-    logger.info(f"Loading classifier {classifier_spec}")
+    print(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
     tasks = [
@@ -813,7 +806,7 @@ async def _inference_batch_of_documents(
         else:
             document_stem, value = result
             if isinstance(value, Exception):
-                logger.exception(f"Failed to process document {document_stem}: {value}")
+                print(f"Failed to process document {document_stem}: {value}")
                 inferences_failures.append((document_stem, value))
             else:
                 inferences_successes.append(value)
@@ -837,11 +830,14 @@ async def _inference_batch_of_documents(
     all_unknown_failures = inferences_unknown_failures + store_labels_unknown_failures
 
     # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
-    run_context = get_run_context()
-    flow_run_name: str | None
-    if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
-        flow_run_name = str(run_context.flow_run.name)
-    else:
+    try:
+        run_context = get_run_context()
+        flow_run_name: str | None
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
+            flow_run_name = str(run_context.flow_run.name)
+        else:
+            flow_run_name = None
+    except MissingContextError:
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
