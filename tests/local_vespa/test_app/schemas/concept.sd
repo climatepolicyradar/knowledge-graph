@@ -48,7 +48,9 @@ schema concept {
         field recursive_subconcept_of type array<string> {
             indexing: attribute | summary | index
         }
-        field recursive_has_subconcept type bool {}
+        field recursive_has_subconcept type array<string> {
+            indexing: attribute | summary | index
+        }
     }
 
     document-summary search_summary {
