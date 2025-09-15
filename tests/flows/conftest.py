@@ -237,12 +237,10 @@ async def mock_async_bucket(
     mock_aws_creds, mock_s3_async_client, test_config
 ) -> AsyncGenerator[str, None]:
     """Returns a mocked s3 bucket name"""
-
     await mock_s3_async_client.create_bucket(
         Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
-
     yield test_config.cache_bucket
 
     await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
@@ -525,7 +523,6 @@ def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
     return f"inference_results/{mock_run_output_identifier_str}/"
 
 
-
 @pytest_asyncio.fixture
 async def mock_async_bucket_inference_results(
     mock_s3_async_client,
@@ -534,8 +531,6 @@ async def mock_async_bucket_inference_results(
     aggregate_inference_results_document_stems: list[DocumentStem],
 ) -> AsyncGenerator[dict[Any, Any], None]:
     """A mocked version of the inference results bucket"""
-
-
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = [
         fixture_root / f"{document_stem}.json"
@@ -573,7 +568,6 @@ async def mock_async_bucket_inference_results(
 async def mock_bucket_labelled_passages_large(
     mock_s3_async_client,
     mock_async_bucket,
-    mock_s3_async_client,
 ) -> AsyncGenerator[tuple[list[str], str, S3Client], None]:
     """A version of the labelled_passage bucket with more files"""
     fixture_root = FIXTURE_DIR / "labelled_passages"

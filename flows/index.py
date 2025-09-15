@@ -68,26 +68,13 @@ INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 async def load_async_json_data_from_s3(
     bucket: str, key: str, config: Config
 ) -> dict[str, Any]:
-    """Load JSON data from an S3 URI."""
+    """Load JSON data from an S3 URI asynchronously"""
 
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3client:
         response = await s3client.get_object(Bucket=bucket, Key=key)
         body = await response["Body"].read()
         decoded_body = body.decode("utf-8")
-        return json.loads(decoded_body)
-
-
-async def load_async_json_data_from_s3(
-    bucket: str, key: str, config: Config
-) -> dict[str, Any]:
-    """Load JSON data from an S3 URI asynchronously"""
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3client:
-        response = await s3client.get_object(Bucket=bucket, Key=key)
-        response_body = response["Body"]
-        read_body = await response_body.read()
-        decoded_body = read_body.decode("utf-8")
         return json.loads(decoded_body)
 
 
