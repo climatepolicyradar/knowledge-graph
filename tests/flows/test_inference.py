@@ -108,14 +108,15 @@ def test_list_bucket_file_stems(test_config, mock_bucket_documents):
         (None, ["AF.document.002MMUCR.n0000"], ["AF.document.002MMUCR.n0000"]),
     ],
 )
-def test_determine_file_stems(
+@pytest.mark.asyncio
+async def test_determine_file_stems(
     mock_bucket_new_and_updated_documents_json,
     test_config,
     doc_ids,
     bucket_ids,
     expected,
 ):
-    got = determine_file_stems(
+    got = await determine_file_stems(
         config=test_config,
         use_new_and_updated=False,
         requested_document_ids=doc_ids,
@@ -124,11 +125,12 @@ def test_determine_file_stems(
     assert got == expected
 
 
-def test_determine_file_stems__error(
+@pytest.mark.asyncio
+async def test_determine_file_stems__error(
     mock_bucket_new_and_updated_documents_json, test_config
 ):
     with pytest.raises(ValueError):
-        _ = determine_file_stems(
+        _ = await determine_file_stems(
             config=test_config,
             use_new_and_updated=False,
             requested_document_ids=[
@@ -163,10 +165,11 @@ async def test_load_classifier__existing_classifier(
     assert classifier.id == classifier_id
 
 
-def test_load_document(test_config, mock_bucket_documents):
-    for doc_file_name in mock_bucket_documents:
+@pytest.mark.asyncio
+async def test_load_document(test_config, mock_async_bucket_documents):
+    for doc_file_name in mock_async_bucket_documents:
         file_stem = Path(doc_file_name).stem
-        doc = load_document(test_config, file_stem=file_stem)
+        doc = await load_document(test_config, file_stem=file_stem)
         assert file_stem == doc.document_id
 
 
@@ -403,15 +406,17 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         assert inference_result.classifier_specs == [expected_classifier_spec]
 
 
-def test_get_latest_ingest_documents(
+@pytest.mark.asyncio
+async def test_get_latest_ingest_documents(
     test_config, mock_bucket_new_and_updated_documents_json
 ):
     _, latest_docs = mock_bucket_new_and_updated_documents_json
-    doc_ids = get_latest_ingest_documents(test_config)
+    doc_ids = await get_latest_ingest_documents(test_config)
     assert set(doc_ids) == latest_docs
 
 
-def test_get_latest_ingest_documents_no_latest(
+@pytest.mark.asyncio
+async def test_get_latest_ingest_documents_no_latest(
     test_config,
     # Setup the empty bucket
     mock_bucket,
@@ -420,7 +425,7 @@ def test_get_latest_ingest_documents_no_latest(
         ValueError,
         match="failed to find",
     ):
-        get_latest_ingest_documents(test_config)
+        await get_latest_ingest_documents(test_config)
 
 
 @pytest.mark.asyncio
@@ -429,7 +434,7 @@ async def test_run_classifier_inference_on_document(
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
-    mock_bucket_documents,
+    mock_async_bucket_documents,
     snapshot,
 ):
     # Setup
@@ -450,7 +455,7 @@ async def test_run_classifier_inference_on_document(
     )
 
     # Run the function on a document with no language
-    document_stem = Path(mock_bucket_documents[1]).stem
+    document_stem = Path(mock_async_bucket_documents[1]).stem
     with pytest.raises(ValueError) as exc_info:
         result = await run_classifier_inference_on_document(
             config=test_config,
@@ -500,7 +505,7 @@ async def test_run_classifier_inference_on_document(
         assert result == snapshot
 
     # Run the function on a document with English language
-    document_stem = Path(mock_bucket_documents[0]).stem
+    document_stem = Path(mock_async_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
         config=test_config,
         file_stem=DocumentStem(document_stem),
@@ -515,7 +520,7 @@ async def test_run_classifier_inference_on_document_missing(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
+    mock_async_bucket,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
@@ -548,8 +553,8 @@ async def test_inference_batch_of_documents_cpu(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
-    mock_bucket_documents,
+    mock_s3_async_client,
+    mock_async_bucket_documents,
     mock_prefect_s3_block,
     snapshot,
 ):
@@ -559,7 +564,7 @@ async def test_inference_batch_of_documents_cpu(
 
     # Prepare test data - use only the PDF document which has languages field
     batch = [
-        DocumentStem(Path(mock_bucket_documents[0]).stem)
+        DocumentStem(Path(mock_async_bucket_documents[0]).stem)
     ]  # PDF.document.0.1 has languages
     classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),
@@ -635,22 +640,30 @@ async def test_inference_batch_of_documents_cpu(
 
         assert snapshot == artifact.data
 
-    # Verify that inference outputs were stored in S3
-    s3 = boto3.client("s3", region_name=test_config.bucket_region)
+    # Verify that inference outputs were stored in S3 using async s3 client
     expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
 
     # Check that the S3 object exists
-    response = s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
+    response = await mock_s3_async_client.head_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
     assert response["ContentLength"] > 0, (
         f"Expected S3 object {expected_key} to have content"
     )
 
     # Verify the content of the stored labels
-    response = s3.get_object(Bucket=test_config.cache_bucket, Key=expected_key)
-    jsonl_content = response["Body"].read().decode("utf-8")
+    response = await mock_s3_async_client.get_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    jsonl_content = await response["Body"].read()
+    jsonl_content_decoded = jsonl_content.decode("utf-8")
 
     # Parse JSONL format - each line is a JSON object
-    lines = [line.strip() for line in jsonl_content.strip().split("\n") if line.strip()]
+    lines = [
+        line.strip()
+        for line in jsonl_content_decoded.strip().split("\n")
+        if line.strip()
+    ]
 
     # Verify we have at least one label for successful processing
     assert len(lines) > 0, "Expected at least one labelled passage"
@@ -665,7 +678,8 @@ async def test_inference_batch_of_documents_cpu_with_failures(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
+    mock_async_bucket,
+    mock_s3_async_client,
     snapshot,
     mock_prefect_s3_block,
 ):
@@ -724,13 +738,15 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 
     # For failed documents, no S3 files should be created since the documents don't exist
     # The failure happens before store_labels is called
-    s3 = boto3.client("s3", region_name=test_config.bucket_region)
+    # using async s3 client to check
 
     # Check that no labels were stored for the non-existent documents
     for doc_stem in batch:
         expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.wandb_registry_version}/{doc_stem}.json"
         with pytest.raises(ClientError) as exc_info:
-            s3.head_object(Bucket=test_config.cache_bucket, Key=expected_key)
+            await mock_s3_async_client.head_object(
+                Bucket=test_config.cache_bucket, Key=expected_key
+            )
         assert exc_info.value.response["Error"]["Code"] == "404"
 
 
@@ -801,7 +817,7 @@ async def test__inference_batch_of_documents(
     mock_classifiers_dir,
     mock_wandb,
     mock_bucket,
-    mock_bucket_documents,
+    mock_async_bucket_documents,
     mock_prefect_s3_block,
 ):
     """Test the inner _inference_batch_of_documents function with mocked flow context."""
@@ -810,7 +826,7 @@ async def test__inference_batch_of_documents(
 
     # Prepare test data - use only the PDF document which has languages field
     batch = [
-        DocumentStem(Path(mock_bucket_documents[0]).stem)
+        DocumentStem(Path(mock_async_bucket_documents[0]).stem)
     ]  # PDF.document.0.1 has languages
     classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),

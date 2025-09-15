@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
+import aioboto3
 import boto3
 import coiled
 import wandb
@@ -207,7 +208,7 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
-def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
+async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     """
     Get IDs of changed documents from the latest ingest run
 
@@ -233,7 +234,7 @@ def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     # Sort by Key and get the last one
     latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
 
-    data = download_s3_file(config, latest["Key"])
+    data = await download_s3_file(config, latest["Key"])
     content = json.loads(data)
     updated = list(content["updated_documents"].keys())
     new = [d["import_id"] for d in content["new_documents"]]
@@ -242,7 +243,7 @@ def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     return new + updated
 
 
-def determine_file_stems(
+async def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
@@ -267,7 +268,7 @@ def determine_file_stems(
             "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
         )
     elif use_new_and_updated:
-        requested_document_ids = get_latest_ingest_documents(config)
+        requested_document_ids = await get_latest_ingest_documents(config)
     elif requested_document_ids is None:
         current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
@@ -313,16 +314,16 @@ async def load_classifier(
         return classifier
 
 
-def download_s3_file(config: Config, key: str):
+async def download_s3_file(config: Config, key: str):
     """Retrieve an S3 file from the pipeline cache"""
-
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    response = s3.get_object(
-        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        Key=key,
-    )
-    content = response["Body"].read().decode("utf-8")
-    return content
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        response = await s3.get_object(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Key=key,
+        )
+        body = await response["Body"].read()
+        return body.decode("utf-8")
 
 
 def generate_document_source_key(config: Config, document_stem: DocumentStem) -> S3Uri:
@@ -335,13 +336,13 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
     )
 
 
-def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
+async def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = generate_document_source_key(
         config=config,
         document_stem=file_stem,
     ).key
-    content = download_s3_file(config=config, key=file_key)
+    content = await download_s3_file(config=config, key=file_key)
     document = BaseParserOutput.model_validate_json(content)
     return document
 
@@ -588,7 +589,7 @@ async def run_classifier_inference_on_document(
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with file stem {file_stem}")
-    document = load_document(config, file_stem)
+    document = await load_document(config, file_stem)
 
     # Resolve typing issue as wikibase_id is optional (though required here)
     assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
@@ -953,7 +954,7 @@ async def inference(
     print(f"Running with config: {config}")
 
     current_bucket_file_stems = list_bucket_file_stems(config=config)
-    validated_file_stems = determine_file_stems(
+    validated_file_stems = await determine_file_stems(
         config=config,
         use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,

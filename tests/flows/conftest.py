@@ -298,6 +298,30 @@ def mock_bucket_documents(mock_s3_client, mock_bucket):
     yield fixture_files
 
 
+@pytest_asyncio.fixture
+async def mock_async_bucket_documents(mock_s3_async_client, mock_async_bucket):
+    fixture_files = ["GEF.document.0.1.json", "CPR.document.0.1.json"]
+    for file_name in fixture_files:
+        data = load_fixture(file_name)
+        body = BytesIO(data.encode("utf-8"))
+        key = os.path.join("embeddings_input", file_name)
+        await mock_s3_async_client.put_object(
+            Bucket=mock_async_bucket, Key=key, Body=body, ContentType="application/json"
+        )
+    yield fixture_files
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
+            )
+
+
 @pytest.fixture
 def mock_bucket_multiple_sources(mock_s3_client, mock_bucket):
     fixture_files = [
@@ -314,7 +338,7 @@ def mock_bucket_multiple_sources(mock_s3_client, mock_bucket):
     yield fixture_files
 
 
-def create_mock_new_and_updated_documents_json(
+async def create_mock_new_and_updated_documents_json(
     mock_s3_client, mock_bucket, doc_names: tuple[str, str], timestamp: str
 ):
     first_doc, second_doc = doc_names
@@ -326,29 +350,42 @@ def create_mock_new_and_updated_documents_json(
     }
     data = BytesIO(json.dumps(content).encode("utf-8"))
     key = os.path.join("input", timestamp, "new_and_updated_documents.json")
-    mock_s3_client.put_object(
+    await mock_s3_client.put_object(
         Bucket=mock_bucket, Key=key, Body=data, ContentType="application/json"
     )
 
 
-@pytest.fixture
-def mock_bucket_new_and_updated_documents_json(mock_s3_client, mock_bucket):
+@pytest_asyncio.fixture
+async def mock_bucket_new_and_updated_documents_json(
+    mock_s3_async_client, mock_async_bucket
+):
     previous_docs = {"Previous.document.0.2", "Previous.document.0.1"}
-    create_mock_new_and_updated_documents_json(
-        mock_s3_client,
-        mock_bucket,
+    await create_mock_new_and_updated_documents_json(
+        mock_s3_async_client,
+        mock_async_bucket,
         doc_names=previous_docs,
         timestamp="2023-01-1T01.01.01.000001",
     )
 
     latest_docs = {"Latest.document.0.2", "Latest.document.0.1"}
-    create_mock_new_and_updated_documents_json(
-        mock_s3_client,
-        mock_bucket,
+    await create_mock_new_and_updated_documents_json(
+        mock_s3_async_client,
+        mock_async_bucket,
         doc_names=latest_docs,
         timestamp="2023-01-1T01.01.01.000001",
     )
     yield previous_docs, latest_docs
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
+            )
 
 
 @pytest.fixture
