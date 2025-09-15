@@ -9,7 +9,6 @@ import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
 from functools import partial
-from io import BytesIO
 from pathlib import Path
 from typing import (
     Annotated,
@@ -372,41 +371,6 @@ async def collect_unique_file_stems_under_prefix(
                 if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
                     file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return list(set(file_stems))
-
-
-def _s3_object_write_text(s3_uri: str, text: str) -> None:
-    """Write text content to an S3 object."""
-    # Parse the S3 URI
-    s3_path: Path = Path(s3_uri)
-    if len(s3_path.parts) < 3:
-        raise ValueError(f"Invalid S3 path: {s3_path}")
-
-    bucket: str = s3_path.parts[1]
-    key = str(Path(*s3_path.parts[2:]))
-
-    # Create BytesIO buffer with the text content
-    body = BytesIO(text.encode("utf-8"))
-
-    # Upload to S3
-    s3 = boto3.client("s3")
-    _ = s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
-
-
-def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
-    """Write text content to an S3 object."""
-    # Parse the S3 URI
-    s3_path: Path = Path(s3_uri)
-    if len(s3_path.parts) < 3:
-        raise ValueError(f"Invalid S3 path: {s3_path}")
-
-    bucket: str = s3_path.parts[1]
-    key = str(Path(*s3_path.parts[2:]))
-
-    # Upload to S3
-    s3 = boto3.client("s3")
-    _ = s3.put_object(
-        Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
-    )
 
 
 def is_file_stem_for_english_language_document(
