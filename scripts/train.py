@@ -243,6 +243,21 @@ def main(
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     """
+    return train(
+        wikibase_id=wikibase_id,
+        track=track,
+        upload=upload,
+        aws_env=aws_env,
+    )
+
+
+def train(
+    wikibase_id: WikibaseID,
+    track: bool,
+    upload: bool,
+    aws_env: AwsEnv,
+):
+    """Train the model and optionally upload the artifact."""
     project = wikibase_id
     namespace = Namespace(project=project, entity=WANDB_ENTITY)
     job_type = "train_model"
