@@ -369,10 +369,11 @@ async def test_process_single_document__value_error(
     assert result == snapshot
 
 
-def test_collect_stems_by_specs(
+@pytest.mark.asyncio
+async def test_collect_stems_by_specs(
     mock_classifier_specs, mock_bucket_labelled_passages_large, test_config
 ):
-    stems = collect_stems_by_specs(test_config)
+    stems = await collect_stems_by_specs(test_config)
     assert set(stems) == set(
         [
             "UNFCCC.non-party.467.0",
