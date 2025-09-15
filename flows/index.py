@@ -4,11 +4,11 @@ import os
 import random
 import tempfile
 from collections import Counter
-from collections.abc import Awaitable, Iterable, Sequence
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-import boto3
+import aioboto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, unmapped
@@ -46,6 +46,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    ParameterisedFlow,
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
@@ -65,13 +66,17 @@ DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 
 
-def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
-    """Load JSON data from an S3 URI."""
+async def load_async_json_data_from_s3(
+    bucket: str, key: str, config: Config
+) -> dict[str, Any]:
+    """Load JSON data from an S3 URI asynchronously"""
 
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket, Key=key)
-    body = response["Body"].read().decode("utf-8")
-    return json.loads(body)
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3client:
+        response = await s3client.get_object(Bucket=bucket, Key=key)
+        body = await response["Body"].read()
+        decoded_body = body.decode("utf-8")
+        return json.loads(decoded_body)
 
 
 async def _update_vespa_passage_concepts(
@@ -133,10 +138,10 @@ async def _update_vespa_passage_concepts(
     return response
 
 
-async def create_aggregate_indexing_summary_artifact(
+async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[None],
+    successes: Sequence[FlowRun],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -222,8 +227,10 @@ async def index_document_passages(
 
     print(f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}")
 
-    raw_data = load_json_data_from_s3(
-        bucket=aggregated_results_s3_uri.bucket, key=aggregated_results_s3_uri.key
+    raw_data = await load_async_json_data_from_s3(
+        bucket=aggregated_results_s3_uri.bucket,
+        key=aggregated_results_s3_uri.key,
+        config=config,
     )
     aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
         TextBlockId(k): v for k, v in raw_data.items()
@@ -724,13 +731,14 @@ async def index(
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
-        collected_document_stems: list[DocumentStem] = (
-            collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket_str,
-                prefix=os.path.join(
-                    config.aggregate_inference_results_prefix, run_output_identifier
-                ),
-            )
+        collected_document_stems: list[
+            DocumentStem
+        ] = await collect_unique_file_stems_under_prefix(
+            bucket_name=config.cache_bucket_str,
+            prefix=os.path.join(
+                config.aggregate_inference_results_prefix, run_output_identifier
+            ),
+            bucket_region=config.bucket_region,
         )
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")
@@ -746,19 +754,24 @@ async def index(
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
         }
 
-    parameterised_batches: Iterable[dict[str, Any]] = (
-        parameters(batch) for batch in batches
-    )
+    parameterised_batches: Sequence[ParameterisedFlow] = []
+    for batch in batches:
+        parameterised_batches.append(
+            ParameterisedFlow(
+                # The typing doesn't pick up the Flow decorator
+                fn=index_batch_of_documents,  # pyright: ignore[reportArgumentType]
+                params=parameters(batch),
+            )
+        )
 
     successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
-        fn=index_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         parameterised_batches=parameterised_batches,
         unwrap_result=False,
     )
 
-    await create_aggregate_indexing_summary_artifact(
+    await create_indexing_summary_artifact(
         config=config,
         document_stems=document_stems,
         successes=successes,

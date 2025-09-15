@@ -21,6 +21,7 @@ just audit-s3-vespa-alignment cpr-staging-data-pipeline-cache indexer_input
     "~/.vespa/climate-policy-radar.navigator_dev.default"
 """
 
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,6 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
+import boto3
 import pandas as pd
 import typer
 import vespa.querybuilder as qb
@@ -38,7 +40,6 @@ from tenacity import Retrying, stop_after_attempt
 from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
-from flows.index import load_json_data_from_s3
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -68,6 +69,15 @@ class Result:
     failed: bool = False
 
 
+def load_json_data_from_s3(bucket: str, key: str) -> dict[str, Any]:
+    """Load JSON data from an S3 URI."""
+
+    s3 = boto3.client("s3")
+    response = s3.get_object(Bucket=bucket, Key=key)
+    body = response["Body"].read().decode("utf-8")
+    return json.loads(body)
+
+
 def get_filtered_passage_count_from_s3(bucket_name: str, s3_key: str) -> int:
     """
     Check how many passages we have in s3 relating to a document id.
@@ -78,10 +88,7 @@ def get_filtered_passage_count_from_s3(bucket_name: str, s3_key: str) -> int:
     This includes text blocks of a certain block type as well as invalid HTML documents.
     """
 
-    data = load_json_data_from_s3(
-        bucket=bucket_name,
-        key=s3_key,
-    )
+    data = load_json_data_from_s3(bucket=bucket_name, key=s3_key)
 
     parser_output = ParserOutput.model_validate(data)
 
