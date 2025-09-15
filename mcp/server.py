@@ -1,7 +1,9 @@
+import logging
 from typing import Annotated, List
 
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
+from rich.logging import RichHandler
 
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseID, WikibaseSession
@@ -61,6 +63,13 @@ async def handle_wikibase_error(
         print(error_msg)
     return error_msg
 
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    handlers=[RichHandler(markup=True, rich_tracebacks=True)],
+)
 
 # Initialize FastMCP app
 mcp = FastMCP("Climate Policy Radar Concept Store")
@@ -128,11 +137,7 @@ async def get_multiple_concepts(
 
     try:
         # Validate and convert IDs
-        valid_ids = [
-            WikibaseID(wid)
-            for wid in wikibase_ids
-            if wid.startswith("Q") and wid[1:].isdigit()
-        ]
+        valid_ids = [WikibaseID(wid) for wid in wikibase_ids]
 
         if not valid_ids and ctx:
             await ctx.warning("No valid Wikibase IDs provided")
