@@ -78,6 +78,19 @@ async def load_async_json_data_from_s3(
         return json.loads(decoded_body)
 
 
+async def load_async_json_data_from_s3(
+    bucket: str, key: str, config: Config
+) -> dict[str, Any]:
+    """Load JSON data from an S3 URI asynchronously"""
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3client:
+        response = await s3client.get_object(Bucket=bucket, Key=key)
+        response_body = response["Body"]
+        read_body = await response_body.read()
+        decoded_body = read_body.decode("utf-8")
+        return json.loads(decoded_body)
+
+
 async def _update_vespa_passage_concepts(
     vespa_data_id: VespaDataId,
     serialised_concepts: list[dict[str, Any]],
@@ -730,13 +743,14 @@ async def index(
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
         )
-        collected_document_stems: list[DocumentStem] = (
-            collect_unique_file_stems_under_prefix(
-                bucket_name=config.cache_bucket_str,
-                prefix=os.path.join(
-                    config.aggregate_inference_results_prefix, run_output_identifier
-                ),
-            )
+        collected_document_stems: list[
+            DocumentStem
+        ] = await collect_unique_file_stems_under_prefix(
+            bucket_name=config.cache_bucket_str,
+            prefix=os.path.join(
+                config.aggregate_inference_results_prefix, run_output_identifier
+            ),
+            bucket_region=config.bucket_region,
         )
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")

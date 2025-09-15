@@ -39,15 +39,12 @@ from flows.utils import (
 async def test_index_document_passages(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
-    mock_s3_async_client,
-    mock_bucket: str,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
     test_config,
 ) -> None:
     """Test that we loaded the inference results from the mock bucket."""
-
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
@@ -130,8 +127,6 @@ async def test_index_document_passages(
 async def test_index_document_passages__error_handling(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
-    mock_s3_client,
-    mock_bucket: str,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
     mock_run_output_identifier_str: str,
     s3_prefix_inference_results: str,
@@ -171,8 +166,6 @@ async def test_index_document_passages__error_handling(
 async def test_index_batch_of_documents(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
-    mock_s3_client,
-    mock_bucket: str,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
     aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
@@ -289,8 +282,6 @@ async def test_index_batch_of_documents(
 async def test_index_batch_of_documents_failure(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
-    mock_s3_client,
-    mock_bucket: str,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
     aggregate_inference_results_document_stems: list[DocumentStem],
     mock_run_output_identifier_str: str,
@@ -419,8 +410,6 @@ async def test_run_indexing_from_aggregate_results__invokes_subdeployments_corre
 async def test_run_indexing_from_aggregate_results__handles_failures(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
-    mock_s3_client,
-    mock_bucket: str,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
     mock_run_output_identifier_str: str,
     aggregate_inference_results_document_stems: list[DocumentStem],

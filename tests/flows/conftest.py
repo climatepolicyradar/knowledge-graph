@@ -237,6 +237,7 @@ async def mock_async_bucket(
     mock_aws_creds, mock_s3_async_client, test_config
 ) -> AsyncGenerator[str, None]:
     """Returns a mocked s3 bucket name"""
+
     await mock_s3_async_client.create_bucket(
         Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
@@ -524,7 +525,8 @@ def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
     return f"inference_results/{mock_run_output_identifier_str}/"
 
 
-@pytest_asyncio.fixture()
+
+@pytest_asyncio.fixture
 async def mock_async_bucket_inference_results(
     mock_s3_async_client,
     mock_async_bucket,
@@ -532,6 +534,7 @@ async def mock_async_bucket_inference_results(
     aggregate_inference_results_document_stems: list[DocumentStem],
 ) -> AsyncGenerator[dict[Any, Any], None]:
     """A mocked version of the inference results bucket"""
+
 
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = [
@@ -568,6 +571,7 @@ async def mock_async_bucket_inference_results(
 
 @pytest_asyncio.fixture
 async def mock_bucket_labelled_passages_large(
+    mock_s3_async_client,
     mock_async_bucket,
     mock_s3_async_client,
 ) -> AsyncGenerator[tuple[list[str], str, S3Client], None]:
@@ -909,3 +913,38 @@ async def mock_prefect_s3_block():
     """Create an S3 block against the local prefect server."""
     async with s3_block_context() as block:
         yield block
+
+
+@pytest_asyncio.fixture
+async def mock_bucket_stem(
+    mock_s3_async_client,
+    mock_async_bucket,
+) -> AsyncGenerator[None, None]:
+    s3_paths = [
+        "test_prefix/Q1/v1/CCLW.executive.1.1.json",
+        "test_prefix/Q1/v1/CCLW.executive.2.2.json",
+        "test_prefix/Q1/v1/CCLW.executive.2.2_translated_en.json",
+        "test_prefix/Q1/v2/CCLW.executive.1.1.json",
+        "test_prefix/Q1/v2/CCLW.executive.2.2.json",
+        "test_prefix/Q2/v1/CCLW.executive.1.1.json",
+        "test_prefix/Q2/v1/CCLW.executive.2.2.json",
+        "test_prefix/Q3/v2/CCLW.executive.1.1.json",
+        "test_prefix/Q3/v2/CCLW.executive.2.2.json",
+        "test_prefix/Q3/v2/CCLW.executive.3.3.json",
+        "some_other_prefix/Q1/v1/CCLW.some_other_doc.4.4.json",
+    ]
+    for s3_path in s3_paths:
+        await mock_s3_async_client.put_object(Bucket=mock_async_bucket, Key=s3_path)
+
+    yield
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
+            )
