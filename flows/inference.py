@@ -444,28 +444,29 @@ async def store_labels(
     """Store the labels in the cache bucket."""
     logger = get_run_logger()
 
-    session = boto3.Session(region_name=config.bucket_region)
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        # Don't get rate-limited by AWS
+        semaphore = asyncio.Semaphore(10)
 
-    s3 = session.client("s3")
-    # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(10)
+        async def fn(
+            inference: SingleDocumentInferenceResult,
+        ) -> PutObjectOutputTypeDef:
+            s3_uri = generate_s3_uri_output(config, inference)
+            logger.info(
+                f"Storing labels for document {inference.document_stem} at {s3_uri}"
+            )
 
-    async def fn(inference: SingleDocumentInferenceResult) -> PutObjectOutputTypeDef:
-        s3_uri = generate_s3_uri_output(config, inference)
-        logger.info(
-            f"Storing labels for document {inference.document_stem} at {s3_uri}"
-        )
+            body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
 
-        body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+            response = await s3.put_object(
+                Bucket=s3_uri.bucket,
+                Key=s3_uri.key,
+                Body=body,
+                ContentType="application/json",
+            )
 
-        response = s3.put_object(
-            Bucket=s3_uri.bucket,
-            Key=s3_uri.key,
-            Body=body,
-            ContentType="application/json",
-        )
-
-        return response
+            return response
 
     tasks = [
         wait_for_semaphore(

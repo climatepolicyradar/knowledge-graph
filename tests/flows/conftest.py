@@ -978,3 +978,19 @@ async def mock_bucket_stem(
             await mock_s3_async_client.delete_objects(
                 Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
             )
+
+
+@pytest_asyncio.fixture
+async def mock_async_bucket_labels(mock_s3_async_client, mock_async_bucket):
+    yield mock_async_bucket
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
+            )

@@ -7,7 +7,6 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import boto3
 import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
@@ -77,10 +76,10 @@ def mock_deployment():
     return MockDeployment
 
 
-def helper_list_labels_in_bucket(test_config, bucket_name):
+async def helper_list_labels_in_bucket(test_config, bucket_name, async_s3_client):
     # Find out what is now in the spans bucket
-    s3 = boto3.client("s3", region_name=test_config.bucket_region)
-    response = s3.list_objects_v2(
+
+    response = await async_s3_client.list_objects_v2(
         Bucket=bucket_name, Prefix=test_config.inference_document_target_prefix
     )
     labels = [c.get("Key") for c in response.get("Contents", [])]
@@ -220,7 +219,9 @@ def test_document_passages__pdf(parser_output_pdf):
 
 
 @pytest.mark.asyncio
-async def test_store_labels(test_config, mock_bucket, snapshot):
+async def test_store_labels(
+    test_config, mock_async_bucket_labels, mock_s3_async_client, snapshot
+):
     text = "This is a test text block"
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
@@ -241,7 +242,9 @@ async def test_store_labels(test_config, mock_bucket, snapshot):
     assert failures == snapshot(name="failures")
     assert unknown_failures == snapshot(name="unknown_failures")
 
-    labels = helper_list_labels_in_bucket(test_config, mock_bucket)
+    labels = await helper_list_labels_in_bucket(
+        test_config, mock_async_bucket_labels, mock_s3_async_client
+    )
 
     assert len(labels) == 1
     assert labels[0] == "labelled_passages/Q9081/2tnmbxaw/TEST.DOC.0.1.json"
