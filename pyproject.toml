@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.12.1"
+version = "0.13.0"
 description = ""
 authors = [
     {name = "CPR Data Science", email = "dsci@climatepolicyradar.org"}
@@ -39,6 +39,7 @@ dependencies = [
     "pytest-aioboto3>=0.6.0",
     "coiled>=1.115.0",
     "prefect-coiled>=0.0.4",
+    "html2text>=2025.4.15",
 ]
 
 [project.optional-dependencies]
