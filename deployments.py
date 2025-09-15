@@ -82,7 +82,7 @@ def create_deployment(
     docker_registry = os.environ["DOCKER_REGISTRY"]
     docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
     image_name = os.path.join(docker_registry, docker_repository)
-
+    image = f"{image_name}:{version}"
     if gpu:
         if aws_env == AwsEnv.production:
             aws_env_str = AwsEnv.production.name
@@ -94,7 +94,16 @@ def create_deployment(
         default_job_variables = JSON.load(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
         ).value
-        default_job_variables["image"] = f"{image_name}:{version}"
+        default_job_variables["image"] = image
+        # Using a single host with a gpu, see:
+        # https://docs.coiled.io/user_guide/prefect.html#configure-hardware
+        default_job_variables.update(
+            {
+                "container": image,
+                "gpu": True,
+            }
+        )
+
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
         work_queue_name = f"mvp-{aws_env}"
