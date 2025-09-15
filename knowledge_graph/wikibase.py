@@ -1,7 +1,9 @@
 import asyncio
+import atexit
 import functools
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from logging import getLogger
 from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
@@ -30,6 +32,45 @@ MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
 
+_thread_state = threading.local()
+
+
+def _get_persistent_loop() -> asyncio.AbstractEventLoop:
+    """
+    Return a persistent event loop bound to the current thread.
+
+    This ensures that synchronous wrappers always reuse the same live event loop
+    instead of creating and closing a new loop on every call. Reusing a loop
+    prevents issues where async resources (like HTTP clients) become tied to a
+    loop that has been closed, which commonly manifests as 'Event loop is
+    closed' errors for newcomers to async.
+    """
+    loop = getattr(_thread_state, "loop", None)
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
+        _thread_state.loop = loop
+        atexit.register(_shutdown_loop, loop)
+    return loop
+
+
+def _shutdown_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """
+    Cleanly shut down the persistent thread-local event loop at process exit.
+
+    This cancels any pending tasks before closing the loop.
+    """
+    if loop.is_closed():
+        return
+    try:
+        pending = asyncio.all_tasks(loop=loop)
+        for t in pending:
+            t.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+
 
 def async_to_sync(
     async_func: Callable[..., Coroutine[None, None, T]],
@@ -38,9 +79,9 @@ def async_to_sync(
     Decorator that converts async methods to synchronous interface
 
     This decorator wraps async methods to provide a synchronous interface by
-    automatically managing the event loop. It creates a new event loop if none exists,
-    or raises an error if called from within an existing async context to prevent
-    deadlocks.
+    automatically managing the event loop. It uses a per-thread loop, so async resources
+    remain bound to a live loop across calls. If there is no running loop, it creates a
+    new persistent event loop bound to the current thread.
 
     The decorator preserves the original function's return type, so type checkers should
     understand that sync wrappers return the actual objects, not coroutines.
@@ -51,11 +92,14 @@ def async_to_sync(
     Returns:
         A synchronous function that returns T (the unwrapped result type)
 
+    Raises:
+        RuntimeError: if called from an already-running event loop, it asks the caller
+        to use the async version directly
+
     Example:
         @async_to_sync
         async def get_data(self) -> MyData:
             return await self.get_data_async()
-
         # Type checker knows this returns MyData, not Awaitable[MyData]
         data = session.get_data()
     """
@@ -63,16 +107,18 @@ def async_to_sync(
     @functools.wraps(async_func)
     def wrapper(self, *args, **kwargs) -> T:
         try:
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
+            running = asyncio.get_running_loop()
+            if running.is_running():
                 raise RuntimeError(
                     f"Cannot call sync version of {async_func.__name__} from async context. "
                     f"Use {async_func.__name__}_async directly."
                 )
-        except RuntimeError as e:
-            if "Cannot call sync version" in str(e):
-                raise
-        return asyncio.run(async_func(self, *args, **kwargs))
+        except RuntimeError:
+            # Not in a running loop in this thread → OK to use our persistent loop
+            pass
+
+        loop = _get_persistent_loop()
+        return loop.run_until_complete(async_func(self, *args, **kwargs))
 
     return cast(Callable[..., T], wrapper)
 
@@ -874,7 +920,10 @@ class WikibaseSession:
     async def close(self):
         """Close the async client"""
         if self._client:
-            await self._client.aclose()
+            try:
+                await self._client.aclose()
+            finally:
+                self._client = None
 
     async def __aenter__(self):
         """Async context manager entry"""
