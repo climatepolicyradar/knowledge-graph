@@ -367,12 +367,12 @@ async def test_inference_with_gpu_enabled(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
-    mock_bucket_multiple_sources,
+    mock_async_bucket,
+    mock_async_bucket_multiple_sources,
     mock_deployment,
 ):
     input_doc_ids = [
-        DocumentImportId(Path(doc).stem) for doc in mock_bucket_multiple_sources
+        DocumentImportId(Path(doc).stem) for doc in mock_async_bucket_multiple_sources
     ]
     output_doc_ids = [DocumentStem(doc) for doc in input_doc_ids]
 
@@ -409,7 +409,6 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_async_bucket,
     mock_async_bucket_documents,
     mock_deployment,
 ):
@@ -480,7 +479,6 @@ async def test_run_classifier_inference_on_document(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
     mock_async_bucket_documents,
     snapshot,
 ):
@@ -802,7 +800,7 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
+    mock_async_bucket,
     snapshot,
     mock_prefect_s3_block,
 ):
@@ -863,7 +861,6 @@ async def test__inference_batch_of_documents(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
     mock_async_bucket_documents,
     mock_prefect_s3_block,
 ):

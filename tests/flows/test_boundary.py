@@ -327,18 +327,21 @@ async def test_get_document_passages_from_vespa_over_limit(
             )
 
 
-def test_load_labelled_passages_by_uri_obj(mock_bucket, mock_s3_client):
+@pytest.mark.asyncio
+async def test_load_labelled_passages_by_uri_obj(
+    mock_async_bucket, mock_s3_async_client, mock_async_bucket_labels
+):
     fixture = load_fixture(
         "labelled_passages/Q218/q4xsgmjb/AF.document.002MMUCR.n0003.json"
     )
-    mock_s3_client.put_object(
-        Bucket=mock_bucket,
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
         Key="labelled_passages/Q218/q4xsgmjb/AF.document.002MMUCR.n0003.json",
         Body=fixture,
         ContentType="application/json",
     )
 
-    document_object_uri: DocumentObjectUri = f"s3://{mock_bucket}/labelled_passages/Q218/q4xsgmjb/AF.document.002MMUCR.n0003.json"
+    document_object_uri: DocumentObjectUri = f"s3://{mock_async_bucket}/labelled_passages/Q218/q4xsgmjb/AF.document.002MMUCR.n0003.json"
     assert load_labelled_passages_by_uri(document_object_uri) == [
         LabelledPassage(
             id="308",
@@ -493,18 +496,21 @@ def test_load_labelled_passages_by_uri_obj(mock_bucket, mock_s3_client):
     ]
 
 
-def test_load_labelled_passages_by_uri_raw(mock_bucket, mock_s3_client):
+@pytest.mark.asyncio
+async def test_load_labelled_passages_by_uri_raw(
+    mock_async_bucket, mock_s3_async_client, mock_async_bucket_labels
+):
     fixture = load_fixture(
         "labelled_passages/Q857/sd6wjpa2/AF.document.i00000021.n0000_translated_en.json"
     )
-    mock_s3_client.put_object(
-        Bucket=mock_bucket,
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
         Key="labelled_passages/Q857/sd6wjpa2/AF.document.i00000021.n0000_translated_en.json",
         Body=fixture,
         ContentType="application/json",
     )
 
-    document_object_uri: DocumentObjectUri = f"s3://{mock_bucket}/labelled_passages/Q857/sd6wjpa2/AF.document.i00000021.n0000_translated_en.json"
+    document_object_uri: DocumentObjectUri = f"s3://{mock_async_bucket}/labelled_passages/Q857/sd6wjpa2/AF.document.i00000021.n0000_translated_en.json"
     assert load_labelled_passages_by_uri(document_object_uri) == [
         LabelledPassage(
             id="58",
