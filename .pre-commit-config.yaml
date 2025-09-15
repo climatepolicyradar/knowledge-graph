@@ -4,7 +4,7 @@ repos:
     hooks:
       - id: check-json
       - id: detect-aws-credentials
-        args: [ --allow-missing-credentials ]
+        args: [--allow-missing-credentials]
   - repo: https://github.com/kynan/nbstripout
     rev: 0.8.1
     hooks:
@@ -14,10 +14,10 @@ repos:
     rev: v0.12.9
     hooks:
       - id: ruff-check
-        types_or: [ python, pyi, jupyter ]
-        args: [ --fix ]
+        types_or: [python, pyi, jupyter]
+        args: [--fix]
       - id: ruff-format
-        types_or: [ python, pyi, jupyter ]
+        types_or: [python, pyi, jupyter]
   - repo: local
     hooks:
       - id: pyright
@@ -39,4 +39,4 @@ repos:
     rev: v1.35.5
     hooks:
       - id: typos
-        exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__)
+        exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__|flows/classifier_specs/)
