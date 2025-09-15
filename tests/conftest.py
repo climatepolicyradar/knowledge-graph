@@ -13,6 +13,8 @@ import pytest
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import get_git_root
+from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.span import Span
 from knowledge_graph.wikibase import WikibaseSession
 
 
@@ -413,3 +415,25 @@ def MockedWikibaseSession(
     finally:
         # Restore original method
         WikibaseSession._get_client = original_get_client
+
+
+class ZeroReturnsClassifier(Classifier):
+    """A classifier which always returns empty predictions."""
+
+    def __init__(self, concept: Concept):
+        self.concept = concept
+
+    def predict(self, text: str) -> list[Span]:
+        """Predict spans for given text"""
+        return []
+
+    @property
+    def id(self) -> ClassifierID:
+        """Return classifier ID"""
+        return ClassifierID.generate("zero", self.concept.id, "always_empty")
+
+
+@pytest.fixture
+def zero_returns_classifier() -> type[ZeroReturnsClassifier]:
+    """Fixture that returns the ZeroReturnsClassifier class."""
+    return ZeroReturnsClassifier

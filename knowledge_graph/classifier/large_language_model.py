@@ -172,8 +172,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
                 labellers=[str(self)],
                 input_text=text,
             )
-        except SpanXMLConceptFormattingError as e:
-            logger.warning(f"Prediction failed: {e}")
+        except SpanXMLConceptFormattingError:
             return []
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
