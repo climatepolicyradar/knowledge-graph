@@ -86,9 +86,10 @@ async def helper_list_labels_in_bucket(test_config, bucket_name, async_s3_client
     return labels
 
 
-def test_list_bucket_file_stems(test_config, mock_bucket_documents):
-    expected_ids = [Path(d).stem for d in mock_bucket_documents]
-    got_ids = list_bucket_file_stems(test_config)
+@pytest.mark.asyncio
+async def test_list_bucket_file_stems(test_config, mock_async_bucket_documents):
+    expected_ids = [Path(d).stem for d in mock_async_bucket_documents]
+    got_ids = await list_bucket_file_stems(test_config)
     assert sorted(expected_ids) == sorted(got_ids)
 
 
@@ -314,12 +315,12 @@ async def test_inference_with_dont_run_on_filter(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
-    mock_bucket_multiple_sources,
+    mock_async_bucket,
+    mock_async_bucket_multiple_sources,
     mock_deployment,
 ):
     input_doc_ids = [
-        DocumentImportId(Path(doc).stem) for doc in mock_bucket_multiple_sources
+        DocumentImportId(Path(doc).stem) for doc in mock_async_bucket_multiple_sources
     ]
     gef_doc_id, cpr_doc_id, sabin_doc_id = input_doc_ids
 
@@ -366,13 +367,14 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_bucket,
-    mock_bucket_documents,
+    mock_async_bucket,
+    mock_async_bucket_documents,
     mock_deployment,
 ):
     """Test inference flow when creating batches of inference results"""
     input_doc_ids = [
-        DocumentImportId(Path(doc_file).stem) for doc_file in mock_bucket_documents
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_async_bucket_documents
     ]
 
     expected_classifier_spec = ClassifierSpec(
@@ -422,7 +424,7 @@ async def test_get_latest_ingest_documents(
 async def test_get_latest_ingest_documents_no_latest(
     test_config,
     # Setup the empty bucket
-    mock_bucket,
+    mock_async_bucket,
 ):
     with pytest.raises(
         ValueError,

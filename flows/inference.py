@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
-import boto3
 import coiled
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
@@ -177,29 +176,30 @@ class InferenceResult(BaseModel):
         return cross_batch_successes - cross_batch_failures
 
 
-def get_bucket_paginator(config: Config, prefix: str):
+async def get_bucket_paginator(config: Config, prefix: str):
     """Returns an S3 paginator for the pipeline cache bucket"""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    paginator = s3.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        Prefix=prefix,
-    )
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        paginator = s3.get_paginator("list_objects_v2")
+        return paginator.paginate(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Prefix=prefix,
+        )
 
 
-def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
 
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    page_iterator = get_bucket_paginator(
+    page_iterator = await get_bucket_paginator(
         config, config.inference_document_source_prefix
     )
     file_stems = []
 
-    for p in page_iterator:
+    async for p in page_iterator:
         if "Contents" in p:
             for o in p["Contents"]:
                 file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
@@ -215,13 +215,15 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     Retrieves the `new_and_updated_docs.json` file from the latest ingest.
     Extracts the ids from the file, and returns them as a single list.
     """
-    page_iterator = get_bucket_paginator(config, config.pipeline_state_prefix)
+    page_iterator = await get_bucket_paginator(config, config.pipeline_state_prefix)
     file_name = "new_and_updated_documents.json"
 
     # First get all matching files, then sort them
     matching_files = [
         item
-        for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
+        async for item in page_iterator.search(
+            f"Contents[?contains(Key, '{file_name}')]"
+        )
         if item is not None
     ]
 
@@ -232,14 +234,14 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
         )
 
     # Sort by Key and get the last one
-    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
+    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]  # pyright: ignore[reportGeneralTypeIssues]
 
-    data = await download_s3_file(config, latest["Key"])
+    data = await download_s3_file(config, latest["Key"])  # pyright: ignore[reportGeneralTypeIssues]
     content = json.loads(data)
     updated = list(content["updated_documents"].keys())
     new = [d["import_id"] for d in content["new_documents"]]
 
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")
+    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")  # pyright: ignore[reportGeneralTypeIssues]
     return new + updated
 
 
@@ -282,8 +284,8 @@ async def determine_file_stems(
         document_key = os.path.join(
             config.inference_document_source_prefix, f"{doc_id}.json"
         )
-        requested_document_stems += get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key
+        requested_document_stems += await get_file_stems_for_document_id(
+            doc_id, config.cache_bucket, document_key, config.bucket_region
         )
 
     missing_from_bucket = list(
@@ -954,7 +956,7 @@ async def inference(
 
     print(f"Running with config: {config}")
 
-    current_bucket_file_stems = list_bucket_file_stems(config=config)
+    current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
         config=config,
         use_new_and_updated=use_new_and_updated,

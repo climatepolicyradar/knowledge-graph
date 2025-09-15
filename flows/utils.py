@@ -23,7 +23,6 @@ from typing import (
 from uuid import UUID
 
 import aioboto3
-import boto3
 from botocore.exceptions import ClientError
 from prefect.artifacts import (
     create_progress_artifact,
@@ -301,24 +300,27 @@ def iterate_batch(
             yield batch
 
 
-def s3_file_exists(bucket_name: str, file_key: str) -> bool:
+async def s3_file_exists(bucket_name: str, file_key: str, bucket_region: str) -> bool:
     """Check if a file exists in an S3 bucket."""
-    s3_client = boto3.client("s3")
+    session = aioboto3.Session(region_name=bucket_region)
+    async with session.client("s3") as s3_client:
+        try:
+            await s3_client.head_object(Bucket=bucket_name, Key=file_key)
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                "404",
+                "403",
+            ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                return False
+            raise
 
-    try:
-        s3_client.head_object(Bucket=bucket_name, Key=file_key)
-        return True
-    except ClientError as e:
-        if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
-            "404",
-            "403",
-        ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
-            return False
-        raise
 
-
-def get_file_stems_for_document_id(
-    document_id: DocumentImportId, bucket_name: str, document_key: str
+async def get_file_stems_for_document_id(
+    document_id: DocumentImportId,
+    bucket_name: str,
+    document_key: str,
+    bucket_region: str,
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -341,9 +343,10 @@ def get_file_stems_for_document_id(
             .with_suffix(".json")
         )
 
-        if s3_file_exists(
+        if await s3_file_exists(
             bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
+            bucket_region=bucket_region,
         ):
             stems.append(translated_file_key.stem)
 
