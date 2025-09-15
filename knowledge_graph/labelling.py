@@ -243,8 +243,6 @@ class ArgillaSession:
         :param Concept concept: The concept to get the labelled passages for
         :param Optional[datetime] min_timestamp: Only get annotations made after this timestamp (inclusive), defaults to None
         :param Optional[datetime] max_timestamp: Only get annotations made before this timestamp (inclusive), defaults to None
-        :raises ValueError: If no dataset matching the concept ID was found in Argilla
-        :raises ValueError: If no datasets were found in Argilla, you may need to be granted access to the workspace(s)
         :return list[LabelledPassage]: A list of LabelledPassage objects
         """
         # First, see whether the dataset exists with the name we expect
