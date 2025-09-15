@@ -101,6 +101,7 @@ def create_deployment(
             {
                 "container": image,
                 "gpu": True,
+                "threads_per_worker": -1,
             }
         )
 
