@@ -6,6 +6,7 @@ from knowledge_graph.classifier.classifier import (
     Classifier,
     ProbabilityCapableClassifier,
 )
+from knowledge_graph.classifier.large_language_model import LLMClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, group_overlapping_spans
@@ -200,3 +201,43 @@ class VotingClassifier(EnsembleClassifier, ProbabilityCapableClassifier):
             )
 
         return predictions
+
+
+class VotingLLMClassifier(VotingClassifier):
+    """
+    A VotingClassifier that automatically creates an ensemble of LLM classifiers.
+
+    Creates multiple LLMClassifiers with the same model but different random seeds.
+    """
+
+    def __init__(
+        self,
+        concept: Concept,
+        model_name: str = "gpt-4o-mini",
+        n_classifiers: int = 10,
+        base_seed: int = 42,
+    ):
+        """
+        Initialize VotingLLMClassifier.
+
+        :param Concept concept: The concept to classify
+        :param str model_name: LLM model name to use
+        :param int n_classifiers: Number of LLM classifiers in ensemble
+        :param int base_seed: Base random seed (each classifier gets base_seed + i)
+        """
+        self.model_name = model_name
+        self.n_classifiers = n_classifiers
+        self.base_seed = base_seed
+
+        llm_classifiers = [
+            LLMClassifier(
+                concept=concept, model_name=model_name, random_seed=base_seed + i
+            )
+            for i in range(n_classifiers)
+        ]
+
+        super().__init__(concept=concept, classifiers=llm_classifiers)
+
+    def __repr__(self):
+        """Return a string representation of the classifier."""
+        return f'{self.name}("{self.concept.preferred_label}", model_name={self.model_name}, n_classifiers={self.n_classifiers}, base_seed={self.base_seed})'
