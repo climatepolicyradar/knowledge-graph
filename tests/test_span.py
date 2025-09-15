@@ -413,3 +413,16 @@ def test_span_from_xml_invalid_concept_annotation(xml: str, is_valid: bool):
     else:
         with pytest.raises(SpanXMLConceptFormattingError):
             _ = Span.from_xml(xml, concept_id=WikibaseID("Q123"), labellers=["me"])
+
+
+@pytest.mark.parametrize(
+    "xml",
+    [
+        "",
+        "no concept tags here",
+        "Some <b>bold</b> but no concept tags.",
+    ],
+)
+def test_span_from_xml_empty(xml: str):
+    spans = Span.from_xml(xml, concept_id=WikibaseID("Q1"), labellers=["tester"])
+    assert spans == []

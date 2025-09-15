@@ -3,12 +3,12 @@ import json
 import os
 import subprocess
 import xml.etree.ElementTree as ET
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import Generator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncGenerator
 from unittest.mock import MagicMock, Mock, patch
 
 import aioboto3
@@ -65,6 +65,7 @@ def test_config():
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
         aws_env=AwsEnv("sandbox"),
+        bucket_region="eu-west-1",
     )
 
 
@@ -234,12 +235,13 @@ def local_vespa_search_adapter(
 @pytest_asyncio.fixture
 async def mock_async_bucket(
     mock_aws_creds, mock_s3_async_client, test_config
-) -> AsyncGenerator[tuple[str, S3Client], None]:
+) -> AsyncGenerator[str, None]:
+    """Returns a mocked s3 bucket name"""
     await mock_s3_async_client.create_bucket(
         Bucket=test_config.cache_bucket,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
-    yield test_config.cache_bucket, mock_s3_async_client
+    yield test_config.cache_bucket
 
     await mock_s3_async_client.delete_bucket(Bucket=test_config.cache_bucket)
 
@@ -521,15 +523,14 @@ def s3_prefix_inference_results(mock_run_output_identifier_str: str) -> str:
     return f"inference_results/{mock_run_output_identifier_str}/"
 
 
-@pytest.fixture
-def mock_bucket_inference_results(
-    mock_s3_client,
-    mock_bucket,
+@pytest_asyncio.fixture
+async def mock_async_bucket_inference_results(
+    mock_s3_async_client,
+    mock_async_bucket,
     s3_prefix_inference_results: str,
     aggregate_inference_results_document_stems: list[DocumentStem],
-) -> dict[str, dict[str, Any]]:
-    """A version of the inference results bucket with more files"""
-
+) -> AsyncGenerator[dict[Any, Any], None]:
+    """A mocked version of the inference results bucket"""
     fixture_root = FIXTURE_DIR / "inference_results"
     fixture_files = [
         fixture_root / f"{document_stem}.json"
@@ -545,36 +546,30 @@ def mock_bucket_inference_results(
         key = s3_prefix_inference_results + str(file_path.relative_to(fixture_root))
         inference_results[key] = json.loads(data)
 
-        mock_s3_client.put_object(
-            Bucket=mock_bucket, Key=key, Body=body, ContentType="application/json"
+        await mock_s3_async_client.put_object(
+            Bucket=mock_async_bucket, Key=key, Body=body, ContentType="application/json"
         )
 
-    return inference_results
+    yield inference_results
 
-
-@pytest.fixture
-def mock_bucket_labelled_passages_b(
-    mock_s3_client,
-    mock_bucket_b,
-    s3_prefix_labelled_passages,
-    labelled_passage_fixture_files,
-) -> None:
-    """Puts the concept fixture files in the mock bucket."""
-    for file_name in labelled_passage_fixture_files:
-        data = load_fixture(file_name)
-        body = BytesIO(data.encode("utf-8"))
-        key = os.path.join(s3_prefix_labelled_passages, file_name)
-        mock_s3_client.put_object(
-            Bucket=mock_bucket_b, Key=key, Body=body, ContentType="application/json"
-        )
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
+            )
 
 
 @pytest_asyncio.fixture
 async def mock_bucket_labelled_passages_large(
+    mock_s3_async_client,
     mock_async_bucket,
 ) -> AsyncGenerator[tuple[list[str], str, S3Client], None]:
     """A version of the labelled_passage bucket with more files"""
-    bucket, mock_s3_async_client = mock_async_bucket
     fixture_root = FIXTURE_DIR / "labelled_passages"
     fixture_files = list(fixture_root.glob("**/*.json"))
 
@@ -588,20 +583,20 @@ async def mock_bucket_labelled_passages_large(
         keys.append(key)
 
         await mock_s3_async_client.put_object(
-            Bucket=bucket, Key=key, Body=body, ContentType="application/json"
+            Bucket=mock_async_bucket, Key=key, Body=body, ContentType="application/json"
         )
 
-    yield (keys, bucket, mock_s3_async_client)
+    yield (keys, mock_async_bucket, mock_s3_async_client)
 
     # Teardown for objects
     paginator = mock_s3_async_client.get_paginator("list_objects_v2")
-    async for page in paginator.paginate(Bucket=bucket):
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
         delete_keys = []
         for obj in page.get("Contents", []):
             delete_keys.append({"Key": obj["Key"]})
         if delete_keys:
             await mock_s3_async_client.delete_objects(
-                Bucket=bucket, Delete={"Objects": delete_keys}
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
             )
 
 
@@ -912,3 +907,38 @@ async def mock_prefect_s3_block():
     """Create an S3 block against the local prefect server."""
     async with s3_block_context() as block:
         yield block
+
+
+@pytest_asyncio.fixture
+async def mock_bucket_stem(
+    mock_s3_async_client,
+    mock_async_bucket,
+) -> AsyncGenerator[None, None]:
+    s3_paths = [
+        "test_prefix/Q1/v1/CCLW.executive.1.1.json",
+        "test_prefix/Q1/v1/CCLW.executive.2.2.json",
+        "test_prefix/Q1/v1/CCLW.executive.2.2_translated_en.json",
+        "test_prefix/Q1/v2/CCLW.executive.1.1.json",
+        "test_prefix/Q1/v2/CCLW.executive.2.2.json",
+        "test_prefix/Q2/v1/CCLW.executive.1.1.json",
+        "test_prefix/Q2/v1/CCLW.executive.2.2.json",
+        "test_prefix/Q3/v2/CCLW.executive.1.1.json",
+        "test_prefix/Q3/v2/CCLW.executive.2.2.json",
+        "test_prefix/Q3/v2/CCLW.executive.3.3.json",
+        "some_other_prefix/Q1/v1/CCLW.some_other_doc.4.4.json",
+    ]
+    for s3_path in s3_paths:
+        await mock_s3_async_client.put_object(Bucket=mock_async_bucket, Key=s3_path)
+
+    yield
+
+    # Teardown for objects
+    paginator = mock_s3_async_client.get_paginator("list_objects_v2")
+    async for page in paginator.paginate(Bucket=mock_async_bucket):
+        delete_keys = []
+        for obj in page.get("Contents", []):
+            delete_keys.append({"Key": obj["Key"]})
+        if delete_keys:
+            await mock_s3_async_client.delete_objects(
+                Bucket=mock_async_bucket, Delete={"Objects": delete_keys}
+            )

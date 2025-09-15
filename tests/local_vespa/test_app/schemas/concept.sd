@@ -1,0 +1,71 @@
+schema concept {
+    document concept {
+        # E.g. 3wt37u7g
+        field id type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        # E.g. Q880
+        field wikibase_id type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field wikibase_url type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+
+        # E.g. fishing sector
+        field preferred_label type string {
+            indexing: attribute | summary | index
+            attribute: fast-search
+        }
+        field description type string {
+            indexing: attribute | summary | index
+        }
+        field definition type string {
+            indexing: attribute | summary | index
+        }
+        field alternative_labels type array<string> {
+            indexing: attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
+        }
+
+        # We can't do self-references for documents in Vespa, so
+        # use strings for the IDs.
+
+        field subconcept_of type array<string> {
+            indexing: attribute | summary | index
+        }
+        field has_subconcept type array<string> {
+            indexing: attribute | summary | index
+        }
+        field related_concepts type array<string> {
+            indexing: attribute | summary | index
+        }
+        field recursive_subconcept_of type array<string> {
+            indexing: attribute | summary | index
+        }
+        field recursive_has_subconcept type array<string> {
+            indexing: attribute | summary | index
+        }
+    }
+
+    document-summary search_summary {
+        summary id {}
+        summary wikibase_id {}
+        summary wikibase_url {}
+        summary preferred_label {}
+        summary description {}
+        summary definition {}
+        summary alternative_labels {}
+        summary negative_labels {}
+        summary subconcept_of {}
+        summary has_subconcept {}
+        summary related_concepts {}
+        summary recursive_subconcept_of {}
+        summary recursive_has_subconcept {}
+    }
+}
