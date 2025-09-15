@@ -1,6 +1,6 @@
 import json
 import os
-from collections.abc import AsyncGenerator, Iterable, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any, TypeAlias, TypeVar
 
 import aioboto3
@@ -34,6 +34,7 @@ from flows.inference import (
 )
 from flows.utils import (
     DocumentStem,
+    ParameterisedFlow,
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
@@ -524,13 +525,17 @@ async def aggregate(
             "run_output_identifier": run_output_identifier,
         }
 
-    parameterised_batches: Iterable[dict[str, Any]] = (
-        parameters(batch) for batch in batches
-    )
+    parameterised_batches: Sequence[ParameterisedFlow] = []
+    for batch in batches:
+        parameterised_batches.append(
+            ParameterisedFlow(
+                # The typing doesn't pick up the Flow decorator
+                fn=aggregate_batch_of_documents,  # pyright: ignore[reportArgumentType]
+                params=parameters(batch),
+            )
+        )
 
     successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
-        # The typing doesn't pick up the Flow decorator
-        fn=aggregate_batch_of_documents,  # pyright: ignore[reportArgumentType]
         aws_env=config.aws_env,
         counter=n_batches,
         parameterised_batches=parameterised_batches,

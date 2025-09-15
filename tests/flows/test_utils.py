@@ -14,6 +14,7 @@ from prefect.flows import flow
 from flows.utils import (
     DocumentStem,
     Fault,
+    ParameterisedFlow,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
@@ -499,10 +500,11 @@ async def test_map_as_sub_flow__on_flow_success(
     )
 
     successes, failures = await map_as_sub_flow(
-        fn=mock_flow,
         aws_env=AwsEnv.sandbox,
         counter=1,
-        parameterised_batches=({} for _ in range(batches_count)),
+        parameterised_batches=(
+            ParameterisedFlow(fn=mock_flow, params={}) for _ in range(batches_count)
+        ),
         unwrap_result=unwrap_result,
     )
 
@@ -530,10 +532,11 @@ async def test_map_as_sub_flow__on_flow_failure(
     )
 
     successes, failures = await map_as_sub_flow(
-        fn=mock_flow,
         aws_env=AwsEnv.sandbox,
         counter=1,
-        parameterised_batches=({} for _ in range(batches_count)),
+        parameterised_batches=(
+            ParameterisedFlow(fn=mock_flow, params={}) for _ in range(batches_count)
+        ),
         unwrap_result=unwrap_result,
     )
 
