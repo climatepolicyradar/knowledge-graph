@@ -329,6 +329,18 @@ wheels = [
 ]
 
 [[package]]
+name = "authlib"
+version = "1.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/c6/d9a9db2e71957827e23a34322bde8091b51cb778dcc38885b84c772a1ba9/authlib-1.6.3.tar.gz", hash = "sha256:9f7a982cc395de719e4c2215c5707e7ea690ecf84f1ab126f28c053f4219e610", size = 160836 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/2f/efa9d26dbb612b774990741fd8f13c7cf4cfd085b870e4a5af5c82eaf5f1/authlib-1.6.3-py2.py3-none-any.whl", hash = "sha256:7ea0f082edd95a03b7b72edac65ec7f8f68d703017d7e37573aee4fc603f2a48", size = 240105 },
+]
+
+[[package]]
 name = "aws-error-utils"
 version = "2.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -888,6 +900,21 @@ wheels = [
 ]
 
 [[package]]
+name = "cyclopts"
+version = "3.24.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "docstring-parser", marker = "python_full_version == '3.13.*'" },
+    { name = "rich" },
+    { name = "rich-rst" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/30/ca/7782da3b03242d5f0a16c20371dff99d4bd1fedafe26bc48ff82e42be8c9/cyclopts-3.24.0.tar.gz", hash = "sha256:de6964a041dfb3c57bf043b41e68c43548227a17de1bad246e3a0bfc5c4b7417", size = 76131 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/8b/2c95f0645c6f40211896375e6fa51f504b8ccb29c21f6ae661fe87ab044e/cyclopts-3.24.0-py3-none-any.whl", hash = "sha256:809d04cde9108617106091140c3964ee6fceb33cecdd537f7ffa360bde13ed71", size = 86154 },
+]
+
+[[package]]
 name = "dask"
 version = "2025.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1044,6 +1071,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dnspython"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/8b/57666417c0f90f08bcafa776861060426765fdb422eb10212086fb811d26/dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f", size = 368251 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/5a/18ad964b0086c6e62e2e7500f7edc89e3faa45033c71c1893d34eed2b2de/dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af", size = 331094 },
+]
+
+[[package]]
 name = "docker"
 version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1055,6 +1091,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/91/9b/4a2ea29aeba62471211598dac5d96825bb49348fa07e906ea930394a83ce/docker-7.1.0.tar.gz", hash = "sha256:ad8c70e6e3f8926cb8a92619b832b4ea5299e2831c14284663184e200546fa6c", size = 117834 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e3/26/57c6fb270950d476074c087527a558ccb6f4436657314bfb6cdf484114c4/docker-7.1.0-py3-none-any.whl", hash = "sha256:c96b93b7f0a746f9e77d325bcfb87422a3d8bd4f03136ae8a85b37f1898d5fc0", size = 147774 },
+]
+
+[[package]]
+name = "docstring-parser"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896 },
 ]
 
 [[package]]
@@ -1089,6 +1134,19 @@ dependencies = [
     { name = "urllib3" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2b/e2/788910715b4910d08725d480278f625e315c3c011eb74b093213363042e0/dulwich-0.21.7.tar.gz", hash = "sha256:a9e9c66833cea580c3ac12927e4b9711985d76afca98da971405d414de60e968", size = 448028 }
+
+[[package]]
+name = "email-validator"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dnspython" },
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f5/22/900cb125c76b7aaa450ce02fd727f452243f2e91a61af068b40adba60ea9/email_validator-2.3.0.tar.gz", hash = "sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426", size = 51238 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/15/545e2b6cf2e3be84bc1ed85613edd75b8aea69807a71c26f4ca6a9258e82/email_validator-2.3.0-py3-none-any.whl", hash = "sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4", size = 35604 },
+]
 
 [[package]]
 name = "eval-type-backport"
@@ -1193,6 +1251,28 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8b/50/4b769ce1ac4071a1ef6d86b1a3fb56cdc3a37615e8c5519e1af96cdac366/fastjsonschema-2.21.1.tar.gz", hash = "sha256:794d4f0a58f848961ba16af7b9c85a3e88cd360df008c59aac6fc5ae9323b5d4", size = 373939 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/90/2b/0817a2b257fe88725c25589d89aec060581aabf668707a8d03b2e9e0cb2a/fastjsonschema-2.21.1-py3-none-any.whl", hash = "sha256:c9e5b7e908310918cf494a434eeb31384dd84a98b57a30bcb1f535015b554667", size = 23924 },
+]
+
+[[package]]
+name = "fastmcp"
+version = "2.12.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "authlib" },
+    { name = "cyclopts" },
+    { name = "exceptiongroup" },
+    { name = "httpx" },
+    { name = "mcp" },
+    { name = "openapi-core" },
+    { name = "openapi-pydantic" },
+    { name = "pydantic", extra = ["email"] },
+    { name = "pyperclip" },
+    { name = "python-dotenv" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/99/5e/035fdfa23646de8811776cd62d93440e334e8a4557b35c63c1bff125c08c/fastmcp-2.12.3.tar.gz", hash = "sha256:541dd569d5b6c083140b04d997ba3dc47f7c10695cee700d0a733ce63b20bb65", size = 5246812 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/79/0fd386e61819e205563d4eb15da76564b80dc2edd3c64b46f2706235daec/fastmcp-2.12.3-py3-none-any.whl", hash = "sha256:aee50872923a9cba731861fc0120e7dbe4642a2685ba251b2b202b82fb6c25a9", size = 314031 },
 ]
 
 [[package]]
@@ -2093,12 +2173,16 @@ dev = [
     { name = "pre-commit" },
     { name = "pulumi" },
     { name = "pulumi-aws" },
+    { name = "pulumi-docker" },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-env" },
     { name = "pytest-xdist", extra = ["psutil"] },
     { name = "syrupy" },
+]
+mcp = [
+    { name = "fastmcp" },
 ]
 transformers = [
     { name = "accelerate" },
@@ -2126,6 +2210,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=2.18.0" },
     { name = "distributed", marker = "extra == 'coiled'", specifier = ">=2025.7.0" },
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.3.2" },
+    { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.12.3" },
     { name = "griffe", specifier = "==1.5.7" },
     { name = "html2text", specifier = ">=2025.4.15" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -2144,6 +2229,7 @@ requires-dist = [
     { name = "prefect-coiled", marker = "extra == 'coiled'", specifier = ">=0.0.4" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.145.0" },
     { name = "pulumi-aws", marker = "extra == 'dev'", specifier = ">=6.66.2" },
+    { name = "pulumi-docker", marker = "extra == 'dev'", specifier = ">=4.0.0,<5.0.0" },
     { name = "pydantic-ai", specifier = ">=1.0.1" },
     { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.403" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.2" },
@@ -2332,7 +2418,7 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "1.12.3"
+version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2347,9 +2433,9 @@ dependencies = [
     { name = "starlette" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/19/9955e2df5384ff5dd25d38f8e88aaf89d2d3d9d39f27e7383eaf0b293836/mcp-1.12.3.tar.gz", hash = "sha256:ab2e05f5e5c13e1dc90a4a9ef23ac500a6121362a564447855ef0ab643a99fed", size = 427203 }
+sdist = { url = "https://files.pythonhosted.org/packages/95/fd/d6e941a52446198b73e5e4a953441f667f1469aeb06fb382d9f6729d6168/mcp-1.14.0.tar.gz", hash = "sha256:2e7d98b195e08b2abc1dc6191f6f3dc0059604ac13ee6a40f88676274787fac4", size = 454855 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8f/8b/0be74e3308a486f1d127f3f6767de5f9f76454c9b4183210c61cc50999b6/mcp-1.12.3-py3-none-any.whl", hash = "sha256:5483345bf39033b858920a5b6348a303acacf45b23936972160ff152107b850e", size = 158810 },
+    { url = "https://files.pythonhosted.org/packages/04/7b/84b0dd4c2c5a499d2c5d63fb7a1224c25fc4c8b6c24623fa7a566471480d/mcp-1.14.0-py3-none-any.whl", hash = "sha256:b2d27feba27b4c53d41b58aa7f4d090ae0cb740cbc4e339af10f8cbe54c4e19d", size = 163805 },
 ]
 
 [[package]]
@@ -2881,6 +2967,38 @@ wheels = [
 ]
 
 [[package]]
+name = "openapi-core"
+version = "0.19.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "isodate" },
+    { name = "jsonschema" },
+    { name = "jsonschema-path" },
+    { name = "more-itertools" },
+    { name = "openapi-schema-validator" },
+    { name = "openapi-spec-validator" },
+    { name = "parse" },
+    { name = "typing-extensions" },
+    { name = "werkzeug" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/35/1acaa5f2fcc6e54eded34a2ec74b479439c4e469fc4e8d0e803fda0234db/openapi_core-0.19.5.tar.gz", hash = "sha256:421e753da56c391704454e66afe4803a290108590ac8fa6f4a4487f4ec11f2d3", size = 103264 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/27/6f/83ead0e2e30a90445ee4fc0135f43741aebc30cca5b43f20968b603e30b6/openapi_core-0.19.5-py3-none-any.whl", hash = "sha256:ef7210e83a59394f46ce282639d8d26ad6fc8094aa904c9c16eb1bac8908911f", size = 106595 },
+]
+
+[[package]]
+name = "openapi-pydantic"
+version = "0.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/2e/58d83848dd1a79cb92ed8e63f6ba901ca282c5f09d04af9423ec26c56fd7/openapi_pydantic-0.5.1.tar.gz", hash = "sha256:ff6835af6bde7a459fb93eb93bb92b8749b754fc6e51b2f1590a19dc3005ee0d", size = 60892 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/cf/03675d8bd8ecbf4445504d8071adab19f5f993676795708e36402ab38263/openapi_pydantic-0.5.1-py3-none-any.whl", hash = "sha256:a3a09ef4586f5bd760a8df7f43028b60cafb6d9f61de2acba9574766255ab146", size = 96381 },
+]
+
+[[package]]
 name = "openapi-schema-validator"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3112,6 +3230,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/1f/e7/81fdcbc7f190cdb058cffc9431587eb289833bdd633e2002455ca9bb13d4/paramiko-4.0.0.tar.gz", hash = "sha256:6a25f07b380cc9c9a88d2b920ad37167ac4667f8d9886ccebd8f90f654b5d69f", size = 1630743 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a9/90/a744336f5af32c433bd09af7854599682a383b37cfd78f7de263de6ad6cb/paramiko-4.0.0-py3-none-any.whl", hash = "sha256:0e20e00ac666503bf0b4eda3b6d833465a2b7aff2e2b3d79a8bba5ef144ee3b9", size = 223932 },
+]
+
+[[package]]
+name = "parse"
+version = "1.20.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/78/d9b09ba24bb36ef8b83b71be547e118d46214735b6dfb39e4bfde0e9b9dd/parse-1.20.2.tar.gz", hash = "sha256:b41d604d16503c79d81af5165155c0b20f6c8d6c559efa66b4b695c3e5a0a0ce", size = 29391 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/31/ba45bf0b2aa7898d81cbbfac0e88c267befb59ad91a19e36e1bc5578ddb1/parse-1.20.2-py2.py3-none-any.whl", hash = "sha256:967095588cb802add9177d0c0b6133b5ba33b1ea9007ca800e526f42a85af558", size = 20126 },
 ]
 
 [[package]]
@@ -3590,6 +3717,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pulumi-docker"
+version = "4.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parver" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/00/88/1f0b346698120dc98481a68f15f353806ccf7a67eee3d842c14a8dbffa7e/pulumi_docker-4.8.2.tar.gz", hash = "sha256:49f69343e1b22e2580a5b427999be156f5b72cdbd81e6d9c252f36d0ce270592", size = 107239 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/99/fc1aa2c32688891ef2589c1b1ecca660a273ec0fd6886311c64e7111fd60/pulumi_docker-4.8.2-py3-none-any.whl", hash = "sha256:d097082810f5a0fa6b3cbe4f65acf365b0eaeeed2278657725f31e47622ab826", size = 128687 },
+]
+
+[[package]]
 name = "pure-eval"
 version = "0.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3672,6 +3813,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/00/dd/4325abf92c39ba8623b5af936ddb36ffcfe0beae70405d456ab1fb2f5b8c/pydantic-2.11.7.tar.gz", hash = "sha256:d989c3c6cb79469287b1569f7447a17848c998458d49ebe294e975b9baf0f0db", size = 788350 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6a/c0/ec2b1c8712ca690e5d61979dee872603e92b8a32f94cc1b72d53beab008a/pydantic-2.11.7-py3-none-any.whl", hash = "sha256:dde5df002701f6de26248661f6835bbe296a47bf73990135c7d07ce741b9623b", size = 444782 },
+]
+
+[package.optional-dependencies]
+email = [
+    { name = "email-validator" },
 ]
 
 [[package]]
@@ -4315,6 +4461,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ab/3a/0316b28d0761c6734d6bc14e770d85506c986c85ffb239e688eeaab2c2bc/rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098", size = 223149 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/19/71/39c7c0d87f8d4e6c020a393182060eaefeeae6c01dab6a84ec346f2567df/rich-13.9.4-py3-none-any.whl", hash = "sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90", size = 242424 },
+]
+
+[[package]]
+name = "rich-rst"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "docutils" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b0/69/5514c3a87b5f10f09a34bb011bc0927bc12c596c8dae5915604e71abc386/rich_rst-1.3.1.tar.gz", hash = "sha256:fad46e3ba42785ea8c1785e2ceaa56e0ffa32dbe5410dec432f37e4107c4f383", size = 13839 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/bc/cc4e3dbc5e7992398dcb7a8eda0cbcf4fb792a0cdb93f857b478bf3cf884/rich_rst-1.3.1-py3-none-any.whl", hash = "sha256:498a74e3896507ab04492d326e794c3ef76e7cda078703aa592d1853d91098c1", size = 11621 },
 ]
 
 [[package]]
@@ -5247,14 +5406,14 @@ wheels = [
 
 [[package]]
 name = "werkzeug"
-version = "3.1.3"
+version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "markupsafe" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/69/83029f1f6300c5fb2471d621ab06f6ec6b3324685a2ce0f9777fd4a8b71e/werkzeug-3.1.3.tar.gz", hash = "sha256:60723ce945c19328679790e3282cc758aa4a6040e4bb330f53d30fa546d44746", size = 806925 }
+sdist = { url = "https://files.pythonhosted.org/packages/32/af/d4502dc713b4ccea7175d764718d5183caf8d0867a4f0190d5d4a45cea49/werkzeug-3.1.1.tar.gz", hash = "sha256:8cd39dfbdfc1e051965f156163e2974e52c210f130810e9ad36858f0fd3edad4", size = 806453 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/24/ab44c871b0f07f491e5d2ad12c9bd7358e527510618cb1b803a88e986db1/werkzeug-3.1.3-py3-none-any.whl", hash = "sha256:54b78bf3716d19a65be4fceccc0d1d7b89e608834989dfae50ea87564639213e", size = 224498 },
+    { url = "https://files.pythonhosted.org/packages/ee/ea/c67e1dee1ba208ed22c06d1d547ae5e293374bfc43e0eb0ef5e262b68561/werkzeug-3.1.1-py3-none-any.whl", hash = "sha256:a71124d1ef06008baafa3d266c02f56e1836a5984afd6dd6c9230669d60d9fb5", size = 224371 },
 ]
 
 [[package]]

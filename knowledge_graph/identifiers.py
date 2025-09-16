@@ -2,8 +2,10 @@ import hashlib
 import re
 from enum import Enum
 from functools import total_ordering
+from typing import Any, Callable
 
 from pydantic import BaseModel, Field
+from pydantic_core import CoreSchema, core_schema
 from typing_extensions import Self
 
 
@@ -11,7 +13,12 @@ from typing_extensions import Self
 class WikibaseID(str):
     """A Wikibase ID, which is a string that starts with a 'Q' followed by a number."""
 
-    regex = r"^Q[1-9]\d*$"
+    regex = r"^Q[1-9][0-9]*$"
+
+    def __new__(cls, value):
+        """Validate the Wikibase ID string and create a new instance."""
+        cls._validate(value)
+        return str.__new__(cls, value)
 
     @property
     def numeric(self) -> int:
@@ -39,21 +46,25 @@ class WikibaseID(str):
         return hash(str(self))
 
     @classmethod
-    def _validate(cls, value: str, field=None) -> str:
-        """Validate that the Wikibase ID is in the correct format"""
-        if not re.match(cls.regex, value):
-            raise ValueError(f"{value} is not a valid Wikibase ID")
-        return value
+    def _validate(cls, __input_value: Any) -> str:
+        """Validate that the Wikibase ID is in the correct format."""
+        if not isinstance(__input_value, str):
+            raise ValueError(f"Wikibase ID must be a string, got {type(__input_value)}")
+        if not re.match(cls.regex, __input_value):
+            raise ValueError(f"'{__input_value}' is not a valid Wikibase ID")
+        return __input_value
 
     @classmethod
-    def __get_validators__(cls):
-        """Return a generator of validators for the WikibaseID class"""
-        yield cls._validate
-
-    def __new__(cls, value: str) -> "WikibaseID":
-        """Create a new instance of WikibaseID after validation"""
-        validated_value = cls._validate(value)
-        return str.__new__(cls, validated_value)
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: Callable[[Any], CoreSchema],  # type: ignore
+    ) -> CoreSchema:
+        """Returns a pydantic_core.CoreSchema object for Pydantic V2 compatibility."""
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.no_info_plain_validator_function(cls._validate),
+        )
 
 
 class VespaSchema(Enum):
@@ -72,7 +83,8 @@ class VespaID(BaseModel):
 
     def __str__(self) -> str:
         """String representation of a Vespa ID, ready to be used with Vespa queries"""
-        return f"{self.prefix}:{self.kind.value}::{self.id}"
+        kind_value: str = self.kind.value  # type: ignore[attr-defined]
+        return f"{self.prefix}:{kind_value}::{self.id}"
 
 
 class FamilyDocumentID(VespaID):
@@ -111,6 +123,11 @@ class Identifier(str):
     # as class attributes are resolved at class creation time.
     pattern = re.compile(rf"^[{valid_characters}]{{8}}$")
 
+    def __new__(cls, value):
+        """Validate the Identifier string and create a new instance."""
+        cls._validate(value)
+        return str.__new__(cls, value)
+
     @classmethod
     def generate(cls, *args) -> "Self":
         """Generates a new Identifier from the supplied data."""
@@ -132,12 +149,9 @@ class Identifier(str):
         return cls(identifier)
 
     @classmethod
-    def _validate(cls, value: str, field=None) -> str:
+    def _validate(cls, value: str) -> str:
         """Validate that the Identifier string is in the correct format"""
-        if not isinstance(value, str):
-            raise TypeError(
-                f"{cls.__name__} value must be a string, received {type(value).__name__}"
-            )
+
         if not cls.pattern.match(value):
             raise ValueError(
                 f"'{value}' is not a valid {cls.__name__}. Must be 8 characters from "
@@ -145,19 +159,17 @@ class Identifier(str):
             )
         return value
 
-    def __new__(cls, value_to_become_identifier: str) -> "Identifier":
-        """
-        Create a new Identifier from a string, after validation.
-
-        To generate an Identifier from arbitrary data, use `Identifier.generate(*args)`.
-        """
-        validated_value = cls._validate(value_to_become_identifier)
-        return str.__new__(cls, validated_value)
-
     @classmethod
-    def __get_validators__(cls):
-        """Return a generator of validators for Pydantic compatibility."""
-        yield cls._validate
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: Any,
+        handler: Callable[[Any], CoreSchema],  # type: ignore
+    ) -> CoreSchema:
+        """Returns a pydantic_core.CoreSchema object for Pydantic V2 compatibility."""
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.no_info_plain_validator_function(cls._validate),
+        )
 
 
 class ClassifierID(Identifier):
@@ -166,5 +178,3 @@ class ClassifierID(Identifier):
 
     This is intended for typing clarity rather than extending the Identifier class.
     """
-
-    pass
