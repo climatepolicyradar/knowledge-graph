@@ -13,6 +13,11 @@ INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
 
+# SSM
+WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
+WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
+WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
+
 
 class Config(BaseModel):
     """Shared Configuration used across flow runs."""
@@ -74,6 +79,19 @@ class Config(BaseModel):
         description="Weights & Biases API Key",
     )
 
+    wikibase_username: Optional[str] = Field(
+        default=None, description="User for authenticating with a WikibaseSession"
+    )
+
+    wikibase_password: Optional[SecretStr] = Field(
+        default=None, description="Password for authenticating with a WikibaseSession"
+    )
+
+    wikibase_url: Optional[str] = Field(
+        default=None,
+        description="The wikibase instance base url. Used to authenticate with a WikibaseSession",
+    )
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
@@ -85,6 +103,17 @@ class Config(BaseModel):
 
         if not config.wandb_api_key:
             config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
+
+        if not config.wikibase_password:
+            config.wikibase_password = SecretStr(
+                get_aws_ssm_param(WIKIBASE_PASSWORD_SSM_NAME)
+            )
+
+        if not config.wikibase_username:
+            config.wikibase_username = get_aws_ssm_param(WIKIBASE_USERNAME_SSM_NAME)
+
+        if not config.wikibase_url:
+            config.wikibase_url = get_aws_ssm_param(WIKIBASE_URL_SSM_NAME)
 
         return config
 
