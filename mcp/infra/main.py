@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 import pulumi
 import pulumi_aws as aws
@@ -6,7 +7,9 @@ import pulumi_docker as docker
 
 from knowledge_graph.config import get_git_root
 
-application_name = "concept-store-mcp-server"
+config = pulumi.Config()
+application_name = config.require("application_name")
+
 
 # Get current AWS account and region to construct ARNs
 caller_identity = aws.get_caller_identity()
@@ -39,6 +42,11 @@ auth = aws.ecr.get_authorization_token()
 root_dir = get_git_root()
 dockerfile_path = (root_dir / "mcp" / "Dockerfile").resolve()
 
+# use the short hash of the current git commit as the version tag for the image
+git_commit_hash = subprocess.check_output(
+    ["git", "rev-parse", "--short", "HEAD"], text=True
+).strip()
+
 image = docker.Image(
     f"{application_name}-image",
     build=docker.DockerBuild(
@@ -46,7 +54,7 @@ image = docker.Image(
         dockerfile=str(dockerfile_path),
         platform="linux/amd64",  # Specify platform for cross-platform builds
     ),
-    image_name=repo.repository_url,
+    image_name=pulumi.Output.concat(repo.repository_url, ":", git_commit_hash),
     registry=docker.RegistryArgs(
         server=auth.proxy_endpoint,
         username=auth.user_name,
@@ -174,7 +182,7 @@ aws.iam.RolePolicyAttachment(
 # Create a Fargate task definition
 task_definition = aws.ecs.TaskDefinition(
     f"{application_name}-task",
-    family="mcp-task-family",
+    family=f"{application_name}-task-family",
     cpu="256",  # 0.25 vCPU
     memory="512",  # 512MB
     network_mode="awsvpc",
@@ -227,5 +235,7 @@ service = aws.ecs.Service(
     opts=pulumi.ResourceOptions(depends_on=[listener]),
 )
 
-# Export the URL of the load balancer
+# Export the URL of the load balancer and version information
 pulumi.export("url", alb.dns_name)
+pulumi.export("image_version", git_commit_hash)
+pulumi.export("image_name", image.image_name)
