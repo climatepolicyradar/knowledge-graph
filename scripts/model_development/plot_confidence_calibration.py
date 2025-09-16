@@ -97,7 +97,7 @@ def get_classifiers_and_inference_settings(
     ]
 
 
-def extract_passage_level_data(
+def extract_passage_level_probabilities_and_human_labels(
     human_labelled_passages: list[LabelledPassage],
     model_labelled_passages: list[LabelledPassage],
 ) -> tuple[list[float], list[bool]]:
@@ -366,8 +366,10 @@ def main(passage_limit: Optional[int] = None):
         for concept, model_predictions in concept_results:
             console.log(f"  Plotting calibration for concept: {concept}")
 
-            predicted_probs, human_labels = extract_passage_level_data(
-                concept.labelled_passages, model_predictions
+            predicted_probs, human_labels = (
+                extract_passage_level_probabilities_and_human_labels(
+                    concept.labelled_passages, model_predictions
+                )
             )
 
             all_predicted_probs.extend(predicted_probs)
