@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_serializer
 
 from flows.utils import DocumentStem
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.version import Version
 
 type SpecStr = str
@@ -43,6 +43,10 @@ class ClassifierSpec(BaseModel):
             default=False,
         )
 
+    concept_id: ConceptID | None = Field(
+        default=None,
+        description=("The Concept ID for the associated concept being classified."),
+    )
     wikibase_id: WikibaseID = Field(
         description=(
             "The Wikibase ID for the underlying concept being classified. e.g. 'Q992'"

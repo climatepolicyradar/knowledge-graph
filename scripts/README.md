@@ -18,7 +18,7 @@ just train "Q123" --track --upload --aws-env sandbox
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier_id abcd2345 --aws-env sandbox --primary
+just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --primary
 ```
 
 You can also achieve the above directly with:
