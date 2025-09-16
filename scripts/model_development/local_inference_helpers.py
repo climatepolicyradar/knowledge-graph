@@ -1,5 +1,7 @@
+import os
 from typing import Any
 
+import boto3
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -97,3 +99,15 @@ def save_labelled_passages_and_classifier(
     classifier_path.parent.mkdir(parents=True, exist_ok=True)
     classifier.save(classifier_path)
     console.log(f"💾 Saved classifier to {classifier_path}")
+
+
+def load_ssm_parameter_into_env(
+    parameter_name: str, profile_name: str = "labs", region_name: str = "eu-west-1"
+) -> None:
+    """Load a parameter stored in AWS SSM into the local environment"""
+    session = boto3.Session(profile_name=profile_name, region_name=region_name)
+    ssm = session.client("ssm")
+    api_key = ssm.get_parameter(Name=parameter_name, WithDecryption=True)["Parameter"][
+        "Value"
+    ]
+    os.environ[parameter_name] = api_key

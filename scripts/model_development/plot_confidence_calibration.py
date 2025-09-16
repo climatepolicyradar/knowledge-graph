@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from typing import Any, Optional
 
@@ -19,6 +20,7 @@ from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.wikibase import WikibaseSession
 from scripts.model_development.local_inference_helpers import (
     label_passages,
+    load_ssm_parameter_into_env,
     save_labelled_passages_and_classifier,
 )
 
@@ -47,7 +49,9 @@ def get_classifiers_and_inference_settings(
     kwargs to pass to the predict method, and batch size
     """
 
-    # TODO: load appropriate secrets for classifiers
+    if not os.getenv("OPENAI_API_KEY"):
+        console.print("No local OpenAI API key found. Loading from AWS SSM.")
+        load_ssm_parameter_into_env("OPENAI_API_KEY")
 
     voting_classifier_predict_passage_kwargs = {"passage_level": True}
 
@@ -60,19 +64,21 @@ def get_classifiers_and_inference_settings(
             20,
         ),
         (
-            VotingLLMClassifier(concept=concept, model_name="gpt-4o", n_classifiers=10),
-            voting_classifier_predict_passage_kwargs,
-            20,
-        ),
-        (
             VotingLLMClassifier(
-                concept=concept,
-                model_name="claude-3-5-sonnet-20241022",
-                n_classifiers=10,
+                concept=concept, model_name="gpt-4.1-mini", n_classifiers=10
             ),
             voting_classifier_predict_passage_kwargs,
             20,
         ),
+        # (
+        #     VotingLLMClassifier(
+        #         concept=concept,
+        #         model_name="claude-3-5-sonnet-20241022",
+        #         n_classifiers=10,
+        #     ),
+        #     voting_classifier_predict_passage_kwargs,
+        #     20,
+        # ),
     ]
 
 
