@@ -1,3 +1,5 @@
+from typing import Any
+
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -19,6 +21,7 @@ def label_passages(
     labelled_passages: list[LabelledPassage],
     classifier: Classifier,
     batch_size: int,
+    predict_kwargs: dict[str, Any] = {},
 ) -> list[LabelledPassage]:
     """
     Label a list of passages with a classifier.
@@ -26,6 +29,8 @@ def label_passages(
     :param list[LabelledPassage] labelled_passages: The passages to label.
     :param Classifier classifier: The classifier to use.
     :param int batch_size: The batch size to use.
+    :param dict[str, Any] predict_kwargs: optional keyword arguments to pass to the
+    classifier's predict method.
 
     :return list[LabelledPassage]: The labelled passages.
     """
@@ -48,7 +53,7 @@ def label_passages(
             ]
             batch_texts = [passage.text for passage in batch]
             try:
-                batch_spans = classifier.predict_batch(batch_texts)
+                batch_spans = classifier.predict_batch(batch_texts, **predict_kwargs)
                 predictions.extend(
                     LabelledPassage(text=text, spans=text_spans)
                     for text, text_spans in zip(batch_texts, batch_spans)

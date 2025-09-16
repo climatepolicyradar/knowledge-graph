@@ -63,7 +63,7 @@ class Classifier(ABC):
         return self
 
     @abstractmethod
-    def predict(self, text: str) -> list[Span]:
+    def predict(self, text: str, **kwargs) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
@@ -72,14 +72,14 @@ class Classifier(ABC):
         """
         raise NotImplementedError
 
-    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+    def predict_batch(self, texts: list[str], **kwargs) -> list[list[Span]]:
         """
         Predict whether the supplied texts contain instances of the concept.
 
         :param list[str] texts: The texts to predict on
         :return list[list[Span]]: A list of spans in the texts for each text
         """
-        return [self.predict(text) for text in texts]
+        return [self.predict(text, **kwargs) for text in texts]
 
     def get_variant_sub_classifier(self) -> Self:
         """
