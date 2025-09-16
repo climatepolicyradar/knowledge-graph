@@ -43,8 +43,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Approach to torch cpu vs gpu as seen in uv docs:
+# https://docs.astral.sh/uv/concepts/projects/dependencies/#optional-dependencies
 transformers = [
     "torch>=2.8.0",
+    "sentence-transformers>=5.1.0",
+    "transformers[torch]>=4.55.0",
+    "scikit-learn>=1.6.1",
+    "accelerate>=1.6.0",
+]
+transformers_gpu = [
+    "torch>=2.7.1",
     "sentence-transformers>=5.1.0",
     "transformers[torch]>=4.55.0",
     "scikit-learn>=1.6.1",
@@ -159,9 +168,24 @@ line-length = 88
 [tool.pyright]
 reportMissingImports = false
 
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "transformers" },
+    { index = "pytorch-cu118", extra = "transformers_gpu" }
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
 [tool.uv.pip]
-# PyTorch CPU-only index for Linux/Windows (non-macOS platforms)
-extra-index-url = ["https://download.pytorch.org/whl/cpu"]
+extra-index-url = []
 index-strategy = "unsafe-best-match"
 resolution = "highest"
 prerelease = "if-necessary"
@@ -170,3 +194,11 @@ compile-bytecode = true
 [tool.uv.workspace]
 # Empty workspace for now, can add members as needed
 members = []
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "transformers" },
+        { extra = "transformers_gpu" },
+    ]
+]
