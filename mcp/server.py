@@ -74,9 +74,6 @@ logging.basicConfig(
 # Initialize FastMCP app
 mcp = FastMCP("Climate Policy Radar Concept Store")
 
-# Initialize Wikibase session globally
-wikibase_session = WikibaseSession()
-
 
 @mcp.tool
 async def search_concepts(
@@ -94,9 +91,8 @@ async def search_concepts(
         await ctx.info(f"Searching for concepts: '{query}' (limit: {limit})")
 
     try:
-        concepts = await wikibase_session.search_concepts_async(
-            search_term=query, limit=limit
-        )
+        wikibase = WikibaseSession()
+        concepts = await wikibase.search_concepts_async(search_term=query, limit=limit)
 
         return ConceptSearchResult(
             concepts=concepts, total_found=len(concepts), query=query
@@ -114,7 +110,8 @@ async def get_all_concept_ids(ctx: Context = None) -> ConceptIdsResult:
         await ctx.info("Retrieving all concept IDs...")
 
     try:
-        concept_ids = await wikibase_session.get_all_concept_ids_async()
+        wikibase = WikibaseSession()
+        concept_ids = await wikibase.get_all_concept_ids_async()
 
         return ConceptIdsResult(concept_ids=concept_ids, total_count=len(concept_ids))
     except Exception as e:
@@ -142,7 +139,8 @@ async def get_multiple_concepts(
         if not valid_ids and ctx:
             await ctx.warning("No valid Wikibase IDs provided")
 
-        concepts = await wikibase_session.get_concepts_async(wikibase_ids=valid_ids)
+        wikibase = WikibaseSession()
+        concepts = await wikibase.get_concepts_async(wikibase_ids=valid_ids)
 
         return MultipleConceptsResult(
             concepts=concepts, requested_ids=wikibase_ids, found_count=len(concepts)
@@ -176,7 +174,8 @@ async def get_concept(
         await ctx.info(f"Retrieving concept {wikibase_id}")
 
     try:
-        concept = await wikibase_session.get_concept_async(
+        wikibase = WikibaseSession()
+        concept = await wikibase.get_concept_async(
             wikibase_id=WikibaseID(wikibase_id),
             include_labels_from_subconcepts=include_labels_from_subconcepts,
             include_recursive_subconcept_of=include_recursive_subconcept_of,
@@ -203,7 +202,8 @@ async def search_help_pages(
         await ctx.info(f"Searching help documentation for: '{query}'")
 
     try:
-        page_titles = await wikibase_session.search_help_pages_async(search_term=query)
+        wikibase = WikibaseSession()
+        page_titles = await wikibase.search_help_pages_async(search_term=query)
 
         return HelpPagesResult(
             page_titles=page_titles, query_used=query, total_found=len(page_titles)
@@ -231,7 +231,8 @@ async def get_help_page(
         await ctx.info(f"Retrieving help page: '{page_title}'")
 
     try:
-        content = await wikibase_session.get_help_page_async(page_title=page_title)
+        wikibase = WikibaseSession()
+        content = await wikibase.get_help_page_async(page_title=page_title)
 
         if not content:
             content = f"Help page '{page_title}' not found. Use search_help_pages to discover available documentation."
