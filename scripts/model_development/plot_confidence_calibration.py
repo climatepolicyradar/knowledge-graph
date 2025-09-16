@@ -25,9 +25,6 @@ from scripts.model_development.local_inference_helpers import (
 app = typer.Typer()
 console = Console(highlight=False)
 
-# These concepts were chosen as representative concepts with well-defined concept-store
-# entries in July 2025.
-# https://linear.app/climate-policy-radar/issue/SCI-434/identify-5-representative-concepts-with-well-defined-concept-store
 CONCEPT_IDS = [
     "Q1285",  # ban
     "Q760",  # extractive sector
