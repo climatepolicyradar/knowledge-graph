@@ -37,7 +37,6 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
             from transformers import (  # type: ignore[import-untyped]
                 AutoModelForSequenceClassification,
                 AutoTokenizer,
-                infer_device,
             )
             from transformers.pipelines import pipeline  # type: ignore[import-untyped]
         except ImportError:
@@ -45,8 +44,13 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
                 f"The `transformers` library is required to run {self.name}s. "
                 "Install it with 'uv install --extra transformers'"
             )
+        try:
+            from transformers import infer_device  # type: ignore[import-untyped]
 
-        device = infer_device()
+            device = infer_device()
+        except ImportError:
+            print("transformers installed without gpu, cant infer device")
+            device = "cpu"
         print(f"Device inferred for training: {device}")
         self.pipeline: Callable = pipeline(
             "text-classification",
