@@ -46,9 +46,7 @@ class WikibaseID(str):
         return hash(str(self))
 
     @classmethod
-    def _validate(
-        cls, __input_value: Any, _info: core_schema.ValidationInfo = None
-    ) -> str:
+    def _validate(cls, __input_value: Any) -> str:
         """Validate that the Wikibase ID is in the correct format."""
         if not isinstance(__input_value, str):
             raise ValueError(f"Wikibase ID must be a string, got {type(__input_value)}")
@@ -58,12 +56,14 @@ class WikibaseID(str):
 
     @classmethod
     def __get_pydantic_core_schema__(
-        cls, source_type: Any, handler: Callable[[Any], CoreSchema]
+        cls,
+        source_type: Any,
+        handler: Callable[[Any], CoreSchema],  # type: ignore
     ) -> CoreSchema:
         """Returns a pydantic_core.CoreSchema object for Pydantic V2 compatibility."""
         return core_schema.json_or_python_schema(
             json_schema=core_schema.str_schema(),
-            python_schema=core_schema.with_info_plain_validator_function(cls._validate),
+            python_schema=core_schema.no_info_plain_validator_function(cls._validate),
         )
 
 
@@ -83,7 +83,8 @@ class VespaID(BaseModel):
 
     def __str__(self) -> str:
         """String representation of a Vespa ID, ready to be used with Vespa queries"""
-        return f"{self.prefix}:{self.kind.value}::{self.id}"
+        kind_value: str = self.kind.value  # type: ignore[attr-defined]
+        return f"{self.prefix}:{kind_value}::{self.id}"
 
 
 class FamilyDocumentID(VespaID):
@@ -148,12 +149,9 @@ class Identifier(str):
         return cls(identifier)
 
     @classmethod
-    def _validate(cls, value: str, _info: core_schema.ValidationInfo = None) -> str:
+    def _validate(cls, value: str) -> str:
         """Validate that the Identifier string is in the correct format"""
-        if not isinstance(value, str):
-            raise TypeError(
-                f"{cls.__name__} value must be a string, received {type(value).__name__}"
-            )
+
         if not cls.pattern.match(value):
             raise ValueError(
                 f"'{value}' is not a valid {cls.__name__}. Must be 8 characters from "
@@ -163,12 +161,14 @@ class Identifier(str):
 
     @classmethod
     def __get_pydantic_core_schema__(
-        cls, source_type: Any, handler: Callable[[Any], CoreSchema]
+        cls,
+        source_type: Any,
+        handler: Callable[[Any], CoreSchema],  # type: ignore
     ) -> CoreSchema:
         """Returns a pydantic_core.CoreSchema object for Pydantic V2 compatibility."""
         return core_schema.json_or_python_schema(
             json_schema=core_schema.str_schema(),
-            python_schema=core_schema.with_info_plain_validator_function(cls._validate),
+            python_schema=core_schema.no_info_plain_validator_function(cls._validate),
         )
 
 
@@ -178,5 +178,3 @@ class ClassifierID(Identifier):
 
     This is intended for typing clarity rather than extending the Identifier class.
     """
-
-    pass
