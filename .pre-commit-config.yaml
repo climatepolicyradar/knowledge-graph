@@ -24,7 +24,7 @@ repos:
         name: pyright
         entry: uv run pyright
         language: system
-        files: ^(src/|scripts/|flows/)
+        files: ^(knowledge_graph/|scripts/|flows/)
         types: [python]
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
