@@ -37,6 +37,7 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
             from transformers import (  # type: ignore[import-untyped]
                 AutoModelForSequenceClassification,
                 AutoTokenizer,
+                infer_device,
             )
             from transformers.pipelines import pipeline  # type: ignore[import-untyped]
         except ImportError:
@@ -45,6 +46,8 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
                 "Install it with 'uv install --extra transformers'"
             )
 
+        device = infer_device()
+        print(f"Device inferred for training: {device}")
         self.pipeline: Callable = pipeline(
             "text-classification",
             model=AutoModelForSequenceClassification.from_pretrained(
@@ -55,7 +58,7 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
                 revision=self.commit_hash,
             ),
             function_to_apply="sigmoid",
-            device="cpu",
+            device=device,
         )
 
     @property
