@@ -9,7 +9,6 @@ import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
 from functools import partial
-from io import BytesIO
 from pathlib import Path
 from typing import (
     Annotated,
@@ -26,7 +25,6 @@ from typing import (
 from uuid import UUID
 
 import aioboto3
-import boto3
 from botocore.exceptions import ClientError
 from prefect.artifacts import (
     create_progress_artifact,
@@ -297,24 +295,27 @@ def iterate_batch(
             yield batch
 
 
-def s3_file_exists(bucket_name: str, file_key: str) -> bool:
+async def s3_file_exists(bucket_name: str, file_key: str, bucket_region: str) -> bool:
     """Check if a file exists in an S3 bucket."""
-    s3_client = boto3.client("s3")
+    session = aioboto3.Session(region_name=bucket_region)
+    async with session.client("s3") as s3_client:
+        try:
+            await s3_client.head_object(Bucket=bucket_name, Key=file_key)
+            return True
+        except ClientError as e:
+            if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                "404",
+                "403",
+            ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                return False
+            raise
 
-    try:
-        s3_client.head_object(Bucket=bucket_name, Key=file_key)
-        return True
-    except ClientError as e:
-        if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
-            "404",
-            "403",
-        ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
-            return False
-        raise
 
-
-def get_file_stems_for_document_id(
-    document_id: DocumentImportId, bucket_name: str, document_key: str
+async def get_file_stems_for_document_id(
+    document_id: DocumentImportId,
+    bucket_name: str,
+    document_key: str,
+    bucket_region: str,
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -337,9 +338,10 @@ def get_file_stems_for_document_id(
             .with_suffix(".json")
         )
 
-        if s3_file_exists(
+        if await s3_file_exists(
             bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
+            bucket_region=bucket_region,
         ):
             stems.append(translated_file_key.stem)
 
@@ -367,41 +369,6 @@ async def collect_unique_file_stems_under_prefix(
                 if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
                     file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return list(set(file_stems))
-
-
-def _s3_object_write_text(s3_uri: str, text: str) -> None:
-    """Write text content to an S3 object."""
-    # Parse the S3 URI
-    s3_path: Path = Path(s3_uri)
-    if len(s3_path.parts) < 3:
-        raise ValueError(f"Invalid S3 path: {s3_path}")
-
-    bucket: str = s3_path.parts[1]
-    key = str(Path(*s3_path.parts[2:]))
-
-    # Create BytesIO buffer with the text content
-    body = BytesIO(text.encode("utf-8"))
-
-    # Upload to S3
-    s3 = boto3.client("s3")
-    _ = s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/json")
-
-
-def _s3_object_write_bytes(s3_uri: str, bytes: BytesIO) -> None:
-    """Write text content to an S3 object."""
-    # Parse the S3 URI
-    s3_path: Path = Path(s3_uri)
-    if len(s3_path.parts) < 3:
-        raise ValueError(f"Invalid S3 path: {s3_path}")
-
-    bucket: str = s3_path.parts[1]
-    key = str(Path(*s3_path.parts[2:]))
-
-    # Upload to S3
-    s3 = boto3.client("s3")
-    _ = s3.put_object(
-        Bucket=bucket, Key=key, Body=bytes, ContentType="application/json"
-    )
 
 
 def is_file_stem_for_english_language_document(

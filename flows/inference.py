@@ -7,11 +7,14 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
-import boto3
+import aioboto3
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
-from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
+from mypy_boto3_s3.type_defs import (
+    ObjectTypeDef,
+    PutObjectOutputTypeDef,
+)
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
@@ -175,29 +178,30 @@ class InferenceResult(BaseModel):
         return cross_batch_successes - cross_batch_failures
 
 
-def get_bucket_paginator(config: Config, prefix: str):
+async def get_bucket_paginator(config: Config, prefix: str):
     """Returns an S3 paginator for the pipeline cache bucket"""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    paginator = s3.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        Prefix=prefix,
-    )
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        paginator = s3.get_paginator("list_objects_v2")
+        return paginator.paginate(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Prefix=prefix,
+        )
 
 
-def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
 
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    page_iterator = get_bucket_paginator(
+    page_iterator = await get_bucket_paginator(
         config, config.inference_document_source_prefix
     )
     file_stems = []
 
-    for p in page_iterator:
+    async for p in page_iterator:
         if "Contents" in p:
             for o in p["Contents"]:
                 file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
@@ -206,42 +210,52 @@ def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
-def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
+async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
     """
     Get IDs of changed documents from the latest ingest run
 
     Retrieves the `new_and_updated_docs.json` file from the latest ingest.
     Extracts the ids from the file, and returns them as a single list.
     """
-    page_iterator = get_bucket_paginator(config, config.pipeline_state_prefix)
+    page_iterator = await get_bucket_paginator(config, config.pipeline_state_prefix)
     file_name = "new_and_updated_documents.json"
 
     # First get all matching files, then sort them
-    matching_files = [
-        item
-        for item in page_iterator.search(f"Contents[?contains(Key, '{file_name}')]")
-        if item is not None
+    matching_files: list[ObjectTypeDef] = []
+
+    # Iterate through pages and extract the "Contents" list
+    async for page in page_iterator:
+        if "Contents" in page:
+            contents: list[ObjectTypeDef] = page[
+                "Contents"
+            ]  # Explicitly type the contents
+            matching_files.extend(contents)
+
+    # Filter files that contain the target file name in their "Key"
+    filtered_files = [
+        item for item in matching_files if "Key" in item and file_name in item["Key"]
     ]
 
-    if not matching_files:
+    if not filtered_files:
         raise ValueError(
             f"failed to find any `{file_name}` files in "
             f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
         )
 
-    # Sort by Key and get the last one
-    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
+    # Sort by "Key" and get the last one
+    latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
 
-    data = download_s3_file(config, latest["Key"])
+    latest_key = latest["Key"]
+    data = await download_s3_file(config, latest_key)
     content = json.loads(data)
     updated = list(content["updated_documents"].keys())
     new = [d["import_id"] for d in content["new_documents"]]
 
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")
+    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
     return new + updated
 
 
-def determine_file_stems(
+async def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
@@ -266,7 +280,7 @@ def determine_file_stems(
             "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
         )
     elif use_new_and_updated:
-        requested_document_ids = get_latest_ingest_documents(config)
+        requested_document_ids = await get_latest_ingest_documents(config)
     elif requested_document_ids is None:
         current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
@@ -280,8 +294,8 @@ def determine_file_stems(
         document_key = os.path.join(
             config.inference_document_source_prefix, f"{doc_id}.json"
         )
-        requested_document_stems += get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key
+        requested_document_stems += await get_file_stems_for_document_id(
+            doc_id, config.cache_bucket, document_key, config.bucket_region
         )
 
     missing_from_bucket = list(
@@ -312,16 +326,16 @@ async def load_classifier(
         return classifier
 
 
-def download_s3_file(config: Config, key: str):
+async def download_s3_file(config: Config, key: str):
     """Retrieve an S3 file from the pipeline cache"""
-
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    response = s3.get_object(
-        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        Key=key,
-    )
-    content = response["Body"].read().decode("utf-8")
-    return content
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        response = await s3.get_object(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Key=key,
+        )
+        body = await response["Body"].read()
+        return body.decode("utf-8")
 
 
 def generate_document_source_key(config: Config, document_stem: DocumentStem) -> S3Uri:
@@ -334,13 +348,13 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
     )
 
 
-def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
+async def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = generate_document_source_key(
         config=config,
         document_stem=file_stem,
     ).key
-    content = download_s3_file(config=config, key=file_key)
+    content = await download_s3_file(config=config, key=file_key)
     document = BaseParserOutput.model_validate_json(content)
     return document
 
@@ -440,26 +454,27 @@ async def store_labels(
     list[BaseException],
 ]:
     """Store the labels in the cache bucket."""
-    session = boto3.Session(region_name=config.bucket_region)
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        # Don't get rate-limited by AWS
+        semaphore = asyncio.Semaphore(10)
 
-    s3 = session.client("s3")
-    # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(10)
+        async def fn(
+            inference: SingleDocumentInferenceResult,
+        ) -> PutObjectOutputTypeDef:
+            s3_uri = generate_s3_uri_output(config, inference)
+            print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
-    async def fn(inference: SingleDocumentInferenceResult) -> PutObjectOutputTypeDef:
-        s3_uri = generate_s3_uri_output(config, inference)
-        print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
+            body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
 
-        body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+            response = await s3.put_object(
+                Bucket=s3_uri.bucket,
+                Key=s3_uri.key,
+                Body=body,
+                ContentType="application/json",
+            )
 
-        response = s3.put_object(
-            Bucket=s3_uri.bucket,
-            Key=s3_uri.key,
-            Body=body,
-            ContentType="application/json",
-        )
-
-        return response
+            return response
 
     tasks = [
         wait_for_semaphore(
@@ -581,7 +596,7 @@ async def run_classifier_inference_on_document(
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with file stem {file_stem}")
-    document = load_document(config, file_stem)
+    document = await load_document(config, file_stem)
 
     # Resolve typing issue as wikibase_id is optional (though required here)
     assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
@@ -944,8 +959,8 @@ async def inference(
 
     print(f"Running with config: {config}")
 
-    current_bucket_file_stems = list_bucket_file_stems(config=config)
-    validated_file_stems = determine_file_stems(
+    current_bucket_file_stems = await list_bucket_file_stems(config=config)
+    validated_file_stems = await determine_file_stems(
         config=config,
         use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,

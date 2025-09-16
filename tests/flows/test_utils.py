@@ -7,7 +7,6 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
-import boto3
 import pytest
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.flows import flow
@@ -126,27 +125,36 @@ def test_iterate_batch(data, expected_lengths):
         assert len(batch) == expected
 
 
-def test_s3_file_exists(test_config, mock_bucket_documents) -> None:
+@pytest.mark.asyncio
+async def test_s3_file_exists(test_config, mock_async_bucket_documents) -> None:
     """Test that we can check if a file exists in an S3 bucket."""
 
     key = os.path.join(
         test_config.inference_document_source_prefix, "PDF.document.0.1.json"
     )
 
-    s3_file_exists(test_config.cache_bucket, key)
+    await s3_file_exists(test_config.cache_bucket, key, test_config.bucket_region)
 
-    assert not s3_file_exists(test_config.cache_bucket, "non_existent_key")
+    assert not await s3_file_exists(
+        test_config.cache_bucket, "non_existent_key", test_config.bucket_region
+    )
 
 
-def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> None:
+@pytest.mark.asyncio
+async def test_get_file_stems_for_document_id(
+    test_config,
+    mock_s3_async_client,
+    mock_async_bucket_documents,
+) -> None:
     """Test that we can get the file stems for a document ID."""
 
-    document_id = Path(mock_bucket_documents[0]).stem
+    document_id = Path(mock_async_bucket_documents[0]).stem
 
-    file_stems = get_file_stems_for_document_id(
+    file_stems = await get_file_stems_for_document_id(
         document_id,
         test_config.cache_bucket,
         test_config.inference_document_source_prefix,
+        test_config.bucket_region,
     )
 
     assert file_stems == [document_id]
@@ -156,22 +164,22 @@ def test_get_file_stems_for_document_id(test_config, mock_bucket_documents) -> N
         test_config.inference_document_source_prefix,
         f"{document_id}_translated_en.json",
     )
-    s3_client = boto3.client("s3")
 
-    s3_client.put_object(
+    await mock_s3_async_client.put_object(
         Bucket=test_config.cache_bucket,
         Key=key,
         Body=body,
         ContentType="application/json",
     )
 
-    file_stems = get_file_stems_for_document_id(
+    file_stems = await get_file_stems_for_document_id(
         document_id=document_id,
         bucket_name=test_config.cache_bucket,
         document_key=os.path.join(
             test_config.inference_document_source_prefix,
             f"{document_id}.json",
         ),
+        bucket_region=test_config.bucket_region,
     )
 
     assert file_stems == [f"{document_id}_translated_en"]
