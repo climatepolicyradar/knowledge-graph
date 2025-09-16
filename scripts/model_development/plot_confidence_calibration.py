@@ -9,6 +9,7 @@ from rich.console import Console
 from knowledge_graph.classifier import (
     Classifier,
 )
+from knowledge_graph.classifier.classifier import ProbabilityCapableClassifier
 from knowledge_graph.classifier.ensemble import VotingLLMClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import metrics_dir
@@ -47,6 +48,8 @@ def get_classifiers_and_inference_settings(
     :returns list[tuple[Classifier, dict[str, Any], int]]: list of tuples of classifier,
     kwargs to pass to the predict method, and batch size
     """
+
+    # TODO: load appropriate secrets for classifiers
 
     voting_classifier_predict_passage_kwargs = {"passage_level": True}
 
@@ -272,9 +275,6 @@ def main(passage_limit: Optional[int] = None):
     argilla = ArgillaSession()
     wikibase = WikibaseSession()
 
-    # TODO: load appropriate secrets for classifiers
-    # TODO: assert that all classifiers can output probabilities
-
     concepts: list[Concept] = []
 
     for concept_id in CONCEPT_IDS:
@@ -300,7 +300,17 @@ def main(passage_limit: Optional[int] = None):
         concept: get_classifiers_and_inference_settings(concept) for concept in concepts
     }
 
-    first_concept_classifiers = list(classifiers_by_concept.values())[0]
+    first_concept_classifiers = [i[0] for i in list(classifiers_by_concept.values())[0]]
+
+    if probability_incapable_classifiers := [
+        clf
+        for clf in first_concept_classifiers
+        if not isinstance(clf, ProbabilityCapableClassifier)
+    ]:
+        raise ValueError(
+            f"All classifiers used in this script must output probabilities.\nThe following classifiers specified don't: {probability_incapable_classifiers}"
+        )
+
     console.log(
         f"Running inference on passages for each concept for classifiers:\n {'|'.join(str(c) for c in first_concept_classifiers)}"
     )
