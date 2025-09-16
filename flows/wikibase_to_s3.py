@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 from io import BytesIO
 
-import boto3
+import aioboto3
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, get_run_logger
 from pydantic import SecretStr
@@ -77,50 +77,54 @@ class Config:
         return self.wikibase_password.get_secret_value()
 
 
-def upload_to_s3(config: Config, concept: Concept) -> None:
+async def upload_to_s3(config: Config, concept: Concept) -> None:
     """Upload an individual concept to S3"""
     filename = f"{concept.wikibase_id}.json"
     key = os.path.join(config.s3_prefix, filename)
     data = concept.model_dump_json().encode()
 
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    _ = s3.put_object(
-        Bucket=config.get_cdn_bucket_name(),
-        Key=key,
-        Body=BytesIO(data),
-        ContentType="application/json",
-    )
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        _ = await s3.put_object(
+            Bucket=config.get_cdn_bucket_name(),
+            Key=key,
+            Body=BytesIO(data),
+            ContentType="application/json",
+        )
 
 
-def delete_from_s3(config: Config, concept_id: str) -> None:
+async def delete_from_s3(config: Config, concept_id: str) -> None:
     """Delete an individual concept from S3"""
     filename = f"{concept_id}.json"
     key = os.path.join(config.s3_prefix, filename)
 
-    s3 = boto3.client("s3", region_name=config.bucket_region)
-    _ = s3.delete_object(
-        Bucket=config.get_cdn_bucket_name(),
-        Key=key,
-    )
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        _ = await s3.delete_object(
+            Bucket=config.get_cdn_bucket_name(),
+            Key=key,
+        )
 
 
-def list_s3_concepts(config: Config) -> list[str]:
+async def list_s3_concepts(config: Config) -> list[str]:
     """List all concepts in S3"""
-    s3 = boto3.client("s3", region_name=config.bucket_region)
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3:
+        concept_paths: list[str] = []
+        paginator = s3.get_paginator("list_objects_v2")
+        async for page in paginator.paginate(
+            Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
+        ):
+            if "Contents" in page:
+                concept_paths.extend([o["Key"] for o in page["Contents"]])  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
-    concept_paths: list[str] = []
-    paginator = s3.get_paginator("list_objects_v2")
-    for page in paginator.paginate(
-        Bucket=config.get_cdn_bucket_name(), Prefix=config.s3_prefix
-    ):
-        if "Contents" in page:
-            concept_paths.extend([o["Key"] for o in page["Contents"]])  # pyright: ignore[reportTypedDictNotRequiredAccess]
-
-    s3_concepts = [file_name_from_path(path) for path in concept_paths]
-    return s3_concepts
+        s3_concepts = [file_name_from_path(path) for path in concept_paths]
+        return s3_concepts
 
 
-def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config) -> list[str]:
+async def delete_extra_concepts_from_s3(
+    extras_in_s3: list[str], config: Config
+) -> list[str]:
     """Delete concepts from S3 that no longer exist in Wikibase."""
     logger = get_run_logger()
 
@@ -132,7 +136,7 @@ def delete_extra_concepts_from_s3(extras_in_s3: list[str], config: Config) -> li
         if i % config.logging_interval == 0:
             logger.info(f"Deleting extra concept #{i}: {concept_id}")
         try:
-            delete_from_s3(config, concept_id)
+            await delete_from_s3(config, concept_id)
         except Exception as e:
             logger.error(f"Failed to delete concept #{i}: {concept_id}, error: {e}")
     return failures
@@ -167,13 +171,13 @@ async def wikibase_to_s3(config: Config | None = None):
             concept = await wikibase.get_concept_async(
                 wikibase_id, include_recursive_subconcept_of=True
             )
-            upload_to_s3(config, concept)
+            await upload_to_s3(config, concept)
         except Exception as e:
             logger.error(f"Failed to upload concept #{i}: {wikibase_id}, error: {e}")
             failed_wikibase_ids_uploads.append(wikibase_id)
 
     # Identify leftovers from prior runs
-    s3_concepts = list_s3_concepts(config)
+    s3_concepts = await list_s3_concepts(config)
     extras_in_s3 = [c for c in s3_concepts if c not in wikibase_ids]
     missing_from_s3 = [c for c in wikibase_ids if c not in s3_concepts]
 
@@ -184,7 +188,7 @@ async def wikibase_to_s3(config: Config | None = None):
 
     failed_extras_in_s3_deletions: list[str] = []
     if extras_in_s3:
-        failed_extras_in_s3_deletions = delete_extra_concepts_from_s3(
+        failed_extras_in_s3_deletions = await delete_extra_concepts_from_s3(
             extras_in_s3, config
         )
 
