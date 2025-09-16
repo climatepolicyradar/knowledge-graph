@@ -329,7 +329,7 @@ async def test_get_document_passages_from_vespa_over_limit(
 
 @pytest.mark.asyncio
 async def test_load_labelled_passages_by_uri_obj(
-    mock_async_bucket, mock_s3_async_client, mock_async_bucket_labels
+    mock_async_bucket, mock_s3_async_client
 ):
     fixture = load_fixture(
         "labelled_passages/Q218/q4xsgmjb/AF.document.002MMUCR.n0003.json"
@@ -498,7 +498,7 @@ async def test_load_labelled_passages_by_uri_obj(
 
 @pytest.mark.asyncio
 async def test_load_labelled_passages_by_uri_raw(
-    mock_async_bucket, mock_s3_async_client, mock_async_bucket_labels
+    mock_async_bucket, mock_s3_async_client
 ):
     fixture = load_fixture(
         "labelled_passages/Q857/sd6wjpa2/AF.document.i00000021.n0000_translated_en.json"

@@ -221,7 +221,7 @@ def test_document_passages__pdf(parser_output_pdf):
 
 @pytest.mark.asyncio
 async def test_store_labels(
-    test_config, mock_async_bucket_labels, mock_s3_async_client, snapshot
+    test_config, mock_async_bucket, mock_s3_async_client, snapshot
 ):
     text = "This is a test text block"
     spans = [Span(text=text, start_index=15, end_index=19)]
@@ -244,7 +244,7 @@ async def test_store_labels(
     assert unknown_failures == snapshot(name="unknown_failures")
 
     labels = await helper_list_labels_in_bucket(
-        test_config, mock_async_bucket_labels, mock_s3_async_client
+        test_config, mock_async_bucket, mock_s3_async_client
     )
 
     assert len(labels) == 1
