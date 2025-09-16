@@ -40,7 +40,7 @@ RUN uv pip install --system -e .
 # Set PYTHONPATH to ensure modules can be found for distributed tasks
 # This is a workaround for when running on coiled when functions are serialised 
 # and it seems the cwd context can be lost
-ENV PYTHONPATH="/app:/app/src:/app/flows:/app/scripts"
+ENV PYTHONPATH="/app:/app/knowledge_graph:/app/flows:/app/scripts"
 
 ENV PREFECT_LOGGING_LEVEL=DEBUG
 # Setting PYTHONUNBUFFERED to a non-empty value different from 0 ensures that the python output i.e. the stdout and
