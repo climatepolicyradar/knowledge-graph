@@ -1,24 +1,3 @@
----
-- wikibase_id: Q53
-  classifier_id: yt874y4h
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q57
-  classifier_id: jq7535b6
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q68
-  classifier_id: kk8dqcrj
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q69
-  classifier_id: bp3wqfwc
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
 - wikibase_id: Q123
   classifier_id: 8np4shsw
   wandb_registry_version: v20
@@ -32,8 +11,6 @@
 - wikibase_id: Q221
   classifier_id: zahr3y3c
   wandb_registry_version: v13
-  dont_run_on:
-  - sabin
   dont_run_on:
   - sabin
 - wikibase_id: Q223
@@ -64,51 +41,6 @@
 - wikibase_id: Q412
   classifier_id: 9cfzu8vh
   wandb_registry_version: v29
-  dont_run_on:
-  - sabin
-- wikibase_id: Q572
-  classifier_id: 9x5fdgft
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q601
-  classifier_id: 76fhnpae
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q606
-  classifier_id: pun2by55
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q615
-  classifier_id: 3wkwmd2t
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q618
-  classifier_id: qp7pt7vc
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q622
-  classifier_id: gxgdn95e
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q639
-  classifier_id: yyrjpgyg
-  wandb_registry_version: v12
-  dont_run_on:
-  - sabin
-- wikibase_id: Q650
-  classifier_id: 274gekg9
-  wandb_registry_version: v12
-  dont_run_on:
-  - sabin
-- wikibase_id: Q661
-  classifier_id: ty2jvjmp
-  wandb_registry_version: v14
   dont_run_on:
   - sabin
 - wikibase_id: Q676
@@ -221,13 +153,9 @@
   wandb_registry_version: v20
   dont_run_on:
   - sabin
-  dont_run_on:
-  - sabin
 - wikibase_id: Q778
   classifier_id: j7c3ktev
   wandb_registry_version: v20
-  dont_run_on:
-  - sabin
   dont_run_on:
   - sabin
 - wikibase_id: Q779
@@ -439,15 +367,5 @@
   wandb_registry_version: v10
   compute_environment:
     gpu: true
-  dont_run_on:
-  - sabin
-- wikibase_id: Q1744
-  classifier_id: ekzukwdz
-  wandb_registry_version: v1
-  dont_run_on:
-  - sabin
-- wikibase_id: Q1754
-  classifier_id: 36bb7tcv
-  wandb_registry_version: v1
   dont_run_on:
   - sabin
