@@ -6,6 +6,9 @@ This section describes how to deploy the MCP server to AWS using Pulumi and AWS 
 
 ## Deploying
 
+> [!WARNING]
+> This stack hasn't been deployed yet! Make sure you understand the implications of deploying an MCP server before deploying it.
+
 ### Prerequisites
 
 - Project dependencies installed by running `just install` from the project root.
