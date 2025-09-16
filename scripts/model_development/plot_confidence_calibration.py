@@ -34,6 +34,27 @@ CONCEPT_IDS = [
 ]
 
 
+def load_concept_and_labelled_passages(
+    concept_id: WikibaseID,
+    wikibase: WikibaseSession,
+    argilla: ArgillaSession,
+    max_passages_per_concept: Optional[int] = None,
+) -> Concept:
+    """Load a concept and its labelled passages."""
+
+    concept = wikibase.get_concept(concept_id)
+    concept.labelled_passages = argilla.pull_labelled_passages(concept)
+
+    if max_passages_per_concept is not None:
+        concept.labelled_passages = concept.labelled_passages[:max_passages_per_concept]
+
+    console.log(
+        f"🧠 Loaded concept [bold white]{concept}[/bold white] with {len(concept.labelled_passages)} labelled passages."
+    )
+
+    return concept
+
+
 def get_classifiers_and_inference_settings(
     concept: Concept,
 ) -> list[tuple[Classifier, dict[str, Any], int]]:
@@ -276,20 +297,19 @@ def main(passage_limit: Optional[int] = None):
     concepts: list[Concept] = []
 
     for concept_id in CONCEPT_IDS:
-        concept = wikibase.get_concept(WikibaseID(concept_id))
-        concept.labelled_passages = argilla.pull_labelled_passages(concept)
+        concept = load_concept_and_labelled_passages(
+            WikibaseID(concept_id),
+            wikibase=wikibase,
+            argilla=argilla,
+            max_passages_per_concept=passage_limit,
+        )
+
         if len(concept.labelled_passages) == 0:
             console.log(
                 f"🚫 No passages found in Argilla for concept {concept_id}. Concept will be excluded from calibration measurement."
             )
             continue
 
-        if passage_limit is not None:
-            concept.labelled_passages = concept.labelled_passages[:passage_limit]
-
-        console.log(
-            f"🧠 Loaded concept [bold white]{concept}[/bold white] with {len(concept.labelled_passages)} labelled passages."
-        )
         concepts.append(concept)
 
     console.log(f"Loaded {len(concepts)}/{len(CONCEPT_IDS)} concepts successfully.")
