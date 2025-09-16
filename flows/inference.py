@@ -267,7 +267,7 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     # Safely access the "Key" field
     latest_key = latest["Key"]
 
-    data = await download_s3_file(config, latest_key)  # pyright: ignore[reportGeneralTypeIssues]
+    data = await download_s3_file(config, latest_key)
 
     content = json.loads(data)
     updated = list(content["updated_documents"].keys())
