@@ -220,3 +220,7 @@ classifier_metadata_entire_env aws_env +OPTS="":
     uv run python -m scripts.classifier_metadata update-entire-env \
         --aws-env {{aws_env}} \
         {{OPTS}}
+
+# Serve the concept store MCP locally
+serve-mcp:
+    uv run fastmcp run mcp/server.py:mcp --transport http --host 0.0.0.0 --port 80

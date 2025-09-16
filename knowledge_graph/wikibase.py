@@ -1213,7 +1213,7 @@ class WikibaseSession:
     async def search_concepts_async(
         self,
         search_term: str,
-        limit: Optional[int],
+        limit: Optional[int] = None,
         timestamp: Optional[datetime] = None,
     ) -> list[Concept]:
         """
