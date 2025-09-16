@@ -33,7 +33,7 @@ from prefect.artifacts import (
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
-from prefect.settings import PREFECT_UI_URL
+from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
 from prefect_slack.credentials import SlackWebhook
 from pydantic import Field, PositiveInt, RootModel
@@ -68,6 +68,11 @@ DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
 def file_name_from_path(path: str) -> str:
     """Get the file name from a path without the path or extension"""
     return os.path.splitext(os.path.basename(path))[0]
+
+
+def get_flow_run_ui_url(flow_run: FlowRun):
+    """Determine the prefect console URL for a flow run."""
+    return f"{get_current_settings().ui_url}/flow-runs/flow-run/{flow_run.id}"
 
 
 class SlackNotify:
