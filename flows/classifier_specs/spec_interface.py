@@ -45,7 +45,7 @@ class ClassifierSpec(BaseModel):
 
     wikibase_id: WikibaseID = Field(
         description=(
-            "The wikibase id for the underlying concept being classified. e.g. 'Q992'"
+            "The Wikibase ID for the underlying concept being classified. e.g. 'Q992'"
         ),
     )
     classifier_id: ClassifierID = Field(

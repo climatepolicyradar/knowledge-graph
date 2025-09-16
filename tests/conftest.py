@@ -238,6 +238,7 @@ def mock_wikibase_revisions_json():
                         "title": f"Item:{wikibase_id}",
                         "revisions": [
                             {
+                                "revid": 12345,
                                 "slots": {
                                     "main": {
                                         "contentmodel": "wikibase-item",
@@ -246,7 +247,7 @@ def mock_wikibase_revisions_json():
                                             generate_concept_data(wikibase_id)
                                         ),
                                     }
-                                }
+                                },
                             }
                         ],
                     }

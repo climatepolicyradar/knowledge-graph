@@ -178,3 +178,11 @@ class ClassifierID(Identifier):
 
     This is intended for typing clarity rather than extending the Identifier class.
     """
+
+
+class ConceptID(Identifier):
+    """
+    A unique identifier specifically for concepts.
+
+    This is intended for typing clarity rather than extending the Identifier class.
+    """

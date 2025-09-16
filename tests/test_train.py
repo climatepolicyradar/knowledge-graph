@@ -88,6 +88,9 @@ def test_create_and_link_model_artifact():
     mock_run = Mock()
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
+    mock_classifier.concept = Mock()
+    mock_classifier.concept.id = "5d4xcy5g"
+    mock_classifier.concept.wikibase_revision = 12300
     bucket = "cpr-labs-models"
     key = "Q123/v4prnc54/v3/model.pickle"
     aws_env = AwsEnv.labs
@@ -116,6 +119,8 @@ def test_create_and_link_model_artifact():
             metadata={
                 "aws_env": aws_env.value,
                 "classifier_name": "test_classifier",
+                "concept_id": "5d4xcy5g",
+                "concept_wikibase_revision": 12300,
             },
         )
 
