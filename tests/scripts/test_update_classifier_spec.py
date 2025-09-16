@@ -24,8 +24,17 @@ def mock_wandb_api():
         # Create mock classifier artifacts
         mock_artifacts = []
         for model_data in [
-            {"name": "Q111:v1", "env": "sandbox", "id": "abcd2345"},
-            {"name": "Q444:v2", "env": "labs", "id": "efgh6789"},
+            {
+                "name": "Q111:v1",
+                "env": "sandbox",
+                "id": "abcd2345",
+                "concept_id": "du5mvcjb",
+            },
+            {
+                "name": "Q444:v2",
+                "env": "labs",
+                "id": "efgh6789",
+            },
             {
                 "name": "Q222:v1",
                 "env": "sandbox",
@@ -45,6 +54,9 @@ def mock_wandb_api():
 
             if compute_environment := model_data.get("compute_environment"):
                 mock_artifact.metadata["compute_environment"] = compute_environment
+
+            if concept_id := model_data.get("concept_id"):
+                mock_artifact.metadata["concept_id"] = concept_id
 
             mock_artifact.source_name = f"{model_data['id']}:v1"
             mock_artifacts.append(mock_artifact)
@@ -71,9 +83,11 @@ def test_refresh_all_available_classifiers(mock_wandb_api):
             with open(output_path, "r") as file:
                 results = file.read()
 
-            expected = textwrap.dedent("""
+            expected = textwrap.dedent(
+                """
                 ---
-                - wikibase_id: Q111
+                - concept_id: du5mvcjb
+                  wikibase_id: Q111
                   classifier_id: abcd2345
                   wandb_registry_version: v1
                 - wikibase_id: Q222
@@ -83,7 +97,8 @@ def test_refresh_all_available_classifiers(mock_wandb_api):
                     gpu: true
                   dont_run_on:
                   - sabin
-                """).lstrip()
+                """
+            ).lstrip()
 
             assert results == expected
 

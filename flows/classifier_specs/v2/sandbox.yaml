@@ -1,4 +1,8 @@
 ---
+- concept_id: du5mvcjb
+  wikibase_id: Q53
+  classifier_id: yt874y4h
+  wandb_registry_version: v2
 - wikibase_id: Q368
   classifier_id: 58br2fy7
   wandb_registry_version: v22

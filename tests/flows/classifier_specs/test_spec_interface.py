@@ -71,7 +71,8 @@ def test_classifier_spec_creation(spec_dict, expectation):
 
 def test_load_classifier_specs():
     """Test loading classifier specs from a YAML file."""
-    sample_data = textwrap.dedent("""
+    sample_data = textwrap.dedent(
+        """
         ---
         - wikibase_id: Q368
           classifier_id: abcd2345
@@ -88,7 +89,8 @@ def test_load_classifier_specs():
           dont_run_on:
             - sabin
             - cpr
-    """).lstrip()
+    """
+    ).lstrip()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_spec_dir = Path(temp_dir)
