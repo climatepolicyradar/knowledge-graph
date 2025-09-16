@@ -34,27 +34,6 @@ CONCEPT_IDS = [
 ]
 
 
-def load_concept_and_labelled_passages(
-    concept_id: WikibaseID,
-    wikibase: WikibaseSession,
-    argilla: ArgillaSession,
-    max_passages_per_concept: Optional[int] = None,
-) -> Concept:
-    """Load a concept and its labelled passages."""
-
-    concept = wikibase.get_concept(concept_id)
-    concept.labelled_passages = argilla.pull_labelled_passages(concept)
-
-    if max_passages_per_concept is not None:
-        concept.labelled_passages = concept.labelled_passages[:max_passages_per_concept]
-
-    console.log(
-        f"🧠 Loaded concept [bold white]{concept}[/bold white] with {len(concept.labelled_passages)} labelled passages."
-    )
-
-    return concept
-
-
 def get_classifiers_and_inference_settings(
     concept: Concept,
 ) -> list[tuple[Classifier, dict[str, Any], int]]:
@@ -95,6 +74,27 @@ def get_classifiers_and_inference_settings(
             20,
         ),
     ]
+
+
+def load_concept_and_labelled_passages(
+    concept_id: WikibaseID,
+    wikibase: WikibaseSession,
+    argilla: ArgillaSession,
+    max_passages_per_concept: Optional[int] = None,
+) -> Concept:
+    """Load a concept and its labelled passages."""
+
+    concept = wikibase.get_concept(concept_id)
+    concept.labelled_passages = argilla.pull_labelled_passages(concept)
+
+    if max_passages_per_concept is not None:
+        concept.labelled_passages = concept.labelled_passages[:max_passages_per_concept]
+
+    console.log(
+        f"🧠 Loaded concept [bold white]{concept}[/bold white] with {len(concept.labelled_passages)} labelled passages."
+    )
+
+    return concept
 
 
 def extract_passage_level_probabilities_and_human_labels(
