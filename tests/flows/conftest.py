@@ -270,15 +270,23 @@ def mock_bucket(
     yield test_config.cache_bucket
 
 
-@pytest.fixture
-def mock_cdn_bucket(
-    mock_aws_creds, mock_s3_client, test_wikibase_to_s3_config
-) -> Generator[str, Any, Any]:
-    mock_s3_client.create_bucket(
+@pytest_asyncio.fixture
+async def mock_async_cdn_bucket(
+    mock_aws_creds, mock_s3_async_client, test_wikibase_to_s3_config
+) -> AsyncGenerator[str, None]:
+    """Returns mocked s3 cdn bucket name"""
+    await mock_s3_async_client.create_bucket(
         Bucket=test_wikibase_to_s3_config.cdn_bucket_name,
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
     yield test_wikibase_to_s3_config.cdn_bucket_name
+
+    await clean_up_bucket(
+        mock_s3_async_client, test_wikibase_to_s3_config.cdn_bucket_name
+    )
+    await mock_s3_async_client.delete_bucket(
+        Bucket=test_wikibase_to_s3_config.cdn_bucket_name
+    )
 
 
 def load_fixture(file_name) -> str:
@@ -638,8 +646,8 @@ def example_labelled_passages_1_doc(
     return file_name, labelled_passages
 
 
-@pytest.fixture
-def mock_wandb(mock_s3_client, mock_classifiers_dir, local_classifier_id):
+@pytest_asyncio.fixture
+async def mock_wandb(mock_s3_async_client, mock_classifiers_dir, local_classifier_id):
     with (
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
