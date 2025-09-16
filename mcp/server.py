@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, List
+from typing import Annotated
 
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
@@ -13,7 +13,7 @@ from knowledge_graph.wikibase import WikibaseID, WikibaseSession
 class ConceptSearchResult(BaseModel):
     """Search results from the concept store."""
 
-    concepts: List[Concept] = Field(description="List of matching concepts")
+    concepts: list[Concept] = Field(description="List of matching concepts")
     total_found: int = Field(description="Total number of concepts found")
     query: str = Field(description="The search query that was used")
 
@@ -21,7 +21,7 @@ class ConceptSearchResult(BaseModel):
 class ConceptIdsResult(BaseModel):
     """All concept IDs in the knowledge graph."""
 
-    concept_ids: List[WikibaseID] = Field(
+    concept_ids: list[WikibaseID] = Field(
         description="Complete list of concept identifiers"
     )
     total_count: int = Field(description="Total number of concepts available")
@@ -30,7 +30,7 @@ class ConceptIdsResult(BaseModel):
 class HelpPagesResult(BaseModel):
     """Help documentation search results."""
 
-    page_titles: List[str] = Field(description="Titles of matching help pages")
+    page_titles: list[str] = Field(description="Titles of matching help pages")
     query_used: str = Field(description="The search query that was used")
     total_found: int = Field(description="Number of help pages found")
 
@@ -38,8 +38,8 @@ class HelpPagesResult(BaseModel):
 class MultipleConceptsResult(BaseModel):
     """Results from retrieving multiple concepts by ID."""
 
-    concepts: List[Concept] = Field(description="The retrieved concepts")
-    requested_ids: List[str] = Field(description="Wikibase IDs that were requested")
+    concepts: list[Concept] = Field(description="The retrieved concepts")
+    requested_ids: list[str] = Field(description="Wikibase IDs that were requested")
     found_count: int = Field(description="Number of concepts successfully retrieved")
 
 
@@ -125,7 +125,7 @@ async def get_all_concept_ids(ctx: Context = None) -> ConceptIdsResult:
 @mcp.tool
 async def get_multiple_concepts(
     wikibase_ids: Annotated[
-        List[str],
+        list[str],
         Field(description="Wikibase IDs to retrieve", min_length=1, max_length=50),
     ],
     ctx: Context = None,
