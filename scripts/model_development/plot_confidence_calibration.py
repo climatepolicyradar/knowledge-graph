@@ -30,9 +30,10 @@ console = Console(highlight=False)
 # https://linear.app/climate-policy-radar/issue/SCI-434/identify-5-representative-concepts-with-well-defined-concept-store
 CONCEPT_IDS = [
     "Q1285",  # ban
-    # "Q913", # restorative justice
     "Q760",  # extractive sector
-    # "Q715", # tax
+    "Q715",  # tax
+    "Q68",  # decent work
+    "Q650",  # gas
 ]
 
 
