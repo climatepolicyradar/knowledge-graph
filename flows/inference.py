@@ -221,25 +221,6 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     file_name = "new_and_updated_documents.json"
 
     # First get all matching files, then sort them
-    # matching_files: list[ObjectTypeDef] = [
-    #     item
-    #     async for item in page_iterator.search(
-    #         f"Contents[?contains(Key, '{file_name}')]"
-    #     )
-    #     if item is not None
-    # ]
-
-    # if not matching_files:
-    #     raise ValueError(
-    #         f"failed to find any `{file_name}` files in "
-    #         f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
-    #     )
-
-    # Sort by Key and get the last one
-    # latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
-
-    # data = await download_s3_file(config, latest["Key"])  # pyright: ignore[reportGeneralTypeIssues]
-
     matching_files: list[ObjectTypeDef] = []
 
     # Iterate through pages and extract the "Contents" list
@@ -268,7 +249,6 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     latest_key = latest["Key"]
 
     data = await download_s3_file(config, latest_key)
-
     content = json.loads(data)
     updated = list(content["updated_documents"].keys())
     new = [d["import_id"] for d in content["new_documents"]]
