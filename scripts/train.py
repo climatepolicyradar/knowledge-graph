@@ -5,10 +5,8 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Any, NamedTuple, Optional
 
-import boto3
 import typer
 import wandb
-from prefect import flow
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from pydantic import BaseModel, Field, SecretStr
@@ -16,7 +14,6 @@ from rich.console import Console
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
-from flows.config import Config
 from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
@@ -27,7 +24,6 @@ from knowledge_graph.classifier import (
 from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
-    function_to_flow_name,
     generate_deployment_name,
     get_s3_client,
     is_logged_in,
@@ -37,7 +33,6 @@ from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
 from knowledge_graph.wikibase import WikibaseSession
 
-# Create these objects inside functions to avoid serialization issues
 app = typer.Typer()
 
 
@@ -277,8 +272,10 @@ def main(
     :type use_coiled_gpu: bool
     """
     if use_coiled_gpu:
-        flow_name = function_to_flow_name(train_on_gpu.fn)
-        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+        flow_name = "train_on_gpu"
+        deployment_name = generate_deployment_name(
+            flow_name="train_on_gpu", aws_env=aws_env
+        )
         qualified_name = f"{flow_name}/{deployment_name}"
 
         flow_run: FlowRun = run_deployment(  # type: ignore[misc]
@@ -305,45 +302,6 @@ def main(
                 aws_env=aws_env,
             )
         )
-
-
-@flow(log_prints=True)
-async def train_on_gpu(
-    wikibase_id: WikibaseID,
-    track: bool = False,
-    upload: bool = False,
-    aws_env: AwsEnv = AwsEnv.labs,
-    config: Config | None = None,
-):
-    if not config:
-        config = await Config.create()
-
-    if (
-        not config.wandb_api_key
-        or not config.wikibase_username
-        or not config.wikibase_password
-        or not config.wikibase_url
-    ):
-        raise ValueError("Missing values in config.")
-
-    wandb.login(key=config.wandb_api_key.get_secret_value())
-
-    wikibase_config = WikibaseConfig(
-        username=config.wikibase_username,
-        password=config.wikibase_password,
-        url=config.wikibase_url,
-    )
-
-    s3_client = boto3.client("s3", region_name=config.bucket_region)
-
-    return await run_training(
-        wikibase_id=wikibase_id,
-        track=track,
-        upload=upload,
-        aws_env=aws_env,
-        wikibase_config=wikibase_config,
-        s3_client=s3_client,
-    )
 
 
 async def run_training(
