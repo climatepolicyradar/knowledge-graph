@@ -26,6 +26,7 @@ def test_wikibase__get_concept(MockedWikibaseSession):
     concept = wikibase.get_concept(wikibase_id=WikibaseID("Q10"))
     assert isinstance(concept, Concept)
     assert concept.wikibase_id == "Q10"
+    assert concept.wikibase_revision == 12345
 
 
 def test_wikibase__get_all_concept_ids(MockedWikibaseSession):

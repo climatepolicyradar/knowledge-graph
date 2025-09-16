@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from knowledge_graph.identifiers import Identifier, WikibaseID
+from knowledge_graph.identifiers import ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 
 if TYPE_CHECKING:
@@ -47,6 +47,9 @@ class Concept(BaseModel):
     )
     wikibase_id: Optional[WikibaseID] = Field(
         default=None, description="The Wikibase ID for the concept"
+    )
+    wikibase_revision: Optional[int] = Field(
+        default=None, description="The Wikibase revision for the concept"
     )
     subconcept_of: list[WikibaseID] = Field(
         default_factory=list,
@@ -135,9 +138,9 @@ class Concept(BaseModel):
         return self.__repr__()
 
     @property
-    def id(self) -> Identifier:
+    def id(self) -> ConceptID:
         """Return a unique ID for the concept"""
-        return Identifier.generate(
+        return ConceptID.generate(
             self.wikibase_id,
             self.preferred_label,
             self.description,

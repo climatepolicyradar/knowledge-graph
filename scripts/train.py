@@ -96,6 +96,8 @@ def create_and_link_model_artifact(
     metadata = {
         "aws_env": storage_link.aws_env.value,
         "classifier_name": classifier.name,
+        "concept_id": classifier.concept.id,
+        "concept_wikibase_revision": classifier.concept.wikibase_revision,
     }
 
     # Set this, so W&B knows where to look for AWS credentials profile
