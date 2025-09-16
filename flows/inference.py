@@ -11,7 +11,10 @@ import aioboto3
 import wandb
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
-from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
+from mypy_boto3_s3.type_defs import (
+    ObjectTypeDef,
+    PutObjectOutputTypeDef,
+)
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.assets import materialize
@@ -218,29 +221,59 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     file_name = "new_and_updated_documents.json"
 
     # First get all matching files, then sort them
-    matching_files = [
-        item
-        async for item in page_iterator.search(
-            f"Contents[?contains(Key, '{file_name}')]"
-        )
-        if item is not None
+    # matching_files: list[ObjectTypeDef] = [
+    #     item
+    #     async for item in page_iterator.search(
+    #         f"Contents[?contains(Key, '{file_name}')]"
+    #     )
+    #     if item is not None
+    # ]
+
+    # if not matching_files:
+    #     raise ValueError(
+    #         f"failed to find any `{file_name}` files in "
+    #         f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
+    #     )
+
+    # Sort by Key and get the last one
+    # latest = sorted(matching_files, key=lambda x: x["Key"])[-1]
+
+    # data = await download_s3_file(config, latest["Key"])  # pyright: ignore[reportGeneralTypeIssues]
+
+    matching_files: list[ObjectTypeDef] = []
+
+    # Iterate through pages and extract the "Contents" list
+    async for page in page_iterator:
+        if "Contents" in page:
+            contents: list[ObjectTypeDef] = page[
+                "Contents"
+            ]  # Explicitly type the contents
+            matching_files.extend(contents)
+
+    # Filter files that contain the target file name in their "Key"
+    filtered_files = [
+        item for item in matching_files if "Key" in item and file_name in item["Key"]
     ]
 
-    if not matching_files:
+    if not filtered_files:
         raise ValueError(
             f"failed to find any `{file_name}` files in "
             f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
         )
 
-    # Sort by Key and get the last one
-    latest = sorted(matching_files, key=lambda x: x["Key"])[-1]  # pyright: ignore[reportGeneralTypeIssues]
+    # Sort by "Key" and get the last one
+    latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
 
-    data = await download_s3_file(config, latest["Key"])  # pyright: ignore[reportGeneralTypeIssues]
+    # Safely access the "Key" field
+    latest_key = latest["Key"]
+
+    data = await download_s3_file(config, latest_key)  # pyright: ignore[reportGeneralTypeIssues]
+
     content = json.loads(data)
     updated = list(content["updated_documents"].keys())
     new = [d["import_id"] for d in content["new_documents"]]
 
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest['Key']}")  # pyright: ignore[reportGeneralTypeIssues]
+    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
     return new + updated
 
 
