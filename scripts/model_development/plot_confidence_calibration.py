@@ -31,7 +31,7 @@ console = Console(highlight=False)
 CONCEPT_IDS = [
     "Q1285",  # ban
     # "Q913", # restorative justice
-    # "Q760", # extractive sector
+    "Q760",  # extractive sector
     # "Q715", # tax
 ]
 
@@ -200,7 +200,7 @@ def calculate_expected_calibration_error(
 def plot_confidence_calibration(
     predicted_probs: list[float],
     human_labels: list[bool],
-    concept: Concept,
+    concept_preferred_label: str,
     classifier_name: str,
     n_bins: int = 10,
 ) -> None:
@@ -217,7 +217,7 @@ def plot_confidence_calibration(
 
     fig, (ax_calibration, ax_histogram) = plt.subplots(1, 2, figsize=(12, 5))
     fig.suptitle(
-        f"{classifier_name}\nConcept: {concept.preferred_label}", y=0.98, wrap=True
+        f"{classifier_name}\nConcept: {concept_preferred_label}", y=0.98, wrap=True
     )
 
     ax_calibration.plot([0, 1], [0, 1], "k--", alpha=0.5, label="Perfect calibration")
@@ -249,7 +249,7 @@ def plot_confidence_calibration(
     fig.tight_layout(rect=(0, 0, 1, 0.95))
 
     safe_classifier_name = classifier_name.replace("/", "_").replace(" ", "_")
-    safe_concept_name = concept.preferred_label.replace("/", "_").replace(" ", "_")
+    safe_concept_name = concept_preferred_label.replace("/", "_").replace(" ", "_")
     filename = f"confidence_calibration_{safe_concept_name}_{safe_classifier_name}.png"
 
     metrics_dir.mkdir(exist_ok=True)
@@ -316,46 +316,65 @@ def main(passage_limit: Optional[int] = None):
     )
 
     console.log("Labelling passages with classifiers:")
-    classifier_labelled_passages_by_concept = defaultdict(list)
-    for concept, classifier_and_batch_size in classifiers_by_concept.items():
+    classifier_results = defaultdict(
+        list
+    )  # classifier -> [(concept, labelled_passages), ...]
+
+    for concept, classifier_and_settings in classifiers_by_concept.items():
         console.log(f"Concept {concept}")
-        for classifier, predict_kwargs, batch_size in classifier_and_batch_size:
+        for classifier, predict_kwargs, batch_size in classifier_and_settings:
             labelled_passages = label_passages(
                 concept.labelled_passages,
                 classifier=classifier,
                 batch_size=batch_size,
                 predict_kwargs=predict_kwargs,
             )
-            classifier_labelled_passages_by_concept[concept].append(labelled_passages)
+            classifier_results[classifier].append((concept, labelled_passages))
             save_labelled_passages_and_classifier(
                 labelled_passages=labelled_passages,
                 classifier=classifier,
             )
 
-    console.log("Creating confidence calibration plots...")
+    console.log("Creating confidence calibration plots by classifier...")
 
-    for concept in concepts:
-        console.log(f"Processing concept: {concept}")
+    for classifier, concept_results in classifier_results.items():
+        classifier_name = str(classifier)
+        console.log(f"Processing classifier: {classifier_name}")
 
-        human_labelled_passages = concept.labelled_passages
-        classifier_results = classifier_labelled_passages_by_concept[concept]
+        all_predicted_probs = []
+        all_human_labels = []
 
-        for classifier_idx, model_predictions in enumerate(classifier_results):
-            classifier_name = str(classifiers_by_concept[concept][classifier_idx][0])
-            console.log(f"  Plotting calibration for: {classifier_name}")
+        # Plot for individual concepts
+        for concept, model_predictions in concept_results:
+            console.log(f"  Plotting calibration for concept: {concept}")
 
             predicted_probs, human_labels = extract_passage_level_data(
-                human_labelled_passages, model_predictions
+                concept.labelled_passages, model_predictions
             )
 
+            all_predicted_probs.extend(predicted_probs)
+            all_human_labels.extend(human_labels)
+
             if len(predicted_probs) == 0:
-                console.log(f"    No predictions found for {classifier_name}")
+                console.log(f"    No predictions found for {concept}")
                 continue
 
             plot_confidence_calibration(
                 predicted_probs=predicted_probs,
                 human_labels=human_labels,
-                concept=concept,
+                concept_preferred_label=concept.preferred_label,
+                classifier_name=classifier_name,
+                n_bins=10,
+            )
+
+        # Plot for all concepts combined
+        console.log("  Plotting calibration for all concepts combined")
+
+        if len(all_predicted_probs) > 0:
+            plot_confidence_calibration(
+                predicted_probs=all_predicted_probs,
+                human_labels=all_human_labels,
+                concept_preferred_label="All concepts",
                 classifier_name=classifier_name,
                 n_bins=10,
             )
