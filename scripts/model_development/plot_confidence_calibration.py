@@ -56,16 +56,16 @@ def get_classifiers_and_inference_settings(
     voting_classifier_predict_passage_kwargs = {"passage_level": True}
 
     return [
+        # (
+        #     VotingLLMClassifier(
+        #         concept=concept, model_name="gpt-4o-mini", n_classifiers=10
+        #     ),
+        #     voting_classifier_predict_passage_kwargs,
+        #     20,
+        # ),
         (
             VotingLLMClassifier(
-                concept=concept, model_name="gpt-4o-mini", n_classifiers=10
-            ),
-            voting_classifier_predict_passage_kwargs,
-            20,
-        ),
-        (
-            VotingLLMClassifier(
-                concept=concept, model_name="gpt-4.1-mini", n_classifiers=10
+                concept=concept, model_name="gpt-4o-mini", n_classifiers=6
             ),
             voting_classifier_predict_passage_kwargs,
             20,
@@ -136,13 +136,13 @@ def extract_passage_level_probabilities_and_human_labels(
     }
 
     for model_passage in model_labelled_passages:
-        if not (human_label := passage_id_to_human_label.get(model_passage.id)):
-            continue
-
         if model_passage.spans:
             predicted_prob = model_passage.spans[0].prediction_probability
             predicted_probs.append(predicted_prob)
-            human_labels.append(human_label)
+        else:
+            predicted_probs.append(0)
+
+        human_labels.append(passage_id_to_human_label.get(model_passage.id))
 
     return predicted_probs, human_labels
 
@@ -245,8 +245,15 @@ def plot_confidence_calibration(
         f"{classifier_name}\nConcept: {concept_preferred_label}", y=0.98, wrap=True
     )
 
+    nonzero_indices = np.where(np.array(bin_counts) > 0)
+
+    bin_confidences_to_plot = np.array(bin_confidences)[nonzero_indices]
+    bin_accuracies_to_plot = np.array(bin_accuracies)[nonzero_indices]
+
     ax_calibration.plot([0, 1], [0, 1], "k--", alpha=0.5, label="Perfect calibration")
-    ax_calibration.plot(bin_confidences, bin_accuracies, "bo-", label="Classifier")
+    ax_calibration.plot(
+        bin_confidences_to_plot, bin_accuracies_to_plot, "bo-", label="Classifier"
+    )
     ax_calibration.set_xlabel("Mean Predicted Probability")
     ax_calibration.set_ylabel("Fraction of Positives")
     ax_calibration.set_title(
