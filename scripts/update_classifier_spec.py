@@ -89,6 +89,9 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
         if concept_id := art.metadata.get("concept_id"):
             spec_data["concept_id"] = concept_id
 
+        if classifiers_profiles := art.metadata.get("classifiers_profiles"):
+            spec_data["classifiers_profiles"] = classifiers_profiles
+
         spec = ClassifierSpec(**spec_data)
         specs[env].append(spec)
 
