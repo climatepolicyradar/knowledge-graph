@@ -30,9 +30,9 @@ console = Console(highlight=False)
 CONCEPT_IDS = [
     "Q1285",  # ban
     "Q760",  # extractive sector
-    "Q715",  # tax
-    "Q68",  # decent work
-    "Q650",  # gas
+    # "Q715",  # tax
+    # "Q68",  # decent work
+    # "Q650",  # gas
 ]
 
 
@@ -349,7 +349,7 @@ def main(passage_limit: Optional[int] = None):
     console.log("Labelling passages with classifiers:")
     classifier_results = defaultdict(
         list
-    )  # classifier -> [(concept, labelled_passages), ...]
+    )  # classifier name -> [(concept, labelled_passages), ...]
 
     for concept, classifier_and_settings in classifiers_by_concept.items():
         console.log(f"Concept {concept}")
@@ -360,7 +360,7 @@ def main(passage_limit: Optional[int] = None):
                 batch_size=batch_size,
                 predict_kwargs=predict_kwargs,
             )
-            classifier_results[classifier].append((concept, labelled_passages))
+            classifier_results[classifier.name].append((concept, labelled_passages))
             save_labelled_passages_and_classifier(
                 labelled_passages=labelled_passages,
                 classifier=classifier,
@@ -368,8 +368,7 @@ def main(passage_limit: Optional[int] = None):
 
     console.log("Creating confidence calibration plots by classifier...")
 
-    for classifier, concept_results in classifier_results.items():
-        classifier_name = str(classifier)
+    for classifier_name, concept_results in classifier_results.items():
         console.log(f"Processing classifier: {classifier_name}")
 
         all_predicted_probs = []
