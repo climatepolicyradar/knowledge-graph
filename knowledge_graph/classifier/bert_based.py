@@ -32,13 +32,8 @@ from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
+logging.basicConfig(handlers=[RichHandler()])
 logger = logging.getLogger(__name__)
-if not logger.handlers:
-    logger.setLevel(logging.INFO)
-    handler = RichHandler(rich_tracebacks=True)
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(handler)
-    logger.propagate = False
 
 
 def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
@@ -212,7 +207,7 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
             for more detail.
         - We freeze the weights of the model's backbone (where most of its fundamental
             language understanding smarts come from) and only adjust the parameters in
-            themodel's task-specific classification head during training - with the
+            the model's task-specific classification head during training - with the
             default model, that means we're only changing ~0.4% of the total model
             weights! This dramatically reduces the training time and memory usage, while
             still producing a performant classifier.
