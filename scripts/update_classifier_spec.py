@@ -29,8 +29,16 @@ WANDB_MODEL_REGISTRY = "wandb-registry-model"
 def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     """Save a classifier spec YAML"""
     serialised_data = [d.model_dump(exclude_none=True, mode="json") for d in data]
+
+    # Reorder to put the Wikibase ID first in each spec
+    ordered_data = []
+    for spec in serialised_data:
+        ordered_spec = {"wikibase_id": spec["wikibase_id"]}
+        ordered_spec.update({k: v for k, v in spec.items() if k != "wikibase_id"})
+        ordered_data.append(ordered_spec)
+
     with open(file_path, "w") as file:
-        yaml.dump(serialised_data, file, explicit_start=True, sort_keys=False)
+        yaml.dump(ordered_data, file, explicit_start=True, sort_keys=False)
 
 
 def sort_specs(specs: list[ClassifierSpec]) -> list[ClassifierSpec]:
