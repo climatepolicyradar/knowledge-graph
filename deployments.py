@@ -255,7 +255,7 @@ create_deployment(
     flow=update_neo4j,
     description="Refresh Neo4j with the latest concept graph",
     env_schedules={
-        AwsEnv.labs: "0 3 * * * MON-THU",
+        AwsEnv.labs: "0 3 * * MON-THU",
     },
 )
 
