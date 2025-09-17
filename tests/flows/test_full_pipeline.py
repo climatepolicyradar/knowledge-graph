@@ -126,7 +126,10 @@ async def test_full_pipeline_no_config_provided(
         summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
         assert summary_artifact and summary_artifact.description
-        assert summary_artifact.description == "Summary of the full pipeline run."
+        assert (
+            summary_artifact.description
+            == "Summary of the full pipeline successful run."
+        )
 
 
 @pytest.mark.asyncio
@@ -241,7 +244,10 @@ async def test_full_pipeline_with_full_config(
         summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
         assert summary_artifact and summary_artifact.description
-        assert summary_artifact.description == "Summary of the full pipeline run."
+        assert (
+            summary_artifact.description
+            == "Summary of the full pipeline successful run."
+        )
 
 
 @pytest.mark.asyncio
