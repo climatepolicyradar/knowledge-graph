@@ -170,8 +170,8 @@ async def test_aggregate_batch_of_documents__with_failures(
     artifact_data = json.loads(summary_artifact.data)
     failure_stems = [f["Failed document Stem"] for f in artifact_data]
     assert set(failure_stems) == set(expect_failure_stems)
-    assert "NoSuchKey" in artifact_data[0]["Context"]
-    assert "NoSuchKey" in artifact_data[1]["Context"]
+    assert "NoSuchKey" in artifact_data[0]["Exception"]
+    assert "NoSuchKey" in artifact_data[1]["Exception"]
 
 
 def test_build_run_output_prefix():
