@@ -195,9 +195,9 @@ def generate_s3_uri_output(
 
 
 def task_run_name(parameters: dict[str, Any]) -> str:
-    document_id = parameters.get("document_id", "unknown")
+    document_stem = parameters.get("document_stem", "unknown")
     slug = generate_slug(2)
-    return f"aggregate-single-document-{document_id}-{slug}"
+    return f"aggregate-single-document-{document_stem}-{slug}"
 
 
 @materialize(
