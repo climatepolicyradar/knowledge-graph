@@ -112,11 +112,16 @@ class Concept(BaseModel):
     @classmethod
     def _ensure_negative_labels_are_not_in_positive_labels(cls, values: Dict) -> Dict:
         """Raise a ValueError if a negative label is also a positive label"""
-        if any(
-            label in values["alternative_labels"] for label in values["negative_labels"]
-        ):
+        overlapping_labels = []
+        for label in values["negative_labels"]:
+            if label in values["alternative_labels"]:
+                overlapping_labels.append(label)
+        if overlapping_labels:
+            wikibase_id = values.get("wikibase_id")
+            preferred_label = values.get("preferred_label")
             raise ValueError(
-                "A negative label should not be the same as a positive label"
+                f"{wikibase_id} ({preferred_label}): A negative label should not be "
+                f"the same as a positive label. Found in both: {overlapping_labels}"
             )
         return values
 

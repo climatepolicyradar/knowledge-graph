@@ -349,6 +349,8 @@ async def run_training(
         )
         # To handle redirects where the wikibase_id is overwritten
         concept.wikibase_id = wikibase_id
+        # Ensure concept data can be serialised and rebuilt without failing validations
+        concept.model_validate_json(concept.model_dump_json())
         # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
