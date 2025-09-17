@@ -86,8 +86,8 @@ def test_refresh_all_available_classifiers(mock_wandb_api):
             expected = textwrap.dedent(
                 """
                 ---
-                - concept_id: du5mvcjb
-                  wikibase_id: Q111
+                - wikibase_id: Q111
+                  concept_id: du5mvcjb
                   classifier_id: abcd2345
                   wandb_registry_version: v1
                 - wikibase_id: Q222

@@ -1,6 +1,6 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import NewType, Optional, Sequence
 
 import yaml
 from pydantic import BaseModel, Field, field_serializer
@@ -12,6 +12,8 @@ from knowledge_graph.version import Version
 
 type SpecStr = str
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
+
+ClassifierProfileName = NewType("ClassifierProfileName", str)
 
 
 class DontRunOnEnum(Enum):
@@ -56,6 +58,10 @@ class ClassifierSpec(BaseModel):
         description=(
             "The unique identifier for the classifier, built from its internals."
         ),
+    )
+    classifiers_profiles: Sequence[ClassifierProfileName] | None = Field(
+        default=None,
+        description=("The classifiers profiles to use it in."),
     )
     wandb_registry_version: Version = Field(
         description=("The version of the classifier in wandb registry. e.g. v1"),

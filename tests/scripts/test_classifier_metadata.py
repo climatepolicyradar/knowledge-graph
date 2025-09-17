@@ -24,6 +24,8 @@ class MetadataTestCase:
     add_require_gpu: bool
     initial_metadata: dict
     expected_metadata: dict
+    add_classifiers_profiles: set[str] | None = None
+    remove_classifiers_profiles: set[str] | None = None
 
 
 @pytest.fixture
@@ -101,6 +103,63 @@ def mock_wandb_context():
                 "compute_environment": {"gpu": True},
             },
         ),
+        MetadataTestCase(
+            description="Add classifier profiles to empty metadata",
+            clear_dont_run_on=False,
+            add_dont_run_on=None,
+            clear_require_gpu=False,
+            add_require_gpu=False,
+            add_classifiers_profiles={"profile1", "profile2"},
+            initial_metadata={},
+            expected_metadata={"classifiers_profiles": ["profile1", "profile2"]},
+        ),
+        MetadataTestCase(
+            description="Add classifier profiles to existing ones",
+            clear_dont_run_on=False,
+            add_dont_run_on=None,
+            clear_require_gpu=False,
+            add_require_gpu=False,
+            add_classifiers_profiles={"profile3", "profile4"},
+            initial_metadata={"classifiers_profiles": ["profile1", "profile2"]},
+            expected_metadata={
+                "classifiers_profiles": ["profile1", "profile2", "profile3", "profile4"]
+            },
+        ),
+        MetadataTestCase(
+            description="Remove classifier profiles from existing ones",
+            clear_dont_run_on=False,
+            add_dont_run_on=None,
+            clear_require_gpu=False,
+            add_require_gpu=False,
+            remove_classifiers_profiles={"profile2"},
+            initial_metadata={
+                "classifiers_profiles": ["profile1", "profile2", "profile3"]
+            },
+            expected_metadata={"classifiers_profiles": ["profile1", "profile3"]},
+        ),
+        MetadataTestCase(
+            description="Remove all classifier profiles deletes metadata key",
+            clear_dont_run_on=False,
+            add_dont_run_on=None,
+            clear_require_gpu=False,
+            add_require_gpu=False,
+            remove_classifiers_profiles={"profile1", "profile2"},
+            initial_metadata={"classifiers_profiles": ["profile1", "profile2"]},
+            expected_metadata={},
+        ),
+        MetadataTestCase(
+            description="Add and remove classifier profiles simultaneously",
+            clear_dont_run_on=False,
+            add_dont_run_on=None,
+            clear_require_gpu=False,
+            add_require_gpu=False,
+            add_classifiers_profiles={"profile3", "profile4"},
+            remove_classifiers_profiles={"profile2"},
+            initial_metadata={"classifiers_profiles": ["profile1", "profile2"]},
+            expected_metadata={
+                "classifiers_profiles": ["profile1", "profile3", "profile4"]
+            },
+        ),
     ],
     ids=lambda test_case: test_case.description,
 )
@@ -116,6 +175,8 @@ def test_classifier_metadata__update(mock_wandb_context, test_case: MetadataTest
         add_dont_run_on=test_case.add_dont_run_on,
         clear_require_gpu=test_case.clear_require_gpu,
         add_require_gpu=test_case.add_require_gpu,
+        add_classifiers_profiles=test_case.add_classifiers_profiles,
+        remove_classifiers_profiles=test_case.remove_classifiers_profiles,
         aws_env=AwsEnv.labs,
         update_specs=False,
     )
@@ -134,7 +195,8 @@ def test_classifier_metadata__update_entire_env(mock_wandb_context):
     mock_run, mock_artifact = mock_wandb_context
     mock_artifact.metadata = {"dont_run_on": ["sabin"]}
 
-    sample_data = textwrap.dedent("""
+    sample_data = textwrap.dedent(
+        """
         ---
         - wikibase_id: Q368
           classifier_id: abcd2345
@@ -145,7 +207,8 @@ def test_classifier_metadata__update_entire_env(mock_wandb_context):
         - wikibase_id: Q999
           classifier_id: jkmn2345
           wandb_registry_version: v2
-    """).lstrip()
+    """
+    ).lstrip()
 
     with TemporaryDirectory() as temp_dir:
         temp_spec_dir = Path(temp_dir)
@@ -174,3 +237,28 @@ def test_classifier_metadata__update_entire_env(mock_wandb_context):
                 ]
             )
             assert mock_artifact.save.call_count == 3
+
+
+def test_classifier_metadata__duplicate_profiles_raises_error(mock_wandb_context):
+    """Test that providing duplicate profiles in add and remove raises an error."""
+    mock_run, mock_artifact = mock_wandb_context
+    mock_artifact.metadata = {}
+
+    with pytest.raises(Exception) as exc_info:
+        update(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("abcd2345"),
+            clear_dont_run_on=False,
+            add_dont_run_on=None,
+            clear_require_gpu=False,
+            add_require_gpu=False,
+            add_classifiers_profiles={"profile1", "profile2"},
+            remove_classifiers_profiles={"profile1", "profile3"},
+            aws_env=AwsEnv.labs,
+            update_specs=False,
+        )
+
+    assert "duplicate values found for adding and removing classifiers profiles" in str(
+        exc_info.value
+    )
+    assert "profile1" in str(exc_info.value)
