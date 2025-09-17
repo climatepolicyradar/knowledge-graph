@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
@@ -77,6 +77,7 @@ __all__ = [
     "BertBasedClassifier",  # type: ignore
     "LLMClassifier",  # type: ignore
     "LocalLLMClassifier",  # type: ignore
+    "GPUBoundClassifier",
     "ModelPath",
     "get_local_classifier_path",
 ]

@@ -18,6 +18,7 @@ from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
     ClassifierFactory,
+    GPUBoundClassifier,
     ModelPath,
     get_local_classifier_path,
 )
@@ -32,6 +33,7 @@ from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
 from knowledge_graph.wikibase import WikibaseSession
+from scripts.classifier_metadata import ComputeEnvironment
 
 app = typer.Typer()
 
@@ -99,7 +101,7 @@ def create_and_link_model_artifact(
     run: Run,
     classifier: Classifier,
     storage_link: StorageLink,
-) -> wandb.Artifact:  # type: ignore
+) -> wandb.Artifact:
     """
     Links a model artifact, stored in S3, to a Weights & Biases run.
 
@@ -112,14 +114,19 @@ def create_and_link_model_artifact(
     :return: The created W&B artifact.
     :rtype: wandb.Artifact
     """
-    metadata = {
+
+    metadata: dict[str, Any] = {
         "aws_env": storage_link.aws_env.value,
         "classifier_name": classifier.name,
         "concept_id": classifier.concept.id,
         "concept_wikibase_revision": classifier.concept.wikibase_revision,
     }
+    if isinstance(classifier, GPUBoundClassifier):
+        Console().log("Adding GPU requirement to metadata")
+        compute_environment: ComputeEnvironment = {"gpu": True}
+        metadata["compute_environment"] = compute_environment
 
-    artifact = wandb.Artifact(  # type: ignore
+    artifact = wandb.Artifact(
         name=classifier.id,
         type="model",
         metadata=metadata,
