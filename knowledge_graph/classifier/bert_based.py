@@ -184,7 +184,21 @@ class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
             for passage in labelled_passages
         ]
 
-        tokenized_inputs = self.tokenizer(  # type: ignore[operator]
+        # To optimise the speed of the matrix multiplications in our model, we pad all of
+        # the passages in each batch to have the same length. This effectively makes every
+        # passage in the batch the length of the LONGEST passage in the batch. We have a
+        # few verrrrry long passages in our dataset. Matching their length could create a
+        # huuuuuge token matrix, leading to memory issues, and breaking our
+        # training/inference runs!
+        # To mitigate this issue, we enforce a maximum length of 512 tokens for all
+        # passages in each batch - we drop any tokens we exceed this limit. Most of the
+        # passages in our dataset should be shorter than this limit, but it's worth
+        # keeping in mind that we WILL lose some information by truncating those longer
+        # passages. This is a trade-off we're willing to make, as the speed of the model's
+        # matrix multiplications is more important than the loss of a few tokens. We can
+        # also resolve some of this by using a more consistent chunking strategy, but
+        # that's out of the scope of this codebase.
+        tokenized_inputs = self.tokenizer(
             texts, padding=True, truncation=True, max_length=512, return_tensors=None
         )
 
