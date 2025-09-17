@@ -65,6 +65,9 @@ def test_config():
         wandb_api_key=SecretStr("test_wandb_api_key"),
         aws_env=AwsEnv("sandbox"),
         bucket_region="eu-west-1",
+        wikibase_password=SecretStr("test_password"),
+        wikibase_username="test_username",
+        wikibase_url="https://test.test.test",
     )
 
 
