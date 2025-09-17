@@ -35,7 +35,7 @@ async def create_full_pipeline_summary_artifact(
     config: Config,
     inference_result: str = "N/A",
 ) -> None:
-    """Create an artifact with summary information about the full pipeline run."""
+    """Create an artifact with summary information about the full pipeline successful run."""
 
     # Format the overview information as a string for the description
     full_pipeline_report = f"""# Full Pipeline Summary
@@ -47,7 +47,7 @@ async def create_full_pipeline_summary_artifact(
 
     await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"full-pipeline-results-summary-{config.aws_env.value}",
-        description="Summary of the full pipeline run.",
+        description="Summary of the full pipeline successful run.",
         markdown=full_pipeline_report,
     )
 
