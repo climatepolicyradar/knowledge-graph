@@ -1,7 +1,8 @@
-
-- wikibase_id: Q53
+---
+- concept_id: du5mvcjb
+  wikibase_id: Q53
   classifier_id: yt874y4h
-  wandb_registry_version: v0
+  wandb_registry_version: v3
   dont_run_on:
   - sabin
 - wikibase_id: Q57
@@ -402,22 +403,16 @@
 - wikibase_id: Q1651
   classifier_id: 6rys3abe
   wandb_registry_version: v12
-  compute_environment:
-    gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1652
   classifier_id: 57uwtz45
   wandb_registry_version: v9
-  compute_environment:
-    gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1653
   classifier_id: u86a8p2d
   wandb_registry_version: v9
-  compute_environment:
-    gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1744
