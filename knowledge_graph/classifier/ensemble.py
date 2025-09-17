@@ -6,7 +6,10 @@ from knowledge_graph.classifier.classifier import (
     Classifier,
     ProbabilityCapableClassifier,
 )
-from knowledge_graph.classifier.large_language_model import LLMClassifier
+from knowledge_graph.classifier.large_language_model import (
+    LLMClassifier,
+    LocalLLMClassifier,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, group_overlapping_spans
@@ -216,6 +219,7 @@ class VotingLLMClassifier(VotingClassifier):
         model_name: str = "gpt-4o-mini",
         n_classifiers: int = 10,
         base_seed: int = 42,
+        local: bool = False,
     ):
         """
         Initialize VotingLLMClassifier.
@@ -229,8 +233,10 @@ class VotingLLMClassifier(VotingClassifier):
         self.n_classifiers = n_classifiers
         self.base_seed = base_seed
 
+        model_class = LocalLLMClassifier if local else LLMClassifier
+
         llm_classifiers = [
-            LLMClassifier(
+            model_class(
                 concept=concept, model_name=model_name, random_seed=base_seed + i
             )
             for i in range(n_classifiers)
