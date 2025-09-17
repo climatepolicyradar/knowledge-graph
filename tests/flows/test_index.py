@@ -416,7 +416,7 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
     s3_prefix_inference_results: str,
     test_config,
 ) -> None:
-    """Test that run passage level indexing correctly from aggregated restuls."""
+    """Test that run passage level indexing correctly from aggregated results."""
 
     non_existent_stem = DocumentStem("non_existent_document")
     document_stems = aggregate_inference_results_document_stems + [non_existent_stem]
@@ -437,18 +437,20 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
                 batch_size=1,
             )
 
-            assert (
-                f"Some batches of documents had failures: 1/{len(document_stems)} failed."
-                in str(excinfo.value)
-            )
+        assert (
+            f"Some batches of documents had failures: 3/{len(document_stems)} failed."
+            in str(excinfo.value)
+        )
 
-            # Assert that the summary artifact was created
-            summary_artifact = await Artifact.get("Aggregate Indexing Summary")
-            assert summary_artifact and summary_artifact.description
-            assert (
-                summary_artifact.description
-                == "Summary of the passages indexing run to update concept counts."
-            )
+        # Assert that the summary artifact was created
+        summary_artifact = await Artifact.get(
+            "indexing-aggregate-results-summary-sandbox"
+        )
+        assert summary_artifact and summary_artifact.description
+        assert (
+            summary_artifact.description
+            == "Summary of the passages indexing run to update concept counts."
+        )
 
 
 @pytest.mark.vespa
