@@ -79,8 +79,8 @@ sg = aws.ec2.SecurityGroup(
     ingress=[
         aws.ec2.SecurityGroupIngressArgs(
             protocol="tcp",
-            from_port=80,
-            to_port=80,
+            from_port=8000,
+            to_port=8000,
             cidr_blocks=["0.0.0.0/0"],
         ),
     ],
@@ -104,7 +104,7 @@ alb = aws.lb.LoadBalancer(
 
 target_group = aws.lb.TargetGroup(
     f"{application_name}-tg",
-    port=80,
+    port=8000,
     protocol="HTTP",
     target_type="ip",
     vpc_id=default_vpc.id,
@@ -113,7 +113,7 @@ target_group = aws.lb.TargetGroup(
 listener = aws.lb.Listener(
     f"{application_name}-listener",
     load_balancer_arn=alb.arn,
-    port=80,
+    port=8000,
     default_actions=[
         aws.lb.ListenerDefaultActionArgs(
             type="forward",
@@ -200,7 +200,7 @@ task_definition = aws.ecs.TaskDefinition(
                     "name": f"{application_name}-container",
                     "image": args[0],
                     "portMappings": [
-                        {"containerPort": 80, "hostPort": 80, "protocol": "tcp"}
+                        {"containerPort": 8000, "hostPort": 8000, "protocol": "tcp"}
                     ],
                     "secrets": [
                         {"name": "WIKIBASE_USERNAME", "valueFrom": args[1]},
@@ -229,7 +229,7 @@ service = aws.ecs.Service(
         aws.ecs.ServiceLoadBalancerArgs(
             target_group_arn=target_group.arn,
             container_name=f"{application_name}-container",
-            container_port=80,
+            container_port=8000,
         )
     ],
     opts=pulumi.ResourceOptions(depends_on=[listener]),

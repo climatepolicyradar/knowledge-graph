@@ -31,7 +31,7 @@ docker build -t wikibase-mcp-server -f mcp/Dockerfile .
 To run the Docker container with an environment file (e.g., `.env`):
 
 ```bash
-docker run -p 80:80 --env-file .env wikibase-mcp-server
+docker run -p 8000:8000 --env-file .env wikibase-mcp-server
 ```
 
 ### Using the local MCP server in Cursor
@@ -42,7 +42,7 @@ To use the MCP server in eg Cursor, you need to add it to the `mcp.json`.
 {
   "mcpServers": {
     "ClimatePolicyRadarConceptStore": {
-      "url": "http://localhost/mcp"
+      "url": "http://localhost:8000/mcp"
     }
   }
 }
