@@ -233,7 +233,7 @@ async def test_store_labels(
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    successes, failures, unknown_failures = await store_labels.fn(
+    successes, failures, unknown_failures = await store_labels(
         test_config,
         [
             SingleDocumentInferenceResult(
@@ -243,6 +243,7 @@ async def test_store_labels(
                 classifier_id="2tnmbxaw",
             )
         ],
+        mock_s3_async_client,
     )
 
     assert successes == snapshot(name="successes")

@@ -17,7 +17,6 @@ from mypy_boto3_s3.type_defs import (
 )
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
-from prefect.assets import materialize
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.exceptions import MissingContextError
@@ -444,48 +443,45 @@ def generate_s3_uri_output(
     )
 
 
-@materialize(
-    "foo://bar",  # Asset key is not known yet
-    retries=1,
-    persist_result=False,
-)
+async def labels_to_s3(
+    config: Config,
+    inference: SingleDocumentInferenceResult,
+    s3_client: S3Client,
+) -> PutObjectOutputTypeDef:
+    s3_uri = generate_s3_uri_output(config, inference)
+    print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
+
+    body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+
+    response = await s3_client.put_object(
+        Bucket=s3_uri.bucket,
+        Key=s3_uri.key,
+        Body=body,
+        ContentType="application/json",
+    )
+
+    return response
+
+
 async def store_labels(
     config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
+    s3_client: S3Client,
 ) -> tuple[
     list[SingleDocumentInferenceResult],
     list[tuple[DocumentStem, Exception]],
     list[BaseException],
 ]:
     """Store the labels in the cache bucket."""
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3:
-        # Don't get rate-limited by AWS
-        semaphore = asyncio.Semaphore(10)
-
-        async def fn(
-            inference: SingleDocumentInferenceResult,
-        ) -> PutObjectOutputTypeDef:
-            s3_uri = generate_s3_uri_output(config, inference)
-            print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
-
-            body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
-
-            response = await s3.put_object(
-                Bucket=s3_uri.bucket,
-                Key=s3_uri.key,
-                Body=body,
-                ContentType="application/json",
-            )
-
-            return response
+    # Don't get rate-limited by AWS
+    semaphore = asyncio.Semaphore(10)
 
     tasks = [
         wait_for_semaphore(
             semaphore,
             return_with(
                 inference,
-                fn(inference),
+                labels_to_s3(config, inference, s3_client),
             ),
         )
         for inference in inferences
@@ -834,14 +830,14 @@ async def _inference_batch_of_documents(
             else:
                 inferences_successes.append(value)
 
-    (
-        store_labels_successes,
-        store_labels_failures,
-        store_labels_unknown_failures,
-    ) = await store_labels.with_options(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-        assets=generate_assets(config, inferences_successes),
-        asset_deps=generate_asset_deps(config, inferences_successes),  # pyright: ignore[reportArgumentType]
-    )(config=config, inferences=inferences_successes)
+    async with session.client("s3") as s3_client:
+        (
+            store_labels_successes,
+            store_labels_failures,
+            store_labels_unknown_failures,
+        ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
+            config=config, inferences=inferences_successes, s3_client=s3_client
+        )
 
     # This doesn't need to be combined since successes are funnelled
     # through all steps.
