@@ -1,7 +1,7 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Optional, Protocol, Sequence, Union
 
 from typing_extensions import Self
 
@@ -192,3 +192,28 @@ class GPUBoundClassifier(ABC):
     GPU-bound classifiers should ideally run on GPU hardware during both training and
     inference.
     """
+
+
+class ProbabilityCapableClassifier(ABC):
+    """
+    A mixin which identifies classifiers that output probabilities of predictions.
+
+    This is useful to know when we need probabilities, or want to use a process that
+    overwrites probabilities – like the VotingClassifier.
+    """
+
+
+class VariantEnabledClassifier(Protocol):
+    """
+    Protocol for classifiers that can generate variants of themselves.
+
+    Classes implementing this protocol can:
+
+    1. Create variant instances of themselves (with stochastic variation)
+    2. Make predictions on text
+
+    This protocol ensures type safety when performing uncertainty estimation.
+    """
+
+    def get_variant(self) -> "VariantEnabledClassifier": ...  # noqa: D102
+    def predict(self, text: str) -> list[Span]: ...  # noqa: D102
