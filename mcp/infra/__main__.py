@@ -7,9 +7,7 @@ import pulumi_docker as docker
 
 from knowledge_graph.config import get_git_root
 
-config = pulumi.Config()
-application_name = config.require("application_name")
-
+application_name = "concept-store-mcp"
 
 # Get current AWS account and region to construct ARNs
 caller_identity = aws.get_caller_identity()
@@ -19,7 +17,7 @@ current_region = aws.get_region()
 def get_ssm_parameter_arn(parameter_name):
     return pulumi.Output.concat(
         "arn:aws:ssm:",
-        current_region.name,
+        current_region.region,
         ":",
         caller_identity.account_id,
         ":parameter",
@@ -49,7 +47,7 @@ git_commit_hash = subprocess.check_output(
 
 image = docker.Image(
     f"{application_name}-image",
-    build=docker.DockerBuild(
+    build=docker.DockerBuildArgs(
         context=str(root_dir.resolve()),
         dockerfile=str(dockerfile_path),
         platform="linux/amd64",  # Specify platform for cross-platform builds
@@ -73,7 +71,7 @@ default_subnet_ids = aws.ec2.get_subnets(
 
 # Create a security group that allows HTTP ingress and all egress
 sg = aws.ec2.SecurityGroup(
-    f"{application_name}-sg",
+    f"{application_name}-security-group",
     vpc_id=default_vpc.id,
     description="Allow HTTP ingress",
     ingress=[
@@ -108,6 +106,17 @@ target_group = aws.lb.TargetGroup(
     protocol="HTTP",
     target_type="ip",
     vpc_id=default_vpc.id,
+    health_check=aws.lb.TargetGroupHealthCheckArgs(
+        enabled=True,
+        healthy_threshold=2,
+        unhealthy_threshold=3,
+        timeout=10,
+        interval=30,
+        path="/health",
+        matcher="200",
+        protocol="HTTP",
+        port="traffic-port",
+    ),
 )
 
 listener = aws.lb.Listener(
@@ -124,7 +133,7 @@ listener = aws.lb.Listener(
 
 # Create an IAM role for the ECS task execution
 ecs_task_execution_role = aws.iam.Role(
-    f"{application_name}-ecs-task-execution-role",
+    f"{application_name}-ecs-task-exec-role",
     assume_role_policy="""{
         "Version": "2012-10-17",
         "Statement": [{
@@ -138,9 +147,15 @@ ecs_task_execution_role = aws.iam.Role(
 )
 
 aws.iam.RolePolicyAttachment(
-    f"{application_name}-ecs-task-execution-role-policy-attachment",
+    f"{application_name}-ecs-exec-policy",
     role=ecs_task_execution_role.name,
     policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+)
+
+# Create a CloudWatch log group for the application logs
+log_group = aws.cloudwatch.LogGroup(
+    f"{application_name}-logs",
+    retention_in_days=7,
 )
 
 # Add a policy to access SSM parameters
@@ -164,7 +179,7 @@ ssm_policy = aws.iam.Policy(
                     {
                         "Effect": "Allow",
                         "Action": "kms:Decrypt",
-                        "Resource": "*",  # Required to decrypt SecureString parameters
+                        "Resource": "*",
                     },
                 ],
             }
@@ -173,7 +188,7 @@ ssm_policy = aws.iam.Policy(
 )
 
 aws.iam.RolePolicyAttachment(
-    f"{application_name}-ecs-task-ssm-policy-attachment",
+    f"{application_name}-ssm-policy-attachment",
     role=ecs_task_execution_role.name,
     policy_arn=ssm_policy.arn,
 )
@@ -193,6 +208,7 @@ task_definition = aws.ecs.TaskDefinition(
         ssm_username_arn,
         ssm_password_arn,
         ssm_url_arn,
+        log_group.name,
     ).apply(
         lambda args: json.dumps(
             [
@@ -207,6 +223,14 @@ task_definition = aws.ecs.TaskDefinition(
                         {"name": "WIKIBASE_PASSWORD", "valueFrom": args[2]},
                         {"name": "WIKIBASE_URL", "valueFrom": args[3]},
                     ],
+                    "logConfiguration": {
+                        "logDriver": "awslogs",
+                        "options": {
+                            "awslogs-group": args[4],
+                            "awslogs-region": current_region.region,
+                            "awslogs-stream-prefix": "ecs",
+                        },
+                    },
                 }
             ]
         )
@@ -239,3 +263,4 @@ service = aws.ecs.Service(
 pulumi.export("url", alb.dns_name)
 pulumi.export("image_version", git_commit_hash)
 pulumi.export("image_name", image.image_name)
+pulumi.export("log_group_name", log_group.name)
