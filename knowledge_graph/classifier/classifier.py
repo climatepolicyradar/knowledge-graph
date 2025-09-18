@@ -215,5 +215,5 @@ class VariantEnabledClassifier(Protocol):
     This protocol ensures type safety when performing uncertainty estimation.
     """
 
-    def get_variant_sub_classifier(self) -> "VariantEnabledClassifier": ...  # noqa: D102
+    def get_variant(self) -> "VariantEnabledClassifier": ...  # noqa: D102
     def predict(self, text: str) -> list[Span]: ...  # noqa: D102

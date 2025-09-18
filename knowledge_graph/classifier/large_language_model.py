@@ -140,7 +140,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         values_string = json.dumps(values)[1:-1].replace(": ", "=")
         return f'{self.name}("{self.concept.preferred_label}", {values_string})'
 
-    def get_variant_sub_classifier(self) -> Self:
+    def get_variant(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
         return type(self)(
             concept=self.concept,

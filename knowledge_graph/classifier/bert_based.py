@@ -167,7 +167,7 @@ class BertBasedClassifier(
 
         return results
 
-    def get_variant_sub_classifier(self) -> Self:
+    def get_variant(self) -> Self:
         """Get a variant of the classifier for Monte Carlo dropout estimation."""
         variant = deepcopy(self)
         variant._use_dropout_during_inference = True  # noqa: SLF001
