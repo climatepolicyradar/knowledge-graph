@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
+import tenacity
 import wandb
+from botocore.exceptions import (
+    ConnectTimeoutError,
+    CredentialRetrievalError,
+    MetadataRetrievalError,
+)
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import (
@@ -24,6 +30,7 @@ from prefect.exceptions import MissingContextError
 from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
+from tenacity import RetryCallState
 from wandb.sdk.wandb_run import Run
 
 from flows.classifier_specs.spec_interface import (
@@ -589,6 +596,23 @@ def _get_labelled_passage_from_prediction(
     )
 
 
+def retry_callback(retry_state: RetryCallState):
+    """Log a message about retries progress."""
+    fn_name = retry_state.fn.__name__ if retry_state.fn else "unknown"
+    attempt = retry_state.attempt_number
+    print(f"{fn_name} retry #{attempt}, having had outcome: {retry_state.outcome}")
+
+
+# https://tenacity.readthedocs.io/en/latest/#waiting-before-retrying
+@tenacity.retry(
+    wait=tenacity.wait_fixed(15) + tenacity.wait_random(0, 15),  # each wait = 15-30s
+    stop=tenacity.stop_after_attempt(5),
+    retry=tenacity.retry_if_exception_type(
+        (CredentialRetrievalError, MetadataRetrievalError, ConnectTimeoutError)
+    ),
+    after=retry_callback,
+    reraise=True,
+)
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
