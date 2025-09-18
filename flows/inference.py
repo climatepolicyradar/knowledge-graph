@@ -17,13 +17,13 @@ from mypy_boto3_s3.type_defs import (
 )
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
-from prefect.assets import materialize
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
+from types_aiobotocore_s3.client import S3Client
 from wandb.sdk.wandb_run import Run
 
 from flows.classifier_specs.spec_interface import (
@@ -246,13 +246,15 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
 
     latest_key = latest["Key"]
-    data = await download_s3_file(config, latest_key)
-    content = json.loads(data)
-    updated = list(content["updated_documents"].keys())
-    new = [d["import_id"] for d in content["new_documents"]]
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        data = await download_s3_file(config, latest_key, s3_client)
+        content = json.loads(data)
+        updated = list(content["updated_documents"].keys())
+        new = [d["import_id"] for d in content["new_documents"]]
 
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
-    return new + updated
+        print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
+        return new + updated
 
 
 async def determine_file_stems(
@@ -326,16 +328,15 @@ async def load_classifier(
         return classifier
 
 
-async def download_s3_file(config: Config, key: str):
+async def download_s3_file(config: Config, key: str, s3_client: S3Client):
     """Retrieve an S3 file from the pipeline cache"""
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3:
-        response = await s3.get_object(
-            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-            Key=key,
-        )
-        body = await response["Body"].read()
-        return body.decode("utf-8")
+
+    response = await s3_client.get_object(
+        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        Key=key,
+    )
+    body = await response["Body"].read()
+    return body.decode("utf-8")
 
 
 def generate_document_source_key(config: Config, document_stem: DocumentStem) -> S3Uri:
@@ -348,13 +349,15 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
     )
 
 
-async def load_document(config: Config, file_stem: DocumentStem) -> BaseParserOutput:
+async def load_document(
+    config: Config, file_stem: DocumentStem, s3_client: S3Client
+) -> BaseParserOutput:
     """Download and opens a parser output based on a document ID."""
     file_key = generate_document_source_key(
         config=config,
         document_stem=file_stem,
     ).key
-    content = await download_s3_file(config=config, key=file_key)
+    content = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
     document = BaseParserOutput.model_validate_json(content)
     return document
 
@@ -440,48 +443,45 @@ def generate_s3_uri_output(
     )
 
 
-@materialize(
-    "foo://bar",  # Asset key is not known yet
-    retries=1,
-    persist_result=False,
-)
+async def labels_to_s3(
+    config: Config,
+    inference: SingleDocumentInferenceResult,
+    s3_client: S3Client,
+) -> PutObjectOutputTypeDef:
+    s3_uri = generate_s3_uri_output(config, inference)
+    print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
+
+    body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+
+    response = await s3_client.put_object(
+        Bucket=s3_uri.bucket,
+        Key=s3_uri.key,
+        Body=body,
+        ContentType="application/json",
+    )
+
+    return response
+
+
 async def store_labels(
     config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
+    s3_client: S3Client,
 ) -> tuple[
     list[SingleDocumentInferenceResult],
     list[tuple[DocumentStem, Exception]],
     list[BaseException],
 ]:
     """Store the labels in the cache bucket."""
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3:
-        # Don't get rate-limited by AWS
-        semaphore = asyncio.Semaphore(10)
-
-        async def fn(
-            inference: SingleDocumentInferenceResult,
-        ) -> PutObjectOutputTypeDef:
-            s3_uri = generate_s3_uri_output(config, inference)
-            print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
-
-            body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
-
-            response = await s3.put_object(
-                Bucket=s3_uri.bucket,
-                Key=s3_uri.key,
-                Body=body,
-                ContentType="application/json",
-            )
-
-            return response
+    # Don't get rate-limited by AWS
+    semaphore = asyncio.Semaphore(10)
 
     tasks = [
         wait_for_semaphore(
             semaphore,
             return_with(
                 inference,
-                fn(inference),
+                labels_to_s3(config, inference, s3_client),
             ),
         )
         for inference in inferences
@@ -593,10 +593,11 @@ async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
     classifier: Classifier,
+    s3_client: S3Client,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
     print(f"Loading document with file stem {file_stem}")
-    document = await load_document(config, file_stem)
+    document = await load_document(config, file_stem, s3_client)
 
     # Resolve typing issue as wikibase_id is optional (though required here)
     assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
@@ -793,17 +794,20 @@ async def _inference_batch_of_documents(
     print(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
-    tasks = [
-        return_with(
-            file_stem,
-            run_classifier_inference_on_document(
-                config=config,
-                file_stem=file_stem,
-                classifier=classifier,
-            ),
-        )
-        for file_stem in batch
-    ]
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        tasks = [
+            return_with(
+                file_stem,
+                run_classifier_inference_on_document(
+                    config=config,
+                    file_stem=file_stem,
+                    classifier=classifier,
+                    s3_client=s3_client,
+                ),
+            )
+            for file_stem in batch
+        ]
 
     results: list[
         tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
@@ -826,14 +830,14 @@ async def _inference_batch_of_documents(
             else:
                 inferences_successes.append(value)
 
-    (
-        store_labels_successes,
-        store_labels_failures,
-        store_labels_unknown_failures,
-    ) = await store_labels.with_options(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-        assets=generate_assets(config, inferences_successes),
-        asset_deps=generate_asset_deps(config, inferences_successes),  # pyright: ignore[reportArgumentType]
-    )(config=config, inferences=inferences_successes)
+    async with session.client("s3") as s3_client:
+        (
+            store_labels_successes,
+            store_labels_failures,
+            store_labels_unknown_failures,
+        ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
+            config=config, inferences=inferences_successes, s3_client=s3_client
+        )
 
     # This doesn't need to be combined since successes are funnelled
     # through all steps.

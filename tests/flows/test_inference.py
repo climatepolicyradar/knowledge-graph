@@ -166,10 +166,14 @@ async def test_load_classifier__existing_classifier(
 
 
 @pytest.mark.asyncio
-async def test_load_document(test_config, mock_async_bucket_documents):
+async def test_load_document(
+    test_config, mock_async_bucket_documents, mock_s3_async_client
+):
     for doc_file_name in mock_async_bucket_documents:
         file_stem = Path(doc_file_name).stem
-        doc = await load_document(test_config, file_stem=file_stem)
+        doc = await load_document(
+            test_config, file_stem=file_stem, s3_client=mock_s3_async_client
+        )
         assert file_stem == doc.document_id
 
 
@@ -227,7 +231,7 @@ async def test_store_labels(
     spans = [Span(text=text, start_index=15, end_index=19)]
     labels = [LabelledPassage(text=text, spans=spans)]
 
-    successes, failures, unknown_failures = await store_labels.fn(
+    successes, failures, unknown_failures = await store_labels(
         test_config,
         [
             SingleDocumentInferenceResult(
@@ -237,6 +241,7 @@ async def test_store_labels(
                 classifier_id="2tnmbxaw",
             )
         ],
+        mock_s3_async_client,
     )
 
     assert successes == snapshot(name="successes")
@@ -481,6 +486,7 @@ async def test_run_classifier_inference_on_document(
     mock_wandb,
     mock_async_bucket_documents,
     snapshot,
+    mock_s3_async_client,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
@@ -506,6 +512,7 @@ async def test_run_classifier_inference_on_document(
             config=test_config,
             file_stem=DocumentStem(document_stem),
             classifier=classifier,
+            s3_client=mock_s3_async_client,
         )
 
     assert "Cannot run inference on" in str(exc_info.value)
@@ -545,6 +552,7 @@ async def test_run_classifier_inference_on_document(
             config=test_config,
             file_stem=DocumentStem(document_stem),
             classifier=classifier,
+            s3_client=mock_s3_async_client,
         )
 
         assert result == snapshot
@@ -555,6 +563,7 @@ async def test_run_classifier_inference_on_document(
         config=test_config,
         file_stem=DocumentStem(document_stem),
         classifier=classifier,
+        s3_client=mock_s3_async_client,
     )
 
     assert result == snapshot
@@ -566,6 +575,7 @@ async def test_run_classifier_inference_on_document_missing(
     mock_classifiers_dir,
     mock_wandb,
     mock_async_bucket,
+    mock_s3_async_client,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
@@ -589,6 +599,7 @@ async def test_run_classifier_inference_on_document_missing(
             config=test_config,
             file_stem=document_stem,
             classifier=classifier,
+            s3_client=mock_s3_async_client,
         )
     assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
 
