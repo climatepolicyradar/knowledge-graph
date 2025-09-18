@@ -13,8 +13,8 @@ RUN uv sync --extra mcp --locked
 # Copy the rest of the application code
 COPY . .
 
-# Expose the FastMCP server on port 80
-EXPOSE 80
+# Expose the FastMCP server on port 8000
+EXPOSE 8000
 
 # Run the FastMCP server
-CMD ["uv", "run", "fastmcp", "run", "mcp/server.py:mcp", "--transport", "http", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uv", "run", "fastmcp", "run", "mcp/server.py:mcp", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]

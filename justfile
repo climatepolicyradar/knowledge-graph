@@ -223,7 +223,7 @@ classifier_metadata_entire_env aws_env +OPTS="":
 
 # Serve the concept store MCP locally
 serve-mcp:
-    uv run fastmcp run mcp/server.py:mcp --transport http --host 0.0.0.0 --port 80
+    uv run fastmcp run mcp/server.py:mcp --transport http --host 0.0.0.0 --port 8000
 
 # Intended use is deploying to sandbox / staging for local testing
 # Ensure that you have configured your .env and authenticated with aws & prefect
