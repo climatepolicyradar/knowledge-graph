@@ -31,8 +31,15 @@ class HelpPagesResult(BaseModel):
     """Help documentation search results."""
 
     page_titles: list[str] = Field(description="Titles of matching help pages")
-    query_used: str = Field(description="The search query that was used")
+    search_terms: str = Field(description="The search terms that were used")
     total_found: int = Field(description="Number of help pages found")
+
+
+class HelpPagesListResult(BaseModel):
+    """List of all help documentation pages available in the concept store."""
+
+    page_titles: list[str] = Field(description="Titles of all help pages")
+    total_count: int = Field(description="Total number of help pages available")
 
 
 class MultipleConceptsResult(BaseModel):
@@ -85,7 +92,23 @@ async def search_concepts(
     ] = 10,
     ctx: Context = None,
 ) -> ConceptSearchResult:
-    """Search the concept store by keywords, phrases, or Wikibase IDs."""
+    """
+    Search the concept store by keywords, phrases, or Wikibase IDs.
+
+    Wikibase will match your search terms to terms found in the preferred labels,
+    alternative labels, and descriptions of the concepts. The search index and matching
+    algorithm are optimised for precision over recall, and the way that terms are
+    matched is strict.
+
+    As a result, longer, compound queries (ie those which reference multiple topics, eg
+    "drainage infrastructure urban planning") rarely deliver good results, and are not
+    recommended. If searching for multiple topics, it's better to search for each topic
+    separately and then combine the results.
+
+    The concept store contains many concepts, each with many labels, so even if you
+    don't find a result based on a single term, you might be able to find it with one
+    or two successive searches. You should try both technical and non-technical terms.
+    """
 
     if ctx:
         await ctx.info(f"Searching for concepts: '{query}' (limit: {limit})")
@@ -103,8 +126,8 @@ async def search_concepts(
 
 
 @mcp.tool
-async def get_all_concept_ids(ctx: Context = None) -> ConceptIdsResult:
-    """Get all concept IDs available in the knowledge graph."""
+async def list_concept_ids(ctx: Context = None) -> ConceptIdsResult:
+    """Get a list of all concept IDs available in the knowledge graph."""
 
     if ctx:
         await ctx.info("Retrieving all concept IDs...")
@@ -127,7 +150,12 @@ async def get_multiple_concepts(
     ],
     ctx: Context = None,
 ) -> MultipleConceptsResult:
-    """Retrieve multiple concepts by their Wikibase IDs."""
+    """
+    Retrieve multiple concepts by their Wikibase IDs.
+
+    This tool is useful when you have retrieved a list of concept IDs (eg a list of
+    related concepts), and you want to get more detailed information about them.
+    """
 
     if ctx:
         await ctx.info(f"Retrieving {len(wikibase_ids)} concepts")
@@ -161,14 +189,31 @@ async def get_concept(
         bool, Field(description="Include child concept labels")
     ] = False,
     include_recursive_subconcept_of: Annotated[
-        bool, Field(description="Include full parent hierarchy")
+        bool,
+        Field(
+            description=(
+                "Include the concept's complete ancestor hierarchy, ie its parent "
+                "concepts, and its parent concepts' parent concepts, etc."
+            )
+        ),
     ] = False,
     include_recursive_has_subconcept: Annotated[
-        bool, Field(description="Include full child hierarchy")
+        bool,
+        Field(
+            description=(
+                "Include the concept's complete descendant hierarchy, ie its "
+                "subconcepts, and its subconcepts' subconcepts' subconcepts, etc"
+            )
+        ),
     ] = False,
     ctx: Context = None,
 ) -> Concept:
-    """Get information about a single concept with optional hierarchical data."""
+    """
+    Get information about a single concept
+
+    If specified, the returned concept can include extra detail about the hierarchy in
+    which it sits, beyond its immediate neighbours.
+    """
 
     if ctx:
         await ctx.info(f"Retrieving concept {wikibase_id}")
@@ -191,28 +236,52 @@ async def get_concept(
 
 @mcp.tool
 async def search_help_pages(
-    query: Annotated[
-        str, Field(description="Search terms for help documentation", min_length=1)
+    search_terms: Annotated[
+        str,
+        Field(
+            description="Search terms to match in help page titles and content",
+            min_length=1,
+        ),
     ],
     ctx: Context = None,
 ) -> HelpPagesResult:
-    """Search for help documentation pages by topic."""
+    """
+    Search for help documentation pages by topic.
+
+    Help pages exist for a variety of topics, including:
+    - Heuristics on how to structure a concept, where to draw boundaries between
+      concepts, and how concepts can be connected to one another
+    - A style guide for concepts' labels, descriptions, definitions, negative labels,
+      etc in the concept store
+    - What the concept store is for, ie how the data is used by downstream classifiers
+      and other tools/services
+
+    Wikibase will match your search terms to terms found in the titles and content of
+    the help pages. The search index and matching algorithm are optimised for precision
+    over recall, and the way that terms are matched is strict.
+
+    As a result, longer, compound queries rarely deliver good results, and are not
+    recommended. If searching for multiple topics, it's better to search for each topic
+    separately and then combine the results.
+    """
 
     if ctx:
-        await ctx.info(f"Searching help documentation for: '{query}'")
+        await ctx.info(f"Searching help documentation for: '{search_terms}'")
 
     try:
         wikibase = WikibaseSession()
-        page_titles = await wikibase.search_help_pages_async(search_term=query)
+        page_titles = await wikibase.search_help_pages_async(search_term=search_terms)
 
         return HelpPagesResult(
-            page_titles=page_titles, query_used=query, total_found=len(page_titles)
+            page_titles=page_titles,
+            search_terms=search_terms,
+            total_found=len(page_titles),
         )
     except Exception as e:
         await handle_wikibase_error(
-            e, f"Help page search failed for query '{query}'", ctx
+            e, f"Help page search failed for query '{search_terms}'", ctx
         )
-        return HelpPagesResult(page_titles=[], query_used=query, total_found=0)
+        return HelpPagesResult(page_titles=[], search_terms=search_terms, total_found=0)
 
 
 @mcp.tool
@@ -248,3 +317,23 @@ async def get_help_page(
         return HelpPageContent(
             title=page_title, content=error_content, character_count=len(error_content)
         )
+
+
+@mcp.tool
+async def list_help_pages(ctx: Context = None) -> HelpPagesListResult:
+    """Get a list of all help documentation pages available in the concept store."""
+
+    if ctx:
+        await ctx.info("Retrieving all help documentation pages...")
+
+    try:
+        wikibase = WikibaseSession()
+        page_titles = await wikibase.get_all_help_pages_async()
+
+        return HelpPagesListResult(
+            page_titles=page_titles,
+            total_count=len(page_titles),
+        )
+    except Exception as e:
+        await handle_wikibase_error(e, "Failed to retrieve help pages", ctx)
+        return HelpPagesListResult(page_titles=[], total_count=0)

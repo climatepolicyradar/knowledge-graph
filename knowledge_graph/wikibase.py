@@ -1139,6 +1139,18 @@ class WikibaseSession:
             wikibase_id, alternative_labels, language
         )
 
+    async def get_all_help_pages_async(self) -> list[str]:
+        """Get a list of all help documentation pages available in the concept store."""
+        pages = await self._get_pages(
+            extra_params={"apnamespace": str(self.HELP_NAMESPACE)}
+        )
+        return [page["title"] for page in pages]
+
+    @async_to_sync
+    async def get_all_help_pages(self) -> list[str]:
+        """Get a list of all help documentation pages available in the concept store."""
+        return await self.get_all_help_pages_async()
+
     async def search_help_pages_async(self, search_term: str) -> list[str]:
         """
         Search for help pages in Wikibase by matching page titles and content.
