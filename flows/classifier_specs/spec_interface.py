@@ -1,3 +1,4 @@
+import json
 from enum import Enum
 from pathlib import Path
 from typing import NewType, Optional, Sequence
@@ -128,3 +129,17 @@ def should_skip_doc(stem: DocumentStem, spec: ClassifierSpec) -> bool:
     """
     source = stem.split(".")[0]
     return DontRunOnEnum(source.lower()) in (spec.dont_run_on or [])
+
+
+def yaml_spec_to_json(aws_env: AwsEnv):
+    """
+    Print classifier specs as json.
+
+    Can be used ad hoc to get a json representation of the yaml files. This can be
+    useful in creating prefect parameters.
+    """
+    file_path = determine_spec_file_path(aws_env)
+    with open(file_path, "r") as file:
+        contents = yaml.load(file, Loader=yaml.FullLoader)
+
+    print(json.dumps(contents, indent=2))
