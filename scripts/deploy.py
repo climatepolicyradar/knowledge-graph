@@ -68,6 +68,8 @@ def existing(
                 upload=True,
                 aws_env=to_aws_env,
             )
+            if not classifier:
+                raise ValueError("No classifier returned from training.")
 
             if promote:
                 print("promoting")
@@ -121,6 +123,9 @@ def new(
                     upload=True,
                     aws_env=aws_env,
                 )
+
+                if not classifier:
+                    raise ValueError("No classifier returned from training.")
 
                 if promote:
                     print("promoting")

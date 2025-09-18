@@ -18,7 +18,7 @@ on:
 
 concurrency:
   group: deploy-${{ inputs.aws-env }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 jobs:
   deploy:

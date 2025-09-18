@@ -106,7 +106,7 @@ def update(
     ] = False,
     add_dont_run_on: Annotated[
         list[DontRunOnEnum] | None,
-        typer.Option(help="Adds a single item to the metadata."),
+        typer.Option(help="Adds 1 or more items to the metadata."),
     ] = None,
     clear_require_gpu: Annotated[
         bool, typer.Option(help="updates `compute_environment.gpu` to remove the field")
@@ -118,6 +118,14 @@ def update(
         AwsEnv,
         typer.Option(help="AWS environment the classifier belongs to"),
     ] = AwsEnv.labs,
+    add_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Adds 1 or more items to the metadata."),
+    ] = None,
+    remove_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Removes 1 or more items to the metadata."),
+    ] = None,
     update_specs: Annotated[
         bool,
         typer.Option(
@@ -179,6 +187,33 @@ def update(
                 "gpu": True
             }
             artifact.metadata["compute_environment"] = compute_environment
+
+        if add_classifiers_profiles or remove_classifiers_profiles:
+            add_class_prof: set[str] = (
+                set(add_classifiers_profiles) if add_classifiers_profiles else set()
+            )
+            remove_class_prof: set[str] = (
+                set(remove_classifiers_profiles)
+                if remove_classifiers_profiles
+                else set()
+            )
+
+            if dupes := add_class_prof & remove_class_prof:
+                raise typer.BadParameter(
+                    f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
+                )
+
+            current_class_prof: set[str] = set(
+                artifact.metadata.get("classifiers_profiles", [])
+            )
+
+            if (
+                classifiers_profiles := (current_class_prof | add_class_prof)
+                - remove_class_prof
+            ):
+                artifact.metadata["classifiers_profiles"] = classifiers_profiles
+            else:
+                artifact.metadata.pop("classifiers_profiles", None)
 
         artifact.save()
 

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from knowledge_graph.identifiers import Identifier, WikibaseID
+from knowledge_graph.identifiers import ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 
 if TYPE_CHECKING:
@@ -47,6 +47,9 @@ class Concept(BaseModel):
     )
     wikibase_id: Optional[WikibaseID] = Field(
         default=None, description="The Wikibase ID for the concept"
+    )
+    wikibase_revision: Optional[int] = Field(
+        default=None, description="The Wikibase revision for the concept"
     )
     subconcept_of: list[WikibaseID] = Field(
         default_factory=list,
@@ -109,11 +112,16 @@ class Concept(BaseModel):
     @classmethod
     def _ensure_negative_labels_are_not_in_positive_labels(cls, values: Dict) -> Dict:
         """Raise a ValueError if a negative label is also a positive label"""
-        if any(
-            label in values["alternative_labels"] for label in values["negative_labels"]
-        ):
+        overlapping_labels = []
+        for label in values["negative_labels"]:
+            if label in values["alternative_labels"]:
+                overlapping_labels.append(label)
+        if overlapping_labels:
+            wikibase_id = values.get("wikibase_id")
+            preferred_label = values.get("preferred_label")
             raise ValueError(
-                "A negative label should not be the same as a positive label"
+                f"{wikibase_id} ({preferred_label}): A negative label should not be "
+                f"the same as a positive label. Found in both: {overlapping_labels}"
             )
         return values
 
@@ -135,9 +143,9 @@ class Concept(BaseModel):
         return self.__repr__()
 
     @property
-    def id(self) -> Identifier:
+    def id(self) -> ConceptID:
         """Return a unique ID for the concept"""
-        return Identifier.generate(
+        return ConceptID.generate(
             self.wikibase_id,
             self.preferred_label,
             self.description,

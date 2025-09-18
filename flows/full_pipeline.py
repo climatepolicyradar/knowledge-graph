@@ -1,12 +1,16 @@
 from collections.abc import Sequence
 
 from prefect import State, flow, get_run_logger
+from prefect.artifacts import create_markdown_artifact
 from pydantic import PositiveInt
 
 from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
-from flows.aggregate import RunOutputIdentifier, aggregate
+from flows.aggregate import (
+    RunOutputIdentifier,
+    aggregate,
+)
 from flows.boundary import (
     DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
 )
@@ -25,6 +29,27 @@ from flows.inference import (
     inference,
 )
 from flows.utils import DocumentImportId, Fault
+
+
+async def create_full_pipeline_summary_artifact(
+    config: Config,
+    inference_result: str = "N/A",
+) -> None:
+    """Create an artifact with summary information about the full pipeline successful run."""
+
+    # Format the overview information as a string for the description
+    full_pipeline_report = f"""# Full Pipeline Summary
+
+## Overview
+- **Environment**: {config.aws_env.value}
+- **Inference: successful documents**: {inference_result}
+"""
+
+    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+        key=f"full-pipeline-results-summary-{config.aws_env.value}",
+        description="Summary of the full pipeline successful run.",
+        markdown=full_pipeline_report,
+    )
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
@@ -156,5 +181,10 @@ async def full_pipeline(
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
         raise indexing_result
+
+    await create_full_pipeline_summary_artifact(
+        config=config,
+        inference_result=success_ratio,
+    )
 
     logger.info("Full pipeline run completed!")

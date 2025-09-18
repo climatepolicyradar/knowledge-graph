@@ -24,6 +24,7 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.train import train_on_gpu
 from flows.update_neo4j import update_neo4j
 from flows.utils import JsonDict
 from flows.wikibase_to_s3 import wikibase_to_s3
@@ -139,6 +140,14 @@ def create_deployment(
     )
 
 
+# Train
+create_deployment(
+    flow=train_on_gpu,
+    description="Train concept classifiers with GPU compute",
+    gpu=True,
+    flow_variables={},
+)
+
 # Inference
 
 create_deployment(
@@ -246,7 +255,7 @@ create_deployment(
     flow=update_neo4j,
     description="Refresh Neo4j with the latest concept graph",
     env_schedules={
-        AwsEnv.labs: "0 3 * * * MON-THU",
+        AwsEnv.labs: "0 3 * * MON-THU",
     },
 )
 

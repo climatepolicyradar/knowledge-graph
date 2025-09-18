@@ -1,30 +1,49 @@
+import asyncio
 import os
 import re
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, NamedTuple, Optional
 
 import typer
 import wandb
-from pydantic import BaseModel, Field
+from prefect.client.schemas.objects import FlowRun
+from prefect.deployments import run_deployment
+from pydantic import BaseModel, Field, SecretStr
 from rich.console import Console
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
+from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
     ClassifierFactory,
     ModelPath,
     get_local_classifier_path,
 )
-from knowledge_graph.cloud import AwsEnv, Namespace, get_s3_client, is_logged_in
+from knowledge_graph.cloud import (
+    AwsEnv,
+    Namespace,
+    generate_deployment_name,
+    get_s3_client,
+    is_logged_in,
+)
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
 from knowledge_graph.wikibase import WikibaseSession
 
-console = Console()
 app = typer.Typer()
+
+
+WikibaseConfig = NamedTuple(
+    "WikibaseConfig",
+    [
+        ("username", str),
+        ("password", SecretStr),
+        ("url", str),
+    ],
+)
 
 
 def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
@@ -96,10 +115,9 @@ def create_and_link_model_artifact(
     metadata = {
         "aws_env": storage_link.aws_env.value,
         "classifier_name": classifier.name,
+        "concept_id": classifier.concept.id,
+        "concept_wikibase_revision": classifier.concept.wikibase_revision,
     }
-
-    # Set this, so W&B knows where to look for AWS credentials profile
-    os.environ["AWS_PROFILE"] = storage_link.aws_env.value
 
     artifact = wandb.Artifact(  # type: ignore
         name=classifier.id,
@@ -146,7 +164,7 @@ def get_next_version(
         wikibase_id = classifier.concept.wikibase_id
         pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{wikibase_id}'"
         if re.search(pattern, error_message):
-            console.log(
+            Console().log(
                 f"No previous wandb version found, '{target_path}' will be at v0"
             )
             next_version = Version("v0")
@@ -184,7 +202,7 @@ def upload_model_artifact(
         "model.pickle",
     )
 
-    console.log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
+    Console().log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
 
     s3_client.upload_file(
         classifier_path,
@@ -194,7 +212,7 @@ def upload_model_artifact(
         Callback=lambda bytes_transferred: None,
     )
 
-    console.log(f"Uploaded {classifier.name} to {key} in bucket {bucket}")
+    Console().log(f"Uploaded {classifier.name} to {key} in bucket {bucket}")
 
     return bucket, key
 
@@ -230,7 +248,17 @@ def main(
             help="AWS environment to use for S3 uploads",
         ),
     ] = AwsEnv.labs,
-) -> Classifier:
+    use_coiled_gpu: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help=(
+                "Run on coiled with a gpu. This uses prefect to start a coiled cluster. "
+                "Note, that the classifier won't be available locally after training."
+            ),
+        ),
+    ] = False,
+) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
 
@@ -242,7 +270,54 @@ def main(
     :type upload: bool
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
+    :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
+    :type use_coiled_gpu: bool
     """
+    if use_coiled_gpu:
+        flow_name = "train_on_gpu"
+        deployment_name = generate_deployment_name(
+            flow_name="train_on_gpu", aws_env=aws_env
+        )
+        qualified_name = f"{flow_name}/{deployment_name}"
+
+        flow_run: FlowRun = run_deployment(  # type: ignore[misc]
+            name=qualified_name,
+            parameters={
+                "wikibase_id": wikibase_id,
+                "track": track,
+                "upload": upload,
+                "aws_env": aws_env,
+            },
+            timeout=0,  # Don't wait for the flow to finish before continuing
+        )
+        Console().print(
+            f"Deployment started. [blue][link={get_flow_run_ui_url(flow_run)}]Click here to open flow run on Prefect.[/link][/blue]"
+        )
+
+        return None  # Can't return the classifier when running remotely
+    else:
+        return asyncio.run(
+            run_training(
+                wikibase_id=wikibase_id,
+                track=track,
+                upload=upload,
+                aws_env=aws_env,
+            )
+        )
+
+
+async def run_training(
+    wikibase_id: WikibaseID,
+    track: bool,
+    upload: bool,
+    aws_env: AwsEnv,
+    wikibase_config: Optional[WikibaseConfig] = None,
+    s3_client: Optional[Any] = None,
+) -> Classifier:
+    """Train the model and optionally upload the artifact."""
+    # Create console locally to avoid serialization issues
+    console = Console()
+
     project = wikibase_id
     namespace = Namespace(project=project, entity=WANDB_ENTITY)
     job_type = "train_model"
@@ -258,14 +333,24 @@ def main(
         else nullcontext()
     ) as run:
         # Fetch all of its subconcepts recursively
-        wikibase = WikibaseSession()
-        concept = wikibase.get_concept(
+        if wikibase_config:
+            wikibase = WikibaseSession(
+                username=wikibase_config.username,
+                password=wikibase_config.password.get_secret_value(),
+                url=wikibase_config.url,
+            )
+        else:
+            wikibase = WikibaseSession()
+
+        concept = await wikibase.get_concept_async(
             wikibase_id,
             include_recursive_has_subconcept=True,
             include_labels_from_subconcepts=True,
         )
         # To handle redirects where the wikibase_id is overwritten
         concept.wikibase_id = wikibase_id
+        # Ensure concept data can be serialised and rebuilt without failing validations
+        concept.model_validate_json(concept.model_dump_json())
         # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
@@ -298,7 +383,11 @@ def main(
 
         if upload:
             region_name = "eu-west-1"
-            s3_client = get_s3_client(aws_env, region_name)
+            # When running in prefect the client is instantiated earlier
+            if not s3_client:
+                # Set this, so W&B knows where to look for AWS credentials profile
+                os.environ["AWS_PROFILE"] = aws_env
+                s3_client = get_s3_client(aws_env, region_name)
 
             storage_upload = StorageUpload(
                 target_path=str(target_path),

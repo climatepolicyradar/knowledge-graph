@@ -15,10 +15,13 @@ _Note: You will need a profile in your `.aws/config` file with an active termina
 just train "Q123" --track --upload --aws-env sandbox
 ```
 
+> [!NOTE]
+> Promoting requires at least once classifiers profile. Set it in the metadata.
+
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier_id abcd2345 --aws-env sandbox --primary
+just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --primary
 ```
 
 You can also achieve the above directly with:
@@ -65,6 +68,12 @@ For times when its necessary to update every promoted classifier that is mention
 
 ```shell
 just classifier_metadata_entire_env sandbox --add-dont-run-on sabin
+```
+
+At least one classififiers profile is required for promotion. You could set one like:
+
+```shell
+just classifier_metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
 ```
 
 ## Training Classifiers in Docker

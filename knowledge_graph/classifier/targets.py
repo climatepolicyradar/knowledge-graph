@@ -44,7 +44,14 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
                 f"The `transformers` library is required to run {self.name}s. "
                 "Install it with 'uv install --extra transformers'"
             )
+        try:
+            from transformers import infer_device  # type: ignore[import-untyped]
 
+            device = infer_device()
+        except ImportError:
+            print("transformers installed without gpu, cant infer device")
+            device = "cpu"
+        print(f"Device inferred for training: {device}")
         self.pipeline: Callable = pipeline(
             "text-classification",
             model=AutoModelForSequenceClassification.from_pretrained(
@@ -55,7 +62,7 @@ class BaseTargetClassifier(Classifier, GPUBoundClassifier):
                 revision=self.commit_hash,
             ),
             function_to_apply="sigmoid",
-            device="cpu",
+            device=device,
         )
 
     @property

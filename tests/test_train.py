@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 
 import pytest
@@ -12,7 +13,7 @@ from scripts.train import (
     StorageUpload,
     create_and_link_model_artifact,
     get_next_version,
-    main,
+    run_training,
     upload_model_artifact,
 )
 
@@ -32,7 +33,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     mock_classifier.name = "test_classifier"
 
     # Create a temporary file to upload
-    test_file_path = os.path.join(tmp_path, "test_model.pickle")
+    test_file_path = Path(os.path.join(tmp_path, "test_model.pickle"))
     with open(test_file_path, "w") as f:
         f.write("test model content")
 
@@ -70,13 +71,70 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     )
 
 
-def test_main_track_false_upload_true():
+@pytest.mark.asyncio
+async def test_run_training(MockedWikibaseSession, mock_s3_client):
+    mock_s3_client.create_bucket(
+        Bucket="cpr-labs-models",
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+
+    # Setup test data
+    mock_classifier = Mock()
+    mock_classifier.fit.return_value = None
+    mock_classifier.save.return_value = None
+    mock_classifier.id = "aaaa2222"
+    mock_classifier.version = None
+
+    mock_path = Path("tests/fixtures/data/processed/classifiers")
+    mock_artifact = Mock(_version="v0")
+    mock_artifact_instance = Mock()
+
+    with (
+        patch(
+            "knowledge_graph.classifier.ClassifierFactory.create",
+            return_value=mock_classifier,
+        ),
+        patch("knowledge_graph.config.classifier_dir", mock_path),
+        patch("scripts.train.validate_params"),
+        patch("wandb.init"),
+        patch(
+            "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
+        ),
+        patch(
+            "wandb.Artifact", return_value=mock_artifact_instance
+        ) as mock_artifact_class,
+    ):
+        result = await run_training(
+            wikibase_id=WikibaseID("Q787"),
+            track=True,
+            upload=True,
+            aws_env=AwsEnv.labs,
+            s3_client=mock_s3_client,
+        )
+
+        # Verify artifact was created with correct metadata
+        mock_artifact_class.assert_called_once_with(
+            name=mock_classifier.id,
+            type="model",
+            metadata={
+                "aws_env": "labs",
+                "classifier_name": mock_classifier.name,
+                "concept_id": mock_classifier.concept.id,
+                "concept_wikibase_revision": mock_classifier.concept.wikibase_revision,
+            },
+        )
+
+    assert result == mock_classifier
+
+
+@pytest.mark.asyncio
+async def test_run_training__valueerror():
     with pytest.raises(
         ValueError,
         match="you can only upload a model artifact, if you're also tracking the run",
     ):
-        main(
-            wikibase_id="Q123",
+        await run_training(
+            wikibase_id=WikibaseID("Q123"),
             track=False,
             upload=True,
             aws_env=AwsEnv.labs,
@@ -88,6 +146,9 @@ def test_create_and_link_model_artifact():
     mock_run = Mock()
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
+    mock_classifier.concept = Mock()
+    mock_classifier.concept.id = "5d4xcy5g"
+    mock_classifier.concept.wikibase_revision = 12300
     bucket = "cpr-labs-models"
     key = "Q123/v4prnc54/v3/model.pickle"
     aws_env = AwsEnv.labs
@@ -116,6 +177,8 @@ def test_create_and_link_model_artifact():
             metadata={
                 "aws_env": aws_env.value,
                 "classifier_name": "test_classifier",
+                "concept_id": "5d4xcy5g",
+                "concept_wikibase_revision": 12300,
             },
         )
 

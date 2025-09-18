@@ -1,17 +1,19 @@
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import NewType, Optional, Sequence
 
 import yaml
 from pydantic import BaseModel, Field, field_serializer
 
 from flows.utils import DocumentStem
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.version import Version
 
 type SpecStr = str
 SPEC_DIR = Path("flows") / "classifier_specs" / "v2"
+
+ClassifierProfileName = NewType("ClassifierProfileName", str)
 
 
 class DontRunOnEnum(Enum):
@@ -43,15 +45,23 @@ class ClassifierSpec(BaseModel):
             default=False,
         )
 
+    concept_id: ConceptID | None = Field(
+        default=None,
+        description=("The Concept ID for the associated concept being classified."),
+    )
     wikibase_id: WikibaseID = Field(
         description=(
-            "The wikibase id for the underlying concept being classified. e.g. 'Q992'"
+            "The Wikibase ID for the underlying concept being classified. e.g. 'Q992'"
         ),
     )
     classifier_id: ClassifierID = Field(
         description=(
             "The unique identifier for the classifier, built from its internals."
         ),
+    )
+    classifiers_profiles: Sequence[ClassifierProfileName] | None = Field(
+        default=None,
+        description=("The classifiers profiles to use it in."),
     )
     wandb_registry_version: Version = Field(
         description=("The version of the classifier in wandb registry. e.g. v1"),

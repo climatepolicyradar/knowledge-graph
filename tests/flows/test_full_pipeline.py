@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import State, StateType
 from prefect.exceptions import FailedRun
 from prefect.states import Completed, Failed
@@ -121,6 +122,15 @@ async def test_full_pipeline_no_config_provided(
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
 
+        # Assert that the summary artifact was created
+        summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
+        print(f"Summary artifact {summary_artifact}")
+        assert summary_artifact and summary_artifact.description
+        assert (
+            summary_artifact.description
+            == "Summary of the full pipeline successful run."
+        )
+
 
 @pytest.mark.asyncio
 async def test_full_pipeline_with_full_config(
@@ -228,6 +238,15 @@ async def test_full_pipeline_with_full_config(
             indexer_document_passages_concurrency_limit=4,
             indexer_max_vespa_connections=8,
             return_state=True,
+        )
+
+        # Assert that the summary artifact was created
+        summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
+        print(f"Summary artifact {summary_artifact}")
+        assert summary_artifact and summary_artifact.description
+        assert (
+            summary_artifact.description
+            == "Summary of the full pipeline successful run."
         )
 
 

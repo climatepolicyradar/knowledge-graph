@@ -105,7 +105,7 @@ run-image cmd="sh":
     docker run --rm -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} {{cmd}}
 
 ecr-login:
-  aws ecr --profile prod get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+  aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
 
 push-image:
     docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
@@ -224,3 +224,14 @@ classifier_metadata_entire_env aws_env +OPTS="":
 # Serve the concept store MCP locally
 serve-mcp:
     uv run fastmcp run mcp/server.py:mcp --transport http --host 0.0.0.0 --port 8000
+
+# Intended use is deploying to sandbox / staging for local testing
+# Ensure that you have configured your .env and authenticated with aws & prefect
+deploy-flows-from-local:
+    echo building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} in region: ${AWS_REGION}
+
+    just ecr-login
+    just build-image
+    just push-image
+    python -m deployments
+    python -m automations

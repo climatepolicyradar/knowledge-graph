@@ -175,6 +175,15 @@ def main(
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
+        # Check that classifiers profiles are defined
+        classifiers_profiles = artifact.metadata.get("classifiers_profiles", [])
+        if not classifiers_profiles:
+            raise typer.BadParameter(
+                "Artifact must have at least one classifiers profile in metadata. "
+                "Use the classifier_metadata script to add profiles before promoting."
+            )
+        log.info(f"Artifact has classifier profiles: {classifiers_profiles}")
+
         api = wandb.Api()
 
         check_existing_artifact_aliases(

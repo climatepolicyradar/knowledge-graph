@@ -70,6 +70,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 
     artifact_mock = Mock()
     artifact_mock.version = "v1"
+    artifact_mock.metadata = {"classifiers_profiles": ["test_profile"]}
 
     run_mock = Mock()
     run_mock.use_artifact.return_value = artifact_mock
@@ -88,6 +89,42 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
             with pytest.raises(expected_exception):
                 main(**test_case)
         else:
+            main(**test_case)
+
+
+@mock_aws
+def test_main_missing_classifier_profiles(monkeypatch):
+    """Test that promote fails when artifact has no classifier profiles."""
+    from scripts.promote import main
+
+    os.environ["USE_AWS_PROFILES"] = "false"
+    os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
+
+    # Create artifact mock without classifier profiles
+    artifact_mock = Mock()
+    artifact_mock.version = "v1"
+    artifact_mock.metadata = {}  # No classifiers_profiles
+
+    run_mock = Mock()
+    run_mock.use_artifact.return_value = artifact_mock
+    run_mock.link_artifact = Mock()
+
+    init_mock = Mock(return_value=nullcontext(run_mock))
+    monkeypatch.setattr("wandb.init", init_mock)
+    monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
+
+    test_case = {
+        "wikibase_id": "Q123",
+        "classifier_id": "abcd2345",
+        "aws_env": AwsEnv.labs,
+        "primary": False,
+    }
+
+    with patch("scripts.promote.is_logged_in", return_value=True):
+        with pytest.raises(
+            typer.BadParameter,
+            match="Artifact must have at least one classifiers profile",
+        ):
             main(**test_case)
 
 

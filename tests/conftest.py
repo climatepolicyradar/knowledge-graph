@@ -4,11 +4,14 @@ import os
 import subprocess
 import traceback
 from pathlib import Path
+from typing import Generator
 from urllib.parse import parse_qs
 
+import boto3
 import httpx
 import pandas as pd
 import pytest
+from moto import mock_aws
 
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.concept import Concept
@@ -17,11 +20,18 @@ from knowledge_graph.wikibase import WikibaseSession
 
 
 @pytest.fixture(scope="function")
-def aws_credentials():
-    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-    os.environ["AWS_SECURITY_TOKEN"] = "testing"
-    os.environ["AWS_SESSION_TOKEN"] = "testing"
+def mock_aws_creds():
+    """Mocked AWS Credentials for moto."""
+    os.environ["AWS_ACCESS_KEY_ID"] = "test"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "test"
+    os.environ["AWS_SECURITY_TOKEN"] = "test"
+    os.environ["AWS_SESSION_TOKEN"] = "test"
+
+
+@pytest.fixture
+def mock_s3_client(mock_aws_creds) -> Generator:
+    with mock_aws():
+        yield boto3.client("s3")
 
 
 @pytest.fixture
@@ -238,6 +248,7 @@ def mock_wikibase_revisions_json():
                         "title": f"Item:{wikibase_id}",
                         "revisions": [
                             {
+                                "revid": 12345,
                                 "slots": {
                                     "main": {
                                         "contentmodel": "wikibase-item",
@@ -246,7 +257,7 @@ def mock_wikibase_revisions_json():
                                             generate_concept_data(wikibase_id)
                                         ),
                                     }
-                                }
+                                },
                             }
                         ],
                     }

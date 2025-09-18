@@ -382,7 +382,7 @@ class WikibaseSession:
                         "prop": "revisions",
                         "rvdir": "older",
                         "rvlimit": 1,
-                        "rvprop": "content",
+                        "rvprop": "content|ids",
                         "rvslots": "main",
                         "rvstart": timestamp.isoformat(),
                     },
@@ -417,10 +417,13 @@ class WikibaseSession:
                 if not revisions:
                     raise RevisionNotFoundError(wikibase_id, timestamp)
 
-                # Get the revision content, handling empty content
-                content = revisions[0].get("slots", {}).get("main", {}).get("*", "{}")
+                # Get the revision content and ID, handling empty content
+                revision = revisions[0]
+                content = revision.get("slots", {}).get("main", {}).get("*", "{}")
                 if not content or content.strip() == "":
                     content = "{}"
+
+                revision_id = revision.get("revid")
 
                 entity = json.loads(content)
 
@@ -428,7 +431,7 @@ class WikibaseSession:
                     raise ConceptNotFoundError(wikibase_id)
 
                 # Parse concept data
-                concept = self._parse_wikibase_entity(wikibase_id, entity)
+                concept = self._parse_wikibase_entity(wikibase_id, entity, revision_id)
 
                 concept = await self._incorporate_negative_concepts(concept)
 
@@ -446,7 +449,10 @@ class WikibaseSession:
             return None
 
     def _parse_wikibase_entity(
-        self, wikibase_id: WikibaseID, entity: dict[str, Any]
+        self,
+        wikibase_id: WikibaseID,
+        entity: dict[str, Any],
+        wikibase_revision: Optional[int] = None,
     ) -> Concept:
         """Parse a Wikibase entity (given in dict format) into a Concept object."""
         # Extract basic concept information
@@ -475,6 +481,7 @@ class WikibaseSession:
             alternative_labels=alternative_labels,
             description=description,
             wikibase_id=WikibaseID(wikibase_id),
+            wikibase_revision=wikibase_revision,
         )
 
         # Parse claims/properties
