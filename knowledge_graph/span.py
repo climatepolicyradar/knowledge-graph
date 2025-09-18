@@ -217,6 +217,9 @@ class Span(BaseModel):
 
         tags = re.findall(r"</?concept>", xml)
 
+        if not tags:
+            return
+
         if not (
             tags[0] == "<concept>"
             and len(set(tags)) == 2
@@ -246,6 +249,11 @@ class Span(BaseModel):
         cls._validate_xml(xml)
 
         text_without_tags = xml.replace("<concept>", "").replace("</concept>", "")
+
+        # There were no XML tags, so return empty list of spans
+        if text_without_tags == xml:
+            return []
+
         span_timestamps = [datetime.now()] * len(labellers)
 
         if input_text is not None and input_text != text_without_tags:
@@ -316,7 +324,7 @@ class Span(BaseModel):
 
             if found_indices is None:
                 logger.warning(
-                    f"No spans found matching {span_text} near to character offset {start_index_in_original} in original.\n{xml}"
+                    f"No spans found matching {span_text} near to character offset {start_index_in_original} in original.\nLLM output:\n{xml}\nOriginal text:\n{input_text}"
                 )
             else:
                 start_index, end_index = found_indices
