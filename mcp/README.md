@@ -34,9 +34,13 @@ To run the Docker container with an environment file (e.g., `.env`):
 docker run -p 8000:8000 --env-file .env wikibase-mcp-server
 ```
 
-### Using the local MCP server in Cursor
+## Using the MCP server
 
-First, get the MCP URL by running `pulumi stack output mcp_url --stack labs` from the `mcp/infra` directory.
+The server has been deployed on AWS - take a look at the [infra README](./infra/README.md) for more details.
+
+You can fetch the URL of the running MCP server by running `pulumi stack output mcp_url --stack labs` from the `mcp/infra` directory. You can use this to various tools, a couple of which are described below.
+
+### Using the remote MCP server in Cursor
 
 To use the MCP server in eg Cursor, you need to add it to the application's `mcp.json`.
 
@@ -54,6 +58,8 @@ To use the MCP server in eg Cursor, you need to add it to the application's `mcp
 }
 ```
 
-## Deploying the MCP server to AWS
+For more information, see [the cursor documentation](https://cursor.com/docs/context/mcp).
 
-The MCP server is deployed to AWS using Pulumi. See the [infra README](./infra/README.md) for more details.
+### Using the MCP server in Claude Desktop
+
+Grab the MCP URL, and follow the instructions on adding a custom remote MCP connection in [Claude's documentation](https://docs.claude.com/en/docs/claude-code/mcp).
