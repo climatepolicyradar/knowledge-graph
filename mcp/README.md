@@ -36,7 +36,7 @@ docker run -p 8000:8000 --env-file .env wikibase-mcp-server
 
 ### Using the local MCP server in Cursor
 
-To use the MCP server in eg Cursor, you need to add it to the `mcp.json`.
+To use the MCP server in eg Cursor, you need to add it to the application's `mcp.json`.
 
 ```json
 {
@@ -47,3 +47,7 @@ To use the MCP server in eg Cursor, you need to add it to the `mcp.json`.
   }
 }
 ```
+
+## Deploying the MCP server to AWS
+
+The MCP server is deployed to AWS using Pulumi. See the [infra README](./infra/README.md) for more details.
