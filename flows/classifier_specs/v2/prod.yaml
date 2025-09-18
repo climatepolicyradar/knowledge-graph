@@ -1,8 +1,10 @@
 ---
-- concept_id: du5mvcjb
-  wikibase_id: Q53
-  classifier_id: yt874y4h
-  wandb_registry_version: v3
+- wikibase_id: Q53
+  concept_id: kgtd77zy
+  classifier_id: r4xsb4ff
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v4
   dont_run_on:
   - sabin
 - wikibase_id: Q57
@@ -91,8 +93,11 @@
   dont_run_on:
   - sabin
 - wikibase_id: Q639
-  classifier_id: yyrjpgyg
-  wandb_registry_version: v11
+  concept_id: 9a3aj2vs
+  classifier_id: zp9e66p9
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v13
   dont_run_on:
   - sabin
 - wikibase_id: Q650
