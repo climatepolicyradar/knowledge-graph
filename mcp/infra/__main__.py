@@ -259,8 +259,11 @@ service = aws.ecs.Service(
     opts=pulumi.ResourceOptions(depends_on=[listener]),
 )
 
-# Export the URL of the load balancer and version information
 pulumi.export("url", alb.dns_name)
+pulumi.export("mcp_url", pulumi.Output.concat("http://", alb.dns_name, ":8000/mcp"))
+pulumi.export(
+    "health_check_url", pulumi.Output.concat("http://", alb.dns_name, ":8000/health")
+)
 pulumi.export("image_version", git_commit_hash)
 pulumi.export("image_name", image.image_name)
 pulumi.export("log_group_name", log_group.name)

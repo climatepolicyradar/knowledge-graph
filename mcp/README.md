@@ -36,13 +36,19 @@ docker run -p 8000:8000 --env-file .env wikibase-mcp-server
 
 ### Using the local MCP server in Cursor
 
+First, get the MCP URL by running `pulumi stack output mcp_url --stack labs` from the `mcp/infra` directory.
+
 To use the MCP server in eg Cursor, you need to add it to the application's `mcp.json`.
 
 ```json
 {
   "mcpServers": {
     "ClimatePolicyRadarConceptStore": {
-      "url": "http://localhost:8000/mcp"
+      "url": THE_MCP_URL,
+      "transport": "streamable-http",
+      "headers": {
+        "Accept": "application/json, text/event-stream"
+      }
     }
   }
 }
