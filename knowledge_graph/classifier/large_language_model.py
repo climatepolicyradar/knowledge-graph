@@ -14,8 +14,11 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 from typing_extensions import Self
 
-from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
-from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    VariantEnabledClassifier,
+    ZeroShotClassifier,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, SpanXMLConceptFormattingError
@@ -57,7 +60,7 @@ Instructions:
 """
 
 
-class BaseLLMClassifier(Classifier, ZeroShotClassifier, UncertaintyMixin, ABC):
+class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier, ABC):
     """A classifier that uses an LLM to predict the presence of a concept in a text."""
 
     def __init__(

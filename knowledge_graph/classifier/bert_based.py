@@ -29,8 +29,8 @@ from knowledge_graph.classifier.classifier import (
     Classifier,
     GPUBoundClassifier,
     ProbabilityCapableClassifier,
+    VariantEnabledClassifier,
 )
-from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -54,7 +54,10 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
 
 
 class BertBasedClassifier(
-    Classifier, GPUBoundClassifier, UncertaintyMixin, ProbabilityCapableClassifier
+    Classifier,
+    GPUBoundClassifier,
+    VariantEnabledClassifier,
+    ProbabilityCapableClassifier,
 ):
     """
     Classifier that uses a fine-tuned transformer model to identify concepts in text.
