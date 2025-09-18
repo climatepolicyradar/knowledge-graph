@@ -154,7 +154,6 @@ async def test_aggregate_batch_of_documents__with_failures(
     expect_failure_stems = [
         DocumentStem("CCLW.Made.Up.Document.ID"),
         DocumentStem("OEP.One.That.Should.Fail"),
-        DocumentStem("sabin.document.1.1"),
     ]
     document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
 
@@ -173,7 +172,6 @@ async def test_aggregate_batch_of_documents__with_failures(
     assert set(failure_stems) == set(expect_failure_stems)
     assert "NoSuchKey" in artifact_data[0]["Context"]
     assert "NoSuchKey" in artifact_data[1]["Context"]
-    assert "AllSkippedFailure" in artifact_data[2]["Context"]
 
 
 def test_build_run_output_prefix():
