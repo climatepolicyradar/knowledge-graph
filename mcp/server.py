@@ -4,6 +4,8 @@ from typing import Annotated
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
 from rich.logging import RichHandler
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseID, WikibaseSession
@@ -80,6 +82,15 @@ logging.basicConfig(
 
 # Initialize FastMCP app
 mcp = FastMCP("Climate Policy Radar Concept Store")
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """Health check endpoint for load balancer monitoring."""
+    _ = request  # Unused but required by the function signature
+    return JSONResponse(
+        {"status": "healthy", "service": "Climate Policy Radar Concept Store MCP"}
+    )
 
 
 @mcp.tool
