@@ -25,7 +25,11 @@ from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 from typing_extensions import Self
 
-from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    ProbabilityCapableClassifier,
+)
 from knowledge_graph.classifier.uncertainty_mixin import UncertaintyMixin
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
@@ -49,7 +53,9 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
     return {"accuracy": accuracy, "f1": f1, "precision": precision, "recall": recall}
 
 
-class BertBasedClassifier(Classifier, GPUBoundClassifier, UncertaintyMixin):
+class BertBasedClassifier(
+    Classifier, GPUBoundClassifier, UncertaintyMixin, ProbabilityCapableClassifier
+):
     """
     Classifier that uses a fine-tuned transformer model to identify concepts in text.
 
