@@ -5,6 +5,7 @@ from typing import Any, TypeAlias, TypeVar
 
 import aioboto3
 import prefect.tasks as tasks
+import pydantic
 from botocore.exceptions import ClientError
 from prefect import flow
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
@@ -212,8 +213,6 @@ async def process_document(
     try:
         session = aioboto3.Session(region_name=config.bucket_region)
         async with session.client("s3") as s3:
-            print("Fetching labelled passages for", document_stem)
-
             concepts_for_vespa: dict[TextBlockId, SerialisedVespaConcept] = {}
             async for (
                 spec,
@@ -224,11 +223,24 @@ async def process_document(
                 # `concepts_for_vespa` starts empty so Validation not
                 # needed initially
                 if not concepts_for_vespa:
-                    for passage in labelled_passages:
-                        concepts_for_vespa[TextBlockId(passage.id)] = [
-                            vc.model_dump(mode="json")
-                            for vc in convert_labelled_passage_to_concepts(passage)
-                        ]
+                    try:
+                        for passage in labelled_passages:
+                            concepts_for_vespa[TextBlockId(passage.id)] = [
+                                vc.model_dump(mode="json")
+                                for vc in convert_labelled_passage_to_concepts(passage)
+                            ]
+                    except pydantic.ValidationError as e:
+                        context = f"spec: {spec}" + ",".join(
+                            f"loc: {err['loc']}, msg: {err['msg']}, ctx: {err.get('ctx', 'no ctx')}"
+                            for err in e.errors()
+                        )
+
+                        raise AggregationFailure(
+                            document_stem=document_stem,
+                            exception=e,
+                            context=context,
+                        )
+
                     continue
 
                 if len(labelled_passages) != len(concepts_for_vespa.keys()):
@@ -278,15 +290,16 @@ async def process_document(
             )
             return document_stem
     except ClientError as e:
-        print(f"ClientError: {e.response}")
         raise AggregationFailure(
             document_stem=document_stem,
             exception=e,
-            context=str(e.response),
+            context="",
         )
     except Exception as e:
         raise AggregationFailure(
-            document_stem=document_stem, exception=e, context=repr(e)
+            document_stem=document_stem,
+            exception=e,
+            context="",
         )
 
 
