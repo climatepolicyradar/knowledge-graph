@@ -5,6 +5,7 @@ from unittest.mock import ANY, Mock, patch
 import pytest
 from wandb.errors.errors import CommError
 
+from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from scripts.train import (
@@ -71,19 +72,33 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    ("classifier_class_to_spec", "extra_metadata"),
+    [
+        (None, {}),
+        (TargetClassifier, {"compute_environment": {"gpu": True}}),
+    ],
+)
 @pytest.mark.asyncio
-async def test_run_training(MockedWikibaseSession, mock_s3_client):
+async def test_run_training(
+    classifier_class_to_spec, extra_metadata, MockedWikibaseSession, mock_s3_client
+):
     mock_s3_client.create_bucket(
         Bucket="cpr-labs-models",
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
 
     # Setup test data
-    mock_classifier = Mock()
+    mock_classifier = Mock(spec=classifier_class_to_spec)
     mock_classifier.fit.return_value = None
     mock_classifier.save.return_value = None
     mock_classifier.id = "aaaa2222"
     mock_classifier.version = None
+
+    mock_concept = Mock()
+    mock_concept.id = "5d4xcy5g"
+    mock_concept.wikibase_revision = 12300
+    mock_classifier.concept = mock_concept
 
     mock_path = Path("tests/fixtures/data/processed/classifiers")
     mock_artifact = Mock(_version="v0")
@@ -121,6 +136,7 @@ async def test_run_training(MockedWikibaseSession, mock_s3_client):
                 "classifier_name": mock_classifier.name,
                 "concept_id": mock_classifier.concept.id,
                 "concept_wikibase_revision": mock_classifier.concept.wikibase_revision,
+                **extra_metadata,
             },
         )
 
