@@ -7,7 +7,6 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import aioboto3
 import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
@@ -167,16 +166,15 @@ async def test_load_classifier__existing_classifier(
 
 
 @pytest.mark.asyncio
-async def test_load_document(test_config, mock_async_bucket_documents):
+async def test_load_document(
+    test_config, mock_async_bucket_documents, mock_s3_async_client
+):
     for doc_file_name in mock_async_bucket_documents:
         file_stem = Path(doc_file_name).stem
-        # s3 client
-        session = aioboto3.Session(region_name=test_config.bucket_region)
-        async with session.client("s3") as s3_client:
-            doc = await load_document(
-                test_config, file_stem=file_stem, s3_client=s3_client
-            )
-            assert file_stem == doc.document_id
+        doc = await load_document(
+            test_config, file_stem=file_stem, s3_client=mock_s3_async_client
+        )
+        assert file_stem == doc.document_id
 
 
 def test_stringify():
