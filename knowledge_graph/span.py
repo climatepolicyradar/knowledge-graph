@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Optional
+from typing import Optional, Sequence
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
@@ -509,3 +509,9 @@ def find_span_text_in_input_text(
         return best_start_index, best_end_index  # type: ignore
 
     return None
+
+
+def all_spans_have_probability(spans: Sequence[Span]) -> bool:
+    """Check whether all spans in the input sequence have a set probability."""
+
+    return all(span.prediction_probability is not None for span in spans)
