@@ -596,7 +596,6 @@ async def run_classifier_inference_on_document(
     s3_client: S3Client,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    print(f"Loading document with file stem {file_stem}")
     document = await load_document(config, file_stem, s3_client)
 
     # Resolve typing issue as wikibase_id is optional (though required here)
