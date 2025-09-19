@@ -1,13 +1,13 @@
 import pytest
 from hypothesis import given
 
-from knowledge_graph.classifier.ensemble import (
-    Ensemble,
-    IncompatibleSubClassifiersError,
-)
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
 from knowledge_graph.concept import Concept
+from knowledge_graph.ensemble import (
+    Ensemble,
+    IncompatibleSubClassifiersError,
+)
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from tests.common_strategies import concept_strategy
 
