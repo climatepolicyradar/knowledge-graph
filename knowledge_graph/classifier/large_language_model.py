@@ -38,9 +38,9 @@ class LLMResponse(BaseModel):
 
 
 DEFAULT_SYSTEM_PROMPT = """
-You are a specialist climate policy analyst, tasked with identifying mentions of 
-concepts in climate policy documents. You will mark up references to concepts with 
-XML tags.
+You are a specialist analyst, tasked with identifying mentions of concepts in policy documents. 
+These documents are mostly drawn from a climate and development context.
+You will mark up references to concepts with XML tags.
 
 First, carefully review the following description of the concept:
 
@@ -50,13 +50,14 @@ First, carefully review the following description of the concept:
 
 Instructions:
 
-1. Read through each passage carefully, thinking about the concept.
-2. Identify any mentions of the concept, including direct references and related terms.
+1. Read through each passage carefully, thinking about the concept and different ways it can be used in documents.
+2. Identify any mentions of the concept, including references that are not included as an example, but which match the definition.
 3. Surround each identified mention with <concept> tags.
 4. If a passage contains multiple instances, each one should be tagged separately.
 5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
-6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag.
+6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag. Skip this step if you have tagged any concept mentions so far.
 7. The input text must be reproduced exactly, down to the last character, only adding concept tags.
+8. Double check that you have tagged all mentions of the concept and that every tagged part is describing an actual mention of that concept.
 """
 
 
