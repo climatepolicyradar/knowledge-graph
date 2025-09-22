@@ -1,0 +1,94 @@
+id: no-print-in-materialize-parameterized
+snapshots:
+  ? |-
+    @materialize("asset://key")
+    def another_materialize():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @materialize("asset://key")
+        def another_materialize():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 81
+  ? |
+    @materialize("asset://key")
+    def another_materialize():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @materialize("asset://key")
+        def another_materialize():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 81
+  ? |-
+    @materialize("complex://asset", retries=2)
+    def complex_materialize():
+        config = setup_config()
+        print("Starting complex materialization")
+        result = expensive_computation(config)
+        print(f"Computation complete: {result}")
+        finalize(result)
+        return result
+  : labels:
+    - source: |-
+        @materialize("complex://asset", retries=2)
+        def complex_materialize():
+            config = setup_config()
+            print("Starting complex materialization")
+            result = expensive_computation(config)
+            print(f"Computation complete: {result}")
+            finalize(result)
+            return result
+      style: primary
+      start: 0
+      end: 270
+  ? |
+    from prefect.assets import materialize
+
+    @materialize(
+        "foo://bar",
+        retries=1,
+        persist_result=False,
+    )
+    def my_materialize():
+        print("This should be flagged")
+  : labels:
+    - source: |-
+        @materialize(
+            "foo://bar",
+            retries=1,
+            persist_result=False,
+        )
+        def my_materialize():
+            print("This should be flagged")
+      style: primary
+      start: 40
+      end: 171
+  ? |
+    from prefect.assets import materialize
+
+    @materialize(
+        "foo://bar",
+        retries=1,
+        persist_result=False,
+    )
+    def my_materialize():
+        print("This should be flagged")
+        return "done"
+  : labels:
+    - source: |-
+        @materialize(
+            "foo://bar",
+            retries=1,
+            persist_result=False,
+        )
+        def my_materialize():
+            print("This should be flagged")
+            return "done"
+      style: primary
+      start: 40
+      end: 189

@@ -1,0 +1,74 @@
+id: no-print-in-task-parameterized
+snapshots:
+  ? |-
+    @task(log_prints=True)
+    def another_task():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @task(log_prints=True)
+        def another_task():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 69
+  ? |
+    @task(log_prints=True)
+    def another_task():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @task(log_prints=True)
+        def another_task():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 69
+  ? |-
+    @task(retries=1)
+    def task_with_context():
+        config = load_config()
+        print("Config loaded successfully")
+        result = process_with_config(config)
+        return result
+  : labels:
+    - source: |-
+        @task(retries=1)
+        def task_with_context():
+            config = load_config()
+            print("Config loaded successfully")
+            result = process_with_config(config)
+            return result
+      style: primary
+      start: 0
+      end: 167
+  ? |
+    from prefect import task
+
+    @task(name="my-task", retries=3)
+    def my_task():
+        print("This should be flagged")
+  : labels:
+    - source: |-
+        @task(name="my-task", retries=3)
+        def my_task():
+            print("This should be flagged")
+      style: primary
+      start: 26
+      end: 109
+  ? |
+    from prefect import task
+
+    @task(name="my-task", retries=3)
+    def my_task():
+        print("This should be flagged")
+        return "done"
+  : labels:
+    - source: |-
+        @task(name="my-task", retries=3)
+        def my_task():
+            print("This should be flagged")
+            return "done"
+      style: primary
+      start: 26
+      end: 127

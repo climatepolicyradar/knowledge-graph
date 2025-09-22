@@ -1,0 +1,59 @@
+id: use-walrus-operator
+snapshots:
+  ? |
+    line = file.readline()
+    if line:
+        process(line)
+  : fixed: |
+      line = file.readline()
+      if line := file.readline():
+        process(line)
+    labels:
+    - source: |-
+        if line:
+            process(line)
+      style: primary
+      start: 23
+      end: 49
+    - source: line = file.readline()
+      style: secondary
+      start: 0
+      end: 22
+  ? |-
+    match = pattern.search(text)
+    if match:
+        return match.group(1)
+  : fixed: |-
+      match = pattern.search(text)
+      if match := pattern.search(text):
+        return match.group(1)
+    labels:
+    - source: |-
+        if match:
+            return match.group(1)
+      style: primary
+      start: 29
+      end: 64
+    - source: match = pattern.search(text)
+      style: secondary
+      start: 0
+      end: 28
+  ? |
+    result = some_function()
+    if result:
+        print(result)
+  : fixed: |
+      result = some_function()
+      if result := some_function():
+        print(result)
+    labels:
+    - source: |-
+        if result:
+            print(result)
+      style: primary
+      start: 25
+      end: 53
+    - source: result = some_function()
+      style: secondary
+      start: 0
+      end: 24

@@ -1,0 +1,168 @@
+---
+id: no-print-in-flow-simple
+language: python
+severity: warning
+message: "Print statements should not be used in functions decorated with @flow. Consider using a logger instead."
+rule:
+  any:
+    - pattern: |
+        @flow
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @flow
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @flow
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+            $$$AFTER
+    - pattern: |
+        @flow
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+            $$$AFTER
+note: "Use logging instead of print statements in Prefect flows for better observability."
+---
+id: no-print-in-task-simple
+language: python
+severity: warning
+message: "Print statements should not be used in functions decorated with @task. Consider using a logger instead."
+rule:
+  any:
+    - pattern: |
+        @task
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @task
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @task
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+            $$$AFTER
+    - pattern: |
+        @task
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+            $$$AFTER
+note: "Use logging instead of print statements in Prefect tasks for better observability."
+---
+id: no-print-in-flow-parameterized
+language: python
+severity: warning
+message: "Print statements should not be used in functions decorated with @flow. Consider using a logger instead."
+rule:
+  any:
+    - pattern: |
+        @flow($$$FLOW_ARGS)
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @flow($$$FLOW_ARGS)
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @flow($$$FLOW_ARGS)
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+            $$$AFTER
+    - pattern: |
+        @flow($$$FLOW_ARGS)
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+            $$$AFTER
+note: "Use logging instead of print statements in Prefect flows for better observability."
+---
+id: no-print-in-task-parameterized
+language: python
+severity: warning
+message: "Print statements should not be used in functions decorated with @task. Consider using a logger instead."
+rule:
+  any:
+    - pattern: |
+        @task($$$TASK_ARGS)
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @task($$$TASK_ARGS)
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @task($$$TASK_ARGS)
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+            $$$AFTER
+    - pattern: |
+        @task($$$TASK_ARGS)
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+            $$$AFTER
+note: "Use logging instead of print statements in Prefect tasks for better observability."
+---
+id: no-print-in-materialize-simple
+language: python
+severity: warning
+message: "Print statements should not be used in functions decorated with @materialize. Consider using a logger instead."
+rule:
+  any:
+    - pattern: |
+        @materialize
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @materialize
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @materialize
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+            $$$AFTER
+    - pattern: |
+        @materialize
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+            $$$AFTER
+note: "Use logging instead of print statements in Prefect materialize functions for better observability."
+---
+id: no-print-in-materialize-parameterized
+language: python
+severity: warning
+message: "Print statements should not be used in functions decorated with @materialize. Consider using a logger instead."
+rule:
+  any:
+    - pattern: |
+        @materialize($$$MATERIALIZE_ARGS)
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @materialize($$$MATERIALIZE_ARGS)
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+    - pattern: |
+        @materialize($$$MATERIALIZE_ARGS)
+        def $FUNC($$$ARGS):
+            print($$$PRINT_ARGS)
+            $$$AFTER
+    - pattern: |
+        @materialize($$$MATERIALIZE_ARGS)
+        def $FUNC($$$ARGS):
+            $$$BEFORE
+            print($$$PRINT_ARGS)
+            $$$AFTER
+note: "Use logging instead of print statements in Prefect materialize functions for better observability."

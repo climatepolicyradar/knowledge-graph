@@ -1,0 +1,76 @@
+id: no-print-in-flow-simple
+snapshots:
+  ? |-
+    @flow
+    def another_flow():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @flow
+        def another_flow():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 52
+  ? |
+    @flow
+    def another_flow():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @flow
+        def another_flow():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 52
+  ? |-
+    @flow
+    def flow_with_surrounding_code():
+        x = 1
+        y = 2
+        print("This should also be flagged")
+        z = x + y
+        return z
+  : labels:
+    - source: |-
+        @flow
+        def flow_with_surrounding_code():
+            x = 1
+            y = 2
+            print("This should also be flagged")
+            z = x + y
+            return z
+      style: primary
+      start: 0
+      end: 127
+  ? |
+    from prefect import flow
+
+    @flow
+    def my_flow():
+        print("This should be flagged")
+  : labels:
+    - source: |-
+        @flow
+        def my_flow():
+            print("This should be flagged")
+      style: primary
+      start: 26
+      end: 82
+  ? |
+    from prefect import flow
+
+    @flow
+    def my_flow():
+        print("This should be flagged")
+        return "done"
+  : labels:
+    - source: |-
+        @flow
+        def my_flow():
+            print("This should be flagged")
+            return "done"
+      style: primary
+      start: 26
+      end: 100

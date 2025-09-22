@@ -1,0 +1,36 @@
+id: no-print-in-flow-parameterized
+valid:
+  - |
+    from prefect import flow, get_run_logger
+
+    @flow(name="my-flow", retries=3)
+    def my_flow():
+        logger = get_run_logger()
+        logger.info("Using logger instead")
+        return "done"
+  - |
+    def regular_function():
+        print("This should not be flagged")
+        return "done"
+  - |
+    @flow(log_prints=False)
+    def my_flow():
+        return "no print here"
+invalid:
+  - |
+    from prefect import flow
+
+    @flow(name="my-flow", retries=3)
+    def my_flow():
+        print("This should be flagged")
+  - |
+    @flow(log_prints=True)
+    def another_flow():
+        print(f"Result: {42}")
+  - |
+    @flow(retries=2)
+    def flow_with_context():
+        setup()
+        print("Debug info")
+        cleanup()
+        return "done"

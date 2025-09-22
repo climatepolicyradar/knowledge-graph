@@ -1,0 +1,38 @@
+id: no-print-in-materialize-simple
+valid:
+  - |
+    from prefect.assets import materialize
+    from prefect import get_run_logger
+
+    @materialize
+    def my_materialize():
+        logger = get_run_logger()
+        logger.info("Using logger instead")
+        return "done"
+  - |
+    def regular_function():
+        print("This should not be flagged")
+        return "done"
+  - |
+    @materialize
+    def my_materialize():
+        return "no print here"
+invalid:
+  - |
+    from prefect.assets import materialize
+
+    @materialize
+    def my_materialize():
+        print("This should be flagged")
+  - |
+    @materialize
+    def another_materialize():
+        print(f"Result: {42}")
+  - |
+    @materialize
+    def materialize_with_context():
+        data = load_data()
+        print("Data loaded for materialization")
+        result = transform(data)
+        save_result(result)
+        return result

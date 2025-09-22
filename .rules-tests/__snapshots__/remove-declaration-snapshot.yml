@@ -1,0 +1,59 @@
+id: remove-declaration
+snapshots:
+  ? |
+    line = file.readline()
+    if line:
+        process(line)
+  : fixed: |2
+
+      if line:
+          process(line)
+    labels:
+    - source: line = file.readline()
+      style: primary
+      start: 0
+      end: 22
+    - source: |-
+        if line:
+            process(line)
+      style: secondary
+      start: 23
+      end: 49
+  ? |-
+    match = pattern.search(text)
+    if match:
+        return match.group(1)
+  : fixed: |2-
+
+      if match:
+          return match.group(1)
+    labels:
+    - source: match = pattern.search(text)
+      style: primary
+      start: 0
+      end: 28
+    - source: |-
+        if match:
+            return match.group(1)
+      style: secondary
+      start: 29
+      end: 64
+  ? |
+    result = some_function()
+    if result:
+        print(result)
+  : fixed: |2
+
+      if result:
+          print(result)
+    labels:
+    - source: result = some_function()
+      style: primary
+      start: 0
+      end: 24
+    - source: |-
+        if result:
+            print(result)
+      style: secondary
+      start: 25
+      end: 53

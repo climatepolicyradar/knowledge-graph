@@ -1,0 +1,74 @@
+id: no-print-in-task-simple
+snapshots:
+  ? |-
+    @task
+    def another_task():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @task
+        def another_task():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 52
+  ? |
+    @task
+    def another_task():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @task
+        def another_task():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 52
+  ? |-
+    @task
+    def task_with_surrounding_code():
+        data = fetch_data()
+        print(f"Processing {len(data)} items")
+        result = process(data)
+        return result
+  : labels:
+    - source: |-
+        @task
+        def task_with_surrounding_code():
+            data = fetch_data()
+            print(f"Processing {len(data)} items")
+            result = process(data)
+            return result
+      style: primary
+      start: 0
+      end: 151
+  ? |
+    from prefect import task
+
+    @task
+    def my_task():
+        print("This should be flagged")
+  : labels:
+    - source: |-
+        @task
+        def my_task():
+            print("This should be flagged")
+      style: primary
+      start: 26
+      end: 82
+  ? |
+    from prefect import task
+
+    @task
+    def my_task():
+        print("This should be flagged")
+        return "done"
+  : labels:
+    - source: |-
+        @task
+        def my_task():
+            print("This should be flagged")
+            return "done"
+      style: primary
+      start: 26
+      end: 100

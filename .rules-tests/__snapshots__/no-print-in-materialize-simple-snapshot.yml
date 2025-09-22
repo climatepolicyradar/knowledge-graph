@@ -1,0 +1,76 @@
+id: no-print-in-materialize-simple
+snapshots:
+  ? |-
+    @materialize
+    def another_materialize():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @materialize
+        def another_materialize():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 66
+  ? |
+    @materialize
+    def another_materialize():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @materialize
+        def another_materialize():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 66
+  ? |-
+    @materialize
+    def materialize_with_context():
+        data = load_data()
+        print("Data loaded for materialization")
+        result = transform(data)
+        save_result(result)
+        return result
+  : labels:
+    - source: |-
+        @materialize
+        def materialize_with_context():
+            data = load_data()
+            print("Data loaded for materialization")
+            result = transform(data)
+            save_result(result)
+            return result
+      style: primary
+      start: 0
+      end: 183
+  ? |
+    from prefect.assets import materialize
+
+    @materialize
+    def my_materialize():
+        print("This should be flagged")
+  : labels:
+    - source: |-
+        @materialize
+        def my_materialize():
+            print("This should be flagged")
+      style: primary
+      start: 40
+      end: 110
+  ? |
+    from prefect.assets import materialize
+
+    @materialize
+    def my_materialize():
+        print("This should be flagged")
+        return "done"
+  : labels:
+    - source: |-
+        @materialize
+        def my_materialize():
+            print("This should be flagged")
+            return "done"
+      style: primary
+      start: 40
+      end: 128

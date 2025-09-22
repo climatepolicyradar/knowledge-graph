@@ -1,0 +1,36 @@
+id: no-print-in-task-parameterized
+valid:
+  - |
+    from prefect import task, get_run_logger
+
+    @task(name="my-task", retries=3)
+    def my_task():
+        logger = get_run_logger()
+        logger.info("Using logger instead")
+        return "done"
+  - |
+    def regular_function():
+        print("This should not be flagged")
+        return "done"
+  - |
+    @task(log_prints=False)
+    def my_task():
+        return "no print here"
+invalid:
+  - |
+    from prefect import task
+
+    @task(name="my-task", retries=3)
+    def my_task():
+        print("This should be flagged")
+  - |
+    @task(log_prints=True)
+    def another_task():
+        print(f"Result: {42}")
+  - |
+    @task(retries=1)
+    def task_with_context():
+        config = load_config()
+        print("Config loaded successfully")
+        result = process_with_config(config)
+        return result

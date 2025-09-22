@@ -1,0 +1,74 @@
+id: no-print-in-flow-parameterized
+snapshots:
+  ? |-
+    @flow(log_prints=True)
+    def another_flow():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @flow(log_prints=True)
+        def another_flow():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 69
+  ? |
+    @flow(log_prints=True)
+    def another_flow():
+        print(f"Result: {42}")
+  : labels:
+    - source: |-
+        @flow(log_prints=True)
+        def another_flow():
+            print(f"Result: {42}")
+      style: primary
+      start: 0
+      end: 69
+  ? |-
+    @flow(retries=2)
+    def flow_with_context():
+        setup()
+        print("Debug info")
+        cleanup()
+        return "done"
+  : labels:
+    - source: |-
+        @flow(retries=2)
+        def flow_with_context():
+            setup()
+            print("Debug info")
+            cleanup()
+            return "done"
+      style: primary
+      start: 0
+      end: 109
+  ? |
+    from prefect import flow
+
+    @flow(name="my-flow", retries=3)
+    def my_flow():
+        print("This should be flagged")
+  : labels:
+    - source: |-
+        @flow(name="my-flow", retries=3)
+        def my_flow():
+            print("This should be flagged")
+      style: primary
+      start: 26
+      end: 109
+  ? |
+    from prefect import flow
+
+    @flow(name="my-flow", retries=3)
+    def my_flow():
+        print("This should be flagged")
+        return "done"
+  : labels:
+    - source: |-
+        @flow(name="my-flow", retries=3)
+        def my_flow():
+            print("This should be flagged")
+            return "done"
+      style: primary
+      start: 26
+      end: 127

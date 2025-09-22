@@ -1,0 +1,47 @@
+id: no-print-in-materialize-parameterized
+valid:
+  - |
+    from prefect.assets import materialize
+    from prefect import get_run_logger
+
+    @materialize(
+        "foo://bar",
+        retries=1,
+        persist_result=False,
+    )
+    def my_materialize():
+        logger = get_run_logger()
+        logger.info("Using logger instead")
+        return "done"
+  - |
+    def regular_function():
+        print("This should not be flagged")
+        return "done"
+  - |
+    @materialize("asset://key")
+    def my_materialize():
+        return "no print here"
+invalid:
+  - |
+    from prefect.assets import materialize
+
+    @materialize(
+        "foo://bar",
+        retries=1,
+        persist_result=False,
+    )
+    def my_materialize():
+        print("This should be flagged")
+  - |
+    @materialize("asset://key")
+    def another_materialize():
+        print(f"Result: {42}")
+  - |
+    @materialize("complex://asset", retries=2)
+    def complex_materialize():
+        config = setup_config()
+        print("Starting complex materialization")
+        result = expensive_computation(config)
+        print(f"Computation complete: {result}")
+        finalize(result)
+        return result

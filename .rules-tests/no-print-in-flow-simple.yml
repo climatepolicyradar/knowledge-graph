@@ -1,0 +1,37 @@
+id: no-print-in-flow-simple
+valid:
+  - |
+    from prefect import flow, get_run_logger
+
+    @flow
+    def my_flow():
+        logger = get_run_logger()
+        logger.info("Using logger instead")
+        return "done"
+  - |
+    def regular_function():
+        print("This should not be flagged")
+        return "done"
+  - |
+    @flow
+    def my_flow():
+        return "no print here"
+invalid:
+  - |
+    from prefect import flow
+
+    @flow
+    def my_flow():
+        print("This should be flagged")
+  - |
+    @flow
+    def another_flow():
+        print(f"Result: {42}")
+  - |
+    @flow
+    def flow_with_surrounding_code():
+        x = 1
+        y = 2
+        print("This should also be flagged")
+        z = x + y
+        return z

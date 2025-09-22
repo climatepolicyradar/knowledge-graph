@@ -1,0 +1,29 @@
+id: use-walrus-operator
+valid:
+  - |
+    if result := some_function():
+        print(result)
+  - |
+    while line := file.readline():
+        process(line)
+  - |
+    if (match := pattern.search(text)) is not None:
+        return match.group(1)
+  - |
+    # Different variable names
+    x = some_value()
+    if y:
+        do_something()
+invalid:
+  - |
+    result = some_function()
+    if result:
+        print(result)
+  - |
+    line = file.readline()
+    if line:
+        process(line)
+  - |
+    match = pattern.search(text)
+    if match:
+        return match.group(1)

@@ -1,0 +1,36 @@
+id: no-print-in-task-simple
+valid:
+  - |
+    from prefect import task, get_run_logger
+
+    @task
+    def my_task():
+        logger = get_run_logger()
+        logger.info("Using logger instead")
+        return "done"
+  - |
+    def regular_function():
+        print("This should not be flagged")
+        return "done"
+  - |
+    @task
+    def my_task():
+        return "no print here"
+invalid:
+  - |
+    from prefect import task
+
+    @task
+    def my_task():
+        print("This should be flagged")
+  - |
+    @task
+    def another_task():
+        print(f"Result: {42}")
+  - |
+    @task
+    def task_with_surrounding_code():
+        data = fetch_data()
+        print(f"Processing {len(data)} items")
+        result = process(data)
+        return result

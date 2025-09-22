@@ -1,0 +1,32 @@
+id: remove-declaration
+valid:
+  - |
+    if result := some_function():
+        print(result)
+  - |
+    while line := file.readline():
+        process(line)
+  - |
+    # Variable used elsewhere first
+    result = some_function()
+    print(result)
+    if result:
+        do_more()
+  - |
+    # Different variable names
+    x = some_value()
+    if y:
+        do_something()
+invalid:
+  - |
+    result = some_function()
+    if result:
+        print(result)
+  - |
+    line = file.readline()
+    if line:
+        process(line)
+  - |
+    match = pattern.search(text)
+    if match:
+        return match.group(1)
