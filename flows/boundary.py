@@ -305,7 +305,7 @@ def convert_labelled_passage_to_concepts(
 
         if not span.timestamps:
             print(
-                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
+                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
             )
             continue
 
