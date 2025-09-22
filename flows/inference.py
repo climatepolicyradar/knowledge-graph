@@ -582,6 +582,32 @@ def text_block_inference(
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
 
+    if spans_missing_timestamps := [span for span in spans if not span.timestamps]:
+        span_ids = ",".join(str(span.id) for span in spans_missing_timestamps)
+        raise ValueError(
+            f"Found {len(spans_missing_timestamps)} span(s) with missing timestamps. "
+            f"Span IDs: {span_ids}"
+        )
+
+    if spans_missing_labellers := [span for span in spans if not span.labellers]:
+        span_ids = ",".join(str(span.id) for span in spans_missing_labellers)
+        raise ValueError(
+            f"Found {len(spans_missing_labellers)} span(s) with missing labellers. "
+            f"Span IDs: {span_ids}"
+        )
+
+    if spans_mismatched_lengths := [
+        span for span in spans if len(span.timestamps) != len(span.labellers)
+    ]:
+        mismatched_info = ",".join(
+            f"{span.id} (timestamps: {len(span.timestamps)}, labellers: {len(span.labellers)})"
+            for span in spans_mismatched_lengths
+        )
+        raise ValueError(
+            f"Found {len(spans_mismatched_lengths)} span(s) with mismatched timestamp/labeller lengths. "
+            f"Details: {mismatched_info}"
+        )
+
     labelled_passage = _get_labelled_passage_from_prediction(
         classifier, spans, block_id, text
     )
