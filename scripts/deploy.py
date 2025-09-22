@@ -43,7 +43,6 @@ def existing(
             parser=parse_aws_env,
         ),
     ] = AwsEnv.production,
-    get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
     train: Annotated[bool, typer.Option(help="Whether to train models")] = True,
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
 ):
@@ -55,10 +54,6 @@ def existing(
 
     for spec in specs:
         print(f"\nprocessing {spec.name}:{spec.alias}")
-
-        if get:
-            print("getting concept")
-            scripts.get_concept.main(wikibase_id=WikibaseID(spec.name))
 
         if train:
             print("training")
@@ -100,7 +95,6 @@ def new(
             parser=lambda x: WikibaseID(x),
         ),
     ] = [],
-    get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
     train: Annotated[bool, typer.Option(help="Whether to train models")] = True,
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
 ):
@@ -110,10 +104,6 @@ def new(
     for wikibase_id in wikibase_ids:
         try:
             print(f"\nprocessing {wikibase_id}")
-
-            if get:
-                print("getting concept")
-                scripts.get_concept.main(wikibase_id=wikibase_id)
 
             if train:
                 print("training")
