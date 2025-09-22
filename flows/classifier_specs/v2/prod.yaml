@@ -405,21 +405,6 @@
   wandb_registry_version: v12
   dont_run_on:
   - sabin
-- wikibase_id: Q1651
-  classifier_id: 6rys3abe
-  wandb_registry_version: v12
-  dont_run_on:
-  - sabin
-- wikibase_id: Q1652
-  classifier_id: 57uwtz45
-  wandb_registry_version: v9
-  dont_run_on:
-  - sabin
-- wikibase_id: Q1653
-  classifier_id: u86a8p2d
-  wandb_registry_version: v9
-  dont_run_on:
-  - sabin
 - wikibase_id: Q1744
   classifier_id: ekzukwdz
   wandb_registry_version: v0

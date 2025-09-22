@@ -474,7 +474,7 @@ async def store_labels(
 ]:
     """Store the labels in the cache bucket."""
     # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(100)
 
     tasks = [
         wait_for_semaphore(
@@ -596,7 +596,6 @@ async def run_classifier_inference_on_document(
     s3_client: S3Client,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    print(f"Loading document with file stem {file_stem}")
     document = await load_document(config, file_stem, s3_client)
 
     # Resolve typing issue as wikibase_id is optional (though required here)
@@ -794,16 +793,21 @@ async def _inference_batch_of_documents(
     print(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
+    semaphore = asyncio.Semaphore(200)
+
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
         tasks = [
-            return_with(
-                file_stem,
-                run_classifier_inference_on_document(
-                    config=config,
-                    file_stem=file_stem,
-                    classifier=classifier,
-                    s3_client=s3_client,
+            wait_for_semaphore(
+                semaphore,
+                return_with(
+                    file_stem,
+                    run_classifier_inference_on_document(
+                        config=config,
+                        file_stem=file_stem,
+                        classifier=classifier,
+                        s3_client=s3_client,
+                    ),
                 ),
             )
             for file_stem in batch

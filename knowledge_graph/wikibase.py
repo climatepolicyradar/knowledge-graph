@@ -22,7 +22,11 @@ from tenacity import (
 )
 
 from knowledge_graph.concept import Concept
-from knowledge_graph.exceptions import ConceptNotFoundError, RevisionNotFoundError
+from knowledge_graph.exceptions import (
+    ConceptNotFoundError,
+    InvalidConceptError,
+    RevisionNotFoundError,
+)
 from knowledge_graph.identifiers import WikibaseID
 
 logger = getLogger(__name__)
@@ -428,7 +432,7 @@ class WikibaseSession:
                 entity = json.loads(content)
 
                 if not entity:
-                    raise ConceptNotFoundError(wikibase_id)
+                    raise InvalidConceptError(wikibase_id, "Empty entity content")
 
                 # Parse concept data
                 concept = self._parse_wikibase_entity(wikibase_id, entity, revision_id)
@@ -442,7 +446,11 @@ class WikibaseSession:
 
             except (KeyError, json.JSONDecodeError) as e:
                 logger.warning("❌ Failed to parse concept %s: %s", wikibase_id, e)
-            except (ConceptNotFoundError, RevisionNotFoundError) as e:
+            except (
+                ConceptNotFoundError,
+                RevisionNotFoundError,
+                InvalidConceptError,
+            ) as e:
                 logger.warning("❌ %s", str(e))
             except ValidationError as e:
                 logger.warning("❌ Failed to validate concept %s: %s", wikibase_id, e)
@@ -456,11 +464,12 @@ class WikibaseSession:
     ) -> Concept:
         """Parse a Wikibase entity (given in dict format) into a Concept object."""
         # Extract basic concept information
-        preferred_label = (
-            entity.get("labels", {})
-            .get("en", {})
-            .get("value", f"concept {wikibase_id}")
-        )
+        preferred_label = entity.get("labels", {}).get("en", {}).get("value")
+
+        if not preferred_label:
+            raise InvalidConceptError(
+                wikibase_id, f"{wikibase_id} doesn't have a preferred label"
+            )
 
         alternative_labels = []
         if isinstance(entity.get("aliases"), dict):
@@ -476,13 +485,16 @@ class WikibaseSession:
             else ""
         )
 
-        concept = Concept(
-            preferred_label=preferred_label,
-            alternative_labels=alternative_labels,
-            description=description,
-            wikibase_id=WikibaseID(wikibase_id),
-            wikibase_revision=wikibase_revision,
-        )
+        try:
+            concept = Concept(
+                preferred_label=preferred_label,
+                alternative_labels=alternative_labels,
+                description=description,
+                wikibase_id=WikibaseID(wikibase_id),
+                wikibase_revision=wikibase_revision,
+            )
+        except (ValidationError, ValueError) as e:
+            raise InvalidConceptError(wikibase_id, str(e)) from e
 
         # Parse claims/properties
         if "claims" in entity and entity["claims"]:

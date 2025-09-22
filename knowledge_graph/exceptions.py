@@ -25,6 +25,16 @@ class RevisionNotFoundError(Exception):
         super().__init__(self.message)
 
 
+class InvalidConceptError(Exception):
+    """Exception raised when a concept is found but its data is invalid"""
+
+    def __init__(self, wikibase_id: WikibaseID, reason: str = "Invalid concept data"):
+        self.wikibase_id = wikibase_id
+        self.reason = reason
+        self.message = f"Concept {wikibase_id} is invalid: {reason}"
+        super().__init__(self.message)
+
+
 class ConceptCountUpdateError(Exception):
     """Exception raised when concept count updates fail"""
 
