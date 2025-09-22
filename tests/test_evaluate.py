@@ -16,7 +16,7 @@ from scripts.evaluate import (
     create_gold_standard_labelled_passages,
     load_classifier_local,
     load_classifier_remote,
-    log_metrics,
+    log_metrics_to_wandb,
     print_metrics,
     save_metrics,
     validate_args,
@@ -254,7 +254,7 @@ def test_log_metrics(metrics_df: pd.DataFrame):
     with patch("wandb.Table") as mock_wandb_table:
         mock_run = Mock()
 
-        log_metrics(mock_run, metrics_df)
+        log_metrics_to_wandb(mock_run, metrics_df)
 
         mock_wandb_table.assert_called_once_with(
             data=metrics_df.values.tolist(),

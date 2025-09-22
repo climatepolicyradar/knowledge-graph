@@ -360,14 +360,36 @@ def validate_args(
             validate_remote_args(track, classifier, version)
 
 
-def log_metrics(
+def log_metrics_to_wandb(
     run: Run,
     df: pd.DataFrame,
 ):
-    """Log metrics DataFrame to Weights & Biases as a table."""
+    """Log metrics to weights and biases."""
     table = wandb.Table(data=df.values.tolist(), columns=df.columns.tolist())
-
     run.log({"performance": table})
+
+    for _, row in df.reset_index(drop=True).iterrows():
+        group = str(row["Group"])
+        agreement = str(row["Agreement at"])
+        metrics_payload = {
+            f"metrics/{group}/{agreement}/precision": float(row["Precision"]),
+            f"metrics/{group}/{agreement}/recall": float(row["Recall"]),
+            f"metrics/{group}/{agreement}/accuracy": float(row["Accuracy"]),
+            f"metrics/{group}/{agreement}/f1": float(row["F1 score"]),
+            f"metrics/{group}/{agreement}/support": float(row["Support"]),
+            "group": group,
+            "agreement": agreement,
+        }
+        run.log(metrics_payload)
+
+    # Optionally add quick-look summaries
+    try:
+        best_row = df.sort_values("F1 score", ascending=False).iloc[0]
+        run.summary["best_f1"] = float(best_row["F1 score"])
+        run.summary["best_f1_group"] = str(best_row["Group"])
+        run.summary["best_f1_agreement"] = str(best_row["Agreement at"])
+    except Exception:
+        pass
 
 
 def evaluate_classifier(
@@ -425,7 +447,7 @@ def evaluate_classifier(
     print_metrics(df)
 
     if wandb_run:
-        log_metrics(wandb_run, df)  # type: ignore
+        log_metrics_to_wandb(wandb_run, df)  # type: ignore
         wandb_run.finish()  # type: ignore
 
     return df, model_labelled_passages
