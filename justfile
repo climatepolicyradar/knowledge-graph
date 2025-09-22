@@ -44,6 +44,10 @@ lint:
 lint-all:
     uv run pre-commit run --all-files --show-diff-on-failure
 
+# run ast-grep tests
+ast-grep-test +OPTS="":
+    ast-grep test {{OPTS}}
+
 # build a dataset of passages for sampling
 build-dataset n="10000":
     poetry run python scripts/build_dataset.py --n {{n}}
