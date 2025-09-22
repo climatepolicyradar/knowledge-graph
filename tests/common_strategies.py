@@ -70,10 +70,7 @@ def span_strategy(draw, text: Optional[str] = None):
         st.lists(labeller_strategy, min_size=num_items, max_size=num_items)
     )
     timestamps = draw(
-        st.one_of(
-            st.just([]),
-            st.lists(timestamp_strategy(), min_size=num_items, max_size=num_items),
-        )
+        st.lists(timestamp_strategy(), min_size=num_items, max_size=num_items)
     )
     return Span(
         text=text,
