@@ -118,7 +118,12 @@ async def test_run_training(
         patch(
             "wandb.Artifact", return_value=mock_artifact_instance
         ) as mock_artifact_class,
+        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
     ):
+        mock_argilla_instance = Mock()
+        mock_argilla_instance.pull_labelled_passages.return_value = []
+        mock_argilla_session.return_value = mock_argilla_instance
+
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
             track=True,
