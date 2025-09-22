@@ -3,17 +3,18 @@ import os
 import re
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple, Optional
+from typing import Annotated, Any, Optional
 
 import typer
 import wandb
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 from rich.console import Console
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
+import scripts.get_concept
 from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
@@ -32,20 +33,10 @@ from knowledge_graph.cloud import (
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
-from knowledge_graph.wikibase import WikibaseSession
 from scripts.classifier_metadata import ComputeEnvironment
+from scripts.get_concept import WikibaseConfig
 
 app = typer.Typer()
-
-
-WikibaseConfig = NamedTuple(
-    "WikibaseConfig",
-    [
-        ("username", str),
-        ("password", SecretStr),
-        ("url", str),
-    ],
-)
 
 
 def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
@@ -339,25 +330,13 @@ async def run_training(
         if track
         else nullcontext()
     ) as run:
-        # Fetch all of its subconcepts recursively
-        if wikibase_config:
-            wikibase = WikibaseSession(
-                username=wikibase_config.username,
-                password=wikibase_config.password.get_secret_value(),
-                url=wikibase_config.url,
-            )
-        else:
-            wikibase = WikibaseSession()
-
-        concept = await wikibase.get_concept_async(
-            wikibase_id,
-            include_recursive_has_subconcept=True,
+        concept = scripts.get_concept.main(
+            wikibase_id=wikibase_id,
             include_labels_from_subconcepts=True,
+            include_recursive_has_subconcept=True,
+            wikibase_config=wikibase_config,
         )
-        # To handle redirects where the wikibase_id is overwritten
-        concept.wikibase_id = wikibase_id
-        # Ensure concept data can be serialised and rebuilt without failing validations
-        concept.model_validate_json(concept.model_dump_json())
+
         # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
