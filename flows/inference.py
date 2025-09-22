@@ -1113,7 +1113,7 @@ async def create_inference_summary_artifact(
 - **Total classifiers**: {len(inference_result.classifier_specs)}
 - **Successful classifiers**: {len(inference_result.successful_classifier_specs)}
 - **Failed classifiers**: {len(inference_result.failed_classifier_specs)}
-- **Classifiers with removals: {len(removal_details)}
+- **Classifiers with removals**: {len(removal_details)}
 """
     # Create classifier details table
     classifier_details = [
