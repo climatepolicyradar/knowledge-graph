@@ -793,7 +793,7 @@ async def _inference_batch_of_documents(
     print(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(100)
 
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
