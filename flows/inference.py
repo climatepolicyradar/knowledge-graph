@@ -15,7 +15,7 @@ from mypy_boto3_s3.type_defs import (
     ObjectTypeDef,
     PutObjectOutputTypeDef,
 )
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
@@ -257,6 +257,7 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
         return new + updated
 
 
+@task
 async def determine_file_stems(
     config: Config,
     use_new_and_updated: bool,
@@ -290,6 +291,8 @@ async def determine_file_stems(
         return current_bucket_file_stems__filtered
 
     assert config.cache_bucket
+
+    print("××××××××××")
 
     requested_document_stems = []
     for doc_id in requested_document_ids:
