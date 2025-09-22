@@ -1323,3 +1323,81 @@ def test_log_client_error():
     assert extra_context
     assert "Request time too skewed" in extra_context
     assert "skew.seconds=1201" in extra_context
+
+
+def test_text_block_inference_span_validation_missing_timestamps():
+    mock_classifier = MagicMock()
+
+    spans_missing_timestamps = [
+        Span(
+            text="test text",
+            start_index=0,
+            end_index=4,
+            labellers=["test_labeller"],
+            timestamps=[],  # Missing timestamps
+        )
+    ]
+    mock_classifier.predict.return_value = spans_missing_timestamps
+
+    with pytest.raises(ValueError, match="Found 1 span\\(s\\) with missing timestamps"):
+        text_block_inference(
+            classifier=mock_classifier, block_id="test_block", text="test text"
+        )
+
+
+def test_text_block_inference_span_validation_missing_labellers():
+    mock_classifier = MagicMock()
+
+    # Create a mock span to bypass Pydantic validation during construction
+    mock_span_missing_labellers = MagicMock(spec=Span)
+    mock_span_missing_labellers.timestamps = [datetime.now()]
+    mock_span_missing_labellers.labellers = []  # Missing labellers
+    spans_missing_labellers = [mock_span_missing_labellers]
+    mock_classifier.predict.return_value = spans_missing_labellers
+
+    with pytest.raises(ValueError, match="Found 1 span\\(s\\) with missing labellers"):
+        text_block_inference(
+            classifier=mock_classifier, block_id="test_block", text="test text"
+        )
+
+
+def test_text_block_inference_span_validation_mismatched_lengths():
+    mock_classifier = MagicMock()
+
+    mock_span_mismatched = MagicMock(spec=Span)
+    mock_span_mismatched.timestamps = [datetime.now()]  # 1 timestamp
+    mock_span_mismatched.labellers = ["labeller1", "labeller2"]  # 2 labellers
+    spans_mismatched_lengths = [mock_span_mismatched]
+    mock_classifier.predict.return_value = spans_mismatched_lengths
+
+    with pytest.raises(
+        ValueError,
+        match="Found 1 span\\(s\\) with mismatched timestamp/labeller lengths",
+    ):
+        text_block_inference(
+            classifier=mock_classifier, block_id="test_block", text="test text"
+        )
+
+
+def test_text_block_inference_span_validation_valid_spans():
+    mock_classifier = MagicMock()
+
+    valid_spans = [
+        Span(
+            text="test text",
+            start_index=0,
+            end_index=4,
+            labellers=["labeller1"],
+            timestamps=[datetime.now()],
+        )
+    ]
+    mock_classifier.predict.return_value = valid_spans
+
+    # This should not raise any exceptions
+    result = text_block_inference(
+        classifier=mock_classifier, block_id="test_block", text="test text"
+    )
+
+    assert result.id == "test_block"
+    assert result.text == "test text"
+    assert len(result.spans) == 1
