@@ -367,10 +367,8 @@ async def collect_unique_file_stems_under_prefix(
     async with session.client("s3") as s3:
         paginator = s3.get_paginator("list_objects_v2")
         file_stems = []
-        print(f"session s3 client: {s3}")
         async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
             for obj in page.get("Contents", []):
-                print(f"Files found: {obj}")
                 if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
                     file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return list(set(file_stems))
