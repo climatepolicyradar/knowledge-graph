@@ -36,6 +36,7 @@ from flows.inference import (
     list_bucket_file_stems,
     load_classifier,
     load_document,
+    parse_client_error_details,
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
     store_labels,
@@ -1302,3 +1303,23 @@ def test_filter_document_batch(dont_run_on, removed):
     )
     assert filter_result.removed == removed
     assert filter_result.accepted == accepted
+
+
+def test_log_client_error():
+    error = ClientError(
+        error_response={  # pyright: ignore
+            "Error": {
+                "Code": "RequestTimeTooSkewed",
+                "Message": "The difference between the request time and the current time is too large.",
+                "RequestTime": "20250922T154936Z",
+                "ServerTime": "2025-09-22T16:09:37Z",
+                "MaxAllowedSkewMilliseconds": "900000",
+            },
+        },
+        operation_name="GetObject",
+    )
+
+    extra_context = parse_client_error_details(error)
+    assert extra_context
+    assert "Request time too skewed" in extra_context
+    assert "skew.seconds=1201" in extra_context
