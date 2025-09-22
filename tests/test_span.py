@@ -14,6 +14,7 @@ from tests.common_strategies import (
     labeller_strategy,
     span_strategy,
     text_strategy,
+    timestamp_strategy,
     wikibase_id_strategy,
 )
 
@@ -22,22 +23,38 @@ from tests.common_strategies import (
 def overlapping_spans_strategy(draw, text):
     start_a = draw(st.integers(min_value=0, max_value=len(text) - 1))
     end_a = draw(st.integers(min_value=start_a + 1, max_value=len(text)))
+    labellers_a = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
     span_a = Span(
         text=text,
         start_index=start_a,
         end_index=end_a,
         concept_id=draw(wikibase_id_strategy),
-        labellers=draw(st.lists(labeller_strategy, min_size=1, max_size=3)),
+        labellers=labellers_a,
+        timestamps=draw(
+            st.lists(
+                timestamp_strategy(),
+                min_size=len(labellers_a),
+                max_size=len(labellers_a),
+            )
+        ),
     )
 
     start_b = draw(st.integers(min_value=start_a, max_value=end_a - 1))
     end_b = draw(st.integers(min_value=start_b + 1, max_value=len(text)))
+    labellers_b = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
     span_b = Span(
         text=text,
         start_index=start_b,
         end_index=end_b,
         concept_id=draw(wikibase_id_strategy),
-        labellers=draw(st.lists(labeller_strategy, min_size=1, max_size=3)),
+        labellers=labellers_b,
+        timestamps=draw(
+            st.lists(
+                timestamp_strategy(),
+                min_size=len(labellers_b),
+                max_size=len(labellers_b),
+            )
+        ),
     )
     return span_a, span_b
 
@@ -46,22 +63,38 @@ def overlapping_spans_strategy(draw, text):
 def non_overlapping_spans_strategy(draw, text):
     start_a = draw(st.integers(min_value=0, max_value=len(text) // 2 - 1))
     end_a = draw(st.integers(min_value=start_a + 1, max_value=len(text) // 2))
+    labellers_a = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
     span_a = Span(
         text=text,
         start_index=start_a,
         end_index=end_a,
         concept_id=draw(wikibase_id_strategy),
-        labellers=draw(st.lists(labeller_strategy, min_size=1, max_size=3)),
+        labellers=labellers_a,
+        timestamps=draw(
+            st.lists(
+                timestamp_strategy(),
+                min_size=len(labellers_a),
+                max_size=len(labellers_a),
+            )
+        ),
     )
 
     start_b = draw(st.integers(min_value=end_a, max_value=len(text) - 1))
     end_b = draw(st.integers(min_value=start_b + 1, max_value=len(text)))
+    labellers_b = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
     span_b = Span(
         text=text,
         start_index=start_b,
         end_index=end_b,
         concept_id=draw(wikibase_id_strategy),
-        labellers=draw(st.lists(labeller_strategy, min_size=1, max_size=3)),
+        labellers=labellers_b,
+        timestamps=draw(
+            st.lists(
+                timestamp_strategy(),
+                min_size=len(labellers_b),
+                max_size=len(labellers_b),
+            )
+        ),
     )
     return span_a, span_b
 
@@ -70,22 +103,38 @@ def non_overlapping_spans_strategy(draw, text):
 def fully_entailed_spans_strategy(draw, text):
     start_a = draw(st.integers(min_value=0, max_value=len(text) - 2))
     end_a = draw(st.integers(min_value=start_a + 2, max_value=len(text)))
+    labellers_a = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
     span_a = Span(
         text=text,
         start_index=start_a,
         end_index=end_a,
         concept_id=draw(wikibase_id_strategy),
-        labellers=draw(st.lists(labeller_strategy, min_size=1, max_size=3)),
+        labellers=labellers_a,
+        timestamps=draw(
+            st.lists(
+                timestamp_strategy(),
+                min_size=len(labellers_a),
+                max_size=len(labellers_a),
+            )
+        ),
     )
 
     start_b = draw(st.integers(min_value=start_a, max_value=end_a - 1))
     end_b = draw(st.integers(min_value=start_b + 1, max_value=end_a))
+    labellers_b = draw(st.lists(labeller_strategy, min_size=1, max_size=3))
     span_b = Span(
         text=text,
         start_index=start_b,
         end_index=end_b,
         concept_id=draw(wikibase_id_strategy),
-        labellers=draw(st.lists(labeller_strategy, min_size=1, max_size=3)),
+        labellers=labellers_b,
+        timestamps=draw(
+            st.lists(
+                timestamp_strategy(),
+                min_size=len(labellers_b),
+                max_size=len(labellers_b),
+            )
+        ),
     )
 
     return span_a, span_b
@@ -266,7 +315,7 @@ def test_whether_span_union_returns_span_of_correct_size(text, spans):
     assert merged_span.start_index == min(span_a.start_index, span_b.start_index)
     assert merged_span.end_index == max(span_a.end_index, span_b.end_index)
     assert merged_span.text == text
-    assert merged_span.labellers == list(set(span_a.labellers + span_b.labellers))
+    assert set(merged_span.labellers) == set(span_a.labellers + span_b.labellers)
 
 
 @given(text=text_strategy, spans=st.data())
@@ -277,7 +326,7 @@ def test_whether_span_intersection_returns_span_of_correct_size(text, spans):
     assert merged_span.start_index == max(span_a.start_index, span_b.start_index)
     assert merged_span.end_index == min(span_a.end_index, span_b.end_index)
     assert merged_span.text == text
-    assert merged_span.labellers == list(set(span_a.labellers + span_b.labellers))
+    assert set(merged_span.labellers) == set(span_a.labellers + span_b.labellers)
 
 
 @pytest.mark.parametrize(
@@ -426,3 +475,134 @@ def test_span_from_xml_invalid_concept_annotation(xml: str, is_valid: bool):
 def test_whether_parsing_text_with_no_concept_tags_returns_an_empty_list(xml: str):
     spans = Span.from_xml(xml, concept_id=WikibaseID("Q1"), labellers=["model"])
     assert spans == []
+
+
+def test_span_union_preserves_timestamps():
+    from datetime import datetime, timezone
+
+    # Create timestamps with different times
+    time1 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    time2 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+
+    span_a = Span(
+        text="This is test text",
+        start_index=0,
+        end_index=4,
+        concept_id=WikibaseID("Q123"),
+        labellers=["labeller1"],
+        timestamps=[time1],
+    )
+
+    span_b = Span(
+        text="This is test text",
+        start_index=2,
+        end_index=6,
+        concept_id=WikibaseID("Q123"),
+        labellers=["labeller2"],
+        timestamps=[time2],
+    )
+
+    merged_span = Span.union(spans=[span_a, span_b])
+
+    assert merged_span.labellers[0] == span_a.labellers[0]
+    assert merged_span.labellers[1] == span_b.labellers[0]
+    assert merged_span.timestamps[0] == span_a.timestamps[0]
+    assert merged_span.timestamps[1] == span_b.timestamps[0]
+
+
+def test_span_union_with_duplicate_labellers():
+    from datetime import datetime, timezone
+
+    time1 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    time2 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+
+    span_a = Span(
+        text="This is test text",
+        start_index=0,
+        end_index=4,
+        concept_id=WikibaseID("Q123"),
+        labellers=["same_labeller"],
+        timestamps=[time1],
+    )
+
+    span_b = Span(
+        text="This is test text",
+        start_index=2,
+        end_index=6,
+        concept_id=WikibaseID("Q123"),
+        labellers=["same_labeller"],
+        timestamps=[time2],
+    )
+
+    merged_span = Span.union(spans=[span_a, span_b])
+
+    # Should only have one instance of the labeller
+    assert merged_span.labellers == ["same_labeller"]
+    assert len(merged_span.timestamps) == 1
+    # Should use the first timestamp encountered
+    assert merged_span.timestamps[0] == time1
+
+
+def test_span_intersection_preserves_timestamps():
+    from datetime import datetime, timezone
+
+    time1 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    time2 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+
+    span_a = Span(
+        text="This is test text",
+        start_index=0,
+        end_index=8,
+        concept_id=WikibaseID("Q123"),
+        labellers=["labeller1"],
+        timestamps=[time1],
+    )
+
+    span_b = Span(
+        text="This is test text",
+        start_index=2,
+        end_index=6,
+        concept_id=WikibaseID("Q123"),
+        labellers=["labeller2"],
+        timestamps=[time2],
+    )
+
+    intersected_span = Span.intersection(spans=[span_a, span_b])
+
+    assert intersected_span.labellers[0] == span_a.labellers[0]
+    assert intersected_span.labellers[1] == span_b.labellers[0]
+    assert intersected_span.timestamps[0] == span_a.timestamps[0]
+    assert intersected_span.timestamps[1] == span_b.timestamps[0]
+
+
+def test_span_intersect_with_duplicate_labellers():
+    from datetime import datetime, timezone
+
+    time1 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    time2 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
+
+    span_a = Span(
+        text="This is test text",
+        start_index=0,
+        end_index=4,
+        concept_id=WikibaseID("Q123"),
+        labellers=["same_labeller"],
+        timestamps=[time1],
+    )
+
+    span_b = Span(
+        text="This is test text",
+        start_index=2,
+        end_index=6,
+        concept_id=WikibaseID("Q123"),
+        labellers=["same_labeller"],
+        timestamps=[time2],
+    )
+
+    intersected_span = Span.intersection(spans=[span_a, span_b])
+
+    # Should only have one instance of the labeller
+    assert intersected_span.labellers == ["same_labeller"]
+    assert len(intersected_span.timestamps) == 1
+    # Should use the first timestamp encountered
+    assert intersected_span.timestamps[0] == time1

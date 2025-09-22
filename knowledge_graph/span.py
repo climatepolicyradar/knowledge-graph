@@ -1,5 +1,6 @@
 import logging
 import re
+from collections import OrderedDict
 from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Optional, Sequence
@@ -149,7 +150,10 @@ class Span(BaseModel):
         """
         Return the union of a set of overlapping spans
 
-        The union of a set of spans is the smallest span that contains all of the spans.
+        The union of a set of spans is the smallest span that contains
+        all of the spans.
+
+        Labellers and timestamps are merged, and kept ordered.
 
         :param Span spans: The spans to union
         :return Span: A new span that is the union of the input spans
@@ -158,14 +162,24 @@ class Span(BaseModel):
         if len(spans) == 1:
             return spans[0]
         else:
+            # Combine unique labellers and their timestamps
+            labeller_to_timestamp: OrderedDict[str, datetime] = OrderedDict()
+
+            # Assume labellers and timestamps are ordered to match
+            # each other already.
+            for span in spans:
+                for i, labeller in enumerate(span.labellers):
+                    # Prefer the first seen timestamp for each labeller
+                    if labeller not in labeller_to_timestamp:
+                        labeller_to_timestamp[labeller] = span.timestamps[i]
+
             return Span(
                 text=spans[0].text,
                 start_index=min(span.start_index for span in spans),
                 end_index=max(span.end_index for span in spans),
                 concept_id=spans[0].concept_id,
-                labellers=list(
-                    set(labeller for span in spans for labeller in span.labellers)
-                ),
+                labellers=list(labeller_to_timestamp.keys()),
+                timestamps=list(labeller_to_timestamp.values()),
             )
 
     @classmethod
@@ -173,8 +187,10 @@ class Span(BaseModel):
         """
         Return the intersection of a set of overlapping spans
 
-        The intersection of a set of spans is the largest span that is contained within
-        all of the spans.
+        The intersection of a set of spans is the largest span that is
+        contained within all of the spans.
+
+        Labellers and timestamps are merged, and kept ordered.
 
         :param Span spans: The spans to intersect
         :return Span: A new span that is the intersection of the input spans
@@ -183,14 +199,24 @@ class Span(BaseModel):
         if len(spans) == 1:
             return spans[0]
         else:
+            # Combine unique labellers and their timestamps
+            labeller_to_timestamp: OrderedDict[str, datetime] = OrderedDict()
+
+            # Assume labellers and timestamps are ordered to match
+            # each other already.
+            for span in spans:
+                for i, labeller in enumerate(span.labellers):
+                    # Prefer the first seen timestamp for each labeller
+                    if labeller not in labeller_to_timestamp:
+                        labeller_to_timestamp[labeller] = span.timestamps[i]
+
             return Span(
                 text=spans[0].text,
                 start_index=max(span.start_index for span in spans),
                 end_index=min(span.end_index for span in spans),
                 concept_id=spans[0].concept_id,
-                labellers=list(
-                    set(labeller for span in spans for labeller in span.labellers)
-                ),
+                labellers=list(labeller_to_timestamp.keys()),
+                timestamps=list(labeller_to_timestamp.values()),
             )
 
     def overlaps(self, other: "Span") -> bool:
