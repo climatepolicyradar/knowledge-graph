@@ -34,6 +34,7 @@ from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
 from scripts.classifier_metadata import ComputeEnvironment
+from scripts.evaluate import evaluate_classifier
 from scripts.get_concept import WikibaseConfig
 
 app = typer.Typer()
@@ -256,6 +257,13 @@ def main(
             ),
         ),
     ] = False,
+    evaluate: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to evaluate the model after training",
+        ),
+    ] = True,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
@@ -270,6 +278,8 @@ def main(
     :type aws_env: AwsEnv
     :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
     :type use_coiled_gpu: bool
+    :param evaluate: Whether to evaluate the model after training
+    :type evaluate: bool
     """
     if use_coiled_gpu:
         flow_name = "train_on_gpu"
@@ -285,6 +295,7 @@ def main(
                 "track": track,
                 "upload": upload,
                 "aws_env": aws_env,
+                "evaluate": evaluate,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -300,6 +311,7 @@ def main(
                 track=track,
                 upload=upload,
                 aws_env=aws_env,
+                evaluate=evaluate,
             )
         )
 
@@ -311,6 +323,7 @@ async def run_training(
     aws_env: AwsEnv,
     wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
+    evaluate: bool = True,
 ) -> Classifier:
     """Train the model and optionally upload the artifact."""
     # Create console locally to avoid serialization issues
@@ -330,7 +343,7 @@ async def run_training(
         if track
         else nullcontext()
     ) as run:
-        concept = scripts.get_concept.main(
+        concept = await scripts.get_concept.get_concept_async(
             wikibase_id=wikibase_id,
             include_labels_from_subconcepts=True,
             include_recursive_has_subconcept=True,
@@ -398,6 +411,13 @@ async def run_training(
                 run,  # type: ignore
                 classifier,
                 storage_link,
+            )
+
+        if evaluate:
+            metrics_df, model_labelled_passages = evaluate_classifier(
+                classifier=classifier,
+                labelled_passages=concept.labelled_passages,
+                wandb_run=run,
             )
 
     return classifier
