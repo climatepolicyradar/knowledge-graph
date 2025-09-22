@@ -74,16 +74,31 @@ class Ensemble:
         """
         Run prediction for each classifier in the ensemble on the input text batch.
 
+        Spans are returned with the outer list being batches, and the inner list being
+        classifiers. This is to make the output consistent with `Ensemble().predict`.
+
         :param Sequence[str] texts: the text to predict on
-        :return list[list[list[Span]]]: a list of batches of spans per classifier
+        :return list[list[list[Span]]]: a list of spans per classifier per batch
         """
 
-        return [clf.predict_batch(texts) for clf in self.classifiers]
+        # this is in the format classifier -> batch -> spans
+        spans_per_batch_per_classifier = [
+            clf.predict_batch(texts) for clf in self.classifiers
+        ]
+
+        # transpose to batch -> classifier -> spans
+        return [
+            [
+                spans_per_batch_per_classifier[clf_idx][batch_idx]
+                for clf_idx in range(len(self.classifiers))
+            ]
+            for batch_idx in range(len(texts))
+        ]
 
     @property
     def name(self) -> str:
         """Return a string representation of the ensemble type, i.e. name of the class."""
-        return __class__.__name__
+        return self.__class__.__name__
 
     @property
     def id(self) -> ClassifierID:
