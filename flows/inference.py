@@ -2,13 +2,14 @@ import asyncio
 import json
 import os
 from collections.abc import Generator, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
 import wandb
+from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from more_itertools import flatten
 from mypy_boto3_s3.type_defs import (
@@ -44,6 +45,7 @@ from flows.utils import (
     SlackNotify,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
+    get_logger,
     iterate_batch,
     map_as_sub_flow,
     return_with,
@@ -328,13 +330,37 @@ async def load_classifier(
         return classifier
 
 
+def parse_client_error_details(e: ClientError) -> Optional[str]:
+    """
+    Return extra context for AWS `ClientError`s.
+
+    Intended to be extendable for specific Errors, and to get extra details not
+    normally covered by just raising the error.
+    """
+    error = e.response.get("Error", {})
+    code = error.get("Code")
+    if code == "RequestTimeTooSkewed":
+        request_time = error.get("RequestTime")
+        server_time = error.get("ServerTime")
+        if request_time and server_time:
+            skew = datetime.fromisoformat(server_time) - datetime.fromisoformat(
+                request_time
+            )
+            return f"Request time too skewed: {' & '.join(e.args)} - {skew.seconds=}"
+
+
 async def download_s3_file(config: Config, key: str, s3_client: S3Client):
     """Retrieve an S3 file from the pipeline cache"""
-
-    response = await s3_client.get_object(
-        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-        Key=key,
-    )
+    logger = get_logger()
+    try:
+        response = await s3_client.get_object(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Key=key,
+        )
+    except ClientError as e:
+        if extra_context := parse_client_error_details(e):
+            logger.error(extra_context)
+        raise
     body = await response["Body"].read()
     return body.decode("utf-8")
 
