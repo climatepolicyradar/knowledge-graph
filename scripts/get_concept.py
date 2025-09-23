@@ -1,40 +1,55 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
 
+from knowledge_graph.concept import Concept
 from knowledge_graph.config import concept_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaSession
-from knowledge_graph.wikibase import WikibaseSession
+from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 
 console = Console()
 app = typer.Typer()
 
 
-@app.command()
-def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ..., help="The Wikibase ID of the concept to fetch", parser=WikibaseID
-        ),
-    ],
-):
-    with console.status("Connecting to Wikibase..."):
+async def get_concept_async(
+    wikibase_id: WikibaseID,
+    include_recursive_has_subconcept: bool = True,
+    include_labels_from_subconcepts: bool = True,
+    wikibase_config: Optional[WikibaseConfig] = None,
+) -> Concept:
+    """Async function to get concept and labelled passages."""
+    console.log("Connecting to Wikibase...")
+    if wikibase_config:
+        wikibase = WikibaseSession(
+            username=wikibase_config.username,
+            password=wikibase_config.password.get_secret_value(),
+            url=wikibase_config.url,
+        )
+    else:
         wikibase = WikibaseSession()
     console.log("✅ Connected to Wikibase")
 
-    with console.status("Connecting to Argilla..."):
-        argilla = ArgillaSession()
+    console.log("Connecting to Argilla...")
+    argilla = ArgillaSession()
     console.log("✅ Connected to Argilla")
 
-    concept = wikibase.get_concept(wikibase_id)
+    concept = await wikibase.get_concept_async(
+        wikibase_id,
+        include_recursive_has_subconcept=include_recursive_has_subconcept,
+        include_labels_from_subconcepts=include_labels_from_subconcepts,
+    )
+    # To handle redirects where the wikibase_id is overwritten
+    concept.wikibase_id = wikibase_id
+    # Ensure concept data can be serialised and rebuilt without failing validations
+    concept.model_validate_json(concept.model_dump_json())
+
     console.log(f'🔍 Fetched metadata for "{concept}" from wikibase')
 
     try:
-        with console.status("Fetching labelled passages from Argilla..."):
-            labelled_passages = argilla.pull_labelled_passages(concept)
+        console.log("Fetching labelled passages from Argilla...")
+        labelled_passages = argilla.pull_labelled_passages(concept)
         console.log(
             f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )
@@ -50,6 +65,30 @@ def main(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     concept.save(output_path)
     console.log(f"💾 Concept saved to {output_path}")
+
+    return concept
+
+
+@app.command()
+async def main(
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ..., help="The Wikibase ID of the concept to fetch", parser=WikibaseID
+        ),
+    ],
+    include_recursive_has_subconcept: bool = True,
+    include_labels_from_subconcepts=True,
+    wikibase_config: Optional[WikibaseConfig] = None,
+):
+    concept = await get_concept_async(
+        wikibase_id=wikibase_id,
+        include_recursive_has_subconcept=include_recursive_has_subconcept,
+        include_labels_from_subconcepts=include_labels_from_subconcepts,
+        wikibase_config=wikibase_config,
+    )
+
+    return concept
 
 
 if __name__ == "__main__":

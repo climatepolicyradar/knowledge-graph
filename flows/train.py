@@ -5,7 +5,8 @@ from prefect import flow
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
-from scripts.train import WikibaseConfig, run_training
+from knowledge_graph.wikibase import WikibaseConfig
+from scripts.train import run_training
 
 
 @flow(log_prints=True)
@@ -14,6 +15,7 @@ async def train_on_gpu(
     track: bool = False,
     upload: bool = False,
     aws_env: AwsEnv = AwsEnv.labs,
+    evaluate: bool = True,
     config: Config | None = None,
 ):
     """Trigger the training script in prefect using coiled."""
@@ -45,4 +47,5 @@ async def train_on_gpu(
         aws_env=aws_env,
         wikibase_config=wikibase_config,
         s3_client=s3_client,
+        evaluate=evaluate,
     )

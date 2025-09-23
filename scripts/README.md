@@ -150,7 +150,6 @@ Execute the training pipeline using the deploy script:
 ```bash
 python scripts/deploy.py new \
   --aws-env prod \
-  --get \
   --train \
   --promote \
   --wikibase-id Q1651
