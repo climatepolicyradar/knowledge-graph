@@ -9,7 +9,7 @@ from knowledge_graph.wikibase import WikibaseConfig
 from scripts.train import run_training
 
 
-@flow(log_prints=True)
+@flow()
 async def train_on_gpu(
     wikibase_id: WikibaseID,
     track_and_upload: bool = False,

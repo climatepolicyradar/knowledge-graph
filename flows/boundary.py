@@ -118,12 +118,13 @@ def vespa_retry(
     exception_types: tuple[type[Exception], ...] = (QueryError, VespaError),
 ) -> Callable:
     """Template for retries, use as a decorator."""
+    logger = get_logger()
 
     return tenacity.retry(
         retry=tenacity.retry_if_exception_type(exception_types),
         stop=tenacity.stop_after_attempt(max_attempts),
         wait=tenacity.wait_fixed(wait_seconds),
-        before_sleep=lambda retry_state: print(
+        before_sleep=lambda retry_state: logger.warning(
             f"Retrying after error. Attempt {retry_state.attempt_number} of {max_attempts}"
         ),
         after=tenacity.after_log(

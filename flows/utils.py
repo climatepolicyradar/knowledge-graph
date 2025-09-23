@@ -691,12 +691,13 @@ class Fault(Exception):
 
     def __str__(self) -> str:
         """Return a string representation"""
+        logger = get_logger()
         if self.metadata is None:
             return self.msg
         try:
             data_str = str(self.data)
         except Exception as e:
-            print(f"could not represent fault's data as a string: {e}")
+            logger.warning(f"could not represent fault's data as a string: {e}")
             data_str = ""
 
         # Prefect logs should have no more than 25,000 characters, so truncate
