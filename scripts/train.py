@@ -433,14 +433,13 @@ async def run_training(
                 with labelled_passages_artifact.new_file(
                     "labelled_passages.json", mode="w"
                 ) as f:
-                    f.write(
-                        "\n".join(
+                    data = "\n".join(
                             [
                                 entry.model_dump_json()
                                 for entry in model_labelled_passages
                             ]
                         )
-                    )
+                    f.write(data)
 
                 console.log("📤 Uploading labelled passages to W&B")
                 run.log_artifact(labelled_passages_artifact)
