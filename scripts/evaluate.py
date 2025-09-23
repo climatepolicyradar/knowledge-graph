@@ -6,12 +6,11 @@ from typing import Annotated, Any, Optional
 
 import pandas as pd
 import typer
-import wandb
 from rich import box
 from rich.console import Console
 from rich.table import Table
-from wandb.wandb_run import Run
 
+import wandb
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.cloud import Namespace
 from knowledge_graph.concept import Concept
@@ -32,6 +31,7 @@ from knowledge_graph.metrics import (
 from knowledge_graph.span import Span, group_overlapping_spans
 from knowledge_graph.version import Version
 from scripts.get_concept import get_concept_async
+from wandb.wandb_run import Run
 
 console = Console()
 
@@ -381,15 +381,6 @@ def log_metrics_to_wandb(
             "agreement": agreement,
         }
         run.log(metrics_payload)
-
-    # Optionally add quick-look summaries
-    try:
-        best_row = df.sort_values("F1 score", ascending=False).iloc[0]
-        run.summary["best_f1"] = float(best_row["F1 score"])
-        run.summary["best_f1_group"] = str(best_row["Group"])
-        run.summary["best_f1_agreement"] = str(best_row["Agreement at"])
-    except Exception:
-        pass
 
 
 def evaluate_classifier(
