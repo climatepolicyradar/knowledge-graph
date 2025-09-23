@@ -1,7 +1,7 @@
 import boto3
+import wandb
 from prefect import flow
 
-import wandb
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
