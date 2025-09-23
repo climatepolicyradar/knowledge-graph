@@ -256,8 +256,8 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
         updated = list(content["updated_documents"].keys())
         new = [d["import_id"] for d in content["new_documents"]]
 
-        print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
-        return new + updated
+    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
+    return new + updated
 
 
 async def determine_file_stems(
@@ -469,7 +469,6 @@ async def labels_to_s3(
 async def store_labels(
     config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
-    s3_client: S3Client,
 ) -> tuple[
     list[SingleDocumentInferenceResult],
     list[tuple[DocumentStem, Exception]],
@@ -479,21 +478,23 @@ async def store_labels(
     # Don't get rate-limited by AWS
     semaphore = asyncio.Semaphore(100)
 
-    tasks = [
-        wait_for_semaphore(
-            semaphore,
-            return_with(
-                inference,
-                labels_to_s3(config, inference, s3_client),
-            ),
-        )
-        for inference in inferences
-    ]
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                return_with(
+                    inference,
+                    labels_to_s3(config, inference, s3_client),
+                ),
+            )
+            for inference in inferences
+        ]
 
-    results: list[
-        tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
-        | BaseException
-    ] = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[
+            tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
+            | BaseException
+        ] = await asyncio.gather(*tasks, return_exceptions=True)
 
     successes: list[SingleDocumentInferenceResult] = []
     failures: list[tuple[DocumentStem, Exception]] = []
@@ -837,14 +838,13 @@ async def _inference_batch_of_documents(
             else:
                 inferences_successes.append(value)
 
-    async with session.client("s3") as s3_client:
-        (
-            store_labels_successes,
-            store_labels_failures,
-            store_labels_unknown_failures,
-        ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-            config=config, inferences=inferences_successes, s3_client=s3_client
-        )
+    (
+        store_labels_successes,
+        store_labels_failures,
+        store_labels_unknown_failures,
+    ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
+        config=config, inferences=inferences_successes
+    )
 
     # This doesn't need to be combined since successes are funnelled
     # through all steps.

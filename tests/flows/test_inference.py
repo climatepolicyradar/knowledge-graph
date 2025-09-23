@@ -241,7 +241,6 @@ async def test_store_labels(
                 classifier_id="2tnmbxaw",
             )
         ],
-        mock_s3_async_client,
     )
 
     assert successes == snapshot(name="successes")
