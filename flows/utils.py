@@ -130,7 +130,7 @@ class SlackNotify:
         if inspect.isawaitable(result):
             result = await result
 
-        print(
+        get_logger().debug(
             f"Posted message to provided webhook: {result.status_code=} | {result.body=}"
         )
 

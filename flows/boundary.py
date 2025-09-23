@@ -575,7 +575,11 @@ async def get_document_passages_from_vespa(
     vespa_connection_pool: VespaAsync,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
     """Retrieve some or all passages for a document in Vespa."""
-    print(f"Getting document passages from Vespa: {document_import_id}")
+    logger = get_logger()
+
+    logger.info(
+        f"Getting {len(text_blocks_ids) if text_blocks_ids else None} document passages from Vespa: {document_import_id}"
+    )
 
     id = FamilyDocumentID(id=document_import_id)
 
@@ -589,8 +593,6 @@ async def get_document_passages_from_vespa(
 
     if text_blocks_ids is not None:
         text_blocks_ids_n: PositiveInt = len(text_blocks_ids)
-
-        print(f"{text_blocks_ids_n} text blocks' IDs passed in")
 
         if text_blocks_ids_n > VESPA_MAX_LIMIT:
             raise ValueError(
@@ -618,10 +620,6 @@ async def get_document_passages_from_vespa(
         math.ceil((text_blocks_ids_n / 5_000) * VESPA_DEFAULT_TIMEOUT_MS),
     )
 
-    print(
-        f"using timeout of {timeout_ms} milliseconds for {text_blocks_ids_n} text blocks' IDs"
-    )
-
     query: qb.Query = (
         qb.select("*")  # type: ignore[attr-defined]
         .from_(
@@ -642,7 +640,7 @@ async def get_document_passages_from_vespa(
     # From `.root.fields.totalCount`
     total_count: NonNegativeInt = vespa_query_response.number_documents_retrieved
 
-    print(
+    logger.info(
         (
             f"Vespa search response for document: {document_import_id} "
             f"with {len(vespa_query_response.hits)} hits, "

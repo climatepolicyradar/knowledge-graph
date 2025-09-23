@@ -41,7 +41,7 @@ from flows.boundary import (
     get_vespa_search_adapter_from_aws_secrets,
 )
 from flows.config import Config
-from flows.result import Err, Error, Ok, Result
+from flows.result import Err, Error, Ok, Result, is_err, unwrap_err
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -50,6 +50,7 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    get_logger,
     iterate_batch,
     map_as_sub_flow,
     remove_translated_suffix,
@@ -103,6 +104,8 @@ async def _update_vespa_passage_concepts(
         fields=fields,
     )
 
+    logger = get_logger()
+
     # Currently, this function isn't aware of which index number it is
     # out of all the document passages for a family document. There
     # may be over 50,000 document passages. With these 2 constraints,
@@ -122,7 +125,7 @@ async def _update_vespa_passage_concepts(
         # 'parent_concept_ids_flat': '', 'model':
         # 'KeywordClassifier("concept_51")', 'end': 108, 'start': 115,
         # 'timestamp': '2025-05-22T17:34:09.649548'}]}
-        print(f"update data at path {path} with fields {fields}")
+        logger.info(f"update data at path {path} with fields {fields}")
 
     if not response.is_successful():
         # Account for when Vespa fails to include the body
@@ -131,9 +134,9 @@ async def _update_vespa_passage_concepts(
             #
             # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
             json_s = json.dumps(response.get_json())
-            print(f"Vespa update failed: {json_s}")
+            logger.error(f"Vespa update failed: {json_s}")
         except Exception as e:
-            print(f"failed to get JSON from Vespa response: {e}")
+            logger.error(f"failed to get JSON from Vespa response: {e}")
 
     return response
 
@@ -225,7 +228,11 @@ async def index_document_passages(
         document_stem=document_stem,
     )
 
-    print(f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}")
+    logger = get_logger()
+
+    logger.info(
+        f"Loading aggregated inference results from S3: {aggregated_results_s3_uri}"
+    )
 
     raw_data = await load_async_json_data_from_s3(
         bucket=aggregated_results_s3_uri.bucket,
@@ -237,7 +244,9 @@ async def index_document_passages(
     }
 
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
-    print(f"Querying Vespa for passages related to document import ID: {document_id}")
+    logger.info(
+        f"Querying Vespa for passages related to document import ID: {document_id}"
+    )
 
     passages_generator = get_document_passages_from_vespa__generator(
         document_import_id=document_id,
@@ -248,7 +257,7 @@ async def index_document_passages(
     async for passage_batch in passages_generator:
         passages_in_vespa.update(passage_batch)
 
-    print(
+    logger.info(
         f"Updating concepts for document import ID: {document_id}, "
         f"found {len(passages_in_vespa)} passages in Vespa",
     )
@@ -314,8 +323,7 @@ async def index_document_passages(
                     #
                     # [1]: https://github.com/vespa-engine/pyvespa/blob/1b42923b77d73666e0bcd1e53431906fc3be5d83/vespa/io.py#L44-L46
                     json = response.get_json()
-                except Exception as e:
-                    print(f"failed to get JSON from Vespa response: {e}")
+                except Exception:
                     json = None
 
                 error = Error(
@@ -472,7 +480,6 @@ def task_run_name(parameters: dict[str, Any]) -> str:
 
 @materialize(
     "foo://bar",  # Asset key is not known yet
-    log_prints=True,
     task_run_name=task_run_name,  # pyright: ignore[reportArgumentType]
 )
 async def index_all(
@@ -512,7 +519,6 @@ async def index_all(
                         simple_concepts.extend(val)
                     case Err(err):
                         errors.append(err)
-                        print(f"indexing document passage failed: {err}")
 
             document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
@@ -522,17 +528,16 @@ async def index_all(
                 simple_concepts=simple_concepts,
             )
 
-            match result:
-                case Ok(_):
-                    print(f"indexing family document {document_stem} succeeded")
-                case Err(err):
-                    errors.append(err)
-                    print(f"indexing family document {document_stem} failed: {err}")
+            if is_err(result):
+                errors.append(unwrap_err(result))
 
             if errors:
                 raise Fault(
                     msg="Failed to index document passages or family document",
-                    metadata={"document_stem": document_stem, "errors": errors},
+                    metadata={
+                        "document_stem": document_stem,
+                        "errors": errors,
+                    },
                 )
 
         return document_stem
@@ -580,7 +585,6 @@ def generate_asset_deps(
 
 
 @flow(  # pyright: ignore[reportCallIssue]
-    log_prints=True,
     timeout_seconds=None,
     task_runner=ThreadPoolTaskRunner(
         # This is valid, as per the docs[1].
@@ -675,7 +679,6 @@ async def index_batch_of_documents(
 
 
 @flow(
-    log_prints=True,
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
