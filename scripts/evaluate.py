@@ -1,16 +1,18 @@
 import os
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
 import pandas as pd
 import typer
+import wandb
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from wandb.wandb_run import Run
 
-import wandb
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.cloud import Namespace
 from knowledge_graph.concept import Concept
@@ -31,7 +33,6 @@ from knowledge_graph.metrics import (
 from knowledge_graph.span import Span, group_overlapping_spans
 from knowledge_graph.version import Version
 from scripts.get_concept import get_concept_async
-from wandb.wandb_run import Run
 
 console = Console()
 
@@ -128,6 +129,7 @@ def create_gold_standard_labelled_passages(
         ):
             merged_span = Span.union(spans=group)
             merged_span.labellers = ["gold standard"]
+            merged_span.timestamps = [datetime.now()]
             merged_spans.append(merged_span)
 
         gold_standard_labelled_passages.append(

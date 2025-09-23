@@ -6,14 +6,14 @@ import os
 import threading
 from datetime import datetime, timezone
 from logging import getLogger
-from typing import Any, Callable, Coroutine, Optional, TypeVar, cast
+from typing import Any, Callable, Coroutine, NamedTuple, Optional, TypeVar, cast
 
 import dotenv
 import html2text
 import httpx
 from httpx import HTTPError, HTTPStatusError, RequestError
 from more_itertools import chunked
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -1317,3 +1317,13 @@ class WikibaseSession:
             List of matching Concept objects, ordered by search relevance
         """
         return await self.search_concepts_async(search_term, limit, timestamp)
+
+
+WikibaseConfig = NamedTuple(
+    "WikibaseConfig",
+    [
+        ("username", str),
+        ("password", SecretStr),
+        ("url", str),
+    ],
+)

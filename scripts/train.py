@@ -6,13 +6,15 @@ from pathlib import Path
 from typing import Annotated, Any, Optional
 
 import typer
+import wandb
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from pydantic import BaseModel, Field
 from rich.console import Console
+from wandb.errors.errors import CommError
+from wandb.sdk.wandb_run import Run
 
 import scripts.get_concept
-import wandb
 from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
@@ -31,11 +33,9 @@ from knowledge_graph.cloud import (
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
+from knowledge_graph.wikibase import WikibaseConfig
 from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
-from scripts.get_concept import WikibaseConfig
-from wandb.errors.errors import CommError
-from wandb.sdk.wandb_run import Run
 
 app = typer.Typer()
 
@@ -269,10 +269,8 @@ def main(
     :type evaluate: bool
     """
     if use_coiled_gpu:
-        flow_name = "train_on_gpu"
-        deployment_name = generate_deployment_name(
-            flow_name="train_on_gpu", aws_env=aws_env
-        )
+        flow_name = "train-on-gpu"
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
         qualified_name = f"{flow_name}/{deployment_name}"
 
         flow_run: FlowRun = run_deployment(  # type: ignore[misc]
@@ -419,21 +417,14 @@ async def run_training(
                 with labelled_passages_artifact.new_file(
                     "labelled_passages.json", mode="w"
                 ) as f:
-                    f.write(
-                        "\n".join(
-                            [
-                                entry.model_dump_json()
-                                for entry in model_labelled_passages
-                            ]
-                        )
+                    data = "\n".join(
+                        [entry.model_dump_json() for entry in model_labelled_passages]
                     )
+                    f.write(data)
 
                 console.log("📤 Uploading labelled passages to W&B")
                 run.log_artifact(labelled_passages_artifact)
                 console.log("✅ Labelled passages uploaded successfully")
-
-        if track_and_upload and run:
-            run.finish()
 
     return classifier
 

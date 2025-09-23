@@ -5,7 +5,8 @@ import wandb
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
-from scripts.train import WikibaseConfig, run_training
+from knowledge_graph.wikibase import WikibaseConfig
+from scripts.train import run_training
 
 
 @flow(log_prints=True)

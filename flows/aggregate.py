@@ -39,6 +39,7 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
+    get_logger,
     iterate_batch,
     map_as_sub_flow,
 )
@@ -210,6 +211,13 @@ async def process_document(
     run_output_identifier: RunOutputIdentifier,
 ) -> DocumentStem:
     """Process a single document and return its status."""
+
+    classifier_specs_str = ",".join(str(spec) for spec in classifier_specs)
+    logger = get_logger()
+    logger.info(
+        f"processing document {document_stem} with classifier specs. {classifier_specs_str}"
+    )
+
     try:
         session = aioboto3.Session(region_name=config.bucket_region)
         async with session.client("s3") as s3:

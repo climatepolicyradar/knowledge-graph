@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 import typer
 from syrupy.assertion import SnapshotAssertion
+from wandb.wandb_run import Run
 
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
@@ -22,7 +23,6 @@ from scripts.evaluate import (
     validate_local_args,
     validate_remote_args,
 )
-from wandb.wandb_run import Run
 
 
 def test_print_metrics(capsys, metrics_df: pd.DataFrame):

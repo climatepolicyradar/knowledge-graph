@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
+from wandb.errors.errors import CommError
 
 from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
@@ -16,7 +17,6 @@ from scripts.train import (
     run_training,
     upload_model_artifact,
 )
-from wandb.errors.errors import CommError
 
 
 @pytest.mark.parametrize(

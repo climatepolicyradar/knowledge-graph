@@ -27,7 +27,6 @@ from cpr_sdk.s3 import _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from cpr_sdk.utils import dig
-from prefect.logging import get_logger
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from types_aiobotocore_s3.client import S3Client
 from vespa.application import VespaAsync
@@ -40,6 +39,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentObjectUri,
     S3Uri,
+    get_logger,
 )
 from knowledge_graph.concept import Concept
 from knowledge_graph.exceptions import QueryError
@@ -276,12 +276,9 @@ def convert_labelled_passage_to_concepts(
         return concepts
 
     if not concept_json and labelled_passage.spans:
-        print(
+        raise ValueError(
             "We have spans but no concept metadata for "
             f"labelled passage {labelled_passage.id}"
-        )
-        raise ValueError(
-            "We have spans but no concept metadata.",
         )
 
     # The concept used to label the passage holds some information on the parent
@@ -294,18 +291,20 @@ def convert_labelled_passage_to_concepts(
         concept=concept
     )
 
+    logger = get_logger()
+
     # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
     for span_idx, span in enumerate(labelled_passage.spans):
         if span.concept_id is None:
             # Include the Span index since Span's don't have IDs
-            print(
+            logger.error(
                 f"span concept ID is missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
             )
             continue
 
         if not span.timestamps:
-            print(
-                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
+            logger.error(
+                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
             )
             continue
 
