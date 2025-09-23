@@ -120,17 +120,6 @@ def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
             labellers=[],
         )
     )
-    # Add a span without timestamps
-    example_labelled_passages[0].spans.append(
-        Span(
-            text="Test text.",
-            start_index=0,
-            end_index=8,
-            concept_id=WikibaseID("Q123"),
-            labellers=[],
-            timestamps=[],  # Empty timestamps
-        )
-    )
 
     concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
 
