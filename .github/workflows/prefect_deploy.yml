@@ -17,7 +17,7 @@ on:
         required: true
 
 concurrency:
-  group: deploy-${{ inputs.aws-env }}
+  group: deploy-${{ inputs.aws-env }}${{ inputs.aws-env == 'sandbox' && format('-{0}', github.ref_name) || '' }}
   cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
 
 jobs:
