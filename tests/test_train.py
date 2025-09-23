@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 from wandb.errors.errors import CommError
@@ -247,3 +247,96 @@ def test_get_next_version_with_default(mock_api):
     next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v0"
+
+
+@pytest.mark.asyncio
+async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
+    MockedWikibaseSession, mock_s3_client
+):
+    """Test that labelled passages artifact is created and uploaded when evaluate=True and track=True."""
+    mock_s3_client.create_bucket(
+        Bucket="cpr-labs-models",
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+
+    # Setup test data
+    mock_classifier = Mock()
+    mock_classifier.fit.return_value = None
+    mock_classifier.save.return_value = None
+    mock_classifier.id = "aaaa2222"
+    mock_classifier.version = None
+
+    mock_concept = Mock()
+    mock_concept.id = "5d4xcy5g"
+    mock_concept.wikibase_revision = 12300
+    mock_concept.labelled_passages = []
+    mock_classifier.concept = mock_concept
+
+    mock_path = Path("tests/fixtures/data/processed/classifiers")
+    mock_artifact = Mock(_version="v0")
+    mock_run = MagicMock()
+    mock_run.__enter__ = Mock(return_value=mock_run)
+    mock_run.__exit__ = Mock(return_value=None)
+
+    # Mock labelled passages that would be returned by evaluate_classifier
+    mock_passage_1 = Mock()
+    mock_passage_1.model_dump_json.return_value = '{"passage": "test passage 1"}'
+    mock_passage_2 = Mock()
+    mock_passage_2.model_dump_json.return_value = '{"passage": "test passage 2"}'
+    mock_labelled_passages = [mock_passage_1, mock_passage_2]
+    mock_metrics_df = Mock()
+
+    with (
+        patch(
+            "knowledge_graph.classifier.ClassifierFactory.create",
+            return_value=mock_classifier,
+        ),
+        patch("knowledge_graph.config.classifier_dir", mock_path),
+        patch("scripts.train.validate_params"),
+        patch("wandb.init", return_value=mock_run),
+        patch(
+            "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
+        ),
+        patch("wandb.Artifact") as mock_artifact_class,
+        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch("scripts.train.evaluate_classifier") as mock_evaluate,
+    ):
+        mock_argilla_instance = Mock()
+        mock_argilla_instance.pull_labelled_passages.return_value = []
+        mock_argilla_session.return_value = mock_argilla_instance
+
+        # Configure evaluate_classifier to return mock data
+        mock_evaluate.return_value = (mock_metrics_df, mock_labelled_passages)
+
+        # Create mock artifact instances with proper context manager support
+        mock_labelled_passages_artifact = Mock()
+        mock_artifact_file = MagicMock()
+        mock_context_manager = MagicMock()
+        mock_context_manager.__enter__ = Mock(return_value=mock_artifact_file)
+        mock_context_manager.__exit__ = Mock(return_value=None)
+        mock_labelled_passages_artifact.new_file.return_value = mock_context_manager
+
+        mock_artifact_class.return_value = mock_labelled_passages_artifact
+
+        result = await run_training(
+            wikibase_id=WikibaseID("Q787"),
+            track=True,
+            upload=False,  # Don't upload model to focus on labelled passages
+            aws_env=AwsEnv.labs,
+            s3_client=mock_s3_client,
+            evaluate=True,
+        )
+
+        # Check that the labelled passages artifact was the only artifact created
+        # as upload is false
+        assert mock_artifact_class.call_count == 1
+        labelled_passages_call = mock_artifact_class.call_args_list[0]
+        assert (
+            labelled_passages_call[1]["name"]
+            == f"{mock_classifier.id}-labelled-passages"
+        )
+        assert labelled_passages_call[1]["type"] == "labelled_passages"
+
+        mock_run.log_artifact.assert_called_once_with(mock_labelled_passages_artifact)
+
+    assert result == mock_classifier

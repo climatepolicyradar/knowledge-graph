@@ -420,6 +420,37 @@ async def run_training(
                 wandb_run=run,
             )
 
+            if track and run:
+                console.log("📄 Creating labelled passages artifact")
+                labelled_passages_artifact = wandb.Artifact(
+                    name=f"{classifier.id}-labelled-passages",
+                    type="labelled_passages",
+                    metadata={
+                        "classifier_id": classifier.id,
+                        "concept_wikibase_revision": classifier.concept.wikibase_revision,
+                        "passage_count": len(model_labelled_passages),
+                    },
+                )
+
+                with labelled_passages_artifact.new_file(
+                    "labelled_passages.json", mode="w"
+                ) as f:
+                    f.write(
+                        "\n".join(
+                            [
+                                entry.model_dump_json()
+                                for entry in model_labelled_passages
+                            ]
+                        )
+                    )
+
+                console.log("📤 Uploading labelled passages to W&B")
+                run.log_artifact(labelled_passages_artifact)
+                console.log("✅ Labelled passages uploaded successfully")
+
+        if track and run:
+            run.finish()
+
     return classifier
 
 

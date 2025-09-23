@@ -448,7 +448,6 @@ def evaluate_classifier(
 
     if wandb_run:
         log_metrics_to_wandb(wandb_run, df)  # type: ignore
-        wandb_run.finish()  # type: ignore
 
     return df, model_labelled_passages
 
@@ -556,6 +555,9 @@ async def main(
         labelled_passages=concept.labelled_passages,
         wandb_run=run if track else None,
     )
+
+    if track:
+        run.finish()  # type: ignore
 
     metrics_path = save_metrics(df, wikibase_id)
     console.log(f"📄 Saved performance metrics to {metrics_path}")
