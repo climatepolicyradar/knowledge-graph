@@ -164,6 +164,16 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                import nest_asyncio
+
+                nest_asyncio.apply()
+        except RuntimeError:
+            pass
+
         response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
             text,
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
