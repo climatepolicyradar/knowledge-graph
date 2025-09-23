@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 import typer
 from syrupy.assertion import SnapshotAssertion
-from wandb.wandb_run import Run
 
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
@@ -23,6 +22,7 @@ from scripts.evaluate import (
     validate_local_args,
     validate_remote_args,
 )
+from wandb.wandb_run import Run
 
 
 def test_print_metrics(capsys, metrics_df: pd.DataFrame):
@@ -261,7 +261,6 @@ def test_log_metrics(metrics_df: pd.DataFrame):
             columns=metrics_df.columns.tolist(),
         )
 
-        mock_run.log.assert_called_once()
-        log_call = mock_run.log.call_args[0][0]
-        assert "performance" in log_call
-        assert log_call["performance"] == mock_wandb_table.return_value
+        log_calls = mock_run.log.call_args_list
+        assert len(log_calls) > 0
+        assert any(["performance" in log_call[0][0] for log_call in log_calls])

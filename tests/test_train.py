@@ -3,7 +3,6 @@ from pathlib import Path
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
-from wandb.errors.errors import CommError
 
 from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
@@ -17,6 +16,7 @@ from scripts.train import (
     run_training,
     upload_model_artifact,
 )
+from wandb.errors.errors import CommError
 
 
 @pytest.mark.parametrize(
@@ -104,6 +104,12 @@ async def test_run_training(
     mock_artifact = Mock(_version="v0")
     mock_artifact_instance = Mock()
 
+    mock_file = MagicMock()
+    mock_new_file_context_manager = MagicMock()
+    mock_new_file_context_manager.__enter__ = Mock(return_value=mock_file)
+    mock_new_file_context_manager.__exit__ = Mock(return_value=None)
+    mock_artifact_instance.new_file.return_value = mock_new_file_context_manager
+
     with (
         patch(
             "knowledge_graph.classifier.ClassifierFactory.create",
@@ -119,10 +125,15 @@ async def test_run_training(
             "wandb.Artifact", return_value=mock_artifact_instance
         ) as mock_artifact_class,
         patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch("scripts.train.evaluate_classifier") as mock_evaluate,
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.pull_labelled_passages.return_value = []
         mock_argilla_session.return_value = mock_argilla_instance
+
+        mock_metrics_df = Mock()
+        mock_labelled_passages = []
+        mock_evaluate.return_value = (mock_metrics_df, mock_labelled_passages)
 
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
@@ -132,18 +143,26 @@ async def test_run_training(
             s3_client=mock_s3_client,
         )
 
-        # Verify artifact was created with correct metadata
-        mock_artifact_class.assert_called_once_with(
-            name=mock_classifier.id,
-            type="model",
-            metadata={
-                "aws_env": "labs",
-                "classifier_name": mock_classifier.name,
-                "concept_id": mock_classifier.concept.id,
-                "concept_wikibase_revision": mock_classifier.concept.wikibase_revision,
-                **extra_metadata,
-            },
+        # Two artifacts are created: a model and a set of labelled passages
+        assert mock_artifact_class.call_count == 2
+
+        model_artifact_call = mock_artifact_class.call_args_list[0]
+        assert model_artifact_call[1]["name"] == mock_classifier.id
+        assert model_artifact_call[1]["type"] == "model"
+        assert model_artifact_call[1]["metadata"] == {
+            "aws_env": "labs",
+            "classifier_name": mock_classifier.name,
+            "concept_id": mock_classifier.concept.id,
+            "concept_wikibase_revision": mock_classifier.concept.wikibase_revision,
+            **extra_metadata,
+        }
+
+        labelled_passages_call = mock_artifact_class.call_args_list[1]
+        assert (
+            labelled_passages_call[1]["name"]
+            == f"{mock_classifier.id}-labelled-passages"
         )
+        assert labelled_passages_call[1]["type"] == "labelled_passages"
 
     assert result == mock_classifier
 
