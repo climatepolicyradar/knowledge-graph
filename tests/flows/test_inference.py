@@ -1250,7 +1250,7 @@ def test_log_client_error():
 
     extra_context = parse_client_error_details(error)
     assert extra_context
-    assert "Request time too skewed" in extra_context
+    assert "Request-Server time discrepancy" in extra_context
     assert "skew.seconds=1201" in extra_context
 
 
