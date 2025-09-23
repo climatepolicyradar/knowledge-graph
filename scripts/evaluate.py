@@ -384,6 +384,22 @@ def log_metrics_to_wandb(
         }
         run.log(metrics_payload)
 
+    summary_row = df[(df["Group"] == "all") & (df["Agreement at"] == "Passage level")]
+    if not summary_row.empty:
+        summary_row = summary_row.iloc[0]
+        summary_metrics = {
+            "passage_level_precision": float(summary_row["Precision"]),
+            "passage_level_recall": float(summary_row["Recall"]),
+            "passage_level_f1": float(summary_row["F1 score"]),
+            "passage_level_accuracy": float(summary_row["Accuracy"]),
+            "passage_level_support": float(summary_row["Support"]),
+        }
+    else:
+        summary_metrics = {}
+
+    for metric_name, metric_value in summary_metrics.items():
+        run.summary[metric_name] = metric_value
+
 
 def evaluate_classifier(
     classifier: Classifier,

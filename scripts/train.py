@@ -396,29 +396,39 @@ async def run_training(
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
 
+    concept = await scripts.get_concept.get_concept_async(
+        wikibase_id=wikibase_id,
+        include_labels_from_subconcepts=True,
+        include_recursive_has_subconcept=True,
+        wikibase_config=wikibase_config,
+    )
+
+    if classifier_type:
+        classifier = create_classifier(
+            concept=concept,
+            classifier_type=classifier_type,
+            classifier_kwargs=classifier_kwargs or {},
+        )
+    else:
+        classifier = ClassifierFactory.create(concept)
+
+    wandb_config = {
+        "classifier_type": classifier.name,
+        "classifier_kwargs": classifier_kwargs,
+        "experimental-model-type": classifier_type is not None,
+        "concept_hash": concept.__hash__(),
+    }
+
     with (
         wandb.init(
-            entity=namespace.entity, project=namespace.project, job_type=job_type
+            entity=namespace.entity,
+            project=namespace.project,
+            job_type=job_type,
+            config=wandb_config,
         )
         if track_and_upload
         else nullcontext()
     ) as run:
-        concept = await scripts.get_concept.get_concept_async(
-            wikibase_id=wikibase_id,
-            include_labels_from_subconcepts=True,
-            include_recursive_has_subconcept=True,
-            wikibase_config=wikibase_config,
-        )
-
-        if classifier_type:
-            classifier = create_classifier(
-                concept=concept,
-                classifier_type=classifier_type,
-                classifier_kwargs=classifier_kwargs or {},
-            )
-        else:
-            classifier = ClassifierFactory.create(concept)
-
         classifier.fit()
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
