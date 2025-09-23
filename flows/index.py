@@ -11,9 +11,8 @@ from typing import Any, Final
 import aioboto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow, unmapped
+from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.logging import get_run_logger
@@ -22,7 +21,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 # generate_slug is being used, but in an implicit f-string
 from prefect.utilities.names import generate_slug  # noqa: F401
 from pydantic import PositiveInt
-from vespa.application import Vespa, VespaAsync
+from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate import (
@@ -197,20 +196,6 @@ def generate_s3_uri_input_document_passages(
             f"{document_stem}.json",
         ),
     )
-
-
-def generate_s3_uri_output_family_document(
-    vespa: Vespa, document_stem: DocumentStem
-) -> str:
-    document_id: DocumentImportId = remove_translated_suffix(document_stem)
-    # Example: /document/v1/doc_search/family_document/docid/CCLW.executive.10014.4470
-    document_v1_path = vespa.get_document_v1_path(
-        id=document_id,
-        schema="document_passage",
-        namespace="doc_search",
-        group=None,
-    )
-    return f"vespa:/{document_v1_path}"
 
 
 async def index_document_passages(
@@ -478,8 +463,7 @@ def task_run_name(parameters: dict[str, Any]) -> str:
             return slug
 
 
-@materialize(
-    "foo://bar",  # Asset key is not known yet
+@task(  # pyright: ignore[reportCallIssue]
     task_run_name=task_run_name,  # pyright: ignore[reportArgumentType]
 )
 async def index_all(
@@ -552,38 +536,6 @@ async def index_all(
         )
 
 
-# Document passages aren't in here yet, since we can't get the
-# Vespa data IDs here, to build a document V1 path. They're
-# available inside the function that becomes a task.
-def generate_assets(vespa: Vespa, document_stem: DocumentStem) -> Sequence[str]:
-    return [
-        generate_s3_uri_output_family_document(
-            vespa=vespa,
-            document_stem=document_stem,
-        )
-    ]
-
-
-# Only document passages is mentioned here, since they're the
-# same inputs that are used for updating family documents too.
-def generate_asset_deps(
-    cache_bucket: str,
-    aggregate_inference_results_prefix: str,
-    run_output_identifier: RunOutputIdentifier,
-    document_stem: DocumentStem,
-) -> Sequence[str]:
-    return [
-        str(
-            generate_s3_uri_input_document_passages(
-                cache_bucket=cache_bucket,
-                aggregate_inference_results_prefix=aggregate_inference_results_prefix,
-                run_output_identifier=run_output_identifier,
-                document_stem=document_stem,
-            )
-        ),
-    ]
-
-
 @flow(  # pyright: ignore[reportCallIssue]
     timeout_seconds=None,
     task_runner=ThreadPoolTaskRunner(
@@ -604,7 +556,7 @@ async def index_batch_of_documents(
 ) -> None:
     """Index aggregated inference results into Vespa for family documents and document passages."""
 
-    logger = get_run_logger()
+    logger = get_logger()
 
     if not document_stems:
         raise NotImplementedError(
@@ -620,30 +572,11 @@ async def index_batch_of_documents(
         f"no. of documents: {len(document_stems)}"
     )
 
-    # Create Vespa connection inside the task to avoid serialization issues
-    temp_dir = tempfile.TemporaryDirectory()
-    vespa: Vespa = get_vespa_search_adapter_from_aws_secrets(
-        cert_dir=temp_dir.name,
-        vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-        vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-    ).client
-
     tasks: list[PrefectFuture[Any]] = []
 
     for document_stem in document_stems:
         tasks.append(
-            index_all.with_options(  # pyright: ignore[reportUnknownMemberType]
-                assets=generate_assets(
-                    vespa=vespa,
-                    document_stem=document_stem,
-                ),
-                asset_deps=generate_asset_deps(
-                    cache_bucket=config.cache_bucket_str,
-                    aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
-                    run_output_identifier=run_output_identifier,
-                    document_stem=document_stem,
-                ),  # pyright: ignore[reportArgumentType]
-            ).submit(
+            index_all.submit(  # pyright: ignore[reportFunctionMemberAccess]
                 document_stem=document_stem,
                 config=config,
                 run_output_identifier=run_output_identifier,

@@ -180,15 +180,13 @@ class InferenceResult(BaseModel):
         return cross_batch_successes - cross_batch_failures
 
 
-async def get_bucket_paginator(config: Config, prefix: str):
+async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
     """Returns an S3 paginator for the pipeline cache bucket"""
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3:
-        paginator = s3.get_paginator("list_objects_v2")
-        return paginator.paginate(
-            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-            Prefix=prefix,
-        )
+    paginator = s3_client.get_paginator("list_objects_v2")
+    return paginator.paginate(
+        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        Prefix=prefix,
+    )
 
 
 async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
@@ -198,17 +196,18 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    page_iterator = await get_bucket_paginator(
-        config, config.inference_document_source_prefix
-    )
-    file_stems = []
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        page_iterator = await get_bucket_paginator(
+            config, config.inference_document_source_prefix, s3_client
+        )
+        file_stems = []
 
-    async for p in page_iterator:
-        if "Contents" in p:
-            for o in p["Contents"]:
-                file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                file_stems.append(file_stem)
-
+        async for p in page_iterator:
+            if "Contents" in p:
+                for o in p["Contents"]:
+                    file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                    file_stems.append(file_stem)
     return file_stems
 
 
@@ -219,19 +218,23 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     Retrieves the `new_and_updated_docs.json` file from the latest ingest.
     Extracts the ids from the file, and returns them as a single list.
     """
-    page_iterator = await get_bucket_paginator(config, config.pipeline_state_prefix)
-    file_name = "new_and_updated_documents.json"
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        page_iterator = await get_bucket_paginator(
+            config, config.pipeline_state_prefix, s3_client
+        )
+        file_name = "new_and_updated_documents.json"
 
-    # First get all matching files, then sort them
-    matching_files: list[ObjectTypeDef] = []
+        # First get all matching files, then sort them
+        matching_files: list[ObjectTypeDef] = []
 
-    # Iterate through pages and extract the "Contents" list
-    async for page in page_iterator:
-        if "Contents" in page:
-            contents: list[ObjectTypeDef] = page[
-                "Contents"
-            ]  # Explicitly type the contents
-            matching_files.extend(contents)
+        # Iterate through pages and extract the "Contents" list
+        async for page in page_iterator:
+            if "Contents" in page:
+                contents: list[ObjectTypeDef] = page[
+                    "Contents"
+                ]  # Explicitly type the contents
+                matching_files.extend(contents)
 
     # Filter files that contain the target file name in their "Key"
     filtered_files = [
@@ -255,8 +258,8 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
         updated = list(content["updated_documents"].keys())
         new = [d["import_id"] for d in content["new_documents"]]
 
-        print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
-        return new + updated
+    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
+    return new + updated
 
 
 async def determine_file_stems(
@@ -327,7 +330,7 @@ async def load_classifier(
         download_folder = artifact.download()
         model_path = Path(download_folder) / "model.pickle"
         classifier = Classifier.load(model_path)
-        return classifier
+    return classifier
 
 
 def parse_client_error_details(e: ClientError) -> Optional[str]:
@@ -492,7 +495,6 @@ async def labels_to_s3(
 async def store_labels(
     config: Config,
     inferences: Sequence[SingleDocumentInferenceResult],
-    s3_client: S3Client,
 ) -> tuple[
     list[SingleDocumentInferenceResult],
     list[tuple[DocumentStem, Exception]],
@@ -502,21 +504,23 @@ async def store_labels(
     # Don't get rate-limited by AWS
     semaphore = asyncio.Semaphore(100)
 
-    tasks = [
-        wait_for_semaphore(
-            semaphore,
-            return_with(
-                inference,
-                labels_to_s3(config, inference, s3_client),
-            ),
-        )
-        for inference in inferences
-    ]
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                return_with(
+                    inference,
+                    labels_to_s3(config, inference, s3_client),
+                ),
+            )
+            for inference in inferences
+        ]
 
-    results: list[
-        tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
-        | BaseException
-    ] = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[
+            tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
+            | BaseException
+        ] = await asyncio.gather(*tasks, return_exceptions=True)
 
     successes: list[SingleDocumentInferenceResult] = []
     failures: list[tuple[DocumentStem, Exception]] = []
@@ -865,9 +869,10 @@ async def _inference_batch_of_documents(
             for file_stem in batch
         ]
 
-    results: list[
-        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
-    ] = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[
+            tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
+            | BaseException
+        ] = await asyncio.gather(*tasks, return_exceptions=True)
 
     inferences_successes: list[SingleDocumentInferenceResult] = []
     inferences_failures: list[tuple[DocumentStem, Exception]] = []
@@ -886,14 +891,13 @@ async def _inference_batch_of_documents(
             else:
                 inferences_successes.append(value)
 
-    async with session.client("s3") as s3_client:
-        (
-            store_labels_successes,
-            store_labels_failures,
-            store_labels_unknown_failures,
-        ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-            config=config, inferences=inferences_successes, s3_client=s3_client
-        )
+    (
+        store_labels_successes,
+        store_labels_failures,
+        store_labels_unknown_failures,
+    ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
+        config=config, inferences=inferences_successes
+    )
 
     # This doesn't need to be combined since successes are funnelled
     # through all steps.

@@ -7,9 +7,8 @@ import aioboto3
 import prefect.tasks as tasks
 import pydantic
 from botocore.exceptions import ClientError
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
@@ -198,8 +197,7 @@ def task_run_name(parameters: dict[str, Any]) -> str:
     return f"aggregate-single-document-{document_stem}-{slug}"
 
 
-@materialize(
-    "foo://bar",  # Asset key is not known yet
+@task(  # pyright: ignore[reportCallIssue]
     task_run_name=task_run_name,  # pyright: ignore[reportArgumentType]
     retries=1,
     persist_result=False,
@@ -429,33 +427,8 @@ async def aggregate_batch_of_documents(
 
     print("submitting tasks")
     for document_stem in document_stems:
-        assets: Sequence[str] = [
-            str(
-                generate_s3_uri_output(
-                    cache_bucket=config.cache_bucket_str,
-                    aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
-                    run_output_identifier=run_output_identifier,
-                    document_stem=document_stem,
-                )
-            )
-        ]
-        asset_deps: list[str] = [
-            str(
-                generate_s3_uri_input(
-                    cache_bucket=config.cache_bucket_str,
-                    document_source_prefix=config.aggregate_document_source_prefix,
-                    classifier_spec=spec,
-                    document_stem=document_stem,
-                )
-            )
-            for spec in classifier_specs
-        ]
-
         tasks.append(
-            process_document.with_options(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-                assets=assets,
-                asset_deps=asset_deps,  # pyright: ignore[reportArgumentType]
-            ).submit(
+            process_document.submit(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
                 document_stem=document_stem,
                 classifier_specs=classifier_specs,
                 config=config,
