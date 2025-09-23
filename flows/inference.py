@@ -477,7 +477,7 @@ async def store_labels(
     """Store the labels in the cache bucket."""
     # Don't get rate-limited by AWS
     semaphore = asyncio.Semaphore(100)
-
+    print("creating session for store labels")
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
         tasks = [
@@ -495,7 +495,7 @@ async def store_labels(
             tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
             | BaseException
         ] = await asyncio.gather(*tasks, return_exceptions=True)
-
+    print("completed storing labels for batch")
     successes: list[SingleDocumentInferenceResult] = []
     failures: list[tuple[DocumentStem, Exception]] = []
     # We really don't expect these, since there's a try/catch handler
@@ -799,6 +799,7 @@ async def _inference_batch_of_documents(
 
     semaphore = asyncio.Semaphore(200)
 
+    print("creating session for run classifier inference")
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
         tasks = [
@@ -817,10 +818,11 @@ async def _inference_batch_of_documents(
             for file_stem in batch
         ]
 
-    results: list[
-        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
-    ] = await asyncio.gather(*tasks, return_exceptions=True)
-
+        results: list[
+            tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
+            | BaseException
+        ] = await asyncio.gather(*tasks, return_exceptions=True)
+    print("completed running classifier inference on batch")
     inferences_successes: list[SingleDocumentInferenceResult] = []
     inferences_failures: list[tuple[DocumentStem, Exception]] = []
     # We really don't expect these, since there's a try/catch handler
@@ -837,7 +839,7 @@ async def _inference_batch_of_documents(
                 inferences_failures.append((document_stem, value))
             else:
                 inferences_successes.append(value)
-
+    print("storing labels for batch")
     (
         store_labels_successes,
         store_labels_failures,
