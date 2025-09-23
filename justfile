@@ -170,7 +170,6 @@ deploy-classifiers aws_env ids:
     uv run python scripts/deploy.py new \
         --aws-env {{aws_env}} \
         $ids_args \
-        --get \
         --train \
         --promote
 

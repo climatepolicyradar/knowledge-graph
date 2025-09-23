@@ -1,5 +1,6 @@
 import os
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional
@@ -31,6 +32,7 @@ from knowledge_graph.metrics import (
 )
 from knowledge_graph.span import Span, group_overlapping_spans
 from knowledge_graph.version import Version
+from scripts.get_concept import get_concept_async
 
 console = Console()
 
@@ -127,6 +129,7 @@ def create_gold_standard_labelled_passages(
         ):
             merged_span = Span.union(spans=group)
             merged_span.labellers = ["gold standard"]
+            merged_span.timestamps = [datetime.now()]
             merged_spans.append(merged_span)
 
         gold_standard_labelled_passages.append(
@@ -359,21 +362,94 @@ def validate_args(
             validate_remote_args(track, classifier, version)
 
 
-def log_metrics(
+def log_metrics_to_wandb(
     run: Run,
     df: pd.DataFrame,
 ):
-    """Log metrics DataFrame to Weights & Biases as a table."""
+    """Log metrics to weights and biases."""
     table = wandb.Table(data=df.values.tolist(), columns=df.columns.tolist())
-
     run.log({"performance": table})
+
+    for _, row in df.reset_index(drop=True).iterrows():
+        group = str(row["Group"])
+        agreement = str(row["Agreement at"])
+        metrics_payload = {
+            f"metrics/{group}/{agreement}/precision": float(row["Precision"]),
+            f"metrics/{group}/{agreement}/recall": float(row["Recall"]),
+            f"metrics/{group}/{agreement}/accuracy": float(row["Accuracy"]),
+            f"metrics/{group}/{agreement}/f1": float(row["F1 score"]),
+            f"metrics/{group}/{agreement}/support": float(row["Support"]),
+            "group": group,
+            "agreement": agreement,
+        }
+        run.log(metrics_payload)
+
+
+def evaluate_classifier(
+    classifier: Classifier,
+    labelled_passages: list[LabelledPassage],
+    wandb_run: Optional[Run] = None,
+) -> tuple[pd.DataFrame, list[LabelledPassage]]:
+    """
+    Evaluate the performance of a classifier using an evaluation dataset.
+
+    :param Classifier classifier: classifier to evaluate
+    :param list[LabelledPassage] labelled_passages: labelled passages, as pulled from
+        Argilla, to evaluate the classifier against
+    :return tuple[pd.DataFrame, list[LabelledPassage]]: dataframe of metrics, and list
+        of passages labelled by the model
+    """
+
+    console.log("🥇 Creating a list of gold-standard labelled passages")
+    gold_standard_labelled_passages = create_gold_standard_labelled_passages(
+        labelled_passages
+    )
+    n_annotations = count_annotations(gold_standard_labelled_passages)
+    console.log(
+        f"🚚 Loaded {len(gold_standard_labelled_passages)} labelled passages "
+        f"with {n_annotations} individual annotations"
+    )
+
+    if wandb_run:
+        wandb_run.config["n_gold_standard_labelled_passages"] = len(  # type: ignore
+            gold_standard_labelled_passages
+        )
+        wandb_run.config["n_annotations"] = n_annotations  # type: ignore
+
+    console.log("🤖 Labelling passages with the classifier")
+    model_labelled_passages = label_passages_with_classifier(
+        classifier,
+        gold_standard_labelled_passages,  # type: ignore
+    )
+    n_annotations = count_annotations(model_labelled_passages)
+    console.log(
+        f"✅ Labelled {len(model_labelled_passages)} passages "
+        f"with {n_annotations} individual annotations"
+    )
+    if wandb_run:
+        wandb_run.config["n_model_labelled_passages"] = len(model_labelled_passages)  # type: ignore
+
+    console.log(f"📊 Calculating performance metrics for {classifier.concept}")
+
+    metrics = calculate_performance_metrics(
+        gold_standard_labelled_passages, model_labelled_passages
+    )
+
+    df = pd.DataFrame(metrics)
+
+    print_metrics(df)
+
+    if wandb_run:
+        log_metrics_to_wandb(wandb_run, df)  # type: ignore
+
+    return df, model_labelled_passages
 
 
 app = typer.Typer()
 
 
 @app.command()
-def main(
+async def main(
     wikibase_id: Annotated[
         WikibaseID,
         typer.Option(
@@ -421,6 +497,9 @@ def main(
         source,
     )
 
+    # set explicitly to avoid run being possibly unbound later on
+    run = None
+
     if track:
         entity = "climatepolicyradar"
         project = wikibase_id
@@ -440,27 +519,13 @@ def main(
 
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
-    concept = load_concept(wikibase_id)
-    console.log(f'📚 Loaded concept "{concept}" from {concept_dir}')
+    console.log(f'📚 Loading concept with ID "{wikibase_id}" from Wikibase and Argilla')
+    concept = await get_concept_async(wikibase_id=wikibase_id)
+
     if track:
         run.config["preferred_label"] = concept.preferred_label  # type: ignore
 
-    console.log("🥇 Creating a list of gold-standard labelled passages")
-    gold_standard_labelled_passages = create_gold_standard_labelled_passages(
-        concept.labelled_passages
-    )
-    n_annotations = count_annotations(gold_standard_labelled_passages)
-    console.log(
-        f"🚚 Loaded {len(gold_standard_labelled_passages)} labelled passages "
-        f"with {n_annotations} individual annotations"
-    )
-
-    if track:
-        run.config["n_gold_standard_labelled_passages"] = len(  # type: ignore
-            gold_standard_labelled_passages
-        )
-        run.config["n_annotations"] = n_annotations  # type: ignore
-
+    console.log("Loading classifier...")
     match source:
         case Source.LOCAL:
             loaded_classifier = load_classifier_local(wikibase_id)
@@ -476,36 +541,19 @@ def main(
                 version,  # type: ignore
                 wikibase_id,
             )
+    assert isinstance(classifier, Classifier)
 
-    console.log("🤖 Labelling passages with the classifier")
-    model_labelled_passages = label_passages_with_classifier(
-        loaded_classifier,
-        gold_standard_labelled_passages,  # type: ignore
+    df, labelled_passages = evaluate_classifier(
+        classifier=classifier,
+        labelled_passages=concept.labelled_passages,
+        wandb_run=run if track else None,
     )
-    n_annotations = count_annotations(model_labelled_passages)
-    console.log(
-        f"✅ Labelled {len(model_labelled_passages)} passages "
-        f"with {n_annotations} individual annotations"
-    )
+
     if track:
-        run.config["n_model_labelled_passages"] = len(model_labelled_passages)  # type: ignore
-
-    console.log(f"📊 Calculating performance metrics for {concept}")
-
-    metrics = calculate_performance_metrics(
-        gold_standard_labelled_passages, model_labelled_passages
-    )
-
-    df = pd.DataFrame(metrics)
-
-    print_metrics(df)
+        run.finish()  # type: ignore
 
     metrics_path = save_metrics(df, wikibase_id)
     console.log(f"📄 Saved performance metrics to {metrics_path}")
-
-    if track:
-        log_metrics(run, df)  # type: ignore
-        run.finish()  # type: ignore
 
 
 if __name__ == "__main__":

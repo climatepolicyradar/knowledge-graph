@@ -3,17 +3,18 @@ import os
 import re
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple, Optional
+from typing import Annotated, Any, Optional
 
 import typer
 import wandb
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 from rich.console import Console
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
+import scripts.get_concept
 from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
@@ -32,31 +33,18 @@ from knowledge_graph.cloud import (
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
-from knowledge_graph.wikibase import WikibaseSession
+from knowledge_graph.wikibase import WikibaseConfig
 from scripts.classifier_metadata import ComputeEnvironment
+from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
 
 
-WikibaseConfig = NamedTuple(
-    "WikibaseConfig",
-    [
-        ("username", str),
-        ("password", SecretStr),
-        ("url", str),
-    ],
-)
-
-
-def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
+def validate_params(track: bool, aws_env: AwsEnv) -> None:
     """Validate parameter dependencies."""
-    if (not track) and upload:
-        raise ValueError(
-            "you can only upload a model artifact, if you're also tracking the run"
-        )
 
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
+    if track and (not is_logged_in(aws_env, use_aws_profiles)):
         raise typer.BadParameter(
             f"you're not logged into {aws_env.value}. "
             f"Do `aws sso login --profile {aws_env.value}`"
@@ -234,18 +222,11 @@ def main(
             parser=WikibaseID,
         ),
     ],
-    track: Annotated[
+    track_and_upload: Annotated[
         bool,
         typer.Option(
             ...,
-            help="Whether to track the training run with Weights & Biases",
-        ),
-    ] = False,
-    upload: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help="Whether to upload the model artifact to S3",
+            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
         ),
     ] = False,
     aws_env: Annotated[
@@ -265,35 +246,40 @@ def main(
             ),
         ),
     ] = False,
+    evaluate: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to evaluate the model after training",
+        ),
+    ] = True,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
 
     :param wikibase_id: The Wikibase ID of the concept classifier to train.
     :type wikibase_id: WikibaseID
-    :param track: Whether to track the training run with W&B.
-    :type track: bool
-    :param upload: Whether to upload the model artifact to S3.
-    :type upload: bool
+    :param track_and_upload: Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.
+    :type track_and_upload: bool
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
     :type use_coiled_gpu: bool
+    :param evaluate: Whether to evaluate the model after training
+    :type evaluate: bool
     """
     if use_coiled_gpu:
-        flow_name = "train_on_gpu"
-        deployment_name = generate_deployment_name(
-            flow_name="train_on_gpu", aws_env=aws_env
-        )
+        flow_name = "train-on-gpu"
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
         qualified_name = f"{flow_name}/{deployment_name}"
 
         flow_run: FlowRun = run_deployment(  # type: ignore[misc]
             name=qualified_name,
             parameters={
                 "wikibase_id": wikibase_id,
-                "track": track,
-                "upload": upload,
+                "track_and_upload": track_and_upload,
                 "aws_env": aws_env,
+                "evaluate": evaluate,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -306,22 +292,22 @@ def main(
         return asyncio.run(
             run_training(
                 wikibase_id=wikibase_id,
-                track=track,
-                upload=upload,
+                track_and_upload=track_and_upload,
                 aws_env=aws_env,
+                evaluate=evaluate,
             )
         )
 
 
 async def run_training(
     wikibase_id: WikibaseID,
-    track: bool,
-    upload: bool,
+    track_and_upload: bool,
     aws_env: AwsEnv,
     wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
+    evaluate: bool = True,
 ) -> Classifier:
-    """Train the model and optionally upload the artifact."""
+    """Train the model and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
     console = Console()
 
@@ -330,34 +316,22 @@ async def run_training(
     job_type = "train_model"
 
     # Validate parameter dependencies
-    validate_params(track, upload, aws_env)
+    validate_params(track_and_upload, aws_env)
 
     with (
         wandb.init(
             entity=namespace.entity, project=namespace.project, job_type=job_type
         )
-        if track
+        if track_and_upload
         else nullcontext()
     ) as run:
-        # Fetch all of its subconcepts recursively
-        if wikibase_config:
-            wikibase = WikibaseSession(
-                username=wikibase_config.username,
-                password=wikibase_config.password.get_secret_value(),
-                url=wikibase_config.url,
-            )
-        else:
-            wikibase = WikibaseSession()
-
-        concept = await wikibase.get_concept_async(
-            wikibase_id,
-            include_recursive_has_subconcept=True,
+        concept = await scripts.get_concept.get_concept_async(
+            wikibase_id=wikibase_id,
             include_labels_from_subconcepts=True,
+            include_recursive_has_subconcept=True,
+            wikibase_config=wikibase_config,
         )
-        # To handle redirects where the wikibase_id is overwritten
-        concept.wikibase_id = wikibase_id
-        # Ensure concept data can be serialised and rebuilt without failing validations
-        concept.model_validate_json(concept.model_dump_json())
+
         # Create and train a classifier instance
         classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
@@ -388,7 +362,7 @@ async def run_training(
         classifier.save(classifier_path)
         console.log(f"Saved {classifier} to {classifier_path}")
 
-        if upload:
+        if track_and_upload:
             region_name = "eu-west-1"
             # When running in prefect the client is instantiated earlier
             if not s3_client:
@@ -420,6 +394,37 @@ async def run_training(
                 classifier,
                 storage_link,
             )
+
+        if evaluate:
+            metrics_df, model_labelled_passages = evaluate_classifier(
+                classifier=classifier,
+                labelled_passages=concept.labelled_passages,
+                wandb_run=run,
+            )
+
+            if track_and_upload and run:
+                console.log("📄 Creating labelled passages artifact")
+                labelled_passages_artifact = wandb.Artifact(
+                    name=f"{classifier.id}-labelled-passages",
+                    type="labelled_passages",
+                    metadata={
+                        "classifier_id": classifier.id,
+                        "concept_wikibase_revision": classifier.concept.wikibase_revision,
+                        "passage_count": len(model_labelled_passages),
+                    },
+                )
+
+                with labelled_passages_artifact.new_file(
+                    "labelled_passages.json", mode="w"
+                ) as f:
+                    data = "\n".join(
+                        [entry.model_dump_json() for entry in model_labelled_passages]
+                    )
+                    f.write(data)
+
+                console.log("📤 Uploading labelled passages to W&B")
+                run.log_artifact(labelled_passages_artifact)
+                console.log("✅ Labelled passages uploaded successfully")
 
     return classifier
 
