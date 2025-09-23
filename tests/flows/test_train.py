@@ -14,14 +14,12 @@ async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
     ) as mock_run_training:
         pass_through_kwargs = {
             "wikibase_id": WikibaseID("Q1"),
-            "track": False,
-            "upload": False,
+            "track_and_upload": False,
         }
 
         _ = await train_on_gpu(
             wikibase_id=pass_through_kwargs["wikibase_id"],
-            track=pass_through_kwargs["track"],
-            upload=pass_through_kwargs["upload"],
+            track_and_upload=pass_through_kwargs["track_and_upload"],
             aws_env=AwsEnv.labs,
             config=test_config,
         )

@@ -137,8 +137,7 @@ async def test_run_training(
 
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
-            track=True,
-            upload=True,
+            track_and_upload=True,
             aws_env=AwsEnv.labs,
             s3_client=mock_s3_client,
         )
@@ -165,20 +164,6 @@ async def test_run_training(
         assert labelled_passages_call[1]["type"] == "labelled_passages"
 
     assert result == mock_classifier
-
-
-@pytest.mark.asyncio
-async def test_run_training__valueerror():
-    with pytest.raises(
-        ValueError,
-        match="you can only upload a model artifact, if you're also tracking the run",
-    ):
-        await run_training(
-            wikibase_id=WikibaseID("Q123"),
-            track=False,
-            upload=True,
-            aws_env=AwsEnv.labs,
-        )
 
 
 def test_create_and_link_model_artifact():
@@ -272,7 +257,7 @@ def test_get_next_version_with_default(mock_api):
 async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
     MockedWikibaseSession, mock_s3_client
 ):
-    """Test that labelled passages artifact is created and uploaded when evaluate=True and track=True."""
+    """Test that labelled passages artifact is created and uploaded when evaluate=True and track_and_upload=True."""
     mock_s3_client.create_bucket(
         Bucket="cpr-labs-models",
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
@@ -339,23 +324,21 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
 
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
-            track=True,
-            upload=False,  # Don't upload model to focus on labelled passages
+            track_and_upload=True,
             aws_env=AwsEnv.labs,
             s3_client=mock_s3_client,
             evaluate=True,
         )
 
-        # Check that the labelled passages artifact was the only artifact created
-        # as upload is false
-        assert mock_artifact_class.call_count == 1
-        labelled_passages_call = mock_artifact_class.call_args_list[0]
+        assert mock_artifact_class.call_count == 2
+        labelled_passages_call = mock_artifact_class.call_args_list[1]
         assert (
             labelled_passages_call[1]["name"]
             == f"{mock_classifier.id}-labelled-passages"
         )
         assert labelled_passages_call[1]["type"] == "labelled_passages"
 
-        mock_run.log_artifact.assert_called_once_with(mock_labelled_passages_artifact)
+        log_artifact_calls = mock_run.log_artifact.call_args_list
+        assert len(log_artifact_calls) == 2
 
     assert result == mock_classifier
