@@ -12,7 +12,7 @@ First we run the training scripts. This will upload the classifier to s3 and lin
 _Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires s3 access._
 
 ```shell
-just train "Q123" --track --upload --aws-env sandbox
+just train "Q123" --track --aws-env sandbox
 ```
 
 > [!NOTE]
