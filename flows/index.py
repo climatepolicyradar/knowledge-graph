@@ -15,7 +15,6 @@ from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.futures import PrefectFuture, PrefectFutureList
-from prefect.logging import get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 
 # generate_slug is being used, but in an implicit f-string
@@ -341,7 +340,7 @@ async def index_family_document(
     simple_concepts: list[SimpleConcept],
 ) -> Result[None, Error]:
     """Index document concept counts in Vespa via partial update."""
-    logger = get_run_logger()
+    logger = get_logger()
 
     concepts_counts: Counter[SimpleConcept] = Counter(simple_concepts)
 
@@ -656,7 +655,7 @@ async def index(
         The maximum number of Vespa connections to use within each indexing flow.
     """
 
-    logger = get_run_logger()
+    logger = get_logger()
 
     if config is None:
         config = await Config.create()
