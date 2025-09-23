@@ -71,7 +71,11 @@ jobs:
           VERSION=$(just get-version)
           echo "version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
+      - name: List knowledge_graph directory
+        run: |
+          du -sh knowledge_graph/*
+          ls -la knowledge_graph/*
+          ls -la knowledge_graph/
       - name: Build the Docker image
         uses: docker/build-push-action@v6
         with:
