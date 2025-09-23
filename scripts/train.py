@@ -23,6 +23,12 @@ from knowledge_graph.classifier import (
     ModelPath,
     get_local_classifier_path,
 )
+from knowledge_graph.classifier import (
+    __all__ as available_classifier_types,
+)
+from knowledge_graph.classifier import (
+    __getattr__ as get_classifier_class,
+)
 from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
@@ -38,6 +44,52 @@ from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
+
+
+def parse_classifier_kwargs(classifier_kwarg: Optional[list[str]]) -> dict[str, Any]:
+    """Parse classifier kwargs from key=value strings."""
+    if not classifier_kwarg:
+        return {}
+
+    kwargs = {}
+    for kv in classifier_kwarg:
+        if "=" not in kv:
+            raise typer.BadParameter(
+                f"Invalid format for classifier kwarg: '{kv}'. Expected key=value format."
+            )
+
+        key, value = kv.split("=", 1)
+
+        # Try to parse as int, then bool, then string
+        try:
+            kwargs[key] = int(value)
+        except ValueError:
+            if value.lower() in ("true", "false"):
+                kwargs[key] = value.lower() == "true"
+            else:
+                kwargs[key] = value
+
+    return kwargs
+
+
+def create_classifier(
+    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
+) -> Classifier:
+    """
+    Create a classifier from its type and any kwargs.
+
+    :raises typer.BadParameter: if classifier_type is unknown
+    """
+
+    try:
+        classifier_class = get_classifier_class(classifier_type)
+        return classifier_class(concept=concept, **classifier_kwargs)
+
+    except (ImportError, AttributeError) as e:
+        raise typer.BadParameter(
+            f"Unknown classifier type: '{classifier_type}'. "
+            f"Available types: {', '.join(available_classifier_types)}"
+        ) from e
 
 
 def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
@@ -253,6 +305,18 @@ def main(
             help="Whether to evaluate the model after training",
         ),
     ] = True,
+    classifier_type: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Classifier type to use (e.g., LLMClassifier, KeywordClassifier). If not specified, uses ClassifierFactory default.",
+        ),
+    ] = None,
+    classifier_kwarg: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Classifier kwargs in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
@@ -267,7 +331,15 @@ def main(
     :type use_coiled_gpu: bool
     :param evaluate: Whether to evaluate the model after training
     :type evaluate: bool
+    :param classifier_type: The classifier type to use, optional. Defaults to the
+    classifier chosen by ClassifierFactory otherwise
+    :type classifier_type: Optional[str]
+    :param classifier_kwarg: List of classifier kwargs in key=value format
+    :type classifier_kwarg: Optional[list[str]]
     """
+
+    classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
+
     if use_coiled_gpu:
         flow_name = "train-on-gpu"
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
@@ -280,6 +352,8 @@ def main(
                 "track_and_upload": track_and_upload,
                 "aws_env": aws_env,
                 "evaluate": evaluate,
+                "classifier_type": classifier_type,
+                "classifier_kwargs": classifier_kwargs,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -295,6 +369,8 @@ def main(
                 track_and_upload=track_and_upload,
                 aws_env=aws_env,
                 evaluate=evaluate,
+                classifier_type=classifier_type,
+                classifier_kwargs=classifier_kwargs,
             )
         )
 
@@ -306,6 +382,8 @@ async def run_training(
     wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
 ) -> Classifier:
     """Train the model and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -332,8 +410,15 @@ async def run_training(
             wikibase_config=wikibase_config,
         )
 
-        # Create and train a classifier instance
-        classifier = ClassifierFactory.create(concept=concept)
+        if classifier_type:
+            classifier = create_classifier(
+                concept=concept,
+                classifier_type=classifier_type,
+                classifier_kwargs=classifier_kwargs or {},
+            )
+        else:
+            classifier = ClassifierFactory.create(concept)
+
         classifier.fit()
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
