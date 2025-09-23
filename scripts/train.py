@@ -282,10 +282,8 @@ def main(
     :type evaluate: bool
     """
     if use_coiled_gpu:
-        flow_name = "train_on_gpu"
-        deployment_name = generate_deployment_name(
-            flow_name="train_on_gpu", aws_env=aws_env
-        )
+        flow_name = "train-on-gpu"
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
         qualified_name = f"{flow_name}/{deployment_name}"
 
         flow_run: FlowRun = run_deployment(  # type: ignore[misc]
