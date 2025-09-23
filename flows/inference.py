@@ -347,12 +347,11 @@ def parse_client_error_details(e: ClientError) -> Optional[str]:
             skew = datetime.fromisoformat(server_time) - datetime.fromisoformat(
                 request_time
             )
-            return f"Request time too skewed: {' & '.join(e.args)} - {skew.seconds=}"
+            return f"Request-Server time discrepancy: {' & '.join(e.args)} - {skew.seconds=}"
 
 
 async def download_s3_file(config: Config, key: str, s3_client: S3Client):
     """Retrieve an S3 file from the pipeline cache"""
-    logger = get_logger()
     try:
         response = await s3_client.get_object(
             Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
@@ -360,7 +359,7 @@ async def download_s3_file(config: Config, key: str, s3_client: S3Client):
         )
     except ClientError as e:
         if extra_context := parse_client_error_details(e):
-            logger.error(extra_context)
+            e.add_note(f"{extra_context}, key: {key}")
         raise
     body = await response["Body"].read()
     return body.decode("utf-8")
