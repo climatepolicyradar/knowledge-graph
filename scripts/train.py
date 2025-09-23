@@ -222,7 +222,7 @@ def main(
             parser=WikibaseID,
         ),
     ],
-    track: Annotated[
+    track_and_upload: Annotated[
         bool,
         typer.Option(
             ...,
@@ -259,8 +259,8 @@ def main(
 
     :param wikibase_id: The Wikibase ID of the concept classifier to train.
     :type wikibase_id: WikibaseID
-    :param track: Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.
-    :type track: bool
+    :param track_and_upload: Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.
+    :type track_and_upload: bool
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
@@ -279,7 +279,7 @@ def main(
             name=qualified_name,
             parameters={
                 "wikibase_id": wikibase_id,
-                "track": track,
+                "track_and_upload": track_and_upload,
                 "aws_env": aws_env,
                 "evaluate": evaluate,
             },
@@ -294,7 +294,7 @@ def main(
         return asyncio.run(
             run_training(
                 wikibase_id=wikibase_id,
-                track=track,
+                track_and_upload=track_and_upload,
                 aws_env=aws_env,
                 evaluate=evaluate,
             )
@@ -303,7 +303,7 @@ def main(
 
 async def run_training(
     wikibase_id: WikibaseID,
-    track: bool,
+    track_and_upload: bool,
     aws_env: AwsEnv,
     wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
@@ -318,13 +318,13 @@ async def run_training(
     job_type = "train_model"
 
     # Validate parameter dependencies
-    validate_params(track, aws_env)
+    validate_params(track_and_upload, aws_env)
 
     with (
         wandb.init(
             entity=namespace.entity, project=namespace.project, job_type=job_type
         )
-        if track
+        if track_and_upload
         else nullcontext()
     ) as run:
         concept = await scripts.get_concept.get_concept_async(
@@ -364,7 +364,7 @@ async def run_training(
         classifier.save(classifier_path)
         console.log(f"Saved {classifier} to {classifier_path}")
 
-        if track:
+        if track_and_upload:
             region_name = "eu-west-1"
             # When running in prefect the client is instantiated earlier
             if not s3_client:
@@ -404,7 +404,7 @@ async def run_training(
                 wandb_run=run,
             )
 
-            if track and run:
+            if track_and_upload and run:
                 console.log("📄 Creating labelled passages artifact")
                 labelled_passages_artifact = wandb.Artifact(
                     name=f"{classifier.id}-labelled-passages",
@@ -432,7 +432,7 @@ async def run_training(
                 run.log_artifact(labelled_passages_artifact)
                 console.log("✅ Labelled passages uploaded successfully")
 
-        if track and run:
+        if track_and_upload and run:
             run.finish()
 
     return classifier

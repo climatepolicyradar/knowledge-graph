@@ -137,7 +137,7 @@ async def test_run_training(
 
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
-            track=True,
+            track_and_upload=True,
             aws_env=AwsEnv.labs,
             s3_client=mock_s3_client,
         )
@@ -257,7 +257,7 @@ def test_get_next_version_with_default(mock_api):
 async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
     MockedWikibaseSession, mock_s3_client
 ):
-    """Test that labelled passages artifact is created and uploaded when evaluate=True and track=True."""
+    """Test that labelled passages artifact is created and uploaded when evaluate=True and track_and_upload=True."""
     mock_s3_client.create_bucket(
         Bucket="cpr-labs-models",
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
@@ -324,7 +324,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
 
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
-            track=True,
+            track_and_upload=True,
             aws_env=AwsEnv.labs,
             s3_client=mock_s3_client,
             evaluate=True,

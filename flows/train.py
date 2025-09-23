@@ -11,7 +11,7 @@ from scripts.train import WikibaseConfig, run_training
 @flow(log_prints=True)
 async def train_on_gpu(
     wikibase_id: WikibaseID,
-    track: bool = False,
+    track_and_upload: bool = False,
     aws_env: AwsEnv = AwsEnv.labs,
     evaluate: bool = True,
     config: Config | None = None,
@@ -40,7 +40,7 @@ async def train_on_gpu(
 
     return await run_training(
         wikibase_id=wikibase_id,
-        track=track,
+        track_and_upload=track_and_upload,
         aws_env=aws_env,
         wikibase_config=wikibase_config,
         s3_client=s3_client,
