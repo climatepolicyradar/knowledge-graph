@@ -434,19 +434,13 @@ async def run_training(
                     "labelled_passages.json", mode="w"
                 ) as f:
                     data = "\n".join(
-                            [
-                                entry.model_dump_json()
-                                for entry in model_labelled_passages
-                            ]
-                        )
+                        [entry.model_dump_json() for entry in model_labelled_passages]
+                    )
                     f.write(data)
 
                 console.log("📤 Uploading labelled passages to W&B")
                 run.log_artifact(labelled_passages_artifact)
                 console.log("✅ Labelled passages uploaded successfully")
-
-        if track and run:
-            run.finish()
 
     return classifier
 
