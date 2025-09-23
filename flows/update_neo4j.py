@@ -41,9 +41,9 @@ from typing import Any, Sequence
 import botocore.exceptions
 from cpr_sdk.ssm import get_aws_ssm_param
 from neomodel import db
-from prefect import flow, get_run_logger
+from prefect import flow
 
-from flows.utils import iterate_batch
+from flows.utils import get_logger, iterate_batch
 from knowledge_graph.config import processed_data_dir
 from knowledge_graph.neo4j import get_neo4j_session
 from knowledge_graph.wikibase import WikibaseSession
@@ -63,7 +63,7 @@ def _setup_env_from_ssm() -> None:
     - /Wikibase/Cloud/ServiceAccount/Password -> WIKIBASE_PASSWORD
     - /Wikibase/Cloud/URL -> WIKIBASE_URL
     """
-    logger = get_run_logger()
+    logger = get_logger()
 
     def _set_env_var_from_ssm(ssm_name: str, env_var: str) -> None:
         try:
@@ -97,7 +97,7 @@ def process_in_batches(
     process_fn,
 ) -> None:
     """Run a side-effecting operation over a sequence in batches."""
-    logger = get_run_logger()
+    logger = get_logger()
     if not items:
         logger.info(f"{short_label_for_logging}: nothing to process")
         return
@@ -143,7 +143,7 @@ def delete_concept_relationships(*, dry_run: bool) -> None:
 
     Document-related nodes/edges are untouched.
     """
-    logger = get_run_logger()
+    logger = get_logger()
     logger.info("Deleting existing concept-to-concept relationships...")
 
     # Delete SUBCONCEPT_OF relationships
@@ -188,7 +188,7 @@ def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> 
     - MERGE `(:DocumentNode)-[:HAS_PASSAGE]->(:PassageNode)` for each text block
     - MERGE `(:PassageNode)-[:MENTIONS]->(:ConceptNode)` for each concept mention
     """
-    logger = get_run_logger()
+    logger = get_logger()
     all_documents: list[dict[str, str]] = []
     all_passages: list[dict[str, str]] = []
     all_doc_passage_rels: list[dict[str, str]] = []
@@ -281,7 +281,7 @@ def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> 
 
 def execute_cypher(query: str, params: dict | None, *, dry_run: bool) -> None:
     """Run a Cypher statement against Neo4j, or log it when in dry-run mode"""
-    logger = get_run_logger()
+    logger = get_logger()
     if dry_run:
         logger.info("DRY RUN — skipping Cypher execution: %s", " ".join(query.split()))
         return
@@ -295,7 +295,7 @@ def execute_cypher(query: str, params: dict | None, *, dry_run: bool) -> None:
 async def update_concepts(*, dry_run: bool = False) -> None:
     """Synchronise Neo4j with the concept graph from Wikibase"""
 
-    logger = get_run_logger()
+    logger = get_logger()
     logger.info("Starting concept graph update")
 
     # Ensure required secrets are set before establishing connections to Neo4j and Wikibase
@@ -459,7 +459,7 @@ async def update_concepts(*, dry_run: bool = False) -> None:
 @flow()
 async def update_documents(*, dry_run: bool = False) -> None:
     """Refresh document/passages and MENTIONS relationships using local data."""
-    logger = get_run_logger()
+    logger = get_logger()
     logger.info("Starting document link refresh from local aggregated results...")
     document_paths = [
         str(p) for p in (processed_data_dir / "aggregated").glob("*.json")
@@ -477,7 +477,7 @@ async def update_neo4j(
     dry_run: bool = False,
 ) -> None:
     """Refresh the Neo4j database with the latest version of the knowledge graph."""
-    logger = get_run_logger()
+    logger = get_logger()
     # Ensure required secrets are set before establishing connections to Neo4j and Wikibase
     _setup_env_from_ssm()
     # Connect to Neo4j here, for both subflows

@@ -43,37 +43,37 @@ This is useful when you are already resolved that the trained model will become 
 You can add a source to the classifiers metadata with the following, this will prevent documents with the source from having inference run with this classifier:
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --add-dont-run-on sabin
+just classifier-metadata Q123 abcd2345 sandbox --add-dont-run-on sabin
 ```
 
 Add and override the current list:
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on --add-dont-run-on sabin --add-dont-run-on gef
+just classifier-metadata Q123 abcd2345 sandbox --clear-dont-run-on --add-dont-run-on sabin --add-dont-run-on gef
 ```
 
 Clear the list to allow the classifier to run on anything
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on
+just classifier-metadata Q123 abcd2345 sandbox --clear-dont-run-on
 ```
 
 Add a requirement for the classifier to run in a compute environment that has a GPU (or use clear-require-gpu to remove and revert to using a cpu)
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --add-require-gpu
+just classifier-metadata Q123 abcd2345 sandbox --add-require-gpu
 ```
 
 For times when its necessary to update every promoted classifier that is mentioned in the spec for an environment, you can run the following:
 
 ```shell
-just classifier_metadata_entire_env sandbox --add-dont-run-on sabin
+just classifier-metadata-entire-env sandbox --add-dont-run-on sabin
 ```
 
 At least one classififiers profile is required for promotion. You could set one like:
 
 ```shell
-just classifier_metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
+just classifier-metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
 ```
 
 ## Training Classifiers in Docker
