@@ -168,6 +168,9 @@ line-length = 88
 [tool.pyright]
 reportMissingImports = false
 
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
+
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cpu", extra = "transformers" },

@@ -6,13 +6,15 @@ from pathlib import Path
 from typing import Annotated, Any, Optional
 
 import typer
+import wandb
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from pydantic import BaseModel, Field
 from rich.console import Console
+from wandb.errors.errors import CommError
+from wandb.sdk.wandb_run import Run
 
 import scripts.get_concept
-import wandb
 from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
@@ -34,8 +36,6 @@ from knowledge_graph.version import Version
 from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 from scripts.get_concept import WikibaseConfig
-from wandb.errors.errors import CommError
-from wandb.sdk.wandb_run import Run
 
 app = typer.Typer()
 
