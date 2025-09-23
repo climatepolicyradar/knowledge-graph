@@ -1,26 +1,16 @@
-from typing import Annotated, NamedTuple, Optional
+from typing import Annotated, Optional
 
 import typer
-from pydantic import SecretStr
 from rich.console import Console
 
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import concept_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaSession
-from knowledge_graph.wikibase import WikibaseSession
+from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 
 console = Console()
 app = typer.Typer()
-
-WikibaseConfig = NamedTuple(
-    "WikibaseConfig",
-    [
-        ("username", str),
-        ("password", SecretStr),
-        ("url", str),
-    ],
-)
 
 
 async def get_concept_async(
