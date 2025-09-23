@@ -1,6 +1,6 @@
-import datetime
 import json
 import re
+from datetime import datetime
 
 import pytest
 import vespa.querybuilder as qb
@@ -22,6 +22,7 @@ from flows.boundary import (
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
     get_document_passages_from_vespa__generator,
+    get_model_from_span,
     get_parent_concepts_from_concept,
     get_text_block_id_from_vespa_data_id,
     get_vespa_passages_from_query_response,
@@ -125,6 +126,32 @@ def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
 
     # Verify that the problematic spans were skipped but valid one was processed
     assert len(concepts) == 1
+
+
+def test_get_model_from_span():
+    assert "KeywordClassifier" == get_model_from_span(
+        Span(
+            text="Test text.",
+            start_index=0,
+            end_index=8,
+            concept_id=None,
+            labellers=["KeywordClassifier"],
+            timestamps=[datetime.now()],
+        )
+    )
+
+
+def test_get_model_from_span_checks_length():
+    with pytest.raises(ValueError, match="Span should have 1 labeller but has 0"):
+        _ = get_model_from_span(
+            Span(
+                text="Test text.",
+                start_index=0,
+                end_index=8,
+                concept_id=None,
+                labellers=[],
+            )
+        )
 
 
 def test_get_parent_concepts_from_concept() -> None:
@@ -342,7 +369,7 @@ async def test_load_labelled_passages_by_uri_obj(
                     end_index=39,
                     concept_id="Q218",
                     labellers=['KeywordClassifier("greenhouse gas")'],
-                    timestamps=[datetime.datetime(2025, 2, 24, 18, 42, 12, 677997)],
+                    timestamps=[datetime(2025, 2, 24, 18, 42, 12, 677997)],
                     id="fxdgkkmc",
                     labelled_text="CO2",
                 )
@@ -511,7 +538,7 @@ async def test_load_labelled_passages_by_uri_raw(
                     end_index=170,
                     concept_id="Q857",
                     labellers=['KeywordClassifier("healthcare sector")'],
-                    timestamps=[datetime.datetime(2025, 2, 25, 1, 35, 56, 388056)],
+                    timestamps=[datetime(2025, 2, 25, 1, 35, 56, 388056)],
                     id="b37t5esb",
                     labelled_text="health services",
                 )
