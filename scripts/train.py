@@ -40,11 +40,11 @@ from scripts.evaluate import evaluate_classifier
 app = typer.Typer()
 
 
-def validate_params(track: bool, aws_env: AwsEnv) -> None:
+def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
     """Validate parameter dependencies."""
 
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-    if track and (not is_logged_in(aws_env, use_aws_profiles)):
+    if track_and_upload and (not is_logged_in(aws_env, use_aws_profiles)):
         raise typer.BadParameter(
             f"you're not logged into {aws_env.value}. "
             f"Do `aws sso login --profile {aws_env.value}`"
@@ -316,7 +316,7 @@ async def run_training(
     job_type = "train_model"
 
     # Validate parameter dependencies
-    validate_params(track_and_upload, aws_env)
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
 
     with (
         wandb.init(
