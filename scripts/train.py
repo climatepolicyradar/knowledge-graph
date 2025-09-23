@@ -40,15 +40,11 @@ from wandb.sdk.wandb_run import Run
 app = typer.Typer()
 
 
-def validate_params(track: bool, upload: bool, aws_env: AwsEnv) -> None:
+def validate_params(track: bool, aws_env: AwsEnv) -> None:
     """Validate parameter dependencies."""
-    if (not track) and upload:
-        raise ValueError(
-            "you can only upload a model artifact, if you're also tracking the run"
-        )
 
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-    if upload and (not is_logged_in(aws_env, use_aws_profiles)):
+    if track and (not is_logged_in(aws_env, use_aws_profiles)):
         raise typer.BadParameter(
             f"you're not logged into {aws_env.value}. "
             f"Do `aws sso login --profile {aws_env.value}`"
@@ -230,14 +226,7 @@ def main(
         bool,
         typer.Option(
             ...,
-            help="Whether to track the training run with Weights & Biases",
-        ),
-    ] = False,
-    upload: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help="Whether to upload the model artifact to S3",
+            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
         ),
     ] = False,
     aws_env: Annotated[
@@ -270,10 +259,8 @@ def main(
 
     :param wikibase_id: The Wikibase ID of the concept classifier to train.
     :type wikibase_id: WikibaseID
-    :param track: Whether to track the training run with W&B.
+    :param track: Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.
     :type track: bool
-    :param upload: Whether to upload the model artifact to S3.
-    :type upload: bool
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
     :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
@@ -293,7 +280,6 @@ def main(
             parameters={
                 "wikibase_id": wikibase_id,
                 "track": track,
-                "upload": upload,
                 "aws_env": aws_env,
                 "evaluate": evaluate,
             },
@@ -309,7 +295,6 @@ def main(
             run_training(
                 wikibase_id=wikibase_id,
                 track=track,
-                upload=upload,
                 aws_env=aws_env,
                 evaluate=evaluate,
             )
@@ -319,13 +304,12 @@ def main(
 async def run_training(
     wikibase_id: WikibaseID,
     track: bool,
-    upload: bool,
     aws_env: AwsEnv,
     wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
 ) -> Classifier:
-    """Train the model and optionally upload the artifact."""
+    """Train the model and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
     console = Console()
 
@@ -334,7 +318,7 @@ async def run_training(
     job_type = "train_model"
 
     # Validate parameter dependencies
-    validate_params(track, upload, aws_env)
+    validate_params(track, aws_env)
 
     with (
         wandb.init(
@@ -380,7 +364,7 @@ async def run_training(
         classifier.save(classifier_path)
         console.log(f"Saved {classifier} to {classifier_path}")
 
-        if upload:
+        if track:
             region_name = "eu-west-1"
             # When running in prefect the client is instantiated earlier
             if not s3_client:

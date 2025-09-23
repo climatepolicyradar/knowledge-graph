@@ -60,7 +60,6 @@ def existing(
             classifier = scripts.train.main(
                 wikibase_id=WikibaseID(spec.name),
                 track=True,
-                upload=True,
                 aws_env=to_aws_env,
             )
             if not classifier:
@@ -110,7 +109,6 @@ def new(
                 classifier = scripts.train.main(
                     wikibase_id=wikibase_id,
                     track=True,
-                    upload=True,
                     aws_env=aws_env,
                 )
 
