@@ -233,9 +233,7 @@ def get_model_from_span(span: Span) -> str:
     ]
     """
     if len(span.labellers) != 1:
-        raise ValueError(
-            f"Span has more than one labeller. Expected 1, got {len(span.labellers)}."
-        )
+        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
     return span.labellers[0]
 
 
