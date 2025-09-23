@@ -253,6 +253,7 @@ def test_create_gold_standard_labelled_passages(concept, snapshot: SnapshotAsser
 def test_log_metrics(metrics_df: pd.DataFrame):
     with patch("wandb.Table") as mock_wandb_table:
         mock_run = Mock()
+        mock_run.summary = {}
 
         log_metrics_to_wandb(mock_run, metrics_df)
 
