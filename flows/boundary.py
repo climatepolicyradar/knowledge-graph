@@ -7,7 +7,7 @@ import logging
 import math
 import re
 from collections.abc import AsyncGenerator, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import (
@@ -306,7 +306,9 @@ def convert_labelled_passage_to_concepts(
             logger.error(
                 f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
             )
-            continue
+            timestamp = datetime.now()
+        else:
+            timestamp = max(span.timestamps)
 
         concepts.append(
             VespaConcept(
@@ -319,7 +321,7 @@ def convert_labelled_passage_to_concepts(
                 start=span.start_index,
                 # These timestamps _should_ all be the same,
                 # but just in case, take the latest.
-                timestamp=max(span.timestamps),
+                timestamp=timestamp,
             )
         )
 
