@@ -6,7 +6,6 @@ from typing import Annotated
 
 import typer
 import wandb
-import wandb.apis.public.api
 from rich.console import Console
 
 from flows.classifier_specs.spec_interface import DontRunOnEnum, load_classifier_specs

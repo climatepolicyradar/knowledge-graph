@@ -148,7 +148,7 @@ aws s3 ls
 Execute the training pipeline using the deploy script:
 
 ```bash
-python scripts/deploy.py new \
+uv run deploy new \
   --aws-env prod \
   --train \
   --promote \
