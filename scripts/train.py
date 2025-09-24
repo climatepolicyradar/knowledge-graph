@@ -115,6 +115,7 @@ def create_and_link_model_artifact(
     run: Run,
     classifier: Classifier,
     storage_link: StorageLink,
+    add_classifiers_profiles: list[str] | None = None,
 ) -> wandb.Artifact:
     """
     Links a model artifact, stored in S3, to a Weights & Biases run.
@@ -135,6 +136,8 @@ def create_and_link_model_artifact(
         "concept_id": classifier.concept.id,
         "concept_wikibase_revision": classifier.concept.wikibase_revision,
     }
+    if add_classifiers_profiles:
+        metadata["classifiers_profiles"] = list(add_classifiers_profiles)
     if isinstance(classifier, GPUBoundClassifier):
         Console().log("Adding GPU requirement to metadata")
         compute_environment: ComputeEnvironment = {"gpu": True}
@@ -267,7 +270,7 @@ def main(
         typer.Option(
             ...,
             help=(
-                "Run on coiled with a gpu. This uses prefect to start a coiled cluster. "
+                "Run on Coiled with a GPU. This uses prefect to start a Coiled cluster. "
                 "Note, that the classifier won't be available locally after training."
             ),
         ),
@@ -291,6 +294,10 @@ def main(
             help="Classifier kwargs in key=value format. Can be specified multiple times.",
         ),
     ] = None,
+    add_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Adds 1 or more classifiers profiles."),
+    ] = None,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
@@ -311,7 +318,6 @@ def main(
     :param classifier_kwarg: List of classifier kwargs in key=value format
     :type classifier_kwarg: Optional[list[str]]
     """
-
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
 
     if use_coiled_gpu:
@@ -328,6 +334,7 @@ def main(
                 "evaluate": evaluate,
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
+                "add_classifiers_profiles": add_classifiers_profiles,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -345,6 +352,7 @@ def main(
                 evaluate=evaluate,
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
+                add_classifiers_profiles=add_classifiers_profiles,
             )
         )
 
@@ -357,6 +365,7 @@ async def train_classifier(
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
     extra_wandb_config: dict[str, Any] = {},
+    add_classifiers_profiles: list[str] | None = None,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -440,10 +449,11 @@ async def train_classifier(
                 aws_env=aws_env,
             )
 
-            create_and_link_model_artifact(
+            _ = create_and_link_model_artifact(
                 run,  # type: ignore
                 classifier,
                 storage_link,
+                add_classifiers_profiles,
             )
 
         if evaluate:

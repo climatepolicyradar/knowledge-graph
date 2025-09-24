@@ -68,6 +68,35 @@ promote id +OPTS="":
 demote id aws_env:
     uv run demote --wikibase-id {{id}} --aws-env {{aws_env}}
 
+# Deploy (Get, train & deploy) new model to primary for the given AWS environment.
+# Example: just deploy-classifiers sandbox Q123
+deploy-classifier id aws_env +OPTS="":
+    uv run deploy new \
+        {{id}} \
+        --aws-env {{aws_env}} \
+        --train \
+        --promote \
+        {{OPTS}}
+
+# Deploy (Get, train & deploy) new models to primary for the given AWS environment.
+# Example: just deploy-classifiers sandbox 'Q123 Q368 Q374 Q404 Q412'
+deploy-classifiers ids aws_env +OPTS="":
+    #!/bin/bash
+    set -e
+
+    # Convert the ids argument to a list of --wikibase-id arguments
+    ids_args=""
+    for id in {{ids}}; do
+      ids_args="$ids_args --wikibase-id $id"
+    done
+
+    uv run deploy new \
+        --aws-env {{aws_env}} \
+        $ids_args \
+        --train \
+        --promote \
+        {{OPTS}}
+
 # run a model for a specific wikibase ID on a supplied string
 label id string:
     uv run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
@@ -154,24 +183,6 @@ serve-static-site tool:
 # Generate a static site
 generate-static-site tool:
     uv run python -m static_sites.{{tool}}
-
-# Deploy (Get, train & deploy) new models to primary for the given AWS environment.
-# Example: just deploy-classifiers sandbox 'Q123 Q368 Q374 Q404 Q412'
-deploy-classifiers aws_env ids:
-    #!/bin/bash
-    set -e
-
-    # Convert the ids argument to a list of --wikibase-id arguments
-    ids_args=""
-    for id in {{ids}}; do
-      ids_args="$ids_args --wikibase-id $id"
-    done
-
-    uv run deploy new \
-        --aws-env {{aws_env}} \
-        $ids_args \
-        --train \
-        --promote
 
 # Does inference have results for accepted classifiers?
 # Set STAGING_CACHE_BUCKET, or pass as argument:
