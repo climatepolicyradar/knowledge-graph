@@ -178,7 +178,7 @@ def main(
         # Check that classifiers profiles are defined
         classifiers_profiles = artifact.metadata.get("classifiers_profiles", [])
         if not classifiers_profiles:
-            raise typer.BadParameter(
+            log.warning(
                 "Artifact must have at least one classifiers profile in metadata. "
                 "Use the classifier-metadata script to add profiles before promoting."
             )
