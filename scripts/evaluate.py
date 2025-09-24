@@ -379,8 +379,6 @@ def log_metrics_to_wandb(
             f"metrics/{group}/{agreement}/accuracy": float(row["Accuracy"]),
             f"metrics/{group}/{agreement}/f1": float(row["F1 score"]),
             f"metrics/{group}/{agreement}/support": float(row["Support"]),
-            "group": group,
-            "agreement": agreement,
         }
         run.log(metrics_payload)
 
