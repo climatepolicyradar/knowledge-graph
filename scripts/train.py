@@ -359,7 +359,6 @@ async def train_classifier(
     extra_wandb_config: dict[str, Any] = {},
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
-
     # Create console locally to avoid serialization issues
     console = Console()
 
