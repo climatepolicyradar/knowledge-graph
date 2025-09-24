@@ -17,7 +17,6 @@ from prefect.states import Completed
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
-    PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
     BatchInferenceResult,
     InferenceResult,
     SingleDocumentInferenceResult,
@@ -28,8 +27,6 @@ from flows.inference import (
     determine_file_stems,
     document_passages,
     filter_document_batch,
-    generate_asset_deps,
-    generate_assets,
     get_latest_ingest_documents,
     inference,
     inference_batch_of_documents_cpu,
@@ -638,32 +635,13 @@ async def test_inference_batch_of_documents_cpu(
         }
     )
 
-    # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
-    def mock_generate_assets(config, inferences):
-        return [
-            "s3://dummy-bucket/dummy-asset-1.json",
-            "s3://dummy-bucket/dummy-asset-2.json",
-        ]
-
-    def mock_generate_asset_deps(config, inferences):
-        return [
-            "s3://dummy-bucket/dummy-dep-1.json",
-            "s3://dummy-bucket/dummy-dep-2.json",
-        ]
-
-    with (
-        patch("flows.inference.generate_assets", side_effect=mock_generate_assets),
-        patch(
-            "flows.inference.generate_asset_deps", side_effect=mock_generate_asset_deps
-        ),
-    ):
-        # Should not raise any exceptions for successful processing
-        result_state = await inference_batch_of_documents_cpu(
-            batch=batch,
-            config_json=config_json,
-            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
-            return_state=True,
-        )
+    # Should not raise any exceptions for successful processing
+    result_state = await inference_batch_of_documents_cpu(
+        batch=batch,
+        config_json=config_json,
+        classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+        return_state=True,
+    )
 
     result = await result_state.result()
     assert isinstance(result, BatchInferenceResult)
@@ -899,32 +877,13 @@ async def test__inference_batch_of_documents(
         }
     )
 
-    # Mock generate_assets and generate_asset_deps to return dummy S3 URIs
-    def mock_generate_assets(config, inferences):
-        return [
-            "s3://dummy-bucket/dummy-asset-1.json",
-            "s3://dummy-bucket/dummy-asset-2.json",
-        ]
-
-    def mock_generate_asset_deps(config, inferences):
-        return [
-            "s3://dummy-bucket/dummy-dep-1.json",
-            "s3://dummy-bucket/dummy-dep-2.json",
-        ]
-
     # Still needed since there's an inner function that uses this.
     mock_flow_run = MagicMock()
     mock_flow_run.name = "test-flow-run"
     mock_context = MagicMock(spec=FlowRunContext)
     mock_context.flow_run = mock_flow_run
 
-    with (
-        patch("flows.inference.generate_assets", side_effect=mock_generate_assets),
-        patch(
-            "flows.inference.generate_asset_deps", side_effect=mock_generate_asset_deps
-        ),
-        patch("flows.inference.get_run_context", return_value=mock_context),
-    ):
+    with patch("flows.inference.get_run_context", return_value=mock_context):
         # Should not raise any exceptions for successful processing
         result = await _inference_batch_of_documents(
             batch=batch,
@@ -1219,35 +1178,6 @@ def test_document_passages(
     )
 
 
-def test_generate_assets_and_asset_deps(test_config) -> None:
-    """Test that the generate_assets and generate_asset_deps functions work correctly."""
-
-    inferences = [
-        SingleDocumentInferenceResult(
-            labelled_passages=[],
-            document_stem=DocumentStem("TEST.DOC.0.1"),
-            wikibase_id=WikibaseID("Q9081"),
-            classifier_id="aaaa2222",
-        ),
-    ]
-
-    assets = generate_assets(test_config, inferences)
-    asset_deps = generate_asset_deps(test_config, inferences)
-    assert len(assets) == len(asset_deps) / 2 == len(inferences)
-
-    assets = generate_assets(test_config, inferences * 1000)
-    asset_deps = generate_asset_deps(test_config, inferences * 1000)
-    assert (
-        len(assets)
-        == len(asset_deps) / 2
-        == PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE
-    )
-
-    assets = generate_assets(test_config, inferences * 1000, 500)
-    asset_deps = generate_asset_deps(test_config, inferences * 1000, 500)
-    assert len(assets) == len(asset_deps) / 2 == 500
-
-
 @pytest.mark.parametrize(
     ("dont_run_on", "removed"),
     [
@@ -1320,7 +1250,7 @@ def test_log_client_error():
 
     extra_context = parse_client_error_details(error)
     assert extra_context
-    assert "Request time too skewed" in extra_context
+    assert "Request-Server time discrepancy" in extra_context
     assert "skew.seconds=1201" in extra_context
 
 

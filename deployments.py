@@ -225,9 +225,18 @@ create_deployment(
                 ],
                 "classifier_specs": [
                     # CPU-based
-                    {"name": "Q708", "alias": "v6"},
+                    {
+                        "wikibase_id": "Q708",
+                        "classifier_id": "x9kfsd8s",
+                        "wandb_registry_version": "v14",
+                    },
                     # GPU-based
-                    {"name": "Q1651", "alias": "v1"},
+                    {
+                        "wikibase_id": "Q1651",
+                        "classifier_id": "6rys3abe",
+                        "wandb_registry_version": "v13",
+                        "compute_environment": {"gpu": True},
+                    },
                 ],
             }
         ),

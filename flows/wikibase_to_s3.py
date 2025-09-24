@@ -4,10 +4,10 @@ from io import BytesIO
 
 import aioboto3
 from cpr_sdk.ssm import get_aws_ssm_param
-from prefect import flow, get_run_logger
+from prefect import flow
 from pydantic import SecretStr
 
-from flows.utils import SlackNotify, file_name_from_path
+from flows.utils import SlackNotify, file_name_from_path, get_logger
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
@@ -126,7 +126,7 @@ async def delete_extra_concepts_from_s3(
     extras_in_s3: list[str], config: Config
 ) -> list[str]:
     """Delete concepts from S3 that no longer exist in Wikibase."""
-    logger = get_run_logger()
+    logger = get_logger()
 
     logger.info(
         f"Deleting {len(extras_in_s3)} extra concepts from S3 that are no longer in Wikibase"
@@ -147,7 +147,7 @@ async def delete_extra_concepts_from_s3(
     on_crashed=[SlackNotify.message],  # pyright: ignore[reportUnknownMemberType]
 )
 async def wikibase_to_s3(config: Config | None = None):
-    logger = get_run_logger()
+    logger = get_logger()
 
     if not config:
         config = Config.create()
