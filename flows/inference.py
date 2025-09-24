@@ -11,7 +11,6 @@ import aioboto3
 import wandb
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
-from more_itertools import flatten
 from mypy_boto3_s3.type_defs import (
     ObjectTypeDef,
     PutObjectOutputTypeDef,
@@ -21,7 +20,6 @@ from prefect.artifacts import acreate_table_artifact
 from prefect.concurrency.asyncio import concurrency
 from prefect.context import FlowRunContext, get_run_context
 from prefect.exceptions import MissingContextError
-from prefect.settings import PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
 from types_aiobotocore_s3.client import S3Client
@@ -70,9 +68,6 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 AWS_ENV: str = os.environ["AWS_ENV"]
-PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE: int = (
-    PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES.value()
-)
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
@@ -218,6 +213,7 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     Retrieves the `new_and_updated_docs.json` file from the latest ingest.
     Extracts the ids from the file, and returns them as a single list.
     """
+    logger = get_logger()
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
@@ -258,7 +254,9 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
         updated = list(content["updated_documents"].keys())
         new = [d["import_id"] for d in content["new_documents"]]
 
-    print(f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}")
+    logger.info(
+        f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}"
+    )
     return new + updated
 
 
@@ -349,12 +347,11 @@ def parse_client_error_details(e: ClientError) -> Optional[str]:
             skew = datetime.fromisoformat(server_time) - datetime.fromisoformat(
                 request_time
             )
-            return f"Request time too skewed: {' & '.join(e.args)} - {skew.seconds=}"
+            return f"Request-Server time discrepancy: {' & '.join(e.args)} - {skew.seconds=}"
 
 
 async def download_s3_file(config: Config, key: str, s3_client: S3Client):
     """Retrieve an S3 file from the pipeline cache"""
-    logger = get_logger()
     try:
         response = await s3_client.get_object(
             Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
@@ -362,7 +359,7 @@ async def download_s3_file(config: Config, key: str, s3_client: S3Client):
         )
     except ClientError as e:
         if extra_context := parse_client_error_details(e):
-            logger.error(extra_context)
+            e.add_note(f"{extra_context}, key: {key}")
         raise
     body = await response["Body"].read()
     return body.decode("utf-8")
@@ -477,8 +474,10 @@ async def labels_to_s3(
     inference: SingleDocumentInferenceResult,
     s3_client: S3Client,
 ) -> PutObjectOutputTypeDef:
+    logger = get_logger()
     s3_uri = generate_s3_uri_output(config, inference)
-    print(f"Storing labels for document {inference.document_stem} at {s3_uri}")
+
+    logger.info(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
     body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
 
@@ -501,6 +500,8 @@ async def store_labels(
     list[BaseException],
 ]:
     """Store the labels in the cache bucket."""
+    logger = get_logger()
+
     # Don't get rate-limited by AWS
     semaphore = asyncio.Semaphore(100)
 
@@ -534,7 +535,9 @@ async def store_labels(
         else:
             inference, value = result
             if isinstance(value, Exception):
-                print(f"Failed to store label for {inference.document_stem}: {value}")
+                logger.error(
+                    f"Failed to store label for {inference.document_stem}: {value}"
+                )
                 failures.append((inference.document_stem, value))
             else:
                 if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
@@ -757,67 +760,6 @@ async def create_inference_on_batch_summary_artifact(
     )
 
 
-def generate_assets(
-    config: Config,
-    inferences: Sequence[SingleDocumentInferenceResult],
-    max_related_resources: int = PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
-) -> Sequence[str]:
-    """
-    Generate assets for the inference results.
-
-    There is a maximum number of related resources for a Prefect event, thus we
-    truncate the assets
-    - https://github.com/PrefectHQ/prefect/blob/4a2335d/src/prefect/events/schemas/events.py#L103-L111
-    """
-
-    if len(inferences) > max_related_resources:
-        print(
-            f"Too many assets to store: {len(inferences)} > {max_related_resources}, truncating to {max_related_resources}."
-        )
-        inferences = inferences[:max_related_resources]
-
-    return [str(generate_s3_uri_output(config, inference)) for inference in inferences]
-
-
-def generate_asset_deps(
-    config: Config,
-    inferences: Sequence[SingleDocumentInferenceResult],
-    max_related_resources: int = PREFECT_EVENTS_MAXIMUM_RELATED_RESOURCES_VALUE,
-) -> Sequence[str]:
-    """
-    Generate asset deps for the inference results.
-
-    There is a maximum number of related resources for a Prefect event, thus we
-    truncate the assets
-    - https://github.com/PrefectHQ/prefect/blob/4a2335d/src/prefect/events/schemas/events.py#L103-L111
-    """
-
-    if len(inferences) > max_related_resources:
-        print(
-            f"Too many asset deps to store: {len(inferences)} > {max_related_resources}, truncating to {max_related_resources}."
-        )
-        inferences = inferences[:max_related_resources]
-
-    return list(
-        flatten(
-            [
-                (
-                    f"wandb://{config.wandb_entity}/{config.wandb_model_registry}"
-                    f"/{inference.wikibase_id}"
-                    f":{inference.classifier_id}",
-                    str(
-                        generate_document_source_key(
-                            config=config,
-                            document_stem=inference.document_stem,
-                        )
-                    ),
-                )
-                for inference in inferences
-            ]
-        )
-    )
-
-
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -829,6 +771,7 @@ async def _inference_batch_of_documents(
     This reflects the unit of work that should be run in one of many
     parallelised Docker containers.
     """
+    logger = get_logger()
 
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
@@ -845,8 +788,7 @@ async def _inference_batch_of_documents(
     )
 
     classifier_spec = ClassifierSpec(**classifier_spec_json)
-
-    print(f"Loading classifier {classifier_spec}")
+    logger.info(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
     semaphore = asyncio.Semaphore(200)
@@ -886,7 +828,7 @@ async def _inference_batch_of_documents(
         else:
             document_stem, value = result
             if isinstance(value, Exception):
-                print(f"Failed to process document {document_stem}: {value}")
+                logger.error(f"Failed to process document {document_stem}: {value}")
                 inferences_failures.append((document_stem, value))
             else:
                 inferences_successes.append(value)
@@ -951,7 +893,7 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -964,7 +906,7 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-@flow(log_prints=True, result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(result_storage=S3_BLOCK_RESULTS_CACHE)
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -991,7 +933,6 @@ def filter_document_batch(
 
 
 @flow(
-    log_prints=True,
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
@@ -1018,10 +959,10 @@ async def inference(
     - config: A Config object, uses the default if not given. Usually
       there is no need to change this outside of local dev
     """
+    logger = get_logger()
     if not config:
         config = await Config.create()
-
-    print(f"Running with config: {config}")
+    logger.info(f"Running with config: {config}")
 
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
@@ -1036,7 +977,7 @@ async def inference(
 
     disallow_latest_alias(classifier_specs)
 
-    print(
+    logger.info(
         f"Running with {len(validated_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
     )

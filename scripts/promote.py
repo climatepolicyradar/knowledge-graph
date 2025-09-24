@@ -180,7 +180,7 @@ def main(
         if not classifiers_profiles:
             raise typer.BadParameter(
                 "Artifact must have at least one classifiers profile in metadata. "
-                "Use the classifier_metadata script to add profiles before promoting."
+                "Use the classifier-metadata script to add profiles before promoting."
             )
         log.info(f"Artifact has classifier profiles: {classifiers_profiles}")
 

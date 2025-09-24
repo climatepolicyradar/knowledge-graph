@@ -23,12 +23,6 @@ from knowledge_graph.classifier import (
     ModelPath,
     get_local_classifier_path,
 )
-from knowledge_graph.classifier import (
-    __all__ as available_classifier_types,
-)
-from knowledge_graph.classifier import (
-    __getattr__ as get_classifier_class,
-)
 from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
@@ -70,26 +64,6 @@ def parse_classifier_kwargs(classifier_kwarg: Optional[list[str]]) -> dict[str, 
                 kwargs[key] = value
 
     return kwargs
-
-
-def create_classifier(
-    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
-) -> Classifier:
-    """
-    Create a classifier from its type and any kwargs.
-
-    :raises typer.BadParameter: if classifier_type is unknown
-    """
-
-    try:
-        classifier_class = get_classifier_class(classifier_type)
-        return classifier_class(concept=concept, **classifier_kwargs)
-
-    except (ImportError, AttributeError) as e:
-        raise typer.BadParameter(
-            f"Unknown classifier type: '{classifier_type}'. "
-            f"Available types: {', '.join(available_classifier_types)}"
-        ) from e
 
 
 def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
@@ -395,6 +369,24 @@ def train_classifier(
     job_type = "train_model"
 
     classifier_args = vars(classifier)
+
+    # Validate parameter dependencies
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    concept = await scripts.get_concept.get_concept_async(
+        wikibase_id=wikibase_id,
+        include_labels_from_subconcepts=True,
+        include_recursive_has_subconcept=True,
+        wikibase_config=wikibase_config,
+    )
+
+    classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        # FIXME: can't use args here
+        classifier_kwargs=classifier_args or {},
+    )
+
 
     wandb_config = {
         "classifier_type": classifier.name,
