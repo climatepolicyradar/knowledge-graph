@@ -383,6 +383,7 @@ def train_classifier(
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
     experimental_model_type: bool = False,
+    extra_wandb_config: dict[str, Any] = {},
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
 
@@ -401,6 +402,7 @@ def train_classifier(
         "experimental-model-type": experimental_model_type,
         "concept_hash": classifier.concept.__hash__(),
     }
+    wandb_config |= extra_wandb_config
 
     with (
         wandb.init(
