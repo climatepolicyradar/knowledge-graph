@@ -1,5 +1,6 @@
 import importlib
 from pathlib import Path
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -83,6 +84,26 @@ __all__ = [
 ]
 
 
+def create_classifier(
+    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
+) -> Classifier:
+    """
+    Create a classifier from its type and any kwargs.
+
+    :raises ValueError: if classifier_type is unknown
+    """
+
+    try:
+        classifier_class = __getattr__(classifier_type)
+        return classifier_class(concept=concept, **classifier_kwargs)
+
+    except (ImportError, AttributeError) as e:
+        raise ValueError(
+            f"Unknown classifier type: '{classifier_type}'. "
+            f"Available types: {', '.join(__all__)}"
+        ) from e
+
+
 class ClassifierFactory:
     # Map of Wikibase IDs to their bespoke classifier classes
     bespoke_classifier_map: dict[WikibaseID, tuple[str, str]] = {
@@ -92,9 +113,21 @@ class ClassifierFactory:
     }
 
     @staticmethod
-    def create(concept: Concept) -> Classifier:
+    def create(
+        concept: Concept,
+        classifier_type: Optional[str] = None,
+        classifier_kwargs: dict[str, Any] = {},
+    ) -> Classifier:
         """Create a classifier for a concept, depending on its attributes"""
-        # First, check whether we have a bespoke classifier for the concept
+
+        if classifier_type is not None:
+            return create_classifier(
+                concept=concept,
+                classifier_type=classifier_type,
+                classifier_kwargs=classifier_kwargs,
+            )
+
+        # Check whether we have a bespoke classifier for the concept
         if (
             concept.wikibase_id is not None
             and concept.wikibase_id in ClassifierFactory.bespoke_classifier_map

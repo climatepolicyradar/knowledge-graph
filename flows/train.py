@@ -1,3 +1,5 @@
+from typing import Any, Optional
+
 import boto3
 import wandb
 from prefect import flow
@@ -15,6 +17,8 @@ async def train_on_gpu(
     track_and_upload: bool = False,
     aws_env: AwsEnv = AwsEnv.labs,
     evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
     config: Config | None = None,
 ):
     """Trigger the training script in prefect using coiled."""
@@ -46,4 +50,6 @@ async def train_on_gpu(
         wikibase_config=wikibase_config,
         s3_client=s3_client,
         evaluate=evaluate,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs,
     )

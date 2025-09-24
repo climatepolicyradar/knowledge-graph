@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Annotated, Optional
 
 import httpx
+import nest_asyncio
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
@@ -164,6 +165,17 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
     def predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
+
+        # Check whether an event loop is already running. Python can't run nested
+        # async processes, so if there's a running loop then we use `nest_asyncio` to
+        # make the prediction be able to run.
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                nest_asyncio.apply()
+        except RuntimeError:
+            pass
+
         response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
             text,
             model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]

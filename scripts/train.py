@@ -40,11 +40,37 @@ from scripts.evaluate import evaluate_classifier
 app = typer.Typer()
 
 
-def validate_params(track: bool, aws_env: AwsEnv) -> None:
+def parse_classifier_kwargs(classifier_kwarg: Optional[list[str]]) -> dict[str, Any]:
+    """Parse classifier kwargs from key=value strings."""
+    if not classifier_kwarg:
+        return {}
+
+    kwargs = {}
+    for kv in classifier_kwarg:
+        if "=" not in kv:
+            raise typer.BadParameter(
+                f"Invalid format for classifier kwarg: '{kv}'. Expected key=value format."
+            )
+
+        key, value = kv.split("=", 1)
+
+        # Try to parse as int, then bool, then string
+        try:
+            kwargs[key] = int(value)
+        except ValueError:
+            if value.lower() in ("true", "false"):
+                kwargs[key] = value.lower() == "true"
+            else:
+                kwargs[key] = value
+
+    return kwargs
+
+
+def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
     """Validate parameter dependencies."""
 
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-    if track and (not is_logged_in(aws_env, use_aws_profiles)):
+    if track_and_upload and (not is_logged_in(aws_env, use_aws_profiles)):
         raise typer.BadParameter(
             f"you're not logged into {aws_env.value}. "
             f"Do `aws sso login --profile {aws_env.value}`"
@@ -253,6 +279,18 @@ def main(
             help="Whether to evaluate the model after training",
         ),
     ] = True,
+    classifier_type: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Classifier type to use (e.g., LLMClassifier, KeywordClassifier). If not specified, uses ClassifierFactory default.",
+        ),
+    ] = None,
+    classifier_kwarg: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Classifier kwargs in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
@@ -267,7 +305,15 @@ def main(
     :type use_coiled_gpu: bool
     :param evaluate: Whether to evaluate the model after training
     :type evaluate: bool
+    :param classifier_type: The classifier type to use, optional. Defaults to the
+    classifier chosen by ClassifierFactory otherwise
+    :type classifier_type: Optional[str]
+    :param classifier_kwarg: List of classifier kwargs in key=value format
+    :type classifier_kwarg: Optional[list[str]]
     """
+
+    classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
+
     if use_coiled_gpu:
         flow_name = "train-on-gpu"
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
@@ -280,6 +326,8 @@ def main(
                 "track_and_upload": track_and_upload,
                 "aws_env": aws_env,
                 "evaluate": evaluate,
+                "classifier_type": classifier_type,
+                "classifier_kwargs": classifier_kwargs,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -295,6 +343,8 @@ def main(
                 track_and_upload=track_and_upload,
                 aws_env=aws_env,
                 evaluate=evaluate,
+                classifier_type=classifier_type,
+                classifier_kwargs=classifier_kwargs,
             )
         )
 
@@ -306,6 +356,8 @@ async def run_training(
     wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
 ) -> Classifier:
     """Train the model and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -316,24 +368,38 @@ async def run_training(
     job_type = "train_model"
 
     # Validate parameter dependencies
-    validate_params(track_and_upload, aws_env)
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    concept = await scripts.get_concept.get_concept_async(
+        wikibase_id=wikibase_id,
+        include_labels_from_subconcepts=True,
+        include_recursive_has_subconcept=True,
+        wikibase_config=wikibase_config,
+    )
+
+    classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs or {},
+    )
+
+    wandb_config = {
+        "classifier_type": classifier.name,
+        "classifier_kwargs": classifier_kwargs,
+        "experimental-model-type": classifier_type is not None,
+        "concept_hash": concept.__hash__(),
+    }
 
     with (
         wandb.init(
-            entity=namespace.entity, project=namespace.project, job_type=job_type
+            entity=namespace.entity,
+            project=namespace.project,
+            job_type=job_type,
+            config=wandb_config,
         )
         if track_and_upload
         else nullcontext()
     ) as run:
-        concept = await scripts.get_concept.get_concept_async(
-            wikibase_id=wikibase_id,
-            include_labels_from_subconcepts=True,
-            include_recursive_has_subconcept=True,
-            wikibase_config=wikibase_config,
-        )
-
-        # Create and train a classifier instance
-        classifier = ClassifierFactory.create(concept=concept)
         classifier.fit()
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
