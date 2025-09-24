@@ -23,12 +23,6 @@ from knowledge_graph.classifier import (
     ModelPath,
     get_local_classifier_path,
 )
-from knowledge_graph.classifier import (
-    __all__ as available_classifier_types,
-)
-from knowledge_graph.classifier import (
-    __getattr__ as get_classifier_class,
-)
 from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
@@ -70,26 +64,6 @@ def parse_classifier_kwargs(classifier_kwarg: Optional[list[str]]) -> dict[str, 
                 kwargs[key] = value
 
     return kwargs
-
-
-def create_classifier(
-    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
-) -> Classifier:
-    """
-    Create a classifier from its type and any kwargs.
-
-    :raises typer.BadParameter: if classifier_type is unknown
-    """
-
-    try:
-        classifier_class = get_classifier_class(classifier_type)
-        return classifier_class(concept=concept, **classifier_kwargs)
-
-    except (ImportError, AttributeError) as e:
-        raise typer.BadParameter(
-            f"Unknown classifier type: '{classifier_type}'. "
-            f"Available types: {', '.join(available_classifier_types)}"
-        ) from e
 
 
 def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
@@ -403,14 +377,11 @@ async def run_training(
         wikibase_config=wikibase_config,
     )
 
-    if classifier_type:
-        classifier = create_classifier(
-            concept=concept,
-            classifier_type=classifier_type,
-            classifier_kwargs=classifier_kwargs or {},
-        )
-    else:
-        classifier = ClassifierFactory.create(concept)
+    classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs or {},
+    )
 
     wandb_config = {
         "classifier_type": classifier.name,
