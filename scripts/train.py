@@ -349,14 +349,13 @@ def main(
         )
 
 
-def train_classifier(
+async def train_classifier(
     classifier: Classifier,
     wikibase_id: WikibaseID,
     track_and_upload: bool,
     aws_env: AwsEnv,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
-    experimental_model_type: bool = False,
     extra_wandb_config: dict[str, Any] = {},
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
@@ -373,25 +372,9 @@ def train_classifier(
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
 
-    concept = await scripts.get_concept.get_concept_async(
-        wikibase_id=wikibase_id,
-        include_labels_from_subconcepts=True,
-        include_recursive_has_subconcept=True,
-        wikibase_config=wikibase_config,
-    )
-
-    classifier = ClassifierFactory.create(
-        concept=concept,
-        classifier_type=classifier_type,
-        # FIXME: can't use args here
-        classifier_kwargs=classifier_args or {},
-    )
-
-
     wandb_config = {
         "classifier_type": classifier.name,
         "classifier_args": classifier_args,
-        "experimental-model-type": experimental_model_type,
         "concept_hash": classifier.concept.__hash__(),
     }
     wandb_config |= extra_wandb_config
@@ -523,23 +506,24 @@ async def run_training(
         wikibase_config=wikibase_config,
     )
 
-    if classifier_type:
-        classifier = create_classifier(
-            concept=concept,
-            classifier_type=classifier_type,
-            classifier_kwargs=classifier_kwargs or {},
-        )
-    else:
-        classifier = ClassifierFactory.create(concept)
+    classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs or {},
+    )
 
-    return train_classifier(
+    extra_wandb_config = {
+        "experimental_model_type": classifier_type is not None,
+    }
+
+    return await train_classifier(
         classifier=classifier,
         wikibase_id=wikibase_id,
         track_and_upload=track_and_upload,
         aws_env=aws_env,
         s3_client=s3_client,
         evaluate=evaluate,
-        experimental_model_type=classifier_type is not None,
+        extra_wandb_config=extra_wandb_config,
     )
 
 

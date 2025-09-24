@@ -5,12 +5,13 @@ import typer
 from rich.console import Console
 from rich.progress import Progress
 
+from knowledge_graph.classifier import ClassifierFactory
 from knowledge_graph.classifier.classifier import Classifier, VariantEnabledClassifier
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.ensemble import Ensemble
 from knowledge_graph.identifiers import WikibaseID
 from scripts.get_concept import get_concept_async
-from scripts.train import create_classifier, parse_classifier_kwargs, train_classifier
+from scripts.train import parse_classifier_kwargs, train_classifier
 
 app = typer.Typer()
 
@@ -59,7 +60,11 @@ async def train_ensemble(
 
     # TODO: warn that random seed will be ignored for LLMClassifier
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
-    initial_classifier = create_classifier(concept, classifier_type, classifier_kwargs)
+    initial_classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs,
+    )
 
     if not isinstance(initial_classifier, VariantEnabledClassifier):
         raise typer.BadParameter(
@@ -82,6 +87,7 @@ async def train_ensemble(
 
     extra_wandb_config = {
         "ensemble_name": ensemble_name,
+        "experimental_model_type": True,
     }
 
     with Progress() as progress:
@@ -90,12 +96,11 @@ async def train_ensemble(
             total=len(classifiers),
         )
         for clf in classifiers:
-            train_classifier(
+            await train_classifier(
                 clf,
                 wikibase_id,
                 track_and_upload=True,
                 evaluate=True,
-                experimental_model_type=True,
                 aws_env=AwsEnv.labs,
                 extra_wandb_config=extra_wandb_config,
             )
