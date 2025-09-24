@@ -499,8 +499,13 @@ async def run_training(
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
+    add_classifiers_profiles: list[str] | None = None,
 ) -> Classifier:
-    """Train the model and optionally track the run, uploading the model."""
+    """
+    Get a concept and create a classifier, then train the classifier.
+
+    Optionally evaluate, track in W&B and upload the model to S3.
+    """
 
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
@@ -530,6 +535,7 @@ async def run_training(
         s3_client=s3_client,
         evaluate=evaluate,
         extra_wandb_config=extra_wandb_config,
+        add_classifiers_profiles=add_classifiers_profiles,
     )
 
 
