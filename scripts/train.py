@@ -375,17 +375,17 @@ def main(
         )
 
 
-async def run_training(
+def train_classifier(
+    classifier: Classifier,
     wikibase_id: WikibaseID,
     track_and_upload: bool,
     aws_env: AwsEnv,
-    wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
-    classifier_type: Optional[str] = None,
-    classifier_kwargs: Optional[dict[str, Any]] = None,
-) -> Classifier:
-    """Train the model and optionally track the run, uploading the model."""
+    experimental_model_type: bool = False,
+) -> "Classifier":
+    """Train a classifier and optionally track the run, uploading the model."""
+
     # Create console locally to avoid serialization issues
     console = Console()
 
@@ -393,30 +393,13 @@ async def run_training(
     namespace = Namespace(project=project, entity=WANDB_ENTITY)
     job_type = "train_model"
 
-    # Validate parameter dependencies
-    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
-
-    concept = await scripts.get_concept.get_concept_async(
-        wikibase_id=wikibase_id,
-        include_labels_from_subconcepts=True,
-        include_recursive_has_subconcept=True,
-        wikibase_config=wikibase_config,
-    )
-
-    if classifier_type:
-        classifier = create_classifier(
-            concept=concept,
-            classifier_type=classifier_type,
-            classifier_kwargs=classifier_kwargs or {},
-        )
-    else:
-        classifier = ClassifierFactory.create(concept)
+    classifier_args = vars(classifier)
 
     wandb_config = {
         "classifier_type": classifier.name,
-        "classifier_kwargs": classifier_kwargs,
-        "experimental-model-type": classifier_type is not None,
-        "concept_hash": concept.__hash__(),
+        "classifier_args": classifier_args,
+        "experimental-model-type": experimental_model_type,
+        "concept_hash": classifier.concept.__hash__(),
     }
 
     with (
@@ -493,7 +476,7 @@ async def run_training(
         if evaluate:
             metrics_df, model_labelled_passages = evaluate_classifier(
                 classifier=classifier,
-                labelled_passages=concept.labelled_passages,
+                labelled_passages=classifier.concept.labelled_passages,
                 wandb_run=run,
             )
 
@@ -522,6 +505,48 @@ async def run_training(
                 console.log("✅ Labelled passages uploaded successfully")
 
     return classifier
+
+
+async def run_training(
+    wikibase_id: WikibaseID,
+    track_and_upload: bool,
+    aws_env: AwsEnv,
+    wikibase_config: Optional[WikibaseConfig] = None,
+    s3_client: Optional[Any] = None,
+    evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
+) -> Classifier:
+    """Train the model and optionally track the run, uploading the model."""
+
+    # Validate parameter dependencies
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    concept = await scripts.get_concept.get_concept_async(
+        wikibase_id=wikibase_id,
+        include_labels_from_subconcepts=True,
+        include_recursive_has_subconcept=True,
+        wikibase_config=wikibase_config,
+    )
+
+    if classifier_type:
+        classifier = create_classifier(
+            concept=concept,
+            classifier_type=classifier_type,
+            classifier_kwargs=classifier_kwargs or {},
+        )
+    else:
+        classifier = ClassifierFactory.create(concept)
+
+    return train_classifier(
+        classifier=classifier,
+        wikibase_id=wikibase_id,
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        s3_client=s3_client,
+        evaluate=evaluate,
+        experimental_model_type=classifier_type is not None,
+    )
 
 
 if __name__ == "__main__":
