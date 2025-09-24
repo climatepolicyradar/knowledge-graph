@@ -53,7 +53,7 @@ async def create_full_pipeline_summary_artifact(
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
-@flow(log_prints=True)
+@flow()
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
