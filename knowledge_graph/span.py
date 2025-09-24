@@ -217,6 +217,12 @@ class Span(BaseModel):
 
         tags = re.findall(r"</?concept>", xml)
 
+        if not tags:
+            return  # No tags is valid - nothing was found to tag
+
+        if len(tags) % 2 != 0:
+            raise SpanXMLConceptFormattingError(f"Odd number of tags found: {xml}")
+
         if not (
             tags[0] == "<concept>"
             and len(set(tags)) == 2
