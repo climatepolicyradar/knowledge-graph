@@ -366,14 +366,11 @@ async def train_classifier(
     namespace = Namespace(project=project, entity=WANDB_ENTITY)
     job_type = "train_model"
 
-    classifier_args = vars(classifier)
-
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
 
     wandb_config = {
         "classifier_type": classifier.name,
-        "classifier_args": classifier_args,
         "concept_hash": classifier.concept.__hash__(),
     }
     wandb_config |= extra_wandb_config

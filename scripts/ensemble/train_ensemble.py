@@ -70,6 +70,7 @@ async def train_ensemble(
     extra_wandb_config = {
         "ensemble_name": ensemble_name,
         "experimental_model_type": True,
+        "classifier_kwargs": classifier_kwargs,
     }
 
     classifiers = ensemble.classifiers
