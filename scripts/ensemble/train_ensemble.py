@@ -1,14 +1,12 @@
 import asyncio
-from typing import Annotated, Optional, cast
+from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
 from rich.progress import Progress
 
 from knowledge_graph.classifier import ClassifierFactory
-from knowledge_graph.classifier.classifier import Classifier, VariantEnabledClassifier
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.ensemble import Ensemble
 from knowledge_graph.identifiers import WikibaseID
 from scripts.get_concept import get_concept_async
 from scripts.train import parse_classifier_kwargs, train_classifier
@@ -26,9 +24,7 @@ async def train_ensemble(
     ],
     n_classifiers: Annotated[
         int,
-        typer.Option(
-            default=10, help="Number of classifiers to include in the ensemble."
-        ),
+        typer.Option(help="Number of classifiers to include in the ensemble."),
     ],
     classifier_kwarg: Annotated[
         Optional[list[str]],
@@ -58,37 +54,25 @@ async def train_ensemble(
         include_recursive_has_subconcept=True,
     )
 
-    # TODO: warn that random seed will be ignored for LLMClassifier
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
-    initial_classifier = ClassifierFactory.create(
+    ensemble = ClassifierFactory.create_ensemble(
         concept=concept,
         classifier_type=classifier_type,
         classifier_kwargs=classifier_kwargs,
+        n_classifiers=n_classifiers,
     )
 
-    if not isinstance(initial_classifier, VariantEnabledClassifier):
-        raise typer.BadParameter(
-            f"Classifier type must be variant-enabled to be part of an ensemble.\nClassifier type {classifier_type} is not."
-        )
-
-    classifiers: list[Classifier] = [
-        initial_classifier,
-        *[
-            cast(Classifier, initial_classifier.get_variant())
-            for _ in range(n_classifiers - 1)
-        ],
-    ]
-
-    ensemble = Ensemble(concept=concept, classifiers=classifiers)
     ensemble_name = str(ensemble)
     console.log(
-        f"Ensemble assembled. To find relevant runs, filter by ensemble_name = {ensemble_name}."
+        f"Ensemble created. To find relevant runs, filter by ensemble_name = {ensemble_name}."
     )
 
     extra_wandb_config = {
         "ensemble_name": ensemble_name,
         "experimental_model_type": True,
     }
+
+    classifiers = ensemble.classifiers
 
     with Progress() as progress:
         task = progress.add_task(
@@ -125,10 +109,8 @@ def main(
     ],
     n_classifiers: Annotated[
         int,
-        typer.Option(
-            default=10, help="Number of classifiers to include in the ensemble."
-        ),
-    ],
+        typer.Option(help="Number of classifiers to include in the ensemble."),
+    ] = 10,
     classifier_kwarg: Annotated[
         Optional[list[str]],
         typer.Option(
