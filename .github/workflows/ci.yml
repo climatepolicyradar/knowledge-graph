@@ -85,7 +85,6 @@ jobs:
 
   deploy_prefect_sandbox:
     name: "Deploy"
-    needs: [lint, test]
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox
