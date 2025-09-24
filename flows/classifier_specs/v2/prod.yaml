@@ -5,10 +5,12 @@
   wandb_registry_version: v5
   dont_run_on:
   - sabin
-- wikibase_id: Q57
-  concept_id: 3p2pxgcp
-  classifier_id: jq7535b6
-  wandb_registry_version: v3
+- wikibase_id: Q58
+  concept_id: hfd68r3n
+  classifier_id: narmhegj
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v1
   dont_run_on:
   - sabin
 - wikibase_id: Q68
@@ -18,9 +20,11 @@
   dont_run_on:
   - sabin
 - wikibase_id: Q69
-  concept_id: swk535mj
-  classifier_id: 5ppa92su
-  wandb_registry_version: v2
+  concept_id: 7gzqkcyc
+  classifier_id: swabfsar
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v3
   dont_run_on:
   - sabin
 - wikibase_id: Q123
@@ -500,12 +504,16 @@
 - wikibase_id: Q1744
   concept_id: m2cfkvme
   classifier_id: 7aeap3ca
-  wandb_registry_version: v2
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v3
   dont_run_on:
   - sabin
 - wikibase_id: Q1754
-  concept_id: xvsvqu5f
-  classifier_id: jakqefy4
-  wandb_registry_version: v2
+  concept_id: zd8gkgga
+  classifier_id: 6y38j2hv
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v3
   dont_run_on:
   - sabin
