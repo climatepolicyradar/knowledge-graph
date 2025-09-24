@@ -125,14 +125,22 @@ def main(
             help="Whether this will be primary for this AWS environment",
         ),
     ] = False,
+    add_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Adds 1 or more classifiers profiles."),
+    ] = None,
+    remove_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Removes 1 or more classifiers profiles."),
+    ] = None,
 ):
     """
     Promote a model to the registry so it can be used downstream.
 
     The model should already have been trained, meaning it will exist
-    as an artefact in wandb, with a linked model in s3 for the environment.
+    as an artifact in W&B, with a linked model in s3 for the environment.
 
-    This script adds a link to the chosen model from the wandb registry as a
+    This script adds a link to the chosen model from the W&B registry as a
     collection. Optionally the model can be made primary for the AWS
     environment, this means applying an environment alias to the model in the
     collection.
@@ -143,6 +151,18 @@ def main(
     Note: promoting between environments is not yet supported.
     """
     log.info("Starting model promotion process")
+
+    log.info("Validating classifiers profiles...")
+    add_class_prof: set[str] = (
+        set(add_classifiers_profiles) if add_classifiers_profiles else set()
+    )
+    remove_class_prof: set[str] = (
+        set(remove_classifiers_profiles) if remove_classifiers_profiles else set()
+    )
+    if dupes := add_class_prof & remove_class_prof:
+        raise typer.BadParameter(
+            f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
+        )
 
     log.info("Validating AWS logins...")
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
@@ -163,7 +183,7 @@ def main(
     target_path = f"wandb-registry-{REGISTRY_NAME}/{collection_name}"
     log.info(f"Using model collection: {target_path}...")
 
-    log.info("Initializing Weights & Biases run...")
+    log.info("Initialising Weights & Biases run...")
     with wandb.init(entity=WANDB_ENTITY, project=wikibase_id, job_type=JOB_TYPE) as run:
         # Regardless of the promotion, we'll always be using some artifact.
         #
@@ -176,13 +196,21 @@ def main(
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
         # Check that classifiers profiles are defined
-        classifiers_profiles = artifact.metadata.get("classifiers_profiles", [])
-        if not classifiers_profiles:
+        current_class_prof = set(artifact.metadata.get("classifiers_profiles", []))
+        if not current_class_prof and not add_class_prof:
             raise typer.BadParameter(
-                "Artifact must have at least one classifiers profile in metadata. "
-                "Use the classifier-metadata script to add profiles before promoting."
+                "Artifact must have at least one classifiers profile in metadata, or you must specify at least 1 to add. "
             )
-        log.info(f"Artifact has classifier profiles: {classifiers_profiles}")
+
+        if (
+            classifiers_profiles := (current_class_prof | add_class_prof)
+            - remove_class_prof
+        ):
+            artifact.metadata["classifiers_profiles"] = classifiers_profiles
+        else:
+            artifact.metadata.pop("classifiers_profiles", None)
+
+        log.info(f"Artifact has classifier profiles: {current_class_prof}")
 
         api = wandb.Api()
 
