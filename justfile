@@ -167,7 +167,7 @@ deploy-classifiers aws_env ids:
       ids_args="$ids_args --wikibase-id $id"
     done
 
-    uv run python scripts/deploy.py new \
+    uv run deploy new \
         --aws-env {{aws_env}} \
         $ids_args \
         --train \
@@ -208,7 +208,7 @@ audit-s3-vespa-alignment +OPTS="":
 
 # Update the metadata for a classifier
 classifier-metadata wikibase_id classifier_id aws_env +OPTS="":
-    uv run python -m scripts.classifier_metadata update \
+    uv run classifier-metadata update \
         --wikibase-id {{wikibase_id}} \
         --classifier-id {{classifier_id}} \
         --aws-env {{aws_env}} \
@@ -216,7 +216,7 @@ classifier-metadata wikibase_id classifier_id aws_env +OPTS="":
 
 # Update the same metadata for multiple classifiers in one aws env
 classifier-metadata-entire-env aws_env +OPTS="":
-    uv run python -m scripts.classifier_metadata update-entire-env \
+    uv run classifier-metadata update-entire-env \
         --aws-env {{aws_env}} \
         {{OPTS}}
 

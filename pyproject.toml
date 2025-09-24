@@ -100,6 +100,7 @@ demote = "scripts.demote:app"
 evaluate = "scripts.evaluate:app"
 infer = "scripts.infer:app"
 update-inference-classifiers = "scripts.update_classifier_spec:app"
+classifier-metadata = "scripts.classifier_metadata:app"
 deploy = "scripts.deploy:app"
 
 
