@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import importlib
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from pydantic import BaseModel
 
@@ -11,8 +13,10 @@ from knowledge_graph.classifier.classifier import (
 )
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
-from knowledge_graph.ensemble import Ensemble
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+
+if TYPE_CHECKING:
+    from knowledge_graph.ensemble import Ensemble
 
 
 class ModelPath(BaseModel):
@@ -159,6 +163,8 @@ class ClassifierFactory:
 
         :raises ValueError: if the classifier_type is not variant-enabled.
         """
+        # Local import avoids circular dependency issues
+        from knowledge_graph.ensemble import Ensemble
 
         initial_classifier = ClassifierFactory.create(
             concept=concept,
