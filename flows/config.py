@@ -92,6 +92,11 @@ class Config(BaseModel):
         description="The wikibase instance base url. Used to authenticate with a WikibaseSession",
     )
 
+    s3_concurrency_limit: int = Field(
+        default=50,
+        description="Use to limit asynchronous s3 operations for an individual batch.",
+    )
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
@@ -144,4 +149,5 @@ class Config(BaseModel):
                 self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
             ),
             "aws_env": self.aws_env,
+            "s3_concurrency_limit": self.s3_concurrency_limit,
         }
