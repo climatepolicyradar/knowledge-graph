@@ -476,7 +476,7 @@ async def train_classifier(
                 )
 
                 with labelled_passages_artifact.new_file(
-                    "labelled_passages.json", mode="w"
+                    "labelled_passages.jsonl", mode="w", encoding="utf-8"
                 ) as f:
                     data = "\n".join(
                         [entry.model_dump_json() for entry in model_labelled_passages]
