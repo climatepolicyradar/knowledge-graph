@@ -28,7 +28,7 @@ from flows.inference import (
     InferenceResult,
     inference,
 )
-from flows.utils import DocumentImportId, Fault, get_logger
+from flows.utils import DocumentImportId, Fault, SlackNotify, get_logger
 
 
 async def create_full_pipeline_summary_artifact(
@@ -53,7 +53,9 @@ async def create_full_pipeline_summary_artifact(
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
-@flow()
+@flow(
+    on_completion=[SlackNotify.message],
+)
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
