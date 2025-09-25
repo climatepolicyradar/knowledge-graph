@@ -1,6 +1,7 @@
 import os
 from time import sleep
 
+from neo4j.exceptions import ServiceUnavailable
 from neomodel import (
     Relationship,
     RelationshipFrom,
@@ -13,8 +14,6 @@ from neomodel import (
 from neomodel.sync_.cardinality import One, ZeroOrMore
 from rich.console import Console
 from rich.progress import Progress
-
-from neo4j.exceptions import ServiceUnavailable
 
 console = Console()
 
