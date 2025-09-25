@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import json
 import os
 from collections.abc import Generator, Sequence
@@ -305,6 +306,12 @@ async def determine_file_stems(
     for doc_id in requested_document_ids:
         if "1" in doc_id:  # Don't log all
             logger.info(f"9: {doc_id} " + json.dumps(get_memory_and_cpu_metrics()))
+            initial_count = len(gc.get_objects())
+            collected = gc.collect()
+            final_count = len(gc.get_objects())
+            logger.info(
+                f"Garbage collection: {initial_count} {collected} {final_count}"
+            )
         document_key = os.path.join(
             config.inference_document_source_prefix, f"{doc_id}.json"
         )
