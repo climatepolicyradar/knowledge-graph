@@ -41,6 +41,7 @@ dependencies = [
     "prefect-coiled>=0.0.4",
     "html2text>=2025.4.15",
     "nest-asyncio>=1.6.0",
+    "psutil>=7.0.0",
 ]
 
 [project.optional-dependencies]

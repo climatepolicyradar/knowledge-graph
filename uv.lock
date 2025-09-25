@@ -1,10 +1,20 @@
 version = 1
+revision = 1
 requires-python = "==3.13.*"
 resolution-markers = [
-    "sys_platform == 'linux'",
-    "sys_platform != 'linux'",
-    "sys_platform != 'darwin' and sys_platform != 'linux'",
-    "sys_platform == 'darwin'",
+    "sys_platform == 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'darwin' and sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'darwin' and sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'darwin' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'darwin' and extra != 'extra-15-knowledge-graph-transformers' and extra != 'extra-15-knowledge-graph-transformers-gpu'",
 ]
 conflicts = [[
     { package = "knowledge-graph", extra = "transformers" },
@@ -23,8 +33,8 @@ dependencies = [
     { name = "pyyaml" },
     { name = "safetensors" },
     { name = "torch", version = "2.7.1+cu118", source = { registry = "https://download.pytorch.org/whl/cu118" }, marker = "extra == 'extra-15-knowledge-graph-transformers-gpu'" },
-    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/25/969456a95a90ed38f73f68d0f0915bdf1d76145d05054c59ad587b171150/accelerate-1.9.0.tar.gz", hash = "sha256:0e8c61f81af7bf37195b6175a545ed292617dd90563c88f49020aea5b6a0b47f", size = 383234 }
 wheels = [
@@ -608,7 +618,7 @@ name = "build"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "(os_name == 'nt' and sys_platform != 'linux') or (os_name != 'nt' and extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu') or (sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "colorama", marker = "(os_name == 'nt' and sys_platform != 'darwin' and sys_platform != 'linux') or (os_name == 'nt' and sys_platform == 'darwin' and extra != 'extra-15-knowledge-graph-transformers') or (os_name != 'nt' and extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu') or (sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu') or (sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
     { name = "packaging" },
     { name = "pyproject-hooks" },
 ]
@@ -2146,6 +2156,7 @@ dependencies = [
     { name = "nltk" },
     { name = "prefect", extra = ["aws", "slack"] },
     { name = "prefect-coiled" },
+    { name = "psutil" },
     { name = "pydantic-ai" },
     { name = "pytest-aioboto3" },
     { name = "python-dotenv" },
@@ -2197,16 +2208,16 @@ transformers = [
     { name = "accelerate" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
-    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'linux'" },
-    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
-    { name = "transformers", extra = ["torch"] },
+    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "transformers", extra = ["torch"], marker = "extra == 'extra-15-knowledge-graph-transformers'" },
 ]
 transformers-gpu = [
     { name = "accelerate" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
     { name = "torch", version = "2.7.1+cu118", source = { registry = "https://download.pytorch.org/whl/cu118" } },
-    { name = "transformers", extra = ["torch"] },
+    { name = "transformers", extra = ["torch"], marker = "extra == 'extra-15-knowledge-graph-transformers-gpu'" },
 ]
 
 [package.metadata]
@@ -2246,6 +2257,7 @@ requires-dist = [
     { name = "prefect", extras = ["aws", "slack"], specifier = ">=3.4.17" },
     { name = "prefect-coiled", specifier = ">=0.0.4" },
     { name = "prefect-coiled", marker = "extra == 'coiled'", specifier = ">=0.0.4" },
+    { name = "psutil", specifier = ">=7.0.0" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.145.0" },
     { name = "pulumi-aws", marker = "extra == 'dev'", specifier = ">=6.66.2" },
     { name = "pulumi-docker", marker = "extra == 'dev'", specifier = ">=4.0.0,<5.0.0" },
@@ -2278,6 +2290,7 @@ requires-dist = [
     { name = "types-aioboto3", extras = ["s3"], specifier = ">=14.3.0" },
     { name = "wandb", specifier = ">=0.21.0" },
 ]
+provides-extras = ["transformers", "transformers-gpu", "coiled", "dev", "mcp"]
 
 [[package]]
 name = "langdetect"
@@ -4687,8 +4700,8 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "torch", version = "2.7.1+cu118", source = { registry = "https://download.pytorch.org/whl/cu118" }, marker = "extra == 'extra-15-knowledge-graph-transformers-gpu'" },
-    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
     { name = "tqdm" },
     { name = "transformers" },
     { name = "typing-extensions" },
@@ -4988,10 +5001,10 @@ name = "torch"
 version = "2.7.1+cu118"
 source = { registry = "https://download.pytorch.org/whl/cu118" }
 resolution-markers = [
-    "sys_platform == 'linux'",
-    "sys_platform != 'linux'",
-    "sys_platform != 'darwin' and sys_platform != 'linux'",
-    "sys_platform == 'darwin'",
+    "sys_platform == 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform != 'darwin' and sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
+    "sys_platform == 'darwin' and extra != 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu'",
 ]
 dependencies = [
     { name = "filelock", marker = "extra == 'extra-15-knowledge-graph-transformers-gpu'" },
@@ -5026,18 +5039,16 @@ name = "torch"
 version = "2.8.0"
 source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
-    "sys_platform != 'linux'",
-    "sys_platform != 'darwin' and sys_platform != 'linux'",
     "sys_platform == 'darwin'",
 ]
 dependencies = [
-    { name = "filelock", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "fsspec", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "jinja2", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "networkx", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "setuptools", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "sympy", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "typing-extensions", marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "filelock", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "fsspec", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "jinja2", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "networkx", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "setuptools", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "sympy", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "typing-extensions", marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
 ]
 wheels = [
     { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0-cp313-cp313t-macosx_14_0_arm64.whl" },
@@ -5050,15 +5061,16 @@ version = "2.8.0+cpu"
 source = { registry = "https://download.pytorch.org/whl/cpu" }
 resolution-markers = [
     "sys_platform == 'linux'",
+    "sys_platform != 'darwin' and sys_platform != 'linux'",
 ]
 dependencies = [
-    { name = "filelock", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "fsspec", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "jinja2", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "networkx", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "setuptools", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "sympy", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "typing-extensions", marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "filelock", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "fsspec", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "jinja2", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "networkx", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "setuptools", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "sympy", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "typing-extensions", marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
 ]
 wheels = [
     { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-linux_s390x.whl" },
@@ -5136,8 +5148,8 @@ wheels = [
 torch = [
     { name = "accelerate" },
     { name = "torch", version = "2.7.1+cu118", source = { registry = "https://download.pytorch.org/whl/cu118" }, marker = "extra == 'extra-15-knowledge-graph-transformers-gpu'" },
-    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
-    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'linux' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
 ]
 
 [[package]]
@@ -5554,7 +5566,7 @@ name = "xattr"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "sys_platform != 'linux' or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "cffi", marker = "sys_platform == 'darwin' or (sys_platform != 'linux' and extra != 'extra-15-knowledge-graph-transformers') or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/65/14438ae55acf7f8fc396ee8340d740a3e1d6ef382bf25bf24156cfb83563/xattr-1.2.0.tar.gz", hash = "sha256:a64c8e21eff1be143accf80fd3b8fde3e28a478c37da298742af647ac3e5e0a7", size = 17293 }
 wheels = [
