@@ -1,12 +1,3 @@
-"""
-Evaluate ensemble metrics as predictors of classifier quality.
-
-This script analyzes how ensemble uncertainty metrics (Disagreement, PositiveRatio,
-PredictionProbabilityStandardDeviation) correlate with classifier performance.
-It generates F1 vs threshold & referral rate plots showing optimal thresholds
-for filtering uncertain predictions to maximize F1 scores.
-"""
-
 import asyncio
 import tempfile
 from pathlib import Path
@@ -49,20 +40,16 @@ def load_ensemble_runs_from_wandb(
     """
     Load ensemble runs and their labelled_passages artifacts from W&B.
 
-    Returns:
-        (run_metadata_list, predictions_per_classifier):
-        - run_metadata_list: List of run metadata dicts
-        - predictions_per_classifier: List of LabelledPassage lists (one per classifier)
+    :returns list[dict] run_metadata_list: Metadata of the W&B runs
+    :returns list[list[LabelledPassage]] predictions_per_classifier: one list of
+        labelled passages per classifier
     """
 
     console.log(
         f"Fetching runs with ensemble_name = {ensemble_name} from {wikibase_id}"
     )
 
-    # Initialize W&B API
     api = wandb.Api()
-
-    # Query runs with the specified ensemble name
     runs = api.runs(wikibase_id, filters={"config.ensemble_name": ensemble_name})
 
     run_metadata = []
@@ -101,9 +88,9 @@ def load_ensemble_runs_from_wandb(
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 artifact_dir = labelled_passages_artifact.download(root=temp_dir)
-                json_files = list(Path(artifact_dir).glob("*.jsonl"))
+                jsonl_files = list(Path(artifact_dir).glob("*.jsonl"))
 
-                if not json_files:
+                if not jsonl_files:
                     console.log(
                         f"⚠️ No JSON files found in labelled_passages artifact for run {run.name}"
                     )
@@ -112,7 +99,7 @@ def load_ensemble_runs_from_wandb(
                     continue
 
                 classifier_predictions = []
-                for json_file in json_files:
+                for json_file in jsonl_files:
                     classifier_predictions += load_labelled_passages_json(json_file)
 
                 predictions_per_classifier.append(classifier_predictions)
@@ -442,7 +429,6 @@ async def calculate_ensemble_metrics(
         "Total predictions": len(df),
     }
 
-    # Add run information
     summary_stats["Run details"] = "\n" + "\n".join(
         [
             f"  - {run['run_name']} ({run['run_id']}): {run['state']}"
