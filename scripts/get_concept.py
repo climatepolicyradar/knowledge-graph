@@ -2,6 +2,7 @@ import asyncio
 from typing import Annotated, Optional
 
 import typer
+from pydantic import SecretStr
 from rich.console import Console
 
 from knowledge_graph.concept import Concept
@@ -70,6 +71,15 @@ async def get_concept_async(
     return concept
 
 
+def parse_wikibase_config(value) -> Optional[WikibaseConfig]:
+    url, username, password = value.split()
+    return WikibaseConfig(
+        url=url,
+        username=username,
+        password=SecretStr(password),
+    )
+
+
 @app.command()
 def main(
     wikibase_id: Annotated[
@@ -80,7 +90,17 @@ def main(
     ],
     include_recursive_has_subconcept: bool = True,
     include_labels_from_subconcepts=True,
-    wikibase_config: Optional[WikibaseConfig] = None,
+    wikibase_config: Annotated[
+        Optional[WikibaseConfig],
+        typer.Option(
+            ...,
+            parser=parse_wikibase_config,
+            help=(
+                "Optional override of env variables for wikibase (username, "
+                "password, url)"
+            ),
+        ),
+    ] = None,
 ):
     concept = asyncio.run(
         get_concept_async(
