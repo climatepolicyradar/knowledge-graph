@@ -84,7 +84,7 @@ jobs:
         run: just test-with-vespa
 
   deploy_prefect_sandbox:
-    name: "Deploy"
+    name: "Sandbox"
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox

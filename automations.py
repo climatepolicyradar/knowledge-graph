@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from datetime import timedelta
+from typing import NamedTuple
 
 import prefect.events.schemas.automations as automations
 import prefect.events.schemas.events as events
@@ -12,8 +13,9 @@ from prefect.automations import Automation
 from prefect.client.orchestration import get_client
 from prefect.client.schemas.objects import StateType
 from prefect.client.schemas.responses import DeploymentResponse
-from prefect.events.actions import RunDeployment
+from prefect.events.actions import RunDeployment, SendNotification
 from prefect.exceptions import ObjectNotFound
+from prefect_slack.credentials import SlackWebhook
 
 from flows.full_pipeline import full_pipeline
 from knowledge_graph.cloud import AwsEnv, generate_deployment_name
@@ -30,6 +32,14 @@ ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
 
+class Notification(NamedTuple):
+    """A notification to send to Slack."""
+
+    subject: str
+    body: str
+    slack_notification_block: SlackWebhook
+
+
 def create_target_automation(
     a_deployment: DeploymentResponse,
     b_deployment: DeploymentResponse,
@@ -37,6 +47,7 @@ def create_target_automation(
     parameters: dict,
     enabled: bool,
     expect_state: StateType = StateType.COMPLETED,
+    notification: Notification | None = None,
 ) -> Automation:
     """
     Create a copy of the `Automation` that triggers another `Deployment`.
@@ -52,6 +63,26 @@ def create_target_automation(
     specifically from `Deployment` A, then launches `Deployment` B
     with the provided parameters.
     """
+    actions = [
+        RunDeployment(
+            # Requires passing the Deployment ID [1]
+            #
+            # [1] https://github.com/PrefectHQ/prefect/blob/ab964c1c4b52fd9ae61bc8d816505ac89df7a8f8/src/prefect/events/actions.py#L32
+            source="selected",
+            deployment_id=b_deployment.id,
+            parameters=parameters,
+        )
+    ]
+
+    if notification:
+        actions.append(
+            SendNotification(
+                block_document_id=notification.slack_notification_block._block_document_id,
+                subject=notification.subject,
+                body=notification.body,
+            ),
+        )
+
     return Automation(
         name=f"trigger-{b_deployment.name}",
         description=description,
@@ -87,16 +118,7 @@ def create_target_automation(
             # NB: Currently a set due to the Prefect Python class used
             expect=set([f"prefect.flow-run.{expect_state.title()}"]),
         ),
-        actions=[
-            RunDeployment(
-                # Requires passing the Deployment ID [1]
-                #
-                # [1] https://github.com/PrefectHQ/prefect/blob/ab964c1c4b52fd9ae61bc8d816505ac89df7a8f8/src/prefect/events/actions.py#L32
-                source="selected",
-                deployment_id=b_deployment.id,
-                parameters=parameters,
-            ),
-        ],
+        actions=actions,
     )
 
 
@@ -145,6 +167,7 @@ async def a_triggers_b(
     ignore: list[AwsEnv],
     aws_env: AwsEnv,
     expect_state: StateType = StateType.COMPLETED,
+    notification: Notification | None = None,
 ) -> None:
     """Automation to after Deployment A completes trigger Deployment B."""
     client = get_client()
@@ -192,6 +215,7 @@ async def a_triggers_b(
         parameters=b_parameters,
         enabled=enabled,
         expect_state=expect_state,
+        notification=notification,
     )
 
     print("deleting, if already exists...")
@@ -206,6 +230,25 @@ async def main() -> None:
     """Create or update the automation for triggering inference."""
     aws_env = AwsEnv(os.getenv("AWS_ENV"))
 
+    if aws_env == AwsEnv.production:
+        # From https://github.com/climatepolicyradar/orchestrator/blob/4da9a897f29fd689020b3bd91c9cb9fc4888701f/infra/prefect_infra/prefect_blocks.py#L70-L88
+        slack_channel_name = "prod-updates"
+        slack_webhook_notification_block_name = (
+            f"slack-webhook-{slack_channel_name}-prefect-mvp-{aws_env.value}"
+        )
+        logger.info(f"Loading {slack_webhook_notification_block_name}...")
+        slack_notification_block = await SlackWebhook.load(
+            name=slack_webhook_notification_block_name
+        )
+        logger.info(f"Loaded {slack_webhook_notification_block_name}")
+        notification = Notification(
+            subject="Starting full pipeline for Knowledge Graph",
+            body="Flow run: {{ flow.name }}/{{ flow_run.name }}.",
+            slack_notification_block=slack_notification_block,
+        )
+    else:
+        notification = None
+
     await a_triggers_b(
         a_flow_name="backup",
         a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
@@ -217,6 +260,7 @@ async def main() -> None:
         aws_env=aws_env,
         expect_state=StateType.RUNNING,
         ignore=[AwsEnv.labs],
+        notification=notification,
     )
 
 
