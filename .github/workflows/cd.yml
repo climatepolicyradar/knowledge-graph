@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   deploy_prefect_labs:
+    name: "Labs"
     if: |
       (github.event.workflow_run.conclusion == 'success' &&
       github.ref == 'refs/heads/main') ||
@@ -26,6 +27,7 @@ jobs:
       PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
 
   deploy_prefect_staging:
+    name: "Staging"
     if: |
       (github.event.workflow_run.conclusion == 'success' &&
       github.ref == 'refs/heads/main') ||
@@ -40,6 +42,7 @@ jobs:
       PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
 
   deploy_prefect_prod:
+    name: "Prod"
     if: |
       (github.event.workflow_run.conclusion == 'success' &&
       github.ref == 'refs/heads/main') ||

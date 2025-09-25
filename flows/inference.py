@@ -503,7 +503,7 @@ async def store_labels(
     logger = get_logger()
 
     # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(100)
+    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
 
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
@@ -791,7 +791,7 @@ async def _inference_batch_of_documents(
     logger.info(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
 
-    semaphore = asyncio.Semaphore(200)
+    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
 
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
