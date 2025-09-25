@@ -43,7 +43,11 @@ async def get_concept_async(
         include_labels_from_subconcepts=include_labels_from_subconcepts,
     )
     # To handle redirects where the wikibase_id is overwritten
-    concept.wikibase_id = wikibase_id
+    if concept.wikibase_id != wikibase_id:
+        raise typer.BadParameter(
+            f"{wikibase_id} is a redirect to {concept.wikibase_id}, run with "
+            f"{concept.wikibase_id} instead."
+        )
     # Ensure concept data can be serialised and rebuilt without failing validations
     concept.model_validate_json(concept.model_dump_json())
 
