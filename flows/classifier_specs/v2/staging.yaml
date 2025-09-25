@@ -429,12 +429,20 @@
   - sabin
 - wikibase_id: Q1651
   classifier_id: 6rys3abe
+  classifiers_profiles:
+  - primary
   wandb_registry_version: v13
+  compute_environment:
+    gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1652
   classifier_id: 57uwtz45
+  classifiers_profiles:
+  - primary
   wandb_registry_version: v10
+  compute_environment:
+    gpu: true
   dont_run_on:
   - sabin
 - wikibase_id: Q1653
