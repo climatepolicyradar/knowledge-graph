@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated, Optional
 
 import typer
@@ -70,7 +71,7 @@ async def get_concept_async(
 
 
 @app.command()
-async def main(
+def main(
     wikibase_id: Annotated[
         WikibaseID,
         typer.Option(
@@ -81,11 +82,13 @@ async def main(
     include_labels_from_subconcepts=True,
     wikibase_config: Optional[WikibaseConfig] = None,
 ):
-    concept = await get_concept_async(
-        wikibase_id=wikibase_id,
-        include_recursive_has_subconcept=include_recursive_has_subconcept,
-        include_labels_from_subconcepts=include_labels_from_subconcepts,
-        wikibase_config=wikibase_config,
+    concept = asyncio.run(
+        get_concept_async(
+            wikibase_id=wikibase_id,
+            include_recursive_has_subconcept=include_recursive_has_subconcept,
+            include_labels_from_subconcepts=include_labels_from_subconcepts,
+            wikibase_config=wikibase_config,
+        )
     )
 
     return concept
