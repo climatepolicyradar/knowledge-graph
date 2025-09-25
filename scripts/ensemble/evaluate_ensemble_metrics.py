@@ -224,7 +224,7 @@ def create_plots(predictions_df: pd.DataFrame, output_dir: Path) -> None:
     :param output_dir: directory to save plots (.png) to
     """
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
     metrics_to_plot = [
         ("disagreement", "Disagreement"),
