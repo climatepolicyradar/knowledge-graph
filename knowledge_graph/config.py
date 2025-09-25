@@ -29,6 +29,7 @@ interim_data_dir = data_dir / "interim"
 processed_data_dir = data_dir / "processed"
 classifier_dir = processed_data_dir / "classifiers"
 metrics_dir = processed_data_dir / "classifiers_performance"
+ensemble_metrics_dir = processed_data_dir / "ensemble_performance"
 concept_dir = processed_data_dir / "concepts"
 
 model_artifact_name = os.getenv("MODEL_ARTIFACT_NAME", "model.pickle")
