@@ -10,7 +10,7 @@ for filtering uncertain predictions to maximize F1 scores.
 import asyncio
 import tempfile
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,9 +20,9 @@ import wandb
 from rich.console import Console
 from rich.progress import Progress
 
+from knowledge_graph.config import ensemble_metrics_dir
 from knowledge_graph.ensemble.metrics import (
     Disagreement,
-    PositiveRatio,
     PredictionProbabilityStandardDeviation,
 )
 from knowledge_graph.identifiers import WikibaseID
@@ -126,21 +126,20 @@ def load_ensemble_runs_from_wandb(
     return run_metadata, predictions_per_classifier
 
 
-def calculate_ensemble_metrics_and_accuracy(
+def create_predictions_dataframe(
     predictions_per_classifier: list[list[LabelledPassage]],
     ground_truth_passages: list[LabelledPassage],
 ) -> pd.DataFrame:
     """
-    Calculate ensemble metrics and per-prediction accuracy from W&B data.
+    Create dataframe of ensemble-level predictions vs ground truth.
 
-    Args:
-        predictions_per_classifier: List of prediction lists (one per classifier)
-        ground_truth_passages: Ground truth labelled passages
+    :param list[list[LabelledPassage]] predictions_per_classifier: One list of
+        predictions per classifier
+    :param list[LabelledPassage] ground_truth_passages: Ground truth labelled passages
 
-    Returns DataFrame with columns:
+    Returns DataFrame of ensemble classification results with columns:
     - passage_id: ID of the evaluation passage
     - disagreement: Disagreement metric value
-    - positive_ratio: PositiveRatio metric value
     - prob_std: PredictionProbabilityStandardDeviation metric value (if available)
     - accuracy: 1 if prediction correct, 0 if incorrect
     - ground_truth_positive: True if passage has positive labels
@@ -149,26 +148,24 @@ def calculate_ensemble_metrics_and_accuracy(
 
     metrics = [
         Disagreement(),
-        PositiveRatio(),
         PredictionProbabilityStandardDeviation(),
     ]
 
     results = []
 
-    # Create a mapping from passage ID to ground truth
     ground_truth_map = {passage.id: passage for passage in ground_truth_passages}
 
-    # Get all unique passage IDs from predictions
-    all_passage_ids = set()
-    for classifier_predictions in predictions_per_classifier:
-        for passage in classifier_predictions:
-            all_passage_ids.add(passage.id)
+    predicted_passage_ids = {
+        passage.id
+        for classifier_predictions in predictions_per_classifier
+        for passage in classifier_predictions
+    }
 
     console.log(
-        f"Evaluating {len(all_passage_ids)} passages across {len(predictions_per_classifier)} classifiers..."
+        f"Evaluating {len(predicted_passage_ids)} passages across {len(predictions_per_classifier)} classifiers..."
     )
 
-    for passage_id in all_passage_ids:
+    for passage_id in predicted_passage_ids:
         # Get ground truth for this passage
         if passage_id not in ground_truth_map:
             console.log(f"⚠️ No ground truth found for passage {passage_id}, skipping")
@@ -190,32 +187,24 @@ def calculate_ensemble_metrics_and_accuracy(
         if not spans_per_classifier:
             continue
 
-        # Calculate ensemble metrics
         metric_values = {}
         for metric in metrics:
             try:
                 metric_values[metric.name] = float(metric(spans_per_classifier))
             except (ValueError, TypeError):
-                # Skip probability-based metrics if probabilities not available
-                if "Probability" in metric.name:
-                    metric_values[metric.name] = None
-                else:
-                    raise
+                metric_values[metric.name] = None
 
-        # Calculate accuracy by majority voting
+        # Calculate accuracy based on ensemble's majority vote
         positive_votes = sum(1 for spans in spans_per_classifier if spans)
         majority_prediction = positive_votes > len(predictions_per_classifier) / 2
 
         ground_truth_positive = len(ground_truth_passage.spans) > 0
-
-        # Accuracy: 1 if prediction matches ground truth, 0 otherwise
         accuracy = 1 if (majority_prediction == ground_truth_positive) else 0
 
         results.append(
             {
                 "passage_id": passage_id,
                 "disagreement": metric_values["Disagreement"],
-                "positive_ratio": metric_values["PositiveRatio"],
                 "prob_std": metric_values.get("PredictionProbabilityStandardDeviation"),
                 "accuracy": accuracy,
                 "ground_truth_positive": ground_truth_positive,
@@ -226,21 +215,24 @@ def calculate_ensemble_metrics_and_accuracy(
     return pd.DataFrame(results)
 
 
-def create_combined_threshold_referral_plots(
-    df: pd.DataFrame, output_dir: Path
-) -> None:
-    """Create plots with dual x-axes: threshold values and referral rates."""
+def create_plots(predictions_df: pd.DataFrame, output_dir: Path) -> None:
+    """
+    Create plot for each metric of cumulative F1 score against metric value.
+
+    :param predictions_df: dataframe of ensemble vs ground truth predictions. Output
+        by `create_predictions_dataframe`.
+    :param output_dir: directory to save plots (.png) to
+    """
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
     metrics_to_plot = [
-        ("disagreement", "Disagreement", "lower"),
-        ("positive_ratio", "Positive Ratio", "extreme"),
-        ("prob_std", "Probability Std Dev", "lower"),
+        ("disagreement", "Disagreement"),
+        ("prob_std", "Probability Std Dev"),
     ]
 
-    for i, (col, title, direction) in enumerate(metrics_to_plot):
-        if col == "prob_std" and df[col].isna().all():
+    for i, (col, title) in enumerate(metrics_to_plot):
+        if col == "prob_std" and bool(predictions_df[col].isna().all()):
             axes[i].text(
                 0.5,
                 0.5,
@@ -252,33 +244,17 @@ def create_combined_threshold_referral_plots(
             axes[i].set_title(title)
             continue
 
-        if direction == "extreme":
-            # For positive ratio, handle extreme values specially
-            clean_df = df.dropna(subset=[col]).copy()
-            if len(clean_df) == 0:
-                continue
-
-            # Calculate distance from 0.5 (most uncertain)
-            clean_df["confidence"] = np.abs(clean_df[col] - 0.5) * 2  # Scale to 0-1
-            thresholds, referral_rates, f1_scores = calculate_cumulative_f1_curve(
-                clean_df, "confidence", "higher"
-            )
-            threshold_values = (
-                clean_df["confidence"]
-                .quantile(np.linspace(0, 1, len(thresholds)))
-                .values
-            )
-        else:
-            thresholds, referral_rates, f1_scores = calculate_cumulative_f1_curve(
-                df, col, direction
-            )
-            threshold_values = thresholds
+        thresholds, referral_rates, f1_scores = calculate_cumulative_f1_curve(
+            predictions_df,
+            col,
+        )
+        threshold_values = thresholds
 
         if not f1_scores:
             continue
 
-        # Create the primary plot with threshold values on x-axis
-        line = axes[i].plot(
+        # Plot with F1 against threshold values on x-axis
+        axes[i].plot(
             threshold_values,
             f1_scores,
             "b-",
@@ -287,39 +263,23 @@ def create_combined_threshold_referral_plots(
             markersize=3,
             label="F1 Score",
         )
+        axes[i].set_xlim(min(threshold_values), max(threshold_values))
+        axes[i].set_xlabel(f"{title} Threshold", color="blue")
+        axes[i].set_ylabel("F1 Score")
+        axes[i].tick_params(axis="x", labelcolor="blue")
 
         # Create secondary x-axis for referral rates
         ax2 = axes[i].twiny()
-        ax2.plot(
-            referral_rates, f1_scores, alpha=0
-        )  # Invisible line just to set up the axis
+        ax2.plot(referral_rates, f1_scores, alpha=0)
 
-        # Set up the axes
-        axes[i].set_xlabel(f"{title} Threshold", color="blue")
+        ax2.set_xlim(min(referral_rates), max(referral_rates))
         ax2.set_xlabel("Referral Rate", color="green")
-        axes[i].set_ylabel("F1 Score")
-
-        # Color the tick labels to match the axis labels
-        axes[i].tick_params(axis="x", labelcolor="blue")
         ax2.tick_params(axis="x", labelcolor="green")
 
         # Add baseline F1 (all predictions)
-        clean_df = df.dropna(subset=[col])
-        if len(clean_df) > 0:
-            y_true = clean_df["ground_truth_positive"].astype(int).tolist()
-            y_pred = clean_df["predicted_positive"].astype(int).tolist()
-
-            tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
-            fp = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 1)
-            fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
-
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            baseline_f1 = (
-                2 * (precision * recall) / (precision + recall)
-                if (precision + recall) > 0
-                else 0
-            )
+        metric_df_dropna = predictions_df.dropna(subset=[col])
+        if len(metric_df_dropna) > 0:
+            baseline_f1 = f1_scores[-1]
 
             axes[i].axhline(
                 y=baseline_f1,
@@ -330,39 +290,28 @@ def create_combined_threshold_referral_plots(
             )
 
         # Find best F1 score and mark it
-        if f1_scores:
-            best_f1_idx = np.argmax(f1_scores)
-            best_threshold = threshold_values[best_f1_idx]
-            best_referral_rate = referral_rates[best_f1_idx]
-            best_f1 = f1_scores[best_f1_idx]
+        best_f1_idx = np.argmax(f1_scores)
+        best_threshold = threshold_values[best_f1_idx]
+        best_referral_rate = referral_rates[best_f1_idx]
+        best_f1 = f1_scores[best_f1_idx]
 
-            axes[i].scatter(
-                best_threshold,
-                best_f1,
-                color="red",
-                s=100,
-                zorder=5,
-                label=f"Best: {best_f1:.3f} (thresh={best_threshold:.2f}, rate={best_referral_rate:.2f})",
-            )
+        axes[i].scatter(
+            best_threshold,
+            best_f1,
+            color="red",
+            s=100,
+            zorder=5,
+            label=f"Best: {best_f1:.3f} (thresh={best_threshold:.2f}, rate={best_referral_rate:.2f})",
+        )
 
-        if direction == "lower":
-            axes[i].set_title(f"F1 vs Threshold & Referral Rate\n({title})")
-        elif direction == "extreme":
-            axes[i].set_title(f"F1 vs Confidence & Referral Rate\n({title})")
-        else:
-            axes[i].set_title(f"F1 vs Threshold & Referral Rate\n({title})")
-
+        axes[i].set_title(f"F1 vs Threshold & Referral Rate\n({title})")
         axes[i].grid(True, alpha=0.3)
         axes[i].legend(loc="lower right")
         axes[i].set_ylim(0, 1)
 
-        # Align the x-axis ranges for better readability
-        axes[i].set_xlim(min(threshold_values), max(threshold_values))
-        ax2.set_xlim(min(referral_rates), max(referral_rates))
-
     plt.tight_layout()
     plt.savefig(
-        output_dir / "combined_threshold_referral_plots.png",
+        output_dir / "ensemble_metric_vs_f1_vs_referral_rate_plot.png",
         dpi=300,
         bbox_inches="tight",
     )
@@ -370,7 +319,7 @@ def create_combined_threshold_referral_plots(
 
 
 def calculate_cumulative_f1_curve(
-    df: pd.DataFrame, metric_col: str, direction: str = "lower"
+    df: pd.DataFrame, metric_col: str
 ) -> tuple[list[float], list[float], list[float]]:
     """
     Calculate cumulative F1 scores for predictions below each threshold.
@@ -384,35 +333,27 @@ def calculate_cumulative_f1_curve(
         (thresholds, retention_rates, f1_scores)
     """
 
-    # Remove NaN values
-    clean_df = df.dropna(subset=[metric_col]).copy()
+    _df = df.dropna(subset=[metric_col]).copy()
 
-    if len(clean_df) == 0:
+    if len(_df) == 0:
         return [], [], []
 
-    # Get sorted thresholds (percentiles)
-    thresholds = np.percentile(clean_df[metric_col], np.linspace(0, 100, 101))
+    # Get sorted thresholds (percentiles) for metric
+    thresholds = np.percentile(_df[metric_col], np.linspace(0, 100, 101)).tolist()
 
     retention_rates = []
     f1_scores = []
 
     for threshold in thresholds:
-        if direction == "lower":
-            # Keep predictions with metric <= threshold (more confident)
-            retained = clean_df[clean_df[metric_col] <= threshold]
-        else:  # direction == "higher"
-            # Keep predictions with metric >= threshold (more confident)
-            retained = clean_df[clean_df[metric_col] >= threshold]
+        retained = _df[_df[metric_col] <= threshold]
 
         if len(retained) == 0:
             retention_rates.append(0)
             f1_scores.append(0)
             continue
 
-        retention_rate = len(retained) / len(clean_df)
+        retention_rate = len(retained) / len(_df)
 
-        # Calculate F1 score for retained predictions
-        # Create ground truth and predicted lists
         y_true = retained["ground_truth_positive"].astype(int).tolist()
         y_pred = retained["predicted_positive"].astype(int).tolist()
 
@@ -443,28 +384,34 @@ def calculate_cumulative_f1_curve(
     return thresholds, retention_rates, f1_scores
 
 
-async def evaluate_ensemble_metrics(
+async def calculate_ensemble_metrics(
     ensemble_name: str,
     wikibase_id: WikibaseID,
-    output_dir: Optional[Path] = None,
 ) -> None:
     """
-    Evaluate ensemble metrics as predictors of classifier quality.
+    Analyse a classifier ensemble with respect to ensemble metrics.
+
+    Saves all outputs to a subdir of the ensemble_metrics_dir defined in config.
+
+    :param str ensemble_name: name of the ensemble stored in W&B
+    :param WikibaseID wikibase_id: wikibase ID of the concept used
     """
 
-    if output_dir is None:
-        output_dir = Path(f"ensemble_evaluation_{ensemble_name}_{wikibase_id}")
+    output_dir = ensemble_metrics_dir / f"{wikibase_id}_ensemble_{ensemble_name}"
 
     output_dir.mkdir(exist_ok=True)
 
-    console.log(f"Getting concept {wikibase_id}")
+    console.log(f"Getting concept {wikibase_id} and its labelled passages")
     concept = await get_concept_async(
         wikibase_id=wikibase_id,
         include_labels_from_subconcepts=True,
         include_recursive_has_subconcept=True,
     )
 
-    # Load ensemble runs and predictions from W&B
+    if not concept.labelled_passages:
+        console.log("❌ No evaluation data found. Exiting.")
+        return
+
     console.log("Loading ensemble runs from Weights & Biases...")
     run_metadata, predictions_per_classifier = load_ensemble_runs_from_wandb(
         ensemble_name=ensemble_name,
@@ -475,23 +422,16 @@ async def evaluate_ensemble_metrics(
         console.log("❌ No predictions found for ensemble. Exiting.")
         return
 
-    # Calculate ensemble metrics and accuracy
-    console.log("Calculating ensemble metrics and accuracy...")
-    df = calculate_ensemble_metrics_and_accuracy(
+    console.log("Calculating dataset of ensemble predictions vs ground truth...")
+    df = create_predictions_dataframe(
         predictions_per_classifier=predictions_per_classifier,
         ground_truth_passages=concept.labelled_passages,
     )
 
-    if df.empty:
-        console.log("❌ No evaluation data generated. Exiting.")
-        return
-
     console.log(f"Analyzing {len(df)} predictions...")
-    console.log(f"Overall accuracy: {df['accuracy'].mean():.3f}")
 
-    # Generate visualization
-    console.log("Creating combined threshold/referral plots...")
-    create_combined_threshold_referral_plots(df, output_dir)
+    console.log("Creating plots...")
+    create_plots(df, output_dir)
 
     # Save summary statistics
     console.log("Generating summary statistics...")
@@ -500,16 +440,6 @@ async def evaluate_ensemble_metrics(
         "Concept": str(wikibase_id),
         "Number of classifiers": len(predictions_per_classifier),
         "Total predictions": len(df),
-        "Overall accuracy": df["accuracy"].mean(),
-        "Disagreement correlation with accuracy": df["disagreement"].corr(
-            df["accuracy"]
-        ),
-        "Positive ratio correlation with accuracy": df["positive_ratio"].corr(
-            df["accuracy"]
-        ),
-        "Prob std correlation with accuracy": df["prob_std"].corr(df["accuracy"])
-        if not df["prob_std"].isna().all()
-        else None,
     }
 
     # Add run information
@@ -530,7 +460,7 @@ async def evaluate_ensemble_metrics(
     console.log(f"✅ Analysis complete! Results saved to {output_dir}")
     console.log("Generated files:")
     console.log(
-        "  - combined_threshold_referral_plots.png: F1 vs threshold & referral rate"
+        "  - ensemble_metric_vs_f1_vs_referral_rate_plot.png: F1 vs threshold & referral rate"
     )
     console.log("  - summary_stats.txt: Summary statistics and run details")
     console.log("  - evaluation_data.csv: Raw evaluation data")
@@ -552,30 +482,19 @@ def main(
             parser=WikibaseID,
         ),
     ],
-    output_dir: Annotated[
-        Optional[Path],
-        typer.Option(help="Directory to save analysis results"),
-    ] = None,
 ):
     """
-    Evaluate ensemble metrics as predictors of classifier quality.
+    Analyse a classifier ensemble with respect to ensemble metrics.
 
     This script loads ensemble runs from Weights & Biases, calculates uncertainty
-    metrics for each prediction, and analyzes how these metrics correlate with
-    prediction accuracy. It generates visualizations showing optimal thresholds
-    for filtering uncertain predictions to maximize F1 scores.
-
-    Example usage:
-        python scripts/ensemble/evaluate_ensemble_metrics.py \\
-            --ensemble-name "wztb2f9" \\
-            --wikibase-id Q30819957
+    metrics for each prediction, and plots these against F1 score. This helps to pick
+    metrics and values of these for downstream applications, like active learning.
     """
 
     return asyncio.run(
-        evaluate_ensemble_metrics(
+        calculate_ensemble_metrics(
             ensemble_name=ensemble_name,
             wikibase_id=wikibase_id,
-            output_dir=output_dir,
         )
     )
 
