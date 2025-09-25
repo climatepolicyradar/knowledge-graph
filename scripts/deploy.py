@@ -43,12 +43,30 @@ def existing(
             parser=parse_aws_env,
         ),
     ] = AwsEnv.production,
-    get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
     train: Annotated[bool, typer.Option(help="Whether to train models")] = True,
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
+    add_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Adds 1 or more classifiers profiles."),
+    ] = None,
+    remove_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Removes 1 or more classifiers profiles."),
+    ] = None,
 ):
     """Deploy existing models from one environment to another."""
     validate_transition(from_aws_env, to_aws_env)
+
+    add_class_prof: set[str] = (
+        set(add_classifiers_profiles) if add_classifiers_profiles else set()
+    )
+    remove_class_prof: set[str] = (
+        set(remove_classifiers_profiles) if remove_classifiers_profiles else set()
+    )
+    if dupes := add_class_prof & remove_class_prof:
+        raise typer.BadParameter(
+            f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
+        )
 
     specs = parse_spec_file(from_aws_env)
     print(f"loaded {len(specs)} classifier specifications")
@@ -56,17 +74,13 @@ def existing(
     for spec in specs:
         print(f"\nprocessing {spec.name}:{spec.alias}")
 
-        if get:
-            print("getting concept")
-            scripts.get_concept.main(wikibase_id=WikibaseID(spec.name))
-
         if train:
             print("training")
             classifier = scripts.train.main(
                 wikibase_id=WikibaseID(spec.name),
-                track=True,
-                upload=True,
+                track_and_upload=True,
                 aws_env=to_aws_env,
+                add_classifiers_profiles=add_classifiers_profiles,
             )
             if not classifier:
                 raise ValueError("No classifier returned from training.")
@@ -78,6 +92,8 @@ def existing(
                     classifier_id=classifier.id,
                     aws_env=to_aws_env,
                     primary=True,
+                    add_classifiers_profiles=add_classifiers_profiles,
+                    remove_classifiers_profiles=remove_classifiers_profiles,
                 )
 
     refresh_all_available_classifiers([to_aws_env])
@@ -100,28 +116,26 @@ def new(
             parser=lambda x: WikibaseID(x),
         ),
     ] = [],
-    get: Annotated[bool, typer.Option(help="Whether to get concepts")] = True,
     train: Annotated[bool, typer.Option(help="Whether to train models")] = True,
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
+    add_classifiers_profiles: Annotated[
+        list[str] | None,
+        typer.Option(help="Adds 1 or more classifiers profiles."),
+    ] = None,
 ):
     """Deploy new models by training and promoting them."""
-
     failed_wikibase_ids = []
     for wikibase_id in wikibase_ids:
         try:
             print(f"\nprocessing {wikibase_id}")
 
-            if get:
-                print("getting concept")
-                scripts.get_concept.main(wikibase_id=wikibase_id)
-
             if train:
                 print("training")
                 classifier = scripts.train.main(
                     wikibase_id=wikibase_id,
-                    track=True,
-                    upload=True,
+                    track_and_upload=True,
                     aws_env=aws_env,
+                    add_classifiers_profiles=add_classifiers_profiles,
                 )
 
                 if not classifier:
@@ -134,6 +148,7 @@ def new(
                         classifier_id=classifier.id,
                         aws_env=aws_env,
                         primary=True,
+                        add_classifiers_profiles=add_classifiers_profiles,
                     )
         except AttributeError as e:
             print(f"Error getting concept: {e}")

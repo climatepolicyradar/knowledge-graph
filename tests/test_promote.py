@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import typer
+from click.exceptions import BadParameter
 from moto import mock_aws
 
 from knowledge_graph.cloud import AwsEnv
@@ -11,6 +12,7 @@ from knowledge_graph.identifiers import ClassifierID
 from scripts.promote import (
     check_existing_artifact_aliases,
     find_artifact_in_registry,
+    main,
 )
 
 
@@ -61,8 +63,6 @@ from scripts.promote import (
 )
 @mock_aws
 def test_main(test_case, logged_in, expected_exception, monkeypatch):
-    from scripts.promote import main
-
     os.environ["USE_AWS_PROFILES"] = "false"
     os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
 
@@ -94,9 +94,6 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 
 @mock_aws
 def test_main_missing_classifier_profiles(monkeypatch):
-    """Test that promote fails when artifact has no classifier profiles."""
-    from scripts.promote import main
-
     os.environ["USE_AWS_PROFILES"] = "false"
     os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
 
@@ -122,8 +119,8 @@ def test_main_missing_classifier_profiles(monkeypatch):
 
     with patch("scripts.promote.is_logged_in", return_value=True):
         with pytest.raises(
-            typer.BadParameter,
-            match="Artifact must have at least one classifiers profile",
+            BadParameter,
+            match="Artifact must have at least one classifiers profile in metadata, or you must specify at least 1 to add",
         ):
             main(**test_case)
 
@@ -246,3 +243,117 @@ def test_find_artifact_in_registry(artifacts, aws_env, expected):
         assert result is None
     else:
         assert result
+
+
+@mock_aws
+def test_main_with_classifier_profiles_addition(monkeypatch):
+    """Test promote with adding classifier profiles to existing ones."""
+
+    os.environ["USE_AWS_PROFILES"] = "false"
+    os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
+
+    # Create artifact mock with existing classifier profiles
+    artifact_mock = Mock()
+    artifact_mock.version = "v1"
+    artifact_mock.metadata = {"classifiers_profiles": ["existing1", "existing2"]}
+
+    run_mock = Mock()
+    run_mock.use_artifact.return_value = artifact_mock
+    run_mock.link_artifact = Mock()
+
+    init_mock = Mock(return_value=nullcontext(run_mock))
+    monkeypatch.setattr("wandb.init", init_mock)
+    monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
+
+    test_case = {
+        "wikibase_id": "Q123",
+        "classifier_id": "abcd2345",
+        "aws_env": AwsEnv.labs,
+        "primary": False,
+        "add_classifiers_profiles": ["new1", "new2"],
+    }
+
+    with patch("scripts.promote.is_logged_in", return_value=True):
+        main(**test_case)
+
+    # Check that profiles were merged correctly
+    assert artifact_mock.metadata["classifiers_profiles"] == {
+        "existing1",
+        "existing2",
+        "new1",
+        "new2",
+    }
+
+
+@mock_aws
+def test_main_with_classifier_profiles_removal(monkeypatch):
+    """Test promote with removing classifier profiles."""
+
+    os.environ["USE_AWS_PROFILES"] = "false"
+    os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
+
+    # Create artifact mock with existing classifier profiles
+    artifact_mock = Mock()
+    artifact_mock.version = "v1"
+    artifact_mock.metadata = {
+        "classifiers_profiles": ["profile1", "profile2", "profile3"]
+    }
+
+    run_mock = Mock()
+    run_mock.use_artifact.return_value = artifact_mock
+    run_mock.link_artifact = Mock()
+
+    init_mock = Mock(return_value=nullcontext(run_mock))
+    monkeypatch.setattr("wandb.init", init_mock)
+    monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
+
+    test_case = {
+        "wikibase_id": "Q123",
+        "classifier_id": "abcd2345",
+        "aws_env": AwsEnv.labs,
+        "primary": False,
+        "remove_classifiers_profiles": ["profile2"],
+    }
+
+    with patch("scripts.promote.is_logged_in", return_value=True):
+        main(**test_case)
+
+    # Check that profile was removed correctly
+    assert artifact_mock.metadata["classifiers_profiles"] == {"profile1", "profile3"}
+
+
+@mock_aws
+def test_main_remove_all_classifier_profiles_deletes_key(monkeypatch):
+    os.environ["USE_AWS_PROFILES"] = "false"
+    os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
+
+    # Create artifact mock with classifier profiles
+    artifact_mock = Mock()
+    artifact_mock.version = "v1"
+    artifact_mock.metadata = {
+        "classifiers_profiles": ["profile1"],
+        "other_key": "value",
+    }
+
+    run_mock = Mock()
+    run_mock.use_artifact.return_value = artifact_mock
+    run_mock.link_artifact = Mock()
+
+    init_mock = Mock(return_value=nullcontext(run_mock))
+    monkeypatch.setattr("wandb.init", init_mock)
+    monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
+
+    test_case = {
+        "wikibase_id": "Q123",
+        "classifier_id": "abcd2345",
+        "aws_env": AwsEnv.labs,
+        "primary": False,
+        "remove_classifiers_profiles": ["profile1"],
+    }
+
+    with patch("scripts.promote.is_logged_in", return_value=True):
+        main(**test_case)
+
+    # Check that classifiers_profiles key was deleted but other keys remain
+    assert "classifiers_profiles" not in artifact_mock.metadata
+    assert artifact_mock.metadata["other_key"] == "value"

@@ -7,9 +7,8 @@ import aioboto3
 import prefect.tasks as tasks
 import pydantic
 from botocore.exceptions import ClientError
-from prefect import flow
+from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.assets import materialize
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
@@ -198,8 +197,7 @@ def task_run_name(parameters: dict[str, Any]) -> str:
     return f"aggregate-single-document-{document_stem}-{slug}"
 
 
-@materialize(
-    "foo://bar",  # Asset key is not known yet
+@task(  # pyright: ignore[reportCallIssue]
     task_run_name=task_run_name,  # pyright: ignore[reportArgumentType]
     retries=1,
     persist_result=False,
@@ -408,7 +406,6 @@ async def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
 
 @flow(  # pyright: ignore[reportCallIssue]
     timeout_seconds=None,
-    log_prints=True,
     task_runner=ThreadPoolTaskRunner(
         # This is valid, as per the docs[1].
         #
@@ -423,39 +420,19 @@ async def aggregate_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
+    logger = get_logger()
+
+    logger.info(
+        f"Aggregating {len(classifier_specs)} classifiers on {len(document_stems)} documents"
+    )
+
     config = Config.model_validate(config_json)
 
     tasks: list[PrefectFuture[DocumentStem]] = []
 
-    print("submitting tasks")
     for document_stem in document_stems:
-        assets: Sequence[str] = [
-            str(
-                generate_s3_uri_output(
-                    cache_bucket=config.cache_bucket_str,
-                    aggregate_inference_results_prefix=config.aggregate_inference_results_prefix,
-                    run_output_identifier=run_output_identifier,
-                    document_stem=document_stem,
-                )
-            )
-        ]
-        asset_deps: list[str] = [
-            str(
-                generate_s3_uri_input(
-                    cache_bucket=config.cache_bucket_str,
-                    document_source_prefix=config.aggregate_document_source_prefix,
-                    classifier_spec=spec,
-                    document_stem=document_stem,
-                )
-            )
-            for spec in classifier_specs
-        ]
-
         tasks.append(
-            process_document.with_options(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-                assets=assets,
-                asset_deps=asset_deps,  # pyright: ignore[reportArgumentType]
-            ).submit(
+            process_document.submit(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
                 document_stem=document_stem,
                 classifier_specs=classifier_specs,
                 config=config,
@@ -467,14 +444,9 @@ async def aggregate_batch_of_documents(
     #
     # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/src/prefect/task_runners.py#L183-L213
     futures: PrefectFutureList[DocumentStem] = PrefectFutureList(tasks)  # pyright: ignore[reportAbstractUsage]
-
-    print("getting results")
     results = futures.result(raise_on_failure=False)
-
-    print("handling results")
     success_stems, failures = handle_results(results)
 
-    print("creating summary artifact")
     await create_aggregate_inference_summary_artifact(
         config=config,
         success_stems=success_stems,
@@ -493,7 +465,6 @@ async def aggregate_batch_of_documents(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
     timeout_seconds=None,
-    log_prints=True,
 )
 async def aggregate(
     document_stems: None | Sequence[DocumentStem] = None,
@@ -502,12 +473,14 @@ async def aggregate(
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
+    logger = get_logger()
+
     if not config:
-        print("no config provided, creating one")
+        logger.debug("no config provided, creating one")
         config = await Config.create()
 
     if not document_stems:
-        print(
+        logger.debug(
             "no document stems provided, collecting all available from S3 under prefix: "
             + f"{config.aggregate_document_source_prefix}"
         )
@@ -516,7 +489,7 @@ async def aggregate(
     run_output_identifier = build_run_output_identifier()
     classifier_specs = load_classifier_specs(config.aws_env)
 
-    print(
+    logger.info(
         f"Aggregating inference results for {len(document_stems)} documents, using "
         + f"{len(classifier_specs)} classifiers, outputting to {run_output_identifier}"
     )

@@ -12,7 +12,7 @@ First we run the training scripts. This will upload the classifier to s3 and lin
 _Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires s3 access._
 
 ```shell
-just train "Q123" --track --upload --aws-env sandbox
+just train "Q123" --track --aws-env sandbox
 ```
 
 > [!NOTE]
@@ -27,13 +27,13 @@ just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --primary
 You can also achieve the above directly with:
 
 ```shell
-just deploy-classifiers sandbox Q374
+just deploy-classifier Q374 sandbox
 ```
 
 Or run a batch sequentially with:
 
 ```shell
-just deploy-classifiers sandbox "Q374 Q473"
+just deploy-classifiers "Q374 Q473" sandbox
 ```
 
 This is useful when you are already resolved that the trained model will become the new primary.
@@ -43,37 +43,37 @@ This is useful when you are already resolved that the trained model will become 
 You can add a source to the classifiers metadata with the following, this will prevent documents with the source from having inference run with this classifier:
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --add-dont-run-on sabin
+just classifier-metadata Q123 abcd2345 sandbox --add-dont-run-on sabin
 ```
 
 Add and override the current list:
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on --add-dont-run-on sabin --add-dont-run-on gef
+just classifier-metadata Q123 abcd2345 sandbox --clear-dont-run-on --add-dont-run-on sabin --add-dont-run-on gef
 ```
 
 Clear the list to allow the classifier to run on anything
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --clear-dont-run-on
+just classifier-metadata Q123 abcd2345 sandbox --clear-dont-run-on
 ```
 
 Add a requirement for the classifier to run in a compute environment that has a GPU (or use clear-require-gpu to remove and revert to using a cpu)
 
 ```shell
-just classifier_metadata Q123 abcd2345 sandbox --add-require-gpu
+just classifier-metadata Q123 abcd2345 sandbox --add-require-gpu
 ```
 
 For times when its necessary to update every promoted classifier that is mentioned in the spec for an environment, you can run the following:
 
 ```shell
-just classifier_metadata_entire_env sandbox --add-dont-run-on sabin
+just classifier-metadata-entire-env sandbox --add-dont-run-on sabin
 ```
 
 At least one classififiers profile is required for promotion. You could set one like:
 
 ```shell
-just classifier_metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
+just classifier-metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
 ```
 
 ## Training Classifiers in Docker
@@ -148,9 +148,8 @@ aws s3 ls
 Execute the training pipeline using the deploy script:
 
 ```bash
-python scripts/deploy.py new \
+uv run deploy new \
   --aws-env prod \
-  --get \
   --train \
   --promote \
   --wikibase-id Q1651

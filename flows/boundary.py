@@ -7,7 +7,7 @@ import logging
 import math
 import re
 from collections.abc import AsyncGenerator, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import (
@@ -118,12 +118,13 @@ def vespa_retry(
     exception_types: tuple[type[Exception], ...] = (QueryError, VespaError),
 ) -> Callable:
     """Template for retries, use as a decorator."""
+    logger = get_logger()
 
     return tenacity.retry(
         retry=tenacity.retry_if_exception_type(exception_types),
         stop=tenacity.stop_after_attempt(max_attempts),
         wait=tenacity.wait_fixed(wait_seconds),
-        before_sleep=lambda retry_state: print(
+        before_sleep=lambda retry_state: logger.warning(
             f"Retrying after error. Attempt {retry_state.attempt_number} of {max_attempts}"
         ),
         after=tenacity.after_log(
@@ -233,9 +234,7 @@ def get_model_from_span(span: Span) -> str:
     ]
     """
     if len(span.labellers) != 1:
-        raise ValueError(
-            f"Span has more than one labeller. Expected 1, got {len(span.labellers)}."
-        )
+        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
     return span.labellers[0]
 
 
@@ -306,7 +305,9 @@ def convert_labelled_passage_to_concepts(
             logger.error(
                 f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
             )
-            continue
+            timestamp = datetime.now()
+        else:
+            timestamp = max(span.timestamps)
 
         concepts.append(
             VespaConcept(
@@ -319,7 +320,7 @@ def convert_labelled_passage_to_concepts(
                 start=span.start_index,
                 # These timestamps _should_ all be the same,
                 # but just in case, take the latest.
-                timestamp=max(span.timestamps),
+                timestamp=timestamp,
             )
         )
 
@@ -575,7 +576,11 @@ async def get_document_passages_from_vespa(
     vespa_connection_pool: VespaAsync,
 ) -> list[tuple[VespaHitId, VespaPassage]]:
     """Retrieve some or all passages for a document in Vespa."""
-    print(f"Getting document passages from Vespa: {document_import_id}")
+    logger = get_logger()
+
+    logger.info(
+        f"Getting {len(text_blocks_ids) if text_blocks_ids else None} document passages from Vespa: {document_import_id}"
+    )
 
     id = FamilyDocumentID(id=document_import_id)
 
@@ -589,8 +594,6 @@ async def get_document_passages_from_vespa(
 
     if text_blocks_ids is not None:
         text_blocks_ids_n: PositiveInt = len(text_blocks_ids)
-
-        print(f"{text_blocks_ids_n} text blocks' IDs passed in")
 
         if text_blocks_ids_n > VESPA_MAX_LIMIT:
             raise ValueError(
@@ -618,10 +621,6 @@ async def get_document_passages_from_vespa(
         math.ceil((text_blocks_ids_n / 5_000) * VESPA_DEFAULT_TIMEOUT_MS),
     )
 
-    print(
-        f"using timeout of {timeout_ms} milliseconds for {text_blocks_ids_n} text blocks' IDs"
-    )
-
     query: qb.Query = (
         qb.select("*")  # type: ignore[attr-defined]
         .from_(
@@ -642,7 +641,7 @@ async def get_document_passages_from_vespa(
     # From `.root.fields.totalCount`
     total_count: NonNegativeInt = vespa_query_response.number_documents_retrieved
 
-    print(
+    logger.info(
         (
             f"Vespa search response for document: {document_import_id} "
             f"with {len(vespa_query_response.hits)} hits, "

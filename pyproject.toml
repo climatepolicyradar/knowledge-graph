@@ -40,6 +40,7 @@ dependencies = [
     "coiled>=1.115.0",
     "prefect-coiled>=0.0.4",
     "html2text>=2025.4.15",
+    "nest-asyncio>=1.6.0",
 ]
 
 [project.optional-dependencies]
@@ -100,6 +101,7 @@ demote = "scripts.demote:app"
 evaluate = "scripts.evaluate:app"
 infer = "scripts.infer:app"
 update-inference-classifiers = "scripts.update_classifier_spec:app"
+classifier-metadata = "scripts.classifier_metadata:app"
 deploy = "scripts.deploy:app"
 
 
@@ -167,6 +169,9 @@ line-length = 88
 
 [tool.pyright]
 reportMissingImports = false
+
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
 
 [tool.uv.sources]
 torch = [

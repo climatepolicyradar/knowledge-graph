@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from prefect import State, flow, get_run_logger
+from prefect import State, flow
 from prefect.artifacts import create_markdown_artifact
 from pydantic import PositiveInt
 
@@ -28,7 +28,7 @@ from flows.inference import (
     InferenceResult,
     inference,
 )
-from flows.utils import DocumentImportId, Fault
+from flows.utils import DocumentImportId, Fault, get_logger
 
 
 async def create_full_pipeline_summary_artifact(
@@ -53,7 +53,7 @@ async def create_full_pipeline_summary_artifact(
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
-@flow(log_prints=True)
+@flow()
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
@@ -97,7 +97,7 @@ async def full_pipeline(
         ValueError: If inference and aggregation configs are incompatible.
     """
 
-    logger = get_run_logger()
+    logger = get_logger()
 
     if not config:
         logger.info("No pipeline config provided, creating default...")
