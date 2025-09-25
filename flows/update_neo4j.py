@@ -45,7 +45,7 @@ from prefect import flow, get_run_logger
 
 from flows.utils import iterate_batch
 from knowledge_graph.config import processed_data_dir
-from knowledge_graph.neo4j import get_neo4j_session
+from knowledge_graph.graph_models import get_neo4j_session
 from knowledge_graph.wikibase import WikibaseSession
 
 CONCEPT_BATCH_SIZE = 5000

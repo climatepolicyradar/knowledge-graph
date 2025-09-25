@@ -1,12 +1,20 @@
 import os
 from time import sleep
 
-from neo4j.exceptions import ServiceUnavailable
-from neomodel import config, db, install_all_labels
+from neomodel import (
+    Relationship,
+    RelationshipFrom,
+    RelationshipTo,
+    StringProperty,
+    StructuredNode,
+    config,
+    db,
+)
+from neomodel.sync_.cardinality import One, ZeroOrMore
 from rich.console import Console
-from rich.progress import Progress, TaskID
+from rich.progress import Progress
 
-from knowledge_graph.neo4j.models import ConceptNode, DocumentNode, PassageNode
+from neo4j.exceptions import ServiceUnavailable
 
 console = Console()
 
@@ -97,3 +105,37 @@ def wait_until_neo4j_is_live(console: Console = console):
         except ServiceUnavailable:
             sleep(1)
             console.log("Connecting to neo4j...")
+
+
+class DocumentNode(StructuredNode):
+    """Neo4j node representing a document."""
+
+    title = StringProperty()
+    document_id = StringProperty(required=True, unique_index=True)
+    passages = RelationshipTo("PassageNode", "HAS_PASSAGE")
+
+
+class PassageNode(StructuredNode):
+    """Neo4j node representing a labelled passage of text."""
+
+    document_passage_id = StringProperty(required=True, unique_index=True)
+    text = StringProperty()
+    concepts = RelationshipTo("ConceptNode", "MENTIONS_CONCEPT", cardinality=ZeroOrMore)
+    source_document = RelationshipFrom("DocumentNode", "HAS_PASSAGE", cardinality=One)  # type: ignore
+
+
+class ConceptNode(StructuredNode):
+    """Neo4j node representing a concept."""
+
+    wikibase_id = StringProperty(required=True, unique_index=True)
+    preferred_label = StringProperty()
+    passages = RelationshipFrom(
+        "PassageNode", "MENTIONS_CONCEPT", cardinality=ZeroOrMore
+    )
+    subconcept_of = RelationshipTo(
+        "ConceptNode", "SUBCONCEPT_OF", cardinality=ZeroOrMore
+    )
+    has_subconcept = RelationshipFrom(
+        "ConceptNode", "SUBCONCEPT_OF", cardinality=ZeroOrMore
+    )
+    related_to = Relationship("ConceptNode", "RELATED_TO", cardinality=ZeroOrMore)
