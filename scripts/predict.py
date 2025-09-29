@@ -23,6 +23,21 @@ console = Console()
 app = typer.Typer()
 
 
+def deduplicate_labelled_passages(
+    labelled_passages: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """Remove duplicate labelled passages based on text content."""
+    seen_texts = set()
+    deduplicated_passages = []
+
+    for passage in labelled_passages:
+        if passage.text not in seen_texts:
+            seen_texts.add(passage.text)
+            deduplicated_passages.append(passage)
+
+    return deduplicated_passages
+
+
 @app.command()
 def main(
     wikibase_id: Annotated[
@@ -75,6 +90,10 @@ def main(
             help="Optionally limit the number of passages predicted on",
         ),
     ] = None,
+    deduplicate_inputs: bool = typer.Option(
+        True,
+        help="Remove duplicate passages based on text content before prediction",
+    ),
 ):
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
@@ -126,6 +145,15 @@ def main(
                 raise ValueError(
                     "One of `labelled_passages_path` and `labelled_passages_run_name` must be defined."
                 )
+
+        if deduplicate_inputs:
+            original_count = len(labelled_passages)
+            labelled_passages = deduplicate_labelled_passages(labelled_passages)
+            deduplicated_count = len(labelled_passages)
+            console.print(
+                f"Deduplicated {original_count} passages to {deduplicated_count} based on their text field"
+                f"(removed {original_count - deduplicated_count} duplicates)"
+            )
 
         if limit:
             labelled_passages = labelled_passages[:limit]
