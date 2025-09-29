@@ -1,5 +1,7 @@
 import html
 import re
+from pathlib import Path
+from typing import Self
 
 from argilla import Argilla, Record, Response
 from pydantic import BaseModel, Field, model_validator
@@ -41,7 +43,7 @@ class LabelledPassage(BaseModel):
         return self
 
     @classmethod
-    def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":
+    def from_argilla_record(cls, record: Record, client: Argilla) -> Self:
         """
         Create a LabelledPassage object from an Argilla record
 
@@ -93,6 +95,15 @@ class LabelledPassage(BaseModel):
                 pass
 
         return cls(text=text, spans=spans, metadata=metadata)
+
+    @classmethod
+    def from_jsonl(cls, jsonl_path: Path) -> list[Self]:
+        """Load labelled passages from JSONL."""
+
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            labelled_passages = [cls.model_validate_json(line) for line in f]
+
+        return labelled_passages
 
     def get_highlighted_text(
         self, start_pattern: str = "[cyan]", end_pattern: str = "[/cyan]"

@@ -1,5 +1,4 @@
 import asyncio
-import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -18,19 +17,11 @@ from knowledge_graph.ensemble.metrics import (
 )
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.wandb_helpers import load_labelled_passages_from_wandb_run
 from scripts.get_concept import get_concept_async
 
 app = typer.Typer()
 console = Console()
-
-
-def load_labelled_passages_json(json_path: Path) -> list[LabelledPassage]:
-    """Load labelled passages JSON."""
-
-    with open(json_path, "r", encoding="utf-8") as f:
-        labelled_passages = [LabelledPassage.model_validate_json(line) for line in f]
-
-    return labelled_passages
 
 
 def load_ensemble_runs_from_wandb(
@@ -73,36 +64,8 @@ def load_ensemble_runs_from_wandb(
             }
             run_metadata.append(metadata)
 
-            # Find the labelled_passages artifact
-            labelled_passages_artifact = None
-            for artifact in run.logged_artifacts():
-                if artifact.type == "labelled_passages":
-                    labelled_passages_artifact = artifact
-                    break
-
-            if labelled_passages_artifact is None:
-                console.log(f"⚠️ No labelled_passages artifact found for run {run.name}")
-                predictions_per_classifier.append([])
-                progress.update(task, advance=1)
-                continue
-
-            with tempfile.TemporaryDirectory() as temp_dir:
-                artifact_dir = labelled_passages_artifact.download(root=temp_dir)
-                jsonl_files = list(Path(artifact_dir).glob("*.jsonl"))
-
-                if not jsonl_files:
-                    console.log(
-                        f"⚠️ No JSON files found in labelled_passages artifact for run {run.name}"
-                    )
-                    predictions_per_classifier.append([])
-                    progress.update(task, advance=1)
-                    continue
-
-                classifier_predictions = []
-                for json_file in jsonl_files:
-                    classifier_predictions += load_labelled_passages_json(json_file)
-
-                predictions_per_classifier.append(classifier_predictions)
+            run_labelled_passages = load_labelled_passages_from_wandb_run(run)
+            predictions_per_classifier.append(run_labelled_passages)
 
             progress.update(task, advance=1)
 

@@ -14,7 +14,7 @@ from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
 from knowledge_graph.config import WANDB_ENTITY, processed_data_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb
+from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
 
 console = Console()
@@ -155,7 +155,7 @@ def main(
 
         if track_and_upload and run:
             console.log("📄 Creating labelled passages artifact")
-            log_labelled_passages_artifact_to_wandb(
+            log_labelled_passages_artifact_to_wandb_run(
                 labelled_passages=labelled_passages,
                 run=run,
                 concept=concept,

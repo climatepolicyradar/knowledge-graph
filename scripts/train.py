@@ -33,7 +33,7 @@ from knowledge_graph.cloud import (
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
-from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb
+from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseConfig
 from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
@@ -466,7 +466,7 @@ async def train_classifier(
 
             if track_and_upload and run:
                 console.log("📄 Creating labelled passages artifact")
-                log_labelled_passages_artifact_to_wandb(
+                log_labelled_passages_artifact_to_wandb_run(
                     labelled_passages=model_labelled_passages,
                     run=run,
                     concept=classifier.concept,
