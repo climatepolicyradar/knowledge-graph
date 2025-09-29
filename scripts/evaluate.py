@@ -24,6 +24,7 @@ from knowledge_graph.config import (
     model_artifact_name,
 )
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.inference import label_passages_with_classifier
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.metrics import (
     ConfusionMatrix,
@@ -140,20 +141,6 @@ def create_gold_standard_labelled_passages(
         )
 
     return gold_standard_labelled_passages
-
-
-def label_passages_with_classifier(
-    classifier: Classifier,
-    gold_standard_labelled_passages: list[LabelledPassage],
-) -> list[LabelledPassage]:
-    """Label passages using the provided classifier."""
-    return [
-        labelled_passage.model_copy(
-            update={"spans": classifier.predict(labelled_passage.text)},
-            deep=True,
-        )
-        for labelled_passage in gold_standard_labelled_passages
-    ]
 
 
 def count_annotations(labelled_passages: list[LabelledPassage]) -> int:

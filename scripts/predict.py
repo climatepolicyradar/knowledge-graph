@@ -9,6 +9,7 @@ from rich.console import Console
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.inference import label_passages_with_classifier
 from knowledge_graph.labelled_passage import (
     LabelledPassage,
     save_labelled_passages_to_jsonl,
@@ -80,7 +81,7 @@ def main(
         ),
     ] = True,
     batch_size: int = typer.Option(
-        25,
+        15,
         help="Number of passages to process in each batch",
     ),
     limit: Annotated[
@@ -162,19 +163,11 @@ def main(
         classifier = Classifier.load_from_wandb(classifier_wandb_path)
 
         # 3. predict using model
-        input_texts = [lp.text for lp in labelled_passages]
-        model_predicted_spans = classifier.predict_many(
-            input_texts,
+        output_labelled_passages = label_passages_with_classifier(
+            classifier=classifier,
+            labelled_passages=labelled_passages,
             batch_size=batch_size,
-            show_progress=True,
         )
-        output_labelled_passages = [
-            labelled_passage.model_copy(
-                update={"spans": model_predicted_spans[idx]},
-                deep=True,
-            )
-            for idx, labelled_passage in enumerate(labelled_passages)
-        ]
 
         # 4. save to local (and wandb)
         save_labelled_passages_to_jsonl(
