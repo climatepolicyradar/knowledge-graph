@@ -100,6 +100,11 @@ class LabelledPassage(BaseModel):
     def from_jsonl(cls, jsonl_path: Path) -> list[Self]:
         """Load labelled passages from JSONL."""
 
+        if str(Path.suffix).lower() != ".jsonl":
+            raise ValueError(
+                f"File extension for labelled passages must be .jsonl\n{jsonl_path} given."
+            )
+
         with open(jsonl_path, "r", encoding="utf-8") as f:
             labelled_passages = [cls.model_validate_json(line) for line in f]
 

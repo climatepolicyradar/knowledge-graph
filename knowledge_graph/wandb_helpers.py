@@ -15,10 +15,20 @@ logger = logging.getLogger(__name__)
 
 
 class WandbArtifactNotFoundError(Exception):
-    """Exception raised when classifiers don't share the same concept."""
+    """Exception raised when an artifact of a type is not found in a W&B run."""
 
     def __init__(self, run_name: str, artifact_type):
-        self.message = f"No artifacts of type {artifact_type} found in run {run_name}/"
+        self.message = f"No artifacts of type {artifact_type} found in run {run_name}"
+        super().__init__(self.message)
+
+
+class WandbMultipleArtifactsFoundError(Exception):
+    """Exception raised when multiple artifacts of the same type are found in a W&B run."""
+
+    def __init__(self, run_name: str, artifact_type):
+        self.message = (
+            f"Multiple artifacts of type {artifact_type} found in run {run_name}"
+        )
         super().__init__(self.message)
 
 
@@ -54,6 +64,41 @@ def log_labelled_passages_artifact_to_wandb_run(
     run.log_artifact(labelled_passages_artifact)
 
 
+def load_artifact_from_wandb_run(
+    run: WandbRun,
+    artifact_type: str,
+) -> Path:
+    """
+    Loads a model artifact from a W&B run and returns the path to the downloaded artifact.
+
+    :param run: The WandB run to load from
+    :param artifact_type: The type of artifact to load (e.g., "model", "checkpoint")
+    :raises WandbArtifactNotFoundError: if no artifacts of the specified type are found
+    :raises WandbMultipleArtifactsFoundError: if multiple artifacts of the specified
+        type are found
+    :returns: Path to the downloaded artifact directory
+    """
+
+    artifacts = [
+        artifact
+        for artifact in run.logged_artifacts()  # type: ignore[attr-defined]
+        if artifact.type == artifact_type
+    ]
+
+    if len(artifacts) == 0:
+        raise WandbArtifactNotFoundError(str(run), artifact_type=artifact_type)
+
+    if len(artifacts) > 1:
+        raise WandbMultipleArtifactsFoundError(str(run), artifact_type=artifact_type)
+
+    artifact = artifacts[0]
+
+    temp_dir = tempfile.mkdtemp()
+    artifact_dir = artifact.download(root=temp_dir)
+
+    return Path(artifact_dir)
+
+
 def load_labelled_passages_from_wandb_run(
     run: WandbRun,
 ) -> list[LabelledPassage]:
@@ -66,32 +111,19 @@ def load_labelled_passages_from_wandb_run(
         the given run
     """
 
-    labelled_passage_artifacts = [
-        artifact
-        for artifact in run.logged_artifacts()  # type: ignore[attr-defined]
-        if artifact.type == "labelled_passages"
-    ]
+    artifact_dir = load_artifact_from_wandb_run(
+        run=run, artifact_type="labelled_passages"
+    )
 
-    if len(labelled_passage_artifacts) == 0:
-        raise WandbArtifactNotFoundError(str(run), artifact_type="labelled_passages")
+    jsonl_files = list(Path(artifact_dir).glob("*.jsonl"))
+
+    if not jsonl_files:
+        logger.warning(
+            f"⚠️ No JSON files found in labelled_passages artifact for run {run.name}"
+        )
 
     labelled_passages = []
-
-    for artifact in labelled_passage_artifacts:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            artifact_dir = artifact.download(root=temp_dir)
-            jsonl_files = list(Path(artifact_dir).glob("*.jsonl"))
-
-            if not jsonl_files:
-                logger.warning(
-                    f"⚠️ No JSON files found in labelled_passages artifact {artifact} for run {run.name}"
-                )
-                continue
-
-            artifact_labelled_passages = []
-            for json_file in jsonl_files:
-                artifact_labelled_passages += LabelledPassage.from_jsonl(json_file)
-
-            labelled_passages.extend(artifact_labelled_passages)
+    for json_file in jsonl_files:
+        labelled_passages += LabelledPassage.from_jsonl(json_file)
 
     return labelled_passages
