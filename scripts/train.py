@@ -33,6 +33,7 @@ from knowledge_graph.cloud import (
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.version import Version
+from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb
 from knowledge_graph.wikibase import WikibaseConfig
 from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
@@ -465,26 +466,12 @@ async def train_classifier(
 
             if track_and_upload and run:
                 console.log("📄 Creating labelled passages artifact")
-                labelled_passages_artifact = wandb.Artifact(
-                    name=f"{classifier.id}-labelled-passages",
-                    type="labelled_passages",
-                    metadata={
-                        "classifier_id": classifier.id,
-                        "concept_wikibase_revision": classifier.concept.wikibase_revision,
-                        "passage_count": len(model_labelled_passages),
-                    },
+                log_labelled_passages_artifact_to_wandb(
+                    labelled_passages=model_labelled_passages,
+                    run=run,
+                    concept=classifier.concept,
+                    classifier=classifier,
                 )
-
-                with labelled_passages_artifact.new_file(
-                    "labelled_passages.jsonl", mode="w", encoding="utf-8"
-                ) as f:
-                    data = "\n".join(
-                        [entry.model_dump_json() for entry in model_labelled_passages]
-                    )
-                    f.write(data)
-
-                console.log("📤 Uploading labelled passages to W&B")
-                run.log_artifact(labelled_passages_artifact)
                 console.log("✅ Labelled passages uploaded successfully")
 
     return classifier
