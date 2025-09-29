@@ -163,18 +163,26 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         self.__dict__.update(state)
         self.agent = self._create_agent()
 
-    def predict(self, text: str) -> list[Span]:
-        """Predict whether the supplied text contains an instance of the concept."""
+    @staticmethod
+    def _check_and_nest_event_loop():
+        """
+        Use nest_asyncio to be able to run nested event loops.
 
-        # Check whether an event loop is already running. Python can't run nested
-        # async processes, so if there's a running loop then we use `nest_asyncio` to
-        # make the prediction be able to run.
+        This is needed for the predict methods if they are running within async outer
+        loops, as the pydantic-ai library uses async calls to LLM APIs.
+        """
+
         try:
             loop = asyncio.get_running_loop()
             if loop.is_running():
                 nest_asyncio.apply()
         except RuntimeError:
             pass
+
+    def predict(self, text: str) -> list[Span]:
+        """Predict whether the supplied text contains an instance of the concept."""
+
+        self._check_and_nest_event_loop()
 
         response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
             text,
@@ -194,6 +202,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
     def predict_batch(self, texts: list[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
+
+        self._check_and_nest_event_loop()
 
         async def run_predictions():
             async_responses = [
