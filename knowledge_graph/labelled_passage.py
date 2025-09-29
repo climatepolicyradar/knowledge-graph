@@ -6,6 +6,7 @@ from typing import Self
 from argilla import Argilla, Record, Response
 from pydantic import BaseModel, Field, model_validator
 
+from knowledge_graph.config import predictions_dir
 from knowledge_graph.identifiers import Identifier
 from knowledge_graph.span import Span, merge_overlapping_spans
 
@@ -195,3 +196,26 @@ class LabelledPassage(BaseModel):
             }
         )
         return text.translate(normalize_translation)
+
+
+def save_labelled_passages_to_jsonl(
+    labelled_passages: list[LabelledPassage],
+    wikibase_id: str,
+    classifier_id: str,
+    include_wandb_run_name: str | None = None,
+) -> None:
+    """
+    Save labelled passages to a JSONL file.
+
+    Passages are saved to a <concept-id> subdir of predictions_dir
+    specified in config. The filename is the classifier ID, with an optional W&B run
+    name appended to the end of the filename.
+    """
+
+    json_content = "\n".join([p.model_dump_json() for p in labelled_passages])
+    if include_wandb_run_name:
+        filename = f"{classifier_id}_{include_wandb_run_name}.jsonl"
+    else:
+        filename = f"{classifier_id}.jsonl"
+    json_path = predictions_dir / wikibase_id / filename
+    json_path.write_text(json_content, encoding="utf-8")

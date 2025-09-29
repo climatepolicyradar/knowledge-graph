@@ -1,8 +1,11 @@
 import pickle
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Optional, Protocol, Sequence, Union, runtime_checkable
 
+import wandb
+from rich.progress import Progress
 from typing_extensions import Self
 
 from knowledge_graph.concept import Concept
@@ -80,6 +83,40 @@ class Classifier(ABC):
         :return list[list[Span]]: A list of spans in the texts for each text
         """
         return [self.predict(text) for text in texts]
+
+    def _batch_list(self, items: list, size: int) -> list[list]:
+        """Batch a list into `size`-lengthed lists"""
+        return [items[i : i + size] for i in range(0, len(items), size)]
+
+    def predict_iter(
+        self, texts: Iterable[str], batch_size: int, show_progress: bool = False
+    ) -> Iterator[list[Span]]:
+        """Yield predictions for texts in batches."""
+        texts_list = list(texts)
+        batches = self._batch_list(texts_list, batch_size)
+
+        if show_progress:
+            with Progress() as progress:
+                task = progress.add_task("Processing batches...", total=len(batches))
+                for batch in batches:
+                    batch_preds = self.predict_batch(batch)
+                    for preds in batch_preds:
+                        yield preds
+                    progress.advance(task)
+        else:
+            for batch in batches:
+                batch_preds = self.predict_batch(batch)
+                for preds in batch_preds:
+                    yield preds
+
+    def predict_many(
+        self, texts: list[str], batch_size: int = 32, show_progress: bool = False
+    ) -> list[list[Span]]:
+        """Predict for all texts, returning a list of per-text predictions."""
+
+        return list(
+            self.predict_iter(texts, batch_size=batch_size, show_progress=show_progress)
+        )
 
     def get_variant_sub_classifier(self) -> Self:
         """
@@ -160,6 +197,7 @@ class Classifier(ABC):
         Load a classifier from a file.
 
         :param Union[str, Path] path: The path to load the classifier from
+        :param bool model_to_cuda: Whether to load the model to CUDA if available
         :return Classifier: The loaded classifier
         """
         with open(path, "rb") as f:
@@ -171,6 +209,23 @@ class Classifier(ABC):
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
+
+    @classmethod
+    def load_from_wandb(
+        cls, wandb_path: str, model_to_cuda: bool = False
+    ) -> "Classifier":
+        """
+        Load a classifier from a W&B path. ''
+
+        :param str wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
+        :param bool model_to_cuda: Whether to load the model to CUDA if available
+        :return Classifier: The loaded classifier
+        """
+
+        api = wandb.Api()
+        model_artifact = api.artifact(wandb_path)
+        model_artifact_dir = model_artifact.download()
+        return cls.load(model_artifact_dir, model_to_cuda=model_to_cuda)
 
 
 class ZeroShotClassifier(ABC):

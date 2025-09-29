@@ -1,18 +1,22 @@
-from typing import Annotated
+from contextlib import nullcontext
+from pathlib import Path
+from typing import Annotated, Optional
 
-import pandas as pd
 import typer
+import wandb
 from rich.console import Console
-from rich.progress import track
 
-from knowledge_graph.classifier import Classifier, ModelPath, get_local_classifier_path
-from knowledge_graph.classifier.embedding import EmbeddingClassifier
-from knowledge_graph.classifier.keyword import KeywordClassifier
-from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
-from knowledge_graph.config import processed_data_dir
+from knowledge_graph.classifier import Classifier
+from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.wikibase import WikibaseSession
+from knowledge_graph.labelled_passage import (
+    LabelledPassage,
+    save_labelled_passages_to_jsonl,
+)
+from knowledge_graph.wandb_helpers import (
+    load_labelled_passages_from_wandb_run,
+    log_labelled_passages_artifact_to_wandb_run,
+)
 
 console = Console()
 
@@ -29,113 +33,133 @@ def main(
             parser=WikibaseID,
         ),
     ],
+    labelled_passages_path: Annotated[
+        Optional[Path],
+        typer.Option(
+            help="Optional local path to labelled passages .jsonl file.",
+            dir_okay=False,
+            exists=True,
+        ),
+    ],
+    labelled_passages_wandb_run_name: Annotated[
+        Optional[str],
+        typer.Option(
+            help="""Optional W&B run name to look for a labelled passages artifact in.
+            
+            Will look for an artifact of type `labelled-passages` in the project 
+            <wikibase_id>.
+            """
+        ),
+    ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
+    track_and_upload: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
+        ),
+    ] = True,
     batch_size: int = typer.Option(
         25,
         help="Number of passages to process in each batch",
     ),
+    limit: Annotated[
+        Optional[int],
+        typer.Option(
+            ...,
+            help="Optionally limit the number of passages predicted on",
+        ),
+    ] = None,
 ):
     """
-    Run classifiers on the balanced dataset, and save the results locally.
+    Load labelled passages from local dir or W&B, and run a classifier on them.
 
-    This script runs inference for a set of classifiers on the balanced dataset, and
-    saves the resulting positive passages for each concept to a file. The results are
-    saved to the local filesystem and can be used for visualisation via the vibe_check
-    tool.
-
-    The script assumes you have already run the `build-dataset` command to create a
-    local copy of the balanced dataset.
+    Saves predicted passages to a local directory. Tracks the run and uploads results
+    if `track_and_upload` is set.
     """
-    dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
 
-    try:
-        with console.status("🚚 Loading combined dataset"):
-            df = pd.read_feather(dataset_path)
-        console.log(f"✅ Loaded {len(df)} passages from {dataset_path}")
-    except FileNotFoundError as e:
-        raise FileNotFoundError(
-            f"{dataset_path} not found locally. If you haven't already, please run:\n"
-            "  just build-dataset"
-        ) from e
+    wandb_config = {
+        "batch_size": batch_size,
+        "limit": limit,
+        "classifier_path": classifier_wandb_path,
+        "labelled_passages_path": labelled_passages_path,
+        "labelled_passages_wandb_run_name": labelled_passages_wandb_run_name,
+    }
+    wandb_job_type = "predict_adhoc"
 
-    with console.status("🔍 Fetching concept and subconcepts from Wikibase"):
-        wikibase = WikibaseSession()
-        concept = wikibase.get_concept(
-            wikibase_id, include_labels_from_subconcepts=True
+    with (
+        wandb.init(
+            entity=WANDB_ENTITY,
+            project=wikibase_id,
+            # TODO: is there a better name to separate document-level inference from
+            # adhoc prediction?
+            job_type=wandb_job_type,
+            config=wandb_config,
+        )
+        if track_and_upload
+        else nullcontext()
+    ) as run:
+        wandb_api = wandb.Api()
+
+        # 1. load labelled passages
+        match (labelled_passages_path, labelled_passages_wandb_run_name):
+            case (local_path, wandb_run_name) if local_path and wandb_run_name:
+                raise ValueError(
+                    "Both `labelled_passages_path` and `labelled_passages_run_name` cannot be defined."
+                )
+
+            case (local_path, wandb_run_name) if local_path:
+                labelled_passages = LabelledPassage.from_jsonl(local_path)
+
+            case (local_path, wandb_run_name) if wandb_run_name:
+                wandb_run = wandb_api.run(
+                    f"{WANDB_ENTITY}/{wikibase_id}/{wandb_run_name}"
+                )
+                labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
+
+            case _:
+                raise ValueError(
+                    "One of `labelled_passages_path` and `labelled_passages_run_name` must be defined."
+                )
+
+        if limit:
+            labelled_passages = labelled_passages[:limit]
+
+        # 2. load model
+        classifier = Classifier.load_from_wandb(classifier_wandb_path)
+
+        # 3. predict using model
+        input_texts = [lp.text for lp in labelled_passages]
+        model_predicted_spans = classifier.predict_many(
+            input_texts,
+            batch_size=batch_size,
+            show_progress=True,
+        )
+        output_labelled_passages = [
+            labelled_passage.model_copy(
+                update={"spans": model_predicted_spans[idx]},
+                deep=True,
+            )
+            for idx, labelled_passage in enumerate(labelled_passages)
+        ]
+
+        # 4. save to local (and wandb)
+        save_labelled_passages_to_jsonl(
+            labelled_passages=output_labelled_passages,
+            wikibase_id=wikibase_id,
+            classifier_id=classifier.id,
+            include_wandb_run_name=run.name if run else None,
         )
 
-    console.log(f"✅ Fetched {concept} from Wikibase")
-
-    classifiers: list[Classifier] = [
-        KeywordClassifier(concept),
-        StemmedKeywordClassifier(concept),
-        EmbeddingClassifier(concept, threshold=0.6),
-        EmbeddingClassifier(concept, threshold=0.625),
-        EmbeddingClassifier(concept, threshold=0.65),
-        EmbeddingClassifier(concept, threshold=0.675),
-        EmbeddingClassifier(concept, threshold=0.7),
-    ]
-
-    for classifier in classifiers:
-        classifier.fit()
-        console.log(f"✅ Created a {classifier}")
-
-        # Save the classifier
-        target_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier.id)
-        version = str(classifier.version if classifier.version else "v0")
-        classifier_path = get_local_classifier_path(
-            target_path=target_path, version=version
-        )
-        classifier_path.parent.mkdir(parents=True, exist_ok=True)
-        classifier.save(classifier_path)
-        console.log(f"✅ Saved {classifier} to {classifier_path}")
-
-        labelled_passages: list[LabelledPassage] = []
-
-        n_batches = len(df) // batch_size + (1 if len(df) % batch_size else 0)
-        for batch_start in track(
-            range(0, len(df), batch_size),
-            console=console,
-            transient=True,
-            total=n_batches,
-            description=f"Running {classifier} on {len(df)} passages in batches of {batch_size}",
-        ):
-            batch_end = min(batch_start + batch_size, len(df))
-            batch_df = df.iloc[batch_start:batch_end]
-
-            texts = batch_df["text_block.text"].fillna("").tolist()
-            spans_batch = classifier.predict_batch(texts)
-
-            for (_, row), text, spans in zip(batch_df.iterrows(), texts, spans_batch):
-                if spans:
-                    labelled_passages.append(
-                        LabelledPassage(
-                            text=text,
-                            spans=spans,
-                            metadata=row.to_dict(),
-                        )
-                    )
-
-        n_spans = sum(len(entry.spans) for entry in labelled_passages)
-        n_positive_passages = sum(len(entry.spans) > 0 for entry in labelled_passages)
-        console.log(
-            f"✅ Processed {len(df)} passages. Found {n_positive_passages} which mention "
-            f'"{classifier.concept}", with {n_spans} individual spans'
-        )
-
-        # Save predictions locally
-        predictions = "\n".join(
-            [entry.model_dump_json() for entry in labelled_passages]
-        )
-        predictions_path = (
-            processed_data_dir
-            / "predictions"
-            / str(wikibase_id)
-            / f"{classifier.id}.jsonl"
-        )
-        predictions_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(predictions_path, "w", encoding="utf-8") as f:
-            f.write(predictions)
-        console.log(f"✅ Saved passages with predictions to {predictions_path}")
+        if track_and_upload and run:
+            log_labelled_passages_artifact_to_wandb_run(
+                output_labelled_passages, run=run, concept=classifier.concept
+            )
 
 
 if __name__ == "__main__":
