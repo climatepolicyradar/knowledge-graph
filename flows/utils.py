@@ -303,27 +303,25 @@ def iterate_batch(
             yield batch
 
 
-async def s3_file_exists(bucket_name: str, file_key: str, bucket_region: str) -> bool:
+async def s3_file_exists(s3_client, bucket_name: str, file_key: str) -> bool:
     """Check if a file exists in an S3 bucket."""
-    session = aioboto3.Session(region_name=bucket_region)
-    async with session.client("s3") as s3_client:
-        try:
-            await s3_client.head_object(Bucket=bucket_name, Key=file_key)
-            return True
-        except ClientError as e:
-            if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                "404",
-                "403",
-            ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                return False
-            raise
+    try:
+        await s3_client.head_object(Bucket=bucket_name, Key=file_key)
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            "404",
+            "403",
+        ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            return False
+        raise
 
 
 async def get_file_stems_for_document_id(
     document_id: DocumentImportId,
     bucket_name: str,
     document_key: str,
-    bucket_region: str,
+    s3_client,
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -347,9 +345,9 @@ async def get_file_stems_for_document_id(
         )
 
         if await s3_file_exists(
+            s3_client,
             bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
-            bucket_region=bucket_region,
         ):
             stems.append(translated_file_key.stem)
 

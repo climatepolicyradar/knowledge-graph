@@ -1,5 +1,4 @@
 import asyncio
-import gc
 import json
 import os
 from collections.abc import Generator, Sequence
@@ -303,21 +302,24 @@ async def determine_file_stems(
     assert config.cache_bucket
 
     requested_document_stems = []
-    for doc_id in requested_document_ids:
-        if "1" in doc_id:  # Don't log all
-            logger.info(f"9: {doc_id} " + json.dumps(get_memory_and_cpu_metrics()))
-            initial_count = len(gc.get_objects())
-            collected = gc.collect()
-            final_count = len(gc.get_objects())
-            logger.info(
-                f"Garbage collection: {initial_count} {collected} {final_count}"
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        for doc_id in requested_document_ids:
+            if "1" in doc_id:  # Don't log all
+                logger.info(f"9: {doc_id} " + json.dumps(get_memory_and_cpu_metrics()))
+                # initial_count = len(gc.get_objects())
+                # collected = gc.collect()
+                # final_count = len(gc.get_objects())
+                # logger.info(
+                #     f"Garbage collection: {initial_count} {collected} {final_count}"
+                # )
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
             )
-        document_key = os.path.join(
-            config.inference_document_source_prefix, f"{doc_id}.json"
-        )
-        requested_document_stems += await get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key, config.bucket_region
-        )
+            requested_document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
 
     logger.info(f"10: {len(requested_document_stems)}")
     missing_from_bucket = list(
