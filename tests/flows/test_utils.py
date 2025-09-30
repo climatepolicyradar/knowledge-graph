@@ -136,10 +136,10 @@ async def test_s3_file_exists(
         test_config.inference_document_source_prefix, "PDF.document.0.1.json"
     )
 
-    await s3_file_exists(mock_s3_async_client, test_config.cache_bucket, key)
+    await s3_file_exists(key, test_config.cache_bucket, mock_s3_async_client)
 
     assert not await s3_file_exists(
-        mock_s3_async_client, test_config.cache_bucket, "non_existent_key"
+        "non_existent_key", test_config.cache_bucket, mock_s3_async_client
     )
 
 

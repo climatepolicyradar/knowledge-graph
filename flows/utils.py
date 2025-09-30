@@ -40,6 +40,7 @@ from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
 from prefect_slack.credentials import SlackWebhook
 from pydantic import Field, PositiveInt, RootModel
+from types_aiobotocore_s3.client import S3Client
 from typing_extensions import Self
 
 from knowledge_graph.cloud import (
@@ -303,7 +304,7 @@ def iterate_batch(
             yield batch
 
 
-async def s3_file_exists(s3_client, bucket_name: str, file_key: str) -> bool:
+async def s3_file_exists(file_key: str, bucket_name: str, s3_client: S3Client) -> bool:
     """Check if a file exists in an S3 bucket."""
     try:
         await s3_client.head_object(Bucket=bucket_name, Key=file_key)
@@ -321,7 +322,7 @@ async def get_file_stems_for_document_id(
     document_id: DocumentImportId,
     bucket_name: str,
     document_key: str,
-    s3_client,
+    s3_client: S3Client,
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -345,9 +346,9 @@ async def get_file_stems_for_document_id(
         )
 
         if await s3_file_exists(
-            s3_client,
-            bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
+            bucket_name=bucket_name,
+            s3_client=s3_client,
         ):
             stems.append(translated_file_key.stem)
 
