@@ -380,7 +380,7 @@ async def train_classifier(
 
     wandb_config = {
         "classifier_type": classifier.name,
-        "concept_hash": classifier.concept.__hash__(),
+        "concept_id": classifier.concept.id,
     }
     wandb_config |= extra_wandb_config
 
