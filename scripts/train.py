@@ -32,7 +32,12 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.version import Version
+from knowledge_graph.wandb_helpers import (
+    load_labelled_passages_from_wandb_run,
+    log_labelled_passages_artifact_to_wandb_run,
+)
 from knowledge_graph.wikibase import WikibaseConfig
 from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
@@ -75,6 +80,27 @@ def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
             f"you're not logged into {aws_env.value}. "
             f"Do `aws sso login --profile {aws_env.value}`"
         )
+
+
+def deduplicate_training_data(
+    training_data: list[LabelledPassage],
+    evaluation_data: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """Remove passages from training data that appear in evaluation data."""
+    console = Console()
+
+    eval_texts = {passage.text for passage in evaluation_data}
+
+    console.log(f"📊 Starting with {len(training_data)} passages for training")
+
+    filtered = [p for p in training_data if p.text not in eval_texts]
+
+    removed_count = len(training_data) - len(filtered)
+    console.log(
+        f"🔍 Removed {removed_count} duplicate passages, training with {len(filtered)} passages"
+    )
+
+    return filtered
 
 
 class StorageUpload(BaseModel):
@@ -298,6 +324,12 @@ def main(
         list[str] | None,
         typer.Option(help="Adds 1 or more classifiers profiles."),
     ] = None,
+    training_data_wandb_run_path: Annotated[
+        Optional[str],
+        typer.Option(
+            help="W&B run path (entity/project/run_id) to fetch training data from instead of using concept's labelled passages",
+        ),
+    ] = None,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
@@ -335,6 +367,7 @@ def main(
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
                 "add_classifiers_profiles": add_classifiers_profiles,
+                "training_data_wandb_run_path": training_data_wandb_run_path,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -353,6 +386,7 @@ def main(
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
                 add_classifiers_profiles=add_classifiers_profiles,
+                training_data_wandb_run_path=training_data_wandb_run_path,
             )
         )
 
@@ -366,6 +400,7 @@ async def train_classifier(
     evaluate: bool = True,
     extra_wandb_config: dict[str, Any] = {},
     add_classifiers_profiles: list[str] | None = None,
+    train_validation_data: Optional[list[LabelledPassage]] = None,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -394,7 +429,22 @@ async def train_classifier(
         if track_and_upload
         else nullcontext()
     ) as run:
-        classifier.fit()
+        # Determine training data and deduplicate against evaluation set
+        training_data = (
+            train_validation_data
+            if train_validation_data is not None
+            else classifier.concept.labelled_passages
+        )
+
+        # Remove any passages from training that appear in evaluation set
+        evaluation_data = classifier.concept.labelled_passages
+        deduplicated_training_data = deduplicate_training_data(
+            training_data=training_data,
+            evaluation_data=evaluation_data,
+        )
+
+        classifier.fit(train_validation_data=deduplicated_training_data)
+
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
         )
@@ -500,12 +550,14 @@ async def run_training(
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
     add_classifiers_profiles: list[str] | None = None,
+    training_data_wandb_run_path: Optional[str] = None,
 ) -> Classifier:
     """
     Get a concept and create a classifier, then train the classifier.
 
     Optionally evaluate, track in W&B and upload the model to S3.
     """
+    console = Console()
 
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
@@ -517,6 +569,21 @@ async def run_training(
         wikibase_config=wikibase_config,
     )
 
+    # Fetch labelled passages from W&B if specified
+    labelled_passages = None
+    if training_data_wandb_run_path:
+        console.log(
+            f"📥 Fetching training data from W&B run: {training_data_wandb_run_path}"
+        )
+        api = wandb.Api()
+        wandb_run = api.run(training_data_wandb_run_path)
+        labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
+        console.log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
+    else:
+        console.log(
+            f"📚 Using {len(concept.labelled_passages)} labelled passages from concept"
+        )
+
     classifier = ClassifierFactory.create(
         concept=concept,
         classifier_type=classifier_type,
@@ -526,6 +593,10 @@ async def run_training(
     extra_wandb_config = {
         "experimental_model_type": classifier_type is not None,
     }
+    if training_data_wandb_run_path:
+        extra_wandb_config["training_data_wandb_run_path"] = (
+            training_data_wandb_run_path
+        )
 
     return await train_classifier(
         classifier=classifier,
@@ -536,6 +607,7 @@ async def run_training(
         evaluate=evaluate,
         extra_wandb_config=extra_wandb_config,
         add_classifiers_profiles=add_classifiers_profiles,
+        train_validation_data=labelled_passages,
     )
 
 

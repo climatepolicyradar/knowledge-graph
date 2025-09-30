@@ -215,6 +215,7 @@ class BertBasedClassifier(
 
     def fit(
         self,
+        train_validation_data: list[LabelledPassage],
         validation_size: float = 0.2,
         **kwargs,
     ) -> "BertBasedClassifier":
@@ -248,6 +249,7 @@ class BertBasedClassifier(
             from the training data, making the final model less spiky and more reliable.
 
         Args:
+            train_validation_data: The labelled passages to train the classifier on.
             validation_size: The proportion of labelled passages to use for validation.
             **kwargs: Additional keyword arguments passed to the base class
         Returns:
@@ -255,24 +257,23 @@ class BertBasedClassifier(
         """
         super().fit(**kwargs)
 
-        if len(self.concept.labelled_passages) < 10:
+        if len(train_validation_data) < 10:
             raise ValueError(
                 f"Not enough labelled passages to train a {self.name} for "
                 f"{self.concept.wikibase_id}. At least 10 are required."
             )
 
-        passages = self.concept.labelled_passages
         labels = [
             1
             if any(span.concept_id == self.concept.wikibase_id for span in p.spans)
             else 0
-            for p in passages
+            for p in train_validation_data
         ]
 
         # Split passages into training and validation sets. Stratify to maintain the
         # distribution of positive and negative passages.
         train_passages, val_passages, _, _ = train_test_split(
-            passages,
+            train_validation_data,
             labels,
             test_size=validation_size,
             random_state=42,
