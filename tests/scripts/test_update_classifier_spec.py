@@ -1,4 +1,3 @@
-import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
@@ -31,9 +30,17 @@ def mock_wandb_api():
                 "concept_id": "du5mvcjb",
             },
             {
+                "name": "Q333:v1",
+                "env": "sandbox",
+                "id": "p7g69v2z",
+                "concept_id": "uv549rv5",
+                "classifiers_profiles": ["primary"],
+            },
+            {
                 "name": "Q444:v2",
                 "env": "labs",
                 "id": "efgh6789",
+                "classifiers_profiles": ["experimental"],
             },
             {
                 "name": "Q222:v1",
@@ -41,6 +48,7 @@ def mock_wandb_api():
                 "id": "2345abcd",
                 "dont_run_on": ["sabin"],
                 "compute_environment": {"gpu": True},
+                "classifiers_profiles": ["primary", "experimental"],
             },
         ]:
             mock_artifact = Mock()
@@ -58,6 +66,9 @@ def mock_wandb_api():
             if concept_id := model_data.get("concept_id"):
                 mock_artifact.metadata["concept_id"] = concept_id
 
+            if classifiers_profiles := model_data.get("classifiers_profiles"):
+                mock_artifact.metadata["classifiers_profiles"] = classifiers_profiles
+
             mock_artifact.source_name = f"{model_data['id']}:v1"
             mock_artifacts.append(mock_artifact)
 
@@ -73,7 +84,7 @@ def mock_wandb_api():
         yield mock_api
 
 
-def test_refresh_all_available_classifiers(mock_wandb_api):
+def test_refresh_all_available_classifiers(mock_wandb_api, snapshot):
     with TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir)
         with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_dir):
@@ -83,24 +94,7 @@ def test_refresh_all_available_classifiers(mock_wandb_api):
             with open(output_path, "r") as file:
                 results = file.read()
 
-            expected = textwrap.dedent(
-                """
-                ---
-                - wikibase_id: Q111
-                  concept_id: du5mvcjb
-                  classifier_id: abcd2345
-                  wandb_registry_version: v1
-                - wikibase_id: Q222
-                  classifier_id: 2345abcd
-                  wandb_registry_version: v1
-                  compute_environment:
-                    gpu: true
-                  dont_run_on:
-                  - sabin
-                """
-            ).lstrip()
-
-            assert results == expected
+            assert results == snapshot
 
 
 def test_sort_specs():
