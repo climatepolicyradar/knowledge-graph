@@ -68,10 +68,6 @@ vibe-check-predict id +OPTS="":
 sample id:
     uv run python scripts/sample.py --wikibase-id {{id}}
 
-# sample passages using multiple classifiers for a specific wikibase ID
-sample-using-classifiers id +OPTS="":
-    uv run python scripts/sample_using_classifiers.py --wikibase-id {{id}} {{OPTS}}
-
 # extend an existing dataset in argilla with additional passages for a specific wikibase ID
 extend-dataset id workspace:
     uv run python scripts/extend_an_existing_dataset_in_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}

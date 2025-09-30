@@ -1,8 +1,10 @@
 import math
+from contextlib import nullcontext
 from typing import Annotated
 
 import pandas as pd
 import typer
+import wandb
 from more_itertools import chunked
 from rich.console import Console
 from rich.progress import (
@@ -15,10 +17,11 @@ from rich.progress import (
 
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
-from knowledge_graph.config import equity_columns, processed_data_dir
+from knowledge_graph.config import WANDB_ENTITY, equity_columns, processed_data_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.sampling import create_balanced_sample, split_evenly
+from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
 
 app = typer.Typer()
@@ -38,6 +41,18 @@ def main(
     sample_size: int = typer.Option(130, help="The number of passages to sample"),
     min_negative_proportion: float = typer.Option(
         0.1, help="The minimum proportion of negative samples to take"
+    ),
+    dataset_name: str = typer.Option(
+        "balanced",
+        help="Dataset to use: 'balanced' or 'combined'",
+    ),
+    max_size_to_sample_from: int = typer.Option(
+        500_000,
+        help="Maximum number of passages to load from the dataset before sampling",
+    ),
+    track_and_upload: bool = typer.Option(
+        False,
+        help="Whether to track the run and upload the labelled passages to W&B",
     ),
 ):
     """
@@ -61,140 +76,187 @@ def main(
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
     positive_sample_size = sample_size - negative_sample_size
 
+    if dataset_name == "balanced":
+        dataset_filename = "balanced_dataset_for_sampling.feather"
+    elif dataset_name == "combined":
+        dataset_filename = "combined_dataset.feather"
+    else:
+        raise ValueError(f"Unknown dataset_name: {dataset_name}")
+
     with console.status(
-        "Loading the balanced passage dataset for inference and sampling"
+        f"Loading the {dataset_name} passage dataset for inference and sampling"
     ):
+        dataset_path = processed_data_dir / dataset_filename
+
         try:
-            balanced_dataset_path = (
-                processed_data_dir / "balanced_dataset_for_sampling.feather"
-            )
-            balanced_dataset = pd.read_feather(balanced_dataset_path)
+            dataset = pd.read_feather(dataset_path)
+            console.log(f"✅ Loaded {len(dataset)} passages from {dataset_path}")
         except FileNotFoundError as e:
             raise FileNotFoundError(
-                "Balanced dataset not found. If you haven't already, you should run:\n"
+                f"{dataset_path} not found. If you haven't already, you should run:\n"
                 "  just build-dataset"
             ) from e
-    console.log(
-        f"✅ Loaded {len(balanced_dataset)} passages from {balanced_dataset_path}"
-    )
+
+    # Limit dataset size if needed
+    if len(dataset) > max_size_to_sample_from:
+        console.log(
+            f"Limiting input data from {len(dataset)} rows to {max_size_to_sample_from}"
+        )
+        dataset = dataset.iloc[:max_size_to_sample_from]
 
     # Get the concept metadata from wikibase
     wikibase = WikibaseSession()
     concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
-    # Run inference with all classifiers
-    raw_text_passages = balanced_dataset["text_block.text"].tolist()
-
-    model_classes = [KeywordClassifier, EmbeddingClassifier]
-    models: list[Classifier] = [model_class(concept) for model_class in model_classes]
-
-    for model in models:
-        model.fit()
-        console.log(f"🤖 Created a {model}")
-
-        progress_bar = Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeRemainingColumn(),
-        )
-        with progress_bar:
-            task = progress_bar.add_task(
-                description=f"Predicting spans for {model}",
-                total=len(raw_text_passages),
-            )
-            predictions = []
-            for text_chunk in chunked(raw_text_passages, 100):
-                predictions.extend(model.predict_batch(text_chunk))
-                progress_bar.update(task, advance=len(text_chunk))
-
-        # Add a column to the dataset for each classifier's predictions
-        balanced_dataset[model.name] = predictions
-        console.log(
-            f"📊 Found {sum(bool(pred) for pred in predictions)} positive passages "
-            f"using the {model}"
-        )
-
-    # Calculate the optimal number of positive samples to take per classifier
-    samples_per_classifier = {
-        model.name: sample_size
-        for model, sample_size in zip(
-            models, split_evenly(positive_sample_size, len(models))
-        )
+    job_type = "sample"
+    wandb_config = {
+        "concept_id": concept.id,
+        "sample_size": sample_size,
+        "dataset_name": dataset_name,
     }
 
-    # Sample from each classifier's predictions
-    positive_samples_list = []
-    for model in models:
-        df = balanced_dataset[balanced_dataset[model.name].astype(bool)]
-        optimal_sample_size = samples_per_classifier[model.name]
+    with (
+        wandb.init(
+            entity=WANDB_ENTITY,
+            project=concept.wikibase_id,
+            job_type=job_type,
+            config=wandb_config,
+        )
+        if track_and_upload
+        else nullcontext()
+    ) as run:
+        # Run inference with all classifiers
+        raw_text_passages = dataset["text_block.text"].tolist()
 
-        if len(df) > 0:  # Only sample if we have positives
-            sampled_df = create_balanced_sample(
-                df=df,  # type: ignore
-                sample_size=min(optimal_sample_size, len(df)),
-                on_columns=equity_columns,
+        model_classes = [KeywordClassifier, EmbeddingClassifier]
+        models: list[Classifier] = [
+            model_class(concept) for model_class in model_classes
+        ]
+
+        for model in models:
+            model.fit()
+            console.log(f"🤖 Created a {model}")
+
+            progress_bar = Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
             )
-            positive_samples_list.append(sampled_df)
+            with progress_bar:
+                task = progress_bar.add_task(
+                    description=f"Predicting spans for {model}",
+                    total=len(raw_text_passages),
+                )
+                predictions = []
+                for text_chunk in chunked(raw_text_passages, 100):
+                    predictions.extend(model.predict_batch(text_chunk))
+                    progress_bar.update(task, advance=len(text_chunk))
 
-    # Combine positive samples
-    positive_samples = pd.concat(positive_samples_list, ignore_index=True)
-    positive_samples = positive_samples.drop_duplicates(subset=["text_block.text"])
+            # Add a column to the dataset for each classifier's predictions
+            dataset[model.name] = predictions
+            console.log(
+                f"📊 Found {sum(bool(pred) for pred in predictions)} positive passages "
+                f"using the {model}"
+            )
 
-    # Calculate the number of negative samples we need to take
-    negative_sample_size = sample_size - len(positive_samples)
+        # Calculate the optimal number of positive samples to take per classifier
+        samples_per_classifier = {
+            model.name: sample_size
+            for model, sample_size in zip(
+                models, split_evenly(positive_sample_size, len(models))
+            )
+        }
 
-    # Get negative samples (passages not identified by any classifier)
-    negative_indices = ~balanced_dataset[[model.name for model in models]].any(axis=1)
-    negative_candidates = balanced_dataset[negative_indices]
+        # Sample from each classifier's predictions
+        positive_samples_list = []
+        for model in models:
+            df = dataset[dataset[model.name].astype(bool)]
+            optimal_sample_size = samples_per_classifier[model.name]
 
-    # Sample negative examples
-    negative_samples = create_balanced_sample(
-        df=negative_candidates,  # type: ignore
-        sample_size=negative_sample_size,
-        on_columns=equity_columns,
-    )
+            if len(df) > 0:  # Only sample if we have positives
+                sampled_df = create_balanced_sample(
+                    df=df,  # type: ignore
+                    sample_size=min(optimal_sample_size, len(df)),
+                    on_columns=equity_columns,
+                )
+                positive_samples_list.append(sampled_df)
 
-    console.log(
-        f"📊 Sampled {len(positive_samples)} positive passages, "
-        f"{negative_sample_size} negative passages"
-    )
+        # Combine positive samples
+        positive_samples = pd.concat(positive_samples_list, ignore_index=True)
+        positive_samples = positive_samples.drop_duplicates(subset=["text_block.text"])
 
-    # Combine positive and negative samples
-    sampled_passages = pd.concat(
-        [positive_samples, negative_samples], ignore_index=True
-    )
+        # Calculate the number of negative samples we need to take
+        negative_sample_size = sample_size - len(positive_samples)
 
-    # Shuffle the final dataset so that the positive and negative examples are interleaved
-    sampled_passages = sampled_passages.sample(frac=1)
+        # Get negative samples (passages not identified by any classifier)
+        negative_indices = ~dataset[[model.name for model in models]].any(axis=1)
+        negative_candidates = dataset[negative_indices]
 
-    # Log the distribution of samples for the user
-    console.log("📊 Distribution of samples by classifier:")
-    for model in models:
-        positive_samples = sampled_passages[sampled_passages[model.name].astype(bool)]
-        console.log(f"{model.name}: {len(positive_samples)}")
-
-    console.log("\n📊 Value counts for the sampled dataset:")
-    for column in equity_columns:
-        console.log(sampled_passages[column].value_counts(), end="\n\n")
-
-    # Convert sampled passage rows to LabelledPassage objects and save them
-    labelled_passages = []
-    for _, row in sampled_passages.iterrows():
-        metadata = row.to_dict()
-        metadata.pop("text_block.text")
-        labelled_passages.append(
-            LabelledPassage(text=row["text_block.text"], metadata=metadata, spans=[])  # type: ignore
+        # Sample negative examples
+        negative_samples = create_balanced_sample(
+            df=negative_candidates,  # type: ignore
+            sample_size=negative_sample_size,
+            on_columns=equity_columns,
         )
 
-    sampled_passages_dir = processed_data_dir / "sampled_passages"
-    sampled_passages_dir.mkdir(parents=True, exist_ok=True)
-    sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
+        console.log(
+            f"📊 Sampled {len(positive_samples)} positive passages, "
+            f"{negative_sample_size} negative passages"
+        )
 
-    with open(sampled_passages_path, "w", encoding="utf-8") as f:
-        f.writelines([entry.model_dump_json() + "\n" for entry in labelled_passages])
+        # Combine positive and negative samples
+        sampled_passages = pd.concat(
+            [positive_samples, negative_samples], ignore_index=True
+        )
 
-    console.log(f"Saved sampled passages to {sampled_passages_path}")
+        # Shuffle the final dataset so that the positive and negative examples are interleaved
+        sampled_passages = sampled_passages.sample(frac=1)
+
+        # Log the distribution of samples for the user
+        console.log("📊 Distribution of samples by classifier:")
+        for model in models:
+            positive_samples = sampled_passages[
+                sampled_passages[model.name].astype(bool)
+            ]
+            console.log(f"{model.name}: {len(positive_samples)}")
+
+        console.log("\n📊 Value counts for the sampled dataset:")
+        for column in equity_columns:
+            console.log(sampled_passages[column].value_counts(), end="\n\n")
+
+        # Convert sampled passage rows to LabelledPassage objects and save them
+        labelled_passages = []
+        for _, row in sampled_passages.iterrows():
+            metadata = row.to_dict()
+            metadata.pop("text_block.text")
+            labelled_passages.append(
+                LabelledPassage(
+                    text=row["text_block.text"],  # type: ignore
+                    metadata=metadata,
+                    spans=[],
+                )
+            )
+
+        sampled_passages_dir = processed_data_dir / "sampled_passages"
+        sampled_passages_dir.mkdir(parents=True, exist_ok=True)
+        sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
+
+        with open(sampled_passages_path, "w", encoding="utf-8") as f:
+            f.writelines(
+                [entry.model_dump_json() + "\n" for entry in labelled_passages]
+            )
+
+        console.log(f"Saved sampled passages to {sampled_passages_path}")
+
+        if track_and_upload and run:
+            console.log("📄 Creating labelled passages artifact")
+            log_labelled_passages_artifact_to_wandb_run(
+                labelled_passages=labelled_passages,
+                run=run,
+                concept=concept,
+            )
+            console.log("✅ Labelled passages uploaded successfully")
 
 
 if __name__ == "__main__":
