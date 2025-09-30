@@ -60,9 +60,9 @@ class ClassifierSpec(BaseModel):
             "The unique identifier for the classifier, built from its internals."
         ),
     )
-    classifiers_profiles: Sequence[ClassifierProfileName] | None = Field(
+    classifiers_profile: ClassifierProfileName | None = Field(
         default=None,
-        description=("The classifiers profiles to use it in."),
+        description=("The classifiers profile to use it in."),
     )
     wandb_registry_version: Version = Field(
         description=("The version of the classifier in wandb registry. e.g. v1"),
