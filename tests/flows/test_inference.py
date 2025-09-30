@@ -1056,6 +1056,61 @@ def test_inference_result_partial_failures() -> None:
     )
 
 
+def test_inference_result_missing_results() -> None:
+    """
+    Test InferenceResult when some documents have no results.
+
+    For example a BatchInference flow crashed and returned no results.
+    """
+
+    # Setup: 5 documents, 2 classifiers
+    all_documents = [
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
+    ]
+
+    # Classifier Q100: All documents succeed
+    all_successful_batch = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id=ClassifierID("aaaa2222"),
+            wandb_registry_version="v1",
+        ),
+    )
+
+    # Create inference result with both classifiers
+    result = InferenceResult(
+        requested_document_stems=all_documents,
+        classifier_specs=[
+            ClassifierSpec(
+                wikibase_id=WikibaseID("Q100"),
+                classifier_id=ClassifierID("aaaa2222"),
+                wandb_registry_version="v1",
+            ),
+            ClassifierSpec(
+                wikibase_id=WikibaseID("Q101"),
+                classifier_id=ClassifierID("bbbb2222"),
+                wandb_registry_version="v1",
+            ),
+        ],
+        batch_inference_results=[all_successful_batch],  # No results for Q101
+    )
+
+    # A document is only considered successful if it succeeds for ALL classifiers
+    # Since Q101 has no results, the document is considered failed overall
+    assert result.failed, "Should fail when some documents have no results"
+
+    # Only documents that succeeded for both classifiers should have succeeded
+    assert result.successful_document_stems == set(), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+
 def test_jsonl_serialization_roundtrip():
     """Test that JSONL serialization and deserialization works correctly."""
     test_passages = [

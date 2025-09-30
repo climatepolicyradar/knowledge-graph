@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from collections import defaultdict
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -152,29 +153,33 @@ class InferenceResult(BaseModel):
     @property
     def failed(self) -> bool:
         """Whether the inference failed."""
-        if not self.batch_inference_results:
-            return True
-        else:
-            return any([result.failed for result in self.batch_inference_results])
+        document_count_difference = len(self.requested_document_stems) != len(
+            self.successful_document_stems
+        )
+        any_batch_failed = any(
+            [result.failed for result in self.batch_inference_results]
+        )
+        return document_count_difference or any_batch_failed
 
     @property
     def successful_document_stems(self) -> set[DocumentStem]:
         """
-        The documents that succeeded within every batch they where sent to.
+        The documents that succeeded for every classifier.
 
-        This means removing any that had a failure in any batch.
+        This means removing any that had a failure in any batch or no results.
         """
-        cross_batch_failures = set()
-        cross_batch_successes = set()
 
-        for batch_result in self.batch_inference_results:
-            cross_batch_failures = cross_batch_failures.union(
-                batch_result.failed_document_stems
-            )
-            cross_batch_successes = cross_batch_successes.union(
-                batch_result.successful_document_stems
-            )
-        return cross_batch_successes - cross_batch_failures
+        document_classifier_count: dict[DocumentStem, int] = defaultdict(int)
+
+        for batch_inference_result in self.batch_inference_results:
+            for document_stem in batch_inference_result.successful_document_stems:
+                document_classifier_count[document_stem] += 1
+
+        return {
+            document_stem
+            for document_stem, successful_classifier_count in document_classifier_count.items()
+            if successful_classifier_count >= len(self.classifier_specs)
+        }
 
 
 async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
