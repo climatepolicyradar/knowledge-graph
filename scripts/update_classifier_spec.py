@@ -64,7 +64,7 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
 
     collection_filters = {"name": {"$regex": WikibaseID.regex}}
 
-    version_filters = {"$or": [{"alias": env} for env in aws_envs]}
+    version_filters = {"$or": [{"tag": env.value} for env in aws_envs]}
 
     artifacts = (
         api.registries(filter=registry_filters)
