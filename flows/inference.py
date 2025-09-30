@@ -280,9 +280,6 @@ async def determine_file_stems(
     For requested document ids we identify whether there are any translated files that
     should also be processed by identifying their file stems as well.
     """
-
-    logger = get_logger()
-
     if use_new_and_updated and requested_document_ids:
         raise ValueError(
             "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
@@ -293,7 +290,6 @@ async def determine_file_stems(
         current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
         )
-        logger.info(f"8: {len(current_bucket_file_stems__filtered)}")
         return current_bucket_file_stems__filtered
 
     assert config.cache_bucket
@@ -967,10 +963,8 @@ async def inference(
       there is no need to change this outside of local dev
     """
     logger = get_logger()
-
     if not config:
         config = await Config.create()
-
     logger.info(f"Running with config: {config}")
 
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
