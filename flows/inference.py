@@ -79,7 +79,7 @@ FilterResult = NamedTuple(
     [("removed", Sequence[DocumentStem]), ("accepted", Sequence[DocumentStem])],
 )
 # A mapping of classifier specifications to the document stems that were sent for inference.
-InferenceWorkloadMapping: TypeAlias = dict[ClassifierSpec, list[DocumentStem]]
+InferenceWorkload: TypeAlias = dict[ClassifierSpec, list[DocumentStem]]
 
 
 class BatchInferenceResult(BaseModel):
@@ -152,14 +152,14 @@ class InferenceResult(BaseModel):
     failed_classifier_specs: list[ClassifierSpec] = []
     """List of classifier specifications that failed for one or more document."""
 
-    inference_workload_mapping: InferenceWorkloadMapping
+    inference_workload: InferenceWorkload
     """Mapping of classifier specifications to the document stems that were sent for inference."""
 
     @property
     def inference_workload_all_document_stems(self) -> set[DocumentStem]:
         """All documents stems we sent to batch level inference."""
         all_documents = set()
-        for stems in self.inference_workload_mapping.values():
+        for stems in self.inference_workload.values():
             all_documents.update(stems)
 
         return all_documents
@@ -198,7 +198,7 @@ class InferenceResult(BaseModel):
         for (
             classifier_spec,
             expected_document_stems,
-        ) in self.inference_workload_mapping.items():
+        ) in self.inference_workload.items():
             failed_document_stems.update(
                 set(expected_document_stems) - successes_by_classifier[classifier_spec]
             )
@@ -1058,12 +1058,12 @@ async def inference(
     # Prepare document batches based on classifier specs
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
-    inference_workload_mapping: InferenceWorkloadMapping = {}
+    inference_workload: InferenceWorkload = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
         removal_details[classifier_spec] = len(filter_result.removed)
-        inference_workload_mapping[classifier_spec] = list(filter_result.accepted)
+        inference_workload[classifier_spec] = list(filter_result.accepted)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
             params = parameters(classifier_spec, document_batch)
@@ -1119,7 +1119,7 @@ async def inference(
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
-        inference_workload_mapping=inference_workload_mapping,
+        inference_workload=inference_workload,
     )
 
     await create_inference_summary_artifact(

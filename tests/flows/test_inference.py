@@ -19,7 +19,7 @@ from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
     InferenceResult,
-    InferenceWorkloadMapping,
+    InferenceWorkload,
     SingleDocumentInferenceResult,
     _inference_batch_of_documents,
     _stringify,
@@ -942,7 +942,7 @@ def test_inference_result_all_successful() -> None:
         classifier_spec=spec_q101,
     )
 
-    inference_workload_mapping: InferenceWorkloadMapping = {
+    inference_workload: InferenceWorkload = {
         spec_q100: all_documents,
         spec_q101: all_documents,
     }
@@ -952,7 +952,7 @@ def test_inference_result_all_successful() -> None:
         requested_document_stems=all_documents,
         classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
-        inference_workload_mapping=inference_workload_mapping,
+        inference_workload=inference_workload,
     )
 
     # All documents are successful as we have successes for all documents
@@ -976,14 +976,14 @@ def test_inference_result_all_failures() -> None:
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
-    inference_workload_mapping: InferenceWorkloadMapping = {spec_q100: documents}
+    inference_workload: InferenceWorkload = {spec_q100: documents}
 
     # Inference result should fail but not crash
     result = InferenceResult(
         requested_document_stems=documents,
         classifier_specs=[spec_q100],
         batch_inference_results=[],  # No successes
-        inference_workload_mapping=inference_workload_mapping,
+        inference_workload=inference_workload,
     )
     assert result.failed
     assert len(result.successful_document_stems) == 0
@@ -1012,7 +1012,7 @@ def test_inference_result_partial_failures() -> None:
         wandb_registry_version="v1",
     )
 
-    inference_workload_mapping: InferenceWorkloadMapping = {
+    inference_workload: InferenceWorkload = {
         spec_q100: all_documents,
         spec_q101: all_documents,
     }
@@ -1039,7 +1039,7 @@ def test_inference_result_partial_failures() -> None:
         requested_document_stems=all_documents,
         classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch, partial_success_batch],
-        inference_workload_mapping=inference_workload_mapping,
+        inference_workload=inference_workload,
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
@@ -1083,7 +1083,7 @@ def test_inference_result_missing_results() -> None:
         wandb_registry_version="v1",
     )
 
-    inference_workload_mapping: InferenceWorkloadMapping = {
+    inference_workload: InferenceWorkload = {
         spec_q100: all_documents,
         spec_q101: all_documents,
     }
@@ -1100,7 +1100,7 @@ def test_inference_result_missing_results() -> None:
         requested_document_stems=all_documents,
         classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch],  # No results for Q101
-        inference_workload_mapping=inference_workload_mapping,
+        inference_workload=inference_workload,
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
