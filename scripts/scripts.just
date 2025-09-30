@@ -149,3 +149,13 @@ audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PRO
 # Check if passages in S3 align with Vespa
 audit-s3-vespa-alignment +OPTS="":
     uv run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}
+
+
+# Usage: just audit-prefect-artifacts <flow_run_name>. Call without arguments for more details.
+audit-prefect-artifacts +OPTS="":
+    #!/bin/bash
+    if [ -z "{{OPTS}}" ]; then
+        uv run collect_prefect_artifacts --help
+    else
+        uv run collect_prefect_artifacts {{OPTS}}
+    fi
