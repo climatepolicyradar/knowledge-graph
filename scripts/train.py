@@ -443,7 +443,10 @@ async def train_classifier(
             evaluation_data=evaluation_data,
         )
 
-        classifier.fit(train_validation_data=deduplicated_training_data)
+        classifier.fit(
+            train_validation_data=deduplicated_training_data,
+            enable_wandb=track_and_upload,
+        )
 
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
