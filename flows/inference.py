@@ -297,13 +297,16 @@ async def determine_file_stems(
     assert config.cache_bucket
 
     requested_document_stems = []
-    for doc_id in requested_document_ids:
-        document_key = os.path.join(
-            config.inference_document_source_prefix, f"{doc_id}.json"
-        )
-        requested_document_stems += await get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key, config.bucket_region
-        )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        for doc_id in requested_document_ids:
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
+            )
+            requested_document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
 
     missing_from_bucket = list(
         set(requested_document_stems) - set(current_bucket_file_stems)
