@@ -32,7 +32,6 @@ from flows.classifier_specs.spec_interface import (
     should_skip_doc,
 )
 from flows.config import Config
-from flows.debug_mem import get_memory_and_cpu_metrics
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -289,10 +288,8 @@ async def determine_file_stems(
             "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
         )
     elif use_new_and_updated:
-        logger.info("6: " + json.dumps(get_memory_and_cpu_metrics()))
         requested_document_ids = await get_latest_ingest_documents(config)
     elif requested_document_ids is None:
-        logger.info("7: " + json.dumps(get_memory_and_cpu_metrics()))
         current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
         )
@@ -306,14 +303,6 @@ async def determine_file_stems(
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3") as s3_client:
         for doc_id in requested_document_ids:
-            if "1" in doc_id:  # Don't log all
-                logger.info(f"9: {doc_id} " + json.dumps(get_memory_and_cpu_metrics()))
-                # initial_count = len(gc.get_objects())
-                # collected = gc.collect()
-                # final_count = len(gc.get_objects())
-                # logger.info(
-                #     f"Garbage collection: {initial_count} {collected} {final_count}"
-                # )
             document_key = os.path.join(
                 config.inference_document_source_prefix, f"{doc_id}.json"
             )
@@ -321,17 +310,14 @@ async def determine_file_stems(
                 doc_id, config.cache_bucket, document_key, s3_client
             )
 
-    logger.info(f"10: {len(requested_document_stems)}")
     missing_from_bucket = list(
         set(requested_document_stems) - set(current_bucket_file_stems)
     )
-    logger.info(f"11: {len(missing_from_bucket)}")
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
-    logger.info(f"12: {len(requested_document_stems)}")
     return requested_document_stems
 
 
@@ -981,23 +967,19 @@ async def inference(
       there is no need to change this outside of local dev
     """
     logger = get_logger()
-    logger.info("3: " + json.dumps(get_memory_and_cpu_metrics()))
 
     if not config:
         config = await Config.create()
 
     logger.info(f"Running with config: {config}")
-    logger.info("4: " + json.dumps(get_memory_and_cpu_metrics()))
 
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
-    logger.info("5: " + json.dumps(get_memory_and_cpu_metrics()))
     validated_file_stems = await determine_file_stems(
         config=config,
         use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
     )
-    logger.info("Final: " + json.dumps(get_memory_and_cpu_metrics()))
 
     if classifier_specs is None:
         classifier_specs = load_classifier_specs(config.aws_env)

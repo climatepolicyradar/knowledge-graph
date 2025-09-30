@@ -1,4 +1,3 @@
-import json
 from collections.abc import Sequence
 
 from prefect import State, flow
@@ -17,7 +16,6 @@ from flows.boundary import (
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
-from flows.debug_mem import get_memory_and_cpu_metrics
 from flows.index import (
     DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
@@ -100,14 +98,12 @@ async def full_pipeline(
     """
 
     logger = get_logger()
-    logger.info("1: " + json.dumps(get_memory_and_cpu_metrics()))
 
     if not config:
         logger.info("No pipeline config provided, creating default...")
         config = await Config.create()
 
     logger.info(f"Running the full pipeline with the config: {config}, ")
-    logger.info("2: " + json.dumps(get_memory_and_cpu_metrics()))
 
     inference_run: State = await inference(
         classifier_specs=classifier_specs,
