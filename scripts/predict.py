@@ -1,12 +1,15 @@
+import os
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 import wandb
+from dotenv import find_dotenv, load_dotenv
 from rich.console import Console
 
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.inference import label_passages_with_classifier
@@ -22,6 +25,8 @@ from knowledge_graph.wandb_helpers import (
 console = Console()
 
 app = typer.Typer()
+
+load_dotenv(find_dotenv())
 
 
 def deduplicate_labelled_passages(
@@ -49,6 +54,12 @@ def main(
             parser=WikibaseID,
         ),
     ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
     labelled_passages_path: Annotated[
         Optional[Path],
         typer.Option(
@@ -56,8 +67,8 @@ def main(
             dir_okay=False,
             exists=True,
         ),
-    ],
-    labelled_passages_wandb_run_name: Annotated[
+    ] = None,
+    labelled_passages_wandb_run_path: Annotated[
         Optional[str],
         typer.Option(
             help="""Optional W&B run name to look for a labelled passages artifact in.
@@ -66,13 +77,7 @@ def main(
             <wikibase_id>.
             """
         ),
-    ],
-    classifier_wandb_path: Annotated[
-        str,
-        typer.Option(
-            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
-        ),
-    ],
+    ] = None,
     track_and_upload: Annotated[
         bool,
         typer.Option(
@@ -108,7 +113,7 @@ def main(
         "limit": limit,
         "classifier_path": classifier_wandb_path,
         "labelled_passages_path": labelled_passages_path,
-        "labelled_passages_wandb_run_name": labelled_passages_wandb_run_name,
+        "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
     }
     wandb_job_type = "predict_adhoc"
 
@@ -127,19 +132,17 @@ def main(
         wandb_api = wandb.Api()
 
         # 1. load labelled passages
-        match (labelled_passages_path, labelled_passages_wandb_run_name):
-            case (local_path, wandb_run_name) if local_path and wandb_run_name:
+        match (labelled_passages_path, labelled_passages_wandb_run_path):
+            case (local_path, wandb_run_path) if local_path and wandb_run_path:
                 raise ValueError(
                     "Both `labelled_passages_path` and `labelled_passages_run_name` cannot be defined."
                 )
 
-            case (local_path, wandb_run_name) if local_path:
+            case (local_path, wandb_run_path) if local_path:
                 labelled_passages = LabelledPassage.from_jsonl(local_path)
 
-            case (local_path, wandb_run_name) if wandb_run_name:
-                wandb_run = wandb_api.run(
-                    f"{WANDB_ENTITY}/{wikibase_id}/{wandb_run_name}"
-                )
+            case (local_path, wandb_run_path) if wandb_run_path:
+                wandb_run = wandb_api.run(wandb_run_path)
                 labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
 
             case _:
@@ -160,6 +163,13 @@ def main(
             labelled_passages = labelled_passages[:limit]
 
         # 2. load model
+        region_name = "eu-west-1"
+        aws_env = AwsEnv.labs
+        # When running in prefect the client is instantiated earlier
+        # Set this, so W&B knows where to look for AWS credentials profile
+        os.environ["AWS_PROFILE"] = aws_env
+        get_s3_client(aws_env, region_name)
+
         classifier = Classifier.load_from_wandb(classifier_wandb_path)
 
         # 3. predict using model

@@ -225,7 +225,8 @@ class Classifier(ABC):
         api = wandb.Api()
         model_artifact = api.artifact(wandb_path)
         model_artifact_dir = model_artifact.download()
-        return cls.load(model_artifact_dir, model_to_cuda=model_to_cuda)
+        model_pickle_path = Path(model_artifact_dir) / "model.pickle"
+        return cls.load(model_pickle_path, model_to_cuda=model_to_cuda)
 
 
 class ZeroShotClassifier(ABC):
