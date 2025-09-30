@@ -78,7 +78,7 @@ FilterResult = NamedTuple(
     "FilterResult",
     [("removed", Sequence[DocumentStem]), ("accepted", Sequence[DocumentStem])],
 )
-# A mapping of classifier specifications to the document stems that were sent for inference.
+# Maps classifier specs to document stems intended for inference
 InferenceWorkload: TypeAlias = dict[ClassifierSpec, list[DocumentStem]]
 
 
@@ -146,7 +146,13 @@ class InferenceResult(BaseModel):
     """List of classifier specifications that failed for one or more document."""
 
     inference_workload: InferenceWorkload
-    """Mapping of classifier specifications to the document stems that were sent for inference."""
+    """Maps classifier specifications to document stems for inference.
+
+    This mapping tracks which document stems (file names without extensions) 
+    were dispatched to each classifier within batch inference for processing.
+    Not all classifiers process all documents - this mapping defines the specific
+    assignments.
+    """
 
     @property
     def inference_workload_all_document_stems(self) -> set[DocumentStem]:
@@ -160,14 +166,22 @@ class InferenceResult(BaseModel):
     @property
     def failed(self) -> bool:
         """Whether the inference failed."""
-        document_count_difference = len(
-            self.inference_workload_all_document_stems
-        ) != len(self.successful_document_stems)
-        any_batch_failed = any(
-            [result.failed for result in self.batch_inference_results]
-        )
-        no_batch_results = not self.batch_inference_results
-        return document_count_difference or any_batch_failed or no_batch_results
+
+        # Check if no batch results
+        if not self.batch_inference_results:
+            return True
+
+        # Check if any batch failed
+        if any(result.failed for result in self.batch_inference_results):
+            return True
+
+        # Check if document counts don't match
+        if len(self.inference_workload_all_document_stems) != len(
+            self.successful_document_stems
+        ):
+            return True
+
+        return False
 
     @property
     def successful_document_stems(self) -> set[DocumentStem]:
