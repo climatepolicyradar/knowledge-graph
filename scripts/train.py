@@ -512,6 +512,7 @@ async def run_training(
 
     extra_wandb_config = {
         "experimental_model_type": classifier_type is not None,
+        "classifier_kwargs": classifier_kwargs,
     }
 
     return await train_classifier(
