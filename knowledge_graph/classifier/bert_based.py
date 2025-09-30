@@ -334,9 +334,14 @@ class BertBasedClassifier(
         with tempfile.TemporaryDirectory() as temp_dir:
             training_args = TrainingArguments(
                 output_dir=os.path.join(temp_dir, "results"),
-                num_train_epochs=3,
-                per_device_train_batch_size=64,
+                # high number of train epochs as we enable early stopping below
+                num_train_epochs=10,
+                # batch size scales with dataset size, to avoid batches or epochs that
+                # have too few batches which leads to unstable training
+                per_device_train_batch_size=min(64, max(16, len(train_dataset) // 10)),
                 per_device_eval_batch_size=64,
+                # gradient clipping for more stable updates
+                max_grad_norm=1.0,
                 learning_rate=5e-4,
                 weight_decay=0.01,
                 warmup_ratio=0.06,
@@ -346,9 +351,8 @@ class BertBasedClassifier(
                 dataloader_pin_memory=False,
                 logging_dir=os.path.join(temp_dir, "logs"),
                 logging_steps=10,
-                eval_strategy="steps",
-                eval_steps=100,
-                save_steps=200,
+                eval_strategy="epoch",
+                save_strategy="epoch",
                 save_total_limit=2,
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_f1",
