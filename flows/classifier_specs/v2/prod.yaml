@@ -501,6 +501,36 @@
   wandb_registry_version: v14
   dont_run_on:
   - sabin
+- wikibase_id: Q1651
+  concept_id: anhcmh9a
+  classifier_id: 6rys3abe
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v14
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
+- wikibase_id: Q1652
+  concept_id: z9k6f9ps
+  classifier_id: 57uwtz45
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v11
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
+- wikibase_id: Q1653
+  concept_id: set8cyd3
+  classifier_id: u86a8p2d
+  classifiers_profiles:
+  - primary
+  wandb_registry_version: v11
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
 - wikibase_id: Q1744
   concept_id: m2cfkvme
   classifier_id: 7aeap3ca
