@@ -129,13 +129,6 @@ class InferenceResult(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    requested_document_stems: list[DocumentStem]
-    """List of document stems that were requested for inference processing.
-    
-    These represent the file names (without extensions) of documents that were 
-    intended to be processed, regardless of whether processing succeeded or failed.
-    """
-
     classifier_specs: list[ClassifierSpec]
     """List of classifier specifications that were used in this inference run.
     
@@ -173,12 +166,13 @@ class InferenceResult(BaseModel):
         any_batch_failed = any(
             [result.failed for result in self.batch_inference_results]
         )
-        return document_count_difference or any_batch_failed
+        no_batch_results = not self.batch_inference_results
+        return document_count_difference or any_batch_failed or no_batch_results
 
     @property
     def successful_document_stems(self) -> set[DocumentStem]:
         """
-        The documents that succeeded for every classifier.
+        The documents that succeeded for every classifier they were expected to run on.
 
         This means removing any that had a failure in any batch or no results.
         """
@@ -1114,7 +1108,6 @@ async def inference(
             failed_classifier_specs.append(spec)
 
     inference_result = InferenceResult(
-        requested_document_stems=list(validated_file_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,
@@ -1172,7 +1165,7 @@ async def create_inference_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Total documents requested**: {len(inference_result.requested_document_stems)}
+- **Total documents requested**: {len(inference_result.inference_workload_all_document_stems)}
 - **Total classifiers**: {len(inference_result.classifier_specs)}
 - **Successful classifiers**: {len(inference_result.successful_classifier_specs)}
 - **Failed classifiers**: {len(inference_result.failed_classifier_specs)}

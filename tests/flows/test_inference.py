@@ -949,7 +949,6 @@ def test_inference_result_all_successful() -> None:
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        requested_document_stems=all_documents,
         classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
         inference_workload=inference_workload,
@@ -980,7 +979,6 @@ def test_inference_result_all_failures() -> None:
 
     # Inference result should fail but not crash
     result = InferenceResult(
-        requested_document_stems=documents,
         classifier_specs=[spec_q100],
         batch_inference_results=[],  # No successes
         inference_workload=inference_workload,
@@ -1036,7 +1034,6 @@ def test_inference_result_partial_failures() -> None:
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        requested_document_stems=all_documents,
         classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch, partial_success_batch],
         inference_workload=inference_workload,
@@ -1097,7 +1094,6 @@ def test_inference_result_missing_results() -> None:
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        requested_document_stems=all_documents,
         classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch],  # No results for Q101
         inference_workload=inference_workload,
