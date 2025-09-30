@@ -36,6 +36,9 @@ def main(
         25,
         help="Number of passages to process in each batch",
     ),
+    max_size_to_sample_from: int = typer.Option(
+        default=25_000, help="Number of passages in the source data to sample from."
+    ),
     track_and_upload: bool = typer.Option(
         default=True,
         help="Whether to track the run and upload the labelled passages to W&B. Defaults to True",
@@ -54,7 +57,7 @@ def main(
     The script assumes you have already run the `build-dataset` command to create a
     local copy of the balanced dataset.
     """
-    dataset_path = processed_data_dir / "balanced_dataset_for_sampling.feather"
+    dataset_path = processed_data_dir / "combined_dataset.feather"
 
     try:
         with console.status("🚚 Loading combined dataset"):
@@ -65,6 +68,13 @@ def main(
             f"{dataset_path} not found locally. If you haven't already, please run:\n"
             "  just build-dataset"
         ) from e
+
+    max_size_to_sample_from = 500_000
+    if len(df) > max_size_to_sample_from:
+        console.log(
+            f"Limiting input data from {len(df)} rows to {max_size_to_sample_from}"
+        )
+        df = df.iloc[:max_size_to_sample_from]
 
     with console.status("🔍 Fetching concept and subconcepts from Wikibase"):
         wikibase = WikibaseSession()
