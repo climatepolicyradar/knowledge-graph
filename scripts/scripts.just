@@ -60,9 +60,17 @@ label id string:
 predict id +OPTS="":
     uv run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
 
+# run classifiers on balanced dataset for vibe checking (legacy predict functionality)
+vibe-check-predict id +OPTS="":
+    uv run python scripts/vibe_checker/predict.py --wikibase-id {{id}} {{OPTS}}
+
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:
     uv run python scripts/sample.py --wikibase-id {{id}}
+
+# sample passages using multiple classifiers for a specific wikibase ID
+sample-using-classifiers id +OPTS="":
+    uv run python scripts/sample_using_classifiers.py --wikibase-id {{id}} {{OPTS}}
 
 # extend an existing dataset in argilla with additional passages for a specific wikibase ID
 extend-dataset id workspace:
