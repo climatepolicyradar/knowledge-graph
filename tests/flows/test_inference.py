@@ -1086,7 +1086,7 @@ def test_inference_result_missing_results() -> None:
     }
 
     # Classifier Q100: All documents succeed
-    all_successful_batch = BatchInferenceResult(
+    Q100_batch = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
         classifier_spec=spec_q100,
@@ -1095,7 +1095,7 @@ def test_inference_result_missing_results() -> None:
     # Create inference result with both classifiers
     result = InferenceResult(
         classifier_specs=[spec_q100, spec_q101],
-        batch_inference_results=[all_successful_batch],  # No results for Q101
+        batch_inference_results=[Q100_batch],  # No results for Q101
         inference_workload=inference_workload,
     )
 

@@ -156,7 +156,7 @@ class InferenceResult(BaseModel):
 
     @property
     def inference_workload_all_document_stems(self) -> set[DocumentStem]:
-        """All documents stems we sent to batch level inference."""
+        """All documents stems sent to batch level inference."""
         all_documents = set()
         for stems in self.inference_workload.values():
             all_documents.update(stems)
