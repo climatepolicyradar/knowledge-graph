@@ -19,6 +19,7 @@ from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
     InferenceResult,
+    InferenceWorkloadMapping,
     SingleDocumentInferenceResult,
     _inference_batch_of_documents,
     _stringify,
@@ -915,44 +916,43 @@ def test_inference_result_all_successful() -> None:
         DocumentStem("TEST.executive.5.5"),
     ]
 
+    spec_q100 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v1",
+    )
+
+    spec_q101 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q101"),
+        classifier_id="bbbb3333",
+        wandb_registry_version="v1",
+    )
+
     # Classifier Q100: All documents succeed
     all_successful_batch_1 = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_spec=ClassifierSpec(
-            wikibase_id=WikibaseID("Q100"),
-            classifier_id="aaaa2222",
-            wandb_registry_version="v1",
-        ),
+        classifier_spec=spec_q100,
     )
 
     # Classifier Q101: All documents succeed
     all_successful_batch_2 = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_spec=ClassifierSpec(
-            wikibase_id=WikibaseID("Q101"),
-            classifier_id="bbbb3333",
-            wandb_registry_version="v1",
-        ),
+        classifier_spec=spec_q101,
     )
+
+    inference_workload_mapping: InferenceWorkloadMapping = {
+        spec_q100: all_documents,
+        spec_q101: all_documents,
+    }
 
     # Create inference result with both classifiers
     result = InferenceResult(
         requested_document_stems=all_documents,
-        classifier_specs=[
-            ClassifierSpec(
-                wikibase_id=WikibaseID("Q100"),
-                classifier_id="aaaa2222",
-                wandb_registry_version="v1",
-            ),
-            ClassifierSpec(
-                wikibase_id=WikibaseID("Q101"),
-                classifier_id="bbbb3333",
-                wandb_registry_version="v1",
-            ),
-        ],
+        classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
+        inference_workload_mapping=inference_workload_mapping,
     )
 
     # All documents are successful as we have successes for all documents
@@ -976,12 +976,14 @@ def test_inference_result_all_failures() -> None:
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
+    inference_workload_mapping: InferenceWorkloadMapping = {spec_q100: documents}
 
     # Inference result should fail but not crash
     result = InferenceResult(
         requested_document_stems=documents,
         classifier_specs=[spec_q100],
         batch_inference_results=[],  # No successes
+        inference_workload_mapping=inference_workload_mapping,
     )
     assert result.failed
     assert len(result.successful_document_stems) == 0
@@ -999,15 +1001,27 @@ def test_inference_result_partial_failures() -> None:
         DocumentStem("TEST.executive.5.5"),
     ]
 
+    spec_q100 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v1",
+    )
+    spec_q101 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q101"),
+        classifier_id="bbbb3333",
+        wandb_registry_version="v1",
+    )
+
+    inference_workload_mapping: InferenceWorkloadMapping = {
+        spec_q100: all_documents,
+        spec_q101: all_documents,
+    }
+
     # Classifier Q100: All documents succeed
     all_successful_batch = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_spec=ClassifierSpec(
-            wikibase_id=WikibaseID("Q100"),
-            classifier_id="aaaa2222",
-            wandb_registry_version="v1",
-        ),
+        classifier_spec=spec_q100,
     )
 
     # Classifier Q101: Only 2 documents succeed
@@ -1017,29 +1031,15 @@ def test_inference_result_partial_failures() -> None:
             DocumentStem("TEST.executive.3.3"),
             DocumentStem("TEST.executive.4.4"),
         ],
-        classifier_spec=ClassifierSpec(
-            wikibase_id=WikibaseID("Q101"),
-            classifier_id="bbbb3333",
-            wandb_registry_version="v1",
-        ),
+        classifier_spec=spec_q101,
     )
 
     # Create inference result with both classifiers
     result = InferenceResult(
         requested_document_stems=all_documents,
-        classifier_specs=[
-            ClassifierSpec(
-                wikibase_id=WikibaseID("Q100"),
-                classifier_id="aaaa2222",
-                wandb_registry_version="v1",
-            ),
-            ClassifierSpec(
-                wikibase_id=WikibaseID("Q101"),
-                classifier_id="bbbb2222",
-                wandb_registry_version="v1",
-            ),
-        ],
+        classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch, partial_success_batch],
+        inference_workload_mapping=inference_workload_mapping,
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
@@ -1072,33 +1072,35 @@ def test_inference_result_missing_results() -> None:
         DocumentStem("TEST.executive.5.5"),
     ]
 
+    spec_q100 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v1",
+    )
+    spec_q101 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q101"),
+        classifier_id="bbbb2222",
+        wandb_registry_version="v1",
+    )
+
+    inference_workload_mapping: InferenceWorkloadMapping = {
+        spec_q100: all_documents,
+        spec_q101: all_documents,
+    }
+
     # Classifier Q100: All documents succeed
     all_successful_batch = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_spec=ClassifierSpec(
-            wikibase_id=WikibaseID("Q100"),
-            classifier_id=ClassifierID("aaaa2222"),
-            wandb_registry_version="v1",
-        ),
+        classifier_spec=spec_q100,
     )
 
     # Create inference result with both classifiers
     result = InferenceResult(
         requested_document_stems=all_documents,
-        classifier_specs=[
-            ClassifierSpec(
-                wikibase_id=WikibaseID("Q100"),
-                classifier_id=ClassifierID("aaaa2222"),
-                wandb_registry_version="v1",
-            ),
-            ClassifierSpec(
-                wikibase_id=WikibaseID("Q101"),
-                classifier_id=ClassifierID("bbbb2222"),
-                wandb_registry_version="v1",
-            ),
-        ],
+        classifier_specs=[spec_q100, spec_q101],
         batch_inference_results=[all_successful_batch],  # No results for Q101
+        inference_workload_mapping=inference_workload_mapping,
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers

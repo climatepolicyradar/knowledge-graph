@@ -78,6 +78,8 @@ FilterResult = NamedTuple(
     "FilterResult",
     [("removed", Sequence[DocumentStem]), ("accepted", Sequence[DocumentStem])],
 )
+# A mapping of classifier specifications to the document stems that were sent for inference.
+InferenceWorkloadMapping: TypeAlias = dict[ClassifierSpec, list[DocumentStem]]
 
 
 class BatchInferenceResult(BaseModel):
@@ -150,12 +152,24 @@ class InferenceResult(BaseModel):
     failed_classifier_specs: list[ClassifierSpec] = []
     """List of classifier specifications that failed for one or more document."""
 
+    inference_workload_mapping: InferenceWorkloadMapping
+    """Mapping of classifier specifications to the document stems that were sent for inference."""
+
+    @property
+    def inference_workload_all_document_stems(self) -> set[DocumentStem]:
+        """All documents stems we sent to batch level inference."""
+        all_documents = set()
+        for stems in self.inference_workload_mapping.values():
+            all_documents.update(stems)
+
+        return all_documents
+
     @property
     def failed(self) -> bool:
         """Whether the inference failed."""
-        document_count_difference = len(self.requested_document_stems) != len(
-            self.successful_document_stems
-        )
+        document_count_difference = len(
+            self.inference_workload_all_document_stems
+        ) != len(self.successful_document_stems)
         any_batch_failed = any(
             [result.failed for result in self.batch_inference_results]
         )
@@ -169,17 +183,33 @@ class InferenceResult(BaseModel):
         This means removing any that had a failure in any batch or no results.
         """
 
-        document_classifier_count: dict[DocumentStem, int] = defaultdict(int)
-
+        # Collect the successful document stems for each classifier.
+        successes_by_classifier: dict[ClassifierSpec, set[DocumentStem]] = defaultdict(
+            set
+        )
         for batch_inference_result in self.batch_inference_results:
-            for document_stem in batch_inference_result.successful_document_stems:
-                document_classifier_count[document_stem] += 1
+            successes_by_classifier[batch_inference_result.classifier_spec].update(
+                batch_inference_result.successful_document_stems
+            )
 
-        return {
-            document_stem
-            for document_stem, successful_classifier_count in document_classifier_count.items()
-            if successful_classifier_count >= len(self.classifier_specs)
-        }
+        # Collect the unsuccessful document stems where an expected success for a classifier
+        #  was not found.
+        failed_document_stems: set[DocumentStem] = set()
+        for (
+            classifier_spec,
+            expected_document_stems,
+        ) in self.inference_workload_mapping.items():
+            failed_document_stems.update(
+                set(expected_document_stems) - successes_by_classifier[classifier_spec]
+            )
+
+        # Collect the successful document stems as the sum of the expected document stems
+        #   minus the unsuccessful document stems.
+        successful_documents = (
+            self.inference_workload_all_document_stems - failed_document_stems
+        )
+
+        return successful_documents
 
 
 async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
@@ -1028,10 +1058,12 @@ async def inference(
     # Prepare document batches based on classifier specs
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
+    inference_workload_mapping: InferenceWorkloadMapping = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
         removal_details[classifier_spec] = len(filter_result.removed)
+        inference_workload_mapping[classifier_spec] = list(filter_result.accepted)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
             params = parameters(classifier_spec, document_batch)
@@ -1087,6 +1119,7 @@ async def inference(
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
+        inference_workload_mapping=inference_workload_mapping,
     )
 
     await create_inference_summary_artifact(
