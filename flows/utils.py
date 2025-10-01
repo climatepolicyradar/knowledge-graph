@@ -567,15 +567,7 @@ class ParameterisedFlow(NamedTuple, Generic[P, R]):
     """A named tuple containing a flow and its parameters."""
 
     fn: Flow[P, R]
-    params: dict[str, Any]
-
-
-class InferenceParams(BaseModel):
-    """Parameters for batch level inference."""
-
-    batch: Sequence[DocumentStem]
-    config_json: JsonDict
-    classifier_spec_json: JsonDict
+    params: BaseModel
 
 
 @overload
@@ -634,7 +626,7 @@ async def map_as_sub_flow(
             semaphore,
             run_deployment(
                 name=qualified_name,
-                parameters=batch.params,
+                parameters=batch.params.model_dump(),
                 # Rely on the flow's own timeout, if any, to make sure it
                 # eventually ends[1].
                 #

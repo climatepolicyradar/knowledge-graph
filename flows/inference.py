@@ -39,7 +39,6 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
-    InferenceParams,
     JsonDict,
     ParameterisedFlow,
     Profiler,
@@ -121,6 +120,14 @@ class BatchInferenceResult(BaseModel):
         """Whether the batch failed, True if failed."""
 
         return len(self.batch_document_stems) != len(self.successful_document_stems)
+
+
+class InferenceParams(BaseModel):
+    """Parameters for batch level inference."""
+
+    batch: Sequence[DocumentStem]
+    config_json: JsonDict
+    classifier_spec_json: JsonDict
 
 
 class InferenceResult(BaseModel):
@@ -1078,9 +1085,7 @@ async def inference(
             else:
                 fn = inference_batch_of_documents_cpu
 
-            parameterised_batches.append(
-                ParameterisedFlow(fn=fn, params=params.model_dump())
-            )
+            parameterised_batches.append(ParameterisedFlow(fn=fn, params=params))
 
     await create_dont_run_on_docs_summary_artifact(
         config=config, removal_details=removal_details

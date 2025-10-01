@@ -14,7 +14,7 @@ from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import PositiveInt
+from pydantic import BaseModel, PositiveInt
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -34,6 +34,7 @@ from flows.inference import (
 )
 from flows.utils import (
     DocumentStem,
+    JsonDict,
     ParameterisedFlow,
     S3Uri,
     SlackNotify,
@@ -72,6 +73,15 @@ class AggregationFailure(Exception):
         self.document_stem = document_stem
         self.exception = exception
         self.context = context
+
+
+class AggregateParams(BaseModel):
+    """Parameters for batch level aggregation."""
+
+    document_stems: Sequence[DocumentStem]
+    config_json: JsonDict
+    classifier_specs: Sequence[ClassifierSpec]
+    run_output_identifier: RunOutputIdentifier
 
 
 def build_run_output_identifier() -> RunOutputIdentifier:
@@ -499,13 +509,13 @@ async def aggregate(
         n_documents_in_batch,
     )
 
-    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
-        return {
-            "document_stems": batch,
-            "config_json": config.model_dump(),
-            "classifier_specs": classifier_specs,
-            "run_output_identifier": run_output_identifier,
-        }
+    def parameters(batch: Sequence[DocumentStem]) -> AggregateParams:
+        return AggregateParams(
+            document_stems=batch,
+            config_json=JsonDict(config.model_dump()),
+            classifier_specs=classifier_specs,
+            run_output_identifier=run_output_identifier,
+        )
 
     parameterised_batches: Sequence[ParameterisedFlow] = []
     for batch in batches:

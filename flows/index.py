@@ -19,7 +19,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 
 # generate_slug is being used, but in an implicit f-string
 from prefect.utilities.names import generate_slug  # noqa: F401
-from pydantic import PositiveInt
+from pydantic import BaseModel, PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
@@ -44,6 +44,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    JsonDict,
     ParameterisedFlow,
     S3Uri,
     SlackNotify,
@@ -63,6 +64,16 @@ DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
 DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 # How many document passages to index concurrently per document
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
+
+
+class IndexParams(BaseModel):
+    """Parameters for batch level indexing."""
+
+    document_stems: Sequence[DocumentStem]
+    config_json: JsonDict
+    run_output_identifier: RunOutputIdentifier
+    indexer_document_passages_concurrency_limit: PositiveInt
+    indexer_max_vespa_connections: PositiveInt
 
 
 async def load_async_json_data_from_s3(
@@ -680,14 +691,14 @@ async def index(
 
     batches = iterate_batch(document_stems, batch_size)
 
-    def parameters(batch: Sequence[DocumentStem]) -> dict[str, Any]:
-        return {
-            "document_stems": batch,
-            "config_json": config.model_dump(),
-            "run_output_identifier": run_output_identifier,
-            "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
-            "indexer_max_vespa_connections": indexer_max_vespa_connections,
-        }
+    def parameters(batch: Sequence[DocumentStem]) -> IndexParams:
+        return IndexParams(
+            document_stems=batch,
+            config_json=JsonDict(config.model_dump()),
+            run_output_identifier=run_output_identifier,
+            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+            indexer_max_vespa_connections=indexer_max_vespa_connections,
+        )
 
     parameterised_batches: Sequence[ParameterisedFlow] = []
     for batch in batches:
