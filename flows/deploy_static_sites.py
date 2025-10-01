@@ -10,9 +10,7 @@ served.
 
 import importlib
 import os
-import pathlib
 import subprocess
-import sys
 
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
@@ -60,12 +58,7 @@ def setup_environment():
 def generate_static_site(app_name: str):
     """Generate the static site by running the generator module directly."""
     print(f"Generating static site for {app_name}...")
-    # Ensure project root is on sys.path so that `static_sites` is importable when
-    # executed in environments (e.g., Prefect) where PYTHONPATH is not set.
-    project_root = pathlib.Path(__file__).resolve().parents[1]
-    project_root_str = str(project_root)
-    if project_root_str not in sys.path:
-        sys.path.insert(0, project_root_str)
+
     module = importlib.import_module(f"static_sites.{app_name}.__main__")
     module.main()
     print(f"Static site generation complete for {app_name}.")
