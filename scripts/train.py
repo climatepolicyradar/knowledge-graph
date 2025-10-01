@@ -36,7 +36,6 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
     load_labelled_passages_from_wandb_run,
-    log_labelled_passages_artifact_to_wandb_run,
 )
 from knowledge_graph.wikibase import WikibaseConfig
 from scripts.classifier_metadata import ComputeEnvironment
@@ -593,7 +592,7 @@ async def run_training(
         classifier_kwargs=classifier_kwargs or {},
     )
 
-    extra_wandb_config = {
+    extra_wandb_config: dict[str, object] = {
         "experimental_model_type": classifier_type is not None,
     }
     if training_data_wandb_run_path:
