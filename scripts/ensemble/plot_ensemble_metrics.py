@@ -10,6 +10,7 @@ import typer
 import wandb
 from rich.console import Console
 from rich.progress import Progress
+from sklearn.metrics import f1_score
 
 from knowledge_graph.config import ensemble_metrics_dir
 from knowledge_graph.ensemble.metrics import (
@@ -344,26 +345,8 @@ def calculate_cumulative_f1_curve(
         y_true = retained["ground_truth_positive"].astype(int).tolist()
         y_pred = retained["predicted_positive"].astype(int).tolist()
 
-        # Calculate confusion matrix
-        tp = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 1)
-        fp = sum(1 for t, p in zip(y_true, y_pred) if t == 0 and p == 1)
-        fn = sum(1 for t, p in zip(y_true, y_pred) if t == 1 and p == 0)
-
-        # Calculate F1
-        if tp + fp == 0:  # No positive predictions
-            precision = 0
-        else:
-            precision = tp / (tp + fp)
-
-        if tp + fn == 0:  # No positive ground truth
-            recall = 0
-        else:
-            recall = tp / (tp + fn)
-
-        if precision + recall == 0:
-            f1 = 0
-        else:
-            f1 = 2 * (precision * recall) / (precision + recall)
+        # Calculate F1 using sklearn
+        f1 = f1_score(y_true, y_pred)
 
         retention_rates.append(retention_rate)
         f1_scores.append(f1)
