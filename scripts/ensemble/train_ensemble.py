@@ -5,8 +5,8 @@ import typer
 from rich.console import Console
 from rich.progress import Progress
 
-from knowledge_graph.classifier import ClassifierFactory
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.ensemble import create_ensemble
 from knowledge_graph.identifiers import WikibaseID
 from scripts.get_concept import get_concept_async
 from scripts.train import parse_classifier_kwargs, train_classifier
@@ -55,7 +55,7 @@ async def train_ensemble(
     )
 
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
-    ensemble = ClassifierFactory.create_ensemble(
+    ensemble = create_ensemble(
         concept=concept,
         classifier_type=classifier_type,
         classifier_kwargs=classifier_kwargs,

@@ -1,9 +1,8 @@
 import logging
-from typing import Sequence
+from typing import Any, Sequence, cast
 
-from knowledge_graph.classifier.classifier import (
-    Classifier,
-)
+from knowledge_graph.classifier import ClassifierFactory
+from knowledge_graph.classifier.classifier import Classifier, VariantEnabledClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
@@ -112,3 +111,45 @@ class Ensemble:
     def __repr__(self) -> str:
         """Return a string representation of the ensemble."""
         return str(self.id)
+
+
+def create_ensemble(
+    concept: Concept,
+    n_classifiers: int,
+    classifier_type: str,
+    classifier_kwargs: dict[str, Any] = {},
+) -> Ensemble:
+    """
+    Create an ensemble of classifiers for a concept.
+
+    :raises ValueError: if the classifier_type is not variant-enabled.
+    """
+
+    initial_classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs,
+    )
+    if not isinstance(initial_classifier, VariantEnabledClassifier):
+        raise ValueError(
+            f"Classifier type must be variant-enabled to be part of an ensemble.\nClassifier type {classifier_type} is not."
+        )
+
+    # TODO: warn that random seed will be ignored for LLMClassifier
+
+    # cast is needed here as list is invariant, so list[Classifier] is incompatible
+    # with list[VariantEnabledClassifier]
+    classifiers: list[Classifier] = [
+        initial_classifier,
+        *[
+            cast(Classifier, initial_classifier.get_variant())
+            for _ in range(n_classifiers - 1)
+        ],
+    ]
+
+    ensemble = Ensemble(
+        concept=concept,
+        classifiers=classifiers,
+    )
+
+    return ensemble
