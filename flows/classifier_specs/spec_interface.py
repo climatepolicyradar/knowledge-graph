@@ -92,7 +92,7 @@ class ClassifierSpec(BaseModel):
 
 def determine_spec_file_path(aws_env: AwsEnv) -> Path:
     """Determine the path to the spec file for a given AWS environment."""
-    return SPEC_DIR / f"{aws_env}.yaml"
+    return SPEC_DIR / f"{aws_env.name}.yaml"
 
 
 def load_classifier_specs(
