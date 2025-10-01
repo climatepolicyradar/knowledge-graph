@@ -4,8 +4,11 @@ build-dataset n="10000":
     poetry run python scripts/build_dataset.py --n {{n}}
 
 # fetch metadata and labelled passages for a specific wikibase ID
-get-concept id:
-    uv run python scripts/get_concept.py --wikibase-id {{id}}
+# Optionally ad a wikibase_config as a string, if omitted this will rely on env variables instead:
+# just get-concept <id> "<url> <username> <password>"
+get-concept id wikibase_config="":
+    uv run python scripts/get_concept.py --wikibase-id {{id}} \
+        {{if wikibase_config != "" { "--wikibase-config \"" + wikibase_config + "\"" } else { "" } }}
 
 # train a model for a specific wikibase ID
 train id +OPTS="":
@@ -150,3 +153,13 @@ audit-doc-prod document_id aggregator_run_identifier="latest" bucket_name="${PRO
 # Check if passages in S3 align with Vespa
 audit-s3-vespa-alignment +OPTS="":
     uv run python -m scripts.audit.do_s3_passages_align_with_vespa {{OPTS}}
+
+
+# Usage: just audit-prefect-artifacts <flow_run_name>. Call without arguments for more details.
+audit-prefect-artifacts +OPTS="":
+    #!/bin/bash
+    if [ -z "{{OPTS}}" ]; then
+        uv run collect_prefect_artifacts --help
+    else
+        uv run collect_prefect_artifacts {{OPTS}}
+    fi

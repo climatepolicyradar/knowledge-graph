@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
+import tenacity
 import wandb
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
@@ -22,6 +23,7 @@ from prefect.context import FlowRunContext, get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
+from tenacity import RetryCallState
 from types_aiobotocore_s3.client import S3Client
 from wandb.sdk.wandb_run import Run
 
@@ -295,13 +297,16 @@ async def determine_file_stems(
     assert config.cache_bucket
 
     requested_document_stems = []
-    for doc_id in requested_document_ids:
-        document_key = os.path.join(
-            config.inference_document_source_prefix, f"{doc_id}.json"
-        )
-        requested_document_stems += await get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key, config.bucket_region
-        )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        for doc_id in requested_document_ids:
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
+            )
+            requested_document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
 
     missing_from_bucket = list(
         set(requested_document_stems) - set(current_bucket_file_stems)
@@ -648,6 +653,32 @@ def _get_labelled_passage_from_prediction(
     )
 
 
+def retry_callback(retry_state: RetryCallState):
+    """Log a message about retries progress."""
+    logger = get_logger()
+
+    fn_name = retry_state.fn.__name__ if retry_state.fn else "unknown"
+    attempt = retry_state.attempt_number
+    if outcome := retry_state.outcome:
+        notes = None
+        if exception := outcome.exception():
+            if hasattr(exception, "__notes__"):
+                notes = ", ".join(exception.__notes__)
+
+            logger.warning(
+                f"{fn_name} retry #{attempt}. Error notes: {notes or exception})"
+            )
+
+
+# https://tenacity.readthedocs.io/en/latest/#waiting-before-retrying
+@tenacity.retry(
+    wait=tenacity.wait_fixed(15) + tenacity.wait_random(0, 45),  # each wait = 15-60s
+    stop=tenacity.stop_after_attempt(2),
+    retry=tenacity.retry_if_exception_type(ClientError)
+    | tenacity.retry_if_exception_message(match="RequestTimeTooSkewed"),
+    after=retry_callback,
+    reraise=True,
+)
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,

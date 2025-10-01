@@ -42,6 +42,7 @@ dependencies = [
     "html2text>=2025.4.15",
     "nest-asyncio>=1.6.0",
     "matplotlib>=3.10.6",
+    "pandas>=2.3.1",
 ]
 
 [project.optional-dependencies]
@@ -104,6 +105,7 @@ infer = "scripts.infer:app"
 update-inference-classifiers = "scripts.update_classifier_spec:app"
 classifier-metadata = "scripts.classifier_metadata:app"
 deploy = "scripts.deploy:app"
+collect_prefect_artifacts = "scripts.audit.collect_prefect_artifacts:app"
 
 
 [tool.pytest.ini_options]

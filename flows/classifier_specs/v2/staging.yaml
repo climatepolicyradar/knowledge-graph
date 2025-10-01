@@ -2,8 +2,7 @@
 - wikibase_id: Q53
   concept_id: kgtd77zy
   classifier_id: r4xsb4ff
-  classifiers_profiles:
-  - primary
+  classifiers_profile: primary
   wandb_registry_version: v6
   dont_run_on:
   - sabin
@@ -33,10 +32,16 @@
   dont_run_on:
   - sabin
 - wikibase_id: Q221
+  concept_id: s9rbcnjc
   classifier_id: zahr3y3c
-  wandb_registry_version: v13
+  classifiers_profile: primary
+  wandb_registry_version: v15
   dont_run_on:
   - sabin
+- wikibase_id: Q221
+  concept_id: s9rbcnjc
+  classifier_id: zahr3y3c
+  wandb_registry_version: v16
 - wikibase_id: Q223
   classifier_id: dntrzvg4
   wandb_registry_version: v15
@@ -100,8 +105,7 @@
 - wikibase_id: Q639
   concept_id: 9a3aj2vs
   classifier_id: zp9e66p9
-  classifiers_profiles:
-  - primary
+  classifiers_profile: primary
   wandb_registry_version: v15
   dont_run_on:
   - sabin
@@ -221,13 +225,17 @@
   dont_run_on:
   - sabin
 - wikibase_id: Q777
-  classifier_id: ztvmwv92
-  wandb_registry_version: v20
+  concept_id: qembqy8s
+  classifier_id: 8fj9pk8h
+  classifiers_profile: primary
+  wandb_registry_version: v22
   dont_run_on:
   - sabin
 - wikibase_id: Q778
-  classifier_id: j7c3ktev
-  wandb_registry_version: v20
+  concept_id: eum2twbb
+  classifier_id: bgrd72hx
+  classifiers_profile: primary
+  wandb_registry_version: v22
   dont_run_on:
   - sabin
 - wikibase_id: Q779
@@ -422,6 +430,7 @@
   - sabin
 - wikibase_id: Q1651
   classifier_id: 6rys3abe
+  classifiers_profile: primary
   wandb_registry_version: v13
   compute_environment:
     gpu: true
@@ -429,6 +438,7 @@
   - sabin
 - wikibase_id: Q1652
   classifier_id: 57uwtz45
+  classifiers_profile: primary
   wandb_registry_version: v10
   compute_environment:
     gpu: true
