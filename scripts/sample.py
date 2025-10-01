@@ -5,15 +5,7 @@ from typing import Annotated
 import pandas as pd
 import typer
 import wandb
-from more_itertools import chunked
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeRemainingColumn,
-)
 
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
@@ -137,21 +129,9 @@ def main(
             model.fit()
             console.log(f"🤖 Created a {model}")
 
-            progress_bar = Progress(
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TimeRemainingColumn(),
+            predictions = model.predict_many(
+                raw_text_passages, batch_size=100, show_progress=True
             )
-            with progress_bar:
-                task = progress_bar.add_task(
-                    description=f"Predicting spans for {model}",
-                    total=len(raw_text_passages),
-                )
-                predictions = []
-                for text_chunk in chunked(raw_text_passages, 100):
-                    predictions.extend(model.predict_batch(text_chunk))
-                    progress_bar.update(task, advance=len(text_chunk))
 
             # Add a column to the dataset for each classifier's predictions
             dataset[model.name] = predictions
