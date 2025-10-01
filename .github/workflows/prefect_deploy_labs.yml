@@ -1,0 +1,18 @@
+name: "CD / Prefect / Labs"
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy_prefect_labs:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/prefect_deploy.yml
+    with:
+      aws-env: labs
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_LABS }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_LABS }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
