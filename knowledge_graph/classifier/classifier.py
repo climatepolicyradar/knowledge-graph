@@ -1,7 +1,7 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Protocol, Sequence, Union
+from typing import Optional, Protocol, Sequence, Union, runtime_checkable
 
 from typing_extensions import Self
 
@@ -203,6 +203,7 @@ class ProbabilityCapableClassifier(ABC):
     """
 
 
+@runtime_checkable
 class VariantEnabledClassifier(Protocol):
     """
     Protocol for classifiers that can generate variants of themselves.

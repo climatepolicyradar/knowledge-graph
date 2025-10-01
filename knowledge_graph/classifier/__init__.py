@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 import importlib
 from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from knowledge_graph.classifier.classifier import Classifier, GPUBoundClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    VariantEnabledClassifier,
+)
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
