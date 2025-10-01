@@ -373,7 +373,7 @@ class BertBasedClassifier(
                 compute_metrics=compute_metrics,
                 callbacks=[
                     EarlyStoppingCallback(
-                        early_stopping_patience=3, early_stopping_threshold=0.001
+                        early_stopping_patience=2, early_stopping_threshold=0
                     )
                 ],
             )
