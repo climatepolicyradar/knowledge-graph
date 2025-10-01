@@ -79,7 +79,12 @@ def load_classifier_remote(
     version: Version,
     wikibase_id: WikibaseID,
 ) -> Classifier:
-    """Load a classifier from W&B artifacts storage."""
+    """
+    Load a classifier from W&B artifacts storage.
+
+    NB: This function temporarily sets AWS_PROFILE to enable W&B to download
+    artifacts from S3. The profile is restored after download completes.
+    """
     artifact_id = f"{wikibase_id}/{classifier}:{version}"
     artifact = run.use_artifact(artifact_id, type="model")
 
@@ -88,13 +93,19 @@ def load_classifier_remote(
     # Make it easier to know which AWS env this happened in
     run.config["aws_env"] = aws_env
 
-    # Set this for W&B to pickup
-    os.environ["AWS_PROFILE"] = aws_env
-
-    artifact_dir = artifact.download()
-    artifact_path = Path(artifact_dir) / model_artifact_name
-
-    return Classifier.load(artifact_path)
+    # Temporarily set AWS_PROFILE for W&B's S3 artifact download
+    original_profile = os.environ.get("AWS_PROFILE")
+    try:
+        os.environ["AWS_PROFILE"] = aws_env
+        artifact_dir = artifact.download()
+        artifact_path = Path(artifact_dir) / model_artifact_name
+        return Classifier.load(artifact_path)
+    finally:
+        # Restore original AWS_PROFILE
+        if original_profile is not None:
+            os.environ["AWS_PROFILE"] = original_profile
+        else:
+            os.environ.pop("AWS_PROFILE", None)
 
 
 def add_artifact_to_run_lineage_local(
