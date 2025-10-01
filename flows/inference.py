@@ -6,7 +6,7 @@ from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, NamedTuple, Optional, TypeAlias
+from typing import Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
 import tenacity
@@ -39,6 +39,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    InferenceParams,
     JsonDict,
     ParameterisedFlow,
     Profiler,
@@ -151,11 +152,9 @@ class InferenceResult(BaseModel):
         """All documents stems sent to batch level inference."""
         all_documents = set()
         for parameterised_batch in self.parameterised_batches:
-            if (batch := parameterised_batch.params.get("batch")) is None:
-                raise ValueError(
-                    f"'batch' not found in parameterised batch: {parameterised_batch.params}"
-                )
-            all_documents.update(batch)
+            all_documents.update(
+                InferenceParams.model_validate(parameterised_batch.params).batch
+            )
 
         return all_documents
 
@@ -200,20 +199,10 @@ class InferenceResult(BaseModel):
         #  was not found.
         failed_document_stems: set[DocumentStem] = set()
         for parameterised_batch in self.parameterised_batches:
-            if (
-                classifier_spec := parameterised_batch.params.get(
-                    "classifier_spec_json"
-                )
-            ) is None:
-                raise ValueError(
-                    f"'classifier_spec_json' not found in parameterised batch: {parameterised_batch.params}"
-                )
-            if (
-                expected_document_stems := parameterised_batch.params.get("batch")
-            ) is None:
-                raise ValueError(
-                    f"'batch' not found in parameterised batch: {parameterised_batch.params}"
-                )
+            params = InferenceParams.model_validate(parameterised_batch.params)
+            expected_document_stems = params.batch
+            classifier_spec = ClassifierSpec.model_validate(params.classifier_spec_json)
+
             failed_document_stems.update(
                 set(expected_document_stems) - successes_by_classifier[classifier_spec]
             )
@@ -1064,12 +1053,12 @@ async def inference(
     def parameters(
         classifier_spec: ClassifierSpec,
         document_batch: Sequence[DocumentStem],
-    ) -> dict[str, Any]:
-        return {
-            "batch": document_batch,
-            "config_json": config.to_json(),
-            "classifier_spec_json": classifier_spec.model_dump(),
-        }
+    ) -> InferenceParams:
+        return InferenceParams(
+            batch=document_batch,
+            config_json=JsonDict(config.to_json()),
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+        )
 
     # Prepare document batches based on classifier specs
     parameterised_batches: Sequence[ParameterisedFlow] = []
@@ -1089,7 +1078,9 @@ async def inference(
             else:
                 fn = inference_batch_of_documents_cpu
 
-            parameterised_batches.append(ParameterisedFlow(fn=fn, params=params))
+            parameterised_batches.append(
+                ParameterisedFlow(fn=fn, params=params.model_dump())
+            )
 
     await create_dont_run_on_docs_summary_artifact(
         config=config, removal_details=removal_details

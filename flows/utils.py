@@ -39,7 +39,7 @@ from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
 from prefect_slack.credentials import SlackWebhook
-from pydantic import Field, PositiveInt, RootModel
+from pydantic import BaseModel, Field, PositiveInt, RootModel
 from types_aiobotocore_s3.client import S3Client
 from typing_extensions import Self
 
@@ -568,6 +568,14 @@ class ParameterisedFlow(NamedTuple, Generic[P, R]):
 
     fn: Flow[P, R]
     params: dict[str, Any]
+
+
+class InferenceParams(BaseModel):
+    """Parameters for batch level inference."""
+
+    batch: Sequence[DocumentStem]
+    config_json: JsonDict
+    classifier_spec_json: JsonDict
 
 
 @overload
