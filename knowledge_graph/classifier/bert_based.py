@@ -12,6 +12,7 @@ from datasets import Dataset
 from rich.logging import RichHandler
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -51,6 +52,31 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
     accuracy = accuracy_score(labels, predictions)
 
     return {"accuracy": accuracy, "f1": f1, "precision": precision, "recall": recall}
+
+
+class WeightedTrainer(Trainer):
+    """Trainer that applies class weights to the cross-entropy loss function."""
+
+    def __init__(self, *args, class_weights=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.class_weights = class_weights
+
+    def compute_loss(
+        self, model, inputs, return_outputs=False, num_items_in_batch=None
+    ):
+        """Compute cross-entropy loss weighted by class weights provided to the trainer."""
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+
+        # Apply class weights to the loss
+        if self.class_weights is not None:
+            loss_fct = torch.nn.CrossEntropyLoss(weight=self.class_weights)
+            loss = loss_fct(logits, labels)
+        else:
+            loss = outputs.loss
+
+        return (loss, outputs) if return_outputs else loss
 
 
 class BertBasedClassifier(
@@ -331,6 +357,16 @@ class BertBasedClassifier(
             f"{trainable_params / total_params * 100:.2f}",
         )
 
+        # Compute class weights to handle class imbalance
+        train_labels = np.array(train_dataset["labels"])
+        class_weights = compute_class_weight(
+            class_weight="balanced", classes=np.unique(train_labels), y=train_labels
+        )
+        class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(
+            self.training_device
+        )
+        logger.info("Class weights: %s", class_weights_tensor.cpu().numpy())
+
         with tempfile.TemporaryDirectory() as temp_dir:
             training_args = TrainingArguments(
                 output_dir=os.path.join(temp_dir, "results"),
@@ -365,12 +401,13 @@ class BertBasedClassifier(
                 log_level="info" if enable_wandb else "warning",
             )
 
-            trainer = Trainer(
+            trainer = WeightedTrainer(
                 model=self.model,
                 args=training_args,
                 train_dataset=train_dataset,
                 eval_dataset=validation_dataset,
                 compute_metrics=compute_metrics,
+                class_weights=class_weights_tensor,
                 callbacks=[
                     EarlyStoppingCallback(
                         early_stopping_patience=2, early_stopping_threshold=0
