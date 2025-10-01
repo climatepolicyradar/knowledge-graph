@@ -12,6 +12,7 @@ from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.flows import flow
 
 from flows.utils import (
+    DocumentImportId,
     DocumentStem,
     Fault,
     ParameterisedFlow,
@@ -126,17 +127,19 @@ def test_iterate_batch(data, expected_lengths):
 
 
 @pytest.mark.asyncio
-async def test_s3_file_exists(test_config, mock_async_bucket_documents) -> None:
+async def test_s3_file_exists(
+    test_config, mock_async_bucket_documents, mock_s3_async_client
+) -> None:
     """Test that we can check if a file exists in an S3 bucket."""
 
     key = os.path.join(
         test_config.inference_document_source_prefix, "PDF.document.0.1.json"
     )
 
-    await s3_file_exists(test_config.cache_bucket, key, test_config.bucket_region)
+    await s3_file_exists(key, test_config.cache_bucket, mock_s3_async_client)
 
     assert not await s3_file_exists(
-        test_config.cache_bucket, "non_existent_key", test_config.bucket_region
+        "non_existent_key", test_config.cache_bucket, mock_s3_async_client
     )
 
 
@@ -148,13 +151,13 @@ async def test_get_file_stems_for_document_id(
 ) -> None:
     """Test that we can get the file stems for a document ID."""
 
-    document_id = Path(mock_async_bucket_documents[0]).stem
+    document_id = DocumentImportId(Path(mock_async_bucket_documents[0]).stem)
 
     file_stems = await get_file_stems_for_document_id(
         document_id,
         test_config.cache_bucket,
         test_config.inference_document_source_prefix,
-        test_config.bucket_region,
+        mock_s3_async_client,
     )
 
     assert file_stems == [document_id]
@@ -179,7 +182,7 @@ async def test_get_file_stems_for_document_id(
             test_config.inference_document_source_prefix,
             f"{document_id}.json",
         ),
-        bucket_region=test_config.bucket_region,
+        s3_client=mock_s3_async_client,
     )
 
     assert file_stems == [f"{document_id}_translated_en"]

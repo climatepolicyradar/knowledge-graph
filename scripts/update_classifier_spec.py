@@ -56,7 +56,7 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
         aws_envs = [e for e in AwsEnv]
 
     console.log(
-        f"Running for AWS environments: {[aws_env.value for aws_env in aws_envs]}"
+        f"Running for AWS environments: {[aws_env.name for aws_env in aws_envs]}"
     )
     api = wandb.Api()
 
@@ -64,7 +64,7 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
 
     collection_filters = {"name": {"$regex": WikibaseID.regex}}
 
-    version_filters = {"$or": [{"alias": env} for env in aws_envs]}
+    version_filters = {"$or": [{"tag": env.name} for env in aws_envs]}
 
     artifacts = (
         api.registries(filter=registry_filters)
@@ -98,10 +98,14 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
             spec_data["concept_id"] = concept_id
 
         if classifiers_profiles := art.metadata.get("classifiers_profiles"):
-            spec_data["classifiers_profiles"] = classifiers_profiles
+            spec = [
+                ClassifierSpec(**spec_data, classifiers_profile=classifiers_profile)
+                for classifiers_profile in classifiers_profiles
+            ]
+        else:
+            spec = [ClassifierSpec(**spec_data)]
 
-        spec = ClassifierSpec(**spec_data)
-        specs[env].append(spec)
+        specs[env].extend(spec)
 
     for env in aws_envs:
         spec_path = determine_spec_file_path(env)
