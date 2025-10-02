@@ -137,150 +137,150 @@ def create_deployment(
     )
 
 
-# Train
-create_deployment(
-    flow=train_on_gpu,
-    description="Train concept classifiers with GPU compute",
-    gpu=True,
-    flow_variables={},
-)
+if __name__ == "__name__":
+    # Train
+    create_deployment(
+        flow=train_on_gpu,
+        description="Train concept classifiers with GPU compute",
+        gpu=True,
+        flow_variables={},
+    )
 
-# Inference
+    # Inference
 
-create_deployment(
-    flow=inference,
-    description="Run concept classifier inference on document passages",
-    extra_tags=["type:entry"],
-)
+    create_deployment(
+        flow=inference,
+        description="Run concept classifier inference on document passages",
+        extra_tags=["type:entry"],
+    )
 
-create_deployment(
-    flow=inference_batch_of_documents_cpu,
-    description="Run concept classifier inference on a batch of documents with CPU compute",
-    extra_tags=["type:sub"],
-    gpu=False,
-)
+    create_deployment(
+        flow=inference_batch_of_documents_cpu,
+        description="Run concept classifier inference on a batch of documents with CPU compute",
+        extra_tags=["type:sub"],
+        gpu=False,
+    )
 
-create_deployment(
-    flow=inference_batch_of_documents_gpu,
-    description="Run concept classifier inference on a batch of documents with GPU compute",
-    extra_tags=["type:sub"],
-    gpu=True,
-    flow_variables={},
-)
+    create_deployment(
+        flow=inference_batch_of_documents_gpu,
+        description="Run concept classifier inference on a batch of documents with GPU compute",
+        extra_tags=["type:sub"],
+        gpu=True,
+        flow_variables={},
+    )
 
-# Aggregate inference results
+    # Aggregate inference results
 
-create_deployment(
-    flow=aggregate_batch_of_documents,
-    description="Aggregate inference results for a batch of documents",
-    flow_variables={
-        "cpu": MEGABYTES_PER_GIGABYTE * 16,
-        "memory": MEGABYTES_PER_GIGABYTE * 64,
-        "match_latest_revision_in_family": True,
-    },
-    extra_tags=["type:sub"],
-)
+    create_deployment(
+        flow=aggregate_batch_of_documents,
+        description="Aggregate inference results for a batch of documents",
+        flow_variables={
+            "cpu": MEGABYTES_PER_GIGABYTE * 16,
+            "memory": MEGABYTES_PER_GIGABYTE * 64,
+            "match_latest_revision_in_family": True,
+        },
+        extra_tags=["type:sub"],
+    )
 
-create_deployment(
-    flow=aggregate,
-    description="Aggregate inference results, through coordinating batches of documents",
-    extra_tags=["type:entry"],
-)
+    create_deployment(
+        flow=aggregate,
+        description="Aggregate inference results, through coordinating batches of documents",
+        extra_tags=["type:entry"],
+    )
 
-# Index
+    # Index
 
-create_deployment(
-    flow=index_batch_of_documents,
-    description="Run passage indexing for a batch of documents from S3 to Vespa",
-    extra_tags=["type:sub"],
-)
+    create_deployment(
+        flow=index_batch_of_documents,
+        description="Run passage indexing for a batch of documents from S3 to Vespa",
+        extra_tags=["type:sub"],
+    )
 
-create_deployment(
-    flow=index,
-    description="Run passage indexing for documents from S3 to Vespa",
-    extra_tags=["type:entry"],
-)
+    create_deployment(
+        flow=index,
+        description="Run passage indexing for documents from S3 to Vespa",
+        extra_tags=["type:entry"],
+    )
 
+    # Orchestrate full pipeline
 
-# Orchestrate full pipeline
+    create_deployment(
+        flow=full_pipeline,
+        description="Run the full Knowledge Graph Pipeline",
+        extra_tags=["type:end_to_end"],
+        env_schedules={
+            # Run it daily, on work days, to validate it works, or to
+            # surface issues.
+            AwsEnv.staging: "0 7 * * MON-THU",
+        },
+        env_parameters={
+            AwsEnv.staging: JsonDict(
+                {
+                    "document_ids": [
+                        "AF.document.061MCLAR.n0000_translated_en",
+                        "CCLW.executive.10512.5360",
+                    ],
+                    "classifier_specs": [
+                        # CPU-based
+                        {
+                            "wikibase_id": "Q708",
+                            "classifier_id": "x9kfsd8s",
+                            "wandb_registry_version": "v14",
+                        },
+                        # GPU-based
+                        {
+                            "wikibase_id": "Q1651",
+                            "classifier_id": "6rys3abe",
+                            "wandb_registry_version": "v13",
+                            "compute_environment": {"gpu": True},
+                        },
+                    ],
+                }
+            ),
+        },
+    )
 
-create_deployment(
-    flow=full_pipeline,
-    description="Run the full Knowledge Graph Pipeline",
-    extra_tags=["type:end_to_end"],
-    env_schedules={
-        # Run it daily, on work days, to validate it works, or to
-        # surface issues.
-        AwsEnv.staging: "0 7 * * MON-THU",
-    },
-    env_parameters={
-        AwsEnv.staging: JsonDict(
-            {
-                "document_ids": [
-                    "AF.document.061MCLAR.n0000_translated_en",
-                    "CCLW.executive.10512.5360",
-                ],
-                "classifier_specs": [
-                    # CPU-based
-                    {
-                        "wikibase_id": "Q708",
-                        "classifier_id": "x9kfsd8s",
-                        "wandb_registry_version": "v14",
-                    },
-                    # GPU-based
-                    {
-                        "wikibase_id": "Q1651",
-                        "classifier_id": "6rys3abe",
-                        "wandb_registry_version": "v13",
-                        "compute_environment": {"gpu": True},
-                    },
-                ],
-            }
-        ),
-    },
-)
+    # Wikibase
 
-# Wikibase
+    create_deployment(
+        flow=wikibase_to_s3,
+        description="Upload concepts from Wikibase to S3",
+        # Temporarily disabled for stability
+        #     env_schedules={
+        #         AwsEnv.production: "0 9 * * TUE,THU",
+        #         AwsEnv.staging: "0 15 2 * *",
+        #         AwsEnv.sandbox: "0 15 1 * *",
+        #         # Not needed in labs
+        #         # AwsEnv.labs: "0 15 3 * *",
+        #     },
+    )
 
-create_deployment(
-    flow=wikibase_to_s3,
-    description="Upload concepts from Wikibase to S3",
-    # Temporarily disabled for stability
-    #     env_schedules={
-    #         AwsEnv.production: "0 9 * * TUE,THU",
-    #         AwsEnv.staging: "0 15 2 * *",
-    #         AwsEnv.sandbox: "0 15 1 * *",
-    #         # Not needed in labs
-    #         # AwsEnv.labs: "0 15 3 * *",
-    #     },
-)
+    # Sync Neo4j with Wikibase
 
-# Sync Neo4j with Wikibase
+    create_deployment(
+        flow=update_neo4j,
+        description="Refresh Neo4j with the latest concept graph",
+        env_schedules={
+            AwsEnv.labs: "0 3 * * MON-THU",
+        },
+    )
 
-create_deployment(
-    flow=update_neo4j,
-    description="Refresh Neo4j with the latest concept graph",
-    env_schedules={
-        AwsEnv.labs: "0 3 * * MON-THU",
-    },
-)
+    # Deploy static sites
 
-# Deploy static sites
+    create_deployment(
+        flow=deploy_static_sites,
+        description="Deploy our static sites to S3",
+        env_schedules={
+            AwsEnv.labs: "0 0 * * *",  # Every day at midnight
+        },
+    )
 
-create_deployment(
-    flow=deploy_static_sites,
-    description="Deploy our static sites to S3",
-    env_schedules={
-        AwsEnv.labs: "0 0 * * *",  # Every day at midnight
-    },
-)
+    # Data backup
 
-# Data backup
-
-create_deployment(
-    flow=data_backup,
-    description="Deploy all Argilla datasets to Huggingface",
-    env_schedules={
-        AwsEnv.labs: "0 0 * * *",  # Every day at midnight
-    },
-)
+    create_deployment(
+        flow=data_backup,
+        description="Deploy all Argilla datasets to Huggingface",
+        env_schedules={
+            AwsEnv.labs: "0 0 * * *",  # Every day at midnight
+        },
+    )
