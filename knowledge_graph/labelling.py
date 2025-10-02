@@ -17,6 +17,7 @@ from argilla import (
 )
 from dotenv import find_dotenv, load_dotenv
 
+from knowledge_graph.classifier import Classifier
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.wikibase import Concept
 
@@ -308,3 +309,17 @@ class ArgillaSession:
                 raise ValueError("All datasets must have the same fields")
             if dataset.questions != questions:
                 raise ValueError("All datasets must have the same questions")
+
+
+def label_passages_with_classifier(
+    classifier: Classifier,
+    gold_standard_labelled_passages: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """Label passages using the provided classifier."""
+    return [
+        labelled_passage.model_copy(
+            update={"spans": classifier.predict(labelled_passage.text)},
+            deep=True,
+        )
+        for labelled_passage in gold_standard_labelled_passages
+    ]
