@@ -185,7 +185,7 @@ class InferenceResult(BaseModel):
         The documents that succeeded for every classifier they were expected to run on.
 
         This means removing any that had a failure in any batch or no results.
-        
+
         The parameterised batches contain the details of which documents were expected
         to be processed by each classifier. We use this therefore to determine explicitly
         whether we have a successful result from the BatchInferenceResults for a given
