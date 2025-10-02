@@ -1066,7 +1066,7 @@ def test_inference_result_partial_failures() -> None:
         ParameterisedFlow(
             fn=inference_batch_of_documents_cpu,
             params={
-                "batch": partial_successful_documents,  # only 2 documents
+                "batch": all_documents,
                 "config_json": {},
                 "classifier_spec_json": q101_classifier_spec.model_dump(),
             },
