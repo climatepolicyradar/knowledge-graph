@@ -201,7 +201,7 @@ class InferenceResult(BaseModel):
         failed_document_stems: set[DocumentStem] = set()
         for parameterised_batch in self.parameterised_batches:
             if (
-                classifier_spec := parameterised_batch.params.get(
+                classifier_spec_json := parameterised_batch.params.get(
                     "classifier_spec_json"
                 )
             ) is None:
@@ -214,6 +214,9 @@ class InferenceResult(BaseModel):
                 raise ValueError(
                     f"'batch' not found in parameterised batch: {parameterised_batch.params}"
                 )
+
+            classifier_spec = ClassifierSpec(**classifier_spec_json)
+
             failed_document_stems.update(
                 set(expected_document_stems) - successes_by_classifier[classifier_spec]
             )

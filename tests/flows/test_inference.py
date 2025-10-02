@@ -19,7 +19,6 @@ from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
     InferenceResult,
-    InferenceWorkload,
     SingleDocumentInferenceResult,
     _inference_batch_of_documents,
     _stringify,
@@ -40,7 +39,13 @@ from flows.inference import (
     store_labels,
     text_block_inference,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault, JsonDict
+from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    Fault,
+    JsonDict,
+    ParameterisedFlow,
+)
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
@@ -916,42 +921,54 @@ def test_inference_result_all_successful() -> None:
         DocumentStem("TEST.executive.5.5"),
     ]
 
-    spec_q100 = ClassifierSpec(
+    # Classifier Q100: All documents succeed
+    q100_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q100"),
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
+    all_successful_batch_1 = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_spec=q100_classifier_spec,
+    )
 
-    spec_q101 = ClassifierSpec(
+    # Classifier Q101: All documents succeed
+    q101_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q101"),
         classifier_id="bbbb3333",
         wandb_registry_version="v1",
     )
-
-    # Classifier Q100: All documents succeed
-    all_successful_batch_1 = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=all_documents,
-        classifier_spec=spec_q100,
-    )
-
-    # Classifier Q101: All documents succeed
     all_successful_batch_2 = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_spec=spec_q101,
+        classifier_spec=q101_classifier_spec,
     )
 
-    inference_workload: InferenceWorkload = {
-        spec_q100: all_documents,
-        spec_q101: all_documents,
-    }
+    parameterised_batches = [
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": all_documents,
+                "config_json": {},
+                "classifier_spec_json": q100_classifier_spec.model_dump(),
+            },
+        ),
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": all_documents,
+                "config_json": {},
+                "classifier_spec_json": q101_classifier_spec.model_dump(),
+            },
+        ),
+    ]
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        classifier_specs=[spec_q100, spec_q101],
+        parameterised_batches=parameterised_batches,
+        classifier_specs=[q100_classifier_spec, q101_classifier_spec],
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
-        inference_workload=inference_workload,
     )
 
     # All documents are successful as we have successes for all documents
@@ -975,13 +992,23 @@ def test_inference_result_all_failures() -> None:
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
-    inference_workload: InferenceWorkload = {spec_q100: documents}
+
+    parameterised_batches = [
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": documents,
+                "config_json": {},
+                "classifier_spec_json": spec_q100.model_dump(),
+            },
+        )
+    ]
 
     # Inference result should fail but not crash
     result = InferenceResult(
+        parameterised_batches=parameterised_batches,
         classifier_specs=[spec_q100],
         batch_inference_results=[],  # No successes
-        inference_workload=inference_workload,
     )
     assert result.failed
     assert len(result.successful_document_stems) == 0
@@ -999,44 +1026,58 @@ def test_inference_result_partial_failures() -> None:
         DocumentStem("TEST.executive.5.5"),
     ]
 
-    spec_q100 = ClassifierSpec(
+    # Classifier Q100: All documents succeed
+    q100_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q100"),
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
-    spec_q101 = ClassifierSpec(
+    all_successful_batch = BatchInferenceResult(
+        batch_document_stems=all_documents,
+        successful_document_stems=all_documents,
+        classifier_spec=q100_classifier_spec,
+    )
+
+    # Classifier Q101: Only 2 documents succeed
+    q101_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q101"),
         classifier_id="bbbb3333",
         wandb_registry_version="v1",
     )
-
-    inference_workload: InferenceWorkload = {
-        spec_q100: all_documents,
-        spec_q101: all_documents,
-    }
-
-    # Classifier Q100: All documents succeed
-    all_successful_batch = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=all_documents,
-        classifier_spec=spec_q100,
-    )
-
-    # Classifier Q101: Only 2 documents succeed
+    partial_successful_documents = [
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+    ]
     partial_success_batch = BatchInferenceResult(
         batch_document_stems=all_documents,
-        successful_document_stems=[
-            DocumentStem("TEST.executive.3.3"),
-            DocumentStem("TEST.executive.4.4"),
-        ],
-        classifier_spec=spec_q101,
+        successful_document_stems=partial_successful_documents,
+        classifier_spec=q101_classifier_spec,
     )
+
+    parameterised_batches = [
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": all_documents,
+                "config_json": {},
+                "classifier_spec_json": q100_classifier_spec.model_dump(),
+            },
+        ),
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": partial_successful_documents,  # only 2 documents
+                "config_json": {},
+                "classifier_spec_json": q101_classifier_spec.model_dump(),
+            },
+        ),
+    ]
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        classifier_specs=[spec_q100, spec_q101],
+        parameterised_batches=parameterised_batches,
+        classifier_specs=[q100_classifier_spec, q101_classifier_spec],
         batch_inference_results=[all_successful_batch, partial_success_batch],
-        inference_workload=inference_workload,
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
@@ -1055,9 +1096,10 @@ def test_inference_result_partial_failures() -> None:
 
 def test_inference_result_missing_results() -> None:
     """
-    Test InferenceResult when some documents have no results.
+    Test InferenceResult when some batches have no results.
 
-    For example a BatchInference flow crashed and returned no results.
+    For example a document wasn't processed in one batch due to a flow crashing but
+    was successfully processed in other batches.
     """
 
     # Setup: 5 documents, 2 classifiers
@@ -1069,34 +1111,48 @@ def test_inference_result_missing_results() -> None:
         DocumentStem("TEST.executive.5.5"),
     ]
 
-    spec_q100 = ClassifierSpec(
+    q100_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q100"),
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
-    spec_q101 = ClassifierSpec(
+    q101_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q101"),
         classifier_id="bbbb2222",
         wandb_registry_version="v1",
     )
 
-    inference_workload: InferenceWorkload = {
-        spec_q100: all_documents,
-        spec_q101: all_documents,
-    }
+    parameterised_batches = [
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": all_documents,
+                "config_json": {},
+                "classifier_spec_json": q100_classifier_spec.model_dump(),
+            },
+        ),
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": all_documents,
+                "config_json": {},
+                "classifier_spec_json": q101_classifier_spec.model_dump(),
+            },
+        ),
+    ]
 
     # Classifier Q100: All documents succeed
     Q100_batch = BatchInferenceResult(
         batch_document_stems=all_documents,
         successful_document_stems=all_documents,
-        classifier_spec=spec_q100,
+        classifier_spec=q100_classifier_spec,
     )
 
     # Create inference result with both classifiers
     result = InferenceResult(
-        classifier_specs=[spec_q100, spec_q101],
+        classifier_specs=[q100_classifier_spec, q101_classifier_spec],
         batch_inference_results=[Q100_batch],  # No results for Q101
-        inference_workload=inference_workload,
+        parameterised_batches=parameterised_batches,
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
