@@ -91,7 +91,6 @@ def create_deployment(
             aws_env_str = str(aws_env)
 
         work_pool_name = f"coiled-{aws_env_str}"
-        work_queue_name = "default"
         default_job_variables = JSON.load(
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
         ).value
@@ -108,7 +107,6 @@ def create_deployment(
 
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
-        work_queue_name = f"mvp-{aws_env}"
         default_job_variables = JSON.load(
             f"default-job-variables-prefect-mvp-{aws_env}"
         ).value
@@ -124,7 +122,6 @@ def create_deployment(
     _ = flow.deploy(
         generate_deployment_name(flow_name, aws_env),
         work_pool_name=work_pool_name,
-        work_queue_name=work_queue_name,
         version=version,
         image=DockerImage(
             name=image_name,

@@ -357,18 +357,17 @@ def main(
         )
 
 
-async def run_training(
+async def train_classifier(
+    classifier: Classifier,
     wikibase_id: WikibaseID,
     track_and_upload: bool,
     aws_env: AwsEnv,
-    wikibase_config: Optional[WikibaseConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
-    classifier_type: Optional[str] = None,
-    classifier_kwargs: Optional[dict[str, Any]] = None,
+    extra_wandb_config: dict[str, Any] = {},
     add_classifiers_profiles: list[str] | None = None,
-) -> Classifier:
-    """Train the model and optionally track the run, uploading the model."""
+) -> "Classifier":
+    """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
     console = Console()
 
@@ -379,25 +378,11 @@ async def run_training(
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
 
-    concept = await scripts.get_concept.get_concept_async(
-        wikibase_id=wikibase_id,
-        include_labels_from_subconcepts=True,
-        include_recursive_has_subconcept=True,
-        wikibase_config=wikibase_config,
-    )
-
-    classifier = ClassifierFactory.create(
-        concept=concept,
-        classifier_type=classifier_type,
-        classifier_kwargs=classifier_kwargs or {},
-    )
-
     wandb_config = {
         "classifier_type": classifier.name,
-        "classifier_kwargs": classifier_kwargs,
-        "experimental-model-type": classifier_type is not None,
-        "concept_hash": concept.__hash__(),
+        "concept_id": classifier.concept.id,
     }
+    wandb_config |= extra_wandb_config
 
     with (
         wandb.init(
@@ -474,7 +459,7 @@ async def run_training(
         if evaluate:
             metrics_df, model_labelled_passages = evaluate_classifier(
                 classifier=classifier,
-                labelled_passages=concept.labelled_passages,
+                labelled_passages=classifier.concept.labelled_passages,
                 wandb_run=run,
             )
 
@@ -491,7 +476,7 @@ async def run_training(
                 )
 
                 with labelled_passages_artifact.new_file(
-                    "labelled_passages.json", mode="w"
+                    "labelled_passages.jsonl", mode="w", encoding="utf-8"
                 ) as f:
                     data = "\n".join(
                         [entry.model_dump_json() for entry in model_labelled_passages]
@@ -503,6 +488,55 @@ async def run_training(
                 console.log("✅ Labelled passages uploaded successfully")
 
     return classifier
+
+
+async def run_training(
+    wikibase_id: WikibaseID,
+    track_and_upload: bool,
+    aws_env: AwsEnv,
+    wikibase_config: Optional[WikibaseConfig] = None,
+    s3_client: Optional[Any] = None,
+    evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
+    add_classifiers_profiles: list[str] | None = None,
+) -> Classifier:
+    """
+    Get a concept and create a classifier, then train the classifier.
+
+    Optionally evaluate, track in W&B and upload the model to S3.
+    """
+
+    # Validate parameter dependencies
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    concept = await scripts.get_concept.get_concept_async(
+        wikibase_id=wikibase_id,
+        include_labels_from_subconcepts=True,
+        include_recursive_has_subconcept=True,
+        wikibase_config=wikibase_config,
+    )
+
+    classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs or {},
+    )
+
+    extra_wandb_config = {
+        "experimental_model_type": classifier_type is not None,
+    }
+
+    return await train_classifier(
+        classifier=classifier,
+        wikibase_id=wikibase_id,
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        s3_client=s3_client,
+        evaluate=evaluate,
+        extra_wandb_config=extra_wandb_config,
+        add_classifiers_profiles=add_classifiers_profiles,
+    )
 
 
 if __name__ == "__main__":
