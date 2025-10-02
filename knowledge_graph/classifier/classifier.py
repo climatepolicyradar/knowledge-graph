@@ -43,7 +43,7 @@ class Classifier(ABC):
                 f"{expected}, not {self.concept.wikibase_id}"
             )
 
-    def fit(self, **kwargs) -> "Classifier":
+    def fit(self, *args, **kwargs) -> "Classifier":
         """
         Train the classifier on the data in the concept.
 
@@ -53,12 +53,12 @@ class Classifier(ABC):
         method here provides a consistent interface across all classifiers while
         allowing flexibility in implementation.
 
-        Args:
-            **kwargs: Training configuration parameters. The specific parameters
+
+        :param *args: Training data or other required parameters.
+        :param **kwargs: Training configuration parameters. The specific parameters
                 required will depend on the classifier implementation.
 
-        Returns:
-            Classifier: The trained classifier
+        :returns Classifier: The trained classifier
         """
         return self
 
