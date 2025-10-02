@@ -461,3 +461,96 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
     concept = Concept(wikibase_id="Q123", preferred_label="test")
 
     assert EmptyIDClassifier(concept)
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(concept=concept_strategy(), data=st.data())
+def test_predict_many_returns_predictions_for_all_texts(
+    classifier_class: Type[Classifier], concept: Concept, data: st.DataObject
+):
+    """Test that predict_many returns predictions for all input texts."""
+    # Generate multiple positive texts
+    num_texts = 5
+    texts = [
+        data.draw(positive_text_strategy(labels=concept.all_labels))
+        for _ in range(num_texts)
+    ]
+
+    classifier = classifier_class(concept)
+    predictions = classifier.predict_many(texts, batch_size=2)
+
+    assert len(predictions) == num_texts
+    assert all(isinstance(pred_list, list) for pred_list in predictions)
+    assert all(len(pred_list) > 0 for pred_list in predictions)
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(concept=concept_strategy())
+def test_predict_many_preserves_order(
+    classifier_class: Type[Classifier], concept: Concept
+):
+    """Test that predict_many returns predictions in the same order as input texts."""
+    texts = [
+        f"Some text with {concept.preferred_label} here",
+        "Some unrelated text without the concept",
+        f"Another text with {concept.preferred_label}",
+    ]
+
+    classifier = classifier_class(concept)
+    predictions = classifier.predict_many(texts, batch_size=2)
+
+    assert len(predictions) == 3
+    # First text should have predictions
+    assert len(predictions[0]) > 0
+    # Second text should have no predictions (doesn't contain the label)
+    assert len(predictions[1]) == 0
+    # Third text should have predictions
+    assert len(predictions[2]) > 0
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@pytest.mark.parametrize("batch_size", [1, 2, 5, 10])
+@given(concept=concept_strategy(), data=st.data())
+def test_predict_many_works_with_different_batch_sizes(
+    classifier_class: Type[Classifier],
+    concept: Concept,
+    batch_size: int,
+    data: st.DataObject,
+):
+    """Test that predict_many produces consistent results with different batch sizes."""
+    num_texts = 10
+    texts = [
+        data.draw(positive_text_strategy(labels=concept.all_labels))
+        for _ in range(num_texts)
+    ]
+
+    classifier = classifier_class(concept)
+    predictions = classifier.predict_many(texts, batch_size=batch_size)
+
+    assert len(predictions) == num_texts
+    assert all(isinstance(pred_list, list) for pred_list in predictions)
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(concept=concept_strategy(), data=st.data())
+def test_predict_iter_and_predict_many_produce_same_results(
+    classifier_class: Type[Classifier], concept: Concept, data: st.DataObject
+):
+    """Test that predict_iter and predict_many produce identical results."""
+    num_texts = 8
+    texts = [
+        data.draw(positive_text_strategy(labels=concept.all_labels))
+        for _ in range(num_texts)
+    ]
+
+    classifier = classifier_class(concept)
+    iter_predictions = list(classifier.predict_iter(texts, batch_size=3))
+    many_predictions = classifier.predict_many(texts, batch_size=3)
+
+    assert len(iter_predictions) == len(many_predictions)
+    for iter_pred, many_pred in zip(iter_predictions, many_predictions):
+        assert iter_pred == many_pred
