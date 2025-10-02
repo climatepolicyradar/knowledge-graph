@@ -9,6 +9,7 @@ from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
 import wandb
+from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from mypy_boto3_s3.type_defs import (
@@ -795,9 +796,14 @@ async def _inference_batch_of_documents(
     classifier = await load_classifier(run, config, classifier_spec)
 
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
+    boto_config = AioConfig(
+        max_pool_connections=(
+            config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
+        ),
+        read_timeout=120,
+    )
     session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
+    async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
                 semaphore,
