@@ -124,7 +124,7 @@ def should_skip_doc(stem: DocumentStem, spec: ClassifierSpec) -> bool:
     """
     Compares a document to the classifier spec for filtering out.
 
-    If the source (i.e. the first part of the id), is in the dont_tun_on field, this
+    If the source (i.e. the first part of the id), is in the dont_run_on field, this
     will return true to recommend filtering out.
     """
     source = stem.split(".")[0]
