@@ -8,10 +8,10 @@ from pydantic import BaseModel, Field, SecretStr
 from knowledge_graph.cloud import AwsEnv, get_prefect_job_variable
 
 # Constant, s3 prefix for the aggregated results
-INFERENCE_RESULTS_PREFIX = "inference_results"
-INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input"
-INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages"
-AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages"
+INFERENCE_RESULTS_PREFIX = "inference_results/"
+INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input/"
+INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages/"
+AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages/"
 
 # SSM
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
@@ -50,7 +50,7 @@ class Config(BaseModel):
     )
 
     pipeline_state_prefix: str = Field(
-        default="input",
+        default="input/",
         description="S3 prefix for where new & updated documents from ingestion are located",
     )
 
