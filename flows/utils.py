@@ -20,6 +20,7 @@ from typing import (
     NamedTuple,
     NewType,
     ParamSpec,
+    TypeAlias,
     TypeVar,
     overload,
 )
@@ -34,6 +35,7 @@ from prefect.artifacts import (
     update_progress_artifact,
 )
 from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.context import TaskRunContext, get_run_context
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
@@ -67,6 +69,29 @@ DocumentStem = NewType("DocumentStem", str)
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
+
+# A unique identifier for the run output made from the run context
+RunOutputIdentifier: TypeAlias = str
+
+
+def build_run_output_identifier() -> RunOutputIdentifier:
+    """Builds an identifier from the start time and name of the flow run."""
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    if run_context.flow_run.start_time is None:
+        raise ValueError("flow run didn't have a start time.")
+
+    start_time = run_context.flow_run.start_time.replace(tzinfo=None).isoformat(
+        timespec="minutes"
+    )
+    run_name = run_context.flow_run.name
+    return f"{start_time}-{run_name}"
 
 
 def file_name_from_path(path: str) -> str:
