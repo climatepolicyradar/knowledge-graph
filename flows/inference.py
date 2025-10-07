@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
-import tenacity
 import wandb
+from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from mypy_boto3_s3.type_defs import (
@@ -24,7 +24,6 @@ from prefect.context import FlowRunContext, get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.utilities.names import generate_slug
 from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
-from tenacity import RetryCallState
 from types_aiobotocore_s3.client import S3Client
 from wandb.sdk.wandb_run import Run
 
@@ -712,32 +711,6 @@ def _get_labelled_passage_from_prediction(
     )
 
 
-def retry_callback(retry_state: RetryCallState):
-    """Log a message about retries progress."""
-    logger = get_logger()
-
-    fn_name = retry_state.fn.__name__ if retry_state.fn else "unknown"
-    attempt = retry_state.attempt_number
-    if outcome := retry_state.outcome:
-        notes = None
-        if exception := outcome.exception():
-            if hasattr(exception, "__notes__"):
-                notes = ", ".join(exception.__notes__)
-
-            logger.warning(
-                f"{fn_name} retry #{attempt}. Error notes: {notes or exception})"
-            )
-
-
-# https://tenacity.readthedocs.io/en/latest/#waiting-before-retrying
-@tenacity.retry(
-    wait=tenacity.wait_fixed(15) + tenacity.wait_random(0, 45),  # each wait = 15-60s
-    stop=tenacity.stop_after_attempt(2),
-    retry=tenacity.retry_if_exception_type(ClientError)
-    | tenacity.retry_if_exception_message(match="RequestTimeTooSkewed"),
-    after=retry_callback,
-    reraise=True,
-)
 async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
@@ -882,9 +855,14 @@ async def _inference_batch_of_documents(
     classifier = await load_classifier(run, config, classifier_spec)
 
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
+    boto_config = AioConfig(
+        max_pool_connections=(
+            config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
+        ),
+        read_timeout=240,
+    )
     session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
+    async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
                 semaphore,
