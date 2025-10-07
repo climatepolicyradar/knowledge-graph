@@ -1012,6 +1012,56 @@ async def store_metadata(
     logger.debug(f"wrote metadata to {s3_uri}")
 
 
+async def store_inference_result(
+    config: Config,
+    inference_result: InferenceResult,
+) -> None:
+    """Store the inference result to S3 for later use."""
+    logger = get_logger()
+
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    if run_context.flow_run.start_time is None:
+        raise ValueError("flow run didn't have a start time")
+
+    run_output_identifier = build_run_output_identifier()
+
+    result_json = inference_result.model_dump_json()
+
+    logger.debug(f"writing inference result: {len(result_json)} bytes")
+
+    s3_uri = S3Uri(
+        bucket=config.cache_bucket_str,
+        key=os.path.join(
+            config.inference_document_target_prefix,
+            run_output_identifier,
+            "results.json",
+        ),
+    )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        response: PutObjectOutputTypeDef = await s3_client.put_object(
+            Bucket=s3_uri.bucket,
+            Key=s3_uri.key,
+            Body=result_json,
+            ContentType="application/json",
+        )
+
+        status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+        if status_code != 200:
+            raise ValueError(
+                f"Failed to store inference result to S3. Status code: {status_code}"
+            )
+
+    logger.debug(f"wrote inference result to {s3_uri}")
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -1150,6 +1200,15 @@ async def inference(
         inference_result=inference_result,
         removal_details=removal_details,
     )
+
+    try:
+        if config.cache_bucket:
+            await store_inference_result(
+                config=config,
+                inference_result=inference_result,
+            )
+    except Exception as e:
+        logger.error(f"Failed to store inference result: {e}")
 
     if inference_result.failed:
         raise Fault(
