@@ -1,9 +1,9 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 from cpr_sdk.ssm import get_aws_ssm_param
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import AfterValidator, BaseModel, Field, SecretStr
 
 from knowledge_graph.cloud import AwsEnv, get_prefect_job_variable
 
@@ -19,24 +19,45 @@ WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
 WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
 
 
+def validate_s3_prefix(value: str) -> str:
+    """
+    Validate S3 prefix format.
+
+    Without a trailing slash, it is too lax in pattern matching. E.g.
+    `embeddings_input` would match `embeddings_input` and
+    `embeddings_input_test`. We only want the former.
+    """
+    if value.startswith("/"):
+        raise ValueError("S3 prefix should not start with '/'")
+    if not value:
+        raise ValueError("S3 prefix cannot be empty")
+    if not value.endswith("/"):
+        raise ValueError("S3 prefix must end with '/'")
+
+    return value
+
+
+S3Prefix = Annotated[str, AfterValidator(validate_s3_prefix)]
+
+
 class Config(BaseModel):
     """Shared Configuration used across flow runs."""
 
     cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
-    aggregate_document_source_prefix: str = Field(
+    aggregate_document_source_prefix: S3Prefix = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="S3 prefix for source documents are read from",
     )
-    aggregate_inference_results_prefix: str = Field(
+    aggregate_inference_results_prefix: S3Prefix = Field(
         default=INFERENCE_RESULTS_PREFIX,
         description="S3 prefix for aggregated inference results are written to",
     )
-    inference_document_source_prefix: str = Field(
+    inference_document_source_prefix: S3Prefix = Field(
         default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="S3 prefix of documents read as source for inference",
     )
 
-    inference_document_target_prefix: str = Field(
+    inference_document_target_prefix: S3Prefix = Field(
         default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
         description="S3 prefix for where inference targets are written to",
     )
@@ -49,7 +70,7 @@ class Config(BaseModel):
         description="AWS environment",
     )
 
-    pipeline_state_prefix: str = Field(
+    pipeline_state_prefix: S3Prefix = Field(
         default="input/",
         description="S3 prefix for where new & updated documents from ingestion are located",
     )
