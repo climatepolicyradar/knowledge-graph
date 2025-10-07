@@ -10,9 +10,11 @@ schema concept {
             indexing: attribute | summary | index
             attribute: fast-search
         }
+        field wikibase_revision type int {
+            indexing: attribute | summary
+        }
         field wikibase_url type string {
             indexing: attribute | summary | index
-            attribute: fast-search
         }
 
         # E.g. fishing sector
