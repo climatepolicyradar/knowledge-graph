@@ -18,11 +18,18 @@ from mypy_boto3_s3.type_defs import (
 )
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
+from prefect.client.schemas import FlowRun
 from prefect.concurrency.asyncio import concurrency
-from prefect.context import FlowRunContext, get_run_context
+from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PositiveInt,
+    SecretStr,
+    ValidationError,
+)
 from types_aiobotocore_s3.client import S3Client
 from wandb.sdk.wandb_run import Run
 
@@ -40,8 +47,10 @@ from flows.utils import (
     JsonDict,
     ParameterisedFlow,
     Profiler,
+    RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_run_output_identifier,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     get_logger,
@@ -941,6 +950,68 @@ def filter_document_batch(
     return FilterResult(removed=removed_file_stems, accepted=accepted_file_stems)
 
 
+class Metadata(BaseModel):
+    """Lineage information for this inference run."""
+
+    flow_run: FlowRun
+    run_output_identifier: RunOutputIdentifier
+    classifier_specs: list[ClassifierSpec]
+    config: Config
+
+
+async def store_metadata(
+    config: Config,
+    classifier_specs: list[ClassifierSpec],
+) -> None:
+    logger = get_logger()
+
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    run_output_identifier = build_run_output_identifier()
+
+    metadata = Metadata(
+        flow_run=run_context.flow_run,
+        run_output_identifier=run_output_identifier,
+        classifier_specs=classifier_specs,
+        config=config,
+    )
+
+    metadata_json = metadata.model_dump_json()
+
+    logger.debug(f"writing metadata: {metadata_json}")
+
+    s3_uri = S3Uri(
+        bucket=config.cache_bucket_str,
+        key=os.path.join(
+            config.inference_document_target_prefix,
+            run_output_identifier,
+            "metadata.json",
+        ),
+    )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        response: PutObjectOutputTypeDef = await s3_client.put_object(
+            Bucket=s3_uri.bucket,
+            Key=s3_uri.key,
+            Body=metadata_json,
+            ContentType="application/json",
+        )
+
+        status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+        if status_code != 200:
+            raise ValueError(
+                f"Failed to store metadata to S3. Status code: {status_code}"
+            )
+
+    logger.debug(f"wrote metadata to {s3_uri}")
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -985,6 +1056,15 @@ async def inference(
         classifier_specs = load_classifier_specs(config.aws_env)
 
     disallow_latest_alias(classifier_specs)
+
+    try:
+        if config.cache_bucket:
+            await store_metadata(
+                config=config,
+                classifier_specs=list(classifier_specs),
+            )
+    except Exception as e:
+        logger.error(f"Failed to store metadata: {e}")
 
     logger.info(
         f"Running with {len(validated_file_stems)} documents and "

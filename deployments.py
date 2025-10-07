@@ -7,6 +7,7 @@ See: https://docs-2.prefect.io/latest/concepts/deployments/
 
 import importlib.metadata
 import os
+import subprocess
 from typing import Any, ParamSpec, TypeVar
 
 from prefect.blocks.system import JSON
@@ -26,7 +27,7 @@ from flows.inference import (
 )
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_neo4j
-from flows.utils import JsonDict
+from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -77,6 +78,8 @@ def create_deployment(
     env_parameters: dict[AwsEnv, JsonDict] = {},
 ) -> None:
     """Create a deployment for the specified flow"""
+    logger = get_logger()
+
     aws_env = AwsEnv(os.environ["AWS_ENV"])
     version = importlib.metadata.version(PROJECT_NAME)
     flow_name = flow.name
@@ -113,6 +116,26 @@ def create_deployment(
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, check=True
+        )
+        if commit_sha := result.stdout.decode().strip():
+            tags.append(f"sha:{commit_sha}")
+    except Exception as e:
+        logger.error(f"failed to get commit SHA: {e}")
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            check=True,
+        )
+        if branch := result.stdout.decode().strip():
+            tags.append(f"branch:{branch}")
+    except Exception as e:
+        logger.error(f"failed to get branch: {e}")
+
     schedule = get_schedule_for_env(
         aws_env,
         env_schedules,
