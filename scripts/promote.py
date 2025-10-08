@@ -131,10 +131,6 @@ def main(
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
-        # Check artifact exists
-        if not artifact:
-            raise ValueError(f"Artifact {artifact_id} not found, cannot promote")
-
         # Check the version to promote has the correct aws env
         if artifact.metadata.get("aws_env") != aws_env.value:
             raise typer.BadParameter(
