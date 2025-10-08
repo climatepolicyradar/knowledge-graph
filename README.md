@@ -181,3 +181,16 @@ We have several [static sites](./static_sites/) which can be generated from the 
 ### Generate a static site
 
 `just generate-static-site vibe_check`
+
+
+## Concept Store
+
+The concept store is an internal tool used to structure and manage key concepts in climate policy. It helps power automated concept detection in our datasets. More can be read about this at Climate Policy Radar's wikibase cloud [domain](https://climatepolicyradar.wikibase.cloud/wiki/Main_Page).
+
+#### User Management
+
+Users can be managed within Climate Policy Radar's organisation under the `SpecialPages` tab. We have taken an approach of rolling users passwords after they stop contributing to keep audit history of their edits within the Concept Store.
+
+#### Programmatic Access
+
+To access Wikibase Cloud we have created _bot passwords_ with basic privileges such that programmatic access is not linked to real users.
