@@ -17,6 +17,7 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.version import Version
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -42,6 +43,13 @@ def main(
         typer.Option(
             help="Classifier ID that aligns with the Python class name",
             parser=ClassifierID,
+        ),
+    ],
+    classifier_version: Annotated[
+        Version,
+        typer.Option(
+            help="Version of the classifier to promote to the registry (e.g. v2)",
+            parser=Version,
         ),
     ],
     aws_env: Annotated[
@@ -115,9 +123,19 @@ def main(
         # artifact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
         model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
-        artifact_id = f"{model_path}:{aws_env.value}"
+        artifact_id = f"{model_path}:{classifier_version}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
+
+        # Check artifact exists
+        if not artifact:
+            raise ValueError(f"Artifact {artifact_id} not found, cannot promote")
+
+        # Check the version to promote has the correct aws env
+        if artifact.metadata.get("aws_env") != aws_env.value:
+            raise typer.BadParameter(
+                f"Artifact {artifact_id} is for AWS environment {artifact.metadata.get('aws_env')}, not {aws_env.value}"
+            )
 
         # Check that classifiers profiles are defined
         current_class_prof = set(artifact.metadata.get("classifiers_profiles", []))

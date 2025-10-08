@@ -17,6 +17,7 @@ from scripts.promote import main
             {  # Labs environment, logged in
                 "wikibase_id": "Q123",
                 "classifier_id": "abcd2345",
+                "classifier_version": "v2",
                 "aws_env": AwsEnv.labs,
             },
             True,
@@ -26,6 +27,7 @@ from scripts.promote import main
             {  # Staging environment, logged in
                 "wikibase_id": "Q456",
                 "classifier_id": "abcd2345",
+                "classifier_version": "v2",
                 "aws_env": AwsEnv.staging,
             },
             True,
@@ -35,6 +37,7 @@ from scripts.promote import main
             {  # Labs environment, logged in
                 "wikibase_id": "Q789",
                 "classifier_id": "abcd2345",
+                "classifier_version": "v10",
                 "aws_env": AwsEnv.labs,
             },
             True,
@@ -44,6 +47,7 @@ from scripts.promote import main
             {  # Labs environment, not logged in
                 "wikibase_id": "Q789",
                 "classifier_id": "abcd2345",
+                "classifier_version": "v10",
                 "aws_env": AwsEnv.labs,
             },
             False,
@@ -60,7 +64,10 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
 
     artifact_mock = Mock()
     artifact_mock.version = "v1"
-    artifact_mock.metadata = {"classifiers_profiles": ["test_profile"]}
+    artifact_mock.metadata = {
+        "classifiers_profiles": ["test_profile"],
+        "aws_env": test_case["aws_env"].value,
+    }
     artifact_mock.tags = []
     artifact_mock.save = Mock()
 

@@ -16,11 +16,12 @@ just train "Q123" --track --aws-env sandbox
 
 > [!NOTE]
 > Promoting requires at least once classifiers profile. Set it in the metadata.
+> It also requires the version of the classifier to promote.
 
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
+just promote "Q123" --classifier-id abcd2345 --classifier-version v10 --aws-env sandbox --add-classifiers-profiles primary
 ```
 
 Finally, to update the classifier specs:
