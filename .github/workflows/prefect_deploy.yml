@@ -105,7 +105,6 @@ jobs:
           AWS_REGION: eu-west-1
           DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
-          DOCKER_TAG: ${{ steps.get_version.outputs.docker_tag }}
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
           PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
         run: uv run python -m deployments
@@ -116,7 +115,6 @@ jobs:
           AWS_REGION: eu-west-1
           DOCKER_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
-          DOCKER_TAG: ${{ steps.get_version.outputs.docker_tag }}
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
           PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
         run: uv run python -m automations
