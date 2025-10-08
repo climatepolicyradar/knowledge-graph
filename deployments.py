@@ -176,7 +176,7 @@ def _version() -> str:
     return importlib.metadata.version(PROJECT_NAME)
 
 
-if __name__ == "__name__":
+if __name__ == "__main__":
     logger.info(f"using version: {_version()}")
 
     # Train
