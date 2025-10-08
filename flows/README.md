@@ -2,9 +2,9 @@
 
 ## Introduction
 
-This directory contains prefect flows for the knowledge graph repository. Utilising our orchestration layer defined in a private  orchestrator [repository](https://github.com/climatepolicyradar/orchestrator) within the climatepolicyradar Github Organisation, this allows one to seamlessly develop flows very close to the source code in this repository whilst deploying to our cloud based infrastructure.
+This directory contains Prefect flows for the Knowledge Graph repository. By leveraging our orchestration layer maintained in a private [orchestrator repository](https://github.com/climatepolicyradar/orchestrator) within the Climate Policy Radar GitHub organization you can easily develop flows directly alongside the source code in this repository, while also deploying them seamlessly to our cloud infrastructure.
 
-The prefect orchestration system is deployed in the cloud and thus for all instances of running flows / deployments you need to authenticate with the cloud. Access requires a prefect account and to be added to the Climate Policy Radar organisation. Then follow the Prefect [documentation](https://docs.prefect.io/v3/how-to-guides/cloud/connect-to-cloud#how-to-connect-to-prefect-cloud) here to authenticate via cli.
+The Prefect orchestration system is deployed in the cloud, so you must authenticate with the cloud to run any flows or deployments. To gain access, you'll need a Prefect account and must be added to the Climate Policy Radar organisation. Once you have access, follow the Prefect [documentation](https://docs.prefect.io/v3/how-to-guides/cloud/connect-to-cloud#how-to-connect-to-prefect-cloud) to authenticate via the CLI.
 
 
 ### Run a flow locally, utilising local dependencies
