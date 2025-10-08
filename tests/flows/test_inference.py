@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -37,6 +37,7 @@ from flows.inference import (
     parse_client_error_details,
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
+    store_inference_result,
     store_labels,
     store_metadata,
     text_block_inference,
@@ -1400,3 +1401,84 @@ async def test_store_metadata(
 
     metadata = Metadata.model_validate(metadata_dict)
     assert metadata == snapshot
+
+
+@pytest.mark.asyncio
+async def test_store_inference_result(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+    snapshot,
+):
+    """Test that store_inference_result correctly builds S3 URI and stores results."""
+    mock_run_output_id = "2025-01-15T10:30-test-flow-run"
+    start_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+    # Create a real FlowRun object with proper data
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        start_time=start_time,
+        state=Running(),
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    # Create test data
+    classifier_spec = ClassifierSpec(
+        concept_id=ConceptID("xyz78abc"),
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="abcd2345",
+        wandb_registry_version="v1",
+    )
+
+    batch_result = BatchInferenceResult(
+        batch_document_stems=[DocumentStem("TEST.DOC.1.1")],
+        successful_document_stems=[DocumentStem("TEST.DOC.1.1")],
+        classifier_spec=classifier_spec,
+    )
+
+    inference_result = InferenceResult(
+        requested_document_stems=[DocumentStem("TEST.DOC.1.1")],
+        classifier_specs=[classifier_spec],
+        batch_inference_results=[batch_result],
+        successful_classifier_specs=[classifier_spec],
+        failed_classifier_specs=[],
+    )
+
+    # Mock only the Prefect context, let moto handle S3
+    with (
+        patch("flows.inference.get_run_context", return_value=mock_context),
+        patch(
+            "flows.inference.build_run_output_identifier",
+            return_value=mock_run_output_id,
+        ),
+    ):
+        await store_inference_result(
+            config=test_config,
+            inference_result=inference_result,
+        )
+
+    expected_key = os.path.join(
+        test_config.inference_document_target_prefix,
+        mock_run_output_id,
+        "results.json",
+    )
+
+    response = await mock_s3_async_client.head_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    assert response["ContentLength"] > 0, (
+        f"Expected S3 object {expected_key} to have content"
+    )
+
+    response = await mock_s3_async_client.get_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    result_content = await response["Body"].read()
+    result_dict = json.loads(result_content.decode("utf-8"))
+
+    loaded_result = InferenceResult.model_validate(result_dict)
+    assert loaded_result == snapshot
