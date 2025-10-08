@@ -138,12 +138,16 @@ def create_deployment(
         logger.error(f"failed to get commit SHA: {e}")
 
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            check=True,
-        )
-        if branch := result.stdout.decode().strip():
+        branch = os.environ.get("GIT_BRANCH")
+        if not branch:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                check=True,
+            )
+            branch = result.stdout.decode().strip()
+
+        if branch:
             tags.append(f"branch:{branch}")
     except Exception as e:
         logger.error(f"failed to get branch: {e}")
