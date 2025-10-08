@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Annotated, Optional, Union
+from typing import Annotated
 
 import typer
 import wandb
@@ -28,74 +28,6 @@ JOB_TYPE = "promote_model"
 app = typer.Typer()
 
 
-def find_artifact_in_registry(
-    model_collection, classifier_id: ClassifierID, aws_env: AwsEnv
-) -> Optional[wandb.Artifact]:
-    """
-    Find an artifact with the specified alias in the model collection.
-
-    This runs through artifacts in the collection and inspects them, checking if they
-    have the ID we are looking for, and also inspecting the alias for the `aws_env`.
-    """
-    for art in model_collection.artifacts():
-        found_classifier_id, _ = art.source_name.split(":")
-        aliases = art.aliases
-        if found_classifier_id == str(classifier_id) and aws_env.value in aliases:
-            return art
-
-
-def check_existing_artifact_aliases(
-    api: wandb.apis.public.api.Api,
-    target_path: str,
-    classifier_id: ClassifierID,
-    aws_env: AwsEnv,
-) -> None:
-    """
-    Review current state of the model in the W&B registry.
-
-    This means first checking whether the collection itself exists (/Q123).
-    Then if found, will look if the artifact already exists within the collection.
-    If the artifact exists, will check the aliases to see if there are any conflicts.
-
-    Note that the versions for project artifacts are not the same as the versions for
-    collection models.
-    """
-    if not api.artifact_collection_exists(
-        type="model",
-        name=target_path,
-    ):
-        log.info("Model collection doesn't already exist")
-        return None
-
-    log.info("Model collection does already exist")
-    model_collection = api.artifact_collection(
-        type_name="model",
-        name=target_path,
-    )
-
-    target_artifact = find_artifact_in_registry(
-        model_collection, classifier_id, aws_env=aws_env
-    )
-
-    # It's okay if there isn't yet an registry artifact for this artifact, and
-    # if there isn't, then there's nothing to check.
-    if not target_artifact:
-        log.info(f"Model collection artifact with alias {aws_env.value} not found")
-        return None
-
-    log.info(f"Model collection artifact with alias {aws_env.value} found")
-
-    # Get all AWS env values except the one we're promoting to
-    other_env_values = {env.value for env in AwsEnv} - {aws_env.value}
-
-    # Check if any other AWS environment values are present as aliases
-    if set(target_artifact.aliases) & other_env_values:
-        raise typer.BadParameter(
-            "Something has gone wrong with the source artifact, multiple AWS "
-            f"environments where found in the aliases: {target_artifact.aliases}"
-        )
-
-
 @app.command()
 def main(
     wikibase_id: Annotated[
@@ -119,12 +51,6 @@ def main(
             parser=parse_aws_env,
         ),
     ],
-    primary: Annotated[
-        bool,
-        typer.Option(
-            help="Whether this will be primary for this AWS environment",
-        ),
-    ] = False,
     add_classifiers_profiles: Annotated[
         list[str] | None,
         typer.Option(help="Adds 1 or more classifiers profiles."),
@@ -141,9 +67,7 @@ def main(
     as an artifact in W&B, with a linked model in s3 for the environment.
 
     This script adds a link to the chosen model from the W&B registry as a
-    collection. Optionally the model can be made primary for the AWS
-    environment, this means applying an environment alias to the model in the
-    collection.
+    collection, and tags it with the AWS environment.
 
     If a W&B model registry collection doesn't exist, it'll automatically be
     made as part of this script.
@@ -212,23 +136,19 @@ def main(
 
         log.info(f"Artifact has classifier profiles: {current_class_prof}")
 
-        api = wandb.Api()
-
-        check_existing_artifact_aliases(
-            api,
-            target_path,
-            classifier_id,
-            aws_env,
-        )
-
-        aliases: Union[list[str], None] = [aws_env.value] if primary else None
+        # Add AWS environment as a tag
+        current_tags = set(artifact.tags or [])
+        current_tags.add(aws_env.value)
+        artifact.tags = list(current_tags)
+        artifact.save()
+        log.info(f"Added AWS environment tag: {aws_env.value}")
 
         # Link the artifact to a collection
         log.info(f"Linking artifact to collection: {target_path}...")
         run.link_artifact(
             artifact=artifact,
             target_path=target_path,
-            aliases=aliases,
+            aliases=None,
         )
 
         log.info("Model promoted")

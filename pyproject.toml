@@ -41,6 +41,8 @@ dependencies = [
     "prefect-coiled>=0.0.4",
     "html2text>=2025.4.15",
     "nest-asyncio>=1.6.0",
+    "matplotlib>=3.10.6",
+    "pandas>=2.3.1",
 ]
 
 [project.optional-dependencies]

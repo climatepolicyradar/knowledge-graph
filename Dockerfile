@@ -33,6 +33,7 @@ COPY --from=builder /app/README.md ./
 COPY knowledge_graph ./knowledge_graph/
 COPY flows ./flows/
 COPY scripts ./scripts/
+COPY static_sites ./static_sites/
 
 # Install the project
 RUN uv pip install --system -e .

@@ -6,8 +6,7 @@
 - wikibase_id: Q57
   concept_id: 3p2pxgcp
   classifier_id: jq7535b6
-  classifiers_profiles:
-  - primary
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q368
   classifier_id: 58br2fy7

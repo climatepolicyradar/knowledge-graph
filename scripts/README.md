@@ -4,7 +4,6 @@ This directory contains scripts that are used to run various processes around th
 
 Individual scripts' docstrings contain more information about their purpose and usage.
 
-
 ## Updating a Classifier
 
 First we run the training scripts. This will upload the classifier to s3 and link to it from its weights and biases project. You can then run the promote script which is used for promoting a model to primary within an aws environment. Promotion as adds the model to the weights and bias registry and setting it as primary gives it the environment alias.
@@ -21,7 +20,13 @@ just train "Q123" --track --aws-env sandbox
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --primary
+just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
+```
+
+Finally, to update the classifier specs:
+
+```shell
+just update-inference-classifiers --aws-envs sandbox
 ```
 
 You can also achieve the above directly with:
@@ -134,7 +139,6 @@ docker run \
 - `~/.aws/sso/cache:/root/.aws/sso/cache:ro` - Read-only AWS SSO cache
 - `$(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2` - Classifier specifications
 
-
 #### 3. Validate Installation + Authentication against AWS
 
 Verify AWS CLI is working correctly:
@@ -161,10 +165,24 @@ Note: If the classifier spec files in the local repo do not update after running
 
 Within the Knowledge Graph full-pipeline the Aggregation step is designed to run on all classifiers as defined in the classifier spec file. Should you want to omit a classifier from running due to an issue with inference, then the classifier should be demoted and then the classifier spec updated. This can be done using the `just demote` command followed by the `just update-inference-classifiers` command.
 
-
 ## Troubleshooting
 
 - Ensure AWS credentials are properly configured locally prior to running the container
 - Verify the `.env` file contains all required environment variables
 - Check that the classifier specs directory is accessible from the container
 - Confirm the target Wikibase ID exists and has associated training data
+
+### Weights and biases: Permission Error
+
+If you experience the following error:
+
+```shell
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.wandb.ai/graphql
+
+ERROR Permission denied to access team/classifier/version
+```
+
+To resolve:
+
+- Ensure permissions for weights and biases are granted for the user for projects as well as for the  [model registry](https://docs.wandb.ai/guides/registry/configure_registry/)
+- If access for only projects is granted then the `train` scripts will be successful since they are accessing the projects however will fail during `promote` when the registry is accessed

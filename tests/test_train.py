@@ -215,7 +215,7 @@ def test_create_and_link_model_artifact():
         # Then the artifact was logged in W&B
         mock_run.log_artifact.assert_called_once_with(
             mock_artifact_instance,
-            aliases=[aws_env.value],
+            aliases=[],
         )
 
         # Then the artifact was waited for

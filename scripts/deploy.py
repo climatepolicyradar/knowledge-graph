@@ -91,7 +91,6 @@ def existing(
                     wikibase_id=WikibaseID(spec.name),
                     classifier_id=classifier.id,
                     aws_env=to_aws_env,
-                    primary=True,
                     add_classifiers_profiles=add_classifiers_profiles,
                     remove_classifiers_profiles=remove_classifiers_profiles,
                 )
@@ -147,7 +146,6 @@ def new(
                         wikibase_id=wikibase_id,
                         classifier_id=classifier.id,
                         aws_env=aws_env,
-                        primary=True,
                         add_classifiers_profiles=add_classifiers_profiles,
                     )
         except AttributeError as e:

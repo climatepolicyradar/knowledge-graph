@@ -126,7 +126,7 @@ async def run(
     flow_run_name: str,
     download_dir: Path,
     include_sub_flows: bool,
-    print_artifact_descriptions: bool,
+    artifact_types_to_print: list[str],
 ):
     async with get_client() as client:
         flow_run_id = await flow_name_to_id(client, flow_run_name)
@@ -142,7 +142,7 @@ async def run(
 
         artifact_type_grouping = defaultdict(list)
         for a in artifacts:
-            if print_artifact_descriptions:
+            if a.type in artifact_types_to_print:
                 console.log(a.description)
 
             match a.type:
@@ -156,7 +156,7 @@ async def run(
                 case _:
                     raise ValueError(f"Unsupported artifact type {a.type}")
 
-        download_dir.mkdir(parents=True)
+        download_dir.mkdir(parents=True, exist_ok=True)
         for key, table in artifact_type_grouping.items():
             path = download_dir / f"{key}.json"
             with open(path, "w") as f:
@@ -179,9 +179,13 @@ def main(
             help="Treat the run as a parent flow and collect all the artifacts of any associated subflows",
         ),
     ] = True,
-    print_artifact_descriptions: Annotated[
-        bool, typer.Option(..., help="Print out the description markdown for artifacts")
-    ] = True,
+    artifact_types_to_print: Annotated[
+        str,
+        typer.Option(
+            ...,
+            help="The types of artifact to print, defaults to all, pass empty to print nothing",
+        ),
+    ] = "progress table markdown links images",
 ):
     """
     Inspect prefect artifacts.
@@ -198,7 +202,7 @@ def main(
             flow_run_name=flow_run_name,
             download_dir=(download_dir / flow_run_name),
             include_sub_flows=include_sub_flows,
-            print_artifact_descriptions=print_artifact_descriptions,
+            artifact_types_to_print=artifact_types_to_print.split(),
         )
     )
 
