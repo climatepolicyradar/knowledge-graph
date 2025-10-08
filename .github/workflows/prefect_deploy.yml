@@ -107,6 +107,7 @@ jobs:
           DOCKER_REPOSITORY: ${{ github.event.repository.name }}
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
           PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
+          GIT_BRANCH: ${{ github.ref_name }}
         run: uv run python -m deployments
 
       - name: "Deploy to Prefect: Automations"

@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.15.0"
+version = "0.16.0"
 description = ""
 authors = [{ name = "CPR Data Science", email = "dsci@climatepolicyradar.org" }]
 license = { text = "Apache 2.0" }
