@@ -134,7 +134,8 @@ def main(
         # Check the version to promote has the correct aws env
         if artifact.metadata.get("aws_env") != aws_env.value:
             raise typer.BadParameter(
-                f"Artifact {artifact_id} is for AWS environment {artifact.metadata.get('aws_env')}, not {aws_env.value}"
+                f"Artifact {artifact_id} was trained in for AWS environment {artifact.metadata.get('aws_env')}. \
+                 Environment specified is {aws_env.value}, specify the correct aws env to promote."
             )
 
         # Check that classifiers profiles are defined
