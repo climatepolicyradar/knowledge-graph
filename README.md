@@ -68,6 +68,7 @@ Our `LabelledPassage` objects combine a passage of text with the spans that ment
 
 ```python
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 labelled_passage = LabelledPassage(
     text="This is a passage of text about extreme weather",
@@ -175,8 +176,8 @@ We have several [static sites](./static_sites/) which can be generated from the 
 
 ### Run a static site locally
 
-``just serve-static-site``
+`just serve-static-site vibe_check`
 
 ### Generate a static site
 
-``just generate-static-site``
+`just generate-static-site vibe_check`

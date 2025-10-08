@@ -2,46 +2,29 @@
 
 ## Introduction
 
-This directory contains prefect flows that can be developed in the knowledge graph repository. This allows one to seemlessy develop flows very close to the source code.
+This directory contains Prefect flows for the Knowledge Graph repository. By leveraging our orchestration layer maintained in a private [orchestrator repository](https://github.com/climatepolicyradar/orchestrator) within the Climate Policy Radar GitHub organization you can easily develop flows directly alongside the source code in this repository, while also deploying them seamlessly to our cloud infrastructure.
 
-The prefect orchestration system is deployed in the cloud and thus for all instances of running flows / deployments you need to authenticate with the cloud. Until we all have personal accounts (from enterpise prefect) its recommended we use tokens for access. 
+The Prefect orchestration system is deployed in the cloud, so you must authenticate with the cloud to run any flows or deployments. To gain access, you'll need a Prefect account and must be added to the Climate Policy Radar organisation. Once you have access, follow the Prefect [documentation](https://docs.prefect.io/v3/how-to-guides/cloud/connect-to-cloud#how-to-connect-to-prefect-cloud) to authenticate via the CLI.
 
-Login to prefect cloud, select the api key option and use the key provided in Bitwarden:
-
-```shell
-prefect cloud login 
-```
 
 ### Run a flow locally, utilising local dependencies
 
-The following example requires declaring a flow, then serving this locally as a deployment. You can then trigger the deployment via a command. The flow then runs locally in your environment.
+Follow this Prefect [How-To-Guide](https://docs.prefect.io/v3/how-to-guides/deployment_infra/run-flows-in-local-processes#serve-a-flow) to run a flow locally. Note if you want your flow to access AWS Infrastructure like s3 objects; you can authenticate your cli with AWS cloud and your local flow will assume the permissions of your terminal session. 
+
+_Below we see how to run a deployment locally using a flow within this repository._
 
 Serve the deployment from local:
+
 ```shell
 uv run python -m flows.repo_info
 ```
 
 Trigger the deployment:
+
 ```shell
 prefect deployment run 'get-repo-info/my-first-deployment'
 ```
 
-### Run a flow in the prefect worker in ECS
+### Run a flow in CPR's AWS Cloud Environment
 
-The following example runs a flow in the prefect worker that is deployed in an elastic container service cluster in the cloud.
-
-Execute the flow:
-```shell
-uv run python -m flows.repo_info
-```
-
-There are alternative interfaces for running flows. For example you can register your local terminal as a worker in a work pool and have that poll a work queue for jobs. If the above doesn't meet the requirements then we can look at expanding more. 
-
-
-### Using KG Codebase
-
-As proof that the prefect flows can utilise local dependencies and code please see the `flows/concepts.py` module.
-
-```shell 
-uv run python -m flows.concepts
-```
+Deployments can be created in a number of ways as per the Prefect [documentation](https://docs.prefect.io/v3/how-to-guides/deployments/create-deployments). Our deployments are currently declared using the `.deploy` method of the flow object in the `deployments.py` module within this repository. This should be used to define deployments to be run within the AWS Cloud environments. Deployment happens via CI/CD upon merge to main.
