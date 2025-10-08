@@ -46,10 +46,9 @@ def main(
         ),
     ],
     classifier_version: Annotated[
-        Version,
+        str,
         typer.Option(
             help="Version of the classifier to promote to the registry (e.g. v2)",
-            parser=Version,
         ),
     ],
     aws_env: Annotated[
@@ -96,6 +95,11 @@ def main(
             f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
         )
 
+    log.info("Validating classifier version...")
+    if not classifier_version:
+        raise typer.BadParameter("Specify a classifier version (eg. v1) to promote.")
+    version = Version(classifier_version)
+
     log.info("Validating AWS logins...")
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
     if not is_logged_in(aws_env, use_aws_profiles):
@@ -123,7 +127,7 @@ def main(
         # artifact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
         model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
-        artifact_id = f"{model_path}:{classifier_version}"
+        artifact_id = f"{model_path}:{version}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
