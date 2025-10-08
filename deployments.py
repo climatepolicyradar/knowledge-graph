@@ -6,6 +6,7 @@ See: https://docs-2.prefect.io/latest/concepts/deployments/
 """
 
 import importlib.metadata
+import logging
 import os
 import subprocess
 from typing import Any, ParamSpec, TypeVar
@@ -38,6 +39,17 @@ DEFAULT_FLOW_VARIABLES = {
     "ephemeralStorage": {"sizeInGiB": 50},
     "match_latest_revision_in_family": True,
 }
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create console handler and set level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Add ch to logger
+logger.addHandler(ch)
 
 
 def get_schedule_for_env(
@@ -81,7 +93,7 @@ def create_deployment(
     logger = get_logger()
 
     aws_env = AwsEnv(os.environ["AWS_ENV"])
-    version = importlib.metadata.version(PROJECT_NAME)
+    version = _version()
     flow_name = flow.name
     docker_registry = os.environ["DOCKER_REGISTRY"]
     docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
@@ -160,7 +172,13 @@ def create_deployment(
     )
 
 
+def _version() -> str:
+    return importlib.metadata.version(PROJECT_NAME)
+
+
 if __name__ == "__name__":
+    logger.info(f"using version: {_version()}")
+
     # Train
     create_deployment(
         flow=train_on_gpu,
