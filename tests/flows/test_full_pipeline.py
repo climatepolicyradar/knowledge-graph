@@ -22,6 +22,8 @@ from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
     BatchInferenceResult,
     InferenceResult,
+    ParameterisedFlow,
+    inference_batch_of_documents_cpu,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
 
@@ -62,12 +64,21 @@ async def test_full_pipeline_no_config_provided(
             wandb_registry_version="v1",
         )
 
+        parameterised_batches = [
+            ParameterisedFlow(
+                fn=inference_batch_of_documents_cpu,
+                params={
+                    "batch": aggregate_inference_results_document_stems,
+                    "config_json": test_config.model_dump(),
+                    "classifier_spec_json": classifier_spec.model_dump(),
+                },
+            )
+        ]
+
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
-                requested_document_stems=list(
-                    aggregate_inference_results_document_stems
-                ),
+                parameterised_batches=parameterised_batches,
                 classifier_specs=[classifier_spec],
                 batch_inference_results=[
                     BatchInferenceResult(
@@ -160,13 +171,21 @@ async def test_full_pipeline_with_full_config(
             classifier_id="zzzz9999",
             wandb_registry_version="v1",
         )
+        parameterised_batches = [
+            ParameterisedFlow(
+                fn=inference_batch_of_documents_cpu,
+                params={
+                    "batch": aggregate_inference_results_document_stems,
+                    "config_json": test_config.model_dump(),
+                    "classifier_spec_json": classifier_spec.model_dump(),
+                },
+            )
+        ]
         # Setup mocks
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=InferenceResult(
-                requested_document_stems=list(
-                    aggregate_inference_results_document_stems
-                ),
+                parameterised_batches=parameterised_batches,
                 classifier_specs=[
                     classifier_spec,
                 ],
@@ -286,6 +305,16 @@ async def test_full_pipeline_with_inference_failure(
             classifier_id="zzzz9999",
             wandb_registry_version="v1",
         )
+        parameterised_batches = [
+            ParameterisedFlow(
+                fn=inference_batch_of_documents_cpu,
+                params={
+                    "batch": document_stems_batch,
+                    "config_json": test_config.model_dump(),
+                    "classifier_spec_json": classifier_spec.model_dump(),
+                },
+            )
+        ]
 
         # Setup mocks
         mock_inference.return_value = Failed(
@@ -294,7 +323,7 @@ async def test_full_pipeline_with_inference_failure(
                 msg="Some inference batches had failures!",
                 metadata={},
                 data=InferenceResult(
-                    requested_document_stems=list(document_stems_batch),
+                    parameterised_batches=parameterised_batches,
                     classifier_specs=[classifier_spec],
                     batch_inference_results=[
                         BatchInferenceResult(
