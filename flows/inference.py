@@ -501,64 +501,10 @@ async def labels_to_s3(
         ContentType="application/json",
     )
 
+    if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+        raise RuntimeError(f"Failed to upload to S3: {response}")
+
     return response
-
-
-async def store_labels(
-    config: Config,
-    inferences: Sequence[SingleDocumentInferenceResult],
-) -> tuple[
-    list[SingleDocumentInferenceResult],
-    list[tuple[DocumentStem, Exception]],
-    list[BaseException],
-]:
-    """Store the labels in the cache bucket."""
-    logger = get_logger()
-
-    # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with(
-                    inference,
-                    labels_to_s3(config, inference, s3_client),
-                ),
-            )
-            for inference in inferences
-        ]
-
-        results: list[
-            tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
-            | BaseException
-        ] = await asyncio.gather(*tasks, return_exceptions=True)
-
-    successes: list[SingleDocumentInferenceResult] = []
-    failures: list[tuple[DocumentStem, Exception]] = []
-    # We really don't expect these, since there's a try/catch handler
-    # in `return_with_id`. It is technically possible though, for
-    # there to be what I'm calling here an _unknown_ failure.
-    unknown_failures: list[BaseException] = []
-    for result in results:
-        if isinstance(result, BaseException):
-            unknown_failures.append(result)
-        else:
-            inference, value = result
-            if isinstance(value, Exception):
-                logger.error(
-                    f"Failed to store label for {inference.document_stem}: {value}"
-                )
-                failures.append((inference.document_stem, value))
-            else:
-                if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                    successes.append(inference)
-                else:
-                    failures.append((inference.document_stem, ValueError(str(value))))
-
-    return successes, failures, unknown_failures
 
 
 def batch_text_block_inference(
@@ -705,12 +651,14 @@ async def run_classifier_inference_on_document(
         )
         doc_labels.append(labelled_passages)
 
-    return SingleDocumentInferenceResult(
+    inference = SingleDocumentInferenceResult(
         labelled_passages=doc_labels,
         document_stem=file_stem,
         wikibase_id=classifier.concept.wikibase_id,
         classifier_id=classifier.id,
     )
+    await labels_to_s3(config, inference, s3_client)
+    return inference
 
 
 async def create_inference_on_batch_summary_artifact(
@@ -851,23 +799,6 @@ async def _inference_batch_of_documents(
             else:
                 inferences_successes.append(value)
 
-    (
-        store_labels_successes,
-        store_labels_failures,
-        store_labels_unknown_failures,
-    ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-        config=config, inferences=inferences_successes
-    )
-
-    # This doesn't need to be combined since successes are funnelled
-    # through all steps.
-    #
-    # Failures are possibly reduced at each step.
-    all_successes = store_labels_successes
-    # Combine the multiple places that have reports
-    all_failures = inferences_failures + store_labels_failures
-    all_unknown_failures = inferences_unknown_failures + store_labels_unknown_failures
-
     # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
     try:
         run_context = get_run_context()
@@ -880,15 +811,15 @@ async def _inference_batch_of_documents(
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
-        all_successes,
-        all_failures,
-        all_unknown_failures,
+        inferences_successes,
+        inferences_failures,
+        inferences_unknown_failures,
         flow_run_name,
     )
 
     batch_inference_result = BatchInferenceResult(
         batch_document_stems=batch,
-        successful_document_stems=[i.document_stem for i in store_labels_successes],
+        successful_document_stems=[i.document_stem for i in inferences_successes],
         classifier_spec=classifier_spec,
     )
 

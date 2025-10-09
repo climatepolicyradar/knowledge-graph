@@ -20,7 +20,6 @@ from flows.inference import (
     BatchInferenceResult,
     InferenceResult,
     Metadata,
-    SingleDocumentInferenceResult,
     _inference_batch_of_documents,
     _stringify,
     deserialise_pydantic_list_from_jsonl,
@@ -38,7 +37,6 @@ from flows.inference import (
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
     store_inference_result,
-    store_labels,
     store_metadata,
     text_block_inference,
 )
@@ -222,38 +220,6 @@ def test_document_passages__html(parser_output_html):
 def test_document_passages__pdf(parser_output_pdf):
     pdf_result = document_passages(parser_output_pdf).__next__()
     assert pdf_result == ("test pdf text", "2")
-
-
-@pytest.mark.asyncio
-async def test_store_labels(
-    test_config, mock_async_bucket, mock_s3_async_client, snapshot
-):
-    text = "This is a test text block"
-    spans = [Span(text=text, start_index=15, end_index=19)]
-    labels = [LabelledPassage(text=text, spans=spans)]
-
-    successes, failures, unknown_failures = await store_labels(
-        test_config,
-        [
-            SingleDocumentInferenceResult(
-                labelled_passages=labels,
-                document_stem=DocumentStem("TEST.DOC.0.1"),
-                wikibase_id="Q9081",
-                classifier_id="2tnmbxaw",
-            )
-        ],
-    )
-
-    assert successes == snapshot(name="successes")
-    assert failures == snapshot(name="failures")
-    assert unknown_failures == snapshot(name="unknown_failures")
-
-    labels = await helper_list_labels_in_bucket(
-        test_config, mock_async_bucket, mock_s3_async_client
-    )
-
-    assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/2tnmbxaw/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -484,6 +450,7 @@ async def test_run_classifier_inference_on_document(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
+    mock_async_bucket,
     mock_async_bucket_documents,
     snapshot,
     mock_s3_async_client,
@@ -565,6 +532,13 @@ async def test_run_classifier_inference_on_document(
         classifier=classifier,
         s3_client=mock_s3_async_client,
     )
+
+    # Check document is in s3
+    labels = await helper_list_labels_in_bucket(
+        test_config, mock_async_bucket, mock_s3_async_client
+    )
+    assert len(labels) == 1
+    assert labels[0] == "labelled_passages/Q788/6vxrmcuf/GEF.document.0.1.json"
 
     assert result == snapshot
 
@@ -772,10 +746,6 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 
         # Verify failure artifact data using snapshot
         assert snapshot == artifact.data
-
-    # For failed documents, no S3 files should be created since the documents don't exist
-    # The failure happens before store_labels is called
-    # using async s3 client to check
 
     # Check that no labels were stored for the non-existent documents
     for doc_stem in batch:
