@@ -2,7 +2,10 @@
 name = "knowledge-graph"
 version = "0.16.0"
 description = ""
-authors = [{ name = "CPR Data Science", email = "dsci@climatepolicyradar.org" }]
+authors = [
+  { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
+  { name = "CPR Platform", email = "platform@climatepolicyradar.org" },
+]
 license = { text = "Apache 2.0" }
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
