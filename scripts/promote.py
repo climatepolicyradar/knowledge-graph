@@ -17,6 +17,7 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.version import Version
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -94,6 +95,19 @@ def main(
         throw_not_logged_in(aws_env)
 
     collection_name = wikibase_id
+    model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
+
+    # Get all artifacts for the model path to select latest version for aws_env
+    log.info(f"Getting latest model version for AWS environment {aws_env.value}...")
+    api = wandb.Api()
+
+    artifacts = api.artifacts(type_name="model", name=f"{model_path}")
+    current_env_versions = [
+        Version(art.version)
+        for art in artifacts
+        if art.metadata.get("aws_env") == aws_env.value
+    ]
+    classifier_version = max(current_env_versions)
 
     # This is the hierarchy we use: CPR / {concept} / {model architecture}(s)
     #
@@ -114,8 +128,7 @@ def main(
         # This also validates that the classifier exists. It relies on an
         # artifact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
-        model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
-        artifact_id = f"{model_path}:{aws_env.value}"
+        artifact_id = f"{model_path}:{classifier_version}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
 
