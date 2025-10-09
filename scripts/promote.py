@@ -45,12 +45,6 @@ def main(
             parser=ClassifierID,
         ),
     ],
-    classifier_version: Annotated[
-        str,
-        typer.Option(
-            help="Version of the classifier to promote to the registry (e.g. v2)",
-        ),
-    ],
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
@@ -95,17 +89,25 @@ def main(
             f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
         )
 
-    log.info("Validating classifier version...")
-    if not classifier_version:
-        raise typer.BadParameter("Specify a classifier version (eg. v1) to promote.")
-    version = Version(classifier_version)
-
     log.info("Validating AWS logins...")
     use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
     if not is_logged_in(aws_env, use_aws_profiles):
         throw_not_logged_in(aws_env)
 
     collection_name = wikibase_id
+    model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
+
+    # Get all artifacts for the model path to select latest version for aws_env
+    log.info(f"Getting latest model version for AWS environment {aws_env.value}...")
+    api = wandb.Api()
+
+    artifacts = api.artifacts(type_name="model", name=f"{model_path}")
+    current_env_versions = [
+        Version(art.version)
+        for art in artifacts
+        if art.metadata.get("aws_env") == aws_env.value
+    ]
+    classifier_version = max(current_env_versions)
 
     # This is the hierarchy we use: CPR / {concept} / {model architecture}(s)
     #
@@ -126,17 +128,9 @@ def main(
         # This also validates that the classifier exists. It relies on an
         # artifact not existing. That is, when trying to `use_artifact`
         # below, it'll throw an exception.
-        model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
-        artifact_id = f"{model_path}:{version}"
+        artifact_id = f"{model_path}:{classifier_version}"
         log.info(f"Using model artifact: {artifact_id}...")
         artifact: wandb.Artifact = run.use_artifact(artifact_id)
-
-        # Check the version to promote has the correct aws env
-        if artifact.metadata.get("aws_env") != aws_env.value:
-            raise typer.BadParameter(
-                f"Artifact {artifact_id} was trained in for AWS environment {artifact.metadata.get('aws_env')}. \
-                 Environment specified is {aws_env.value}, specify the correct aws env to promote."
-            )
 
         # Check that classifiers profiles are defined
         current_class_prof = set(artifact.metadata.get("classifiers_profiles", []))

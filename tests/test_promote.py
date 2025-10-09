@@ -17,7 +17,6 @@ from scripts.promote import main
             {  # Labs environment, logged in
                 "wikibase_id": "Q123",
                 "classifier_id": "abcd2345",
-                "classifier_version": "v2",
                 "aws_env": AwsEnv.labs,
             },
             True,
@@ -27,7 +26,6 @@ from scripts.promote import main
             {  # Staging environment, logged in
                 "wikibase_id": "Q456",
                 "classifier_id": "abcd2345",
-                "classifier_version": "v2",
                 "aws_env": AwsEnv.staging,
             },
             True,
@@ -37,7 +35,6 @@ from scripts.promote import main
             {  # Labs environment, logged in
                 "wikibase_id": "Q789",
                 "classifier_id": "abcd2345",
-                "classifier_version": "v10",
                 "aws_env": AwsEnv.labs,
             },
             True,
@@ -47,7 +44,6 @@ from scripts.promote import main
             {  # Labs environment, not logged in
                 "wikibase_id": "Q789",
                 "classifier_id": "abcd2345",
-                "classifier_version": "v10",
                 "aws_env": AwsEnv.labs,
             },
             False,
@@ -60,26 +56,37 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
     os.environ["USE_AWS_PROFILES"] = "false"
     os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
 
+    # Mock the wandb.init function
     init_mock = Mock(return_value=nullcontext(Mock()))
 
+    # Mock the artifact returned by use_artifact
     artifact_mock = Mock()
     artifact_mock.version = "v1"
     artifact_mock.metadata = {
         "classifiers_profiles": ["test_profile"],
-        "aws_env": test_case["aws_env"].value,
     }
     artifact_mock.tags = []
     artifact_mock.save = Mock()
 
+    # Mock the run object returned by wandb.init
     run_mock = Mock()
     run_mock.use_artifact.return_value = artifact_mock
     run_mock.link_artifact = Mock()
 
+    # Mock the wandb.Api object
     api_mock = Mock()
     api_mock.artifact_collection_exists.return_value = False
+    artifacts_mock = [
+        Mock(version="v1", metadata={"aws_env": test_case["aws_env"].value}),
+        Mock(version="v2", metadata={"aws_env": test_case["aws_env"].value}),
+        Mock(version="v3", metadata={"aws_env": "other_env"}),
+    ]
+    api_mock.artifacts.return_value = artifacts_mock
 
     init_mock = Mock(return_value=nullcontext(run_mock))
+    # Patch objects
     monkeypatch.setattr("wandb.init", init_mock)
+    monkeypatch.setattr("wandb.Api", lambda: api_mock)
     monkeypatch.setattr("wandb.Artifact", lambda **kwargs: artifact_mock)
     monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
 
@@ -91,3 +98,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
             main(**test_case)
             assert test_case["aws_env"].value in artifact_mock.tags
             artifact_mock.save.assert_called()
+            api_mock.artifacts.asset_called_once_with(
+                type_name="model",
+                name=f"{test_case['wikibase_id']}/{test_case['classifier_id']}",
+            )

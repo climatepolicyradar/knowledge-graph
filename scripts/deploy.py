@@ -90,7 +90,6 @@ def existing(
                 scripts.promote.main(
                     wikibase_id=WikibaseID(spec.name),
                     classifier_id=classifier.id,
-                    classifier_version=str(classifier.version),
                     aws_env=to_aws_env,
                     add_classifiers_profiles=add_classifiers_profiles,
                     remove_classifiers_profiles=remove_classifiers_profiles,
@@ -146,7 +145,6 @@ def new(
                     scripts.promote.main(
                         wikibase_id=wikibase_id,
                         classifier_id=classifier.id,
-                        classifier_version=str(classifier.version),
                         aws_env=aws_env,
                         add_classifiers_profiles=add_classifiers_profiles,
                     )
