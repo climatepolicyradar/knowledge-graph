@@ -1006,7 +1006,7 @@ async def store_metadata(
         status_code = response["ResponseMetadata"]["HTTPStatusCode"]
         if status_code != 200:
             raise ValueError(
-                f"Failed to store metadata to S3. Status code: {status_code}"
+                f"failed to store metadata to S3. Status code: {status_code}"
             )
 
     logger.debug(f"wrote metadata to {s3_uri}")
