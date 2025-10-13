@@ -31,6 +31,9 @@ from flows.classifier_specs.spec_interface import (
 )
 from flows.config import Config
 from flows.inference import (
+    METADATA_FILE_NAME as INFERENCE_METADATA_FILE_NAME,
+)
+from flows.inference import (
     deserialise_pydantic_list_with_fallback,
 )
 from flows.utils import (
@@ -54,6 +57,8 @@ R = TypeVar("R")
 
 DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
 DEFAULT_N_BATCHES: PositiveInt = 5
+
+METADATA_FILE_NAME = "metadata.json"
 
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
@@ -379,6 +384,7 @@ async def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
                 bucket_name=config.cache_bucket_str,
                 prefix=prefix,
                 bucket_region=config.bucket_region,
+                disallow={INFERENCE_METADATA_FILE_NAME},
             )
         )
 
@@ -481,7 +487,7 @@ async def store_metadata(
         key=os.path.join(
             config.aggregate_inference_results_prefix,
             run_output_identifier,
-            "metadata.json",
+            METADATA_FILE_NAME,
         ),
     )
 
