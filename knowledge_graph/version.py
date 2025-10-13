@@ -3,7 +3,7 @@ import re
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 from wandb.apis.public import artifacts
-from wandb.public.registries import registries_search
+from wandb.apis.public.registries import registries_search
 
 from knowledge_graph.cloud import AwsEnv
 
