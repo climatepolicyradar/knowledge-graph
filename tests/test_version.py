@@ -1,6 +1,7 @@
 import pytest
 
-from knowledge_graph.version import Version
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.version import Version, get_latest_model_version
 
 
 @pytest.mark.parametrize("input_version", ["v1", "v10", "v0"])
@@ -59,3 +60,25 @@ def test_version_equality():
 def test_version_hash():
     versions = {Version("v1"), Version("v2"), Version("v1")}
     assert len(versions) == 2
+
+
+def test_get_latest_model_version():
+    class MockArtifact:
+        def __init__(self, version, aws_env):
+            self.version = version
+            self.metadata = {"aws_env": aws_env}
+
+    artifacts = [
+        MockArtifact("v1", "labs"),
+        MockArtifact("v2", "labs"),
+        MockArtifact("v1", "staging"),
+        MockArtifact("v2", "staging"),
+        MockArtifact("v3", "labs"),
+    ]
+
+    latest_version = get_latest_model_version(artifacts, AwsEnv.labs)
+    assert str(latest_version) == "v3"
+    assert type(latest_version) is Version
+
+    latest_version_prod = get_latest_model_version(artifacts, AwsEnv.staging)
+    assert str(latest_version_prod) == "v2"

@@ -17,7 +17,7 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
-from knowledge_graph.version import Version
+from knowledge_graph.version import get_latest_model_version
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -102,12 +102,7 @@ def main(
     api = wandb.Api()
 
     artifacts = api.artifacts(type_name="model", name=f"{model_path}")
-    current_env_versions = [
-        Version(art.version)
-        for art in artifacts
-        if art.metadata.get("aws_env") == aws_env.value
-    ]
-    classifier_version = max(current_env_versions)
+    classifier_version = get_latest_model_version(artifacts, aws_env)
 
     # This is the hierarchy we use: CPR / {concept} / {model architecture}(s)
     #
