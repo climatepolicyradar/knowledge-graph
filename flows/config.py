@@ -118,6 +118,11 @@ class Config(BaseModel):
         description="Use to limit asynchronous s3 operations for an individual batch.",
     )
 
+    s3_read_timeout: int = Field(
+        default=300,
+        description="Use to adjust the time before an s3 read times out.",
+    )
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
