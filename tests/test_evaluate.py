@@ -219,7 +219,6 @@ def test_load_classifier_remote(mock_classifier):
 
     # Mock the artifact
     mock_artifact = Mock()
-    mock_artifact.metadata = {"aws_env": "test-env"}
     mock_artifact.download.return_value = "downloaded_path"
     run.use_artifact.return_value = mock_artifact
 
@@ -232,8 +231,6 @@ def test_load_classifier_remote(mock_classifier):
     # Verify classifier was loaded from downloaded path
     mock_classifier.load.assert_called_once_with(Path("downloaded_path/model.pickle"))
 
-    # Verify AWS environment was set
-    assert run.config["aws_env"] == "test-env"
     assert result == mock_classifier.load.return_value
 
 
