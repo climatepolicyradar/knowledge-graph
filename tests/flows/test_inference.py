@@ -582,6 +582,9 @@ async def test_inference_batch_of_documents_cpu(
     )
 
     # Should not raise any exceptions for successful processing
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu"
+    )
     result_state = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
@@ -617,8 +620,7 @@ async def test_inference_batch_of_documents_cpu(
 
         assert artifact.description is not None, "Artifact should have a description"
         assert hasattr(artifact, "data"), "Artifact should have data"
-
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # Verify that inference outputs were stored in S3 using async s3 client
     expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
@@ -686,6 +688,9 @@ async def test_inference_batch_of_documents_cpu_with_failures(
     )
 
     with pytest.raises(Fault) as exc_info:
+        inference_batch_of_documents_cpu.flow_run_name = (
+            "test-inference-batch-of-documents-cpu-with-failures"
+        )
         _ = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
@@ -714,7 +719,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
         )
 
         # Verify failure artifact data using snapshot
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # For failed documents, no S3 files should be created since the documents don't exist
     # The failure happens before store_labels is called
@@ -761,6 +766,9 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
     )
 
     # Should complete successfully with empty batch
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu-empty-batch"
+    )
     _ = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
@@ -785,7 +793,7 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
         artifact = batch_artifacts[0]  # Most recently created
 
         # Verify empty batch artifact data using snapshot
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
