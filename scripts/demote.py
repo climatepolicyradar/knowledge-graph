@@ -97,6 +97,9 @@ def main(
             .versions(filter=version_filters)
         )
         classifier_version = get_latest_model_version(artifacts, aws_env)
+        log.info(
+            f"Latest model version for AWS environment {aws_env.value} is {classifier_version}"
+        )
     else:
         log.info(
             f"Demoting specific registry version {wandb_registry_version} for wikibase id {wikibase_id} with AWS environment {aws_env.value}..."
