@@ -114,8 +114,13 @@ class Config(BaseModel):
     )
 
     s3_concurrency_limit: int = Field(
-        default=50,
+        default=25,
         description="Use to limit asynchronous s3 operations for an individual batch.",
+    )
+
+    s3_read_timeout: int = Field(
+        default=300,
+        description="Use to adjust the time before an s3 read times out.",
     )
 
     @classmethod
