@@ -14,7 +14,13 @@ from rich.table import Table
 from wandb.wandb_run import Run
 
 from knowledge_graph.classifier import Classifier
-from knowledge_graph.cloud import Namespace
+from knowledge_graph.cloud import (
+    AwsEnv,
+    Namespace,
+    is_logged_in,
+    parse_aws_env,
+    throw_not_logged_in,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import (
     classifier_dir,
@@ -79,33 +85,13 @@ def load_classifier_remote(
     version: Version,
     wikibase_id: WikibaseID,
 ) -> Classifier:
-    """
-    Load a classifier from W&B artifacts storage.
-
-    NB: This function temporarily sets AWS_PROFILE to enable W&B to download
-    artifacts from S3. The profile is restored after download completes.
-    """
+    """Load a classifier from W&B artifacts storage. Authentication is a Prerequisite, since it downloads the contents of the artifact. Raises ValueError should download fail"""
     artifact_id = f"{wikibase_id}/{classifier}:{version}"
     artifact = run.use_artifact(artifact_id, type="model")
 
-    aws_env = artifact.metadata["aws_env"]
-
-    # Make it easier to know which AWS env this happened in
-    run.config["aws_env"] = aws_env
-
-    # Temporarily set AWS_PROFILE for W&B's S3 artifact download
-    original_profile = os.environ.get("AWS_PROFILE")
-    try:
-        os.environ["AWS_PROFILE"] = aws_env
-        artifact_dir = artifact.download()
-        artifact_path = Path(artifact_dir) / model_artifact_name
-        return Classifier.load(artifact_path)
-    finally:
-        # Restore original AWS_PROFILE
-        if original_profile is not None:
-            os.environ["AWS_PROFILE"] = original_profile
-        else:
-            os.environ.pop("AWS_PROFILE", None)
+    artifact_dir = artifact.download()
+    artifact_path = Path(artifact_dir) / model_artifact_name
+    return Classifier.load(artifact_path)
 
 
 def add_artifact_to_run_lineage_local(
@@ -483,6 +469,13 @@ async def main(
             parser=WikibaseID,
         ),
     ],
+    aws_env: Annotated[
+        AwsEnv,
+        typer.Option(
+            help="AWS environment to evaluate the model artifact within",
+            parser=parse_aws_env,
+        ),
+    ],
     track: Annotated[
         bool,
         typer.Option(
@@ -521,6 +514,14 @@ async def main(
         version,
         source,
     )
+
+    console.log("Validating AWS login...")
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
+    if not is_logged_in(aws_env, use_aws_profiles):
+        console.log(
+            "AWS credentials required to access Weights & Biases repository in order to permit download of models"
+        )
+        throw_not_logged_in(aws_env)
 
     # set explicitly to avoid run being possibly unbound later on
     run = None
