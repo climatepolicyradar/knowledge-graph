@@ -146,9 +146,7 @@ def update(
     """
     model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
 
-    # Since this next bit is repeated in promote.py, consider refactoring
     # Get all artifacts for the model path to select latest version for aws_env
-    console.log(f"Getting latest model version for AWS environment {aws_env.value}...")
     api = wandb.Api()
 
     artifacts = api.artifacts(type_name="model", name=f"{model_path}")
