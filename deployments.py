@@ -6,7 +6,9 @@ See: https://docs-2.prefect.io/latest/concepts/deployments/
 """
 
 import importlib.metadata
+import logging
 import os
+import subprocess
 from typing import Any, ParamSpec, TypeVar
 
 from prefect.blocks.system import JSON
@@ -26,7 +28,7 @@ from flows.inference import (
 )
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_neo4j
-from flows.utils import JsonDict
+from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -37,6 +39,17 @@ DEFAULT_FLOW_VARIABLES = {
     "ephemeralStorage": {"sizeInGiB": 50},
     "match_latest_revision_in_family": True,
 }
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create console handler and set level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# Add ch to logger
+logger.addHandler(ch)
 
 
 def get_schedule_for_env(
@@ -77,8 +90,10 @@ def create_deployment(
     env_parameters: dict[AwsEnv, JsonDict] = {},
 ) -> None:
     """Create a deployment for the specified flow"""
+    logger = get_logger()
+
     aws_env = AwsEnv(os.environ["AWS_ENV"])
-    version = importlib.metadata.version(PROJECT_NAME)
+    version = _version()
     flow_name = flow.name
     docker_registry = os.environ["DOCKER_REGISTRY"]
     docker_repository = os.getenv("DOCKER_REPOSITORY", PROJECT_NAME)
@@ -113,6 +128,30 @@ def create_deployment(
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, check=True
+        )
+        if commit_sha := result.stdout.decode().strip():
+            tags.append(f"sha:{commit_sha}")
+    except Exception as e:
+        logger.error(f"failed to get commit SHA: {e}")
+
+    try:
+        branch = os.environ.get("GIT_BRANCH")
+        if not branch:
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                check=True,
+            )
+            branch = result.stdout.decode().strip()
+
+        if branch:
+            tags.append(f"branch:{branch}")
+    except Exception as e:
+        logger.error(f"failed to get branch: {e}")
+
     schedule = get_schedule_for_env(
         aws_env,
         env_schedules,
@@ -137,7 +176,13 @@ def create_deployment(
     )
 
 
-if __name__ == "__name__":
+def _version() -> str:
+    return importlib.metadata.version(PROJECT_NAME)
+
+
+if __name__ == "__main__":
+    logger.info(f"using version: {_version()}")
+
     # Train
     create_deployment(
         flow=train_on_gpu,

@@ -66,16 +66,16 @@ export-env-vars:
 prefect-login: export-env-vars
 	prefect cloud login -k ${PREFECT_API_KEY}
 
-deploy: prefect-login
+deploy:
     just deploy-deployments
     just deploy-automations
 
-deploy-deployments: prefect-login
-	aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
-	python -m deployments
+deploy-deployments:
+    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+    uv run python -m deployments
 
-deploy-automations: prefect-login
-	python -m automations
+deploy-automations:
+    uv run python -m automations
 
 # Run a static site locally
 serve-static-site tool:

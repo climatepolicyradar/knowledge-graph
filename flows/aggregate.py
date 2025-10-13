@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun
-from prefect.context import TaskRunContext, get_run_context
+from prefect.context import TaskRunContext
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
@@ -35,8 +35,10 @@ from flows.inference import (
 from flows.utils import (
     DocumentStem,
     ParameterisedFlow,
+    RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     get_logger,
     iterate_batch,
@@ -51,9 +53,6 @@ R = TypeVar("R")
 
 DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
 DEFAULT_N_BATCHES: PositiveInt = 5
-
-# A unique identifier for the run output made from the run context
-RunOutputIdentifier: TypeAlias = str
 
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
@@ -72,25 +71,6 @@ class AggregationFailure(Exception):
         self.document_stem = document_stem
         self.exception = exception
         self.context = context
-
-
-def build_run_output_identifier() -> RunOutputIdentifier:
-    """Builds an identifier from the start time and name of the flow run."""
-    run_context = get_run_context()
-    if isinstance(run_context, TaskRunContext):
-        raise ValueError("expected flow run context but got task run context")
-
-    if run_context.flow_run is None:
-        raise ValueError("run context is missing flow run")
-
-    if run_context.flow_run.start_time is None:
-        raise ValueError("flow run didn't have a start time.")
-
-    start_time = run_context.flow_run.start_time.replace(tzinfo=None).isoformat(
-        timespec="minutes"
-    )
-    run_name = run_context.flow_run.name
-    return f"{start_time}-{run_name}"
 
 
 async def get_all_labelled_passages_for_one_document(
