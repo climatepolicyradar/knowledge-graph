@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.16.0"
+version = "0.16.1"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },

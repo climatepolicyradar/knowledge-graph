@@ -24,6 +24,9 @@ from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate import (
+    METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME,
+)
+from flows.aggregate import (
     RunOutputIdentifier,
     SerialisedVespaConcept,
 )
@@ -671,9 +674,11 @@ async def index(
         ] = await collect_unique_file_stems_under_prefix(
             bucket_name=config.cache_bucket_str,
             prefix=os.path.join(
-                config.aggregate_inference_results_prefix, run_output_identifier
+                config.aggregate_inference_results_prefix,
+                run_output_identifier,
             ),
             bucket_region=config.bucket_region,
+            disallow={AGGREGATE_METADATA_FILE_NAME},
         )
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")

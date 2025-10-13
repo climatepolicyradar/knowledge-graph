@@ -211,6 +211,62 @@ async def test_collect_file_stems_under_prefix(test_config, mock_bucket_stem) ->
     )
 
 
+@pytest.mark.parametrize(
+    "disallow,expected_stems",
+    [
+        # No disallow - should include all files including metadata
+        (
+            None,
+            {
+                "CCLW.executive.1.1",
+                "metadata",
+                "CCLW.executive.2.2",
+                "CCLW.executive.3.3",
+            },
+        ),
+        # Disallow only metadata.json
+        (
+            {"metadata.json"},
+            {
+                "CCLW.executive.1.1",
+                "CCLW.executive.2.2",
+                "CCLW.executive.3.3",
+            },
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_collect_file_stems_under_prefix_with_disallow(
+    test_config, mock_s3_async_client, mock_async_bucket, disallow, expected_stems
+) -> None:
+    """Test that we can filter out specific filenames using the disallow parameter."""
+
+    # Create test files including metadata.json files
+    s3_paths = [
+        "test_prefix/Q1/v1/CCLW.executive.1.1.json",
+        "test_prefix/Q1/v1/metadata.json",
+        "test_prefix/Q1/v1/CCLW.executive.2.2.json",
+        "test_prefix/Q2/v1/CCLW.executive.3.3.json",
+        "test_prefix/Q2/v1/metadata.json",
+    ]
+    for s3_path in s3_paths:
+        await mock_s3_async_client.put_object(
+            Bucket=mock_async_bucket,
+            Key=s3_path,
+            Body=b"{}",
+            ContentType="application/json",
+        )
+
+    file_stems = await collect_unique_file_stems_under_prefix(
+        bucket_name=test_config.cache_bucket,
+        prefix="test_prefix",
+        bucket_region=test_config.bucket_region,
+        disallow=disallow,
+    )
+
+    assert set(file_stems) == {DocumentStem(stem) for stem in expected_stems}
+
+
 def test_filter_non_english_file_stems() -> None:
     """Test that we can successfully filter out non-English file stems."""
 
