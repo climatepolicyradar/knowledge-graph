@@ -85,7 +85,12 @@ def load_classifier_remote(
     version: Version,
     wikibase_id: WikibaseID,
 ) -> Classifier:
-    """Load a classifier from W&B artifacts storage. Authentication is a Prerequisite, since it downloads the contents of the artifact. Raises ValueError should download fail"""
+    """
+    Load a classifier from W&B artifacts storage.
+
+    Authentication is a Prerequisite, since it downloads the contents of the artifact.
+    Raises ValueError should download fail
+    """
     artifact_id = f"{wikibase_id}/{classifier}:{version}"
     artifact = run.use_artifact(artifact_id, type="model")
 
