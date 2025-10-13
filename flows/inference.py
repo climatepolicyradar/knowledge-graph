@@ -218,15 +218,14 @@ def gather_successful_document_stems(
     #  was not found.
     failed_document_stems: set[DocumentStem] = set()
     for parameterised_batch in parameterised_batches:
-        if (
-            classifier_spec_json := parameterised_batch.params.get(
-                "classifier_spec_json"
-            )
-        ) is None:
+        classifier_spec_json = parameterised_batch.params.get("classifier_spec_json")
+        if classifier_spec_json is None:
             raise ValueError(
                 f"'classifier_spec_json' not found in parameterised batch: {parameterised_batch.params}"
             )
-        if (batch_document_stems := parameterised_batch.params.get("batch")) is None:
+
+        batch_document_stems = parameterised_batch.params.get("batch")
+        if batch_document_stems is None:
             raise ValueError(
                 f"'batch' not found in parameterised batch: {parameterised_batch.params}"
             )
