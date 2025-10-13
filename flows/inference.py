@@ -161,23 +161,34 @@ class InferenceResult(BaseModel):
     successful_document_stems: set[DocumentStem]
     """Set of document stems that were processed successfully."""
 
-    @property
-    def failed(self) -> bool:
-        """Whether the inference failed."""
+    failed: bool
+    """Whether Inference failed; True equates to a failed run."""
 
-        # Check if no batch results
-        if not self.batch_inference_results:
-            return True
 
-        # Check if any batch failed
-        if any(result.failed for result in self.batch_inference_results):
-            return True
+def did_inference_fail(
+    batch_inference_results: list[BatchInferenceResult],
+    requested_document_stems: list[DocumentStem],
+    successful_document_stems: set[DocumentStem],
+) -> bool:
+    """
+    Whether the Inference run failed.
 
-        # Check if document counts don't match
-        if len(self.requested_document_stems) != len(self.successful_document_stems):
-            return True
+    True equates to a failed run.
+    """
 
-        return False
+    # Check if no batch results
+    if not batch_inference_results:
+        return True
+
+    # Check if any batch failed
+    if any(result.failed for result in batch_inference_results):
+        return True
+
+    # Check if document counts don't match
+    if len(requested_document_stems) != len(successful_document_stems):
+        return True
+
+    return False
 
 
 def gather_inference_document_stems(
@@ -200,7 +211,7 @@ def gather_inference_document_stems(
     return inference_document_stems
 
 
-def successful_document_stems(
+def gather_successful_document_stems(
     parameterised_batches: list[ParameterisedFlow],
     inference_all_document_stems: set[DocumentStem],
     batch_inference_results: list[BatchInferenceResult],
@@ -1258,13 +1269,18 @@ async def inference(
         else:
             failed_classifier_specs.append(spec)
 
-    inference_document_stems = gather_inference_document_stems(
+    inference_document_stems: set[DocumentStem] = gather_inference_document_stems(
         parameterised_batches=parameterised_batches
     )
-    successful_stems = successful_document_stems(
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
         inference_all_document_stems=inference_document_stems,
         batch_inference_results=all_successes,
+    )
+    inference_run_failed: bool = did_inference_fail(
+        batch_inference_results=all_successes,
+        requested_document_stems=list(inference_document_stems),
+        successful_document_stems=successful_document_stems,
     )
 
     inference_result = InferenceResult(
@@ -1273,7 +1289,8 @@ async def inference(
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
-        successful_document_stems=successful_stems,
+        successful_document_stems=successful_document_stems,
+        failed=inference_run_failed,
     )
 
     await create_inference_summary_artifact(

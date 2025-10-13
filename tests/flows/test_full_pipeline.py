@@ -83,6 +83,7 @@ async def test_full_pipeline_no_config_provided(
                 successful_document_stems=set(
                     aggregate_inference_results_document_stems
                 ),
+                failed=False,
             ),
         )
         mock_aggregate.return_value = State(
@@ -183,6 +184,7 @@ async def test_full_pipeline_with_full_config(
                 successful_document_stems=set(
                     aggregate_inference_results_document_stems
                 ),
+                failed=False,
             ),
         )
         mock_aggregate.return_value = State(
@@ -310,6 +312,7 @@ async def test_full_pipeline_with_inference_failure(
                         ),
                     ],
                     successful_document_stems=set(document_stems_successful),
+                    failed=True,
                 ),
             ),
         )
