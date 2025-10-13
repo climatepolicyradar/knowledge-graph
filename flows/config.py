@@ -114,7 +114,7 @@ class Config(BaseModel):
     )
 
     s3_concurrency_limit: int = Field(
-        default=50,
+        default=25,
         description="Use to limit asynchronous s3 operations for an individual batch.",
     )
 
