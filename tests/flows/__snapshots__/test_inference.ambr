@@ -1,12 +1,54 @@
 # serializer version: 1
 # name: test_inference_batch_of_documents_cpu
-  '[{"Document stem": "GEF.document.0.1", "Status": "\\u2713", "Exception": "N/A"}]'
+  tuple(
+    '[{"Document stem": "GEF.document.0.1", "Status": "\\u2713", "Exception": "N/A"}]',
+    '''
+      # Batch Inference Summary
+      
+      ## Overview
+      - **Flow Run**: test-inference-batch-of-documents-cpu
+      - **Classifier**: Q788:6vxrmcuf
+      - **Total documents processed**: 1
+      - **Successful documents**: 1
+      - **Failed documents**: 0
+      - **Unknown failures**: 0
+  
+    ''',
+  )
 # ---
 # name: test_inference_batch_of_documents_cpu_empty_batch
-  '[]'
+  tuple(
+    '[]',
+    '''
+      # Batch Inference Summary
+      
+      ## Overview
+      - **Flow Run**: test-inference-batch-of-documents-cpu-empty-batch
+      - **Classifier**: Q788:aaaa2222
+      - **Total documents processed**: 0
+      - **Successful documents**: 0
+      - **Failed documents**: 0
+      - **Unknown failures**: 0
+  
+    ''',
+  )
 # ---
 # name: test_inference_batch_of_documents_cpu_with_failures
-  '[{"Document stem": "NonExistent.doc.1", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}, {"Document stem": "AnotherMissing.doc.2", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}]'
+  tuple(
+    '[{"Document stem": "NonExistent.doc.1", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}, {"Document stem": "AnotherMissing.doc.2", "Status": "\\u2717", "Exception": "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist."}]',
+    '''
+      # Batch Inference Summary
+      
+      ## Overview
+      - **Flow Run**: test-inference-batch-of-documents-cpu-with-failures
+      - **Classifier**: Q788:aaaa2222
+      - **Total documents processed**: 2
+      - **Successful documents**: 0
+      - **Failed documents**: 2
+      - **Unknown failures**: 0
+  
+    ''',
+  )
 # ---
 # name: test_run_classifier_inference_on_document
   SingleDocumentInferenceResult(labelled_passages=[], document_stem='HTML.document.0.1', wikibase_id='Q788', classifier_id='6vxrmcuf')

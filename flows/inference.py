@@ -714,6 +714,7 @@ async def run_classifier_inference_on_document(
 
 
 async def create_inference_on_batch_summary_artifact(
+    classifier_spec: ClassifierSpec,
     successes: Sequence[SingleDocumentInferenceResult],
     failures: Sequence[tuple[DocumentStem, Exception]],
     unknown_failures: Sequence[BaseException],
@@ -730,6 +731,7 @@ async def create_inference_on_batch_summary_artifact(
 
 ## Overview
 - **Flow Run**: {flow_run_name or "Unknown"}
+- **Classifier**: {classifier_spec}
 - **Total documents processed**: {total_documents}
 - **Successful documents**: {successful_documents}
 - **Failed documents**: {failed_documents}
@@ -880,6 +882,7 @@ async def _inference_batch_of_documents(
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
+        classifier_spec,
         all_successes,
         all_failures,
         all_unknown_failures,
