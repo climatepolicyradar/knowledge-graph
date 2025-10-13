@@ -146,9 +146,7 @@ def update(
     """
     model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
 
-    # Get all artifacts for the model path to select latest version for aws_env
     api = wandb.Api()
-
     artifacts = api.artifacts(type_name="model", name=f"{model_path}")
     classifier_version = get_latest_model_version(artifacts, aws_env)
 
