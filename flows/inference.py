@@ -809,7 +809,7 @@ async def _inference_batch_of_documents(
         max_pool_connections=(
             config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
         ),
-        read_timeout=240,
+        read_timeout=config.s3_read_timeout,
     )
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3", config=boto_config) as s3_client:
