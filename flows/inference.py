@@ -191,29 +191,9 @@ def did_inference_fail(
     return False
 
 
-def gather_inference_document_stems(
-    parameterised_batches: list[ParameterisedFlow],
-) -> set[DocumentStem]:
-    """
-    Gather all the document stems sent to batch level inference.
-
-    This is the set (and thus deduplicated version) of all documents that were expected
-    to be processed by the parameterised batches.
-    """
-    inference_document_stems = set()
-    for parameterised_batch in parameterised_batches:
-        if not parameterised_batch.params.get("batch"):
-            raise ValueError(
-                f"'batch' not found in parameterised batch: {parameterised_batch.params}"
-            )
-        inference_document_stems.update(parameterised_batch.params["batch"])
-
-    return inference_document_stems
-
-
 def gather_successful_document_stems(
     parameterised_batches: list[ParameterisedFlow],
-    inference_all_document_stems: set[DocumentStem],
+    requested_document_stems: set[DocumentStem],
     batch_inference_results: list[BatchInferenceResult],
 ) -> set[DocumentStem]:
     """
@@ -262,7 +242,7 @@ def gather_successful_document_stems(
 
     # Collect the successful document stems as the sum of the expected document stems
     #   minus the unsuccessful document stems.
-    successful_documents = inference_all_document_stems - failed_document_stems
+    successful_documents = requested_document_stems - failed_document_stems
 
     return successful_documents
 
@@ -1214,11 +1194,13 @@ async def inference(
         }
 
     # Prepare document batches based on classifier specs
+    requested_document_stems: set[DocumentStem] = set()
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
+        requested_document_stems.update(filter_result.accepted)
         removal_details[classifier_spec] = len(filter_result.removed)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
@@ -1269,22 +1251,19 @@ async def inference(
         else:
             failed_classifier_specs.append(spec)
 
-    inference_document_stems: set[DocumentStem] = gather_inference_document_stems(
-        parameterised_batches=parameterised_batches
-    )
     successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
-        inference_all_document_stems=inference_document_stems,
+        requested_document_stems=requested_document_stems,
         batch_inference_results=all_successes,
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=all_successes,
-        requested_document_stems=list(inference_document_stems),
+        requested_document_stems=list(requested_document_stems),
         successful_document_stems=successful_document_stems,
     )
 
     inference_result = InferenceResult(
-        requested_document_stems=list(inference_document_stems),
+        requested_document_stems=list(requested_document_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,

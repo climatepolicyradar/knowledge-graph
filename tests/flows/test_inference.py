@@ -30,7 +30,6 @@ from flows.inference import (
     did_inference_fail,
     document_passages,
     filter_document_batch,
-    gather_inference_document_stems,
     gather_successful_document_stems,
     get_latest_ingest_documents,
     inference,
@@ -968,23 +967,15 @@ def test_inference_result_collection_all_successful() -> None:
     ]
 
     # Run results collection functions
-    inference_document_stems: set[DocumentStem] = gather_inference_document_stems(
-        parameterised_batches=parameterised_batches
-    )
     successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
-        inference_all_document_stems=inference_document_stems,
+        requested_document_stems=set(all_documents),
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
-        requested_document_stems=list(inference_document_stems),
+        requested_document_stems=list(all_documents),
         successful_document_stems=successful_document_stems,
-    )
-
-    # All documents were passed to inference
-    assert inference_document_stems == set(all_documents), (
-        "All documents should have been passed to inference"
     )
 
     # All documents are successful as we have successes for all documents
@@ -1020,23 +1011,17 @@ def test_inference_result_collection_all_failures() -> None:
     ]
 
     # Run results collection functions
-    inference_document_stems: set[DocumentStem] = gather_inference_document_stems(
-        parameterised_batches=parameterised_batches
-    )
     successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
-        inference_all_document_stems=inference_document_stems,
+        requested_document_stems=set(documents),
         batch_inference_results=[],
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[],
-        requested_document_stems=list(inference_document_stems),
+        requested_document_stems=list(documents),
         successful_document_stems=successful_document_stems,
     )
 
-    assert inference_document_stems == set(documents), (
-        "All documents should have been passed to inference"
-    )
     assert inference_run_failed, (
         "Should fail when some documents fail for some classifiers"
     )
@@ -1102,22 +1087,15 @@ def test_inference_result_collection_partial_failures() -> None:
     ]
 
     # Run results collection functions
-    inference_document_stems: set[DocumentStem] = gather_inference_document_stems(
-        parameterised_batches=parameterised_batches
-    )
     successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
-        inference_all_document_stems=inference_document_stems,
+        requested_document_stems=set(all_documents),
         batch_inference_results=[all_successful_batch, partial_success_batch],
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[all_successful_batch, partial_success_batch],
-        requested_document_stems=list(inference_document_stems),
+        requested_document_stems=list(all_documents),
         successful_document_stems=successful_document_stems,
-    )
-
-    assert inference_document_stems == set(all_documents), (
-        "All documents should have been passed to inference"
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
@@ -1618,22 +1596,15 @@ def test_inference_result_collection_missing_results() -> None:
     ]
 
     # Run results collection functions
-    inference_document_stems: set[DocumentStem] = gather_inference_document_stems(
-        parameterised_batches=parameterised_batches
-    )
     successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
-        inference_all_document_stems=inference_document_stems,
+        requested_document_stems=set(all_documents),
         batch_inference_results=[Q100_batch],  # No results for Q101
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[Q100_batch],  # No results for Q101
-        requested_document_stems=list(inference_document_stems),
+        requested_document_stems=list(all_documents),
         successful_document_stems=successful_document_stems,
-    )
-
-    assert inference_document_stems == set(all_documents), (
-        "All documents should have been passed to inference"
     )
 
     # A document is only considered successful if it succeeds for ALL classifiers
