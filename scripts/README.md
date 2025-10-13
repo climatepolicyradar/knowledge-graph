@@ -81,6 +81,14 @@ At least one classififiers profile is required for promotion. You could set one 
 just classifier-metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
 ```
 
+If a classifier specification should no longer be used, the inverse of a promotion should be done—a demotion.
+
+```shell
+just demote Q57 --aws-env sandbox
+```
+
+Then, update the classifier specifications as per usual.
+
 ## Training Classifiers in Docker
 
 This guide explains how to train classifiers using Docker containers with AWS integration. This may be desirable for developers as installing transformers (which is required for training our neural network based models) locally can be difficult; with system incompatibilities and version support issues being common.
@@ -160,10 +168,6 @@ uv run deploy new \
 ```
 
 Note: If the classifier spec files in the local repo do not update after running the deploy script in docker then simply come out of the docker container and run `just update-inference-classifiers`.
-
-## Remove a Classifier Spec
-
-Within the Knowledge Graph full-pipeline the Aggregation step is designed to run on all classifiers as defined in the classifier spec file. Should you want to omit a classifier from running due to an issue with inference, then the classifier should be demoted and then the classifier spec updated. This can be done using the `just demote` command followed by the `just update-inference-classifiers` command.
 
 ## Troubleshooting
 
