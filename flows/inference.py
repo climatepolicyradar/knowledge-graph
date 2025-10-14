@@ -136,7 +136,7 @@ def get_inference_fault_metadata(
     all_successes: list[BatchInferenceResult],
     all_raw_failures: list[BaseException | FlowRun],
     requested_document_stems: set[DocumentStem],
-) -> dict[str, list[str] | set[DocumentStem]]:
+) -> dict[str, list[str]]:
     """Construct the metadata object to give context to an Inference failure."""
 
     all_raw_failures_as_strings: list[str] = []
