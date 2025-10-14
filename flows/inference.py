@@ -81,6 +81,8 @@ INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 AWS_ENV: str = os.environ["AWS_ENV"]
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
+METADATA_FILE_NAME = "metadata.json"
+
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 FilterResult = NamedTuple(
     "FilterResult",
@@ -1051,7 +1053,7 @@ async def store_metadata(
         key=os.path.join(
             config.inference_document_target_prefix,
             run_output_identifier,
-            "metadata.json",
+            METADATA_FILE_NAME,
         ),
     )
 
