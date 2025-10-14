@@ -3,6 +3,7 @@ import re
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 from wandb.apis.public import artifacts
+from wandb.apis.public.registries import registries_search
 
 from knowledge_graph.cloud import AwsEnv
 
@@ -81,7 +82,7 @@ class Version:
 
 
 def get_latest_model_version(
-    artifacts: artifacts.Artifacts,
+    artifacts: artifacts.Artifacts | registries_search.Versions,
     aws_env: AwsEnv,
 ) -> Version:
     """Get the latest wandb model version for a given AWS environment from a list of artifacts."""
