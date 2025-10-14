@@ -1474,20 +1474,6 @@ async def test_store_inference_result(
     mock_context = MagicMock(spec=FlowRunContext)
     mock_context.flow_run = flow_run
 
-    # Create test data
-    classifier_spec = ClassifierSpec(
-        concept_id=ConceptID("xyz78abc"),
-        wikibase_id=WikibaseID("Q788"),
-        classifier_id="abcd2345",
-        wandb_registry_version="v1",
-    )
-
-    batch_result = BatchInferenceResult(
-        batch_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        successful_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        classifier_spec=classifier_spec,
-    )
-
     # Mock only the Prefect context, let moto handle S3
     with (
         patch("flows.inference.get_run_context", return_value=mock_context),
@@ -1499,12 +1485,6 @@ async def test_store_inference_result(
         await store_inference_result(
             config=test_config,
             successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
-            requested_document_stems=[DocumentStem("TEST.DOC.1.1")],
-            classifier_specs=[classifier_spec],
-            batch_inference_results=[batch_result],
-            successful_classifier_specs=[classifier_spec],
-            failed_classifier_specs=[],
-            failed=False,
         )
 
     expected_key = os.path.join(

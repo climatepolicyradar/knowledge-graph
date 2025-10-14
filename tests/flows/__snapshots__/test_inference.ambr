@@ -16,53 +16,6 @@
 # ---
 # name: test_store_inference_result
   dict({
-    'batch_inference_results': list([
-      dict({
-        'batch_document_stems': list([
-          'TEST.DOC.1.1',
-        ]),
-        'classifier_spec': dict({
-          'classifier_id': 'abcd2345',
-          'classifiers_profile': None,
-          'compute_environment': None,
-          'concept_id': 'xyz78abc',
-          'dont_run_on': None,
-          'wandb_registry_version': 'v1',
-          'wikibase_id': 'Q788',
-        }),
-        'successful_document_stems': list([
-          'TEST.DOC.1.1',
-        ]),
-      }),
-    ]),
-    'classifier_specs': list([
-      dict({
-        'classifier_id': 'abcd2345',
-        'classifiers_profile': None,
-        'compute_environment': None,
-        'concept_id': 'xyz78abc',
-        'dont_run_on': None,
-        'wandb_registry_version': 'v1',
-        'wikibase_id': 'Q788',
-      }),
-    ]),
-    'failed': False,
-    'failed_classifier_specs': list([
-    ]),
-    'requested_document_stems': list([
-      'TEST.DOC.1.1',
-    ]),
-    'successful_classifier_specs': list([
-      dict({
-        'classifier_id': 'abcd2345',
-        'classifiers_profile': None,
-        'compute_environment': None,
-        'concept_id': 'xyz78abc',
-        'dont_run_on': None,
-        'wandb_registry_version': 'v1',
-        'wikibase_id': 'Q788',
-      }),
-    ]),
     'successful_document_stems': list([
       'TEST.DOC.1.1',
     ]),

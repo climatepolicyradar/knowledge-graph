@@ -1043,12 +1043,6 @@ async def store_metadata(
 async def store_inference_result(
     config: Config,
     successful_document_stems: set[DocumentStem],
-    requested_document_stems: list[DocumentStem],
-    classifier_specs: list[ClassifierSpec],
-    batch_inference_results: list[BatchInferenceResult],
-    successful_classifier_specs: list[ClassifierSpec],
-    failed_classifier_specs: list[ClassifierSpec],
-    failed: bool,
 ) -> None:
     """Store the inference result to S3 for later use."""
     logger = get_logger()
@@ -1065,21 +1059,8 @@ async def store_inference_result(
 
     run_output_identifier = build_run_output_identifier()
 
-    # Create a dictionary with all the inference result data
     result_data = {
-        "requested_document_stems": requested_document_stems,
-        "classifier_specs": [spec.model_dump() for spec in classifier_specs],
-        "batch_inference_results": [
-            result.model_dump() for result in batch_inference_results
-        ],
-        "successful_classifier_specs": [
-            spec.model_dump() for spec in successful_classifier_specs
-        ],
-        "failed_classifier_specs": [
-            spec.model_dump() for spec in failed_classifier_specs
-        ],
         "successful_document_stems": list(successful_document_stems),
-        "failed": failed,
     }
 
     result_json = json.dumps(result_data)
@@ -1263,14 +1244,7 @@ async def inference(
     try:
         if config.cache_bucket:
             await store_inference_result(
-                config=config,
-                successful_document_stems=successful_document_stems,
-                requested_document_stems=list(requested_document_stems),
-                classifier_specs=list(classifier_specs),
-                batch_inference_results=all_successes,
-                successful_classifier_specs=successful_classifier_specs,
-                failed_classifier_specs=failed_classifier_specs,
-                failed=inference_run_failed,
+                config=config, successful_document_stems=successful_document_stems
             )
     except Exception as e:
         logger.error(f"Failed to store inference result: {e}")
