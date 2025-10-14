@@ -728,10 +728,16 @@ async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
     classifier: Classifier,
-    s3_client: S3Client,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    document = await load_document(config, file_stem, s3_client)
+    boto_config = AioConfig(
+        max_pool_connections=(config.s3_concurrency_limit * 2),
+        read_timeout=config.s3_read_timeout,
+        retries={"mode": "standard"},
+    )
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3", config=boto_config) as s3_client:
+        document = await load_document(config, file_stem, s3_client)
 
     # Resolve typing issue as wikibase_id is optional (though required here)
     assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
@@ -868,34 +874,24 @@ async def _inference_batch_of_documents(
     classifier = await load_classifier(run, config, classifier_spec)
 
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-    boto_config = AioConfig(
-        max_pool_connections=(
-            config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
-        ),
-        read_timeout=config.s3_read_timeout,
-    )
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3", config=boto_config) as s3_client:
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with(
-                    file_stem,
-                    run_classifier_inference_on_document(
-                        config=config,
-                        file_stem=file_stem,
-                        classifier=classifier,
-                        s3_client=s3_client,
-                    ),
+    tasks = [
+        wait_for_semaphore(
+            semaphore,
+            return_with(
+                file_stem,
+                run_classifier_inference_on_document(
+                    config=config,
+                    file_stem=file_stem,
+                    classifier=classifier,
                 ),
-            )
-            for file_stem in batch
-        ]
+            ),
+        )
+        for file_stem in batch
+    ]
 
-        results: list[
-            tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
-            | BaseException
-        ] = await asyncio.gather(*tasks, return_exceptions=True)
+    results: list[
+        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
+    ] = await asyncio.gather(*tasks, return_exceptions=True)
 
     inferences_successes: list[SingleDocumentInferenceResult] = []
     inferences_failures: list[tuple[DocumentStem, Exception]] = []
