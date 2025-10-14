@@ -15,7 +15,7 @@ import boto3
 import pytest
 import pytest_asyncio
 from botocore.config import Config as BotoCoreConfig
-from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.parser_models import (
     BaseParserOutput,
     BlockType,
@@ -601,10 +601,10 @@ def document_passages_test_data_file_path() -> str:
 
 
 @pytest.fixture
-def example_vespa_concepts() -> list[VespaConcept]:
+def example_vespa_concepts() -> list[VespaPassage.Concept]:
     """Vespa concepts for testing."""
     return [
-        VespaConcept(
+        VespaPassage.Concept(
             id="1457",
             name="wood industry",
             parent_concepts=None,
@@ -614,7 +614,7 @@ def example_vespa_concepts() -> list[VespaConcept]:
             start=0,
             timestamp=datetime.now(),
         ),
-        VespaConcept(
+        VespaPassage.Concept(
             id="1273",
             name="manufacturing sector",
             parent_concepts=[

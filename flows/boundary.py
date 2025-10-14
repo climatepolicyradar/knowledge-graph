@@ -21,7 +21,6 @@ from typing import (
 
 import tenacity
 import vespa.querybuilder as qb
-from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _s3_object_read_text
@@ -269,14 +268,14 @@ def get_parent_concepts_from_concept(
 
 def convert_labelled_passage_to_concepts(
     labelled_passage: LabelledPassage,
-) -> list[VespaConcept]:
+) -> list[VespaPassage.Concept]:
     """
-    Convert a labelled passage to a list of VespaConcept objects and their text block ID.
+    Convert a labelled passage to a list of VespaPassage.Concept objects and their text block ID.
 
     The labelled passage contains a list of spans relating to concepts
-    that we must convert to VespaConcept objects.
+    that we must convert to VespaPassage.Concept objects.
     """
-    concepts: list[VespaConcept] = []
+    concepts: list[VespaPassage.Concept] = []
     concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
 
     if not concept_json and not labelled_passage.spans:
@@ -318,7 +317,7 @@ def convert_labelled_passage_to_concepts(
             timestamp = max(span.timestamps)
 
         concepts.append(
-            VespaConcept(
+            VespaPassage.Concept(
                 id=span.concept_id,
                 name=concept.preferred_label,
                 parent_concepts=parent_concepts,

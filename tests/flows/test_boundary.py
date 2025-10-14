@@ -4,7 +4,6 @@ from datetime import datetime
 
 import pytest
 import vespa.querybuilder as qb
-from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.exceptions import VespaError
@@ -104,7 +103,7 @@ def test_convert_labelled_passges_to_concepts(
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
     concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
-    assert all([isinstance(concept, VespaConcept) for concept in concepts])
+    assert all([isinstance(concept, VespaPassage.Concept) for concept in concepts])
 
 
 def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
