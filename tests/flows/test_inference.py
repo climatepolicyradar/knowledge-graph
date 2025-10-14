@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,7 +19,6 @@ from prefect.states import Completed, Running
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
-    InferenceResult,
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
@@ -31,6 +31,7 @@ from flows.inference import (
     document_passages,
     filter_document_batch,
     gather_successful_document_stems,
+    get_inference_fault_metadata,
     get_latest_ingest_documents,
     inference,
     inference_batch_of_documents_cpu,
@@ -449,15 +450,9 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         mock_inference_run_deployment.assert_called_once()
 
-        assert type(inference_result) is InferenceResult
+        assert type(inference_result) is set
 
-        assert not inference_result.failed
-
-        assert inference_result.successful_document_stems == set(input_doc_ids)
-
-        assert inference_result.failed_classifier_specs == []
-
-        assert inference_result.classifier_specs == [expected_classifier_spec]
+        assert inference_result == set(input_doc_ids)
 
 
 @pytest.mark.asyncio
@@ -1276,30 +1271,6 @@ async def test_store_inference_result(
     mock_context = MagicMock(spec=FlowRunContext)
     mock_context.flow_run = flow_run
 
-    # Create test data
-    classifier_spec = ClassifierSpec(
-        concept_id=ConceptID("xyz78abc"),
-        wikibase_id=WikibaseID("Q788"),
-        classifier_id="abcd2345",
-        wandb_registry_version="v1",
-    )
-
-    batch_result = BatchInferenceResult(
-        batch_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        successful_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        classifier_spec=classifier_spec,
-    )
-
-    inference_result = InferenceResult(
-        requested_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        classifier_specs=[classifier_spec],
-        batch_inference_results=[batch_result],
-        successful_classifier_specs=[classifier_spec],
-        failed_classifier_specs=[],
-        successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
-        failed=False,
-    )
-
     # Mock only the Prefect context, let moto handle S3
     with (
         patch("flows.inference.get_run_context", return_value=mock_context),
@@ -1310,7 +1281,7 @@ async def test_store_inference_result(
     ):
         await store_inference_result(
             config=test_config,
-            inference_result=inference_result,
+            successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
         )
 
     expected_key = os.path.join(
@@ -1332,8 +1303,7 @@ async def test_store_inference_result(
     result_content = await response["Body"].read()
     result_dict = json.loads(result_content.decode("utf-8"))
 
-    loaded_result = InferenceResult.model_validate(result_dict)
-    assert loaded_result == snapshot
+    assert result_dict == snapshot
 
 
 def test_did_inference_fail() -> None:
@@ -1601,3 +1571,41 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(requested_document_stems), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+
+
+def test_get_inference_fault_metadata() -> None:
+    """Test the get_inference_fault_metadata function."""
+
+    metadata_json: dict[str, Any] = get_inference_fault_metadata(
+        all_successes=[
+            BatchInferenceResult(
+                batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+                successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+                classifier_spec=ClassifierSpec(
+                    wikibase_id=WikibaseID("Q100"),
+                    classifier_id=ClassifierID("aaaa2222"),
+                    wandb_registry_version="v1",
+                ),
+            ),
+        ],
+        all_raw_failures=[
+            FlowRun(
+                id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+                flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+                name="test-flow-run",
+                state=Completed(),
+            ),
+            BaseException(),
+        ],
+        requested_document_stems=set([DocumentStem("TEST.executive.1.1")]),
+    )
+
+    assert metadata_json.keys() == {
+        "all_successes",
+        "all_raw_failures",
+        "requested_document_stems",
+    }
+
+    # Assert that we can dump the result to a string as this is a requirement of the
+    # fault metadata.
+    json.dumps(metadata_json)
