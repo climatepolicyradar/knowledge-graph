@@ -51,10 +51,6 @@ async def create_full_pipeline_summary_artifact(
     )
 
 
-# TODO: Don't think we need to pass back all document stems inference was run on just
-# for the success ratio? Also, type alias for successful document stems?
-
-
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
 @flow()
 async def full_pipeline(
