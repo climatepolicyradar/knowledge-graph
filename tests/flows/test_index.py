@@ -5,7 +5,6 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.artifacts import Artifact
@@ -93,7 +92,7 @@ async def test_index_document_passages(
                     text_block_response = response[text_block_id]
 
                     vespa_passage: VespaPassage = text_block_response[1]
-                    vespa_passage_concepts: Sequence[VespaConcept] = (
+                    vespa_passage_concepts: Sequence[VespaPassage.Concept] = (
                         vespa_passage.concepts if vespa_passage.concepts else []
                     )
                     # When parent concepts is empty we are loading it as None from Vespa
@@ -105,8 +104,8 @@ async def test_index_document_passages(
                     expected_concepts_json: Sequence[dict] = (
                         aggregated_inference_results[text_block_id]
                     )
-                    expected_concepts: Sequence[VespaConcept] = [
-                        VespaConcept.model_validate(concept)
+                    expected_concepts: Sequence[VespaPassage.Concept] = [
+                        VespaPassage.Concept.model_validate(concept)
                         for concept in expected_concepts_json
                     ]
 
@@ -219,7 +218,7 @@ async def test_index_batch_of_documents(
                             concept.parent_concepts = []
 
                     passage_expected_concepts = [
-                        VespaConcept.model_validate(c)
+                        VespaPassage.Concept.model_validate(c)
                         for c in expected_concepts[text_block_id]
                     ]
 

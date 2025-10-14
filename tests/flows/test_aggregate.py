@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pydantic
 import pytest
-from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
 from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
@@ -125,7 +125,7 @@ async def test_aggregate_batch_of_documents(
         for concepts in document_inference_output:
             for concept in concepts:
                 try:
-                    vespa_concept = VespaConcept.model_validate(concept)
+                    vespa_concept = VespaPassage.Concept.model_validate(concept)
                     collected_ids_for_document.append(vespa_concept.id)
                 except pydantic.ValidationError as e:
                     pytest.fail(
