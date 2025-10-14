@@ -81,7 +81,7 @@ At least one classififiers profile is required for promotion. You could set one 
 just classifier-metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
 ```
 
-If a classifier specification should no longer be used, the inverse of a promotion should be done—a demotion. This will demote the latest version of the aws env specified in the registry by removing the tag.
+If a classifier specification should no longer be used, the inverse of a promotion should be done—a demotion. This will demote the latest version of the AWS env specified in the registry by removing the tag.
 
 ```shell
 just demote Q57 --aws-env sandbox
