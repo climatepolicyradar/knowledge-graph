@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from collections import defaultdict
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -159,32 +160,92 @@ class InferenceResult(BaseModel):
     failed_classifier_specs: list[ClassifierSpec] = []
     """List of classifier specifications that failed for one or more document."""
 
-    @property
-    def failed(self) -> bool:
-        """Whether the inference failed."""
-        if not self.batch_inference_results:
-            return True
-        else:
-            return any([result.failed for result in self.batch_inference_results])
+    successful_document_stems: set[DocumentStem]
+    """Set of document stems that were processed successfully."""
 
-    @property
-    def successful_document_stems(self) -> set[DocumentStem]:
-        """
-        The documents that succeeded within every batch they where sent to.
+    failed: bool
+    """Whether Inference failed; True equates to a failed run."""
 
-        This means removing any that had a failure in any batch.
-        """
-        cross_batch_failures = set()
-        cross_batch_successes = set()
 
-        for batch_result in self.batch_inference_results:
-            cross_batch_failures = cross_batch_failures.union(
-                batch_result.failed_document_stems
+def did_inference_fail(
+    batch_inference_results: list[BatchInferenceResult],
+    requested_document_stems: set[DocumentStem],
+    successful_document_stems: set[DocumentStem],
+) -> bool:
+    """
+    Whether the Inference run failed.
+
+    True equates to a failed run.
+    """
+
+    # Check if no batch results
+    if not batch_inference_results:
+        return True
+
+    # Check if any batch failed
+    if any(result.failed for result in batch_inference_results):
+        return True
+
+    # Check if document counts don't match
+    if len(requested_document_stems) != len(successful_document_stems):
+        return True
+
+    return False
+
+
+def gather_successful_document_stems(
+    parameterised_batches: list[ParameterisedFlow],
+    requested_document_stems: set[DocumentStem],
+    batch_inference_results: list[BatchInferenceResult],
+) -> set[DocumentStem]:
+    """
+    The documents that succeeded for every classifier they were expected to run on.
+
+    This means removing any that had a failure in any batch or no results.
+
+    The parameterised batches contain the details of which documents were expected
+    to be processed by each classifier. We use this therefore to determine explicitly
+    whether we have a successful result from the BatchInferenceResults for a given
+    classifier.
+    """
+
+    # Collect the successful document stems for each classifier.
+    successes_by_classifier: dict[ClassifierSpec, set[DocumentStem]] = defaultdict(set)
+    for batch_inference_result in batch_inference_results:
+        successes_by_classifier[batch_inference_result.classifier_spec].update(
+            batch_inference_result.successful_document_stems
+        )
+
+    # Collect the unsuccessful document stems where an expected success for a classifier
+    #  was not found.
+    failed_document_stems: set[DocumentStem] = set()
+    for parameterised_batch in parameterised_batches:
+        classifier_spec_json = parameterised_batch.params.get("classifier_spec_json")
+        if classifier_spec_json is None:
+            raise KeyError(
+                f"'classifier_spec_json' not found in parameterised batch: {parameterised_batch.params}"
             )
-            cross_batch_successes = cross_batch_successes.union(
-                batch_result.successful_document_stems
+
+        batch_document_stems = parameterised_batch.params.get("batch")
+        if batch_document_stems is None:
+            raise KeyError(
+                f"'batch' not found in parameterised batch: {parameterised_batch.params}"
             )
-        return cross_batch_successes - cross_batch_failures
+
+        classifier_spec = ClassifierSpec(**classifier_spec_json)
+        classifier_successful_document_stems: set[DocumentStem] = (
+            successes_by_classifier[classifier_spec]
+        )
+
+        failed_document_stems.update(
+            set(batch_document_stems) - classifier_successful_document_stems
+        )
+
+    # Collect the successful document stems as the sum of the expected document stems
+    #   minus the unsuccessful document stems.
+    successful_documents = requested_document_stems - failed_document_stems
+
+    return successful_documents
 
 
 async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
@@ -1134,11 +1195,13 @@ async def inference(
         }
 
     # Prepare document batches based on classifier specs
+    requested_document_stems: set[DocumentStem] = set()
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
+        requested_document_stems.update(filter_result.accepted)
         removal_details[classifier_spec] = len(filter_result.removed)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
@@ -1189,12 +1252,25 @@ async def inference(
         else:
             failed_classifier_specs.append(spec)
 
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=requested_document_stems,
+        batch_inference_results=all_successes,
+    )
+    inference_run_failed: bool = did_inference_fail(
+        batch_inference_results=all_successes,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+
     inference_result = InferenceResult(
-        requested_document_stems=list(validated_file_stems),
+        requested_document_stems=list(requested_document_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
+        successful_document_stems=successful_document_stems,
+        failed=inference_run_failed,
     )
 
     await create_inference_summary_artifact(
