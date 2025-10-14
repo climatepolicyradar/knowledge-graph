@@ -167,7 +167,7 @@ class InferenceResult(BaseModel):
 
 def did_inference_fail(
     batch_inference_results: list[BatchInferenceResult],
-    requested_document_stems: list[DocumentStem],
+    requested_document_stems: set[DocumentStem],
     successful_document_stems: set[DocumentStem],
 ) -> bool:
     """
@@ -220,13 +220,13 @@ def gather_successful_document_stems(
     for parameterised_batch in parameterised_batches:
         classifier_spec_json = parameterised_batch.params.get("classifier_spec_json")
         if classifier_spec_json is None:
-            raise ValueError(
+            raise KeyError(
                 f"'classifier_spec_json' not found in parameterised batch: {parameterised_batch.params}"
             )
 
         batch_document_stems = parameterised_batch.params.get("batch")
         if batch_document_stems is None:
-            raise ValueError(
+            raise KeyError(
                 f"'batch' not found in parameterised batch: {parameterised_batch.params}"
             )
 
@@ -1257,7 +1257,7 @@ async def inference(
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=all_successes,
-        requested_document_stems=list(requested_document_stems),
+        requested_document_stems=requested_document_stems,
         successful_document_stems=successful_document_stems,
     )
 

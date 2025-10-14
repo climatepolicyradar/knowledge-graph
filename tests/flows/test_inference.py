@@ -974,7 +974,7 @@ def test_inference_result_collection_all_successful() -> None:
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
-        requested_document_stems=list(all_documents),
+        requested_document_stems=set(all_documents),
         successful_document_stems=successful_document_stems,
     )
 
@@ -1018,7 +1018,7 @@ def test_inference_result_collection_all_failures() -> None:
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[],
-        requested_document_stems=list(documents),
+        requested_document_stems=set(documents),
         successful_document_stems=successful_document_stems,
     )
 
@@ -1094,7 +1094,7 @@ def test_inference_result_collection_partial_failures() -> None:
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[all_successful_batch, partial_success_batch],
-        requested_document_stems=list(all_documents),
+        requested_document_stems=set(all_documents),
         successful_document_stems=successful_document_stems,
     )
 
@@ -1603,7 +1603,7 @@ def test_inference_result_collection_missing_results() -> None:
     )
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=[Q100_batch],  # No results for Q101
-        requested_document_stems=list(all_documents),
+        requested_document_stems=set(all_documents),
         successful_document_stems=successful_document_stems,
     )
 
