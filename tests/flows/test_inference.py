@@ -1615,3 +1615,148 @@ def test_inference_result_collection_missing_results() -> None:
     assert successful_document_stems == set(), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+
+
+def test_did_inference_fail() -> None:
+    """Test the did_inference_fail function."""
+
+    q100_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id=ClassifierID("aaaa2222"),
+        wandb_registry_version="v1",
+    )
+    q101_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q101"),
+        classifier_id=ClassifierID("bbbb2222"),
+        wandb_registry_version="v1",
+    )
+
+    # No batch results or requested documents
+    batch_inference_results: list[BatchInferenceResult] = []
+    requested_document_stems: set[DocumentStem] = set()
+    successful_document_stems: set[DocumentStem] = set()
+
+    inference_run_failed: bool = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # No batch results but documents were requested
+    batch_inference_results = []
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = set()
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # No successes in any batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[],
+            classifier_spec=q101_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = set()
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # Success in only some batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[],  # No success
+            classifier_spec=q100_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = set()
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # Only some documents successful in all batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[
+                DocumentStem("TEST.executive.1.1"),
+                DocumentStem("TEST.executive.1.2"),
+            ],
+            successful_document_stems=[
+                DocumentStem("TEST.executive.1.1"),
+                DocumentStem("TEST.executive.1.2"),
+            ],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[
+                DocumentStem("TEST.executive.1.1"),
+                DocumentStem("TEST.executive.1.2"),
+            ],
+            successful_document_stems=[
+                DocumentStem("TEST.executive.1.1")
+            ],  # No success for TEST.executive.1.2
+            classifier_spec=q101_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.1.2"),
+    }
+    successful_document_stems = {DocumentStem("TEST.executive.1.1")}
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # Success across all batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+            classifier_spec=q100_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = {DocumentStem("TEST.executive.1.1")}
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is False
