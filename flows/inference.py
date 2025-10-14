@@ -132,41 +132,6 @@ class BatchInferenceResult(BaseModel):
         return len(self.batch_document_stems) != len(self.successful_document_stems)
 
 
-class InferenceResult(BaseModel):
-    """Result from running inference on all batches of documents."""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    requested_document_stems: list[DocumentStem]
-    """List of document stems that were requested for inference processing.
-    
-    These represent the file names (without extensions) of documents that were 
-    intended to be processed, regardless of whether processing succeeded or failed.
-    """
-
-    classifier_specs: list[ClassifierSpec]
-    """List of classifier specifications that were used in this inference run.
-    
-    These define which classifiers (models) were intended to be used for processing
-    the documents, regardless of whether they succeeded or failed.
-    """
-
-    batch_inference_results: list[BatchInferenceResult] = []
-    """All the batches that made up this inference run."""
-
-    successful_classifier_specs: list[ClassifierSpec] = []
-    """List of classifier specifications that completed all processing successfully."""
-
-    failed_classifier_specs: list[ClassifierSpec] = []
-    """List of classifier specifications that failed for one or more document."""
-
-    successful_document_stems: set[DocumentStem]
-    """Set of document stems that were processed successfully."""
-
-    failed: bool
-    """Whether Inference failed; True equates to a failed run."""
-
-
 def did_inference_fail(
     batch_inference_results: list[BatchInferenceResult],
     requested_document_stems: set[DocumentStem],
@@ -1077,7 +1042,13 @@ async def store_metadata(
 
 async def store_inference_result(
     config: Config,
-    inference_result: InferenceResult,
+    successful_document_stems: set[DocumentStem],
+    requested_document_stems: list[DocumentStem],
+    classifier_specs: list[ClassifierSpec],
+    batch_inference_results: list[BatchInferenceResult],
+    successful_classifier_specs: list[ClassifierSpec],
+    failed_classifier_specs: list[ClassifierSpec],
+    failed: bool,
 ) -> None:
     """Store the inference result to S3 for later use."""
     logger = get_logger()
@@ -1094,7 +1065,24 @@ async def store_inference_result(
 
     run_output_identifier = build_run_output_identifier()
 
-    result_json = inference_result.model_dump_json()
+    # Create a dictionary with all the inference result data
+    result_data = {
+        "requested_document_stems": requested_document_stems,
+        "classifier_specs": [spec.model_dump() for spec in classifier_specs],
+        "batch_inference_results": [
+            result.model_dump() for result in batch_inference_results
+        ],
+        "successful_classifier_specs": [
+            spec.model_dump() for spec in successful_classifier_specs
+        ],
+        "failed_classifier_specs": [
+            spec.model_dump() for spec in failed_classifier_specs
+        ],
+        "successful_document_stems": list(successful_document_stems),
+        "failed": failed,
+    }
+
+    result_json = json.dumps(result_data)
 
     logger.debug(f"writing inference result: {len(result_json)} bytes")
 
@@ -1136,7 +1124,7 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> InferenceResult | Fault:
+) -> set[DocumentStem] | Fault:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -1263,19 +1251,12 @@ async def inference(
         successful_document_stems=successful_document_stems,
     )
 
-    inference_result = InferenceResult(
-        requested_document_stems=list(requested_document_stems),
-        classifier_specs=list(classifier_specs),
-        batch_inference_results=all_successes,
-        successful_classifier_specs=successful_classifier_specs,
-        failed_classifier_specs=failed_classifier_specs,
-        successful_document_stems=successful_document_stems,
-        failed=inference_run_failed,
-    )
-
     await create_inference_summary_artifact(
         config=config,
-        inference_result=inference_result,
+        requested_document_stems=list(requested_document_stems),
+        classifier_specs=list(classifier_specs),
+        successful_classifier_specs=successful_classifier_specs,
+        failed_classifier_specs=failed_classifier_specs,
         removal_details=removal_details,
     )
 
@@ -1283,18 +1264,24 @@ async def inference(
         if config.cache_bucket:
             await store_inference_result(
                 config=config,
-                inference_result=inference_result,
+                successful_document_stems=successful_document_stems,
+                requested_document_stems=list(requested_document_stems),
+                classifier_specs=list(classifier_specs),
+                batch_inference_results=all_successes,
+                successful_classifier_specs=successful_classifier_specs,
+                failed_classifier_specs=failed_classifier_specs,
+                failed=inference_run_failed,
             )
     except Exception as e:
         logger.error(f"Failed to store inference result: {e}")
 
-    if inference_result.failed:
+    if inference_run_failed:
         raise Fault(
             msg="Some inference batches had failures.",
             metadata={},
-            data=inference_result,
+            data=successful_document_stems,
         )
-    return inference_result
+    return successful_document_stems
 
 
 async def create_dont_run_on_docs_summary_artifact(
@@ -1322,7 +1309,10 @@ async def create_dont_run_on_docs_summary_artifact(
 
 async def create_inference_summary_artifact(
     config: Config,
-    inference_result: InferenceResult,
+    requested_document_stems: list[DocumentStem],
+    classifier_specs: list[ClassifierSpec],
+    successful_classifier_specs: list[ClassifierSpec],
+    failed_classifier_specs: list[ClassifierSpec],
     removal_details: dict[ClassifierSpec, int],
 ) -> None:
     """Create an artifact with a summary about the inference run."""
@@ -1332,10 +1322,10 @@ async def create_inference_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Total documents requested**: {len(inference_result.requested_document_stems)}
-- **Total classifiers**: {len(inference_result.classifier_specs)}
-- **Successful classifiers**: {len(inference_result.successful_classifier_specs)}
-- **Failed classifiers**: {len(inference_result.failed_classifier_specs)}
+- **Total documents requested**: {len(requested_document_stems)}
+- **Total classifiers**: {len(classifier_specs)}
+- **Successful classifiers**: {len(successful_classifier_specs)}
+- **Failed classifiers**: {len(failed_classifier_specs)}
 - **Classifiers with removals**: {len(removal_details)}
 """
     # Create classifier details table
@@ -1345,14 +1335,14 @@ async def create_inference_summary_artifact(
             "Filtered Out": removal_details[spec],
             "Status": "✓",
         }
-        for spec in inference_result.successful_classifier_specs
+        for spec in successful_classifier_specs
     ] + [
         {
             "Classifier": spec.wikibase_id,
             "Filtered Out": removal_details[spec],
             "Status": "✗",
         }
-        for spec in inference_result.failed_classifier_specs
+        for spec in failed_classifier_specs
     ]
 
     await acreate_table_artifact(

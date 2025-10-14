@@ -18,7 +18,6 @@ from prefect.states import Completed, Running
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
-    InferenceResult,
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
@@ -449,15 +448,9 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         mock_inference_run_deployment.assert_called_once()
 
-        assert type(inference_result) is InferenceResult
+        assert type(inference_result) is set
 
-        assert not inference_result.failed
-
-        assert inference_result.successful_document_stems == set(input_doc_ids)
-
-        assert inference_result.failed_classifier_specs == []
-
-        assert inference_result.classifier_specs == [expected_classifier_spec]
+        assert inference_result == set(input_doc_ids)
 
 
 @pytest.mark.asyncio
@@ -1495,16 +1488,6 @@ async def test_store_inference_result(
         classifier_spec=classifier_spec,
     )
 
-    inference_result = InferenceResult(
-        requested_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        classifier_specs=[classifier_spec],
-        batch_inference_results=[batch_result],
-        successful_classifier_specs=[classifier_spec],
-        failed_classifier_specs=[],
-        successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
-        failed=False,
-    )
-
     # Mock only the Prefect context, let moto handle S3
     with (
         patch("flows.inference.get_run_context", return_value=mock_context),
@@ -1515,7 +1498,13 @@ async def test_store_inference_result(
     ):
         await store_inference_result(
             config=test_config,
-            inference_result=inference_result,
+            successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
+            requested_document_stems=[DocumentStem("TEST.DOC.1.1")],
+            classifier_specs=[classifier_spec],
+            batch_inference_results=[batch_result],
+            successful_classifier_specs=[classifier_spec],
+            failed_classifier_specs=[],
+            failed=False,
         )
 
     expected_key = os.path.join(
@@ -1537,8 +1526,7 @@ async def test_store_inference_result(
     result_content = await response["Body"].read()
     result_dict = json.loads(result_content.decode("utf-8"))
 
-    loaded_result = InferenceResult.model_validate(result_dict)
-    assert loaded_result == snapshot
+    assert result_dict == snapshot
 
 
 def test_inference_result_collection_missing_results() -> None:
