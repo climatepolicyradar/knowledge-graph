@@ -1760,3 +1760,125 @@ def test_did_inference_fail() -> None:
         successful_document_stems=successful_document_stems,
     )
     assert inference_run_failed is False
+
+
+def test_gather_successful_document_stems() -> None:
+    """Test the gather_successful_document_stems function."""
+
+    # Setup: 5 documents, 2 classifiers, 2 batches
+    requested_document_stems = [
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.2.2"),
+        DocumentStem("TEST.executive.3.3"),
+        DocumentStem("TEST.executive.4.4"),
+        DocumentStem("TEST.executive.5.5"),
+    ]
+
+    q100_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v1",
+    )
+
+    q101_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q101"),
+        classifier_id="bbbb3333",
+        wandb_registry_version="v1",
+    )
+
+    parameterised_batches = [
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": requested_document_stems,
+                "config_json": {},
+                "classifier_spec_json": q100_classifier_spec.model_dump(),
+            },
+        ),
+        ParameterisedFlow(
+            fn=inference_batch_of_documents_cpu,
+            params={
+                "batch": requested_document_stems,
+                "config_json": {},
+                "classifier_spec_json": q101_classifier_spec.model_dump(),
+            },
+        ),
+    ]
+
+    # No results from any batches
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[],  # No results
+    )
+    assert successful_document_stems == set(), "No results should return an empty set"
+
+    # No documents successful for any batches
+    all_failed_batch_1 = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=[],  # No success
+        classifier_spec=q100_classifier_spec,
+    )
+    all_failed_batch_2 = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=[],  # No success
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[all_failed_batch_1, all_failed_batch_2],
+    )
+    assert successful_document_stems == set(), (
+        "All failures should return no successful documents"
+    )
+
+    # Only some batch results
+    q101_batch_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems,
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[q101_batch_success],  # No results for q100
+    )
+    assert successful_document_stems == set(), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+    # Not all documents successful for all batches
+    q100_batch_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems,
+        classifier_spec=q100_classifier_spec,
+    )
+    q101_batch_partial_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems[1:],  # Partial success
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[q100_batch_success, q101_batch_partial_success],
+    )
+    assert successful_document_stems == set(requested_document_stems[1:]), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+    # All documents successful for all batches
+    q100_batch_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems,
+        classifier_spec=q100_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[q100_batch_success, q101_batch_success],
+    )
+    assert successful_document_stems == set(requested_document_stems), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
