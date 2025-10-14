@@ -20,6 +20,8 @@ from typing import (
     NamedTuple,
     NewType,
     ParamSpec,
+    Set,
+    TypeAlias,
     TypeVar,
     overload,
 )
@@ -34,12 +36,16 @@ from prefect.artifacts import (
     update_progress_artifact,
 )
 from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.context import TaskRunContext, get_run_context
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
 from prefect_slack.credentials import SlackWebhook
 from pydantic import Field, PositiveInt, RootModel
+from types_aiobotocore_s3.client import S3Client
+from types_aiobotocore_s3.paginator import ListObjectsV2Paginator
+from types_aiobotocore_s3.type_defs import ListObjectsV2OutputTypeDef, ObjectTypeDef
 from typing_extensions import Self
 
 from knowledge_graph.cloud import (
@@ -66,6 +72,29 @@ DocumentStem = NewType("DocumentStem", str)
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
+
+# A unique identifier for the run output made from the run context
+RunOutputIdentifier: TypeAlias = str
+
+
+def build_run_output_identifier() -> RunOutputIdentifier:
+    """Builds an identifier from the start time and name of the flow run."""
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    if run_context.flow_run.start_time is None:
+        raise ValueError("flow run didn't have a start time.")
+
+    start_time = run_context.flow_run.start_time.replace(tzinfo=None).isoformat(
+        timespec="minutes"
+    )
+    run_name = run_context.flow_run.name
+    return f"{start_time}-{run_name}"
 
 
 def file_name_from_path(path: str) -> str:
@@ -303,27 +332,25 @@ def iterate_batch(
             yield batch
 
 
-async def s3_file_exists(bucket_name: str, file_key: str, bucket_region: str) -> bool:
+async def s3_file_exists(file_key: str, bucket_name: str, s3_client: S3Client) -> bool:
     """Check if a file exists in an S3 bucket."""
-    session = aioboto3.Session(region_name=bucket_region)
-    async with session.client("s3") as s3_client:
-        try:
-            await s3_client.head_object(Bucket=bucket_name, Key=file_key)
-            return True
-        except ClientError as e:
-            if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                "404",
-                "403",
-            ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                return False
-            raise
+    try:
+        await s3_client.head_object(Bucket=bucket_name, Key=file_key)
+        return True
+    except ClientError as e:
+        if e.response["Error"]["Code"] in [  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            "404",
+            "403",
+        ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            return False
+        raise
 
 
 async def get_file_stems_for_document_id(
     document_id: DocumentImportId,
     bucket_name: str,
     document_key: str,
-    bucket_region: str,
+    s3_client: S3Client,
 ) -> list[DocumentStem]:
     """
     Get the file stems for a document ID.
@@ -347,9 +374,9 @@ async def get_file_stems_for_document_id(
         )
 
         if await s3_file_exists(
-            bucket_name=bucket_name,
             file_key=translated_file_key.__str__(),
-            bucket_region=bucket_region,
+            bucket_name=bucket_name,
+            s3_client=s3_client,
         ):
             stems.append(translated_file_key.stem)
 
@@ -363,17 +390,42 @@ async def collect_unique_file_stems_under_prefix(
     bucket_name: str,
     prefix: str,
     bucket_region: str,
+    disallow: Set[str] | None = None,
 ) -> list[DocumentStem]:
     """Collect all unique file stems under a prefix."""
-
+    logger = get_logger()
     session = aioboto3.Session(region_name=bucket_region)
     async with session.client("s3") as s3:
-        paginator = s3.get_paginator("list_objects_v2")
-        file_stems = []
+        paginator: ListObjectsV2Paginator = s3.get_paginator("list_objects_v2")
+        file_stems: list[DocumentStem] = []
+        page: ListObjectsV2OutputTypeDef
         async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-            for obj in page.get("Contents", []):
-                if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                    file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            if "Contents" not in page:
+                logger.debug("`Contents` wasn't found in page")
+                continue
+
+            obj: ObjectTypeDef
+            for obj in page["Contents"]:
+                if "Key" not in obj:
+                    logger.debug("`Key` wasn't found in object")
+                    continue
+
+                path = Path(obj["Key"])
+                filename = path.name
+
+                if disallow and filename in disallow:
+                    logger.debug(
+                        f"filename wasn't allowed: `{filename}` was in `{','.join(disallow)}`"
+                    )
+                    continue
+
+                if path.suffix.lower() != ".json":
+                    logger.debug(
+                        f"filename didn't end with a JSON file extension: `{filename}`"
+                    )
+                    continue
+
+                file_stems.append(DocumentStem(path.stem))
     return list(set(file_stems))
 
 

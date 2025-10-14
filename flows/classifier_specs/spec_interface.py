@@ -60,9 +60,9 @@ class ClassifierSpec(BaseModel):
             "The unique identifier for the classifier, built from its internals."
         ),
     )
-    classifiers_profiles: Sequence[ClassifierProfileName] | None = Field(
+    classifiers_profile: ClassifierProfileName | None = Field(
         default=None,
-        description=("The classifiers profiles to use it in."),
+        description=("The classifiers profile to use it in."),
     )
     wandb_registry_version: Version = Field(
         description=("The version of the classifier in wandb registry. e.g. v1"),
@@ -92,7 +92,7 @@ class ClassifierSpec(BaseModel):
 
 def determine_spec_file_path(aws_env: AwsEnv) -> Path:
     """Determine the path to the spec file for a given AWS environment."""
-    return SPEC_DIR / f"{aws_env}.yaml"
+    return SPEC_DIR / f"{aws_env.name}.yaml"
 
 
 def load_classifier_specs(
@@ -124,7 +124,7 @@ def should_skip_doc(stem: DocumentStem, spec: ClassifierSpec) -> bool:
     """
     Compares a document to the classifier spec for filtering out.
 
-    If the source (i.e. the first part of the id), is in the dont_tun_on field, this
+    If the source (i.e. the first part of the id), is in the dont_run_on field, this
     will return true to recommend filtering out.
     """
     source = stem.split(".")[0]

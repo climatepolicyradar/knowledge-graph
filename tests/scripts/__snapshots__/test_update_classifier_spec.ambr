@@ -1,0 +1,32 @@
+# serializer version: 1
+# name: test_refresh_all_available_classifiers
+  '''
+  ---
+  - wikibase_id: Q111
+    concept_id: du5mvcjb
+    classifier_id: abcd2345
+    wandb_registry_version: v1
+  - wikibase_id: Q222
+    classifier_id: 2345abcd
+    classifiers_profile: primary
+    wandb_registry_version: v1
+    compute_environment:
+      gpu: true
+    dont_run_on:
+    - sabin
+  - wikibase_id: Q222
+    classifier_id: 2345abcd
+    classifiers_profile: experimental
+    wandb_registry_version: v1
+    compute_environment:
+      gpu: true
+    dont_run_on:
+    - sabin
+  - wikibase_id: Q333
+    concept_id: uv549rv5
+    classifier_id: p7g69v2z
+    classifiers_profile: primary
+    wandb_registry_version: v1
+  
+  '''
+# ---

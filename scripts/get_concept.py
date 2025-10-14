@@ -1,6 +1,8 @@
+import asyncio
 from typing import Annotated, Optional
 
 import typer
+from pydantic import SecretStr
 from rich.console import Console
 
 from knowledge_graph.concept import Concept
@@ -41,7 +43,11 @@ async def get_concept_async(
         include_labels_from_subconcepts=include_labels_from_subconcepts,
     )
     # To handle redirects where the wikibase_id is overwritten
-    concept.wikibase_id = wikibase_id
+    if concept.wikibase_id != wikibase_id:
+        raise typer.BadParameter(
+            f"{wikibase_id} is a redirect to {concept.wikibase_id}, run with "
+            f"{concept.wikibase_id} instead."
+        )
     # Ensure concept data can be serialised and rebuilt without failing validations
     concept.model_validate_json(concept.model_dump_json())
 
@@ -69,8 +75,17 @@ async def get_concept_async(
     return concept
 
 
+def parse_wikibase_config(value) -> Optional[WikibaseConfig]:
+    url, username, password = value.split()
+    return WikibaseConfig(
+        url=url,
+        username=username,
+        password=SecretStr(password),
+    )
+
+
 @app.command()
-async def main(
+def main(
     wikibase_id: Annotated[
         WikibaseID,
         typer.Option(
@@ -79,13 +94,25 @@ async def main(
     ],
     include_recursive_has_subconcept: bool = True,
     include_labels_from_subconcepts=True,
-    wikibase_config: Optional[WikibaseConfig] = None,
+    wikibase_config: Annotated[
+        Optional[WikibaseConfig],
+        typer.Option(
+            ...,
+            parser=parse_wikibase_config,
+            help=(
+                "Optional override of env variables for wikibase (username, "
+                "password, url)"
+            ),
+        ),
+    ] = None,
 ):
-    concept = await get_concept_async(
-        wikibase_id=wikibase_id,
-        include_recursive_has_subconcept=include_recursive_has_subconcept,
-        include_labels_from_subconcepts=include_labels_from_subconcepts,
-        wikibase_config=wikibase_config,
+    concept = asyncio.run(
+        get_concept_async(
+            wikibase_id=wikibase_id,
+            include_recursive_has_subconcept=include_recursive_has_subconcept,
+            include_labels_from_subconcepts=include_labels_from_subconcepts,
+            wikibase_config=wikibase_config,
+        )
     )
 
     return concept

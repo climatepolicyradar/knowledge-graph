@@ -13,6 +13,7 @@ from knowledge_graph.classifier import ModelPath
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.version import get_latest_model_version
 from scripts.update_classifier_spec import refresh_all_available_classifiers
 
 log = logging.getLogger(__name__)
@@ -144,7 +145,12 @@ def update(
     ```
     """
     model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
-    artifact_id = f"{model_path}:{aws_env.value}"
+
+    api = wandb.Api()
+    artifacts = api.artifacts(type_name="model", name=f"{model_path}")
+    classifier_version = get_latest_model_version(artifacts, aws_env)
+
+    artifact_id = f"{model_path}:{classifier_version}"
 
     with wandb.init(entity=WANDB_ENTITY, project=wikibase_id, job_type=JOB_TYPE) as run:
         artifact: wandb.Artifact = run.use_artifact(artifact_id)

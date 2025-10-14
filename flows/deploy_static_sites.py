@@ -58,6 +58,7 @@ def setup_environment():
 def generate_static_site(app_name: str):
     """Generate the static site by running the generator module directly."""
     print(f"Generating static site for {app_name}...")
+
     module = importlib.import_module(f"static_sites.{app_name}.__main__")
     module.main()
     print(f"Static site generation complete for {app_name}.")

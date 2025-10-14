@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from collections import defaultdict
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -9,6 +10,7 @@ from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
 import wandb
+from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from mypy_boto3_s3.type_defs import (
@@ -17,11 +19,18 @@ from mypy_boto3_s3.type_defs import (
 )
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
+from prefect.client.schemas import FlowRun
 from prefect.concurrency.asyncio import concurrency
-from prefect.context import FlowRunContext, get_run_context
+from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, ConfigDict, PositiveInt, SecretStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PositiveInt,
+    SecretStr,
+    ValidationError,
+)
 from types_aiobotocore_s3.client import S3Client
 from wandb.sdk.wandb_run import Run
 
@@ -39,8 +48,10 @@ from flows.utils import (
     JsonDict,
     ParameterisedFlow,
     Profiler,
+    RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_run_output_identifier,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
     get_logger,
@@ -69,6 +80,8 @@ CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 AWS_ENV: str = os.environ["AWS_ENV"]
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
+
+METADATA_FILE_NAME = "metadata.json"
 
 DocumentRunIdentifier: TypeAlias = tuple[str, str, str]
 FilterResult = NamedTuple(
@@ -147,32 +160,92 @@ class InferenceResult(BaseModel):
     failed_classifier_specs: list[ClassifierSpec] = []
     """List of classifier specifications that failed for one or more document."""
 
-    @property
-    def failed(self) -> bool:
-        """Whether the inference failed."""
-        if not self.batch_inference_results:
-            return True
-        else:
-            return any([result.failed for result in self.batch_inference_results])
+    successful_document_stems: set[DocumentStem]
+    """Set of document stems that were processed successfully."""
 
-    @property
-    def successful_document_stems(self) -> set[DocumentStem]:
-        """
-        The documents that succeeded within every batch they where sent to.
+    failed: bool
+    """Whether Inference failed; True equates to a failed run."""
 
-        This means removing any that had a failure in any batch.
-        """
-        cross_batch_failures = set()
-        cross_batch_successes = set()
 
-        for batch_result in self.batch_inference_results:
-            cross_batch_failures = cross_batch_failures.union(
-                batch_result.failed_document_stems
+def did_inference_fail(
+    batch_inference_results: list[BatchInferenceResult],
+    requested_document_stems: set[DocumentStem],
+    successful_document_stems: set[DocumentStem],
+) -> bool:
+    """
+    Whether the Inference run failed.
+
+    True equates to a failed run.
+    """
+
+    # Check if no batch results
+    if not batch_inference_results:
+        return True
+
+    # Check if any batch failed
+    if any(result.failed for result in batch_inference_results):
+        return True
+
+    # Check if document counts don't match
+    if len(requested_document_stems) != len(successful_document_stems):
+        return True
+
+    return False
+
+
+def gather_successful_document_stems(
+    parameterised_batches: list[ParameterisedFlow],
+    requested_document_stems: set[DocumentStem],
+    batch_inference_results: list[BatchInferenceResult],
+) -> set[DocumentStem]:
+    """
+    The documents that succeeded for every classifier they were expected to run on.
+
+    This means removing any that had a failure in any batch or no results.
+
+    The parameterised batches contain the details of which documents were expected
+    to be processed by each classifier. We use this therefore to determine explicitly
+    whether we have a successful result from the BatchInferenceResults for a given
+    classifier.
+    """
+
+    # Collect the successful document stems for each classifier.
+    successes_by_classifier: dict[ClassifierSpec, set[DocumentStem]] = defaultdict(set)
+    for batch_inference_result in batch_inference_results:
+        successes_by_classifier[batch_inference_result.classifier_spec].update(
+            batch_inference_result.successful_document_stems
+        )
+
+    # Collect the unsuccessful document stems where an expected success for a classifier
+    #  was not found.
+    failed_document_stems: set[DocumentStem] = set()
+    for parameterised_batch in parameterised_batches:
+        classifier_spec_json = parameterised_batch.params.get("classifier_spec_json")
+        if classifier_spec_json is None:
+            raise KeyError(
+                f"'classifier_spec_json' not found in parameterised batch: {parameterised_batch.params}"
             )
-            cross_batch_successes = cross_batch_successes.union(
-                batch_result.successful_document_stems
+
+        batch_document_stems = parameterised_batch.params.get("batch")
+        if batch_document_stems is None:
+            raise KeyError(
+                f"'batch' not found in parameterised batch: {parameterised_batch.params}"
             )
-        return cross_batch_successes - cross_batch_failures
+
+        classifier_spec = ClassifierSpec(**classifier_spec_json)
+        classifier_successful_document_stems: set[DocumentStem] = (
+            successes_by_classifier[classifier_spec]
+        )
+
+        failed_document_stems.update(
+            set(batch_document_stems) - classifier_successful_document_stems
+        )
+
+    # Collect the successful document stems as the sum of the expected document stems
+    #   minus the unsuccessful document stems.
+    successful_documents = requested_document_stems - failed_document_stems
+
+    return successful_documents
 
 
 async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
@@ -295,13 +368,16 @@ async def determine_file_stems(
     assert config.cache_bucket
 
     requested_document_stems = []
-    for doc_id in requested_document_ids:
-        document_key = os.path.join(
-            config.inference_document_source_prefix, f"{doc_id}.json"
-        )
-        requested_document_stems += await get_file_stems_for_document_id(
-            doc_id, config.cache_bucket, document_key, config.bucket_region
-        )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        for doc_id in requested_document_ids:
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
+            )
+            requested_document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
 
     missing_from_bucket = list(
         set(requested_document_stems) - set(current_bucket_file_stems)
@@ -792,9 +868,14 @@ async def _inference_batch_of_documents(
     classifier = await load_classifier(run, config, classifier_spec)
 
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
+    boto_config = AioConfig(
+        max_pool_connections=(
+            config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
+        ),
+        read_timeout=config.s3_read_timeout,
+    )
     session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
+    async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
                 semaphore,
@@ -932,6 +1013,118 @@ def filter_document_batch(
     return FilterResult(removed=removed_file_stems, accepted=accepted_file_stems)
 
 
+class Metadata(BaseModel):
+    """Lineage information for this inference run."""
+
+    flow_run: FlowRun
+    run_output_identifier: RunOutputIdentifier
+    classifier_specs: list[ClassifierSpec]
+    config: Config
+
+
+async def store_metadata(
+    config: Config,
+    classifier_specs: list[ClassifierSpec],
+) -> None:
+    logger = get_logger()
+
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    run_output_identifier = build_run_output_identifier()
+
+    metadata = Metadata(
+        flow_run=run_context.flow_run,
+        run_output_identifier=run_output_identifier,
+        classifier_specs=classifier_specs,
+        config=config,
+    )
+
+    metadata_json = metadata.model_dump_json()
+
+    logger.debug(f"writing metadata: {metadata_json}")
+
+    s3_uri = S3Uri(
+        bucket=config.cache_bucket_str,
+        key=os.path.join(
+            config.inference_document_target_prefix,
+            run_output_identifier,
+            METADATA_FILE_NAME,
+        ),
+    )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        response: PutObjectOutputTypeDef = await s3_client.put_object(
+            Bucket=s3_uri.bucket,
+            Key=s3_uri.key,
+            Body=metadata_json,
+            ContentType="application/json",
+        )
+
+        status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+        if status_code != 200:
+            raise ValueError(
+                f"failed to store metadata to S3. Status code: {status_code}"
+            )
+
+    logger.debug(f"wrote metadata to {s3_uri}")
+
+
+async def store_inference_result(
+    config: Config,
+    inference_result: InferenceResult,
+) -> None:
+    """Store the inference result to S3 for later use."""
+    logger = get_logger()
+
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    if run_context.flow_run.start_time is None:
+        raise ValueError("flow run didn't have a start time")
+
+    run_output_identifier = build_run_output_identifier()
+
+    result_json = inference_result.model_dump_json()
+
+    logger.debug(f"writing inference result: {len(result_json)} bytes")
+
+    s3_uri = S3Uri(
+        bucket=config.cache_bucket_str,
+        key=os.path.join(
+            config.inference_document_target_prefix,
+            run_output_identifier,
+            "results.json",
+        ),
+    )
+
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        response: PutObjectOutputTypeDef = await s3_client.put_object(
+            Bucket=s3_uri.bucket,
+            Key=s3_uri.key,
+            Body=result_json,
+            ContentType="application/json",
+        )
+
+        status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+        if status_code != 200:
+            raise ValueError(
+                f"Failed to store inference result to S3. Status code: {status_code}"
+            )
+
+    logger.debug(f"wrote inference result to {s3_uri}")
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -977,6 +1170,15 @@ async def inference(
 
     disallow_latest_alias(classifier_specs)
 
+    try:
+        if config.cache_bucket:
+            await store_metadata(
+                config=config,
+                classifier_specs=list(classifier_specs),
+            )
+    except Exception as e:
+        logger.error(f"Failed to store metadata: {e}")
+
     logger.info(
         f"Running with {len(validated_file_stems)} documents and "
         f"{len(classifier_specs)} classifiers"
@@ -993,11 +1195,13 @@ async def inference(
         }
 
     # Prepare document batches based on classifier specs
+    requested_document_stems: set[DocumentStem] = set()
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
+        requested_document_stems.update(filter_result.accepted)
         removal_details[classifier_spec] = len(filter_result.removed)
 
         for document_batch in iterate_batch(filter_result.accepted, batch_size):
@@ -1048,12 +1252,25 @@ async def inference(
         else:
             failed_classifier_specs.append(spec)
 
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=requested_document_stems,
+        batch_inference_results=all_successes,
+    )
+    inference_run_failed: bool = did_inference_fail(
+        batch_inference_results=all_successes,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+
     inference_result = InferenceResult(
-        requested_document_stems=list(validated_file_stems),
+        requested_document_stems=list(requested_document_stems),
         classifier_specs=list(classifier_specs),
         batch_inference_results=all_successes,
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
+        successful_document_stems=successful_document_stems,
+        failed=inference_run_failed,
     )
 
     await create_inference_summary_artifact(
@@ -1061,6 +1278,15 @@ async def inference(
         inference_result=inference_result,
         removal_details=removal_details,
     )
+
+    try:
+        if config.cache_bucket:
+            await store_inference_result(
+                config=config,
+                inference_result=inference_result,
+            )
+    except Exception as e:
+        logger.error(f"Failed to store inference result: {e}")
 
     if inference_result.failed:
         raise Fault(
