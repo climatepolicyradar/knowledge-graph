@@ -3,10 +3,11 @@ import json
 import os
 from collections import defaultdict
 from collections.abc import Generator, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, NamedTuple, Optional, TypeAlias
+from typing import Any, AsyncGenerator, Final, NamedTuple, Optional, TypeAlias
 
 import aioboto3
 import wandb
@@ -88,6 +89,28 @@ FilterResult = NamedTuple(
     "FilterResult",
     [("removed", Sequence[DocumentStem]), ("accepted", Sequence[DocumentStem])],
 )
+
+
+@asynccontextmanager
+async def get_s3_client(config: Config) -> AsyncGenerator[S3Client, None]:
+    """
+    Create a fresh S3 client for each operation.
+
+    This avoids session sharing issues and credential refresh conflicts
+    by creating a new session and client for each context. Each operation
+    gets its own session, preventing:
+    - Credential refresh race conditions
+    - Event loop binding issues
+    - Connection pool exhaustion
+    """
+    boto_config = AioConfig(
+        max_pool_connections=(config.s3_concurrency_limit * 2),
+        read_timeout=config.s3_read_timeout,
+        retries={"max_attempts": 3, "mode": "adaptive"},
+    )
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3", config=boto_config) as s3_client:
+        yield s3_client
 
 
 class BatchInferenceResult(BaseModel):
@@ -563,65 +586,11 @@ async def labels_to_s3(
         Body=body,
         ContentType="application/json",
     )
-
+    if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+        raise ValueError(
+            f"labels_to_s3 failed for {inference.document_stem}: {str(response)}"
+        )
     return response
-
-
-async def store_labels(
-    config: Config,
-    inferences: Sequence[SingleDocumentInferenceResult],
-) -> tuple[
-    list[SingleDocumentInferenceResult],
-    list[tuple[DocumentStem, Exception]],
-    list[BaseException],
-]:
-    """Store the labels in the cache bucket."""
-    logger = get_logger()
-
-    # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with(
-                    inference,
-                    labels_to_s3(config, inference, s3_client),
-                ),
-            )
-            for inference in inferences
-        ]
-
-        results: list[
-            tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
-            | BaseException
-        ] = await asyncio.gather(*tasks, return_exceptions=True)
-
-    successes: list[SingleDocumentInferenceResult] = []
-    failures: list[tuple[DocumentStem, Exception]] = []
-    # We really don't expect these, since there's a try/catch handler
-    # in `return_with_id`. It is technically possible though, for
-    # there to be what I'm calling here an _unknown_ failure.
-    unknown_failures: list[BaseException] = []
-    for result in results:
-        if isinstance(result, BaseException):
-            unknown_failures.append(result)
-        else:
-            inference, value = result
-            if isinstance(value, Exception):
-                logger.error(
-                    f"Failed to store label for {inference.document_stem}: {value}"
-                )
-                failures.append((inference.document_stem, value))
-            else:
-                if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                    successes.append(inference)
-                else:
-                    failures.append((inference.document_stem, ValueError(str(value))))
-
-    return successes, failures, unknown_failures
 
 
 def batch_text_block_inference(
@@ -728,52 +697,57 @@ async def run_classifier_inference_on_document(
     config: Config,
     file_stem: DocumentStem,
     classifier: Classifier,
-    s3_client: S3Client,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    document = await load_document(config, file_stem, s3_client)
+    # Use a single session for all S3 operations in this document processing task
+    async with get_s3_client(config) as s3_client:
+        # Load document
+        document = await load_document(config, file_stem, s3_client)
 
-    # Resolve typing issue as wikibase_id is optional (though required here)
-    assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
+        # Resolve typing issue as wikibase_id is optional (though required here)
+        assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
 
-    # Don't run inference on documents that have no text or languages as well as HTML
-    # documents with no valid text.
-    no_text_and_no_languages: bool = (
-        not document.languages
-        and document.pdf_data is None
-        and document.html_data is None
-    )
-    html_and_invalid_text: bool = (
-        document.html_data is not None and not document.html_data.has_valid_text
-    )
-    if no_text_and_no_languages or html_and_invalid_text:
-        return SingleDocumentInferenceResult(
-            labelled_passages=[],
+        # Don't run inference on documents that have no text or languages as well as HTML
+        # documents with no valid text.
+        no_text_and_no_languages: bool = (
+            not document.languages
+            and document.pdf_data is None
+            and document.html_data is None
+        )
+        html_and_invalid_text: bool = (
+            document.html_data is not None and not document.html_data.has_valid_text
+        )
+        if no_text_and_no_languages or html_and_invalid_text:
+            return SingleDocumentInferenceResult(
+                labelled_passages=[],
+                document_stem=file_stem,
+                wikibase_id=classifier.concept.wikibase_id,
+                classifier_id=classifier.id,
+            )
+
+        # Raise on non-English documents
+        if document.languages != ["en"]:
+            raise ValueError(
+                f"Cannot run inference on {file_stem} as it has non-English language: "
+                f"{document.languages}"
+            )
+
+        doc_labels: list[LabelledPassage] = []
+        for text, block_id in document_passages(document):
+            labelled_passages = text_block_inference(
+                classifier=classifier, block_id=block_id, text=text
+            )
+            doc_labels.append(labelled_passages)
+        inference = SingleDocumentInferenceResult(
+            labelled_passages=doc_labels,
             document_stem=file_stem,
             wikibase_id=classifier.concept.wikibase_id,
             classifier_id=classifier.id,
         )
 
-    # Raise on non-English documents
-    if document.languages != ["en"]:
-        raise ValueError(
-            f"Cannot run inference on {file_stem} as it has non-English language: "
-            f"{document.languages}"
-        )
+        await labels_to_s3(config, inference, s3_client)
 
-    doc_labels: list[LabelledPassage] = []
-    for text, block_id in document_passages(document):
-        labelled_passages = text_block_inference(
-            classifier=classifier, block_id=block_id, text=text
-        )
-        doc_labels.append(labelled_passages)
-
-    return SingleDocumentInferenceResult(
-        labelled_passages=doc_labels,
-        document_stem=file_stem,
-        wikibase_id=classifier.concept.wikibase_id,
-        classifier_id=classifier.id,
-    )
+        return inference
 
 
 async def create_inference_on_batch_summary_artifact(
@@ -868,68 +842,41 @@ async def _inference_batch_of_documents(
     classifier = await load_classifier(run, config, classifier_spec)
 
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-    boto_config = AioConfig(
-        max_pool_connections=(
-            config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
-        ),
-        read_timeout=config.s3_read_timeout,
-    )
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3", config=boto_config) as s3_client:
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with(
-                    file_stem,
-                    run_classifier_inference_on_document(
-                        config=config,
-                        file_stem=file_stem,
-                        classifier=classifier,
-                        s3_client=s3_client,
-                    ),
+    tasks = [
+        wait_for_semaphore(
+            semaphore,
+            return_with(
+                file_stem,
+                run_classifier_inference_on_document(
+                    config=config,
+                    file_stem=file_stem,
+                    classifier=classifier,
                 ),
-            )
-            for file_stem in batch
-        ]
+            ),
+        )
+        for file_stem in batch
+    ]
 
-        results: list[
-            tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
-            | BaseException
-        ] = await asyncio.gather(*tasks, return_exceptions=True)
+    results: list[
+        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
+    ] = await asyncio.gather(*tasks, return_exceptions=True)
 
-    inferences_successes: list[SingleDocumentInferenceResult] = []
-    inferences_failures: list[tuple[DocumentStem, Exception]] = []
+    successes: list[SingleDocumentInferenceResult] = []
+    failures: list[tuple[DocumentStem, Exception]] = []
     # We really don't expect these, since there's a try/catch handler
     # in `return_with_id`. It is technically possible though, for
     # there to be what I'm calling here an _unknown_ failure.
-    inferences_unknown_failures: list[BaseException] = []
+    unknown_failures: list[BaseException] = []
     for result in results:
         if isinstance(result, BaseException):
-            inferences_unknown_failures.append(result)
+            unknown_failures.append(result)
         else:
             document_stem, value = result
             if isinstance(value, Exception):
                 logger.error(f"Failed to process document {document_stem}: {value}")
-                inferences_failures.append((document_stem, value))
+                failures.append((document_stem, value))
             else:
-                inferences_successes.append(value)
-
-    (
-        store_labels_successes,
-        store_labels_failures,
-        store_labels_unknown_failures,
-    ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-        config=config, inferences=inferences_successes
-    )
-
-    # This doesn't need to be combined since successes are funnelled
-    # through all steps.
-    #
-    # Failures are possibly reduced at each step.
-    all_successes = store_labels_successes
-    # Combine the multiple places that have reports
-    all_failures = inferences_failures + store_labels_failures
-    all_unknown_failures = inferences_unknown_failures + store_labels_unknown_failures
+                successes.append(value)
 
     # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
     try:
@@ -943,15 +890,15 @@ async def _inference_batch_of_documents(
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
-        all_successes,
-        all_failures,
-        all_unknown_failures,
+        successes,
+        failures,
+        unknown_failures,
         flow_run_name,
     )
 
     batch_inference_result = BatchInferenceResult(
         batch_document_stems=batch,
-        successful_document_stems=[i.document_stem for i in store_labels_successes],
+        successful_document_stems=[i.document_stem for i in successes],
         classifier_spec=classifier_spec,
     )
 
