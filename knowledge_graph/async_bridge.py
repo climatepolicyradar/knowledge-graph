@@ -9,7 +9,7 @@ T = TypeVar("T")
 _thread_state = threading.local()
 
 
-def _get_persistent_loop() -> asyncio.AbstractEventLoop:
+def get_persistent_loop() -> asyncio.AbstractEventLoop:
     """
     Return a persistent event loop bound to the current thread.
 
@@ -23,11 +23,11 @@ def _get_persistent_loop() -> asyncio.AbstractEventLoop:
     if loop is None or loop.is_closed():
         loop = asyncio.new_event_loop()
         _thread_state.loop = loop
-        atexit.register(_shutdown_loop, loop)
+        atexit.register(shutdown_loop, loop)
     return loop
 
 
-def _shutdown_loop(loop: asyncio.AbstractEventLoop) -> None:
+def shutdown_loop(loop: asyncio.AbstractEventLoop) -> None:
     """
     Cleanly shut down the persistent thread-local event loop at process exit.
 
@@ -91,7 +91,7 @@ def async_to_sync(
             # Not in a running loop in this thread → OK to use our persistent loop
             pass
 
-        loop = _get_persistent_loop()
+        loop = get_persistent_loop()
         return loop.run_until_complete(async_func(self, *args, **kwargs))
 
     return cast(Callable[..., T], wrapper)
