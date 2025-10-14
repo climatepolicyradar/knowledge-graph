@@ -115,6 +115,11 @@ def main(
         model: wandb.Artifact = run.use_artifact(artifact_id)
 
         # validate tag exists
+        if model.tags is None or aws_env.value not in model.tags:
+            raise typer.BadParameter(
+                f"Model {artifact_id} does not contain tag: {aws_env.value}"
+            )
+        # validate model trained for this aws env
         if model.metadata.get("aws_env") != aws_env.value:
             raise typer.BadParameter(
                 f"Model {artifact_id} is not promoted in AWS environment {aws_env.value}"
