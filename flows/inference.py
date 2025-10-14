@@ -132,6 +132,37 @@ class BatchInferenceResult(BaseModel):
         return len(self.batch_document_stems) != len(self.successful_document_stems)
 
 
+def get_inference_fault_metadata(
+    all_successes: list[BatchInferenceResult],
+    all_raw_failures: list[BaseException | FlowRun],
+    requested_document_stems: set[DocumentStem],
+) -> dict[str, list[str] | set[DocumentStem]]:
+    """Construct the metadata object to give context to an Inference failure."""
+
+    all_raw_failures_as_strings: list[str] = []
+    for result in all_raw_failures:
+        if isinstance(result, FlowRun):
+            all_raw_failures_as_strings.append(result.model_dump_json())
+        elif isinstance(result, BaseException):
+            all_raw_failures_as_strings.append(result.__repr__())
+        else:
+            all_raw_failures_as_strings.append(result)
+
+    all_successes_as_strings: list[str] = [
+        result.model_dump_json() for result in all_successes
+    ]
+
+    requested_document_stems_as_strings: list[str] = [
+        str(document_stem) for document_stem in requested_document_stems
+    ]
+
+    return {
+        "all_successes": all_successes_as_strings,
+        "all_raw_failures": all_raw_failures_as_strings,
+        "requested_document_stems": requested_document_stems_as_strings,
+    }
+
+
 def did_inference_fail(
     batch_inference_results: list[BatchInferenceResult],
     requested_document_stems: set[DocumentStem],
@@ -1250,9 +1281,19 @@ async def inference(
         logger.error(f"Failed to store inference result: {e}")
 
     if inference_run_failed:
+        try:
+            metadata_json: dict[str, Any] = get_inference_fault_metadata(
+                all_successes=all_successes,
+                all_raw_failures=all_raw_failures,
+                requested_document_stems=requested_document_stems,
+            )
+        except Exception as e:
+            logger.error(f"Failed to get inference fault metadata: {e}")
+            metadata_json = {}
+
         raise Fault(
             msg="Some inference batches had failures.",
-            metadata={},
+            metadata=metadata_json,
             data=successful_document_stems,
         )
     return successful_document_stems

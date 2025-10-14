@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,6 +31,7 @@ from flows.inference import (
     document_passages,
     filter_document_batch,
     gather_successful_document_stems,
+    get_inference_fault_metadata,
     get_latest_ingest_documents,
     inference,
     inference_batch_of_documents_cpu,
@@ -1583,3 +1585,41 @@ def test_inference_result_collection_missing_results() -> None:
     assert successful_document_stems == set(), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+
+
+def test_get_inference_fault_metadata() -> None:
+    """Test the get_inference_fault_metadata function."""
+
+    metadata_json: dict[str, Any] = get_inference_fault_metadata(
+        all_successes=[
+            BatchInferenceResult(
+                batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+                successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+                classifier_spec=ClassifierSpec(
+                    wikibase_id=WikibaseID("Q100"),
+                    classifier_id=ClassifierID("aaaa2222"),
+                    wandb_registry_version="v1",
+                ),
+            ),
+        ],
+        all_raw_failures=[
+            FlowRun(
+                id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+                flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+                name="test-flow-run",
+                state=Completed(),
+            ),
+            BaseException(),
+        ],
+        requested_document_stems=set([DocumentStem("TEST.executive.1.1")]),
+    )
+
+    assert metadata_json.keys() == {
+        "all_successes",
+        "all_raw_failures",
+        "requested_document_stems",
+    }
+
+    # Assert that we can dump the result to a string as this is a requirement of the
+    # fault metadata.
+    json.dumps(metadata_json)
