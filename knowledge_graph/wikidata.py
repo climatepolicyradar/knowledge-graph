@@ -409,3 +409,97 @@ class WikidataSession:
         :return list[Concept]: A list of concepts
         """
         return await self._get_concepts_async(entity_ids, limit)
+
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+    )
+    async def search_concepts_async(
+        self,
+        search_term: str,
+        limit: Optional[int] = None,
+        language: str = "en",
+        entity_type: str = "item",
+    ) -> list[Concept]:
+        """
+        Search for concepts using the Wikidata MediaWiki API.
+
+        :param str search_term: The search term to query for
+        :param Optional[int] limit: Maximum number of results to return
+        :param str language: Language code for search results (default: "en")
+        :param str entity_type: Type of entity to search ("item" or "property")
+        :return list[Concept]: A list of matching concepts
+        """
+        client = await self._get_client()
+
+        # Use semaphore to limit concurrent requests
+        assert self._semaphore is not None, "Semaphore should be initialized"
+        async with self._semaphore:
+            try:
+                # Use the MediaWiki API search endpoint
+                # Map entity_type to the correct API parameter
+                api_type = "item" if entity_type == "item" else "property"
+
+                response = await client.get(
+                    self.api_url,
+                    params={
+                        "action": "wbsearchentities",
+                        "search": search_term,
+                        "language": language,
+                        "limit": limit or 50,
+                        "type": api_type,
+                        "format": "json",
+                    },
+                    timeout=self.DEFAULT_TIMEOUT,
+                )
+                response.raise_for_status()
+
+                search_results = response.json()
+
+                # Extract entity IDs from search results
+                entity_ids = []
+                for result in search_results.get("search", []):
+                    if entity_id := result.get("id"):
+                        entity_ids.append(WikibaseID(entity_id))
+
+                if not entity_ids:
+                    return []
+
+                # Fetch full concept details for the found entities
+                concepts = await self._get_concepts_async(entity_ids, limit)
+
+                # Small delay to be gentle on the server
+                await asyncio.sleep(self.REQUEST_DELAY_SECONDS)
+
+                return concepts
+
+            except httpx.HTTPError as e:
+                logger.error(
+                    "HTTP error during concept search for '%s': %s", search_term, e
+                )
+                raise
+            except Exception as e:
+                logger.error("Error during concept search for '%s': %s", search_term, e)
+                raise
+
+    @async_to_sync
+    async def search_concepts(
+        self,
+        search_term: str,
+        limit: Optional[int] = None,
+        language: str = "en",
+        entity_type: str = "item",
+    ) -> list[Concept]:
+        """
+        Search for concepts using the Wikidata MediaWiki API.
+
+        :param str search_term: The search term to query for
+        :param Optional[int] limit: Maximum number of results to return
+        :param str language: Language code for search results (default: "en")
+        :param str entity_type: Type of entity to search ("item" or "property")
+        :return list[Concept]: A list of matching concepts
+        """
+        return await self.search_concepts_async(
+            search_term, limit, language, entity_type
+        )
