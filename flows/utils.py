@@ -623,6 +623,51 @@ class ParameterisedFlow(NamedTuple, Generic[P, R]):
     params: dict[str, Any]
 
 
+async def map_as_local(
+    counter: PositiveInt,
+    parameterised_batches: Sequence[ParameterisedFlow[P, R]],
+) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]:
+    """
+    Map over an iterable, running the function as a thread on same host.
+
+    The concurrency is limited to a semaphore with a counter.
+
+    The results are grouped by success and failure, based on if an
+    exception was returned or a flow run didn't complete, or some
+    value was returned.
+
+    """
+    semaphore = asyncio.Semaphore(counter)
+
+    tasks = []
+
+    for paramaterised_batch in parameterised_batches:
+        tasks.append(
+            wait_for_semaphore(
+                semaphore,
+                paramaterised_batch.fn(**paramaterised_batch.params),
+            )
+        )
+
+    results = await asyncio.gather(
+        *tasks,
+        # Normally this is True, but since there's the wrapper
+        # function to ensure that the ID is always included, which
+        # captures exceptions, it can be False here.
+        return_exceptions=False,
+    )
+
+    successes: list[R] = []
+    failures: list[BaseException] = []
+    for result in results:
+        if isinstance(result, Exception):
+            failures.append(result)
+        else:
+            successes.append(result)
+
+    return successes, failures
+
+
 @overload
 async def map_as_sub_flow(
     aws_env: AwsEnv,
@@ -660,8 +705,6 @@ async def map_as_sub_flow(
     timeout.
 
     Either return the flow run itself, or unwrap the result from it.
-
-    This assumes that the same parameters are used for each sub-flow run
     """
     semaphore = asyncio.Semaphore(counter)
 

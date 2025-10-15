@@ -27,6 +27,7 @@ from flows.utils import (
     gather_and_report,
     get_file_stems_for_document_id,
     iterate_batch,
+    map_as_local,
     map_as_sub_flow,
     remove_translated_suffix,
     s3_file_exists,
@@ -674,3 +675,32 @@ def test_build_run_output_identifier_raises_on_missing_start_time():
     with patch("flows.utils.get_run_context", return_value=mock_context):
         with pytest.raises(ValueError, match="flow run didn't have a start time"):
             build_run_output_identifier()
+
+
+@pytest.mark.asyncio
+@patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
+async def test_map_as_local(
+    mock_wait_for_semaphore,
+    mock_flow,
+) -> None:
+    batches_count = 10
+    call_count = 0
+
+    async def side_effect_fn(*args, **kwargs):
+        nonlocal call_count
+        result = {} if call_count < (batches_count / 2) else ValueError("failure")
+        call_count += 1
+        return result
+
+    mock_wait_for_semaphore.side_effect = side_effect_fn
+
+    successes, failures = await map_as_local(
+        counter=1,
+        parameterised_batches=[
+            ParameterisedFlow(fn=mock_flow, params={}) for _ in range(batches_count)
+        ],
+    )
+
+    assert len(successes) == (batches_count / 2)
+    assert len(failures) == (batches_count / 2)
+    assert all(isinstance(f, ValueError) and str(f) == "failure" for f in failures)

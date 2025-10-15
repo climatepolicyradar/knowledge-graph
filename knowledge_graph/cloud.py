@@ -4,6 +4,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+import aioboto3
+import aioboto3.session
 import boto3
 import boto3.session
 import botocore
@@ -131,6 +133,29 @@ def get_session(aws_env: AwsEnv) -> boto3.session.Session:
     return boto3.Session(profile_name=aws_env.value)
 
 
+def get_async_session(
+    aws_env: Optional[AwsEnv],
+    region_name: str = "eu-west-1",
+) -> aioboto3.session.Session:
+    """
+    Create an async AWS session.
+
+    Uses the specified AWS environment and region.
+    """
+    use_aws_profiles: bool = (
+        os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    )
+    if not use_aws_profiles:
+        aws_env = None
+
+    match aws_env:
+        case None:
+            return aioboto3.Session(region_name=region_name)
+
+        case aws_env:
+            return aioboto3.Session(profile_name=aws_env.value, region_name=region_name)
+
+
 def get_s3_client(
     aws_env: Optional[AwsEnv],
     region_name: str,
@@ -140,6 +165,12 @@ def get_s3_client(
 
     Uses the specified AWS environment and region.
     """
+    use_aws_profiles: bool = (
+        os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    )
+    if not use_aws_profiles:
+        aws_env = None
+
     match aws_env:
         case None:
             return boto3.client("s3", region_name=region_name)
@@ -191,6 +222,42 @@ def get_sts_client(
         case aws_env:
             session = get_session(aws_env)
             return session.client("sts")
+
+
+def get_ssm_client(
+    aws_env: Optional[AwsEnv],
+    region_name: str = "eu-west-1",
+) -> botocore.client.BaseClient:
+    """
+    Create an AWS SSM client.
+
+    Uses the specified AWS environment and region.
+    """
+    use_aws_profiles: bool = (
+        os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    )
+    if not use_aws_profiles:
+        aws_env = None
+
+    match aws_env:
+        case None:
+            return boto3.client("ssm", region_name=region_name)
+
+        case aws_env:
+            session = get_session(aws_env)
+            return session.client("ssm", region_name=region_name)
+
+
+def get_aws_ssm_param(
+    param_name: str,
+    aws_env: Optional[AwsEnv] = None,
+    region_name: str = "eu-west-1",
+) -> str:
+    """Retrieve a parameter from AWS SSM."""
+    ssm = get_ssm_client(aws_env, region_name)
+    response = ssm.get_parameter(Name=param_name, WithDecryption=True)  # pyright: ignore[reportAttributeAccessIssue]
+
+    return response["Parameter"]["Value"]
 
 
 def is_logged_in(aws_env: AwsEnv, use_aws_profiles: bool) -> bool:
