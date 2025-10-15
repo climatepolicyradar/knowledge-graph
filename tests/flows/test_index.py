@@ -1,15 +1,18 @@
+import json
+import os
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
-from prefect.states import Completed
+from prefect.context import FlowRunContext
+from prefect.states import Completed, Running
 from vespa.io import VespaResponse
 
 from flows.aggregate import RunOutputIdentifier
@@ -18,11 +21,14 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
 )
 from flows.index import (
+    METADATA_FILE_NAME,
+    Metadata,
     SimpleConcept,
     index,
     index_batch_of_documents,
     index_document_passages,
     index_family_document,
+    store_metadata,
 )
 from flows.result import is_err, is_ok, unwrap_err
 from flows.utils import (
@@ -548,3 +554,56 @@ async def test_index_family_document__failure(
             assert error.msg == "Vespa update failed"
             assert "json" in error.metadata
             assert error.metadata["json"] == {"error": "Internal server error"}
+
+
+@pytest.mark.asyncio
+async def test_store_metadata(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+    snapshot,
+):
+    """Test that store_metadata correctly builds S3 URI and stores metadata."""
+    mock_tags = ["tag:value1", "sha:abc123", "branch:main"]
+    mock_run_output_id = "2025-01-15T10:30-test-flow-run"
+
+    # Create a real FlowRun object with proper data
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        state=Running(),
+        tags=mock_tags,
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    # Mock only the Prefect context, let moto handle S3
+    with patch("flows.index.get_run_context", return_value=mock_context):
+        await store_metadata(
+            config=test_config,
+            run_output_identifier=mock_run_output_id,
+        )
+
+    expected_key = os.path.join(
+        test_config.index_results_prefix,
+        mock_run_output_id,
+        METADATA_FILE_NAME,
+    )
+
+    response = await mock_s3_async_client.head_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    assert response["ContentLength"] > 0, (
+        f"Expected S3 object {expected_key} to have content"
+    )
+
+    response = await mock_s3_async_client.get_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    metadata_content = await response["Body"].read()
+    metadata_dict = json.loads(metadata_content.decode("utf-8"))
+
+    metadata = Metadata.model_validate(metadata_dict)
+    assert metadata == snapshot
