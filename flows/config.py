@@ -11,6 +11,7 @@ INFERENCE_RESULTS_PREFIX = "inference_results/"
 INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input/"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages/"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages/"
+INDEX_RESULTS_PREFIX: str = "index_concepts/"
 
 # SSM
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
@@ -55,10 +56,13 @@ class Config(BaseModel):
         default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="S3 prefix of documents read as source for inference",
     )
-
     inference_document_target_prefix: S3Prefix = Field(
         default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
         description="S3 prefix for where inference targets are written to",
+    )
+    index_results_prefix: S3Prefix = Field(
+        default=INDEX_RESULTS_PREFIX,
+        description="S3 prefix for index results are written to",
     )
 
     bucket_region: str = Field(
