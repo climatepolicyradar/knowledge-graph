@@ -8,12 +8,10 @@ from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-import aioboto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.client.schemas.objects import FlowRun
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 
@@ -53,12 +51,13 @@ from flows.utils import (
     collect_unique_file_stems_under_prefix,
     get_logger,
     iterate_batch,
+    map_as_local,
     map_as_sub_flow,
     remove_translated_suffix,
     return_with,
     wait_for_semaphore,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
@@ -73,7 +72,7 @@ async def load_async_json_data_from_s3(
 ) -> dict[str, Any]:
     """Load JSON data from an S3 URI asynchronously"""
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(config.aws_env, config.bucket_region)
     async with session.client("s3") as s3client:
         response = await s3client.get_object(Bucket=bucket, Key=key)
         body = await response["Body"].read()
@@ -145,8 +144,8 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[FlowRun],
-    failures: Sequence[FlowRun | BaseException],
+    successes: Sequence[Any],
+    failures: Sequence[Any],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
 
@@ -483,6 +482,7 @@ async def index_all(
             cert_dir=temp_dir.name,
             vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
             vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+            aws_env=config.aws_env,
         )
 
         async with vespa_search_adapter.client.asyncio(
@@ -627,6 +627,7 @@ async def index(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
+    single_host_mode: bool = False,
 ) -> None:
     """
     Index aggregated inference results from a list of S3 URIs into Vespa.
@@ -656,6 +657,10 @@ async def index(
 
     indexer_max_vespa_connections : int
         The maximum number of Vespa connections to use within each indexing flow.
+
+    single_host_mode : int
+        Run all documents in the same machine as the top-level
+        function or across separate machines via deployments.
     """
 
     logger = get_logger()
@@ -704,12 +709,18 @@ async def index(
             )
         )
 
-    successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
-        aws_env=config.aws_env,
-        counter=indexer_concurrency_limit,
-        parameterised_batches=parameterised_batches,
-        unwrap_result=False,
-    )
+    if single_host_mode:
+        successes, failures = await map_as_local(  # pyright: ignore[reportCallIssue]
+            counter=indexer_concurrency_limit,
+            parameterised_batches=parameterised_batches,
+        )
+    else:
+        successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
+            aws_env=config.aws_env,
+            counter=indexer_concurrency_limit,
+            parameterised_batches=parameterised_batches,
+            unwrap_result=False,
+        )
 
     await create_indexing_summary_artifact(
         config=config,
