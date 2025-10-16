@@ -30,7 +30,7 @@ jobs:
         run: pipx install rust-just
 
       - name: Install python or load from cache with dependencies
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: pyproject.toml
 
@@ -58,7 +58,7 @@ jobs:
         run: pipx install rust-just
 
       - name: Install python or load from cache with dependencies
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: pyproject.toml
 
