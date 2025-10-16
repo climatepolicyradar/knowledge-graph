@@ -444,16 +444,12 @@ def label_with_separator_variant_strategy(draw, label: str):
 
     Eg. takes "greenhouse gas" and returns "greenhouse\ngas" or "greenhouse-gas" etc.
     """
-    # Split on any separator characters to get the words
-    # Use the same pattern as in the keyword classifier
     separator_pattern = r"[\s\-]+"
-    words = re.split(separator_pattern, label.strip())
-    words = [w for w in words if w]  # Remove empty strings
+    words = [w for w in re.split(pattern=separator_pattern, string=label.strip()) if w]
 
     if len(words) == 1:
-        return label  # Single word, no separator to vary
+        return label
 
-    # Join with a separator from separator_characters
     variant_sep = draw(st.sampled_from(more_complex_separator_characters))
     return variant_sep.join(words)
 
@@ -468,7 +464,7 @@ def test_whether_multi_word_labels_match_text_with_different_separators(
     label_variant_data: st.DataObject,
     text_data: st.DataObject,
 ):
-    r"""Test that labels defined with one separator match text with different separators."""
+    """Test that labels defined with one separator match text with different separators."""
     label = label_data.draw(multi_word_label_strategy())
     label_variant = label_variant_data.draw(
         label_with_separator_variant_strategy(label)
@@ -491,24 +487,15 @@ def test_whether_negative_labels_filter_matches_regardless_of_separator(
     negative_label_data: st.DataObject,
     text_data: st.DataObject,
 ):
-    r"""Test that negative labels defined with one separator filter text with different separators."""
-    # Create a positive label (single or multi-word)
+    """Test that negative labels defined with one separator filter text with different separators."""
     positive_label = label_data.draw(concept_label_strategy)
-
-    # Create a negative label that CONTAINS the positive label
-    # Similar to test_whether_classifier_respects_negative_labels
     negative_label = (
         positive_label + " " + negative_label_data.draw(single_word_label_strategy)
     )
-
-    # Create a variant of the negative label with different separators
     negative_variant = negative_label_data.draw(
         label_with_separator_variant_strategy(negative_label)
     )
-
-    # Generate text containing the negative label variant (which contains the positive)
     text = text_data.draw(positive_text_strategy(labels=[negative_variant]))
-
     concept = Concept(
         wikibase_id=WikibaseID("Q123"),
         preferred_label=positive_label,
@@ -516,10 +503,8 @@ def test_whether_negative_labels_filter_matches_regardless_of_separator(
     )
     classifier = classifier_class(concept)
     spans = classifier.predict(text)
-
     assert not spans, (
-        f"{classifier} matched text in '{text}', but it shouldn't have! "
-        f"The negative label '{negative_label}' should filter out the positive match."
+        f"{classifier} matched text in '{text}', but it shouldn't have! The negative label '{negative_label}' should filter out the positive match."
     )
 
 
