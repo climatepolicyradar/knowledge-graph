@@ -13,7 +13,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import (
     PutObjectOutputTypeDef,
 )
-from prefect import flow, task, unmapped
+from prefect import flow, task
 from prefect.artifacts import (
     create_markdown_artifact,
     create_table_artifact,
@@ -704,8 +704,8 @@ async def index_batch_of_documents(
                 document_stem=document_stem,
                 config=config,
                 run_output_identifier=run_output_identifier,
-                indexer_document_passages_concurrency_limit=unmapped(
-                    int(indexer_document_passages_concurrency_limit)  # pyright: ignore[reportArgumentType]
+                indexer_document_passages_concurrency_limit=int(
+                    indexer_document_passages_concurrency_limit
                 ),
                 indexer_max_vespa_connections=indexer_max_vespa_connections,
             )
