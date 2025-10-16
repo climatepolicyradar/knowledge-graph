@@ -377,9 +377,11 @@ def mock_classifiers_dir(test_config):
 def local_classifier_id(mock_classifiers_dir):
     wikibase_id = WikibaseID("Q788")
     classifier_id = "6vxrmcuf"
-    full_path = mock_classifiers_dir / wikibase_id / classifier_id / "model.pickle"
+    wandb_registry_version = "v1"
+
+    full_path = mock_classifiers_dir / f"{classifier_id}:v1" / "model.pickle"
     assert full_path.exists()
-    yield wikibase_id, classifier_id
+    yield wikibase_id, classifier_id, wandb_registry_version
 
 
 @pytest.fixture
@@ -655,15 +657,13 @@ async def mock_wandb(mock_s3_async_client, mock_classifiers_dir, local_classifie
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
-        wikibase_id, classifier_id = local_classifier_id
+        wikibase_id, classifier_id, wandb_registry_version = local_classifier_id
         mock_artifact = Mock()
-        mock_artifact.download.return_value = (
-            mock_classifiers_dir / wikibase_id / classifier_id
-        )
 
         mock_run = Mock()
-        mock_run.use_artifact.return_value = mock_artifact
-
+        mock_run.use_model.return_value = (
+            mock_classifiers_dir / f"{classifier_id}:v1" / "model.pickle"
+        )
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
 

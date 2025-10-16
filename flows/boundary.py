@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Final,
     NewType,
+    Optional,
     TypeVar,
     Union,
 )
@@ -25,7 +26,6 @@ from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.s3 import _s3_object_read_text
 from cpr_sdk.search_adaptors import VespaSearchAdapter
-from cpr_sdk.ssm import get_aws_ssm_param
 from cpr_sdk.utils import dig
 from pydantic import BaseModel, NonNegativeInt, PositiveInt
 from types_aiobotocore_s3.client import S3Client
@@ -41,6 +41,7 @@ from flows.utils import (
     S3Uri,
     get_logger,
 )
+from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.concept import Concept
 from knowledge_graph.exceptions import QueryError
 from knowledge_graph.identifiers import FamilyDocumentID, WikibaseID
@@ -139,6 +140,7 @@ def get_vespa_search_adapter_from_aws_secrets(
     vespa_instance_url_param_name: str = "VESPA_INSTANCE_URL",
     vespa_public_cert_param_name: str = "VESPA_PUBLIC_CERT_READ",
     vespa_private_key_param_name: str = "VESPA_PRIVATE_KEY_READ",
+    aws_env: Optional[AwsEnv] = None,
 ) -> VespaSearchAdapter:
     """
     Get a VespaSearchAdapter instance by retrieving secrets from AWS Secrets Manager.
@@ -150,9 +152,15 @@ def get_vespa_search_adapter_from_aws_secrets(
     if not cert_dir_path.exists():
         raise FileNotFoundError(f"Certificate directory does not exist: {cert_dir}")
 
-    vespa_instance_url = get_aws_ssm_param(vespa_instance_url_param_name)
-    vespa_public_cert_encoded = get_aws_ssm_param(vespa_public_cert_param_name)
-    vespa_private_key_encoded = get_aws_ssm_param(vespa_private_key_param_name)
+    vespa_instance_url = get_aws_ssm_param(
+        vespa_instance_url_param_name, aws_env=aws_env
+    )
+    vespa_public_cert_encoded = get_aws_ssm_param(
+        vespa_public_cert_param_name, aws_env=aws_env
+    )
+    vespa_private_key_encoded = get_aws_ssm_param(
+        vespa_private_key_param_name, aws_env=aws_env
+    )
 
     vespa_public_cert = base64.b64decode(vespa_public_cert_encoded).decode("utf-8")
     vespa_private_key = base64.b64decode(vespa_private_key_encoded).decode("utf-8")

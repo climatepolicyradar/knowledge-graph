@@ -2349,7 +2349,7 @@ requires-dist = [
     { name = "nltk", specifier = ">=3.9.1" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8.0" },
-    { name = "prefect", extras = ["aws", "slack"], specifier = ">=3.4.17" },
+    { name = "prefect", extras = ["aws", "slack"], specifier = ">=3.4.23" },
     { name = "prefect-coiled", specifier = ">=0.0.4" },
     { name = "prefect-coiled", marker = "extra == 'coiled'", specifier = ">=0.0.4" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.145.0" },
@@ -3615,7 +3615,7 @@ wheels = [
 
 [[package]]
 name = "prefect"
-version = "3.4.17"
+version = "3.4.23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
@@ -3672,9 +3672,9 @@ dependencies = [
     { name = "websockets" },
     { name = "whenever" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e6/fd/4b4593e29342218d020c3aa18b982afb54770746f3020707b15d4eafbd53/prefect-3.4.17.tar.gz", hash = "sha256:665225935a58e162afa4bc14aa5f880a8551d19a3f696e02f6c8dd7aba0cd5a0", size = 5597760, upload-time = "2025-09-05T19:36:16.117Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/b6/1179c61550150d2584a25a7b414a5ecf29f1e7b24120e8a3b9b6d3f2f1b1/prefect-3.4.23.tar.gz", hash = "sha256:5c6800737bd577ede070fa3852f608235c715e72a897d41fd3b9317f67fde8c3", size = 5619598, upload-time = "2025-10-09T20:40:47.618Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/77/5414ab4740c392aaf8e1a51ed2e7fb892b17370c9d1feba85bcb046bdc80/prefect-3.4.17-py3-none-any.whl", hash = "sha256:962fd837c76bb3ea8350c9d0a60c42a23ea9149227968b3c17c51e4bda8a69c0", size = 6110119, upload-time = "2025-09-05T19:36:12.917Z" },
+    { url = "https://files.pythonhosted.org/packages/07/f1/6924d0dc0c123479530ec5ad8fdf2cfc8959b3d94df0a6ebf40e5e5fcf70/prefect-3.4.23-py3-none-any.whl", hash = "sha256:0422861f0d1729d56546501eeebadf255ddf21b8041aa2bc2715168b4eb615bb", size = 6141297, upload-time = "2025-10-09T20:40:45.098Z" },
 ]
 
 [package.optional-dependencies]

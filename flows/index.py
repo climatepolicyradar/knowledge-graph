@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-import aioboto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, task, unmapped
@@ -58,7 +57,7 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
@@ -73,7 +72,7 @@ async def load_async_json_data_from_s3(
 ) -> dict[str, Any]:
     """Load JSON data from an S3 URI asynchronously"""
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(config.aws_env, config.bucket_region)
     async with session.client("s3") as s3client:
         response = await s3client.get_object(Bucket=bucket, Key=key)
         body = await response["Body"].read()
@@ -145,7 +144,7 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[FlowRun],
+    successes: Sequence[None],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -483,6 +482,7 @@ async def index_all(
             cert_dir=temp_dir.name,
             vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
             vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+            aws_env=config.aws_env,
         )
 
         async with vespa_search_adapter.client.asyncio(
@@ -708,7 +708,7 @@ async def index(
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         parameterised_batches=parameterised_batches,
-        unwrap_result=False,
+        unwrap_result=True,
     )
 
     await create_indexing_summary_artifact(
