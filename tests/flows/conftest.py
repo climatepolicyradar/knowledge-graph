@@ -377,19 +377,9 @@ def mock_classifiers_dir(test_config):
 def local_classifier_id(mock_classifiers_dir):
     wikibase_id = WikibaseID("Q788")
     classifier_id = "6vxrmcuf"
-    full_path = mock_classifiers_dir / wikibase_id / classifier_id / "model.pickle"
-    assert full_path.exists()
-    yield wikibase_id, classifier_id
-
-
-@pytest.fixture
-def local_registry_version(mock_classifiers_dir):
-    wikibase_id = WikibaseID("Q788")
-    classifier_id = "6vxrmcuf"
     wandb_registry_version = "v1"
-    full_path = (
-        mock_classifiers_dir / wikibase_id / wandb_registry_version / "model.pickle"
-    )
+
+    full_path = mock_classifiers_dir / f"{classifier_id}:v1" / "model.pickle"
     assert full_path.exists()
     yield wikibase_id, classifier_id, wandb_registry_version
 
@@ -662,19 +652,17 @@ def example_labelled_passages_1_doc(
 
 
 @pytest_asyncio.fixture
-async def mock_wandb(
-    mock_s3_async_client, mock_classifiers_dir, local_registry_version
-):
+async def mock_wandb(mock_s3_async_client, mock_classifiers_dir, local_classifier_id):
     with (
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
-        wikibase_id, classifier_id, wandb_registry_version = local_registry_version
+        wikibase_id, classifier_id, wandb_registry_version = local_classifier_id
         mock_artifact = Mock()
 
         mock_run = Mock()
         mock_run.use_model.return_value = (
-            mock_classifiers_dir / wikibase_id / wandb_registry_version / "model.pickle"
+            mock_classifiers_dir / f"{classifier_id}:v1" / "model.pickle"
         )
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
