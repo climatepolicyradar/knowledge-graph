@@ -40,7 +40,9 @@ def multi_word_label_strategy(
     draw,
     min_words: int = 2,
     max_words: int = 4,
-    separators: list[str] = [" "],  # default to space-separated labels for most tests
+    separators: Optional[
+        list[str]
+    ] = None,  # default to space-separated labels for most tests
 ):
     """Generate a multi-word label, separated by the supplied separator characters"""
     num_words = draw(st.integers(min_value=min_words, max_value=max_words))
@@ -48,7 +50,7 @@ def multi_word_label_strategy(
 
     output_text = ""
     for word in words[:-1]:
-        sep = draw(st.sampled_from(separators))
+        sep = draw(st.sampled_from(separators or [" "]))
         output_text += word + sep
     return output_text + words[-1]
 
@@ -79,6 +81,69 @@ def concept_strategy(draw):
         alternative_labels=alt_labels,
         negative_labels=negative_labels,
     )
+
+
+@st.composite
+def negative_text_strategy(draw, labels: list[str]):
+    """Generate text which does not contain any of the concept's labels."""
+    return draw(
+        st.text(min_size=1, max_size=1000).filter(
+            lambda x: all(label.lower() not in x.lower() for label in labels)
+        )
+    )
+
+
+@st.composite
+def positive_text_strategy(
+    draw,
+    labels: Optional[list[str]] = None,
+    negative_labels: Optional[list[str]] = None,
+):
+    """Generate text containing one of the labels, with pre/post text that avoids negatives."""
+    labels = labels or []
+    negative_labels = negative_labels or []
+
+    keyword = draw(st.sampled_from(labels))
+
+    pre_text = draw(
+        st.text(
+            min_size=1,
+            max_size=50,
+            alphabet=st.characters(
+                # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
+                exclude_categories=("C", "Zl", "Zp", "P", "M", "S", "N"),
+            ),
+        ).filter(
+            lambda x: x.strip()
+            and all(label.lower() not in x.lower() for label in labels)
+            and all(
+                not any(word in label.lower() for word in x.lower().split())
+                for label in labels
+            )
+            and all(neg_label.lower() not in x.lower() for neg_label in negative_labels)
+        )
+    )
+
+    post_text = draw(
+        st.text(
+            min_size=1,
+            max_size=50,
+            alphabet=st.characters(
+                exclude_categories=("C", "Zl", "Zp"),
+            ),
+        ).filter(
+            lambda x: x.strip()
+            and x != pre_text
+            and all(label.lower() not in x.lower() for label in labels)
+            and all(
+                not any(word in label.lower() for word in x.lower().split())
+                for label in labels
+            )
+            and all(neg_label.lower() not in x.lower() for neg_label in negative_labels)
+        )
+    )
+
+    return f"{pre_text} {keyword} {post_text}"
 
 
 @st.composite

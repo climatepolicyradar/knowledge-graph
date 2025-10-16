@@ -2,7 +2,7 @@ import re
 from typing import Type
 
 import pytest
-from hypothesis import assume, given
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from knowledge_graph.classifier.classifier import Classifier
@@ -16,77 +16,10 @@ from tests.common_strategies import (
     concept_strategy,
     more_complex_separator_characters,
     multi_word_label_strategy,
+    negative_text_strategy,
+    positive_text_strategy,
     single_word_label_strategy,
 )
-
-
-@st.composite
-def negative_text_strategy(draw, labels: list[str]):
-    """Generate text which does not contain the any of the concept's labels."""
-    return draw(
-        st.text(min_size=1, max_size=1000).filter(
-            lambda x: all(label.lower() not in x.lower() for label in labels)
-        )
-    )
-
-
-@st.composite
-def positive_text_strategy(
-    draw: st.DataObject, labels: list[str] = [], negative_labels: list[str] = []
-):
-    """Generate text containing one of the labels, with different before and after text that doesn't match negative labels."""
-    keyword = draw(st.sampled_from(labels))
-
-    pre_text = draw(
-        st.text(
-            min_size=1,
-            max_size=50,
-            alphabet=st.characters(
-                # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
-                exclude_categories=("C", "Zl", "Zp", "P", "M", "S", "N")
-            ),
-        ).filter(
-            lambda x: x.strip()
-            and all(label.lower() not in x.lower() for label in labels)
-            and all(
-                not any(word in label.lower() for word in x.lower().split())
-                for label in labels
-            )  # Prevent extra partial matches
-            and (
-                negative_labels is None
-                or all(
-                    neg_label.lower() not in x.lower() for neg_label in negative_labels
-                )
-            )
-        )
-    )
-    post_text = draw(
-        st.text(
-            min_size=1,
-            max_size=50,
-            alphabet=st.characters(
-                # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
-                exclude_categories=("C", "Zl", "Zp")
-            ),
-        ).filter(
-            lambda x: x.strip()
-            and x != pre_text
-            and all(label.lower() not in x.lower() for label in labels)
-            and all(
-                not any(word in label.lower() for word in x.lower().split())
-                for label in labels
-            )  # Prevent extra partial matches
-            and (
-                negative_labels is None
-                or all(
-                    neg_label.lower() not in x.lower() for neg_label in negative_labels
-                )
-            )
-        )
-    )
-
-    return f"{pre_text} {keyword} {post_text}"
-
 
 classifier_classes: list[Type[Classifier]] = [
     KeywordClassifier,
@@ -95,6 +28,7 @@ classifier_classes: list[Type[Classifier]] = [
 
 
 @given(concept=concept_strategy(), text_data=st.data())
+@settings(max_examples=100, database=None)
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 def test_whether_classifier_matches_concept_labels_in_text(
@@ -138,6 +72,7 @@ def test_whether_classifier_matches_concept_labels_in_text(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy(), data=st.data())
+@settings(max_examples=100, database=None)
 def test_whether_classifier_finds_no_spans_in_negative_text(
     classifier_class: Type[Classifier], concept: Concept, data
 ):
@@ -151,6 +86,7 @@ def test_whether_classifier_finds_no_spans_in_negative_text(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(data=st.data())
+@settings(max_examples=100, database=None)
 def test_whether_classifier_respects_negative_labels(
     classifier_class: Type[Classifier], data: st.DataObject
 ):
@@ -166,7 +102,7 @@ def test_whether_classifier_respects_negative_labels(
     )
 
     concept = Concept(
-        wikibase_id="Q1",
+        wikibase_id=WikibaseID("Q1"),
         preferred_label=positive_label,
         negative_labels=[negative_label],
     )
@@ -244,7 +180,7 @@ def test_concrete_negative_label_examples(
     should_match: bool,
 ):
     """Test specific examples of positive and negative label matching."""
-    concept = Concept(wikibase_id="Q123", **concept_data)
+    concept = Concept(wikibase_id=WikibaseID("Q123"), **concept_data)
     classifier = classifier_class(concept)
     spans = classifier.predict(test_text)
 
@@ -262,6 +198,7 @@ def test_concrete_negative_label_examples(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy(), data=st.data())
+@settings(max_examples=100, database=None)
 def test_whether_returned_spans_are_valid(
     classifier_class: Type[Classifier], concept: Concept, data
 ):
@@ -279,6 +216,7 @@ def test_whether_returned_spans_are_valid(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy())
+@settings(max_examples=100, database=None)
 def test_whether_classifier_repr_is_correct(
     classifier_class: Type[Classifier], concept: Concept
 ):
@@ -291,6 +229,7 @@ def test_whether_classifier_repr_is_correct(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concept=concept_strategy())
+@settings(max_examples=100, database=None)
 def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
@@ -318,6 +257,7 @@ def test_whether_classifier_id_generation_is_affected_by_internal_state(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(concepts=st.sets(concept_strategy(), min_size=10, max_size=10))
+@settings(max_examples=100, database=None)
 def test_whether_different_concepts_produce_different_hashes_when_using_the_same_classifier_class(
     classifier_class: Type[Classifier], concepts: list[Concept]
 ):
@@ -329,6 +269,7 @@ def test_whether_different_concepts_produce_different_hashes_when_using_the_same
 
 @pytest.mark.xdist_group(name="classifier")
 @given(concept=concept_strategy())
+@settings(max_examples=100, database=None)
 def test_whether_different_classifier_models_produce_different_hashes_when_based_on_the_same_concept(
     concept: Concept,
 ):
@@ -360,9 +301,9 @@ def test_whether_a_classifier_with_a_small_change_to_the_internal_concept_produc
     assert hash(classifier) != hash(new_classifier)
     assert classifier != new_classifier
 
-    augmented_concept = concept.model_copy(
-        update={"wikibase_id": concept.wikibase_id + "1"}
-    )
+    assert concept.wikibase_id is not None
+    new_wikibase_id = WikibaseID("Q" + str(concept.wikibase_id.numeric + 1))
+    augmented_concept = concept.model_copy(update={"wikibase_id": new_wikibase_id})
     new_classifier = classifier_class(augmented_concept)
     assert classifier.id != new_classifier.id
     assert hash(classifier) != hash(new_classifier)
@@ -387,8 +328,8 @@ def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts
         def predict(self, text: str) -> list[Span]:
             return []
 
-    concept1 = Concept(wikibase_id="Q123", preferred_label="test")
-    concept2 = Concept(wikibase_id="Q456", preferred_label="test")
+    concept1 = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+    concept2 = Concept(wikibase_id=WikibaseID("Q456"), preferred_label="test")
 
     assert UnrestrictedClassifier(concept1)
     assert UnrestrictedClassifier(concept2)
@@ -406,8 +347,8 @@ def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correct
         def predict(self, text: str) -> list[Span]:
             return []
 
-    valid_concept = Concept(wikibase_id="Q123", preferred_label="test")
-    invalid_concept = Concept(wikibase_id="Q456", preferred_label="test")
+    valid_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+    invalid_concept = Concept(wikibase_id=WikibaseID("Q456"), preferred_label="test")
 
     assert SingleIDClassifier(valid_concept)
 
@@ -429,8 +370,8 @@ def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correc
         def predict(self, text: str) -> list[Span]:
             return []
 
-    valid_concept = Concept(wikibase_id="Q123", preferred_label="test")
-    invalid_concept = Concept(wikibase_id="Q789", preferred_label="test")
+    valid_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+    invalid_concept = Concept(wikibase_id=WikibaseID("Q789"), preferred_label="test")
 
     assert MultiIDClassifier(valid_concept)
 
@@ -455,8 +396,10 @@ def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance
     class ChildClassifier(ParentClassifier):
         allowed_concept_ids = [WikibaseID("Q123")]  # More restrictive than parent
 
-    valid_concept = Concept(wikibase_id="Q123", preferred_label="test")
-    parent_only_concept = Concept(wikibase_id="Q456", preferred_label="test")
+    valid_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+    parent_only_concept = Concept(
+        wikibase_id=WikibaseID("Q456"), preferred_label="test"
+    )
 
     # Parent should accept both concepts
     assert ParentClassifier(valid_concept)
@@ -489,7 +432,7 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
         def predict(self, text: str) -> list[Span]:
             return []
 
-    concept = Concept(wikibase_id="Q123", preferred_label="test")
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
 
     assert EmptyIDClassifier(concept)
 
@@ -516,6 +459,7 @@ def label_with_separator_variant_strategy(draw, label: str):
 
 
 @given(label_data=st.data(), label_variant_data=st.data(), text_data=st.data())
+@settings(max_examples=100, database=None)
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 def test_whether_multi_word_labels_match_text_with_different_separators(
@@ -540,6 +484,7 @@ def test_whether_multi_word_labels_match_text_with_different_separators(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(label_data=st.data(), negative_label_data=st.data(), text_data=st.data())
+@settings(max_examples=100, database=None)
 def test_whether_negative_labels_filter_matches_regardless_of_separator(
     classifier_class: Type[Classifier],
     label_data: st.DataObject,
@@ -581,6 +526,7 @@ def test_whether_negative_labels_filter_matches_regardless_of_separator(
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(label=single_word_label_strategy)
+@settings(max_examples=100, database=None)
 def test_whether_single_word_labels_respect_word_boundaries(
     classifier_class: Type[Classifier], label: str
 ):
