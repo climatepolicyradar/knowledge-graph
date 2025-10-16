@@ -392,7 +392,8 @@ async def load_classifier(
     """Load a classifier into memory."""
     async with concurrency("load_classifier", occupy=5):
         artifact_id = f"{config.wandb_model_registry}/{classifier_spec.wikibase_id}:{classifier_spec.wandb_registry_version}"
-        download_folder = run.use_model(artifact_id)
+        downloaded_model_path = run.use_model(artifact_id)
+        classifier = Classifier.load(downloaded_model_path)
         model_path = Path(download_folder) / "model.pickle"
         classifier = Classifier.load(model_path)
     return classifier
