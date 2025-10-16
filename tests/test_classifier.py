@@ -102,7 +102,7 @@ def test_whether_classifier_respects_negative_labels(
     )
 
     concept = Concept(
-        wikibase_id=WikibaseID("Q1"),
+        wikibase_id=WikibaseID("Q123"),
         preferred_label=positive_label,
         negative_labels=[negative_label],
     )
@@ -533,8 +533,73 @@ def test_whether_single_word_labels_respect_word_boundaries(
     """Test that single-word labels still respect word boundaries."""
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
     classifier = classifier_class(concept)
-
-    # Test that it matches when there are proper word boundaries
     assert classifier.predict(f"The {label} is important.")
-    # Test that it doesn't match when embedded in another word (no word boundaries)
     assert not classifier.predict(f"xyz{label}abc")
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_classifier_respects_case_sensitivity():
+    # Uppercase-containing label should match exactly as-is
+    uppercase_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="WHO")
+    uppercase_classifier = KeywordClassifier(uppercase_concept)
+    assert uppercase_classifier.predict("The WHO released guidance.")
+    assert not uppercase_classifier.predict("the who released guidance.")
+
+    # Lowercase-only label should match any case
+    lowercase_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="who")
+    lowercase_classifier = KeywordClassifier(lowercase_concept)
+    assert lowercase_classifier.predict("The WHO released guidance.")
+    assert lowercase_classifier.predict("the who released guidance.")
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize(
+    "label,text,should_match",
+    [
+        ("gas", "gas, prices rose", True),
+        ("gas", "(gas) is discussed", True),
+        ("greenhouse gas", "greenhouse-gas emissions", True),
+        ("greenhouse gas", "(greenhouse gas) emissions", True),
+    ],
+)
+def test_whether_classifier_respects_punctuation_as_word_boundaries(
+    label: str, text: str, should_match: bool
+):
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
+    classifier = KeywordClassifier(concept)
+    spans = classifier.predict(text)
+    assert bool(spans) == should_match
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_classifier_merges_overlapping_spans_to_the_longest_phrase():
+    concept = Concept(
+        wikibase_id=WikibaseID("Q123"),
+        preferred_label="greenhouse gas",
+        alternative_labels=["gas"],
+    )
+    classifier = KeywordClassifier(concept)
+    text = "Greenhouse-gas emissions are measured."
+    spans = classifier.predict(text)
+    # Should return a single merged span matching the longer phrase variant
+    assert len(spans) == 1
+    assert spans[0].labelled_text.lower().replace("-", " ") == "greenhouse gas"
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize(
+    "label,variant_text",
+    [
+        ("CO₂", "CO₂ emissions"),
+        ("CO₂", "(CO₂) emissions"),
+        ("Météo", "Météo report"),
+        ("Météo", "Météo\nreport"),
+    ],
+)
+def test_whether_classifier_handles_non_ascii_labels_across_separators(
+    label: str, variant_text: str
+):
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
+    classifier = KeywordClassifier(concept)
+    spans = classifier.predict(variant_text)
+    assert spans

@@ -76,7 +76,7 @@ def concept_strategy(draw):
     )
 
     return Concept(
-        wikibase_id=draw(wikibase_id_strategy),
+        wikibase_id=WikibaseID(draw(wikibase_id_strategy)),
         preferred_label=preferred_label,
         alternative_labels=alt_labels,
         negative_labels=negative_labels,
