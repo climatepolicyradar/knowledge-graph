@@ -13,7 +13,7 @@ from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import (
     PutObjectOutputTypeDef,
 )
-from prefect import flow, task, unmapped
+from prefect import flow, task
 from prefect.artifacts import (
     create_markdown_artifact,
     create_table_artifact,
@@ -34,6 +34,9 @@ from vespa.io import VespaResponse
 
 from flows.aggregate import (
     METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME,
+)
+from flows.aggregate import (
+    Metadata as AggregateMetadata,
 )
 from flows.aggregate import (
     SerialisedVespaConcept,
@@ -134,6 +137,40 @@ async def store_metadata(
                 )
 
         logger.debug(f"wrote index metadata to {s3_uri}")
+
+
+async def load_aggregate_metadata(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> Result[AggregateMetadata, Error]:
+    """Load metadata from aggregate run output."""
+    logger = get_logger()
+
+    metadata_key = os.path.join(
+        config.aggregate_inference_results_prefix,
+        run_output_identifier,
+        "metadata.json",
+    )
+
+    try:
+        metadata_dict = await load_async_json_data_from_s3(
+            bucket=config.cache_bucket_str,
+            key=metadata_key,
+            config=config,
+        )
+        metadata = AggregateMetadata.model_validate(metadata_dict)
+        return Ok(metadata)
+    except Exception as e:
+        logger.warning(f"Failed to load aggregate metadata from {metadata_key}: {e}")
+        return Err(
+            Error(
+                msg="Failed to load aggregate metadata",
+                metadata={
+                    "metadata_key": metadata_key,
+                    "exception": str(e),
+                },
+            )
+        )
 
 
 async def load_async_json_data_from_s3(
@@ -620,6 +657,7 @@ async def index_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
     config_json: dict[str, Any],
+    aggregate_metadata_json: dict[str, Any] | None = None,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
@@ -639,6 +677,21 @@ async def index_batch_of_documents(
     config.aws_env = AwsEnv(config.aws_env)
 
     logger.info(
+        f"Loading aggregate metadata for run: Provided? {aggregate_metadata_json is not None}"
+    )
+    aggregate_metadata: AggregateMetadata | None = None
+    if aggregate_metadata_json:
+        try:
+            aggregate_metadata = AggregateMetadata.model_validate(
+                aggregate_metadata_json
+            )
+            logger.info(
+                f"Loaded aggregate metadata for run: {aggregate_metadata.run_output_identifier}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to parse aggregate metadata: {e}")
+
+    logger.info(
         f"Running indexing for batch with config: {config}, "
         f"no. of documents: {len(document_stems)}"
     )
@@ -651,8 +704,8 @@ async def index_batch_of_documents(
                 document_stem=document_stem,
                 config=config,
                 run_output_identifier=run_output_identifier,
-                indexer_document_passages_concurrency_limit=unmapped(
-                    int(indexer_document_passages_concurrency_limit)  # pyright: ignore[reportArgumentType]
+                indexer_document_passages_concurrency_limit=int(
+                    indexer_document_passages_concurrency_limit
                 ),
                 indexer_max_vespa_connections=indexer_max_vespa_connections,
             )
@@ -743,6 +796,25 @@ async def index(
     except Exception as e:
         logger.error(f"Failed to store index metadata: {e}")
 
+    # Load metadata from aggregate run
+    aggregate_metadata_result = await load_aggregate_metadata(
+        config=config,
+        run_output_identifier=run_output_identifier,
+    )
+
+    aggregate_metadata: AggregateMetadata | None = None
+    match aggregate_metadata_result:
+        case Ok(metadata):
+            aggregate_metadata = metadata
+            logger.info(
+                f"Loaded aggregate metadata from run {aggregate_metadata.run_output_identifier} "
+                f"with {len(aggregate_metadata.classifier_specs)} classifier specs"
+            )
+        case Err(error):
+            logger.warning(
+                f"No aggregate metadata found for run {run_output_identifier}: {error.msg}"
+            )
+
     if not document_stems:
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
@@ -767,6 +839,9 @@ async def index(
         return {
             "document_stems": batch,
             "config_json": config.model_dump(),
+            "aggregate_metadata_json": aggregate_metadata.model_dump()
+            if aggregate_metadata
+            else None,
             "run_output_identifier": run_output_identifier,
             "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
