@@ -36,6 +36,9 @@ from flows.aggregate import (
     METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME,
 )
 from flows.aggregate import (
+    Metadata as AggregateMetadata,
+)
+from flows.aggregate import (
     SerialisedVespaConcept,
 )
 from flows.boundary import (
@@ -134,6 +137,40 @@ async def store_metadata(
                 )
 
         logger.debug(f"wrote index metadata to {s3_uri}")
+
+
+async def load_aggregate_metadata(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> Result[AggregateMetadata, Error]:
+    """Load metadata from aggregate run output."""
+    logger = get_logger()
+
+    metadata_key = os.path.join(
+        config.aggregate_inference_results_prefix,
+        run_output_identifier,
+        "metadata.json",
+    )
+
+    try:
+        metadata_dict = await load_async_json_data_from_s3(
+            bucket=config.cache_bucket_str,
+            key=metadata_key,
+            config=config,
+        )
+        metadata = AggregateMetadata.model_validate(metadata_dict)
+        return Ok(metadata)
+    except Exception as e:
+        logger.warning(f"Failed to load aggregate metadata from {metadata_key}: {e}")
+        return Err(
+            Error(
+                msg="Failed to load aggregate metadata",
+                metadata={
+                    "metadata_key": metadata_key,
+                    "exception": str(e),
+                },
+            )
+        )
 
 
 async def load_async_json_data_from_s3(
@@ -742,6 +779,25 @@ async def index(
             )
     except Exception as e:
         logger.error(f"Failed to store index metadata: {e}")
+
+    # Load metadata from aggregate run
+    aggregate_metadata_result = await load_aggregate_metadata(
+        config=config,
+        run_output_identifier=run_output_identifier,
+    )
+
+    aggregate_metadata: AggregateMetadata | None = None
+    match aggregate_metadata_result:
+        case Ok(metadata):
+            aggregate_metadata = metadata
+            logger.info(
+                f"Loaded aggregate metadata from run {aggregate_metadata.run_output_identifier} "
+                f"with {len(aggregate_metadata.classifier_specs)} classifier specs"
+            )
+        case Err(error):
+            logger.warning(
+                f"No aggregate metadata found for run {run_output_identifier}: {error.msg}"
+            )
 
     if not document_stems:
         logger.info(
