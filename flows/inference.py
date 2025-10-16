@@ -527,7 +527,7 @@ async def labels_to_s3(
     config: Config,
     inference: SingleDocumentInferenceResult,
     s3_client: S3Client,
-) -> PutObjectOutputTypeDef:
+) -> SingleDocumentInferenceResult:
     logger = get_logger()
     s3_uri = generate_s3_uri_output(config, inference)
 
@@ -542,64 +542,13 @@ async def labels_to_s3(
         ContentType="application/json",
     )
 
-    return response
-
-
-async def store_labels(
-    config: Config,
-    inferences: Sequence[SingleDocumentInferenceResult],
-) -> tuple[
-    list[SingleDocumentInferenceResult],
-    list[tuple[DocumentStem, Exception]],
-    list[BaseException],
-]:
-    """Store the labels in the cache bucket."""
-    logger = get_logger()
-
-    # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with(
-                    inference,
-                    labels_to_s3(config, inference, s3_client),
-                ),
-            )
-            for inference in inferences
-        ]
-
-        results: list[
-            tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
-            | BaseException
-        ] = await asyncio.gather(*tasks, return_exceptions=True)
-
-    successes: list[SingleDocumentInferenceResult] = []
-    failures: list[tuple[DocumentStem, Exception]] = []
-    # We really don't expect these, since there's a try/catch handler
-    # in `return_with_id`. It is technically possible though, for
-    # there to be what I'm calling here an _unknown_ failure.
-    unknown_failures: list[BaseException] = []
-    for result in results:
-        if isinstance(result, BaseException):
-            unknown_failures.append(result)
-        else:
-            inference, value = result
-            if isinstance(value, Exception):
-                logger.error(
-                    f"Failed to store label for {inference.document_stem}: {value}"
-                )
-                failures.append((inference.document_stem, value))
-            else:
-                if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                    successes.append(inference)
-                else:
-                    failures.append((inference.document_stem, ValueError(str(value))))
-
-    return successes, failures, unknown_failures
+    if response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200:
+        return inference
+    else:
+        raise ValueError(
+            f"Error storing {inference.document_stem} for "
+            f"{inference.wikibase_id}:{inference.classifier_id}: {response}"
+        )
 
 
 def batch_text_block_inference(
@@ -958,16 +907,29 @@ async def _inference_batch_of_documents(
     ) = process_single_document_inference(inferences_results)
 
     # Store labelled passages in s3
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                return_with(
+                    inference.document_stem,
+                    labels_to_s3(config, inference, s3_client),
+                ),
+            )
+            for inference in inferences_successes
+        ]
+        store_labels_results: list[
+            tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
+            | BaseException
+        ] = await asyncio.gather(*tasks, return_exceptions=True)
+
     (
         store_labels_successes,
         store_labels_failures,
         store_labels_unknown_failures,
-    ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-        config=config, inferences=inferences_successes
-    )
+    ) = process_single_document_inference(store_labels_results)
 
-    # This doesn't need to be combined since successes are funnelled
-    # through all steps.
     #
     # Failures are possibly reduced at each step.
     all_successes = store_labels_successes
