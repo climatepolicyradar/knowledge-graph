@@ -51,6 +51,33 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         """
         super().__init__(concept)
 
+        def make_separator_flexible(label: str) -> str:
+            r"""
+            Convert a label to a regex pattern that matches different word separators.
+
+            This allows labels like "greenhouse gas" to match:
+            - "greenhouse gas" (space)
+            - "greenhouse-gas" (hyphen)
+            - "greenhouse\ngas" (newline)
+            - "greenhouse -gas" (multiple consecutive separators)
+
+            :param str label: The label to convert
+            :return str: A regex pattern string that matches the label with flexible separators
+            """
+            # Split by any common separator characters (space, hyphen, newline, etc.)
+            separator_pattern = r"[\s\-]+"
+            parts = re.split(separator_pattern, label.strip())
+
+            # Filter out empty parts and escape each word part
+            word_parts = [re.escape(part) for part in parts if part]
+
+            # If the label has no separators, return the escaped label as-is
+            if len(word_parts) == 1:
+                return word_parts[0]
+
+            # Join parts of the label using the separator pattern
+            return separator_pattern.join(word_parts)
+
         def create_pattern(
             labels: list[str], case_sensitive: bool = False
         ) -> re.Pattern:
@@ -73,10 +100,10 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
                         ord(char) > 127 for char in label
                     ):
                         # Labels including uppercase or non-ASCII characters are added to the case-sensitive list
-                        case_sensitive_labels.append(re.escape(label))
+                        case_sensitive_labels.append(make_separator_flexible(label))
                     else:
                         # Only pure ASCII lowercase labels are added to the case-insensitive list
-                        case_insensitive_labels.append(re.escape(label))
+                        case_insensitive_labels.append(make_separator_flexible(label))
 
             return case_sensitive_labels, case_insensitive_labels
 
