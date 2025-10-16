@@ -383,6 +383,18 @@ def local_classifier_id(mock_classifiers_dir):
 
 
 @pytest.fixture
+def local_registry_version(mock_classifiers_dir):
+    wikibase_id = WikibaseID("Q788")
+    classifier_id = "6vxrmcuf"
+    wandb_registry_version = "v1"
+    full_path = (
+        mock_classifiers_dir / wikibase_id / wandb_registry_version / "model.pickle"
+    )
+    assert full_path.exists()
+    yield wikibase_id, classifier_id, wandb_registry_version
+
+
+@pytest.fixture
 def parser_output() -> Generator[BaseParserOutput, None, None]:
     yield BaseParserOutput(
         document_id="test id",
@@ -650,20 +662,20 @@ def example_labelled_passages_1_doc(
 
 
 @pytest_asyncio.fixture
-async def mock_wandb(mock_s3_async_client, mock_classifiers_dir, local_classifier_id):
+async def mock_wandb(
+    mock_s3_async_client, mock_classifiers_dir, local_registry_version
+):
     with (
         patch("wandb.init") as mock_init,
         patch("wandb.login"),
     ):
-        wikibase_id, classifier_id = local_classifier_id
+        wikibase_id, classifier_id, wandb_registry_version = local_registry_version
         mock_artifact = Mock()
-        mock_artifact.download.return_value = (
-            mock_classifiers_dir / wikibase_id / classifier_id
-        )
 
         mock_run = Mock()
-        mock_run.use_artifact.return_value = mock_artifact
-
+        mock_run.use_model.return_value = (
+            mock_classifiers_dir / wikibase_id / wandb_registry_version
+        )
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
 
