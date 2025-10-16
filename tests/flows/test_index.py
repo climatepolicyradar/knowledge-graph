@@ -443,34 +443,6 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_run_indexing_from_aggregate_results__single_host_mode(
-    vespa_app,
-    local_vespa_search_adapter: VespaSearchAdapter,
-    mock_async_bucket_inference_results: dict[str, dict[str, Any]],
-    aggregate_inference_results_document_stems: list[DocumentStem],
-    mock_run_output_identifier_str: str,
-    test_config,
-) -> None:
-    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
-
-    with patch(
-        "flows.index.get_vespa_search_adapter_from_aws_secrets",
-        return_value=local_vespa_search_adapter,
-    ):
-        assert (
-            await index(
-                run_output_identifier=run_output_identifier,
-                document_stems=aggregate_inference_results_document_stems,
-                config=test_config,
-                batch_size=1,
-                single_host_mode=True,
-            )
-            is None
-        )
-
-
-@pytest.mark.vespa
-@pytest.mark.asyncio
 async def test_index_family_document(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,

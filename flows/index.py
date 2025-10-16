@@ -12,6 +12,7 @@ import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow, task, unmapped
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.client.schemas.objects import FlowRun
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 
@@ -51,7 +52,6 @@ from flows.utils import (
     collect_unique_file_stems_under_prefix,
     get_logger,
     iterate_batch,
-    map_as_local,
     map_as_sub_flow,
     remove_translated_suffix,
     return_with,
@@ -144,8 +144,8 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[Any],
-    failures: Sequence[Any],
+    successes: Sequence[None],
+    failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
 
@@ -627,7 +627,6 @@ async def index(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
-    single_host_mode: bool = False,
 ) -> None:
     """
     Index aggregated inference results from a list of S3 URIs into Vespa.
@@ -657,10 +656,6 @@ async def index(
 
     indexer_max_vespa_connections : int
         The maximum number of Vespa connections to use within each indexing flow.
-
-    single_host_mode : int
-        Run all documents in the same machine as the top-level
-        function or across separate machines via deployments.
     """
 
     logger = get_logger()
@@ -709,18 +704,12 @@ async def index(
             )
         )
 
-    if single_host_mode:
-        successes, failures = await map_as_local(  # pyright: ignore[reportCallIssue]
-            counter=indexer_concurrency_limit,
-            parameterised_batches=parameterised_batches,
-        )
-    else:
-        successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
-            aws_env=config.aws_env,
-            counter=indexer_concurrency_limit,
-            parameterised_batches=parameterised_batches,
-            unwrap_result=False,
-        )
+    successes, failures = await map_as_sub_flow(  # pyright: ignore[reportCallIssue]
+        aws_env=config.aws_env,
+        counter=indexer_concurrency_limit,
+        parameterised_batches=parameterised_batches,
+        unwrap_result=True,
+    )
 
     await create_indexing_summary_artifact(
         config=config,
