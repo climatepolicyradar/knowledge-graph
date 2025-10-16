@@ -60,7 +60,7 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from knowledge_graph.classifier import Classifier, ModelPath
+from knowledge_graph.classifier import Classifier
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -391,15 +391,9 @@ async def load_classifier(
 ) -> Classifier:
     """Load a classifier into memory."""
     async with concurrency("load_classifier", occupy=5):
-        wandb_classifier_path = ModelPath(
-            wikibase_id=classifier_spec.wikibase_id,
-            classifier_id=classifier_spec.classifier_id,
-        )
-        artifact_id = f"{wandb_classifier_path}:{config.aws_env}"
-        artifact = run.use_artifact(artifact_id, type="model")
-        download_folder = artifact.download()
-        model_path = Path(download_folder) / "model.pickle"
-        classifier = Classifier.load(model_path)
+        artifact_id = f"{config.wandb_model_registry}/{classifier_spec.wikibase_id}:{classifier_spec.wandb_registry_version}"
+        downloaded_model_path = run.use_model(artifact_id)
+        classifier = Classifier.load(downloaded_model_path)
     return classifier
 
 

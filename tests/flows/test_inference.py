@@ -153,12 +153,12 @@ async def test_determine_file_stems__error(
 async def test_load_classifier__existing_classifier(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
-    wikibase_id, classifier_id = local_classifier_id
+    wikibase_id, classifier_id, wandb_registry_version = local_classifier_id
     _, mock_run, mock_artifact = mock_wandb
     spec = ClassifierSpec(
         wikibase_id=wikibase_id,
-        classifier_id=classifier_id,
-        wandb_registry_version="v1",
+        classifier_id=classifier_id,  # no longer used but required for validation
+        wandb_registry_version=wandb_registry_version,
     )
     classifier = await load_classifier(
         mock_run,
