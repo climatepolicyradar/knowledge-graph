@@ -10,7 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.client import ClientError
-from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
+from cpr_sdk.parser_models import (
+    BaseParserOutput,
+    BlockType,
+    PDFData,
+    PDFTextBlock,
+)
 from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
@@ -39,10 +44,10 @@ from flows.inference import (
     load_classifier,
     load_document,
     parse_client_error_details,
+    process_single_document_inference,
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
     store_inference_result,
-    store_labels,
     store_metadata,
     text_block_inference,
 )
@@ -174,12 +179,40 @@ async def test_load_classifier__existing_classifier(
 async def test_load_document(
     test_config, mock_async_bucket_documents, mock_s3_async_client
 ):
-    for doc_file_name in mock_async_bucket_documents:
-        file_stem = Path(doc_file_name).stem
-        doc = await load_document(
-            test_config, file_stem=file_stem, s3_client=mock_s3_async_client
+    valid_doc, invalid_doc = mock_async_bucket_documents
+
+    # Invalid doc
+    invalid_document_stem = Path(invalid_doc).stem
+    invalid_document_result = SingleDocumentInferenceResult(
+        document_stem=DocumentStem(invalid_document_stem),
+        document=None,
+        labelled_passages=[],
+        wikibase_id="",
+        classifier_id="",
+    )
+
+    with pytest.raises(ValueError, match="non-English language"):
+        await load_document(
+            test_config,
+            document_result=invalid_document_result,
+            s3_client=mock_s3_async_client,
         )
-        assert file_stem == doc.document_id
+
+    # Valid Doc
+    valid_document_stem = Path(valid_doc).stem
+    valid_document_result = SingleDocumentInferenceResult(
+        document_stem=DocumentStem(valid_document_stem),
+        document=None,
+        labelled_passages=[],
+        wikibase_id="",
+        classifier_id="",
+    )
+    result = await load_document(
+        test_config,
+        document_result=valid_document_result,
+        s3_client=mock_s3_async_client,
+    )
+    assert result.document is not None
 
 
 def test_stringify():
@@ -226,38 +259,6 @@ def test_document_passages__html(parser_output_html):
 def test_document_passages__pdf(parser_output_pdf):
     pdf_result = document_passages(parser_output_pdf).__next__()
     assert pdf_result == ("test pdf text", "2")
-
-
-@pytest.mark.asyncio
-async def test_store_labels(
-    test_config, mock_async_bucket, mock_s3_async_client, snapshot
-):
-    text = "This is a test text block"
-    spans = [Span(text=text, start_index=15, end_index=19)]
-    labels = [LabelledPassage(text=text, spans=spans)]
-
-    successes, failures, unknown_failures = await store_labels(
-        test_config,
-        [
-            SingleDocumentInferenceResult(
-                labelled_passages=labels,
-                document_stem=DocumentStem("TEST.DOC.0.1"),
-                wikibase_id="Q9081",
-                classifier_id="2tnmbxaw",
-            )
-        ],
-    )
-
-    assert successes == snapshot(name="successes")
-    assert failures == snapshot(name="failures")
-    assert unknown_failures == snapshot(name="unknown_failures")
-
-    labels = await helper_list_labels_in_bucket(
-        test_config, mock_async_bucket, mock_s3_async_client
-    )
-
-    assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/2tnmbxaw/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -482,9 +483,7 @@ async def test_run_classifier_inference_on_document(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_async_bucket_documents,
     snapshot,
-    mock_s3_async_client,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
@@ -502,23 +501,11 @@ async def test_run_classifier_inference_on_document(
         test_config,
         classifier_spec,
     )
-
-    # Run the function on a document with no language
-    document_stem = Path(mock_async_bucket_documents[1]).stem
-    with pytest.raises(ValueError) as exc_info:
-        result = await run_classifier_inference_on_document(
-            config=test_config,
-            file_stem=DocumentStem(document_stem),
-            classifier=classifier,
-            s3_client=mock_s3_async_client,
-        )
-
-    assert "Cannot run inference on" in str(exc_info.value)
-
-    # Run the function on a HTML document with has_valid_text=False
-    document_stem = "HTML.document.0.1"
-    with patch("flows.inference.load_document") as mock_load_document:
-        html_document_invalid_text = BaseParserOutput(
+    document_stem = DocumentStem("HTML.document.0.1")
+    store_result = SingleDocumentInferenceResult(
+        document_stem=document_stem,
+        labelled_passages=[],
+        document=BaseParserOutput(
             document_id=document_stem,
             document_metadata={},
             document_name="test document",
@@ -530,76 +517,34 @@ async def test_run_classifier_inference_on_document(
             document_slug=document_stem,
             languages=None,
             translated=False,
-            html_data=HTMLData(
-                has_valid_text=False,
+            html_data=None,
+            pdf_data=PDFData(
+                page_metadata=[],
+                md5sum="",
                 text_blocks=[
-                    HTMLTextBlock(
-                        text=["This is an invalid text block."],
-                        text_block_id="0",
+                    PDFTextBlock(
+                        text=[
+                            "Ministry of fishing, overfishing, seafood harvest and fisheries."
+                        ],
+                        text_block_id="2",
+                        page_number=1,
+                        coords=[],
                         type=BlockType.TEXT,
+                        type_confidence=0.5,
                     )
                 ],
             ),
-            pdf_data=None,
             pipeline_metadata={},
-        )
+        ),
+        wikibase_id=classifier_spec.wikibase_id,
+        classifier_id=classifier_spec.classifier_id,
+    )
 
-        mock_load_document.return_value = html_document_invalid_text
-
-        result = await run_classifier_inference_on_document(
-            config=test_config,
-            file_stem=DocumentStem(document_stem),
-            classifier=classifier,
-            s3_client=mock_s3_async_client,
-        )
-
-        assert result == snapshot
-
-    # Run the function on a document with English language
-    document_stem = Path(mock_async_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
-        config=test_config,
-        file_stem=DocumentStem(document_stem),
+        result=store_result,
         classifier=classifier,
-        s3_client=mock_s3_async_client,
     )
-
-    assert result == snapshot
-
-
-@pytest.mark.asyncio
-async def test_run_classifier_inference_on_document_missing(
-    test_config,
-    mock_classifiers_dir,
-    mock_wandb,
-    mock_async_bucket,
-    mock_s3_async_client,
-):
-    # Setup
-    _, mock_run, _ = mock_wandb
-    test_config.local_classifier_dir = mock_classifiers_dir
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q788"),
-        classifier_id=ClassifierID.generate("Q788", "v1"),
-        wandb_registry_version="v1",
-    )
-
-    # Load classifier
-    classifier = await load_classifier(
-        mock_run,
-        test_config,
-        classifier_spec,
-    )
-
-    document_stem = DocumentStem("CCLW.executive.8133.0")
-    with pytest.raises(ClientError) as excinfo:
-        await run_classifier_inference_on_document(
-            config=test_config,
-            file_stem=document_stem,
-            classifier=classifier,
-            s3_client=mock_s3_async_client,
-        )
-    assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
+    assert result.labelled_passages == snapshot
 
 
 @pytest.mark.asyncio
@@ -1609,3 +1554,25 @@ def test_get_inference_fault_metadata() -> None:
     # Assert that we can dump the result to a string as this is a requirement of the
     # fault metadata.
     json.dumps(metadata_json)
+
+
+def test_process_single_document_inference():
+    doc_stem = DocumentStem("test_doc")
+    success_result = SingleDocumentInferenceResult(
+        document=None,
+        labelled_passages=[],
+        document_stem=doc_stem,
+        wikibase_id="Q123",
+        classifier_id="test_classifier",
+    )
+
+    results: list[
+        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
+    ] = [
+        (doc_stem, success_result),  # success
+        (doc_stem, ValueError("test error")),  # failure
+        RuntimeError("unknown error"),  # unknown failure
+    ]
+
+    successes, failures, unknown_failures = process_single_document_inference(results)
+    assert (len(successes), len(failures), len(unknown_failures)) == (1, 1, 1)
