@@ -55,7 +55,14 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
             labels: list[str], case_sensitive: bool = False
         ) -> re.Pattern:
             """Create a regex pattern from a list of labels."""
-            pattern = r"\b(?:" + "|".join(labels) + r")\b" if labels else ""
+
+            # Matches space, hyphen-minus, en-dash, and em-dash interchangeably
+            normalized_labels = [
+                re.escape(label).replace(r"\ ", r"[ \-–—]").replace(r"\-", r"[ \-–—]")
+                for label in labels
+            ]
+
+            pattern = r"\b(?:" + "|".join(normalized_labels) + r")\b" if labels else ""
             flags = re.IGNORECASE if not case_sensitive else 0
             return re.compile(pattern, flags)
 
