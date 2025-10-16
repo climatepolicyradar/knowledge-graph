@@ -80,9 +80,12 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
 
         def create_pattern(
             labels: list[str], case_sensitive: bool = False
-        ) -> re.Pattern:
+        ) -> re.Pattern | None:
             """Create a regex pattern from a list of labels."""
-            pattern = r"\b(?:" + "|".join(labels) + r")\b" if labels else ""
+            if not labels:
+                return None
+
+            pattern = r"(?<!\w)(?:" + "|".join(labels) + r")(?!\w)"
             flags = re.IGNORECASE if not case_sensitive else 0
             return re.compile(pattern, flags)
 
