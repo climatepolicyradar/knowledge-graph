@@ -674,7 +674,7 @@ async def mock_wandb(
 
         mock_run = Mock()
         mock_run.use_model.return_value = (
-            mock_classifiers_dir / wikibase_id / wandb_registry_version
+            mock_classifiers_dir / wikibase_id / wandb_registry_version / "model.pickle"
         )
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact

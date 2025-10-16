@@ -394,8 +394,6 @@ async def load_classifier(
         artifact_id = f"{config.wandb_model_registry}/{classifier_spec.wikibase_id}:{classifier_spec.wandb_registry_version}"
         downloaded_model_path = run.use_model(artifact_id)
         classifier = Classifier.load(downloaded_model_path)
-        model_path = Path(download_folder) / "model.pickle"
-        classifier = Classifier.load(model_path)
     return classifier
 
 
