@@ -624,8 +624,10 @@ class ParameterisedFlow(NamedTuple, Generic[P, R]):
 
 
 async def map_as_local(
+    aws_env: AwsEnv,
     counter: PositiveInt,
     parameterised_batches: Sequence[ParameterisedFlow[P, R]],
+    unwrap_result: bool,
 ) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]:
     """
     Map over an iterable, running the function as a thread on same host.
@@ -636,7 +638,26 @@ async def map_as_local(
     exception was returned or a flow run didn't complete, or some
     value was returned.
 
+    The parameters are the same as `map_as_sub_flow` so it can be a
+    drop-in replacement.
+
+    You'll want to patch the function first, for example, if you want to run indexing:
+
+    ```
+    import flows.utils
+
+    flows.utils.map_as_sub_flow = flows.utils.map_as_local
+
+    from flows.index import (
+        index,
+    ...
+    ````
     """
+    if not unwrap_result:
+        raise ValueError(
+            "this cannot be used for if you're expecting wrapped results, from Prefect"
+        )
+
     semaphore = asyncio.Semaphore(counter)
 
     tasks = []
