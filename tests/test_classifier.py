@@ -1,7 +1,8 @@
+import re
 from typing import Type
 
 import pytest
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from knowledge_graph.classifier.classifier import Classifier
@@ -10,7 +11,13 @@ from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
-from tests.common_strategies import concept_label_strategy, concept_strategy
+from tests.common_strategies import (
+    concept_label_strategy,
+    concept_strategy,
+    more_complex_separator_characters,
+    multi_word_label_strategy,
+    single_word_label_strategy,
+)
 
 
 @st.composite
@@ -87,13 +94,37 @@ classifier_classes: list[Type[Classifier]] = [
 ]
 
 
+@given(concept=concept_strategy(), text_data=st.data())
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
-@given(concept=concept_strategy(), text=st.data())
 def test_whether_classifier_matches_concept_labels_in_text(
-    classifier_class: Type[Classifier], concept: Concept, text
+    classifier_class: Type[Classifier], concept: Concept, text_data: st.DataObject
 ):
-    text = text.draw(positive_text_strategy(labels=concept.all_labels))
+    # Skip concepts where any negative label token equals any token from a positive label.
+    # In those cases, a positive match would be correctly filtered by the classifier
+    # due to the overlapping negative label.
+    sep = r"[\s\-]+"
+    positive_tokens = {
+        tok.lower()
+        for label in concept.all_labels
+        for tok in re.split(sep, label)
+        if tok
+    }
+    negative_tokens = {
+        tok.lower()
+        for label in concept.negative_labels
+        for tok in re.split(sep, label)
+        if tok
+    }
+    assume(positive_tokens.isdisjoint(negative_tokens))
+
+    # Ensure the generated positive text does not accidentally include a negative label
+    # (e.g. by appending extra tokens after the positive label that complete a negative label).
+    text = text_data.draw(
+        positive_text_strategy(
+            labels=concept.all_labels, negative_labels=concept.negative_labels
+        )
+    )
     classifier = classifier_class(concept)
     spans = classifier.predict(text)
 
@@ -106,11 +137,11 @@ def test_whether_classifier_matches_concept_labels_in_text(
 
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
-@given(concept=concept_strategy(), text=st.data())
+@given(concept=concept_strategy(), data=st.data())
 def test_whether_classifier_finds_no_spans_in_negative_text(
-    classifier_class: Type[Classifier], concept: Concept, text
+    classifier_class: Type[Classifier], concept: Concept, data
 ):
-    text = text.draw(negative_text_strategy(labels=concept.all_labels))
+    text = data.draw(negative_text_strategy(labels=concept.all_labels))
     classifier = classifier_class(concept)
     spans = classifier.predict(text)
 
@@ -230,11 +261,11 @@ def test_concrete_negative_label_examples(
 
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
-@given(concept=concept_strategy(), text=st.data())
+@given(concept=concept_strategy(), data=st.data())
 def test_whether_returned_spans_are_valid(
-    classifier_class: Type[Classifier], concept: Concept, text
+    classifier_class: Type[Classifier], concept: Concept, data
 ):
-    text = text.draw(positive_text_strategy(labels=concept.all_labels))
+    text = data.draw(positive_text_strategy(labels=concept.all_labels))
     classifier = classifier_class(concept)
     spans = classifier.predict(text)
 
@@ -461,3 +492,103 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
     concept = Concept(wikibase_id="Q123", preferred_label="test")
 
     assert EmptyIDClassifier(concept)
+
+
+@st.composite
+def label_with_separator_variant_strategy(draw, label: str):
+    r"""
+    Given a label, return it with a different separator.
+
+    Eg. takes "greenhouse gas" and returns "greenhouse\ngas" or "greenhouse-gas" etc.
+    """
+    # Split on any separator characters to get the words
+    # Use the same pattern as in the keyword classifier
+    separator_pattern = r"[\s\-]+"
+    words = re.split(separator_pattern, label.strip())
+    words = [w for w in words if w]  # Remove empty strings
+
+    if len(words) == 1:
+        return label  # Single word, no separator to vary
+
+    # Join with a separator from separator_characters
+    variant_sep = draw(st.sampled_from(more_complex_separator_characters))
+    return variant_sep.join(words)
+
+
+@given(label_data=st.data(), label_variant_data=st.data(), text_data=st.data())
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+def test_whether_multi_word_labels_match_text_with_different_separators(
+    classifier_class: Type[Classifier],
+    label_data: st.DataObject,
+    label_variant_data: st.DataObject,
+    text_data: st.DataObject,
+):
+    r"""Test that labels defined with one separator match text with different separators."""
+    label = label_data.draw(multi_word_label_strategy())
+    label_variant = label_variant_data.draw(
+        label_with_separator_variant_strategy(label)
+    )
+    text = text_data.draw(positive_text_strategy(labels=[label_variant]))
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
+    classifier = classifier_class(concept)
+    spans = classifier.predict(text)
+
+    assert spans, f"{classifier} did not match label '{label}' in text: '{text}'"
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(label_data=st.data(), negative_label_data=st.data(), text_data=st.data())
+def test_whether_negative_labels_filter_matches_regardless_of_separator(
+    classifier_class: Type[Classifier],
+    label_data: st.DataObject,
+    negative_label_data: st.DataObject,
+    text_data: st.DataObject,
+):
+    r"""Test that negative labels defined with one separator filter text with different separators."""
+    # Create a positive label (single or multi-word)
+    positive_label = label_data.draw(concept_label_strategy)
+
+    # Create a negative label that CONTAINS the positive label
+    # Similar to test_whether_classifier_respects_negative_labels
+    negative_label = (
+        positive_label + " " + negative_label_data.draw(single_word_label_strategy)
+    )
+
+    # Create a variant of the negative label with different separators
+    negative_variant = negative_label_data.draw(
+        label_with_separator_variant_strategy(negative_label)
+    )
+
+    # Generate text containing the negative label variant (which contains the positive)
+    text = text_data.draw(positive_text_strategy(labels=[negative_variant]))
+
+    concept = Concept(
+        wikibase_id=WikibaseID("Q123"),
+        preferred_label=positive_label,
+        negative_labels=[negative_label],
+    )
+    classifier = classifier_class(concept)
+    spans = classifier.predict(text)
+
+    assert not spans, (
+        f"{classifier} matched text in '{text}', but it shouldn't have! "
+        f"The negative label '{negative_label}' should filter out the positive match."
+    )
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(label=single_word_label_strategy)
+def test_whether_single_word_labels_respect_word_boundaries(
+    classifier_class: Type[Classifier], label: str
+):
+    """Test that single-word labels still respect word boundaries."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
+    classifier = classifier_class(concept)
+
+    # Test that it matches when there are proper word boundaries
+    assert classifier.predict(f"The {label} is important.")
+    # Test that it doesn't match when embedded in another word (no word boundaries)
+    assert not classifier.predict(f"xyz{label}abc")
