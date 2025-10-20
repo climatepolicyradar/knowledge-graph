@@ -62,7 +62,7 @@ METADATA_FILE_NAME = "metadata.json"
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
 
-# A serialised vespa concept, see cpr_sdk.models.search.Concept
+# A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 
 
