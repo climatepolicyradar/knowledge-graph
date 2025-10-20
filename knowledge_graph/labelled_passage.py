@@ -1,5 +1,6 @@
 import html
 import re
+from collections import defaultdict
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -124,3 +125,55 @@ class LabelledPassage(BaseModel):
             }
         )
         return text.translate(normalize_translation)
+
+    def __hash__(self) -> int:
+        """Hash based on id for use in sets/dicts"""
+        return hash(self.id)
+
+
+def consolidate_spans(
+    labelled_passages: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """
+    Consolidate spans on passages with matching text.
+
+    This function combines multiple passages with the same text into single
+    passages, merging spans from all labellers. This is useful when pulling
+    passages from Argilla where multiple labellers may have annotated the same
+    text, resulting in separate passages per response.
+
+    Metadata from the first passage in each group is preserved (since passages with
+    identical text should have the same metadata from the same source document).
+
+    Args:
+        labelled_passages: List of passages, potentially containing duplicates
+            with the same text but different spans from different labellers.
+
+    Returns:
+        List of consolidated passages with unique texts and merged spans.
+
+    Example:
+        >>> # Three passages: same text, different labellers
+        >>> passage1 = LabelledPassage(text="Hello world", spans=[span_a])
+        >>> passage2 = LabelledPassage(text="Hello world", spans=[span_b])
+        >>> passage3 = LabelledPassage(text="Different", spans=[span_c])
+        >>> merged = consolidate_by_text([passage1, passage2, passage3])
+        >>> len(merged)  # Two unique texts
+        2
+        >>> len(merged[0].spans)  # Spans from both labellers combined
+        2
+    """
+    grouped_passages: dict[str, list[LabelledPassage]] = defaultdict(list)
+    for passage in labelled_passages:
+        grouped_passages[passage.id].append(passage)
+
+    consolidated: list[LabelledPassage] = []
+    for passages in grouped_passages.values():
+        consolidated.append(
+            LabelledPassage(
+                text=passages[0].text,
+                spans=[span for passage in passages for span in passage.spans],
+                metadata=passages[0].metadata,
+            )
+        )
+    return consolidated
