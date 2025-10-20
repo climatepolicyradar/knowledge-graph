@@ -1,7 +1,6 @@
 import html
 import re
 
-from argilla import Argilla, Record, Response
 from pydantic import BaseModel, Field, model_validator
 
 from knowledge_graph.identifiers import Identifier
@@ -39,60 +38,6 @@ class LabelledPassage(BaseModel):
                     "end_index must be less than or equal to the length of the text"
                 )
         return self
-
-    @classmethod
-    def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":
-        """
-        Create a LabelledPassage object from an Argilla record
-
-        :param Record record: The Argilla record to create the LabelledPassage
-        object from
-        :return LabelledPassage: The created LabelledPassage object
-        """
-        text: str = record.fields.get("text", "")  # type: ignore
-
-        metadata = record.metadata or {}  # type: ignore
-        spans = []
-
-        # we've observed that users can submit multiple annotations for the same text!
-        # we should only consider the most recent annotation from each.
-        # NOTE we don't seem to have this field anymore
-        # most_recent_annotation_from_each_user = [
-        #     max(group, key=lambda record: record.updated_at)
-        #     for _, group in itertools.groupby(  # type: ignore
-        #         sorted(record.responses, key=lambda response: response.user_id),  # type: ignore
-        #         key=lambda response: response.user_id,
-        #     )
-        # ]
-
-        # https://docs.argilla.io/latest/reference/argilla/records/responses/?h=#usage-examples
-        # this suggests we call the attribute with the name of the question here
-        # I believe all of our questions are named "entities", so this is safe, but not aligned to
-        # what they imagined. Also, their typing is utterly unhelpful, so filling that in myself below.
-        responses: list[Response] = record.responses["entities"]
-        for response in responses:
-            user = client.users(id=response.user_id)
-            assert user is not None, f"User with id {response.user_id} not found"
-            user_name = user.username
-            try:
-                # a "value" is a dict with the keys "start", "end", and "label"
-                for value in response.value:
-                    spans.append(
-                        Span(
-                            text=text,
-                            start_index=value["start"],
-                            end_index=value["end"],
-                            concept_id=value["label"],
-                            labellers=[user_name],
-                            timestamps=[
-                                record.updated_at
-                            ],  # so it's the record that bears this attribute now rather than the response...
-                        )
-                    )
-            except KeyError:
-                pass
-
-        return cls(text=text, spans=spans, metadata=metadata)
 
     def get_highlighted_text(
         self, start_pattern: str = "[cyan]", end_pattern: str = "[/cyan]"
