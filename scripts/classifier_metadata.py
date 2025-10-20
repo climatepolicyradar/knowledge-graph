@@ -216,7 +216,12 @@ def update(
                 classifiers_profiles := (current_class_prof | add_class_prof)
                 - remove_class_prof
             ):
-                artifact.metadata["classifiers_profiles"] = classifiers_profiles
+                if len(classifiers_profiles) > 1:
+                    raise typer.BadParameter(
+                        f"Artifact must have maximum of one classifiers profile in metadata, or you must specify 1 to remove. Current classifiers profiles `{current_class_prof}`"
+                    )
+                else:
+                    artifact.metadata["classifiers_profiles"] = classifiers_profiles
             else:
                 artifact.metadata.pop("classifiers_profiles", None)
 
