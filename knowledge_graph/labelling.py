@@ -1,5 +1,6 @@
 import os
 import uuid
+from functools import lru_cache
 from logging import getLogger
 from typing import Optional, Sequence
 from uuid import UUID
@@ -12,6 +13,7 @@ from argilla import (
     SpanQuestion,
     TaskDistribution,
     TextField,
+    User,
     Workspace,
 )
 from dotenv import find_dotenv, load_dotenv
@@ -72,7 +74,7 @@ class ArgillaSession:
 
     def get_dataset(
         self,
-        wikibase_id: WikibaseID,
+        wikibase_id: WikibaseID | str,
         workspace: Optional[str] = None,
     ) -> Dataset:
         """
@@ -188,6 +190,22 @@ class ArgillaSession:
         )
         return created_dataset
 
+    @lru_cache(maxsize=128)
+    def get_user(self, user_id: UUID) -> User | None:
+        """
+        Get user object by ID, with caching to avoid repeated API calls.
+
+        This method is cached and can be reused across the session for efficient
+        user lookups. Returns None if user not found.
+
+        Args:
+            user_id: User UUID.
+
+        Returns:
+            User object, or None if user not found.
+        """
+        return self.client.users(id=user_id)
+
     def push_labelled_passages(
         self,
         dataset: Dataset,
@@ -272,7 +290,7 @@ class ArgillaSession:
                 if response.status not in include_statuses:
                     continue
 
-                user = self.client.users(id=UUID(response.user_id))
+                user = self.get_user(response.user_id)
                 labeller = user.username if user else str(response.user_id)
 
                 spans = []
