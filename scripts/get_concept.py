@@ -8,6 +8,7 @@ from rich.console import Console
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import concept_dir
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import consolidate_spans
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 
@@ -55,11 +56,12 @@ async def get_concept_async(
 
     try:
         console.log("Fetching labelled passages from Argilla...")
-        labelled_passages = argilla.pull_labelled_passages(concept)
+        labelled_passages = argilla.get_labelled_passages(wikibase_id=wikibase_id)
+        consolidated_labelled_passages = consolidate_spans(labelled_passages)
         console.log(
-            f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
+            f"🏷️ Found {len(consolidated_labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )
-        concept.labelled_passages = labelled_passages
+        concept.labelled_passages = consolidated_labelled_passages
     except ValueError:
         console.log(
             f"⚠️ No labelled passages found for {wikibase_id} in Argilla",

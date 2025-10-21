@@ -7,7 +7,7 @@ import argilla as rg
 from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
-from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelled_passage import LabelledPassage, consolidate_spans
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.metrics import count_span_level_metrics
 from knowledge_graph.span import Span
@@ -25,8 +25,11 @@ def dataset_to_labelled_passages_with_cache(
     if dataset_name in DATASET_CACHE:
         return DATASET_CACHE[dataset_name]
 
-    labelled_passages = argilla_session.dataset_to_labelled_passages(dataset)
-    merged_passages = create_gold_standard_labelled_passages(labelled_passages)
+    labelled_passages = argilla_session.get_labelled_passages(wikibase_id=dataset_name)
+    consolidated_labelled_passages = consolidate_spans(labelled_passages)
+    merged_passages = create_gold_standard_labelled_passages(
+        consolidated_labelled_passages
+    )
 
     DATASET_CACHE[dataset_name] = merged_passages
     return merged_passages
@@ -48,8 +51,6 @@ class PassageLevelIssue(LabellingIssue):
 
 class DatasetLevelIssue(LabellingIssue):
     """Issue at the dataset level"""
-
-    pass
 
 
 def all_dataset_level_checks(dataset: rg.Dataset) -> list[DatasetLevelIssue]:
@@ -145,7 +146,8 @@ def check_whether_dataset_has_a_high_discard_ratio(
 
 @lru_cache(maxsize=64)
 def _get_username_from_id(user_id: str) -> str:
-    user = argilla_session.client.users(id=user_id)
+    """Get username from user ID, with caching."""
+    user = argilla_session.get_user(user_id)
     assert isinstance(user, User)
     return user.username
 
@@ -158,8 +160,8 @@ def check_whether_dataset_has_a_low_level_of_interannotator_agreement(
     # Get all unique labeller names
     labeller_names = set()
     for record in dataset.records:
-        responses: list[Response] = record.responses["entities"]
-        for response in responses:
+        record_responses: list[Response] = record.responses["entities"]
+        for response in record_responses:
             user_name = _get_username_from_id(response.user_id)
             labeller_names.add(user_name)
 
@@ -171,12 +173,12 @@ def check_whether_dataset_has_a_low_level_of_interannotator_agreement(
     passages_by_labeller = defaultdict(list)
     for record in dataset.records:
         text = record.fields.get("text", "")
-        responses: list[Response] = record.responses["entities"]
+        entity_responses: list[Response] = record.responses["entities"]
 
         # Create a passage for each labeller's annotations
         for labeller in labeller_names:
             spans = []
-            for response in responses:
+            for response in entity_responses:
                 user_name = _get_username_from_id(response.user_id)
                 if user_name == labeller:
                     try:
