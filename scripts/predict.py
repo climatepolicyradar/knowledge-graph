@@ -103,7 +103,7 @@ def main(
             batch_df = df.iloc[batch_start:batch_end]
 
             texts = batch_df["text_block.text"].fillna("").tolist()
-            spans_batch = classifier.predict_batch(texts)
+            spans_batch = classifier.predict(texts)
 
             for (_, row), text, spans in zip(batch_df.iterrows(), texts, spans_batch):
                 if spans:

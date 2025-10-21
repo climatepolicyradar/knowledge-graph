@@ -126,7 +126,7 @@ class StemmedKeywordClassifier(KeywordClassifier):
 
         return token_info
 
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str) -> list[Span]:
         """
         Predict whether the concept is present in the text.
 
@@ -135,7 +135,7 @@ class StemmedKeywordClassifier(KeywordClassifier):
         """
         token_info = self.stem_text(text)
         stemmed_text = " ".join(token["stemmed_token"] for token in token_info)
-        stemmed_spans = super().predict(stemmed_text)
+        stemmed_spans = super()._predict(stemmed_text)
 
         seen_positions = set()
         result_spans = []

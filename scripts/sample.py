@@ -105,7 +105,7 @@ def main(
             )
             predictions = []
             for text_chunk in chunked(raw_text_passages, 100):
-                predictions.extend(model.predict_batch(text_chunk))
+                predictions.extend(model.predict(text_chunk))
                 progress_bar.update(task, advance=len(text_chunk))
 
         # Add a column to the dataset for each classifier's predictions

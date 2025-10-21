@@ -182,7 +182,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         except RuntimeError:
             pass
 
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
 
         self._check_and_nest_event_loop()
@@ -203,7 +203,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             logger.warning(f"Prediction failed: {e}")
             return []
 
-    def predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
+    def _predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
 
         self._check_and_nest_event_loop()

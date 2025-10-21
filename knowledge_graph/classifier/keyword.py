@@ -140,7 +140,7 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
                 )
         return spans
 
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 

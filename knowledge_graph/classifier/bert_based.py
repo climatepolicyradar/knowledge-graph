@@ -133,11 +133,11 @@ class BertBasedClassifier(
         finally:
             self.model.train(was_training)  # type: ignore[attr-defined]
 
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        return self.predict_batch([text])[0]
+        return self._predict_batch([text])[0]
 
-    def predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
+    def _predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
 
         if getattr(self, "_use_dropout_during_inference", False):

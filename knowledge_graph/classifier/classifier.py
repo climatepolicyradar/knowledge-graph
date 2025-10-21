@@ -2,11 +2,11 @@ import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import (
-    Iterator,
     Optional,
     Protocol,
     Sequence,
     Union,
+    overload,
     runtime_checkable,
 )
 
@@ -71,8 +71,67 @@ class Classifier(ABC):
         """
         return self
 
+    @overload
+    def predict(
+        self,
+        text: str,
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        **kwargs,
+    ) -> list[Span]: ...
+
+    @overload
+    def predict(
+        self,
+        text: list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        **kwargs,
+    ) -> list[list[Span]]: ...
+
+    def predict(
+        self,
+        text: str | list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        **kwargs,
+    ) -> list[Span] | list[list[Span]]:
+        """
+        Predict whether the supplied text contains an instance of the concept.
+
+        :param str | list[str] text: The text to predict on
+        :param int | None batch_size: Batch size to use if predicting on multiple texts.
+            If not passed, defaults to predicting all texts in one batch.
+        :param bool show_progress: Whether to show progress in predicting. Defaults to
+            False.
+        :return list[Span] | list[list[Span]]: A list of spans in the text or texts
+        """
+
+        if isinstance(text, str):
+            return self._predict(text, **kwargs)
+
+        batch_size = batch_size or len(text)
+        text_batches = list(iterate_batch(text, batch_size))
+        preds = []
+
+        if show_progress:
+            with Progress() as progress:
+                task = progress.add_task(
+                    "Processing batches...", total=len(text_batches)
+                )
+                for batch in text_batches:
+                    batch_preds = self._predict_batch(batch, **kwargs)
+                    preds.extend(batch_preds)
+                    progress.advance(task)
+        else:
+            for batch in text_batches:
+                batch_preds = self._predict_batch(batch, **kwargs)
+                preds.extend(batch_preds)
+
+        return preds
+
     @abstractmethod
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
@@ -81,47 +140,14 @@ class Classifier(ABC):
         """
         raise NotImplementedError
 
-    def predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
+    def _predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
         """
         Predict whether the supplied texts contain instances of the concept.
 
         :param list[str] texts: The texts to predict on
         :return list[list[Span]]: A list of spans in the texts for each text
         """
-        return [self.predict(text) for text in texts]
-
-    def predict_iter(
-        self, texts: Sequence[str], batch_size: int, show_progress: bool = False
-    ) -> Iterator[list[Span]]:
-        """Yield predictions for texts in batches."""
-
-        batches = iterate_batch(texts, batch_size)
-        batches_list = list(batches)
-
-        if show_progress:
-            with Progress() as progress:
-                task = progress.add_task(
-                    "Processing batches...", total=len(batches_list)
-                )
-                for batch in batches_list:
-                    batch_preds = self.predict_batch(batch)
-                    for preds in batch_preds:
-                        yield preds
-                    progress.advance(task)
-        else:
-            for batch in batches_list:
-                batch_preds = self.predict_batch(batch)
-                for preds in batch_preds:
-                    yield preds
-
-    def predict_many(
-        self, texts: list[str], batch_size: int, show_progress: bool = False
-    ) -> list[list[Span]]:
-        """Predict for all texts, returning a list of per-text predictions."""
-
-        return list(
-            self.predict_iter(texts, batch_size=batch_size, show_progress=show_progress)
-        )
+        return [self._predict(text) for text in texts]
 
     def get_variant_sub_classifier(self) -> Self:
         """
@@ -259,4 +285,4 @@ class VariantEnabledClassifier(Protocol):
     """
 
     def get_variant(self) -> "VariantEnabledClassifier": ...  # noqa: D102
-    def predict(self, text: str) -> list[Span]: ...  # noqa: D102
+    def _predict(self, text: str) -> list[Span]: ...  # noqa: D102
