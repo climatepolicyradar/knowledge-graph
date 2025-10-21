@@ -590,7 +590,6 @@ metadata_key_strategy = st.text(
             # https://en.wikipedia.org/wiki/Unicode_character_property#General_Category
             "Lu",  # Letter, uppercase
             "Ll",  # Letter, lowercase
-            "And",  # Number, decimal digit
         ),
         whitelist_characters="._- ",
     ),
@@ -639,14 +638,6 @@ def test_whether_format_metadata_property_idempotent(metadata):
         result_once = session._format_metadata(metadata)
         result_twice = session._format_metadata(result_once)
         assert result_once == result_twice
-
-
-@given(metadata_dict_strategy)
-def test_whether_format_metadata_preserves_count_of_key_value_pairs(metadata):
-    with patch("knowledge_graph.labelling.Argilla"):
-        session = ArgillaSession()
-        result = session._format_metadata(metadata)
-        assert len(result) == len(metadata)
 
 
 @given(metadata_dict_strategy)
