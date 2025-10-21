@@ -974,17 +974,19 @@ def test_document_passages(
 @pytest.mark.parametrize(
     ("dont_run_on", "removed"),
     [
-        (None, []),
-        ([], []),
+        (None, ["Sabin.document.2524.placeholder"]),
+        ([], ["Sabin.document.2524.placeholder"]),
         (
             ["gef"],
-            [
-                "GEF.document.787.n0000.json",
-            ],
+            ["GEF.document.787.n0000.json", "Sabin.document.2524.placeholder"],
         ),
         (
             ["cpr", "sabin"],
-            ["Sabin.document.9869.10352.json", "CPR.document.i00003835.n0000.json"],
+            [
+                "Sabin.document.9869.10352.json",
+                "CPR.document.i00003835.n0000.json",
+                "Sabin.document.2524.placeholder",
+            ],
         ),
         (
             DontRunOnEnum.__members__.keys(),
@@ -997,6 +999,7 @@ def test_document_passages(
                 "OEP.document.i00000231.n0000.json",
                 "Sabin.document.9869.10352.json",
                 "CPR.document.i00003835.n0000.json",
+                "Sabin.document.2524.placeholder",
             ],
         ),
     ],
@@ -1011,6 +1014,7 @@ def test_filter_document_batch(dont_run_on, removed):
         "OEP.document.i00000231.n0000.json",
         "Sabin.document.9869.10352.json",
         "CPR.document.i00003835.n0000.json",
+        "Sabin.document.2524.placeholder",
     ]
     accepted = [f for f in file_stems if f not in removed]
 

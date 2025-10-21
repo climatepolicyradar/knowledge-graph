@@ -1010,13 +1010,34 @@ async def inference_batch_of_documents_gpu(
     )
 
 
+def is_a_sabin_placeholder(stem: DocumentStem):
+    """
+    Returns True if document matches the naming convention of a Sabin Placeholder document
+
+    Sabin Placeholder Document stems have dummy files which can not be processed at Inference time
+    See https://linear.app/climate-policy-radar/issue/APP-391/spike-getting-families-with-no-documents-into-vespa
+    """
+
+    return stem.lower().startswith("sabin") and stem.lower().endswith("placeholder")
+
+
 def filter_document_batch(
     file_stems: Sequence[DocumentStem], spec: ClassifierSpec
 ) -> FilterResult:
+    """
+    Given a Sequence of DocumentStems, applies filtering rules to return a FilterResult contain the lists of accepted and removed DocumentStems according to both the ClassifierSpec rules and the Sabin placeholder filter rules.
+
+    Filters out DocumentStems according to the Classifier Spec rules to prevent them from being submitted for Inference.
+    Filters out Sabin placeholder DocumentStems, to prevent them from being submitted for Inference. The Sabin placeholder
+    Document stems have dummy files which can not be processed at Inference time
+    """
+
     removed_file_stems = []
     accepted_file_stems = []
     for stem in file_stems:
-        if should_skip_doc(stem, spec):
+        if is_a_sabin_placeholder(stem):
+            removed_file_stems.append(stem)
+        elif should_skip_doc(stem, spec):
             removed_file_stems.append(stem)
         else:
             accepted_file_stems.append(stem)
