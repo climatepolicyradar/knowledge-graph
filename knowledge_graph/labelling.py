@@ -324,7 +324,7 @@ def label_passages_with_classifier(
     """
 
     input_texts = [lp.text for lp in labelled_passages]
-    model_predicted_spans = classifier.predict_many(
+    model_predicted_spans = classifier.predict(
         input_texts,
         batch_size=batch_size,
         show_progress=show_progress,
