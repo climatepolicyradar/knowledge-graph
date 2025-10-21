@@ -137,12 +137,34 @@ def display_run_results(flow_runs):
     console.print(table)
 
 
+def write_failed_doc_ids(flow_run_name):
+    dir_path = "./data/audit/prefect_artifacts/{0}/"
+
+    dir_path = dir_path.format(flow_run_name)
+
+    failed_doc_ids = []
+    with open(dir_path + "batch_inference_summary.json", "r") as file:
+        data = json.load(file)
+
+        for doc in data:
+            if doc["Status"] == "✗":
+                failed_doc_ids.append(doc["Document stem"])
+
+    print(f"{len(failed_doc_ids)} Failed documents")
+
+    report_output_file_path = dir_path + "failed_docs.json"
+    print(f"Written report to: {report_output_file_path}")
+    with open(report_output_file_path, "w") as file:
+        json.dump(failed_doc_ids, file)
+
+
 async def run(
     flow_run_name: str,
     download_dir: Path,
     include_sub_flows: bool,
     artifact_types_to_print: list[str],
     success_summary: bool,
+    write_failed_doc_ids_to_json: bool,
 ):
     async with get_client() as client:
         flow_run = await flow_run_from_name(client, flow_run_name)
@@ -182,6 +204,9 @@ async def run(
                 f.write(json.dumps(table, indent=2))
             console.print(f"Written table to `{path}`")
 
+        if write_failed_doc_ids_to_json:
+            write_failed_doc_ids(flow_run_name)
+
 
 @app.command()
 def main(
@@ -212,6 +237,13 @@ def main(
             help="The types of artifact to print, defaults to all, pass empty to print nothing",
         ),
     ] = "progress table markdown links images",
+    write_failed_doc_ids_to_json: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Writes the failed document IDs to a json file, which can be copied into the Prefect Web UI to re-process those documents in a custom run",
+        ),
+    ] = False,
 ):
     """
     Inspect prefect artifacts.
@@ -222,6 +254,8 @@ def main(
 
     This can be used to get artifacts for individual runs, as well as runs that have
     sub-flows (and subflows of subflows).
+
+    Optionally writes out a json blob with a list of Failed Document Ids, which can be resubmitted to Prefect Cloud Web UI to process them again
     """
     asyncio.run(
         run(
@@ -230,6 +264,7 @@ def main(
             success_summary=success_summary,
             include_sub_flows=include_sub_flows,
             artifact_types_to_print=artifact_types_to_print.split(),
+            write_failed_doc_ids_to_json=write_failed_doc_ids_to_json,
         )
     )
 

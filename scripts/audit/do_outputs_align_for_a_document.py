@@ -279,7 +279,7 @@ def create_results_table(
             str(span_count),
             str(passage_count),
             str(document_count),
-            "Success" if aligned else "Fail",
+            "✅" if aligned else "❌",
         )
     return table
 
