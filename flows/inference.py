@@ -8,7 +8,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
-import aioboto3
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
@@ -61,6 +60,7 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.cloud import get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -260,7 +260,10 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
             config, config.inference_document_source_prefix, s3_client
@@ -283,7 +286,10 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     Extracts the ids from the file, and returns them as a single list.
     """
     logger = get_logger()
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
             config, config.pipeline_state_prefix, s3_client
@@ -316,7 +322,10 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
 
     latest_key = latest["Key"]
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         data = await download_s3_file(config, latest_key, s3_client)
         content = json.loads(data)
@@ -365,7 +374,10 @@ async def determine_file_stems(
 
     requested_document_stems = []
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         for doc_id in requested_document_ids:
             document_key = os.path.join(
@@ -855,7 +867,10 @@ async def _inference_batch_of_documents(
         read_timeout=config.s3_read_timeout,
     )
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
@@ -909,7 +924,10 @@ async def _inference_batch_of_documents(
     ) = process_single_document_inference(inferences_results)
 
     # Store labelled passages in s3
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         tasks = [
             wait_for_semaphore(
@@ -1091,7 +1109,10 @@ async def store_metadata(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
@@ -1145,7 +1166,10 @@ async def store_inference_result(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
