@@ -98,6 +98,7 @@ async def test_run_training(
     mock_concept = Mock()
     mock_concept.id = "5d4xcy5g"
     mock_concept.wikibase_revision = 12300
+    mock_concept.labelled_passages = []
     mock_classifier.concept = mock_concept
 
     mock_path = Path("tests/fixtures/data/processed/classifiers")
