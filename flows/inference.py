@@ -517,19 +517,19 @@ class SingleDocumentInferenceResult(BaseModel):
     document: Optional[BaseParserOutput]
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
-    wikibase_id: str
-    classifier_id: str
+    classifier_spec: ClassifierSpec
 
 
 def generate_s3_uri_output(
-    config: Config, inference: SingleDocumentInferenceResult
+    config: Config,
+    inference: SingleDocumentInferenceResult,
 ) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
             config.inference_document_target_prefix,
-            inference.wikibase_id,
-            inference.classifier_id,
+            inference.classifier_spec.wikibase_id,
+            inference.classifier_spec.classifier_id,
             f"{inference.document_stem}.json",
         ),
     )
@@ -559,12 +559,13 @@ async def labels_to_s3(
     else:
         raise ValueError(
             f"Error storing {inference.document_stem} for "
-            f"{inference.wikibase_id}:{inference.classifier_id}: {response}"
+            f"{inference.classifier_spec.wikibase_id}:{inference.classifier_spec.classifier_id}: {response}"
         )
 
 
 def batch_text_block_inference(
     classifier: Classifier,
+    classifier_spec: ClassifierSpec,
     all_text: list[str],
     all_block_ids: list[str],
     batch_size: int = 10,
@@ -578,20 +579,28 @@ def batch_text_block_inference(
 
         outputs.extend(
             _text_block_inference_for_single_batch(
-                classifier=classifier, text_batch=text_batch, block_ids=block_ids
+                classifier=classifier,
+                classifier_spec=classifier_spec,
+                text_batch=text_batch,
+                block_ids=block_ids,
             )
         )
     return outputs
 
 
 def _text_block_inference_for_single_batch(
-    classifier: Classifier, text_batch: list[str], block_ids: list[str]
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    text_batch: list[str],
+    block_ids: list[str],
 ) -> list[LabelledPassage]:
     """Runs predict on a batch of blocks."""
     spans: list[list[Span]] = classifier.predict_batch(text_batch)
 
     labelled_passages = [
-        _get_labelled_passage_from_prediction(classifier, spans, block_id, text)
+        _get_labelled_passage_from_prediction(
+            classifier, spans, block_id, text, classifier_spec
+        )
         for spans, block_id, text in zip(spans, block_ids, text_batch)
     ]
 
@@ -599,7 +608,10 @@ def _text_block_inference_for_single_batch(
 
 
 def text_block_inference(
-    classifier: Classifier, block_id: str, text: str
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    block_id: str,
+    text: str,
 ) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
@@ -631,14 +643,18 @@ def text_block_inference(
         )
 
     labelled_passage = _get_labelled_passage_from_prediction(
-        classifier, spans, block_id, text
+        classifier, spans, block_id, text, classifier_spec
     )
 
     return labelled_passage
 
 
 def _get_labelled_passage_from_prediction(
-    classifier: Classifier, spans: list[Span], block_id: str, text: str
+    classifier: Classifier,
+    spans: list[Span],
+    block_id: str,
+    text: str,
+    classifier_spec: ClassifierSpec,
 ) -> LabelledPassage:
     """Creates the LabelledPassage from the list of spans output by the classifier"""
     # If there were no inference results, don't include the concept
@@ -653,7 +669,10 @@ def _get_labelled_passage_from_prediction(
 
         concept = concept_no_labelled_passages.model_dump()
 
-        metadata = {"concept": concept}
+        metadata = {
+            "concept": concept,
+            "classifier_spec": classifier_spec.model_dump(),
+        }
 
     return LabelledPassage(
         id=block_id,
@@ -709,7 +728,10 @@ async def run_classifier_inference_on_document(
     assert result.document  # For typing, we already check this properly earlier
     for text, block_id in document_passages(result.document):
         labelled_passages = text_block_inference(
-            classifier=classifier, block_id=block_id, text=text
+            classifier=classifier,
+            block_id=block_id,
+            text=text,
+            classifier_spec=result.classifier_spec,
         )
         doc_labels.append(labelled_passages)
     result.labelled_passages = doc_labels
@@ -854,8 +876,7 @@ async def _inference_batch_of_documents(
                 document=None,
                 labelled_passages=[],
                 document_stem=document_stem,
-                wikibase_id=classifier.concept.wikibase_id,
-                classifier_id=classifier.id,
+                classifier_spec=classifier_spec,
             )
         )
 
