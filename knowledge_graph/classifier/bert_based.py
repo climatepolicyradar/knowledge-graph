@@ -12,6 +12,7 @@ from datasets import Dataset
 from rich.logging import RichHandler
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -51,6 +52,31 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
     accuracy = accuracy_score(labels, predictions)
 
     return {"accuracy": accuracy, "f1": f1, "precision": precision, "recall": recall}
+
+
+class WeightedTrainer(Trainer):
+    """Trainer that applies class weights to the cross-entropy loss function."""
+
+    def __init__(self, *args, class_weights=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.class_weights = class_weights
+
+    def compute_loss(
+        self, model, inputs, return_outputs=False, num_items_in_batch=None
+    ):
+        """Compute cross-entropy loss weighted by class weights provided to the trainer."""
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+
+        # Apply class weights to the loss
+        if self.class_weights is not None:
+            loss_fct = torch.nn.CrossEntropyLoss(weight=self.class_weights)
+            loss = loss_fct(logits, labels)
+        else:
+            loss = outputs.loss
+
+        return (loss, outputs) if return_outputs else loss
 
 
 class BertBasedClassifier(
@@ -215,7 +241,9 @@ class BertBasedClassifier(
 
     def fit(
         self,
+        labelled_passages: list[LabelledPassage],
         validation_size: float = 0.2,
+        enable_wandb: bool = False,
         **kwargs,
     ) -> "BertBasedClassifier":
         """
@@ -235,7 +263,7 @@ class BertBasedClassifier(
             weights! This dramatically reduces the training time and memory usage, while
             still producing a performant classifier.
         - Because we're only training the head, we can use a relatively high learning
-            rate (5e-4) and batch size (64), even on modest hardware.
+            rate and batch size, even on modest hardware.
         - We use a cosine learning rate scheduler, giving us a smooth learning rate
             decay over each epoch.
         - We set a warmup period for the first 6% of the run to stabilise the weights
@@ -248,31 +276,32 @@ class BertBasedClassifier(
             from the training data, making the final model less spiky and more reliable.
 
         Args:
+            labelled_passages: The labelled passages to train the classifier on.
             validation_size: The proportion of labelled passages to use for validation.
+            enable_wandb: Whether to enable W&B logging for training metrics and model checkpoints.
             **kwargs: Additional keyword arguments passed to the base class
         Returns:
             BertBasedClassifier: The trained classifier
         """
         super().fit(**kwargs)
 
-        if len(self.concept.labelled_passages) < 10:
+        if len(labelled_passages) < 10:
             raise ValueError(
                 f"Not enough labelled passages to train a {self.name} for "
                 f"{self.concept.wikibase_id}. At least 10 are required."
             )
 
-        passages = self.concept.labelled_passages
         labels = [
             1
             if any(span.concept_id == self.concept.wikibase_id for span in p.spans)
             else 0
-            for p in passages
+            for p in labelled_passages
         ]
 
         # Split passages into training and validation sets. Stratify to maintain the
         # distribution of positive and negative passages.
         train_passages, val_passages, _, _ = train_test_split(
-            passages,
+            labelled_passages,
             labels,
             test_size=validation_size,
             random_state=42,
@@ -328,12 +357,27 @@ class BertBasedClassifier(
             f"{trainable_params / total_params * 100:.2f}",
         )
 
+        # Compute class weights to handle class imbalance
+        train_labels = np.array(train_dataset["labels"])
+        class_weights = compute_class_weight(
+            class_weight="balanced", classes=np.unique(train_labels), y=train_labels
+        )
+        class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(
+            self.training_device
+        )
+        logger.info("Class weights: %s", class_weights_tensor.cpu().numpy())
+
         with tempfile.TemporaryDirectory() as temp_dir:
             training_args = TrainingArguments(
                 output_dir=os.path.join(temp_dir, "results"),
-                num_train_epochs=3,
-                per_device_train_batch_size=64,
+                # high number of train epochs as we enable early stopping below
+                num_train_epochs=10,
+                # batch size scales with dataset size, to avoid batches or epochs that
+                # have too few batches which leads to unstable training
+                per_device_train_batch_size=min(64, max(16, len(train_dataset) // 10)),
                 per_device_eval_batch_size=64,
+                # gradient clipping for more stable updates
+                max_grad_norm=1.0,
                 learning_rate=5e-4,
                 weight_decay=0.01,
                 warmup_ratio=0.06,
@@ -343,27 +387,30 @@ class BertBasedClassifier(
                 dataloader_pin_memory=False,
                 logging_dir=os.path.join(temp_dir, "logs"),
                 logging_steps=10,
-                eval_strategy="steps",
-                eval_steps=100,
-                save_steps=200,
+                eval_strategy="epoch",
+                save_strategy="epoch",
                 save_total_limit=2,
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_f1",
                 greater_is_better=True,
                 dataloader_num_workers=2,
-                report_to=[],
+                report_to=["wandb"] if enable_wandb else [],
                 disable_tqdm=True,
+                # W&B-specific settings when enabled
+                run_name=f"{self.concept.id}_{self.name}" if enable_wandb else None,
+                log_level="info" if enable_wandb else "warning",
             )
 
-            trainer = Trainer(
+            trainer = WeightedTrainer(
                 model=self.model,
                 args=training_args,
                 train_dataset=train_dataset,
                 eval_dataset=validation_dataset,
                 compute_metrics=compute_metrics,
+                class_weights=class_weights_tensor,
                 callbacks=[
                     EarlyStoppingCallback(
-                        early_stopping_patience=3, early_stopping_threshold=0.001
+                        early_stopping_patience=2, early_stopping_threshold=0
                     )
                 ],
             )
