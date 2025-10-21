@@ -10,7 +10,13 @@ from typing import (
     runtime_checkable,
 )
 
-from rich.progress import Progress
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+)
 from typing_extensions import Self
 
 from flows.utils import iterate_batch
@@ -115,7 +121,12 @@ class Classifier(ABC):
         preds = []
 
         if show_progress:
-            with Progress() as progress:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
+            ) as progress:
                 task = progress.add_task(
                     "Processing batches...", total=len(text_batches)
                 )
