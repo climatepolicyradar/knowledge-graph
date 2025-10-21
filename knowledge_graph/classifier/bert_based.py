@@ -241,7 +241,7 @@ class BertBasedClassifier(
 
     def fit(
         self,
-        train_validation_data: list[LabelledPassage],
+        labelled_passages: list[LabelledPassage],
         validation_size: float = 0.2,
         enable_wandb: bool = False,
         **kwargs,
@@ -263,7 +263,7 @@ class BertBasedClassifier(
             weights! This dramatically reduces the training time and memory usage, while
             still producing a performant classifier.
         - Because we're only training the head, we can use a relatively high learning
-            rate (5e-4) and batch size (64), even on modest hardware.
+            rate and batch size, even on modest hardware.
         - We use a cosine learning rate scheduler, giving us a smooth learning rate
             decay over each epoch.
         - We set a warmup period for the first 6% of the run to stabilise the weights
@@ -276,7 +276,7 @@ class BertBasedClassifier(
             from the training data, making the final model less spiky and more reliable.
 
         Args:
-            train_validation_data: The labelled passages to train the classifier on.
+            labelled_passages: The labelled passages to train the classifier on.
             validation_size: The proportion of labelled passages to use for validation.
             enable_wandb: Whether to enable W&B logging for training metrics and model checkpoints.
             **kwargs: Additional keyword arguments passed to the base class
@@ -285,7 +285,7 @@ class BertBasedClassifier(
         """
         super().fit(**kwargs)
 
-        if len(train_validation_data) < 10:
+        if len(labelled_passages) < 10:
             raise ValueError(
                 f"Not enough labelled passages to train a {self.name} for "
                 f"{self.concept.wikibase_id}. At least 10 are required."
@@ -295,13 +295,13 @@ class BertBasedClassifier(
             1
             if any(span.concept_id == self.concept.wikibase_id for span in p.spans)
             else 0
-            for p in train_validation_data
+            for p in labelled_passages
         ]
 
         # Split passages into training and validation sets. Stratify to maintain the
         # distribution of positive and negative passages.
         train_passages, val_passages, _, _ = train_test_split(
-            train_validation_data,
+            labelled_passages,
             labels,
             test_size=validation_size,
             random_state=42,
