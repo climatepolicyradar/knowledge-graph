@@ -2,7 +2,7 @@ import os
 import uuid
 from functools import lru_cache
 from logging import getLogger
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 from uuid import UUID
 
 from argilla import (
@@ -16,6 +16,7 @@ from argilla import (
     User,
     Workspace,
 )
+from argilla._models import Role
 from dotenv import find_dotenv, load_dotenv
 
 from knowledge_graph.identifiers import WikibaseID
@@ -67,37 +68,40 @@ class ArgillaSession:
         logger.info("Fetching workspace: %s", workspace_name)
         workspace_object = self.client.workspaces(name=workspace_name)
         if not workspace_object:
-            logger.warning("Workspace '%s' not found", workspace_name)
             raise ValueError(f"Workspace '{workspace_name}' not found")
         logger.info("Successfully retrieved workspace: %s", workspace_object.name)
         return workspace_object
+
+    def create_workspace(self, name: str) -> Workspace:
+        """Create a new workspace in Argilla, or return the existing workspace"""
+        logger.info("Creating workspace: %s", name)
+        try:
+            workspace = Workspace(name=name)
+            created_workspace: Workspace = workspace.create()  # type: ignore[assignment]
+            logger.info("Successfully created workspace: %s", created_workspace.name)
+            return created_workspace
+        except ValueError as e:
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "unique constraint" in error_msg:
+                logger.warning(
+                    "Workspace '%s' already exists, returning existing workspace", name
+                )
+                return self.get_workspace(name)
+            else:
+                raise ValueError(f"Failed to create workspace '{name}'") from e
 
     def get_dataset(
         self,
         wikibase_id: WikibaseID | str,
         workspace: Optional[str] = None,
     ) -> Dataset:
-        """
-        Get a dataset by its Wikibase ID.
-
-        Args:
-            wikibase_id: Wikibase ID of the dataset.
-            workspace: Workspace name. Defaults to session's default_workspace.
-
-        Returns:
-            Dataset object.
-        """
+        """Get a dataset by its Wikibase ID (ie its name) in the given workspace"""
         logger.info("Fetching dataset '%s'", wikibase_id)
         workspace_object = self.get_workspace(workspace)
         dataset = self.client.datasets(
             name=str(wikibase_id), workspace=workspace_object
         )
         if not dataset:
-            logger.warning(
-                "Dataset '%s' not found in workspace '%s'",
-                wikibase_id,
-                workspace_object.name,
-            )
             raise ValueError(
                 f"Dataset '{wikibase_id}' not found in workspace '{workspace_object.name}'"
             )
@@ -105,15 +109,7 @@ class ArgillaSession:
         return dataset
 
     def get_all_datasets(self, workspace: Optional[str] = None) -> list[Dataset]:
-        """
-        Get all datasets in a workspace.
-
-        Args:
-            workspace: Workspace name. Defaults to session's default_workspace.
-
-        Returns:
-            List of Dataset objects.
-        """
+        """Get all datasets in a workspace"""
         workspace_object = self.get_workspace(workspace)
         datasets = workspace_object.datasets
         logger.info(
@@ -129,16 +125,9 @@ class ArgillaSession:
         workspace: Optional[str] = None,
     ) -> Dataset:
         """
-        Create a dataset for a concept in the given workspace.
+        Create a new dataset for a concept in the given workspace
 
-        The dataset will be named after the concept's Wikibase ID.
-
-        Args:
-            concept: Concept to create a dataset for.
-            workspace: Workspace name. Defaults to session's default_workspace.
-
-        Returns:
-            The created dataset.
+        If the dataset already exists, it will be returned without being re-created.
         """
 
         logger.info("Creating dataset for concept: %s", concept)
@@ -190,23 +179,120 @@ class ArgillaSession:
         )
         return created_dataset
 
-    @lru_cache(maxsize=128)
-    def get_user(self, user_id: UUID) -> User | None:
-        """
-        Get user object by ID, with caching to avoid repeated API calls.
-
-        This method is cached and can be reused across the session for efficient
-        user lookups. Returns None if user not found.
-
-        Args:
-            user_id: User UUID.
-
-        Returns:
-            User object, or None if user not found.
-        """
+    @lru_cache(maxsize=64)
+    def _get_user_by_id(self, user_id: Union[UUID, str]) -> User | None:
+        """Get user object by ID"""
         return self.client.users(id=user_id)
 
-    def push_labelled_passages(
+    @lru_cache(maxsize=64)
+    def _get_user_by_username(self, username: str) -> User | None:
+        """Get user object by username"""
+        return self.client.users(username=username)
+
+    def get_user(
+        self, username: Optional[str] = None, user_id: Union[UUID, str, None] = None
+    ) -> User:
+        """Get user object by username or ID"""
+        if not (username or user_id):
+            raise ValueError("One of 'username' or 'user_id' must be provided")
+        if username and user_id:
+            raise ValueError("Only one of 'username' or 'user_id' must be provided")
+
+        if user_id is not None:
+            user = self._get_user_by_id(user_id)
+        else:
+            assert username is not None
+            user = self._get_user_by_username(username)
+        if not user:
+            raise ValueError(f"User '{username}' not found in Argilla")
+        return user
+
+    def create_user(
+        self,
+        username: str,
+        password: Optional[str] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        role: Role | str = Role.annotator,
+    ) -> User:
+        """
+        Create a new user in Argilla.
+
+        Args:
+            username: Username for the new user. Must be unique in Argilla.
+            password: Password for the new user. If not provided, a random one will be generated.
+            first_name: First name of the new user. Defaults to username if not provided.
+            last_name: Last name of the new user.
+            role: Role of the new user. Can be a Role enum or string. Options:
+                - Role.annotator or "annotator" - Can annotate records and submit responses (default)
+                - Role.admin or "admin" - Full administrative access
+                - Role.owner or "owner" - Owner role
+
+        If the user already exists, it will be returned without being re-created.
+        """
+        logger.info("Creating user: %s (role: %s)", username, role)
+
+        try:
+            user = User(
+                username=username,
+                password=password,
+                first_name=first_name or username,
+                last_name=last_name,
+                role=Role(role),
+            )
+            created_user = user.create()
+            logger.info("Successfully created user: %s", created_user.username)
+            return created_user
+        except ValueError as e:
+            error_msg = str(e).lower()
+            if "already exists" in error_msg or "unique constraint" in error_msg:
+                logger.warning(
+                    "User '%s' already exists, retrieving existing user", username
+                )
+                return self.get_user(username=username)
+            raise ValueError(f"Failed to create user '{username}'") from e
+
+    def add_user_to_workspace(self, username: str, workspace: Optional[str] = None):
+        """Add an existing user to a workspace"""
+        workspace_name = workspace or self.default_workspace
+        logger.info("Adding user '%s' to workspace '%s'", username, workspace_name)
+
+        workspace_object = self.get_workspace(workspace_name)
+        user_object = self.get_user(username)
+
+        try:
+            user_object.add_to_workspace(workspace_object)
+            logger.info("Added user '%s' to workspace '%s'", username, workspace_name)
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(
+                f"Failed to add user '{username}' to workspace '{workspace_name}'"
+            ) from e
+
+    def remove_user_from_workspace(
+        self, username: str, workspace: Optional[str] = None
+    ):
+        """Remove a user from a workspace"""
+        workspace_name = workspace or self.default_workspace
+        logger.info("Removing user '%s' from workspace '%s'", username, workspace_name)
+
+        workspace_object = self.get_workspace(workspace_name)
+        user_object = self.get_user(username)
+
+        try:
+            user_object.remove_from_workspace(workspace_object)
+            logger.info(
+                "Removed user '%s' from workspace '%s'", username, workspace_name
+            )
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(
+                f"Failed to remove user '{username}' from workspace '{workspace_name}'"
+            ) from e
+
+    def add_labelled_passages_to_dataset(
         self,
         dataset: Dataset,
         labelled_passages: list[LabelledPassage],
@@ -246,7 +332,7 @@ class ArgillaSession:
         )
         return dataset
 
-    def pull_labelled_passages(
+    def get_labelled_passages_from_dataset(
         self,
         dataset: Dataset,
         include_statuses: Optional[Sequence[ResponseStatus]] = None,
@@ -290,7 +376,7 @@ class ArgillaSession:
                 if response.status not in include_statuses:
                     continue
 
-                user = self.get_user(response.user_id)
+                user = self.get_user(user_id=response.user_id)
                 labeller = user.username if user else str(response.user_id)
 
                 spans = []
@@ -318,19 +404,7 @@ class ArgillaSession:
         return passages
 
     def _format_metadata(self, metadata: dict) -> dict:
-        """
-        Format metadata for Argilla ingestion.
-
-        Normalizes keys if needed (dot→hyphen, lowercase) and optionally
-        surfaces whitelisted keys. Relies on Dataset.allow_extra_metadata=True
-        to accept arbitrary keys.
-
-        Args:
-            metadata: Original metadata dict.
-
-        Returns:
-            Formatted metadata dict.
-        """
+        """Format metadata keys for Argilla by lowercasing and replacing dots with hyphens"""
         if not metadata:
             return {}
 
