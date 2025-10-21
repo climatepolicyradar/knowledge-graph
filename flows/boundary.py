@@ -34,6 +34,7 @@ from vespa.io import VespaQueryResponse
 from vespa.package import Document, Schema
 from vespa.querybuilder import Grouping as G
 
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.utils import (
     DocumentImportId,
     DocumentObjectUri,
@@ -219,12 +220,19 @@ def load_labelled_passages_by_uri(
     return [LabelledPassage(**labelled_passage) for labelled_passage in object_json]
 
 
-def get_model_from_span(span: Span) -> str:
+def get_model_from_span(
+    span: Span,
+    classifier_spec: ClassifierSpec | None,
+) -> str:
     """
     Get the model used to label the span.
 
-    Labellers are stored in a list, these can contain many labellers as seen in the
-    example below, referring to human and machine annotators.
+    There's 2 versions of the value. The deprecated one is from the
+    labellers. The new one is from the classifier spec.
+
+    Labellers are stored in a list, these can contain many labellers
+    as seen in the example below, referring to human and machine
+    annotators.
 
     [
         "alice",
@@ -233,16 +241,31 @@ def get_model_from_span(span: Span) -> str:
         'KeywordClassifier("extreme weather")',
     ]
 
-    In the context of inference the labellers array should only hold the model used to
-    label the span as seen in the example below.
+    In the context of inference the labellers array should only hold
+    the model used to label the span as seen in the example below.
 
     [
         'KeywordClassifier("extreme weather")',
     ]
     """
-    if len(span.labellers) != 1:
-        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
-    return span.labellers[0]
+    if classifier_spec:
+        return ":".join(
+            map(
+                lambda field: str(field),
+                [
+                    classifier_spec.wikibase_id,
+                    classifier_spec.concept_id,
+                    classifier_spec.classifier_id,
+                ],
+            )
+        )
+    else:
+        if len(span.labellers) != 1:
+            raise ValueError(
+                f"Span should have 1 labeller but has {len(span.labellers)}."
+            )
+
+        return span.labellers[0]
 
 
 def get_parent_concepts_from_concept(
@@ -299,6 +322,15 @@ def convert_labelled_passage_to_concepts(
 
     logger = get_logger()
 
+    classifier_spec: ClassifierSpec | None = None
+    if classifier_spec_json := labelled_passage.metadata.get("classifier_spec"):
+        try:
+            classifier_spec = ClassifierSpec(**classifier_spec_json)
+        except Exception as e:
+            logger.error(
+                f"metadata contained classifier spec. but it couldn't be parsed: {e}"
+            )
+
     # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
     for span_idx, span in enumerate(labelled_passage.spans):
         if span.concept_id is None:
@@ -322,7 +354,10 @@ def convert_labelled_passage_to_concepts(
                 name=concept.preferred_label,
                 parent_concepts=parent_concepts,
                 parent_concept_ids_flat=parent_concept_ids_flat,
-                model=get_model_from_span(span),
+                model=get_model_from_span(
+                    span=span,
+                    classifier_spec=classifier_spec,
+                ),
                 end=span.end_index,
                 start=span.start_index,
                 # These timestamps _should_ all be the same,
