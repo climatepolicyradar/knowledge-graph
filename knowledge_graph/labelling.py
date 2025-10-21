@@ -20,7 +20,10 @@ from argilla._models import Role
 from dotenv import find_dotenv, load_dotenv
 
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelled_passage import (
+    LabelledPassage,
+    consolidate_passages_by_text,
+)
 from knowledge_graph.span import Span
 from knowledge_graph.wikibase import Concept
 
@@ -343,6 +346,7 @@ class ArgillaSession:
         workspace: Optional[str] = None,
         include_statuses: Optional[Sequence[ResponseStatus]] = None,
         limit: Optional[int] = None,
+        merge_responses: bool = True,
     ) -> list[LabelledPassage]:
         """
         Pull labelled passages from a dataset.
@@ -359,9 +363,13 @@ class ArgillaSession:
             include_statuses: Response statuses to include. Defaults to [ResponseStatus.submitted].
             limit: Max number of records to pull (note: may return more passages if
                 records have multiple responses).
+            merge_responses: Whether to merge responses from multiple labellers into
+                single passages with combined spans. Defaults to True. If False, each
+                response will be returned as a separate passage, which may be useful
+                for tracking individual labeller contributions.
 
         Returns:
-            List of LabelledPassage objects, one per response.
+            List of LabelledPassage objects, one per response (or merged by text if merge_responses=True).
         """
         dataset = self.get_dataset(wikibase_id, workspace)
 
@@ -411,7 +419,16 @@ class ArgillaSession:
                 )
 
         logger.info("Pulled %d labelled passages", len(passages))
-        return passages
+        if merge_responses:
+            merged_passages = consolidate_passages_by_text(passages)
+            logger.info(
+                "Merged %d responses into %d LabelledPassages",
+                len(passages),
+                len(merged_passages),
+            )
+            return merged_passages
+        else:
+            return passages
 
     def _format_metadata(self, metadata: dict) -> dict:
         """Format metadata keys for Argilla by lowercasing and replacing dots with hyphens"""

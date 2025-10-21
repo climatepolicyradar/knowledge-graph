@@ -7,7 +7,7 @@ import argilla as rg
 from argilla import Response, ResponseStatus, User
 from pydantic import BaseModel
 
-from knowledge_graph.labelled_passage import LabelledPassage, consolidate_spans
+from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.metrics import count_span_level_metrics
 from knowledge_graph.span import Span
@@ -26,10 +26,7 @@ def dataset_to_labelled_passages_with_cache(
         return DATASET_CACHE[dataset_name]
 
     labelled_passages = argilla_session.get_labelled_passages(wikibase_id=dataset_name)
-    consolidated_labelled_passages = consolidate_spans(labelled_passages)
-    merged_passages = create_gold_standard_labelled_passages(
-        consolidated_labelled_passages
-    )
+    merged_passages = create_gold_standard_labelled_passages(labelled_passages)
 
     DATASET_CACHE[dataset_name] = merged_passages
     return merged_passages

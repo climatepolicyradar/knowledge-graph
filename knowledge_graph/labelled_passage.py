@@ -131,11 +131,11 @@ class LabelledPassage(BaseModel):
         return hash(self.id)
 
 
-def consolidate_spans(
+def consolidate_passages_by_text(
     labelled_passages: list[LabelledPassage],
 ) -> list[LabelledPassage]:
     """
-    Consolidate spans on passages with matching text.
+    Merge multiple LabelledPassages for the same text into single LabelledPassages.
 
     This function combines multiple passages with the same text into single
     passages, merging spans from all labellers. This is useful when pulling
@@ -150,30 +150,30 @@ def consolidate_spans(
             with the same text but different spans from different labellers.
 
     Returns:
-        List of consolidated passages with unique texts and merged spans.
+        List of merged_passages passages with unique texts and merged spans.
 
     Example:
         >>> # Three passages: same text, different labellers
         >>> passage1 = LabelledPassage(text="Hello world", spans=[span_a])
         >>> passage2 = LabelledPassage(text="Hello world", spans=[span_b])
         >>> passage3 = LabelledPassage(text="Different", spans=[span_c])
-        >>> merged = consolidate_by_text([passage1, passage2, passage3])
+        >>> merged = consolidate_passages_by_text([passage1, passage2, passage3])
         >>> len(merged)  # Two unique texts
         2
         >>> len(merged[0].spans)  # Spans from both labellers combined
         2
     """
-    grouped_passages: dict[str, list[LabelledPassage]] = defaultdict(list)
+    passage_groups: dict[str, list[LabelledPassage]] = defaultdict(list)
     for passage in labelled_passages:
-        grouped_passages[passage.id].append(passage)
+        passage_groups[passage.id].append(passage)
 
-    consolidated: list[LabelledPassage] = []
-    for passages in grouped_passages.values():
-        consolidated.append(
+    merged_passages: list[LabelledPassage] = []
+    for group in passage_groups.values():
+        merged_passages.append(
             LabelledPassage(
-                text=passages[0].text,
-                spans=[span for passage in passages for span in passage.spans],
-                metadata=passages[0].metadata,
+                text=group[0].text,
+                spans=[span for passage in group for span in passage.spans],
+                metadata=group[0].metadata,
             )
         )
-    return consolidated
+    return merged_passages

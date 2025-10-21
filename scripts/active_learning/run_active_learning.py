@@ -9,7 +9,6 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.ensemble import Ensemble
 from knowledge_graph.ensemble.metrics import Disagreement
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelled_passage import consolidate_spans
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.wikibase import WikibaseSession
 
@@ -26,8 +25,7 @@ def load_concept_and_labelled_passages(
 
     concept = wikibase.get_concept(concept_id)
     labelled_passages = argilla.get_labelled_passages(wikibase_id=concept_id)
-    consolidated_labelled_passages = consolidate_spans(labelled_passages)
-    concept.labelled_passages = consolidated_labelled_passages
+    concept.labelled_passages = labelled_passages
 
     if max_passages_per_concept is not None:
         concept.labelled_passages = concept.labelled_passages[:max_passages_per_concept]
