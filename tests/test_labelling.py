@@ -503,7 +503,7 @@ def test_whether_get_labelled_passages_returns_labelled_passages_from_a_dataset_
     mock_client.users.side_effect = mock_get_user
 
     session = ArgillaSession()
-    result = session.get_labelled_passages("Q123")
+    result = session.get_labelled_passages("Q123", merge_responses=False)
 
     # Should create two labelled passages, one per response
     assert len(result) == 2
@@ -560,7 +560,9 @@ def test_whether_get_labelled_passages_respects_status_filters(
     assert len(result) == 1
 
     result = session.get_labelled_passages(
-        "Q123", include_statuses=[ResponseStatus.submitted, ResponseStatus.draft]
+        "Q123",
+        include_statuses=[ResponseStatus.submitted, ResponseStatus.draft],
+        merge_responses=False,
     )
     assert len(result) == 2
 
