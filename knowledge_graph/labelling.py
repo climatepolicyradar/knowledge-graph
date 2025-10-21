@@ -292,28 +292,33 @@ class ArgillaSession:
                 f"Failed to remove user '{username}' from workspace '{workspace_name}'"
             ) from e
 
-    def add_labelled_passages_to_dataset(
+    def add_labelled_passages(
         self,
-        dataset: Dataset,
         labelled_passages: list[LabelledPassage],
+        wikibase_id: WikibaseID | str,
+        workspace: Optional[str] = None,
     ) -> Dataset:
         """
         Add labelled passages to an existing dataset in Argilla.
 
         Args:
-            dataset: Dataset to add passages to.
             labelled_passages: List of LabelledPassage objects to add. Note that only
                 the text and the metadata of each passage will be uploaded - spans
                 attached to the labelled passages will be ignored.
+            wikibase_id: Wikibase ID of the dataset to add passages to.
+            workspace: Name of the workspace to add passages to. If not provided, the
+                session's default_workspace will be used.
 
         Returns:
             The updated dataset.
         """
+        dataset = self.get_dataset(wikibase_id, workspace)
         logger.info(
             "Pushing %d labelled passages to dataset: %s",
             len(labelled_passages),
             dataset.name,
         )
+
         records = []
         for passage in labelled_passages:
             records.append(
@@ -332,9 +337,10 @@ class ArgillaSession:
         )
         return dataset
 
-    def get_labelled_passages_from_dataset(
+    def get_labelled_passages(
         self,
-        dataset: Dataset,
+        wikibase_id: WikibaseID | str,
+        workspace: Optional[str] = None,
         include_statuses: Optional[Sequence[ResponseStatus]] = None,
         limit: Optional[int] = None,
     ) -> list[LabelledPassage]:
@@ -347,7 +353,9 @@ class ArgillaSession:
         across labellers.
 
         Args:
-            dataset: Dataset to pull passages from.
+            wikibase_id: Wikibase ID of the dataset to pull passages from.
+            workspace: Name of the workspace to pull passages from. If not provided, the
+                session's default_workspace will be used.
             include_statuses: Response statuses to include. Defaults to [ResponseStatus.submitted].
             limit: Max number of records to pull (note: may return more passages if
                 records have multiple responses).
@@ -355,6 +363,8 @@ class ArgillaSession:
         Returns:
             List of LabelledPassage objects, one per response.
         """
+        dataset = self.get_dataset(wikibase_id, workspace)
+
         if include_statuses is None:
             include_statuses = [ResponseStatus.submitted]
 
