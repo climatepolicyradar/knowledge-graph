@@ -53,6 +53,7 @@ def test_main(
         if aws_env != AwsEnv.production
         else {"aws_env": "test"}
     )
+    artifact_mock.metadata["classifiers_profiles"] = ["profile1"]
     artifact_mock.tags.remove = Mock()
     artifact_mock.save = Mock()
 
@@ -96,6 +97,7 @@ def test_main(
                 wandb_registry_version=wandb_registry_version,
             )
             artifact_mock.tags.remove.assert_called_once_with(aws_env.value)
+            assert "classifiers_profiles" not in artifact_mock.metadata
 
         if logged_in and not wandb_registry_version:
             api_mock.registries.assert_called_once()

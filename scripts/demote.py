@@ -125,6 +125,10 @@ def main(
                 f"Model {artifact_id} is not promoted in AWS environment {aws_env.value}"
             )
 
+        # remove all classifiers profiles
+        model.metadata.pop("classifiers_profiles", None)
+
+        # remove aws env tag
         model.tags.remove(aws_env.value)
         model.save()
 
