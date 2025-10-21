@@ -43,6 +43,26 @@ def mock_wandb_context():
         yield mock_run, mock_artifact
 
 
+@pytest.fixture
+def mock_wandb_api():
+    """Mock wandb.Api and its artifacts method."""
+    with patch("scripts.classifier_metadata.wandb.Api") as mock_api_class:
+        mock_api = Mock()
+        mock_api_class.return_value = mock_api
+
+        # Mock the artifacts method to return a list of mock artifacts
+        mock_artifacts = [
+            Mock(version="v1", metadata={"aws_env": "labs"}),
+            Mock(version="v2", metadata={"aws_env": "labs"}),
+            Mock(version="v3", metadata={"aws_env": "labs"}),
+            Mock(version="v1", metadata={"aws_env": "sandbox"}),
+            Mock(version="v2", metadata={"aws_env": "sandbox"}),
+        ]
+        mock_api.artifacts.return_value = mock_artifacts
+
+        yield mock_api, mock_artifacts
+
+
 @pytest.mark.parametrize(
     "test_case",
     [
@@ -163,9 +183,12 @@ def mock_wandb_context():
     ],
     ids=lambda test_case: test_case.description,
 )
-def test_classifier_metadata__update(mock_wandb_context, test_case: MetadataTestCase):
+def test_classifier_metadata__update(
+    mock_wandb_context, mock_wandb_api, test_case: MetadataTestCase
+):
     mock_run, mock_artifact = mock_wandb_context
     mock_artifact.metadata = test_case.initial_metadata
+    mock_api, mock_artifacts = mock_wandb_api
 
     # Run the main function
     update(
@@ -181,8 +204,8 @@ def test_classifier_metadata__update(mock_wandb_context, test_case: MetadataTest
         update_specs=False,
     )
 
-    # Check we updated the classifiers metadata
-    mock_run.use_artifact.assert_called_once_with("Q123/abcd2345:labs")
+    # Check we updated the classifiers metadata using latest version for labs
+    mock_run.use_artifact.assert_called_once_with("Q123/abcd2345:v3")
     assert sorted(mock_artifact.metadata) == sorted(test_case.expected_metadata), (
         f"Test case '{test_case.description}' failed: "
         f"Expected metadata {test_case.expected_metadata}, "
@@ -191,9 +214,10 @@ def test_classifier_metadata__update(mock_wandb_context, test_case: MetadataTest
     mock_artifact.save.assert_called_once()
 
 
-def test_classifier_metadata__update_entire_env(mock_wandb_context):
+def test_classifier_metadata__update_entire_env(mock_wandb_context, mock_wandb_api):
     mock_run, mock_artifact = mock_wandb_context
     mock_artifact.metadata = {"dont_run_on": ["sabin"]}
+    mock_api, mock_artifacts = mock_wandb_api
 
     sample_data = textwrap.dedent(
         """
@@ -229,20 +253,24 @@ def test_classifier_metadata__update_entire_env(mock_wandb_context):
             for use_artifact_calls in mock_run.use_artifact.call_args_list:
                 artifacts_used.extend(use_artifact_calls.args)
 
+            # Check that we used the expected artifacts with latest version for sandbox v2
             assert set(artifacts_used) == set(
                 [
-                    "Q368/abcd2345:sandbox",
-                    "Q123/efgh2345:sandbox",
-                    "Q999/jkmn2345:sandbox",
+                    "Q368/abcd2345:v2",
+                    "Q123/efgh2345:v2",
+                    "Q999/jkmn2345:v2",
                 ]
             )
             assert mock_artifact.save.call_count == 3
 
 
-def test_classifier_metadata__duplicate_profiles_raises_error(mock_wandb_context):
+def test_classifier_metadata__duplicate_profiles_raises_error(
+    mock_wandb_context, mock_wandb_api
+):
     """Test that providing duplicate profiles in add and remove raises an error."""
     mock_run, mock_artifact = mock_wandb_context
     mock_artifact.metadata = {}
+    mock_api, mock_artifacts = mock_wandb_api
 
     with pytest.raises(Exception) as exc_info:
         update(

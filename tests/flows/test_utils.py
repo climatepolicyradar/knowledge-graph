@@ -1,14 +1,16 @@
 import asyncio
 import os
 import time
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.context import FlowRunContext, TaskRunContext
 from prefect.flows import flow
 
 from flows.utils import (
@@ -17,6 +19,7 @@ from flows.utils import (
     Fault,
     ParameterisedFlow,
     SlackNotify,
+    build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
     filter_non_english_language_file_stems,
@@ -24,6 +27,7 @@ from flows.utils import (
     gather_and_report,
     get_file_stems_for_document_id,
     iterate_batch,
+    map_as_local,
     map_as_sub_flow,
     remove_translated_suffix,
     s3_file_exists,
@@ -206,6 +210,62 @@ async def test_collect_file_stems_under_prefix(test_config, mock_bucket_stem) ->
             DocumentStem("CCLW.executive.3.3"),
         ]
     )
+
+
+@pytest.mark.parametrize(
+    "disallow,expected_stems",
+    [
+        # No disallow - should include all files including metadata
+        (
+            None,
+            {
+                "CCLW.executive.1.1",
+                "metadata",
+                "CCLW.executive.2.2",
+                "CCLW.executive.3.3",
+            },
+        ),
+        # Disallow only metadata.json
+        (
+            {"metadata.json"},
+            {
+                "CCLW.executive.1.1",
+                "CCLW.executive.2.2",
+                "CCLW.executive.3.3",
+            },
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_collect_file_stems_under_prefix_with_disallow(
+    test_config, mock_s3_async_client, mock_async_bucket, disallow, expected_stems
+) -> None:
+    """Test that we can filter out specific filenames using the disallow parameter."""
+
+    # Create test files including metadata.json files
+    s3_paths = [
+        "test_prefix/Q1/v1/CCLW.executive.1.1.json",
+        "test_prefix/Q1/v1/metadata.json",
+        "test_prefix/Q1/v1/CCLW.executive.2.2.json",
+        "test_prefix/Q2/v1/CCLW.executive.3.3.json",
+        "test_prefix/Q2/v1/metadata.json",
+    ]
+    for s3_path in s3_paths:
+        await mock_s3_async_client.put_object(
+            Bucket=mock_async_bucket,
+            Key=s3_path,
+            Body=b"{}",
+            ContentType="application/json",
+        )
+
+    file_stems = await collect_unique_file_stems_under_prefix(
+        bucket_name=test_config.cache_bucket,
+        prefix="test_prefix",
+        bucket_region=test_config.bucket_region,
+        disallow=disallow,
+    )
+
+    assert set(file_stems) == {DocumentStem(stem) for stem in expected_stems}
 
 
 def test_filter_non_english_file_stems() -> None:
@@ -558,3 +618,122 @@ def test_fault() -> None:
     fault.data = "a" * 30_000  # 30_000 characters
     assert len(str(fault)) <= 25_000
     assert str(fault).endswith("...")
+
+
+def test_build_run_output_identifier():
+    """Test that build_run_output_identifier correctly builds identifier from flow run context."""
+    # Create a flow run with a known start time and name
+    start_time = datetime(2025, 1, 15, 10, 30, 45, tzinfo=timezone.utc)
+    flow_run = FlowRun(
+        flow_id=uuid4(),
+        name="test-flow-run",
+        start_time=start_time,
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    with patch("flows.utils.get_run_context", return_value=mock_context):
+        result = build_run_output_identifier()
+
+    # Expected format: ISO format with minutes precision, no timezone, followed by flow name
+    assert result == "2025-01-15T10:30-test-flow-run"
+
+
+def test_build_run_output_identifier_raises_on_task_context():
+    """Test that build_run_output_identifier raises ValueError when called from task context."""
+    mock_context = MagicMock(spec=TaskRunContext)
+
+    with patch("flows.utils.get_run_context", return_value=mock_context):
+        with pytest.raises(
+            ValueError, match="expected flow run context but got task run context"
+        ):
+            build_run_output_identifier()
+
+
+def test_build_run_output_identifier_raises_on_missing_flow_run():
+    """Test that build_run_output_identifier raises ValueError when flow_run is None."""
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = None
+
+    with patch("flows.utils.get_run_context", return_value=mock_context):
+        with pytest.raises(ValueError, match="run context is missing flow run"):
+            build_run_output_identifier()
+
+
+def test_build_run_output_identifier_raises_on_missing_start_time():
+    """Test that build_run_output_identifier raises ValueError when start_time is None."""
+    flow_run = FlowRun(
+        flow_id=uuid4(),
+        name="test-flow-run",
+        start_time=None,
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    with patch("flows.utils.get_run_context", return_value=mock_context):
+        with pytest.raises(ValueError, match="flow run didn't have a start time"):
+            build_run_output_identifier()
+
+
+@pytest.mark.asyncio
+@patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
+async def test_map_as_local_unwrap(
+    mock_wait_for_semaphore,
+    mock_flow,
+) -> None:
+    batches_count = 10
+    call_count = 0
+
+    async def side_effect_fn(*args, **kwargs):
+        nonlocal call_count
+        result = {} if call_count < (batches_count / 2) else ValueError("failure")
+        call_count += 1
+        return result
+
+    mock_wait_for_semaphore.side_effect = side_effect_fn
+
+    successes, failures = await map_as_local(
+        aws_env=AwsEnv.sandbox,
+        counter=1,
+        parameterised_batches=[
+            ParameterisedFlow(fn=mock_flow, params={}) for _ in range(batches_count)
+        ],
+        unwrap_result=True,
+    )
+
+    assert len(successes) == (batches_count / 2)
+    assert len(failures) == (batches_count / 2)
+    assert all(isinstance(f, ValueError) and str(f) == "failure" for f in failures)
+
+
+@pytest.mark.asyncio
+@patch("flows.utils.wait_for_semaphore", new_callable=AsyncMock)
+async def test_map_as_local_wrap(
+    mock_wait_for_semaphore,
+    mock_flow,
+) -> None:
+    batches_count = 10
+    call_count = 0
+
+    async def side_effect_fn(*args, **kwargs):
+        nonlocal call_count
+        result = {} if call_count < (batches_count / 2) else ValueError("failure")
+        call_count += 1
+        return result
+
+    mock_wait_for_semaphore.side_effect = side_effect_fn
+
+    with pytest.raises(
+        ValueError,
+        match="this cannot be used for if you're expecting wrapped results, from Prefect",
+    ):
+        _successes, _failures = await map_as_local(
+            aws_env=AwsEnv.sandbox,
+            counter=1,
+            parameterised_batches=[
+                ParameterisedFlow(fn=mock_flow, params={}) for _ in range(batches_count)
+            ],
+            unwrap_result=False,
+        )

@@ -1,9 +1,8 @@
 import asyncio
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Annotated, Any, Callable
-from uuid import UUID
 
 import typer
 from prefect.client.orchestration import PrefectClient, get_client
@@ -14,8 +13,10 @@ from prefect.client.schemas.filters import (
     FlowRunFilterName,
     FlowRunFilterParentFlowRunId,
 )
-from prefect.client.schemas.objects import Artifact
+from prefect.client.schemas.objects import Artifact, FlowRun
+from rich import box
 from rich.console import Console
+from rich.table import Table
 
 app = typer.Typer()
 console = Console()
@@ -63,11 +64,11 @@ async def _paginate_prefect_read(fn: Callable, kwargs: dict[str, Any]) -> list[A
     return results
 
 
-async def flow_name_to_id(client: PrefectClient, flow_run_name: str) -> UUID:
+async def flow_run_from_name(client: PrefectClient, flow_run_name: str) -> FlowRun:
     """
-    Looks up the flow run id using a flow run name
+    Looks up the flow run using a flow run name
 
-    The run names are more user friendly and easier to find, but also are not used in
+    The run names are more user friendly and easier to find than ids, but ids are used in
     other client requests.
     """
     flow_runs = await client.read_flow_runs(
@@ -76,73 +77,91 @@ async def flow_name_to_id(client: PrefectClient, flow_run_name: str) -> UUID:
     if not flow_runs:
         raise ValueError(f"No flow run found with name: {flow_run_name}")
     else:
-        return flow_runs[0].id
+        return flow_runs[0]
 
 
-async def collect_subflow_ids(
-    client: PrefectClient, flow_run_ids: list[UUID]
-) -> list[UUID]:
+async def collect_subflows(
+    client: PrefectClient, flow_runs: list[FlowRun]
+) -> list[FlowRun]:
     """
     Given a parent flow id return all the sub flow ids across all children.
 
     This is recursive so will include subflows of subflows, etc.
     """
-    all_subflow_ids = []
-    current_level_ids = flow_run_ids
+    all_subflows = []
+    current_level = flow_runs
 
-    while current_level_ids:
+    while current_level:
         kwargs = {
             "flow_run_filter": FlowRunFilter(
-                parent_flow_run_id=FlowRunFilterParentFlowRunId(any_=current_level_ids)
+                parent_flow_run_id=FlowRunFilterParentFlowRunId(
+                    any_=[fr.id for fr in current_level]
+                )
             )
         }
         subflows = await _paginate_prefect_read(fn=client.read_flow_runs, kwargs=kwargs)
-        subflow_ids = [r.id for r in subflows]
 
-        if not subflow_ids:
+        if not subflows:
             break
         else:
-            all_subflow_ids.extend(subflow_ids)
-            current_level_ids = subflow_ids
+            all_subflows.extend(subflows)
+            current_level = subflows
             continue
 
-    return all_subflow_ids
+    return all_subflows
 
 
 async def artifacts_from_run_ids(
-    client: PrefectClient, flow_run_ids: list[UUID]
+    client: PrefectClient, flow_runs: list[FlowRun]
 ) -> list[Artifact]:
     """Returns all artifacts associated with a list of flow run ids"""
     kwargs = {
         "artifact_filter": ArtifactFilter(
-            flow_run_id=ArtifactFilterFlowRunId(any_=flow_run_ids)
+            flow_run_id=ArtifactFilterFlowRunId(any_=[fr.id for fr in flow_runs])
         )
     }
     artifacts = await _paginate_prefect_read(fn=client.read_artifacts, kwargs=kwargs)
     return artifacts
 
 
+def display_run_results(flow_runs):
+    results = {
+        k: str(v) for k, v in Counter([fr.state_name for fr in flow_runs]).items()
+    }
+    table = Table(box=box.ROUNDED)
+
+    for state in results.keys():
+        table.add_column(state)
+    table.add_row(*list(results.values()))
+
+    console.print(table)
+
+
 async def run(
     flow_run_name: str,
     download_dir: Path,
     include_sub_flows: bool,
-    print_artifact_descriptions: bool,
+    artifact_types_to_print: list[str],
+    success_summary: bool,
 ):
     async with get_client() as client:
-        flow_run_id = await flow_name_to_id(client, flow_run_name)
+        flow_run = await flow_run_from_name(client, flow_run_name)
 
-        flow_run_ids = [flow_run_id]
+        flow_runs = [flow_run]
         if include_sub_flows:
-            flow_run_ids.extend(await collect_subflow_ids(client, [flow_run_id]))
+            flow_runs.extend(await collect_subflows(client, flow_runs))
 
-        artifacts = await artifacts_from_run_ids(client, flow_run_ids)
+        if success_summary:
+            display_run_results(flow_runs)
+
+        artifacts = await artifacts_from_run_ids(client, flow_runs)
         console.log(
-            f"Found {len(artifacts)} artifacts across {len(flow_run_ids)} flows/subflows"
+            f"Found {len(artifacts)} artifacts across {len(flow_runs)} flows/subflows"
         )
 
         artifact_type_grouping = defaultdict(list)
         for a in artifacts:
-            if print_artifact_descriptions:
+            if a.type in artifact_types_to_print:
                 console.log(a.description)
 
             match a.type:
@@ -156,7 +175,7 @@ async def run(
                 case _:
                     raise ValueError(f"Unsupported artifact type {a.type}")
 
-        download_dir.mkdir(parents=True)
+        download_dir.mkdir(parents=True, exist_ok=True)
         for key, table in artifact_type_grouping.items():
             path = download_dir / f"{key}.json"
             with open(path, "w") as f:
@@ -179,9 +198,20 @@ def main(
             help="Treat the run as a parent flow and collect all the artifacts of any associated subflows",
         ),
     ] = True,
-    print_artifact_descriptions: Annotated[
-        bool, typer.Option(..., help="Print out the description markdown for artifacts")
+    success_summary: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Print out success/failure count for flows",
+        ),
     ] = True,
+    artifact_types_to_print: Annotated[
+        str,
+        typer.Option(
+            ...,
+            help="The types of artifact to print, defaults to all, pass empty to print nothing",
+        ),
+    ] = "progress table markdown links images",
 ):
     """
     Inspect prefect artifacts.
@@ -197,8 +227,9 @@ def main(
         run(
             flow_run_name=flow_run_name,
             download_dir=(download_dir / flow_run_name),
+            success_summary=success_summary,
             include_sub_flows=include_sub_flows,
-            print_artifact_descriptions=print_artifact_descriptions,
+            artifact_types_to_print=artifact_types_to_print.split(),
         )
     )
 

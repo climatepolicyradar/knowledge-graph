@@ -11,11 +11,12 @@ RUN uv pip install awscliv2==2.3.1
 
 WORKDIR /app
 
-# This allows the dependencies of the project (which do not change
-# often) to be cached separately from the project itself (which
-# changes very frequently).
-COPY pyproject.toml README.md ./
-RUN uv pip install -r pyproject.toml --extra transformers_gpu --extra coiled
+# Use bind mounts to install dependencies without copying pyproject.toml into the layer.
+# This allows the dependency layer to remain cached even when the version field changes.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv pip install -r pyproject.toml --extra transformers_gpu --extra coiled --link-mode=copy
 
 # Runtime stage with slim image
 FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d13b2fbfb514e20f84f5e386
@@ -26,13 +27,12 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-COPY --from=builder /app/pyproject.toml ./
-COPY --from=builder /app/README.md ./
-
 # Copy the project into the image
+COPY pyproject.toml README.md ./
 COPY knowledge_graph ./knowledge_graph/
 COPY flows ./flows/
 COPY scripts ./scripts/
+COPY static_sites ./static_sites/
 
 # Install the project
 RUN uv pip install --system -e .

@@ -2,6 +2,10 @@ import re
 
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
+from wandb.apis.public import artifacts
+from wandb.apis.public.registries import registries_search
+
+from knowledge_graph.cloud import AwsEnv
 
 
 class Version:
@@ -75,3 +79,16 @@ class Version:
     def increment(self) -> "Version":
         """Increment the version number by 1."""
         return Version(f"v{self.value + 1}")
+
+
+def get_latest_model_version(
+    artifacts: artifacts.Artifacts | registries_search.Versions,
+    aws_env: AwsEnv,
+) -> Version:
+    """Get the latest wandb model version for a given AWS environment from a list of artifacts."""
+    current_env_versions = [
+        Version(artifact.version)
+        for artifact in artifacts
+        if artifact.metadata.get("aws_env") == aws_env.value
+    ]
+    return max(current_env_versions)

@@ -25,15 +25,14 @@ from flows.index import (
 from flows.inference import (
     CLASSIFIER_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
-    InferenceResult,
     inference,
 )
-from flows.utils import DocumentImportId, Fault, get_logger
+from flows.utils import DocumentImportId, DocumentStem, Fault, get_logger
 
 
 async def create_full_pipeline_summary_artifact(
     config: Config,
-    inference_result: str = "N/A",
+    successful_document_stems: set[DocumentStem],
 ) -> None:
     """Create an artifact with summary information about the full pipeline successful run."""
 
@@ -42,7 +41,7 @@ async def create_full_pipeline_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Inference: successful documents**: {inference_result}
+- **Inference: successful documents**: {len(successful_document_stems)}
 """
 
     await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
@@ -116,7 +115,7 @@ async def full_pipeline(
     )
 
     inference_result_raw: (
-        InferenceResult | Fault | Exception
+        set[DocumentStem] | Fault | Exception
     ) = await inference_run.result(raise_on_failure=False)
 
     match inference_result_raw:
@@ -124,33 +123,28 @@ async def full_pipeline(
             logger.error("Inference failed.")
             raise inference_result_raw
         case Fault():
-            assert isinstance(inference_result_raw.data, InferenceResult), (
-                "Expected data field of the Fault to contain an InferenceResult object,"
+            assert isinstance(inference_result_raw.data, set), (
+                "Expected data field of the Fault to contain a set of DocumentStem objects,"
                 + f"got type: {type(inference_result_raw.data)}"
             )
-            inference_result: InferenceResult = inference_result_raw.data
-        case InferenceResult():
-            inference_result: InferenceResult = inference_result_raw
+            successful_document_stems: set[DocumentStem] = inference_result_raw.data
+        case set():
+            successful_document_stems: set[DocumentStem] = inference_result_raw
         case _:
             raise ValueError(
                 f"Unexpected inference result type: {type(inference_result_raw)}"
             )
-
-    success_ratio: str = (
-        f"{len(inference_result.successful_document_stems)}/"
-        + f"{len(inference_result.requested_document_stems)}"
-    )
     logger.info(
-        f"Inference complete. Successfully classified {success_ratio} documents."
+        f"Inference complete. Successfully classified {len(successful_document_stems)} documents."
     )
 
-    if len(inference_result.successful_document_stems) == 0:
+    if len(successful_document_stems) == 0:
         raise ValueError(
             "Inference successfully ran on 0 documents, skipping aggregation and indexing."
         )
 
     aggregation_run: State = await aggregate(
-        document_stems=list(inference_result.successful_document_stems),
+        document_stems=list(successful_document_stems),
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
@@ -184,7 +178,7 @@ async def full_pipeline(
 
     await create_full_pipeline_summary_artifact(
         config=config,
-        inference_result=success_ratio,
+        successful_document_stems=successful_document_stems,
     )
 
     logger.info("Full pipeline run completed!")
