@@ -2,7 +2,7 @@ import os
 import uuid
 from functools import lru_cache
 from logging import getLogger
-from typing import Optional, Sequence, Union
+from typing import Literal, Optional, Sequence, Union
 from uuid import UUID
 
 from argilla import (
@@ -302,6 +302,42 @@ class ArgillaSession:
         logger.info("Successfully created user: %s", created_user.username)
         return created_user
 
+    def _modify_user_workspace(
+        self,
+        username: str,
+        workspace: Optional[str],
+        action: Literal["add", "remove"],
+    ):
+        """
+        Modify a user's workspace membership
+
+        Args:
+            username: Username of the user to modify
+            workspace: Name of the workspace. If not provided, uses default_workspace
+            action: The action to perform - either "add" or "remove"
+
+        Raises:
+            ResourceDoesNotExistError: If the user or workspace does not exist
+        """
+        workspace_name = workspace or self.default_workspace
+        logger.info(
+            "%s user '%s' to workspace '%s'", action.title(), username, workspace_name
+        )
+
+        workspace_object = self.get_workspace(workspace_name)
+        user_object = self.get_user(username=username)
+
+        if action.lower() == "add":
+            user_object.add_to_workspace(workspace_object)
+        elif action.lower() == "remove":
+            user_object.remove_from_workspace(workspace_object)
+        else:
+            raise ValueError(f"Unknown action: {action}")
+
+        logger.info(
+            "%s user '%s' to workspace '%s'", action.lower(), username, workspace_name
+        )
+
     def add_user_to_workspace(self, username: str, workspace: Optional[str] = None):
         """
         Add an existing user to a workspace
@@ -309,14 +345,9 @@ class ArgillaSession:
         Raises:
             ResourceDoesNotExistError: If the user or workspace does not exist
         """
-        workspace_name = workspace or self.default_workspace
-        logger.info("Adding user '%s' to workspace '%s'", username, workspace_name)
-
-        workspace_object = self.get_workspace(workspace_name)
-        user_object = self.get_user(username=username)
-
-        user_object.add_to_workspace(workspace_object)
-        logger.info("Added user '%s' to workspace '%s'", username, workspace_name)
+        self._modify_user_workspace(
+            username=username, workspace=workspace, action="add"
+        )
 
     def remove_user_from_workspace(
         self, username: str, workspace: Optional[str] = None
@@ -327,14 +358,9 @@ class ArgillaSession:
         Raises:
             ResourceDoesNotExistError: If the user or workspace does not exist
         """
-        workspace_name = workspace or self.default_workspace
-        logger.info("Removing user '%s' from workspace '%s'", username, workspace_name)
-
-        workspace_object = self.get_workspace(workspace_name)
-        user_object = self.get_user(username=username)
-
-        user_object.remove_from_workspace(workspace_object)
-        logger.info("Removed user '%s' from workspace '%s'", username, workspace_name)
+        self._modify_user_workspace(
+            username=username, workspace=workspace, action="remove"
+        )
 
     def add_labelled_passages(
         self,
@@ -460,7 +486,7 @@ class ArgillaSession:
                 passages.append(
                     LabelledPassage(
                         text=text,
-                        metadata=self._format_metadata(record.metadata),
+                        metadata=record.metadata,
                         spans=spans,
                     )
                 )
