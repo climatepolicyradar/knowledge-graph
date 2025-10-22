@@ -545,10 +545,7 @@ def build_v2_passage_spans(
         )
 
         if span := spans.get(index):
-            if span.concepts_v2:
-                span.concepts_v2 = list(span.concepts_v2) + [concept]
-            else:
-                span.concepts_v2 = [concept]
+            span.concepts_v2 = list(span.concepts_v2) + [concept]
         else:
             spans[index] = VespaPassage.Span(
                 start=index.start,

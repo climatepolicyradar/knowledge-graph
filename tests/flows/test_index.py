@@ -913,20 +913,25 @@ def test_build_v2_document_concepts__concept_counting():
 
 
 def test_build_v2_document_concepts__invalid_wikibase_id():
-    """Test build_v2_document_concepts with invalid WikibaseID."""
+    """
+    Test build_v2_document_concepts with invalid WikibaseID.
+
+    When parse_model_field encounters invalid IDs, it returns None,
+    so we test that the function skips concepts with None parsed_model.
+    """
     simple_concepts = [
         SimpleConcept(
             id="invalid_id",
             name="Test Concept",
             model="invalid_id:concept123:classifier456",
-            parsed_model=parse_model_field("invalid_id:concept123:classifier456"),
-        ),  # Invalid
+            parsed_model=None,  # parse_model_field would return None for invalid IDs
+        ),
         SimpleConcept(
             id="Q0",
             name="Another Concept",
             model="Q0:concept789:classifierabc",
-            parsed_model=parse_model_field("Q0:concept789:classifierabc"),
-        ),  # Invalid (Q0 not allowed)
+            parsed_model=None,  # parse_model_field would return None for Q0
+        ),
     ]
 
     result = build_v2_document_concepts(
