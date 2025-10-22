@@ -2,7 +2,7 @@ import os
 import uuid
 from functools import lru_cache
 from logging import getLogger
-from typing import Literal, Optional, Sequence, Union
+from typing import Literal, Optional, Sequence, Union, overload
 from uuid import UUID
 
 from argilla import (
@@ -230,8 +230,17 @@ class ArgillaSession:
         """Get user object by username"""
         return self.client.users(username=username)
 
+    @overload
+    def get_user(self, *, username: str) -> User: ...
+
+    @overload
+    def get_user(self, *, user_id: Union[UUID, str]) -> User: ...
+
     def get_user(
-        self, username: Optional[str] = None, user_id: Union[UUID, str, None] = None
+        self,
+        *,  # Force keyword-only args
+        username: Optional[str] = None,
+        user_id: Union[UUID, str, None] = None,
     ) -> User:
         """
         Get user object by username or ID
@@ -416,7 +425,7 @@ class ArgillaSession:
         workspace: Optional[str] = None,
         include_statuses: Optional[Sequence[ResponseStatus]] = None,
         limit: Optional[int] = None,
-        merge_responses: bool = True,
+        merge_responses_by_text: bool = True,
     ) -> list[LabelledPassage]:
         """
         Pull labelled passages from a dataset.
@@ -433,13 +442,13 @@ class ArgillaSession:
             include_statuses: Response statuses to include. Defaults to [ResponseStatus.submitted].
             limit: Max number of records to pull (note: may return more passages if
                 records have multiple responses).
-            merge_responses: Whether to merge responses from multiple labellers into
+            merge_responses_by_text: Whether to merge responses from multiple labellers into
                 single passages with combined spans. Defaults to True. If False, each
                 response will be returned as a separate passage, which may be useful
                 for tracking individual labeller contributions.
 
         Returns:
-            List of LabelledPassage objects, one per response (or merged by text if merge_responses=True).
+            List of LabelledPassage objects, one per response (or merged by text if merge_responses_by_text=True).
 
         Raises:
             ResourceDoesNotExistError: If the dataset or workspace does not exist
@@ -492,7 +501,7 @@ class ArgillaSession:
                 )
 
         logger.info("Pulled %d labelled passages", len(passages))
-        if merge_responses:
+        if merge_responses_by_text:
             merged_passages = consolidate_passages_by_text(passages)
             logger.info(
                 "Merged %d responses into %d LabelledPassages",
