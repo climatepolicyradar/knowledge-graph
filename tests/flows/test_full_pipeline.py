@@ -20,8 +20,6 @@ from flows.config import Config
 from flows.full_pipeline import full_pipeline
 from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
-    BatchInferenceResult,
-    InferenceResult,
 )
 from flows.utils import DocumentImportId, DocumentStem, Fault
 
@@ -56,35 +54,9 @@ async def test_full_pipeline_no_config_provided(
         # Setup mocks
         mock_pipeline_config_create.return_value = test_config
 
-        classifier_spec = ClassifierSpec(
-            wikibase_id=WikibaseID("Q100"),
-            classifier_id="zzzz9999",
-            wandb_registry_version="v1",
-        )
-
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
-            data=InferenceResult(
-                requested_document_stems=list(
-                    aggregate_inference_results_document_stems
-                ),
-                classifier_specs=[classifier_spec],
-                batch_inference_results=[
-                    BatchInferenceResult(
-                        batch_document_stems=list(
-                            aggregate_inference_results_document_stems
-                        ),
-                        successful_document_stems=list(
-                            aggregate_inference_results_document_stems
-                        ),
-                        classifier_spec=classifier_spec,
-                    ),
-                ],
-                successful_document_stems=set(
-                    aggregate_inference_results_document_stems
-                ),
-                failed=False,
-            ),
+            data=set(aggregate_inference_results_document_stems),
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -167,25 +139,7 @@ async def test_full_pipeline_with_full_config(
         # Setup mocks
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
-            data=InferenceResult(
-                requested_document_stems=list(
-                    aggregate_inference_results_document_stems
-                ),
-                classifier_specs=[
-                    classifier_spec,
-                ],
-                batch_inference_results=[
-                    BatchInferenceResult(
-                        batch_document_stems=aggregate_inference_results_document_stems,
-                        successful_document_stems=aggregate_inference_results_document_stems,
-                        classifier_spec=classifier_spec,
-                    ),
-                ],
-                successful_document_stems=set(
-                    aggregate_inference_results_document_stems
-                ),
-                failed=False,
-            ),
+            data=set(aggregate_inference_results_document_stems),
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -284,10 +238,6 @@ async def test_full_pipeline_with_inference_failure(
             DocumentImportId("CCLW.executive.1.1"),
             DocumentImportId("CCLW.executive.2.2"),
         ]
-        document_stems_batch = [
-            DocumentStem("CCLW.executive.1.1"),
-            DocumentStem("CCLW.executive.2.2"),
-        ]
         document_stems_successful = [DocumentStem("CCLW.executive.2.2")]
         classifier_spec = ClassifierSpec(
             wikibase_id=WikibaseID("Q100"),
@@ -301,19 +251,7 @@ async def test_full_pipeline_with_inference_failure(
             data=Fault(
                 msg="Some inference batches had failures!",
                 metadata={},
-                data=InferenceResult(
-                    requested_document_stems=list(document_stems_batch),
-                    classifier_specs=[classifier_spec],
-                    batch_inference_results=[
-                        BatchInferenceResult(
-                            batch_document_stems=document_stems_batch,
-                            successful_document_stems=document_stems_successful,
-                            classifier_spec=classifier_spec,
-                        ),
-                    ],
-                    successful_document_stems=set(document_stems_successful),
-                    failed=True,
-                ),
+                data=set(document_stems_successful),
             ),
         )
         mock_aggregate.return_value = State(

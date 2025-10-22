@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from datetime import datetime, timezone
+from enum import Enum
 from logging import getLogger
 from typing import Any, NamedTuple, Optional
 
@@ -25,7 +26,7 @@ from knowledge_graph.exceptions import (
     InvalidConceptError,
     RevisionNotFoundError,
 )
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 
 logger = getLogger(__name__)
 dotenv.load_dotenv()
@@ -34,6 +35,14 @@ dotenv.load_dotenv()
 MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
+
+
+class StatementRank(Enum):
+    """Rank levels for statements on Wikibase items"""
+
+    PREFERRED = "preferred"
+    NORMAL = "normal"
+    DEPRECATED = "deprecated"
 
 
 class WikibaseSession:
@@ -63,6 +72,7 @@ class WikibaseSession:
     negative_concept_property_id = os.getenv(
         "WIKIBASE_NEGATIVE_CONCEPT_PROPERTY_ID", "P11"
     )
+    classifier_id_property_id = os.getenv("WIKIBASE_CLASSIFIER_ID_PROPERTY_ID", "P20")
 
     def __init__(
         self,
@@ -1225,6 +1235,59 @@ class WikibaseSession:
             List of matching Concept objects, ordered by search relevance
         """
         return await self.search_concepts_async(search_term, limit, timestamp)
+
+    async def get_classifier_ids_async(
+        self,
+        wikibase_id: WikibaseID,
+    ) -> list[tuple[StatementRank, ClassifierID]]:
+        """Get the classifier IDs and their ranks for a given Wikibase item"""
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={"action": "wbgetentities", "ids": wikibase_id, "format": "json"},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        claims = data["entities"][wikibase_id]["claims"][self.classifier_id_property_id]
+        classifier_ids = []
+        for claim in claims:
+            rank_str = claim["rank"]
+            classifier_id_str = claim["mainsnak"]["datavalue"]["value"]
+
+            # Make sure the returned statement rank is one of the allowed values
+            try:
+                statement_rank = StatementRank(rank_str)
+            except ValueError as e:
+                logger.warning(
+                    "Invalid statement rank for wikibase item %s: '%s' - %s",
+                    wikibase_id,
+                    rank_str,
+                    str(e),
+                )
+                continue
+
+            # Validate the format of the returned classifier ID
+            try:
+                classifier_id = ClassifierID(classifier_id_str)
+                # Only return the statements where both classifier ID and rank are valid
+                classifier_ids.append((statement_rank, classifier_id))
+            except ValueError as e:
+                logger.warning(
+                    "Invalid classifier ID format for wikibase item %s: '%s' - %s",
+                    wikibase_id,
+                    classifier_id_str,
+                    str(e),
+                )
+
+        return classifier_ids
+
+    @async_to_sync
+    async def get_classifier_ids(
+        self, wikibase_id: WikibaseID
+    ) -> list[tuple[StatementRank, ClassifierID]]:
+        """Get the classifier IDs and their ranks for a given Wikibase item"""
+        return await self.get_classifier_ids_async(wikibase_id)
 
 
 WikibaseConfig = NamedTuple(

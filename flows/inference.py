@@ -60,7 +60,7 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from knowledge_graph.classifier import Classifier, ModelPath
+from knowledge_graph.classifier import Classifier
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -132,39 +132,35 @@ class BatchInferenceResult(BaseModel):
         return len(self.batch_document_stems) != len(self.successful_document_stems)
 
 
-class InferenceResult(BaseModel):
-    """Result from running inference on all batches of documents."""
+def get_inference_fault_metadata(
+    all_successes: list[BatchInferenceResult],
+    all_raw_failures: list[BaseException | FlowRun],
+    requested_document_stems: set[DocumentStem],
+) -> dict[str, list[str]]:
+    """Construct the metadata object to give context to an Inference failure."""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    all_raw_failures_as_strings: list[str] = []
+    for result in all_raw_failures:
+        if isinstance(result, FlowRun):
+            all_raw_failures_as_strings.append(result.model_dump_json())
+        elif isinstance(result, BaseException):
+            all_raw_failures_as_strings.append(result.__repr__())
+        else:
+            all_raw_failures_as_strings.append(result)
 
-    requested_document_stems: list[DocumentStem]
-    """List of document stems that were requested for inference processing.
-    
-    These represent the file names (without extensions) of documents that were 
-    intended to be processed, regardless of whether processing succeeded or failed.
-    """
+    all_successes_as_strings: list[str] = [
+        result.model_dump_json() for result in all_successes
+    ]
 
-    classifier_specs: list[ClassifierSpec]
-    """List of classifier specifications that were used in this inference run.
-    
-    These define which classifiers (models) were intended to be used for processing
-    the documents, regardless of whether they succeeded or failed.
-    """
+    requested_document_stems_as_strings: list[str] = [
+        str(document_stem) for document_stem in requested_document_stems
+    ]
 
-    batch_inference_results: list[BatchInferenceResult] = []
-    """All the batches that made up this inference run."""
-
-    successful_classifier_specs: list[ClassifierSpec] = []
-    """List of classifier specifications that completed all processing successfully."""
-
-    failed_classifier_specs: list[ClassifierSpec] = []
-    """List of classifier specifications that failed for one or more document."""
-
-    successful_document_stems: set[DocumentStem]
-    """Set of document stems that were processed successfully."""
-
-    failed: bool
-    """Whether Inference failed; True equates to a failed run."""
+    return {
+        "all_successes": all_successes_as_strings,
+        "all_raw_failures": all_raw_failures_as_strings,
+        "requested_document_stems": requested_document_stems_as_strings,
+    }
 
 
 def did_inference_fail(
@@ -395,15 +391,9 @@ async def load_classifier(
 ) -> Classifier:
     """Load a classifier into memory."""
     async with concurrency("load_classifier", occupy=5):
-        wandb_classifier_path = ModelPath(
-            wikibase_id=classifier_spec.wikibase_id,
-            classifier_id=classifier_spec.classifier_id,
-        )
-        artifact_id = f"{wandb_classifier_path}:{config.aws_env}"
-        artifact = run.use_artifact(artifact_id, type="model")
-        download_folder = artifact.download()
-        model_path = Path(download_folder) / "model.pickle"
-        classifier = Classifier.load(model_path)
+        artifact_id = f"{config.wandb_model_registry}/{classifier_spec.wikibase_id}:{classifier_spec.wandb_registry_version}"
+        downloaded_model_path = run.use_model(artifact_id)
+        classifier = Classifier.load(downloaded_model_path)
     return classifier
 
 
@@ -449,19 +439,6 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
             f"{document_stem}.json",
         ),
     )
-
-
-async def load_document(
-    config: Config, file_stem: DocumentStem, s3_client: S3Client
-) -> BaseParserOutput:
-    """Download and opens a parser output based on a document ID."""
-    file_key = generate_document_source_key(
-        config=config,
-        document_stem=file_stem,
-    ).key
-    content = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
-    document = BaseParserOutput.model_validate_json(content)
-    return document
 
 
 def _stringify(text: list[str]) -> str:
@@ -525,6 +502,7 @@ def deserialise_pydantic_list_with_fallback[T: BaseModel](
 class SingleDocumentInferenceResult(BaseModel):
     """Labelled passages from inference on a single document."""
 
+    document: Optional[BaseParserOutput]
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
     wikibase_id: str
@@ -549,7 +527,7 @@ async def labels_to_s3(
     config: Config,
     inference: SingleDocumentInferenceResult,
     s3_client: S3Client,
-) -> PutObjectOutputTypeDef:
+) -> SingleDocumentInferenceResult:
     logger = get_logger()
     s3_uri = generate_s3_uri_output(config, inference)
 
@@ -564,64 +542,13 @@ async def labels_to_s3(
         ContentType="application/json",
     )
 
-    return response
-
-
-async def store_labels(
-    config: Config,
-    inferences: Sequence[SingleDocumentInferenceResult],
-) -> tuple[
-    list[SingleDocumentInferenceResult],
-    list[tuple[DocumentStem, Exception]],
-    list[BaseException],
-]:
-    """Store the labels in the cache bucket."""
-    logger = get_logger()
-
-    # Don't get rate-limited by AWS
-    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-
-    session = aioboto3.Session(region_name=config.bucket_region)
-    async with session.client("s3") as s3_client:
-        tasks = [
-            wait_for_semaphore(
-                semaphore,
-                return_with(
-                    inference,
-                    labels_to_s3(config, inference, s3_client),
-                ),
-            )
-            for inference in inferences
-        ]
-
-        results: list[
-            tuple[SingleDocumentInferenceResult, Exception | PutObjectOutputTypeDef]
-            | BaseException
-        ] = await asyncio.gather(*tasks, return_exceptions=True)
-
-    successes: list[SingleDocumentInferenceResult] = []
-    failures: list[tuple[DocumentStem, Exception]] = []
-    # We really don't expect these, since there's a try/catch handler
-    # in `return_with_id`. It is technically possible though, for
-    # there to be what I'm calling here an _unknown_ failure.
-    unknown_failures: list[BaseException] = []
-    for result in results:
-        if isinstance(result, BaseException):
-            unknown_failures.append(result)
-        else:
-            inference, value = result
-            if isinstance(value, Exception):
-                logger.error(
-                    f"Failed to store label for {inference.document_stem}: {value}"
-                )
-                failures.append((inference.document_stem, value))
-            else:
-                if value["ResponseMetadata"]["HTTPStatusCode"] == 200:
-                    successes.append(inference)
-                else:
-                    failures.append((inference.document_stem, ValueError(str(value))))
-
-    return successes, failures, unknown_failures
+    if response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200:
+        return inference
+    else:
+        raise ValueError(
+            f"Error storing {inference.document_stem} for "
+            f"{inference.wikibase_id}:{inference.classifier_id}: {response}"
+        )
 
 
 def batch_text_block_inference(
@@ -724,17 +651,16 @@ def _get_labelled_passage_from_prediction(
     )
 
 
-async def run_classifier_inference_on_document(
-    config: Config,
-    file_stem: DocumentStem,
-    classifier: Classifier,
-    s3_client: S3Client,
+async def load_document(
+    config: Config, document_result: SingleDocumentInferenceResult, s3_client: S3Client
 ) -> SingleDocumentInferenceResult:
-    """Run the classifier inference flow on a document."""
-    document = await load_document(config, file_stem, s3_client)
-
-    # Resolve typing issue as wikibase_id is optional (though required here)
-    assert classifier.concept.wikibase_id, f"Classifier invalid: {classifier.id}"
+    """Download and opens a parser output based on a document ID."""
+    file_key = generate_document_source_key(
+        config=config,
+        document_stem=document_result.document_stem,
+    ).key
+    content = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
+    document = BaseParserOutput.model_validate_json(content)
 
     # Don't run inference on documents that have no text or languages as well as HTML
     # documents with no valid text.
@@ -747,36 +673,42 @@ async def run_classifier_inference_on_document(
         document.html_data is not None and not document.html_data.has_valid_text
     )
     if no_text_and_no_languages or html_and_invalid_text:
-        return SingleDocumentInferenceResult(
-            labelled_passages=[],
-            document_stem=file_stem,
-            wikibase_id=classifier.concept.wikibase_id,
-            classifier_id=classifier.id,
+        raise ValueError(
+            f"Cannot run inference on {document_result.document_stem} as it has no valid text: "
+            f"{no_text_and_no_languages=}, {html_and_invalid_text=}"
         )
 
     # Raise on non-English documents
     if document.languages != ["en"]:
         raise ValueError(
-            f"Cannot run inference on {file_stem} as it has non-English language: "
+            f"Cannot run inference on {document_result.document_stem} as it has non-English language: "
             f"{document.languages}"
         )
+    document_result.document = document
+    return document_result
 
+
+async def run_classifier_inference_on_document(
+    result: SingleDocumentInferenceResult,
+    classifier: Classifier,
+) -> SingleDocumentInferenceResult:
+    """Run the classifier inference flow on a document."""
     doc_labels: list[LabelledPassage] = []
-    for text, block_id in document_passages(document):
+    assert result.document  # For typing, we already check this properly earlier
+    for text, block_id in document_passages(result.document):
         labelled_passages = text_block_inference(
             classifier=classifier, block_id=block_id, text=text
         )
         doc_labels.append(labelled_passages)
+    result.labelled_passages = doc_labels
 
-    return SingleDocumentInferenceResult(
-        labelled_passages=doc_labels,
-        document_stem=file_stem,
-        wikibase_id=classifier.concept.wikibase_id,
-        classifier_id=classifier.id,
-    )
+    # Unload the document now that we're done with it
+    result.document = None
+    return result
 
 
 async def create_inference_on_batch_summary_artifact(
+    classifier_spec: ClassifierSpec,
     successes: Sequence[SingleDocumentInferenceResult],
     failures: Sequence[tuple[DocumentStem, Exception]],
     unknown_failures: Sequence[BaseException],
@@ -793,6 +725,7 @@ async def create_inference_on_batch_summary_artifact(
 
 ## Overview
 - **Flow Run**: {flow_run_name or "Unknown"}
+- **Classifier**: {classifier_spec}
 - **Total documents processed**: {total_documents}
 - **Successful documents**: {successful_documents}
 - **Failed documents**: {failed_documents}
@@ -836,6 +769,36 @@ async def create_inference_on_batch_summary_artifact(
     )
 
 
+def process_single_document_inference(
+    results: list[
+        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
+    ],
+) -> tuple[
+    list[SingleDocumentInferenceResult],
+    list[tuple[DocumentStem, Exception]],
+    list[BaseException],
+]:
+    """Turn raw single document results into successes & failures"""
+    logger = get_logger()
+    successes: list[SingleDocumentInferenceResult] = []
+    failures: list[tuple[DocumentStem, Exception]] = []
+    # We really don't expect these, since there's a try/catch handler
+    # in `return_with_id`. It is technically possible though, for
+    # there to be what I'm calling here an _unknown_ failure.
+    unknown_failures: list[BaseException] = []
+    for result in results:
+        if isinstance(result, BaseException):
+            unknown_failures.append(result)
+        else:
+            document_stem, value = result
+            if isinstance(value, Exception):
+                logger.error(f"Failed to process document {document_stem}: {value}")
+                failures.append((document_stem, value))
+            else:
+                successes.append(value)
+    return successes, failures, unknown_failures
+
+
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -857,79 +820,128 @@ async def _inference_batch_of_documents(
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
 
+    # Load classifier
     wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",
     )
-
     classifier_spec = ClassifierSpec(**classifier_spec_json)
     logger.info(f"Loading classifier {classifier_spec}")
     classifier = await load_classifier(run, config, classifier_spec)
+    if not classifier.concept.wikibase_id:
+        raise ValueError(
+            "Invalid classifier requested, associated concept has no wikibase_id"
+        )
 
-    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
+    # Prepare empty single result objects
+    documents_results: list[SingleDocumentInferenceResult] = []
+    for document_stem in batch:
+        documents_results.append(
+            SingleDocumentInferenceResult(
+                document=None,
+                labelled_passages=[],
+                document_stem=document_stem,
+                wikibase_id=classifier.concept.wikibase_id,
+                classifier_id=classifier.id,
+            )
+        )
+
+    # Load documents for the batch
     boto_config = AioConfig(
         max_pool_connections=(
             config.s3_concurrency_limit * 2  # add buffer on top of semaphore limit
         ),
         read_timeout=config.s3_read_timeout,
     )
+    semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
     session = aioboto3.Session(region_name=config.bucket_region)
     async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
                 semaphore,
                 return_with(
-                    file_stem,
-                    run_classifier_inference_on_document(
-                        config=config,
-                        file_stem=file_stem,
-                        classifier=classifier,
-                        s3_client=s3_client,
-                    ),
+                    document_result.document_stem,
+                    load_document(config, document_result, s3_client),
                 ),
             )
-            for file_stem in batch
+            for document_result in documents_results
         ]
-
-        results: list[
+        loads_results: list[
             tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
             | BaseException
         ] = await asyncio.gather(*tasks, return_exceptions=True)
 
-    inferences_successes: list[SingleDocumentInferenceResult] = []
-    inferences_failures: list[tuple[DocumentStem, Exception]] = []
-    # We really don't expect these, since there's a try/catch handler
-    # in `return_with_id`. It is technically possible though, for
-    # there to be what I'm calling here an _unknown_ failure.
-    inferences_unknown_failures: list[BaseException] = []
-    for result in results:
-        if isinstance(result, BaseException):
-            inferences_unknown_failures.append(result)
-        else:
-            document_stem, value = result
-            if isinstance(value, Exception):
-                logger.error(f"Failed to process document {document_stem}: {value}")
-                inferences_failures.append((document_stem, value))
-            else:
-                inferences_successes.append(value)
+    (
+        loads_successes,
+        loads_failures,
+        loads_unknown_failures,
+    ) = process_single_document_inference(loads_results)
+
+    # Validate all documents are loaded or handled
+    for load_result in loads_successes:
+        if not load_result.document:
+            raise ValueError(
+                f"Document load failed with an unhandled exception {load_result.document_stem}"
+            )
+
+    # Run Inference
+    tasks = [
+        wait_for_semaphore(
+            semaphore,
+            return_with(
+                load_result.document_stem,
+                run_classifier_inference_on_document(
+                    result=load_result,
+                    classifier=classifier,
+                ),
+            ),
+        )
+        for load_result in loads_successes
+    ]
+    inferences_results: list[
+        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
+    ] = await asyncio.gather(*tasks, return_exceptions=True)
+    (
+        inferences_successes,
+        inferences_failures,
+        inferences_unknown_failures,
+    ) = process_single_document_inference(inferences_results)
+
+    # Store labelled passages in s3
+    session = aioboto3.Session(region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        tasks = [
+            wait_for_semaphore(
+                semaphore,
+                return_with(
+                    inference.document_stem,
+                    labels_to_s3(config, inference, s3_client),
+                ),
+            )
+            for inference in inferences_successes
+        ]
+        store_labels_results: list[
+            tuple[DocumentStem, Exception | SingleDocumentInferenceResult]
+            | BaseException
+        ] = await asyncio.gather(*tasks, return_exceptions=True)
 
     (
         store_labels_successes,
         store_labels_failures,
         store_labels_unknown_failures,
-    ) = await store_labels(  # pyright: ignore[reportFunctionMemberAccess, reportArgumentType]
-        config=config, inferences=inferences_successes
-    )
+    ) = process_single_document_inference(store_labels_results)
 
-    # This doesn't need to be combined since successes are funnelled
-    # through all steps.
     #
     # Failures are possibly reduced at each step.
     all_successes = store_labels_successes
     # Combine the multiple places that have reports
-    all_failures = inferences_failures + store_labels_failures
-    all_unknown_failures = inferences_unknown_failures + store_labels_unknown_failures
+    all_failures = loads_failures + inferences_failures + store_labels_failures
+    all_unknown_failures = (
+        loads_unknown_failures
+        + inferences_unknown_failures
+        + store_labels_unknown_failures
+    )
 
     # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
     try:
@@ -943,6 +955,7 @@ async def _inference_batch_of_documents(
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
+        classifier_spec,
         all_successes,
         all_failures,
         all_unknown_failures,
@@ -1000,13 +1013,34 @@ async def inference_batch_of_documents_gpu(
     )
 
 
+def is_a_sabin_placeholder(stem: DocumentStem):
+    """
+    Returns True if document matches the naming convention of a Sabin Placeholder document
+
+    Sabin Placeholder Document stems have dummy files which can not be processed at Inference time
+    See https://linear.app/climate-policy-radar/issue/APP-391/spike-getting-families-with-no-documents-into-vespa
+    """
+
+    return stem.lower().startswith("sabin") and stem.lower().endswith("placeholder")
+
+
 def filter_document_batch(
     file_stems: Sequence[DocumentStem], spec: ClassifierSpec
 ) -> FilterResult:
+    """
+    Given a Sequence of DocumentStems, applies filtering rules to return a FilterResult contain the lists of accepted and removed DocumentStems according to both the ClassifierSpec rules and the Sabin placeholder filter rules.
+
+    Filters out DocumentStems according to the Classifier Spec rules to prevent them from being submitted for Inference.
+    Filters out Sabin placeholder DocumentStems, to prevent them from being submitted for Inference. The Sabin placeholder
+    Document stems have dummy files which can not be processed at Inference time
+    """
+
     removed_file_stems = []
     accepted_file_stems = []
     for stem in file_stems:
-        if should_skip_doc(stem, spec):
+        if is_a_sabin_placeholder(stem):
+            removed_file_stems.append(stem)
+        elif should_skip_doc(stem, spec):
             removed_file_stems.append(stem)
         else:
             accepted_file_stems.append(stem)
@@ -1077,7 +1111,7 @@ async def store_metadata(
 
 async def store_inference_result(
     config: Config,
-    inference_result: InferenceResult,
+    successful_document_stems: set[DocumentStem],
 ) -> None:
     """Store the inference result to S3 for later use."""
     logger = get_logger()
@@ -1094,7 +1128,11 @@ async def store_inference_result(
 
     run_output_identifier = build_run_output_identifier()
 
-    result_json = inference_result.model_dump_json()
+    result_data = {
+        "successful_document_stems": list(successful_document_stems),
+    }
+
+    result_json = json.dumps(result_data)
 
     logger.debug(f"writing inference result: {len(result_json)} bytes")
 
@@ -1136,7 +1174,7 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> InferenceResult | Fault:
+) -> set[DocumentStem] | Fault:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -1263,38 +1301,40 @@ async def inference(
         successful_document_stems=successful_document_stems,
     )
 
-    inference_result = InferenceResult(
-        requested_document_stems=list(requested_document_stems),
-        classifier_specs=list(classifier_specs),
-        batch_inference_results=all_successes,
-        successful_classifier_specs=successful_classifier_specs,
-        failed_classifier_specs=failed_classifier_specs,
-        successful_document_stems=successful_document_stems,
-        failed=inference_run_failed,
-    )
-
     await create_inference_summary_artifact(
         config=config,
-        inference_result=inference_result,
+        requested_document_stems=list(requested_document_stems),
+        classifier_specs=list(classifier_specs),
+        successful_classifier_specs=successful_classifier_specs,
+        failed_classifier_specs=failed_classifier_specs,
         removal_details=removal_details,
     )
 
     try:
         if config.cache_bucket:
             await store_inference_result(
-                config=config,
-                inference_result=inference_result,
+                config=config, successful_document_stems=successful_document_stems
             )
     except Exception as e:
         logger.error(f"Failed to store inference result: {e}")
 
-    if inference_result.failed:
+    if inference_run_failed:
+        try:
+            metadata_json: dict[str, Any] = get_inference_fault_metadata(
+                all_successes=all_successes,
+                all_raw_failures=all_raw_failures,
+                requested_document_stems=requested_document_stems,
+            )
+        except Exception as e:
+            logger.error(f"Failed to get inference fault metadata: {e}")
+            metadata_json = {}
+
         raise Fault(
             msg="Some inference batches had failures.",
-            metadata={},
-            data=inference_result,
+            metadata=metadata_json,
+            data=successful_document_stems,
         )
-    return inference_result
+    return successful_document_stems
 
 
 async def create_dont_run_on_docs_summary_artifact(
@@ -1322,7 +1362,10 @@ async def create_dont_run_on_docs_summary_artifact(
 
 async def create_inference_summary_artifact(
     config: Config,
-    inference_result: InferenceResult,
+    requested_document_stems: list[DocumentStem],
+    classifier_specs: list[ClassifierSpec],
+    successful_classifier_specs: list[ClassifierSpec],
+    failed_classifier_specs: list[ClassifierSpec],
     removal_details: dict[ClassifierSpec, int],
 ) -> None:
     """Create an artifact with a summary about the inference run."""
@@ -1332,10 +1375,10 @@ async def create_inference_summary_artifact(
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Total documents requested**: {len(inference_result.requested_document_stems)}
-- **Total classifiers**: {len(inference_result.classifier_specs)}
-- **Successful classifiers**: {len(inference_result.successful_classifier_specs)}
-- **Failed classifiers**: {len(inference_result.failed_classifier_specs)}
+- **Total documents requested**: {len(requested_document_stems)}
+- **Total classifiers**: {len(classifier_specs)}
+- **Successful classifiers**: {len(successful_classifier_specs)}
+- **Failed classifiers**: {len(failed_classifier_specs)}
 - **Classifiers with removals**: {len(removal_details)}
 """
     # Create classifier details table
@@ -1345,14 +1388,14 @@ async def create_inference_summary_artifact(
             "Filtered Out": removal_details[spec],
             "Status": "✓",
         }
-        for spec in inference_result.successful_classifier_specs
+        for spec in successful_classifier_specs
     ] + [
         {
             "Classifier": spec.wikibase_id,
             "Filtered Out": removal_details[spec],
             "Status": "✗",
         }
-        for spec in inference_result.failed_classifier_specs
+        for spec in failed_classifier_specs
     ]
 
     await acreate_table_artifact(

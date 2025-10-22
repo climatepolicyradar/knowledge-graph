@@ -5,11 +5,17 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.client import ClientError
-from cpr_sdk.parser_models import BaseParserOutput, BlockType, HTMLData, HTMLTextBlock
+from cpr_sdk.parser_models import (
+    BaseParserOutput,
+    BlockType,
+    PDFData,
+    PDFTextBlock,
+)
 from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
@@ -18,7 +24,6 @@ from prefect.states import Completed, Running
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
-    InferenceResult,
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
@@ -31,6 +36,7 @@ from flows.inference import (
     document_passages,
     filter_document_batch,
     gather_successful_document_stems,
+    get_inference_fault_metadata,
     get_latest_ingest_documents,
     inference,
     inference_batch_of_documents_cpu,
@@ -38,10 +44,10 @@ from flows.inference import (
     load_classifier,
     load_document,
     parse_client_error_details,
+    process_single_document_inference,
     run_classifier_inference_on_document,
     serialise_pydantic_list_as_jsonl,
     store_inference_result,
-    store_labels,
     store_metadata,
     text_block_inference,
 )
@@ -152,12 +158,12 @@ async def test_determine_file_stems__error(
 async def test_load_classifier__existing_classifier(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
-    wikibase_id, classifier_id = local_classifier_id
+    wikibase_id, classifier_id, wandb_registry_version = local_classifier_id
     _, mock_run, mock_artifact = mock_wandb
     spec = ClassifierSpec(
         wikibase_id=wikibase_id,
-        classifier_id=classifier_id,
-        wandb_registry_version="v1",
+        classifier_id=classifier_id,  # no longer used but required for validation
+        wandb_registry_version=wandb_registry_version,
     )
     classifier = await load_classifier(
         mock_run,
@@ -173,12 +179,40 @@ async def test_load_classifier__existing_classifier(
 async def test_load_document(
     test_config, mock_async_bucket_documents, mock_s3_async_client
 ):
-    for doc_file_name in mock_async_bucket_documents:
-        file_stem = Path(doc_file_name).stem
-        doc = await load_document(
-            test_config, file_stem=file_stem, s3_client=mock_s3_async_client
+    valid_doc, invalid_doc = mock_async_bucket_documents
+
+    # Invalid doc
+    invalid_document_stem = Path(invalid_doc).stem
+    invalid_document_result = SingleDocumentInferenceResult(
+        document_stem=DocumentStem(invalid_document_stem),
+        document=None,
+        labelled_passages=[],
+        wikibase_id="",
+        classifier_id="",
+    )
+
+    with pytest.raises(ValueError, match="non-English language"):
+        await load_document(
+            test_config,
+            document_result=invalid_document_result,
+            s3_client=mock_s3_async_client,
         )
-        assert file_stem == doc.document_id
+
+    # Valid Doc
+    valid_document_stem = Path(valid_doc).stem
+    valid_document_result = SingleDocumentInferenceResult(
+        document_stem=DocumentStem(valid_document_stem),
+        document=None,
+        labelled_passages=[],
+        wikibase_id="",
+        classifier_id="",
+    )
+    result = await load_document(
+        test_config,
+        document_result=valid_document_result,
+        s3_client=mock_s3_async_client,
+    )
+    assert result.document is not None
 
 
 def test_stringify():
@@ -225,38 +259,6 @@ def test_document_passages__html(parser_output_html):
 def test_document_passages__pdf(parser_output_pdf):
     pdf_result = document_passages(parser_output_pdf).__next__()
     assert pdf_result == ("test pdf text", "2")
-
-
-@pytest.mark.asyncio
-async def test_store_labels(
-    test_config, mock_async_bucket, mock_s3_async_client, snapshot
-):
-    text = "This is a test text block"
-    spans = [Span(text=text, start_index=15, end_index=19)]
-    labels = [LabelledPassage(text=text, spans=spans)]
-
-    successes, failures, unknown_failures = await store_labels(
-        test_config,
-        [
-            SingleDocumentInferenceResult(
-                labelled_passages=labels,
-                document_stem=DocumentStem("TEST.DOC.0.1"),
-                wikibase_id="Q9081",
-                classifier_id="2tnmbxaw",
-            )
-        ],
-    )
-
-    assert successes == snapshot(name="successes")
-    assert failures == snapshot(name="failures")
-    assert unknown_failures == snapshot(name="unknown_failures")
-
-    labels = await helper_list_labels_in_bucket(
-        test_config, mock_async_bucket, mock_s3_async_client
-    )
-
-    assert len(labels) == 1
-    assert labels[0] == "labelled_passages/Q9081/2tnmbxaw/TEST.DOC.0.1.json"
 
 
 @pytest.mark.asyncio
@@ -449,15 +451,9 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
 
         mock_inference_run_deployment.assert_called_once()
 
-        assert type(inference_result) is InferenceResult
+        assert type(inference_result) is set
 
-        assert not inference_result.failed
-
-        assert inference_result.successful_document_stems == set(input_doc_ids)
-
-        assert inference_result.failed_classifier_specs == []
-
-        assert inference_result.classifier_specs == [expected_classifier_spec]
+        assert inference_result == set(input_doc_ids)
 
 
 @pytest.mark.asyncio
@@ -487,9 +483,7 @@ async def test_run_classifier_inference_on_document(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
-    mock_async_bucket_documents,
     snapshot,
-    mock_s3_async_client,
 ):
     # Setup
     _, mock_run, _ = mock_wandb
@@ -507,23 +501,11 @@ async def test_run_classifier_inference_on_document(
         test_config,
         classifier_spec,
     )
-
-    # Run the function on a document with no language
-    document_stem = Path(mock_async_bucket_documents[1]).stem
-    with pytest.raises(ValueError) as exc_info:
-        result = await run_classifier_inference_on_document(
-            config=test_config,
-            file_stem=DocumentStem(document_stem),
-            classifier=classifier,
-            s3_client=mock_s3_async_client,
-        )
-
-    assert "Cannot run inference on" in str(exc_info.value)
-
-    # Run the function on a HTML document with has_valid_text=False
-    document_stem = "HTML.document.0.1"
-    with patch("flows.inference.load_document") as mock_load_document:
-        html_document_invalid_text = BaseParserOutput(
+    document_stem = DocumentStem("HTML.document.0.1")
+    store_result = SingleDocumentInferenceResult(
+        document_stem=document_stem,
+        labelled_passages=[],
+        document=BaseParserOutput(
             document_id=document_stem,
             document_metadata={},
             document_name="test document",
@@ -535,76 +517,34 @@ async def test_run_classifier_inference_on_document(
             document_slug=document_stem,
             languages=None,
             translated=False,
-            html_data=HTMLData(
-                has_valid_text=False,
+            html_data=None,
+            pdf_data=PDFData(
+                page_metadata=[],
+                md5sum="",
                 text_blocks=[
-                    HTMLTextBlock(
-                        text=["This is an invalid text block."],
-                        text_block_id="0",
+                    PDFTextBlock(
+                        text=[
+                            "Ministry of fishing, overfishing, seafood harvest and fisheries."
+                        ],
+                        text_block_id="2",
+                        page_number=1,
+                        coords=[],
                         type=BlockType.TEXT,
+                        type_confidence=0.5,
                     )
                 ],
             ),
-            pdf_data=None,
             pipeline_metadata={},
-        )
+        ),
+        wikibase_id=classifier_spec.wikibase_id,
+        classifier_id=classifier_spec.classifier_id,
+    )
 
-        mock_load_document.return_value = html_document_invalid_text
-
-        result = await run_classifier_inference_on_document(
-            config=test_config,
-            file_stem=DocumentStem(document_stem),
-            classifier=classifier,
-            s3_client=mock_s3_async_client,
-        )
-
-        assert result == snapshot
-
-    # Run the function on a document with English language
-    document_stem = Path(mock_async_bucket_documents[0]).stem
     result = await run_classifier_inference_on_document(
-        config=test_config,
-        file_stem=DocumentStem(document_stem),
+        result=store_result,
         classifier=classifier,
-        s3_client=mock_s3_async_client,
     )
-
-    assert result == snapshot
-
-
-@pytest.mark.asyncio
-async def test_run_classifier_inference_on_document_missing(
-    test_config,
-    mock_classifiers_dir,
-    mock_wandb,
-    mock_async_bucket,
-    mock_s3_async_client,
-):
-    # Setup
-    _, mock_run, _ = mock_wandb
-    test_config.local_classifier_dir = mock_classifiers_dir
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q788"),
-        classifier_id=ClassifierID.generate("Q788", "v1"),
-        wandb_registry_version="v1",
-    )
-
-    # Load classifier
-    classifier = await load_classifier(
-        mock_run,
-        test_config,
-        classifier_spec,
-    )
-
-    document_stem = DocumentStem("CCLW.executive.8133.0")
-    with pytest.raises(ClientError) as excinfo:
-        await run_classifier_inference_on_document(
-            config=test_config,
-            file_stem=document_stem,
-            classifier=classifier,
-            s3_client=mock_s3_async_client,
-        )
-    assert excinfo.value.response["Error"]["Code"] == "NoSuchKey"
+    assert result.labelled_passages == snapshot
 
 
 @pytest.mark.asyncio
@@ -642,6 +582,9 @@ async def test_inference_batch_of_documents_cpu(
     )
 
     # Should not raise any exceptions for successful processing
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu"
+    )
     result_state = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
@@ -677,8 +620,7 @@ async def test_inference_batch_of_documents_cpu(
 
         assert artifact.description is not None, "Artifact should have a description"
         assert hasattr(artifact, "data"), "Artifact should have data"
-
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # Verify that inference outputs were stored in S3 using async s3 client
     expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
@@ -746,6 +688,9 @@ async def test_inference_batch_of_documents_cpu_with_failures(
     )
 
     with pytest.raises(Fault) as exc_info:
+        inference_batch_of_documents_cpu.flow_run_name = (
+            "test-inference-batch-of-documents-cpu-with-failures"
+        )
         _ = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
@@ -774,7 +719,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
         )
 
         # Verify failure artifact data using snapshot
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # For failed documents, no S3 files should be created since the documents don't exist
     # The failure happens before store_labels is called
@@ -821,6 +766,9 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
     )
 
     # Should complete successfully with empty batch
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu-empty-batch"
+    )
     _ = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
@@ -845,7 +793,7 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
         artifact = batch_artifacts[0]  # Most recently created
 
         # Verify empty batch artifact data using snapshot
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
@@ -906,211 +854,6 @@ async def test__inference_batch_of_documents(
     mock_wandb_init.assert_called_once_with(
         entity=test_config.wandb_entity,
         job_type="concept_inference",
-    )
-
-
-def test_inference_result_collection_all_successful() -> None:
-    """Test Inference result collection when all documents are successful for all classifiers."""
-
-    # Setup: 5 documents, 2 classifiers
-    all_documents = [
-        DocumentStem("TEST.executive.1.1"),
-        DocumentStem("TEST.executive.2.2"),
-        DocumentStem("TEST.executive.3.3"),
-        DocumentStem("TEST.executive.4.4"),
-        DocumentStem("TEST.executive.5.5"),
-    ]
-
-    # Classifier Q100: All documents succeed
-    q100_classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q100"),
-        classifier_id="aaaa2222",
-        wandb_registry_version="v1",
-    )
-
-    all_successful_batch_1 = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=all_documents,
-        classifier_spec=q100_classifier_spec,
-    )
-
-    # Classifier Q101: All documents succeed
-    q101_classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q101"),
-        classifier_id="bbbb3333",
-        wandb_registry_version="v1",
-    )
-
-    all_successful_batch_2 = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=all_documents,
-        classifier_spec=q101_classifier_spec,
-    )
-
-    parameterised_batches = [
-        ParameterisedFlow(
-            fn=inference_batch_of_documents_cpu,
-            params={
-                "batch": all_documents,
-                "config_json": {},
-                "classifier_spec_json": q100_classifier_spec.model_dump(),
-            },
-        ),
-        ParameterisedFlow(
-            fn=inference_batch_of_documents_cpu,
-            params={
-                "batch": all_documents,
-                "config_json": {},
-                "classifier_spec_json": q101_classifier_spec.model_dump(),
-            },
-        ),
-    ]
-
-    # Run results collection functions
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(all_documents),
-        batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
-    )
-    inference_run_failed: bool = did_inference_fail(
-        batch_inference_results=[all_successful_batch_1, all_successful_batch_2],
-        requested_document_stems=set(all_documents),
-        successful_document_stems=successful_document_stems,
-    )
-
-    # All documents are successful as we have successes for all documents
-    # and all classifiers in the InferenceResult
-    assert not inference_run_failed, (
-        "Should fail when some documents fail for some classifiers"
-    )
-
-    # Only documents that succeeded for both classifiers should have succeeded
-    assert successful_document_stems == set(all_documents), (
-        "Only documents that succeeded for all classifiers should be marked as successful"
-    )
-
-
-def test_inference_result_collection_all_failures() -> None:
-    """Test Inference result collection when some documents fail for some classifiers."""
-
-    documents = [DocumentStem("TEST.executive.1.1")]
-    spec_q100 = ClassifierSpec(
-        wikibase_id=WikibaseID("Q100"),
-        classifier_id="aaaa2222",
-        wandb_registry_version="v1",
-    )
-    parameterised_batches = [
-        ParameterisedFlow(
-            fn=inference_batch_of_documents_cpu,
-            params={
-                "batch": documents,
-                "config_json": {},
-                "classifier_spec_json": spec_q100.model_dump(),
-            },
-        )
-    ]
-
-    # Run results collection functions
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(documents),
-        batch_inference_results=[],
-    )
-    inference_run_failed: bool = did_inference_fail(
-        batch_inference_results=[],
-        requested_document_stems=set(documents),
-        successful_document_stems=successful_document_stems,
-    )
-
-    assert inference_run_failed, (
-        "Should fail when some documents fail for some classifiers"
-    )
-    assert len(successful_document_stems) == 0
-
-
-def test_inference_result_collection_partial_failures() -> None:
-    """Test Inference result collection when some documents fail for some classifiers."""
-
-    # Setup: 5 documents, 2 classifiers
-    all_documents = [
-        DocumentStem("TEST.executive.1.1"),
-        DocumentStem("TEST.executive.2.2"),
-        DocumentStem("TEST.executive.3.3"),
-        DocumentStem("TEST.executive.4.4"),
-        DocumentStem("TEST.executive.5.5"),
-    ]
-
-    # Classifier Q100: All documents succeed
-    spec_q100 = ClassifierSpec(
-        wikibase_id=WikibaseID("Q100"),
-        classifier_id="aaaa2222",
-        wandb_registry_version="v1",
-    )
-    all_successful_batch = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=all_documents,
-        classifier_spec=spec_q100,
-    )
-
-    # Classifier Q101: Only 2 documents succeed
-    spec_q101 = ClassifierSpec(
-        wikibase_id=WikibaseID("Q101"),
-        classifier_id="bbbb3333",
-        wandb_registry_version="v1",
-    )
-    partial_success_batch = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=[
-            DocumentStem("TEST.executive.3.3"),
-            DocumentStem("TEST.executive.4.4"),
-        ],
-        classifier_spec=spec_q101,
-    )
-
-    parameterised_batches = [
-        ParameterisedFlow(
-            fn=inference_batch_of_documents_cpu,
-            params={
-                "batch": all_documents,
-                "config_json": {},
-                "classifier_spec_json": spec_q100.model_dump(),
-            },
-        ),
-        ParameterisedFlow(
-            fn=inference_batch_of_documents_cpu,
-            params={
-                "batch": all_documents,
-                "config_json": {},
-                "classifier_spec_json": spec_q101.model_dump(),
-            },
-        ),
-    ]
-
-    # Run results collection functions
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(all_documents),
-        batch_inference_results=[all_successful_batch, partial_success_batch],
-    )
-    inference_run_failed: bool = did_inference_fail(
-        batch_inference_results=[all_successful_batch, partial_success_batch],
-        requested_document_stems=set(all_documents),
-        successful_document_stems=successful_document_stems,
-    )
-
-    # A document is only considered successful if it succeeds for ALL classifiers
-    # Since Q101 failed on 3 documents, those documents are considered failed overall
-    assert inference_run_failed, (
-        "Should fail when some documents fail for some classifiers"
-    )
-
-    # Only documents that succeeded for both classifiers should have succeeded
-    expected_successful = {
-        DocumentStem("TEST.executive.3.3"),
-        DocumentStem("TEST.executive.4.4"),
-    }
-    assert successful_document_stems == expected_successful, (
-        "Only documents that succeeded for all classifiers should be marked as successful"
     )
 
 
@@ -1239,17 +982,19 @@ def test_document_passages(
 @pytest.mark.parametrize(
     ("dont_run_on", "removed"),
     [
-        (None, []),
-        ([], []),
+        (None, ["Sabin.document.2524.placeholder"]),
+        ([], ["Sabin.document.2524.placeholder"]),
         (
             ["gef"],
-            [
-                "GEF.document.787.n0000.json",
-            ],
+            ["GEF.document.787.n0000.json", "Sabin.document.2524.placeholder"],
         ),
         (
             ["cpr", "sabin"],
-            ["Sabin.document.9869.10352.json", "CPR.document.i00003835.n0000.json"],
+            [
+                "Sabin.document.9869.10352.json",
+                "CPR.document.i00003835.n0000.json",
+                "Sabin.document.2524.placeholder",
+            ],
         ),
         (
             DontRunOnEnum.__members__.keys(),
@@ -1262,6 +1007,7 @@ def test_document_passages(
                 "OEP.document.i00000231.n0000.json",
                 "Sabin.document.9869.10352.json",
                 "CPR.document.i00003835.n0000.json",
+                "Sabin.document.2524.placeholder",
             ],
         ),
     ],
@@ -1276,6 +1022,7 @@ def test_filter_document_batch(dont_run_on, removed):
         "OEP.document.i00000231.n0000.json",
         "Sabin.document.9869.10352.json",
         "CPR.document.i00003835.n0000.json",
+        "Sabin.document.2524.placeholder",
     ]
     accepted = [f for f in file_stems if f not in removed]
 
@@ -1481,30 +1228,6 @@ async def test_store_inference_result(
     mock_context = MagicMock(spec=FlowRunContext)
     mock_context.flow_run = flow_run
 
-    # Create test data
-    classifier_spec = ClassifierSpec(
-        concept_id=ConceptID("xyz78abc"),
-        wikibase_id=WikibaseID("Q788"),
-        classifier_id="abcd2345",
-        wandb_registry_version="v1",
-    )
-
-    batch_result = BatchInferenceResult(
-        batch_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        successful_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        classifier_spec=classifier_spec,
-    )
-
-    inference_result = InferenceResult(
-        requested_document_stems=[DocumentStem("TEST.DOC.1.1")],
-        classifier_specs=[classifier_spec],
-        batch_inference_results=[batch_result],
-        successful_classifier_specs=[classifier_spec],
-        failed_classifier_specs=[],
-        successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
-        failed=False,
-    )
-
     # Mock only the Prefect context, let moto handle S3
     with (
         patch("flows.inference.get_run_context", return_value=mock_context),
@@ -1515,7 +1238,7 @@ async def test_store_inference_result(
     ):
         await store_inference_result(
             config=test_config,
-            inference_result=inference_result,
+            successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
         )
 
     expected_key = os.path.join(
@@ -1537,20 +1260,159 @@ async def test_store_inference_result(
     result_content = await response["Body"].read()
     result_dict = json.loads(result_content.decode("utf-8"))
 
-    loaded_result = InferenceResult.model_validate(result_dict)
-    assert loaded_result == snapshot
+    assert result_dict == snapshot
 
 
-def test_inference_result_collection_missing_results() -> None:
-    """
-    Test Inference result collection when some batches have no results.
+def test_did_inference_fail() -> None:
+    """Test the did_inference_fail function."""
 
-    For example a document wasn't processed in one batch due to a flow crashing but
-    was successfully processed in other batches.
-    """
+    q100_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id=ClassifierID("aaaa2222"),
+        wandb_registry_version="v1",
+    )
+    q101_classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q101"),
+        classifier_id=ClassifierID("bbbb2222"),
+        wandb_registry_version="v1",
+    )
 
-    # Setup: 5 documents, 2 classifiers
-    all_documents = [
+    # No batch results or requested documents
+    batch_inference_results: list[BatchInferenceResult] = []
+    requested_document_stems: set[DocumentStem] = set()
+    successful_document_stems: set[DocumentStem] = set()
+
+    inference_run_failed: bool = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # No batch results but documents were requested
+    batch_inference_results = []
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = set()
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # No successes in any batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[],
+            classifier_spec=q101_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = set()
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # Success in only some batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[],  # No success
+            classifier_spec=q100_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = set()
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # Only some documents successful in all batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[
+                DocumentStem("TEST.executive.1.1"),
+                DocumentStem("TEST.executive.1.2"),
+            ],
+            successful_document_stems=[
+                DocumentStem("TEST.executive.1.1"),
+                DocumentStem("TEST.executive.1.2"),
+            ],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[
+                DocumentStem("TEST.executive.1.1"),
+                DocumentStem("TEST.executive.1.2"),
+            ],
+            successful_document_stems=[
+                DocumentStem("TEST.executive.1.1")
+            ],  # No success for TEST.executive.1.2
+            classifier_spec=q101_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {
+        DocumentStem("TEST.executive.1.1"),
+        DocumentStem("TEST.executive.1.2"),
+    }
+    successful_document_stems = {DocumentStem("TEST.executive.1.1")}
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is True
+
+    # Success across all batches
+    batch_inference_results = [
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+            classifier_spec=q100_classifier_spec,
+        ),
+        BatchInferenceResult(
+            batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+            successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+            classifier_spec=q100_classifier_spec,
+        ),
+    ]
+    requested_document_stems = {DocumentStem("TEST.executive.1.1")}
+    successful_document_stems = {DocumentStem("TEST.executive.1.1")}
+
+    inference_run_failed = did_inference_fail(
+        batch_inference_results=batch_inference_results,
+        requested_document_stems=requested_document_stems,
+        successful_document_stems=successful_document_stems,
+    )
+    assert inference_run_failed is False
+
+
+def test_gather_successful_document_stems() -> None:
+    """Test the gather_successful_document_stems function."""
+
+    # Setup: 5 documents, 2 classifiers, 2 batches
+    requested_document_stems = [
         DocumentStem("TEST.executive.1.1"),
         DocumentStem("TEST.executive.2.2"),
         DocumentStem("TEST.executive.3.3"),
@@ -1563,24 +1425,18 @@ def test_inference_result_collection_missing_results() -> None:
         classifier_id="aaaa2222",
         wandb_registry_version="v1",
     )
+
     q101_classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q101"),
-        classifier_id="bbbb2222",
+        classifier_id="bbbb3333",
         wandb_registry_version="v1",
-    )
-
-    # Classifier Q100: All documents succeed
-    Q100_batch = BatchInferenceResult(
-        batch_document_stems=all_documents,
-        successful_document_stems=all_documents,
-        classifier_spec=q100_classifier_spec,
     )
 
     parameterised_batches = [
         ParameterisedFlow(
             fn=inference_batch_of_documents_cpu,
             params={
-                "batch": all_documents,
+                "batch": requested_document_stems,
                 "config_json": {},
                 "classifier_spec_json": q100_classifier_spec.model_dump(),
             },
@@ -1588,30 +1444,147 @@ def test_inference_result_collection_missing_results() -> None:
         ParameterisedFlow(
             fn=inference_batch_of_documents_cpu,
             params={
-                "batch": all_documents,
+                "batch": requested_document_stems,
                 "config_json": {},
                 "classifier_spec_json": q101_classifier_spec.model_dump(),
             },
         ),
     ]
 
-    # Run results collection functions
+    # No results from any batches
     successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
         parameterised_batches=parameterised_batches,
-        requested_document_stems=set(all_documents),
-        batch_inference_results=[Q100_batch],  # No results for Q101
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[],  # No results
     )
-    inference_run_failed: bool = did_inference_fail(
-        batch_inference_results=[Q100_batch],  # No results for Q101
-        requested_document_stems=set(all_documents),
-        successful_document_stems=successful_document_stems,
+    assert successful_document_stems == set(), "No results should return an empty set"
+
+    # No documents successful for any batches
+    all_failed_batch_1 = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=[],  # No success
+        classifier_spec=q100_classifier_spec,
+    )
+    all_failed_batch_2 = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=[],  # No success
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[all_failed_batch_1, all_failed_batch_2],
+    )
+    assert successful_document_stems == set(), (
+        "All failures should return no successful documents"
     )
 
-    # A document is only considered successful if it succeeds for ALL classifiers
-    # Since Q101 has no results, the document is considered failed overall
-    assert inference_run_failed, "Should fail when some documents have no results"
-
-    # Only documents that succeeded for both classifiers should have succeeded
+    # Only some batch results
+    q101_batch_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems,
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[q101_batch_success],  # No results for q100
+    )
     assert successful_document_stems == set(), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+
+    # Not all documents successful for all batches
+    q100_batch_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems,
+        classifier_spec=q100_classifier_spec,
+    )
+    q101_batch_partial_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems[1:],  # Partial success
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[q100_batch_success, q101_batch_partial_success],
+    )
+    assert successful_document_stems == set(requested_document_stems[1:]), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+    # All documents successful for all batches
+    q100_batch_success = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=requested_document_stems,
+        classifier_spec=q100_classifier_spec,
+    )
+    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+        parameterised_batches=parameterised_batches,
+        requested_document_stems=set(requested_document_stems),
+        batch_inference_results=[q100_batch_success, q101_batch_success],
+    )
+    assert successful_document_stems == set(requested_document_stems), (
+        "Only documents that succeeded for all classifiers should be marked as successful"
+    )
+
+
+def test_get_inference_fault_metadata() -> None:
+    """Test the get_inference_fault_metadata function."""
+
+    metadata_json: dict[str, Any] = get_inference_fault_metadata(
+        all_successes=[
+            BatchInferenceResult(
+                batch_document_stems=[DocumentStem("TEST.executive.1.1")],
+                successful_document_stems=[DocumentStem("TEST.executive.1.1")],
+                classifier_spec=ClassifierSpec(
+                    wikibase_id=WikibaseID("Q100"),
+                    classifier_id=ClassifierID("aaaa2222"),
+                    wandb_registry_version="v1",
+                ),
+            ),
+        ],
+        all_raw_failures=[
+            FlowRun(
+                id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+                flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+                name="test-flow-run",
+                state=Completed(),
+            ),
+            BaseException(),
+        ],
+        requested_document_stems=set([DocumentStem("TEST.executive.1.1")]),
+    )
+
+    assert metadata_json.keys() == {
+        "all_successes",
+        "all_raw_failures",
+        "requested_document_stems",
+    }
+
+    # Assert that we can dump the result to a string as this is a requirement of the
+    # fault metadata.
+    json.dumps(metadata_json)
+
+
+def test_process_single_document_inference():
+    doc_stem = DocumentStem("test_doc")
+    success_result = SingleDocumentInferenceResult(
+        document=None,
+        labelled_passages=[],
+        document_stem=doc_stem,
+        wikibase_id="Q123",
+        classifier_id="test_classifier",
+    )
+
+    results: list[
+        tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
+    ] = [
+        (doc_stem, success_result),  # success
+        (doc_stem, ValueError("test error")),  # failure
+        RuntimeError("unknown error"),  # unknown failure
+    ]
+
+    successes, failures, unknown_failures = process_single_document_inference(results)
+    assert (len(successes), len(failures), len(unknown_failures)) == (1, 1, 1)

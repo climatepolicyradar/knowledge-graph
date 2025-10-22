@@ -2,16 +2,16 @@ import os
 from pathlib import Path
 from typing import Annotated, Optional
 
-from cpr_sdk.ssm import get_aws_ssm_param
 from pydantic import AfterValidator, BaseModel, Field, SecretStr
 
-from knowledge_graph.cloud import AwsEnv, get_prefect_job_variable
+from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param, get_prefect_job_variable
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results/"
 INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input/"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages/"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages/"
+INDEX_RESULTS_PREFIX: str = "index_concepts/"
 
 # SSM
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
@@ -56,10 +56,13 @@ class Config(BaseModel):
         default=INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="S3 prefix of documents read as source for inference",
     )
-
     inference_document_target_prefix: S3Prefix = Field(
         default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
         description="S3 prefix for where inference targets are written to",
+    )
+    index_results_prefix: S3Prefix = Field(
+        default=INDEX_RESULTS_PREFIX,
+        description="S3 prefix for index results are written to",
     )
 
     bucket_region: str = Field(
@@ -133,18 +136,32 @@ class Config(BaseModel):
             )
 
         if not config.wandb_api_key:
-            config.wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY"))
+            config.wandb_api_key = SecretStr(
+                get_aws_ssm_param(
+                    "WANDB_API_KEY",
+                    aws_env=config.aws_env,
+                )
+            )
 
         if not config.wikibase_password:
             config.wikibase_password = SecretStr(
-                get_aws_ssm_param(WIKIBASE_PASSWORD_SSM_NAME)
+                get_aws_ssm_param(
+                    WIKIBASE_PASSWORD_SSM_NAME,
+                    aws_env=config.aws_env,
+                )
             )
 
         if not config.wikibase_username:
-            config.wikibase_username = get_aws_ssm_param(WIKIBASE_USERNAME_SSM_NAME)
+            config.wikibase_username = get_aws_ssm_param(
+                WIKIBASE_USERNAME_SSM_NAME,
+                aws_env=config.aws_env,
+            )
 
         if not config.wikibase_url:
-            config.wikibase_url = get_aws_ssm_param(WIKIBASE_URL_SSM_NAME)
+            config.wikibase_url = get_aws_ssm_param(
+                WIKIBASE_URL_SSM_NAME,
+                aws_env=config.aws_env,
+            )
 
         return config
 
