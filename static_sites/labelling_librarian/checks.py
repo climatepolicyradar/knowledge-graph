@@ -1,7 +1,8 @@
 import itertools
 from collections import defaultdict
 from functools import lru_cache
-from typing import Callable
+from typing import Callable, Union
+from uuid import UUID
 
 import argilla as rg
 from argilla import Response, ResponseStatus, User
@@ -142,9 +143,9 @@ def check_whether_dataset_has_a_high_discard_ratio(
 
 
 @lru_cache(maxsize=64)
-def _get_username_from_id(user_id: str) -> str:
+def _get_username_from_id(user_id: Union[UUID, str]) -> str:
     """Get username from user ID, with caching."""
-    user = argilla_session.get_user(user_id)
+    user = argilla_session.get_user(user_id=user_id)
     assert isinstance(user, User)
     return user.username
 
