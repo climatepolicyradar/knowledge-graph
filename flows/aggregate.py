@@ -1,7 +1,7 @@
 import json
 import os
 from collections.abc import AsyncGenerator, Sequence
-from typing import Any, TypeAlias, TypeVar
+from typing import Any, NamedTuple, TypeAlias, TypeVar
 
 import prefect.tasks as tasks
 import pydantic
@@ -48,6 +48,7 @@ from flows.utils import (
     map_as_sub_flow,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 
 T = TypeVar("T")
@@ -64,6 +65,75 @@ SpecStr: TypeAlias = str
 
 # A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
+
+
+class MiniClassifierSpec(NamedTuple):
+    """Minimal classifier spec parsed from model field."""
+
+    wikibase_id: WikibaseID
+    concept_id: ConceptID
+    classifier_id: ClassifierID
+
+    def to_string(self) -> str:
+        """
+        Serialise to string format.
+
+        Returns:
+            String in format "wikibase_id:concept_id:classifier_id"
+        """
+        return f"{self.wikibase_id}:{self.concept_id}:{self.classifier_id}"
+
+    @classmethod
+    def from_classifier_spec(cls, spec: ClassifierSpec) -> "MiniClassifierSpec | None":
+        """
+        Create MiniClassifierSpec from a ClassifierSpec.
+
+        Args:
+            spec: The classifier spec to convert
+
+        Returns:
+            MiniClassifierSpec with the same IDs, or None if any required field is missing
+
+        Raises:
+            ValueError: If any of the IDs are invalid
+        """
+        # Check if all required fields are present
+        if (
+            spec.wikibase_id is None
+            or spec.concept_id is None
+            or spec.classifier_id is None
+        ):
+            return None
+
+        return cls(
+            wikibase_id=WikibaseID(spec.wikibase_id),
+            concept_id=ConceptID(spec.concept_id),
+            classifier_id=ClassifierID(spec.classifier_id),
+        )
+
+
+def parse_model_field(model: str) -> MiniClassifierSpec | None:
+    """
+    Parse the model field from a concept.
+
+    New format: "wikibase_id:concept_id:classifier_id" (e.g., "Q1363:xyz78abc:vax7e3n7")
+    Old format: 'KeywordClassifier("concept_name")' (no colons)
+
+    Returns:
+        MiniClassifierSpec if new format with valid IDs, None if old format or invalid IDs
+    """
+    parts = model.split(":")
+    if len(parts) == 3:
+        try:
+            return MiniClassifierSpec(
+                wikibase_id=WikibaseID(parts[0]),
+                concept_id=ConceptID(parts[1]),
+                classifier_id=ClassifierID(parts[2]),
+            )
+        except ValueError:
+            # Invalid ID format - treat as old format
+            return None
+    return None
 
 
 class AggregationFailure(Exception):

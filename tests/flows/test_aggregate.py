@@ -18,17 +18,19 @@ from prefect.states import Running
 from flows.aggregate import (
     AggregationFailure,
     Metadata,
+    MiniClassifierSpec,
     aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
+    parse_model_field,
     process_document,
     store_metadata,
     validate_passages_are_same_except_concepts,
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.utils import DocumentStem
-from knowledge_graph.identifiers import ConceptID, WikibaseID
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 from scripts.update_classifier_spec import write_spec_file
@@ -451,3 +453,30 @@ async def test_store_metadata(
 
     metadata = Metadata.model_validate(metadata_dict)
     assert metadata == snapshot
+
+
+@pytest.mark.parametrize(
+    ("model,expected"),
+    [
+        (
+            "Q123:xabs2345:abcd2345",
+            MiniClassifierSpec(
+                wikibase_id=WikibaseID(
+                    "Q123",
+                ),
+                concept_id=ConceptID("xabs2345"),
+                classifier_id=ClassifierID("abcd2345"),
+            ),
+        ),
+        (
+            "Q123:None:abcd2345",
+            None,
+        ),
+        (
+            'KeywordClassifier("concept_38")',
+            None,
+        ),
+    ],
+)
+def test_parse_model_field(model, expected):
+    assert parse_model_field(model) == expected
