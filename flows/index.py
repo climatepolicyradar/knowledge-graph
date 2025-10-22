@@ -40,7 +40,9 @@ from flows.aggregate import (
     Metadata as AggregateMetadata,
 )
 from flows.aggregate import (
+    MiniClassifierSpec,
     SerialisedVespaConcept,
+    parse_model_field,
 )
 from flows.boundary import (
     CONCEPT_COUNT_SEPARATOR,
@@ -53,7 +55,6 @@ from flows.boundary import (
     get_document_passages_from_vespa__generator,
     get_vespa_search_adapter_from_aws_secrets,
 )
-from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
 from flows.result import Err, Error, Ok, Result, is_err, unwrap_err
 from flows.utils import (
@@ -293,10 +294,16 @@ class SimpleConcept:
     A simple, hashable concept.
 
     As of 2025-06-03, the Concept from the cpr_sdk isn't hashable.
+
+    The parsed_model field contains the parsed classifier spec info
+    from the model field. It is None for old format concepts (before
+    the new model format was introduced).
     """
 
     id: str
     name: str
+    model: str
+    parsed_model: MiniClassifierSpec | None
 
 
 def generate_s3_uri_input_document_passages(
@@ -320,7 +327,6 @@ async def index_document_passages(
     run_output_identifier: RunOutputIdentifier,
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
-    classifier_specs: list[ClassifierSpec] | None,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
 ) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
@@ -379,14 +385,10 @@ async def index_document_passages(
             results.append(Err(error))
             continue
 
-        if classifier_specs is not None:
-            serialised_spans = build_v2_passage_spans(
-                text_block_id=text_block_id,
-                serialised_concepts=serialised_concepts,
-                classifier_specs=classifier_specs,
-            )
-        else:
-            serialised_spans = []
+        serialised_spans = build_v2_passage_spans(
+            text_block_id=text_block_id,
+            serialised_concepts=serialised_concepts,
+        )
 
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
         vespa_data_id: VespaDataId = get_data_id_from_vespa_hit_id(vespa_hit_id)
@@ -452,14 +454,36 @@ async def index_document_passages(
 
             serialised_concepts = aggregated_inference_results[text_block_id]
 
-            results.append(
-                Ok(
-                    [
-                        SimpleConcept(id=concept["id"], name=concept["name"])
-                        for concept in serialised_concepts
-                    ]
+            simple_concepts = []
+            for concept in serialised_concepts:
+                if not isinstance(concept, dict):
+                    logger.warning(f"Expected dict for concept, got {type(concept)}")
+                    continue
+
+                concept_id = concept.get("id")
+                concept_name = concept.get("name")
+                concept_model = concept.get("model")
+
+                if not all(
+                    isinstance(v, str)
+                    for v in [concept_id, concept_name, concept_model]
+                ):
+                    logger.warning(
+                        f"Invalid concept fields in {text_block_id}: "
+                        f"id={concept_id}, name={concept_name}, model={concept_model}"
+                    )
+                    continue
+
+                simple_concepts.append(
+                    SimpleConcept(
+                        id=concept_id,  # type: ignore[arg-type]  # validated above
+                        name=concept_name,  # type: ignore[arg-type]  # validated above
+                        model=concept_model,  # type: ignore[arg-type]  # validated above
+                        parsed_model=parse_model_field(concept_model),  # type: ignore[arg-type]  # validated above
+                    )
                 )
-            )
+
+            results.append(Ok(simple_concepts))
 
     return results
 
@@ -474,13 +498,9 @@ class Index(NamedTuple):
 def build_v2_passage_spans(
     text_block_id: TextBlockId,
     serialised_concepts: Sequence[SerialisedVespaConcept],
-    classifier_specs: Sequence[ClassifierSpec],
 ) -> Sequence[SerialisedVespaSpan]:
     """Group and enrich v1 spans into v2 spans."""
     logger = get_logger()
-
-    # Compute this once to have O(1) lookups
-    classifier_specs_by_id = {cs.wikibase_id: cs for cs in classifier_specs}
 
     spans: dict[Index, VespaPassage.Span] = {}
     for serialised_concept_json in serialised_concepts:
@@ -488,6 +508,10 @@ def build_v2_passage_spans(
         vespa_concept: VespaPassage.Concept = VespaPassage.Concept.model_validate(
             serialised_concept_json
         )
+
+        parsed_model = parse_model_field(vespa_concept.model)
+        if parsed_model is None:
+            continue
 
         try:
             # This is mostly done to ensure that it's a valid Wikibase ID
@@ -499,32 +523,26 @@ def build_v2_passage_spans(
             )
             continue
 
+        # Verify the Wikibase ID in the model field matches the
+        # concept ID. The concept ID in the v1 concept in the SDK
+        # should be Wikibase ID. It's not a canonical ID for a concept.
+        if parsed_model.wikibase_id != wikibase_id:
+            logger.warning(
+                f"Wikibase ID mismatch for concept in text block {text_block_id}: "
+                f"concept.id={wikibase_id}, model={vespa_concept.model}"
+            )
+            continue
+
         index = Index(
             start=vespa_concept.start,
             end=vespa_concept.end,
         )
 
-        # Since the aggregated inference results don't contain all the
-        # data needed, enrich it from the classifier specs.
-        if classifier_spec := classifier_specs_by_id.get(wikibase_id):
-            if classifier_spec.concept_id is None:
-                logger.warning(
-                    f"classifier spec for concept {wikibase_id} has no concept_id, "
-                    f"skipping v2 enrichment for text block {text_block_id}"
-                )
-                continue
-
-            concept: VespaPassage.Span.ConceptV2 = VespaPassage.Span.ConceptV2(
-                concept_id=str(classifier_spec.concept_id),
-                concept_wikibase_id=str(wikibase_id),
-                classifier_id=classifier_spec.classifier_id,
-            )
-        else:
-            logger.error(
-                "no matching classifier spec for concept "
-                f"{wikibase_id} for text block {text_block_id}"
-            )
-            continue
+        concept: VespaPassage.Span.ConceptV2 = VespaPassage.Span.ConceptV2(
+            concept_id=parsed_model.concept_id,
+            concept_wikibase_id=parsed_model.wikibase_id,
+            classifier_id=parsed_model.classifier_id,
+        )
 
         if span := spans.get(index):
             if span.concepts_v2:
@@ -538,24 +556,28 @@ def build_v2_passage_spans(
                 concepts_v2=[concept],
             )
 
-    return [v.model_dump(mode="json") for _k, v in spans.items()]
+    return [v.model_dump(mode="json") for _k, v in spans.items()]  # type: ignore[return-value]
 
 
 def build_v2_document_concepts(
     simple_concepts: list[SimpleConcept],
-    classifier_specs: Sequence[ClassifierSpec],
 ) -> list[dict[str, Any]]:
     """Group and enrich v1 concepts into v2 concepts."""
     logger = get_logger()
-
-    # Compute this once to have O(1) lookups
-    classifier_specs_by_id = {cs.wikibase_id: cs for cs in classifier_specs}
 
     # Count occurrences of each concept
     concepts_counter: Counter[SimpleConcept] = Counter(simple_concepts)
 
     document_concepts: list[VespaDocument.ConceptV2] = []
     for concept, count in concepts_counter.items():
+        # Check if we have parsed model info (new format)
+        if concept.parsed_model is None:
+            # Old format - skip v2 enrichment
+            logger.debug(
+                f"skipping v2 enrichment for concept {concept.id}: old model format"
+            )
+            continue
+
         # This is mostly done to ensure that it's a valid Wikibase ID
         try:
             wikibase_id = WikibaseID(concept.id)
@@ -563,25 +585,23 @@ def build_v2_document_concepts(
             logger.warning(f"invalid Wikibase ID {concept.id} for concept: {e}")
             continue
 
-        # Look up classifier spec to enrich concept data
-        if classifier_spec := classifier_specs_by_id.get(wikibase_id):
-            if classifier_spec.concept_id is None:
-                logger.warning(
-                    f"classifier spec for concept {wikibase_id} has no concept_id, "
-                    f"skipping v2 enrichment"
-                )
-                continue
-
-            document_concept = VespaDocument.ConceptV2(
-                concept_id=str(classifier_spec.concept_id),
-                concept_wikibase_id=str(wikibase_id),
-                classifier_id=classifier_spec.classifier_id,
-                count=count,
+        # Verify the Wikibase ID in the model field matches the
+        # concept ID. The concept ID in the v1 concept in the SDK
+        # should be Wikibase ID. It's not a canonical ID for a concept.
+        if concept.parsed_model.wikibase_id != wikibase_id:
+            logger.warning(
+                f"Wikibase ID mismatch for concept: "
+                f"concept.id={wikibase_id}, model={concept.model}"
             )
-            document_concepts.append(document_concept)
-        else:
-            logger.error(f"no matching classifier spec for concept {wikibase_id}")
             continue
+
+        document_concept = VespaDocument.ConceptV2(
+            concept_id=concept.parsed_model.concept_id,
+            concept_wikibase_id=concept.parsed_model.wikibase_id,
+            classifier_id=concept.parsed_model.classifier_id,
+            count=count,
+        )
+        document_concepts.append(document_concept)
 
     return [concept.model_dump(mode="json") for concept in document_concepts]
 
@@ -590,7 +610,6 @@ async def index_family_document(
     document_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
     simple_concepts: list[SimpleConcept],
-    classifier_specs: list[ClassifierSpec] | None,
 ) -> Result[None, Error]:
     """Index document concept counts in Vespa via partial update."""
     logger = get_logger()
@@ -604,13 +623,9 @@ async def index_family_document(
 
     logger.debug(f"serialised concepts counts: {concepts_counts_with_names}")
 
-    if classifier_specs is not None:
-        concepts_v2 = build_v2_document_concepts(
-            simple_concepts=simple_concepts,
-            classifier_specs=classifier_specs,
-        )
-    else:
-        concepts_v2 = []
+    concepts_v2 = build_v2_document_concepts(
+        simple_concepts=simple_concepts,
+    )
 
     path = vespa_connection_pool.app.get_document_v1_path(
         id=document_id,
@@ -735,7 +750,6 @@ async def index_all(
     run_output_identifier: RunOutputIdentifier,
     indexer_document_passages_concurrency_limit: PositiveInt,
     indexer_max_vespa_connections: PositiveInt,
-    classifier_specs: list[ClassifierSpec] | None = None,
 ) -> DocumentStem:
     """Indexes all (document passages and family documents) data."""
     try:
@@ -758,7 +772,6 @@ async def index_all(
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
                 indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
-                classifier_specs=classifier_specs,
             )
 
             simple_concepts: list[SimpleConcept] = []
@@ -776,7 +789,6 @@ async def index_all(
                 document_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
                 simple_concepts=simple_concepts,
-                classifier_specs=classifier_specs,
             )
 
             if is_err(result):
@@ -867,9 +879,6 @@ async def index_batch_of_documents(
                     indexer_document_passages_concurrency_limit
                 ),
                 indexer_max_vespa_connections=indexer_max_vespa_connections,
-                classifier_specs=aggregate_metadata.classifier_specs
-                if aggregate_metadata
-                else None,
             )
         )
 

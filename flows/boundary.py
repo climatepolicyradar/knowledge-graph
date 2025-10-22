@@ -249,23 +249,18 @@ def get_model_from_span(
     ]
     """
     if classifier_spec:
-        return ":".join(
-            map(
-                lambda field: str(field),
-                [
-                    classifier_spec.wikibase_id,
-                    classifier_spec.concept_id,
-                    classifier_spec.classifier_id,
-                ],
-            )
-        )
-    else:
-        if len(span.labellers) != 1:
-            raise ValueError(
-                f"Span should have 1 labeller but has {len(span.labellers)}."
-            )
+        # Local import to avoid circular dependency
+        from flows.aggregate import MiniClassifierSpec
 
-        return span.labellers[0]
+        if mini_spec := MiniClassifierSpec.from_classifier_spec(classifier_spec):
+            return mini_spec.to_string()
+
+    # Fall back to using labellers if classifier_spec is None or
+    # missing required fields
+    if len(span.labellers) != 1:
+        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
+
+    return span.labellers[0]
 
 
 def get_parent_concepts_from_concept(

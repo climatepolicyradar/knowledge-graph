@@ -16,13 +16,12 @@ from prefect.context import FlowRunContext
 from prefect.states import Completed, Running
 from vespa.io import VespaResponse
 
-from flows.aggregate import RunOutputIdentifier
+from flows.aggregate import RunOutputIdentifier, parse_model_field
 from flows.boundary import (
     TextBlockId,
     get_document_from_vespa,
     get_document_passages_from_vespa__generator,
 )
-from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.index import (
     METADATA_FILE_NAME,
     Metadata,
@@ -41,7 +40,6 @@ from flows.utils import (
     DocumentStem,
     remove_translated_suffix,
 )
-from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 
 
 @pytest.mark.vespa
@@ -81,7 +79,6 @@ async def test_index_document_passages(
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
-                classifier_specs=None,
             )
 
             # Get the final vespa passages
@@ -169,7 +166,6 @@ async def test_index_document_passages__error_handling(
                     config=test_config,
                     document_stem=document_stem,
                     vespa_connection_pool=vespa_connection_pool,
-                    classifier_specs=None,
                 )
 
 
@@ -467,12 +463,32 @@ async def test_index_family_document(
     document_stem = aggregate_inference_results_document_stems[0]
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
-    # Create some test concepts
+    # Create some test concepts with old model format (no v2 enrichment)
     test_concepts = [
-        SimpleConcept(id="Q123", name="Climate Change"),
-        SimpleConcept(id="Q456", name="Carbon Emissions"),
-        SimpleConcept(id="Q123", name="Climate Change"),  # Duplicate to test counting
-        SimpleConcept(id="Q789", name="Renewable Energy"),
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model='KeywordClassifier("Climate Change")',
+            parsed_model=None,
+        ),
+        SimpleConcept(
+            id="Q456",
+            name="Carbon Emissions",
+            model='KeywordClassifier("Carbon Emissions")',
+            parsed_model=None,
+        ),
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model='KeywordClassifier("Climate Change")',
+            parsed_model=None,
+        ),  # Duplicate to test counting
+        SimpleConcept(
+            id="Q789",
+            name="Renewable Energy",
+            model='KeywordClassifier("Renewable Energy")',
+            parsed_model=None,
+        ),
     ]
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
@@ -487,7 +503,6 @@ async def test_index_family_document(
             document_id=document_id,
             vespa_connection_pool=vespa_connection_pool,
             simple_concepts=test_concepts,
-            classifier_specs=None,
         )
 
         # Assert the operation was successful
@@ -533,10 +548,20 @@ async def test_index_family_document__failure(
     document_stem = aggregate_inference_results_document_stems[0]
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
-    # Create some test concepts
+    # Create some test concepts with old model format
     test_concepts = [
-        SimpleConcept(id="Q123", name="Climate Change"),
-        SimpleConcept(id="Q456", name="Carbon Emissions"),
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model='KeywordClassifier("Climate Change")',
+            parsed_model=None,
+        ),
+        SimpleConcept(
+            id="Q456",
+            name="Carbon Emissions",
+            model='KeywordClassifier("Carbon Emissions")',
+            parsed_model=None,
+        ),
     ]
 
     # Mock the update_data method at the module level to avoid Prefect serialization issues
@@ -554,7 +579,6 @@ async def test_index_family_document__failure(
                 document_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
                 simple_concepts=test_concepts,
-                classifier_specs=None,
             )
 
             # Assert the operation failed
@@ -620,9 +644,10 @@ async def test_store_metadata(
 
 
 def test_build_v2_passage_spans__valid_concepts():
-    """Test build_v2_passage_spans with valid concepts."""
+    """Test build_v2_passage_spans with valid concepts using new model field format."""
 
     text_block_id = TextBlockId("test.passage.1")
+    # Use new model field format: "wikibase_id:concept_id:classifier_id"
     serialised_concepts = [
         {
             "id": "Q123",
@@ -631,7 +656,7 @@ def test_build_v2_passage_spans__valid_concepts():
             "end": 10,
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": "Q123:ttbb2345:abcd2345",
             "timestamp": "2025-01-01T00:00:00",
         },
         {
@@ -641,35 +666,14 @@ def test_build_v2_passage_spans__valid_concepts():
             "end": 25,
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": "Q456:abcd2345:efgh6789",
             "timestamp": "2025-01-01T00:00:00",
         },
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("ttbb2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
     ]
 
     result = build_v2_passage_spans(
         text_block_id=text_block_id,
         serialised_concepts=serialised_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == [
@@ -709,7 +713,7 @@ def test_build_v2_passage_spans__invalid_wikibase_id():
             "end": 10,
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": "invalid_id:concept123:classifier456",
             "timestamp": "2025-01-01T00:00:00",
         },
         {
@@ -719,82 +723,41 @@ def test_build_v2_passage_spans__invalid_wikibase_id():
             "end": 25,
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": "Q0:concept789:classifierabc",
             "timestamp": "2025-01-01T00:00:00",
         },
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
     ]
 
     result = build_v2_passage_spans(
         text_block_id=text_block_id,
         serialised_concepts=serialised_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == []
 
 
-def test_build_v2_passage_spans__missing_classifier_spec():
-    """Test build_v2_passage_spans with missing classifier spec."""
+def test_build_v2_passage_spans__old_model_format():
+    """Test build_v2_passage_spans skips concepts with old model format."""
     text_block_id = TextBlockId("test.passage.1")
     serialised_concepts = [
         {
-            "id": "Q999",  # Valid WikibaseID but no matching classifier spec
-            "name": "Unknown Concept",
+            "id": "Q999",
+            "name": "Old Format Concept",
             "start": 0,
             "end": 10,
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": 'KeywordClassifier("Unknown Concept")',  # Old format
             "timestamp": "2025-01-01T00:00:00",
         },
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            concept_id=ConceptID("abcd2345"),
-            classifier_id=ClassifierID("mnpq2468"),
-            wandb_registry_version="v1",
-        ),
     ]
 
     result = build_v2_passage_spans(
         text_block_id=text_block_id,
         serialised_concepts=serialised_concepts,
-        classifier_specs=classifier_specs,
     )
 
+    # Old format concepts are skipped, so no v2 spans
     assert result == []
 
 
@@ -810,7 +773,7 @@ def test_build_v2_passage_spans__grouping_by_position():
             "end": 10,
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": "Q123:gbhf2299:abcd2345",
             "timestamp": "2025-01-01T00:00:00",
         },
         {
@@ -820,35 +783,14 @@ def test_build_v2_passage_spans__grouping_by_position():
             "end": 10,  # Same position as above
             "parent_concepts": [],
             "parent_concept_ids_flat": "",
-            "model": "test_model",
+            "model": "Q456:tttt3333:efgh6789",
             "timestamp": "2025-01-01T00:00:00",
         },
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("gbhf2299"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("tttt3333"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("uuyy7728"),
-            wandb_registry_version="v1",
-        ),
     ]
 
     result = build_v2_passage_spans(
         text_block_id=text_block_id,
         serialised_concepts=serialised_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == [
@@ -875,31 +817,10 @@ def test_build_v2_passage_spans__empty_inputs():
     """Test build_v2_passage_spans with empty inputs."""
     text_block_id = TextBlockId("test.passage.1")
     serialised_concepts = []
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-    ]
 
     result = build_v2_passage_spans(
         text_block_id=text_block_id,
         serialised_concepts=serialised_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == []
@@ -908,33 +829,22 @@ def test_build_v2_passage_spans__empty_inputs():
 def test_build_v2_document_concepts__valid_concepts():
     """Test build_v2_document_concepts with valid concepts."""
     simple_concepts = [
-        SimpleConcept(id="Q123", name="Climate Change"),
-        SimpleConcept(id="Q456", name="Carbon Emissions"),
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("xabs2345"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model="Q123:xabs2345:abcd2345",
+            parsed_model=parse_model_field("Q123:xabs2345:abcd2345"),
         ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("abcd2345"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q456",
+            name="Carbon Emissions",
+            model="Q456:abcd2345:efgh6789",
+            parsed_model=parse_model_field("Q456:abcd2345:efgh6789"),
         ),
     ]
 
     result = build_v2_document_concepts(
         simple_concepts=simple_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == [
@@ -956,35 +866,34 @@ def test_build_v2_document_concepts__valid_concepts():
 def test_build_v2_document_concepts__concept_counting():
     """Test build_v2_document_concepts correctly counts duplicate concepts."""
     simple_concepts = [
-        SimpleConcept(id="Q123", name="Climate Change"),
-        SimpleConcept(id="Q123", name="Climate Change"),  # Duplicate
-        SimpleConcept(id="Q123", name="Climate Change"),  # Duplicate
-        SimpleConcept(id="Q456", name="Carbon Emissions"),
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("tqhn2243"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model="Q123:tqhn2243:abcd2345",
+            parsed_model=parse_model_field("Q123:tqhn2243:abcd2345"),
         ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("qkjt4493"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("kktt8888"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model="Q123:tqhn2243:abcd2345",
+            parsed_model=parse_model_field("Q123:tqhn2243:abcd2345"),
+        ),  # Duplicate
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model="Q123:tqhn2243:abcd2345",
+            parsed_model=parse_model_field("Q123:tqhn2243:abcd2345"),
+        ),  # Duplicate
+        SimpleConcept(
+            id="Q456",
+            name="Carbon Emissions",
+            model="Q456:qkjt4493:efgh6789",
+            parsed_model=parse_model_field("Q456:qkjt4493:efgh6789"),
         ),
     ]
 
     result = build_v2_document_concepts(
         simple_concepts=simple_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == [
@@ -1006,99 +915,52 @@ def test_build_v2_document_concepts__concept_counting():
 def test_build_v2_document_concepts__invalid_wikibase_id():
     """Test build_v2_document_concepts with invalid WikibaseID."""
     simple_concepts = [
-        SimpleConcept(id="invalid_id", name="Test Concept"),  # Invalid
-        SimpleConcept(id="Q0", name="Another Concept"),  # Invalid (Q0 not allowed)
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("tqhn2243"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("qkjt4493"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("kktt8888"),
-            wandb_registry_version="v1",
-        ),
+        SimpleConcept(
+            id="invalid_id",
+            name="Test Concept",
+            model="invalid_id:concept123:classifier456",
+            parsed_model=parse_model_field("invalid_id:concept123:classifier456"),
+        ),  # Invalid
+        SimpleConcept(
+            id="Q0",
+            name="Another Concept",
+            model="Q0:concept789:classifierabc",
+            parsed_model=parse_model_field("Q0:concept789:classifierabc"),
+        ),  # Invalid (Q0 not allowed)
     ]
 
     result = build_v2_document_concepts(
         simple_concepts=simple_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == []
 
 
-def test_build_v2_document_concepts__missing_classifier_spec():
-    """Test build_v2_document_concepts with missing classifier spec."""
+def test_build_v2_document_concepts__old_model_format():
+    """Test build_v2_document_concepts skips concepts with old model format."""
     simple_concepts = [
-        SimpleConcept(id="Q999", name="Unknown Concept"),  # No matching spec
-    ]
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("tqhn2243"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("qkjt4493"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("kktt8888"),
-            wandb_registry_version="v1",
-        ),
+        SimpleConcept(
+            id="Q999",
+            name="Unknown Concept",
+            model='KeywordClassifier("Unknown Concept")',
+            parsed_model=None,
+        ),  # Old format
     ]
 
     result = build_v2_document_concepts(
         simple_concepts=simple_concepts,
-        classifier_specs=classifier_specs,
     )
 
+    # Old format concepts are skipped
     assert result == []
 
 
 def test_build_v2_document_concepts__empty_inputs():
     """Test build_v2_document_concepts with empty inputs."""
     simple_concepts = []
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("tqhn2243"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("qkjt4493"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("kktt8888"),
-            wandb_registry_version="v1",
-        ),
-    ]
 
     result = build_v2_document_concepts(
         simple_concepts=simple_concepts,
-        classifier_specs=classifier_specs,
     )
 
     assert result == []
@@ -1117,28 +979,9 @@ async def test_index_document_passages__with_aggregate_metadata(
     """Test that v2 spans are created when aggregate_metadata is provided."""
     run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
 
-    # Create classifier specs that match the actual concepts in our test fixture data
-    # These WikibaseIDs (Q237, Q309, Q371) are present in BOTH test fixture files
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q237"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("ttbb2345"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q309"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("xyzw6789"),
-            wandb_registry_version="v1",
-        ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q371"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("hjkm9999"),
-            wandb_registry_version="v1",
-        ),
-    ]
+    # NOTE: The test fixture data has been updated to use the new model format
+    # "wikibase_id:concept_id:classifier_id" for WikibaseIDs Q237, Q309, Q371
+    # These match the classifier specs: Q237:ttbb2345:abcd2345, Q309:xyzw6789:efgh6789, Q371:hjkm9999:mnpq2468
 
     async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
         for (
@@ -1148,13 +991,12 @@ async def test_index_document_passages__with_aggregate_metadata(
             document_stem = DocumentStem(Path(file_key).stem)
             document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
-            # Index the aggregated inference results from S3 to Vespa with classifier_specs
+            # Index the aggregated inference results from S3 to Vespa
             await index_document_passages(
                 config=test_config,
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
-                classifier_specs=classifier_specs,
             )
 
             # Get the final vespa passages
@@ -1244,31 +1086,31 @@ async def test_index_family_document__with_aggregate_metadata(
     document_stem = aggregate_inference_results_document_stems[0]
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
 
+    # Use new model field format: "wikibase_id:concept_id:classifier_id"
     simple_concepts = [
-        SimpleConcept(id="Q123", name="Climate Change"),
-        SimpleConcept(id="Q456", name="Carbon Emissions"),
-        SimpleConcept(id="Q123", name="Climate Change"),  # Duplicate to test counting
-        SimpleConcept(id="Q789", name="Renewable Energy"),
-    ]
-
-    classifier_specs = [
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q123"),
-            classifier_id=ClassifierID("abcd2345"),
-            concept_id=ConceptID("ttbb2345"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model="Q123:ttbb2345:abcd2345",
+            parsed_model=parse_model_field("Q123:ttbb2345:abcd2345"),
         ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q456"),
-            classifier_id=ClassifierID("efgh6789"),
-            concept_id=ConceptID("xyzw6789"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q456",
+            name="Carbon Emissions",
+            model="Q456:xyzw6789:efgh6789",
+            parsed_model=parse_model_field("Q456:xyzw6789:efgh6789"),
         ),
-        ClassifierSpec(
-            wikibase_id=WikibaseID("Q789"),
-            classifier_id=ClassifierID("mnpq2468"),
-            concept_id=ConceptID("hjkm9999"),
-            wandb_registry_version="v1",
+        SimpleConcept(
+            id="Q123",
+            name="Climate Change",
+            model="Q123:ttbb2345:abcd2345",
+            parsed_model=parse_model_field("Q123:ttbb2345:abcd2345"),
+        ),  # Duplicate to test counting
+        SimpleConcept(
+            id="Q789",
+            name="Renewable Energy",
+            model="Q789:hjkm9999:mnpq2468",
+            parsed_model=parse_model_field("Q789:hjkm9999:mnpq2468"),
         ),
     ]
 
@@ -1279,12 +1121,11 @@ async def test_index_family_document__with_aggregate_metadata(
             vespa_search_adapter=local_vespa_search_adapter,
         )
 
-        # Index the concepts with classifier_specs to test v2 concepts
+        # Index the concepts - v2 concepts will be created from model field
         result = await index_family_document(
             document_id=document_id,
             vespa_connection_pool=vespa_connection_pool,
             simple_concepts=simple_concepts,
-            classifier_specs=classifier_specs,
         )
 
         # Assert the operation was successful
