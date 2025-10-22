@@ -22,7 +22,9 @@ wikidata = WikidataSession()
 logger.info("Connected to Wikidata")
 
 
-class MatchedConcept(BaseModel):  # noqa: D101
+class MatchedConcept(BaseModel):
+    """A plausible match between concepts in Wikibase and Wikidata"""
+
     wikibase_concept: Concept
     wikidata_concept: Concept
 
