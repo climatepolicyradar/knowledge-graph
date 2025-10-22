@@ -32,8 +32,6 @@ single_word_label_strategy = (
     .filter(lambda x: x)
 )
 
-more_complex_separator_characters = [" ", "-", "\n", "\t"]
-
 
 @st.composite
 def multi_word_label_strategy(
@@ -85,7 +83,14 @@ def concept_strategy(draw):
 
 @st.composite
 def negative_text_strategy(draw, labels: list[str]):
-    """Generate text which does not contain any of the concept's labels."""
+    """
+    Generate text which does not contain any of the concept's labels.
+
+    Args:
+        draw: Hypothesis strategy drawing function.
+        labels: Plain string labels (NOT regex patterns).
+                These should be the original concept labels before any transformation.
+    """
     return draw(
         st.text(min_size=1, max_size=1000).filter(
             lambda x: all(label.lower() not in x.lower() for label in labels)
@@ -99,7 +104,14 @@ def positive_text_strategy(
     labels: Optional[list[str]] = None,
     negative_labels: Optional[list[str]] = None,
 ):
-    """Generate text containing one of the labels, with pre/post text that avoids negatives."""
+    """
+    Generate text containing one of the labels, with pre/post text that avoids negatives.
+
+    Args:
+        draw: Hypothesis strategy drawing function.
+        labels: Plain string labels (NOT regex patterns) to include in the generated text.
+        negative_labels: Plain string labels (NOT regex patterns) to avoid in the text.
+    """
     labels = labels or []
     negative_labels = negative_labels or []
 

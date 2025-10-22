@@ -14,7 +14,6 @@ from knowledge_graph.span import Span
 from tests.common_strategies import (
     concept_label_strategy,
     concept_strategy,
-    more_complex_separator_characters,
     multi_word_label_strategy,
     negative_text_strategy,
     positive_text_strategy,
@@ -37,7 +36,7 @@ def test_whether_classifier_matches_concept_labels_in_text(
     # Skip concepts where any negative label token equals any token from a positive label.
     # In those cases, a positive match would be correctly filtered by the classifier
     # due to the overlapping negative label.
-    sep = r"[\s\-]+"
+    sep = KeywordClassifier.separator_pattern
     positive_tokens = {
         tok.lower()
         for label in concept.all_labels
@@ -444,13 +443,21 @@ def label_with_separator_variant_strategy(draw, label: str):
 
     Eg. takes "greenhouse gas" and returns "greenhouse\ngas" or "greenhouse-gas" etc.
     """
-    separator_pattern = r"[\s\-]+"
-    words = [w for w in re.split(pattern=separator_pattern, string=label.strip()) if w]
+    words = [
+        w
+        for w in re.split(
+            pattern=KeywordClassifier.separator_pattern, string=label.strip()
+        )
+        if w
+    ]
 
     if len(words) == 1:
         return label
 
-    variant_sep = draw(st.sampled_from(more_complex_separator_characters))
+    # Draw a single separator character matching the classifier's pattern
+    # Remove the '+' quantifier to get just one character
+    single_separator_pattern = KeywordClassifier.separator_pattern.rstrip("+")
+    variant_sep = draw(st.from_regex(single_separator_pattern, fullmatch=True))
     return variant_sep.join(words)
 
 
