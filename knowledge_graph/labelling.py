@@ -33,7 +33,12 @@ load_dotenv(find_dotenv())
 
 
 class ResourceAlreadyExistsError(Exception):
-    """Raise this error if a user is trying to create a resource which already exists"""
+    """
+    Raise this error if a user is trying to create a resource which already exists.
+
+    :param resource_type: The type of resource that already exists
+    :param resource_name: The name of the resource that already exists
+    """
 
     def __init__(
         self,
@@ -50,7 +55,12 @@ class ResourceAlreadyExistsError(Exception):
 
 
 class ResourceDoesNotExistError(Exception):
-    """Raise this error if the user is trying to fetch a resource which does not exist"""
+    """
+    Raise this error if the user is trying to fetch a resource which does not exist.
+
+    :param resource_type: The type of resource that does not exist
+    :param resource_name: The name of the resource that does not exist
+    """
 
     def __init__(
         self,
@@ -78,7 +88,13 @@ class ArgillaSession:
         api_key: Optional[str] = None,
         workspace: str = "knowledge-graph",
     ):
-        """Initialize an Argilla session"""
+        """
+        Initialize an Argilla session.
+
+        :param api_url: URL of the Argilla API. If not provided, uses ARGILLA_API_URL env var
+        :param api_key: API key for authentication. If not provided, uses ARGILLA_API_KEY env var
+        :param workspace: Default workspace name for this session
+        """
         self.client = Argilla(
             api_key=api_key or os.getenv("ARGILLA_API_KEY"),
             api_url=api_url or os.getenv("ARGILLA_API_URL"),
@@ -97,15 +113,10 @@ class ArgillaSession:
         """
         Get a workspace by name.
 
-        Args:
-            name: If a name is not provided, the session's default_workspace will be
-            used.
-
-        Returns:
-            Workspace object.
-
-        Raises:
-            ResourceDoesNotExistError: If the workspace does not exist
+        :param name: Name of the workspace to get. If not provided, the session's
+            default_workspace will be used.
+        :return: The requested Workspace object
+        :raises ResourceDoesNotExistError: If the workspace does not exist
         """
         workspace_name = name or self.default_workspace
         logger.info("Fetching workspace: %s", workspace_name)
@@ -118,10 +129,11 @@ class ArgillaSession:
 
     def create_workspace(self, name: str) -> Workspace:
         """
-        Create a new workspace in Argilla
+        Create a new workspace in Argilla.
 
-        Raises:
-            ResourceAlreadyExistsError: If a workspace with this name already exists
+        :param name: Name of the workspace to create
+        :return: The created Workspace object
+        :raises ResourceAlreadyExistsError: If a workspace with this name already exists
         """
         try:
             # First, check whether the workspace already exists
@@ -140,10 +152,13 @@ class ArgillaSession:
         workspace: Optional[str] = None,
     ) -> Dataset:
         """
-        Get a dataset by its Wikibase ID (ie its name) in the given workspace
+        Get a dataset by its Wikibase ID (ie its name) in the given workspace.
 
-        Raises:
-            ResourceDoesNotExistError: If the dataset or workspace does not exist
+        :param wikibase_id: Wikibase ID of the dataset to retrieve
+        :param workspace: Name of the workspace to get the dataset from. If not
+            provided, uses the session's default_workspace.
+        :return: The requested Dataset object
+        :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
         logger.info("Fetching dataset '%s'", wikibase_id)
         workspace_object = self.get_workspace(workspace)
@@ -157,7 +172,13 @@ class ArgillaSession:
             raise ResourceDoesNotExistError("Dataset", str(wikibase_id))
 
     def get_all_datasets(self, workspace: Optional[str] = None) -> list[Dataset]:
-        """Get all datasets in a workspace"""
+        """
+        Get all datasets in a workspace.
+
+        :param workspace: Name of the workspace to get the datasets from. If not
+            provided, uses the session's default_workspace
+        :return: List of Dataset objects in the workspace
+        """
         workspace_object = self.get_workspace(workspace)
         datasets = workspace_object.datasets
         logger.info(
@@ -173,9 +194,14 @@ class ArgillaSession:
         workspace: Optional[str] = None,
     ) -> Dataset:
         """
-        Create a new dataset for a concept in the given workspace
+        Create a new dataset for a concept in the given workspace.
 
-        Raises ResourceAlreadyExistsError if the dataset already exists.
+        :param concept: Concept object to create a dataset for
+        :param workspace: Name of the workspace to create the dataset in. If not
+            provided, uses the session's default_workspace
+        :return: The created Dataset object
+        :raises ResourceAlreadyExistsError: If the dataset already exists
+        :raises ValueError: If the supplied concept doesn't have a Wikibase ID
         """
         logger.info("Creating dataset for concept: %s", concept)
 
@@ -222,12 +248,22 @@ class ArgillaSession:
 
     @lru_cache(maxsize=64)
     def _get_user_by_id(self, user_id: Union[UUID, str]) -> User | None:
-        """Get user object by ID"""
+        """
+        Get user object by ID.
+
+        :param user_id: User ID to look up
+        :return: User object if found, None otherwise
+        """
         return self.client.users(id=user_id)
 
     @lru_cache(maxsize=64)
     def _get_user_by_username(self, username: str) -> User | None:
-        """Get user object by username"""
+        """
+        Get user object by username.
+
+        :param username: Username to look up
+        :return: User object if found, None otherwise
+        """
         return self.client.users(username=username)
 
     @overload
@@ -243,11 +279,13 @@ class ArgillaSession:
         user_id: Union[UUID, str, None] = None,
     ) -> User:
         """
-        Get user object by username or ID
+        Get user object by username or ID.
 
-        Raises:
-            ValueError: If both or neither username and user_id are provided
-            ResourceDoesNotExistError: If the user is not found
+        :param username: Username to look up
+        :param user_id: User ID to look up
+        :return: User object
+        :raises ValueError: If both or neither username and user_id are provided
+        :raises ResourceDoesNotExistError: If the user is not found
         """
         if not (username or user_id):
             raise ValueError("One of 'username' or 'user_id' must be provided")
@@ -277,18 +315,19 @@ class ArgillaSession:
         """
         Create a new user in Argilla.
 
-        Args:
-            username: Username for the new user. Must be unique in Argilla.
-            password: Password for the new user. If not provided, a random one will be generated.
-            first_name: First name of the new user. Defaults to username if not provided.
-            last_name: Last name of the new user.
-            role: Role of the new user. Can be a Role enum or string. Options:
-                - Role.annotator or "annotator" - Can annotate records and submit responses (default)
-                - Role.admin or "admin" - Full administrative access
-                - Role.owner or "owner" - Owner role
-
-        Raises:
-            ResourceAlreadyExistsError: If a user with this username already exists
+        :param username: Username for the new user. Must be unique in Argilla
+        :param password: Password for the new user. If not provided, a random one will
+            be generated
+        :param first_name: First name of the new user. Defaults to username if not
+            provided
+        :param last_name: Last name of the new user
+        :param role: Role of the new user. Can be a Role enum or string. Default is
+            Role.annotator. Options are:
+            - Role.annotator or "annotator": Can annotate records and submit responses
+            - Role.admin or "admin": Full administrative access
+            - Role.owner or "owner": Full ownership of the workspace
+        :return: The created User object
+        :raises ResourceAlreadyExistsError: If a user with this username already exists
         """
         logger.info("Creating user: %s (role: %s)", username, role)
 
@@ -318,15 +357,14 @@ class ArgillaSession:
         action: Literal["add", "remove"],
     ):
         """
-        Modify a user's workspace membership
+        Modify a user's workspace membership.
 
-        Args:
-            username: Username of the user to modify
-            workspace: Name of the workspace. If not provided, uses default_workspace
-            action: The action to perform - either "add" or "remove"
-
-        Raises:
-            ResourceDoesNotExistError: If the user or workspace does not exist
+        :param username: Username of the user to modify
+        :param workspace: Name of the workspace to add the user to or remove the user
+            from. If not provided, use the session's default workspace.
+        :param action: The action to perform. Must be either "add" or "remove".
+        :raises ResourceDoesNotExistError: If the user or workspace does not exist
+        :raises ValueError: If action is not "add" or "remove"
         """
         workspace_name = workspace or self.default_workspace
         logger.info(
@@ -349,10 +387,12 @@ class ArgillaSession:
 
     def add_user_to_workspace(self, username: str, workspace: Optional[str] = None):
         """
-        Add an existing user to a workspace
+        Add an existing user to a workspace.
 
-        Raises:
-            ResourceDoesNotExistError: If the user or workspace does not exist
+        :param username: Username of the user to add
+        :param workspace: Name of the workspace to add the user to. If not provided,
+            uses the session's default_workspace
+        :raises ResourceDoesNotExistError: If the user or workspace does not exist
         """
         self._modify_user_workspace(
             username=username, workspace=workspace, action="add"
@@ -362,10 +402,12 @@ class ArgillaSession:
         self, username: str, workspace: Optional[str] = None
     ):
         """
-        Remove a user from a workspace
+        Remove a user from a workspace.
 
-        Raises:
-            ResourceDoesNotExistError: If the user or workspace does not exist
+        :param username: Username of the user to remove
+        :param workspace: Name of the workspace to remove the user from. If not
+            provided, uses the session's default_workspace
+        :raises ResourceDoesNotExistError: If the user or workspace does not exist
         """
         self._modify_user_workspace(
             username=username, workspace=workspace, action="remove"
@@ -380,19 +422,14 @@ class ArgillaSession:
         """
         Add labelled passages to an existing dataset in Argilla.
 
-        Args:
-            labelled_passages: List of LabelledPassage objects to add. Note that only
-                the text and the metadata of each passage will be uploaded - spans
-                attached to the labelled passages will be ignored.
-            wikibase_id: Wikibase ID of the dataset to add passages to.
-            workspace: Name of the workspace to add passages to. If not provided, the
-                session's default_workspace will be used.
-
-        Returns:
-            The updated dataset.
-
-        Raises:
-            ResourceDoesNotExistError: If the dataset or workspace does not exist
+        :param labelled_passages: List of LabelledPassage objects to add. Note that only
+            the text and the metadata of each passage will be uploaded - spans
+            attached to the labelled passages will be ignored
+        :param wikibase_id: Wikibase ID of the dataset to add passages to
+        :param workspace: Name of the workspace to add passages to. If not provided, the
+            session's default_workspace will be used
+        :return: The updated dataset
+        :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
         dataset = self.get_dataset(wikibase_id, workspace)
         logger.info(
@@ -437,23 +474,20 @@ class ArgillaSession:
         This allows downstream code to explicitly decide how to merge or aggregate
         across labellers.
 
-        Args:
-            wikibase_id: Wikibase ID of the dataset to pull passages from.
-            workspace: Name of the workspace to pull passages from. If not provided, the
-                session's default_workspace will be used.
-            include_statuses: Response statuses to include. Defaults to [ResponseStatus.submitted].
-            limit: Max number of records to pull (note: may return more passages if
-                records have multiple responses).
-            merge_responses_by_text: Whether to merge responses from multiple labellers into
-                single passages with combined spans. Defaults to True. If False, each
-                response will be returned as a separate passage, which may be useful
-                for tracking individual labeller contributions.
-
-        Returns:
-            List of LabelledPassage objects, one per response (or merged by text if merge_responses_by_text=True).
-
-        Raises:
-            ResourceDoesNotExistError: If the dataset or workspace does not exist
+        :param wikibase_id: Wikibase ID of the dataset to pull passages from
+        :param workspace: Name of the workspace to pull passages from. If not provided,
+            the session's default_workspace will be used
+        :param include_statuses: Response statuses to include. Defaults to submitted
+            responses only.
+        :param limit: Max number of records to pull (note: may return more passages if
+            records have multiple responses)
+        :param merge_responses_by_text: Whether to merge responses from multiple
+            labellers into single passages with combined spans. Defaults to True. If
+            False, each response will be returned as a separate passage, which may be
+            useful for tracking individual labeller contributions
+        :return: List of LabelledPassage objects, one per response (or merged by text
+            if merge_responses_by_text=True)
+        :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
         dataset = self.get_dataset(wikibase_id, workspace)
 
@@ -517,7 +551,12 @@ class ArgillaSession:
     def _format_metadata_keys_for_argilla(
         self, metadata: dict[str, Any]
     ) -> dict[str, Any]:
-        """Format metadata keys for Argilla by lowercasing and replacing dots with hyphens"""
+        """
+        Format metadata keys for Argilla by lowercasing and replacing dots with hyphens.
+
+        :param metadata: Dictionary of metadata to format
+        :return: Dictionary with formatted keys
+        """
         if not metadata:
             return {}
 
