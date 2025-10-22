@@ -32,6 +32,43 @@ logger = getLogger(__name__)
 load_dotenv(find_dotenv())
 
 
+class ResourceAlreadyExistsError(Exception):
+    """Raise this error if a user is trying to create a resource which already exists"""
+
+    def __init__(
+        self,
+        resource_type: str,
+        resource_name: str,
+        *args: object,
+    ) -> None:
+        super().__init__(*args)
+        self.resource_type = resource_type
+        self.resource_name = resource_name
+
+    def __str__(self) -> str:  # noqa: D105
+        return f"{self.resource_type} '{self.resource_name}' already exists"
+
+
+class ResourceDoesNotExistError(Exception):
+    """Raise this error if the user is trying to fetch a resource which does not exist"""
+
+    def __init__(
+        self,
+        resource_type: str,
+        resource_name: str,
+        *args: object,
+    ) -> None:
+        super().__init__(*args)
+        self.resource_type = resource_type
+        self.resource_name = resource_name
+
+    def __str__(self) -> str:  # noqa: D105
+        return (
+            f"{self.resource_type} '{self.resource_name}' doesn't exist. "
+            f"Try running ArgillaSession().create_{self.resource_type.lower()}({self.resource_name}) to create it first"
+        )
+
+
 class ArgillaSession:
     """Session for interacting with Argilla"""
 
@@ -62,54 +99,62 @@ class ArgillaSession:
 
         Args:
             name: If a name is not provided, the session's default_workspace will be
-            used. If the workspace is not found, a ValueError will be raised.
+            used.
 
         Returns:
             Workspace object.
+
+        Raises:
+            ResourceDoesNotExistError: If the workspace does not exist
         """
         workspace_name = name or self.default_workspace
         logger.info("Fetching workspace: %s", workspace_name)
-        workspace_object = self.client.workspaces(name=workspace_name)
-        if not workspace_object:
-            raise ValueError(f"Workspace '{workspace_name}' not found")
-        logger.info("Successfully retrieved workspace: %s", workspace_object.name)
-        return workspace_object
+
+        if workspace_object := self.client.workspaces(name=workspace_name):
+            logger.debug("Successfully retrieved workspace: %s", workspace_object.name)
+            return workspace_object
+        else:
+            raise ResourceDoesNotExistError("Workspace", workspace_name)
 
     def create_workspace(self, name: str) -> Workspace:
-        """Create a new workspace in Argilla, or return the existing workspace"""
-        logger.info("Creating workspace: %s", name)
+        """
+        Create a new workspace in Argilla
+
+        Raises:
+            ResourceAlreadyExistsError: If a workspace with this name already exists
+        """
         try:
+            # First, check whether the workspace already exists
+            self.get_workspace(name)
+            raise ResourceAlreadyExistsError("Workspace", name)
+        except ResourceDoesNotExistError:
+            logger.info("Creating workspace: %s", name)
             workspace = Workspace(name=name)
             created_workspace: Workspace = workspace.create()  # type: ignore[assignment]
             logger.info("Successfully created workspace: %s", created_workspace.name)
             return created_workspace
-        except ValueError as e:
-            error_msg = str(e).lower()
-            if "already exists" in error_msg or "unique constraint" in error_msg:
-                logger.warning(
-                    "Workspace '%s' already exists, returning existing workspace", name
-                )
-                return self.get_workspace(name)
-            else:
-                raise ValueError(f"Failed to create workspace '{name}'") from e
 
     def get_dataset(
         self,
         wikibase_id: WikibaseID | str,
         workspace: Optional[str] = None,
     ) -> Dataset:
-        """Get a dataset by its Wikibase ID (ie its name) in the given workspace"""
+        """
+        Get a dataset by its Wikibase ID (ie its name) in the given workspace
+
+        Raises:
+            ResourceDoesNotExistError: If the dataset or workspace does not exist
+        """
         logger.info("Fetching dataset '%s'", wikibase_id)
         workspace_object = self.get_workspace(workspace)
-        dataset = self.client.datasets(
+        if dataset_object := self.client.datasets(
             name=str(wikibase_id), workspace=workspace_object
-        )
-        if not dataset:
-            raise ValueError(
-                f"Dataset '{wikibase_id}' not found in workspace '{workspace_object.name}'"
-            )
-        logger.debug("Successfully retrieved dataset: %s", wikibase_id)
-        return dataset
+        ):
+            logger.debug("Successfully retrieved dataset: %s", dataset_object.name)
+            return dataset_object
+        else:
+            logger.debug("Couldn't find dataset: %s", wikibase_id)
+            raise ResourceDoesNotExistError("Dataset", str(wikibase_id))
 
     def get_all_datasets(self, workspace: Optional[str] = None) -> list[Dataset]:
         """Get all datasets in a workspace"""
@@ -130,9 +175,8 @@ class ArgillaSession:
         """
         Create a new dataset for a concept in the given workspace
 
-        If the dataset already exists, it will be returned without being re-created.
+        Raises ResourceAlreadyExistsError if the dataset already exists.
         """
-
         logger.info("Creating dataset for concept: %s", concept)
 
         workspace_object = self.get_workspace(workspace)
@@ -142,16 +186,10 @@ class ArgillaSession:
             )
 
         try:
-            if dataset := self.get_dataset(concept.wikibase_id, workspace):
-                logger.warning(
-                    "Dataset '%s' already exists in workspace '%s'. "
-                    "Returning existing dataset instead of creating a new one.",
-                    dataset.name,
-                    workspace_object.name,
-                )
-                return dataset
-        except ValueError:
-            logger.debug("Dataset for %s does not yet exist", concept)
+            self.get_dataset(concept.wikibase_id, workspace)
+            raise ResourceAlreadyExistsError("Dataset", str(concept.wikibase_id))
+        except ResourceDoesNotExistError:
+            pass
 
         settings = Settings(
             guidelines="Highlight the entity if it is present in the text",
@@ -195,7 +233,13 @@ class ArgillaSession:
     def get_user(
         self, username: Optional[str] = None, user_id: Union[UUID, str, None] = None
     ) -> User:
-        """Get user object by username or ID"""
+        """
+        Get user object by username or ID
+
+        Raises:
+            ValueError: If both or neither username and user_id are provided
+            ResourceDoesNotExistError: If the user is not found
+        """
         if not (username or user_id):
             raise ValueError("One of 'username' or 'user_id' must be provided")
         if username and user_id:
@@ -203,11 +247,14 @@ class ArgillaSession:
 
         if user_id is not None:
             user = self._get_user_by_id(user_id)
+            identifier = str(user_id)
         else:
             assert username is not None
             user = self._get_user_by_username(username)
+            identifier = username
+
         if not user:
-            raise ValueError(f"User '{username}' not found in Argilla")
+            raise ResourceDoesNotExistError("User", identifier)
         return user
 
     def create_user(
@@ -231,69 +278,63 @@ class ArgillaSession:
                 - Role.admin or "admin" - Full administrative access
                 - Role.owner or "owner" - Owner role
 
-        If the user already exists, it will be returned without being re-created.
+        Raises:
+            ResourceAlreadyExistsError: If a user with this username already exists
         """
         logger.info("Creating user: %s (role: %s)", username, role)
 
+        # First, check whether the user already exists
         try:
-            user = User(
-                username=username,
-                password=password,
-                first_name=first_name or username,
-                last_name=last_name,
-                role=Role(role),
-            )
-            created_user = user.create()
-            logger.info("Successfully created user: %s", created_user.username)
-            return created_user
-        except ValueError as e:
-            error_msg = str(e).lower()
-            if "already exists" in error_msg or "unique constraint" in error_msg:
-                logger.warning(
-                    "User '%s' already exists, retrieving existing user", username
-                )
-                return self.get_user(username=username)
-            raise ValueError(f"Failed to create user '{username}'") from e
+            self.get_user(username=username)
+            raise ResourceAlreadyExistsError("User", username)
+        except ResourceDoesNotExistError:
+            # The user doesn't exist so we can go ahead and create it
+            pass
+
+        user = User(
+            username=username,
+            password=password,
+            first_name=first_name or username,
+            last_name=last_name,
+            role=Role(role),
+        )
+        created_user = user.create()
+        logger.info("Successfully created user: %s", created_user.username)
+        return created_user
 
     def add_user_to_workspace(self, username: str, workspace: Optional[str] = None):
-        """Add an existing user to a workspace"""
+        """
+        Add an existing user to a workspace
+
+        Raises:
+            ResourceDoesNotExistError: If the user or workspace does not exist
+        """
         workspace_name = workspace or self.default_workspace
         logger.info("Adding user '%s' to workspace '%s'", username, workspace_name)
 
         workspace_object = self.get_workspace(workspace_name)
-        user_object = self.get_user(username)
+        user_object = self.get_user(username=username)
 
-        try:
-            user_object.add_to_workspace(workspace_object)
-            logger.info("Added user '%s' to workspace '%s'", username, workspace_name)
-        except ValueError:
-            raise
-        except Exception as e:
-            raise ValueError(
-                f"Failed to add user '{username}' to workspace '{workspace_name}'"
-            ) from e
+        user_object.add_to_workspace(workspace_object)
+        logger.info("Added user '%s' to workspace '%s'", username, workspace_name)
 
     def remove_user_from_workspace(
         self, username: str, workspace: Optional[str] = None
     ):
-        """Remove a user from a workspace"""
+        """
+        Remove a user from a workspace
+
+        Raises:
+            ResourceDoesNotExistError: If the user or workspace does not exist
+        """
         workspace_name = workspace or self.default_workspace
         logger.info("Removing user '%s' from workspace '%s'", username, workspace_name)
 
         workspace_object = self.get_workspace(workspace_name)
-        user_object = self.get_user(username)
+        user_object = self.get_user(username=username)
 
-        try:
-            user_object.remove_from_workspace(workspace_object)
-            logger.info(
-                "Removed user '%s' from workspace '%s'", username, workspace_name
-            )
-        except ValueError:
-            raise
-        except Exception as e:
-            raise ValueError(
-                f"Failed to remove user '{username}' from workspace '{workspace_name}'"
-            ) from e
+        user_object.remove_from_workspace(workspace_object)
+        logger.info("Removed user '%s' from workspace '%s'", username, workspace_name)
 
     def add_labelled_passages(
         self,
@@ -314,6 +355,9 @@ class ArgillaSession:
 
         Returns:
             The updated dataset.
+
+        Raises:
+            ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
         dataset = self.get_dataset(wikibase_id, workspace)
         logger.info(
@@ -370,6 +414,9 @@ class ArgillaSession:
 
         Returns:
             List of LabelledPassage objects, one per response (or merged by text if merge_responses=True).
+
+        Raises:
+            ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
         dataset = self.get_dataset(wikibase_id, workspace)
 

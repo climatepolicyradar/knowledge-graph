@@ -3,13 +3,17 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from argilla import ResponseStatus
+from argilla import Dataset, ResponseStatus
 from hypothesis import given
 from hypothesis import strategies as st
 
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.labelling import ArgillaSession
+from knowledge_graph.labelling import (
+    ArgillaSession,
+    ResourceAlreadyExistsError,
+    ResourceDoesNotExistError,
+)
 from knowledge_graph.span import Span
 
 
@@ -82,7 +86,7 @@ def test_whether_get_workspace_uses_default_workspace(
     mock_client.workspaces.assert_called_once_with(name="knowledge-graph")
 
 
-def test_whether_get_workspace_raises_value_error_if_workspace_not_found(
+def test_whether_get_workspace_raises_error_if_workspace_not_found(
     mock_argilla_client,
 ):
     mock_client, _ = mock_argilla_client
@@ -90,12 +94,17 @@ def test_whether_get_workspace_raises_value_error_if_workspace_not_found(
 
     session = ArgillaSession()
 
-    with pytest.raises(ValueError, match="Workspace 'nonexistent' not found"):
+    with pytest.raises(
+        ResourceDoesNotExistError, match="Workspace 'nonexistent' doesn't exist"
+    ):
         session.get_workspace("nonexistent")
 
 
 def test_whether_create_workspace_creates_a_new_workspace(mock_argilla_client):
-    _, _ = mock_argilla_client
+    mock_client, _ = mock_argilla_client
+    # Mock that the workspace doesn't exist
+    mock_client.workspaces.return_value = None
+
     with patch("knowledge_graph.labelling.Workspace") as mock_workspace_class:
         mock_workspace = MagicMock()
         mock_workspace.name = "new-workspace"
@@ -110,27 +119,22 @@ def test_whether_create_workspace_creates_a_new_workspace(mock_argilla_client):
         mock_workspace.create.assert_called_once()
 
 
-def test_whether_create_workspace_returns_existing_workspace_if_it_already_exists(
+def test_whether_create_workspace_raises_error_if_workspace_already_exists(
     mock_argilla_client, mock_workspace
 ):
     mock_client, _ = mock_argilla_client
     existing_workspace = mock_workspace(name="existing-workspace")
     mock_client.workspaces.return_value = existing_workspace
 
-    with patch("knowledge_graph.labelling.Workspace") as mock_workspace_class:
-        mock_ws = MagicMock()
-        mock_workspace_class.return_value = mock_ws
-        # Simulate a "workspace already exists" error
-        mock_ws.create.side_effect = ValueError(
-            "Workspace already exists in the database"
-        )
+    session = ArgillaSession()
 
-        session = ArgillaSession()
-        result = session.create_workspace("existing-workspace")
+    with pytest.raises(
+        ResourceAlreadyExistsError,
+        match="Workspace 'existing-workspace' already exists",
+    ):
+        session.create_workspace("existing-workspace")
 
-        # Should catch the error and call get_workspace instead
-        assert result == existing_workspace
-        mock_client.workspaces.assert_called_once_with(name="existing-workspace")
+    mock_client.workspaces.assert_called_once_with(name="existing-workspace")
 
 
 def test_whether_get_dataset_finds_an_existing_dataset(
@@ -150,7 +154,7 @@ def test_whether_get_dataset_finds_an_existing_dataset(
     mock_client.datasets.assert_called_once_with(name="Q123", workspace=workspace)
 
 
-def test_whether_get_dataset_raises_value_error_if_dataset_not_found(
+def test_whether_get_dataset_raises_error_if_dataset_not_found(
     mock_argilla_client, mock_workspace
 ):
     mock_client, _ = mock_argilla_client
@@ -162,8 +166,8 @@ def test_whether_get_dataset_raises_value_error_if_dataset_not_found(
     session = ArgillaSession()
 
     with pytest.raises(
-        ValueError,
-        match="Dataset 'Q999' not found in workspace 'test-workspace'",
+        ResourceDoesNotExistError,
+        match="Dataset 'Q999' doesn't exist",
     ):
         session.get_dataset("Q999")
 
@@ -195,6 +199,7 @@ def test_whether_create_dataset_creates_a_new_dataset(concept):
         mock_workspace = MagicMock()
         mock_workspace.name = "test-workspace"
         mock_client.workspaces.return_value = mock_workspace
+        # Mock that dataset doesn't exist initially
         mock_client.datasets.return_value = None
 
         with (
@@ -202,21 +207,20 @@ def test_whether_create_dataset_creates_a_new_dataset(concept):
             patch("knowledge_graph.labelling.TextField"),
             patch("knowledge_graph.labelling.SpanQuestion"),
             patch("knowledge_graph.labelling.TaskDistribution"),
-            patch("knowledge_graph.labelling.Dataset") as mock_dataset_class,
         ):
-            mock_dataset = MagicMock()
-            mock_dataset.name = "Q787"
-            mock_dataset_class.return_value = mock_dataset
-            mock_dataset.create.return_value = mock_dataset
+            with patch.object(Dataset, "create") as mock_create:
+                mock_dataset = MagicMock()
+                mock_dataset.name = "Q787"
+                mock_create.return_value = mock_dataset
 
-            session = ArgillaSession()
-            result = session.create_dataset(concept)
+                session = ArgillaSession()
+                result = session.create_dataset(concept)
 
-            assert result == mock_dataset
-            mock_dataset.create.assert_called_once()
+                assert result == mock_dataset
+                mock_create.assert_called_once()
 
 
-def test_whether_create_dataset_returns_an_existing_dataset_if_it_already_exists(
+def test_whether_create_dataset_raises_error_if_dataset_already_exists(
     mock_argilla_client, mock_workspace, mock_dataset, concept
 ):
     mock_client, _ = mock_argilla_client
@@ -227,9 +231,9 @@ def test_whether_create_dataset_returns_an_existing_dataset_if_it_already_exists
     mock_client.datasets.return_value = existing_dataset
 
     session = ArgillaSession()
-    result = session.create_dataset(concept)
 
-    assert result == existing_dataset
+    with pytest.raises(ResourceAlreadyExistsError, match="'Q787' already exists"):
+        session.create_dataset(concept)
 
 
 def test_whether_create_dataset_raises_value_error_if_concept_has_no_wikibase_id(
@@ -294,18 +298,22 @@ def test_whether_get_user_raises_value_error_if_both_username_and_id_are_provide
         session.get_user(username="alice", user_id=uuid.uuid4())
 
 
-def test_whether_get_user_raises_value_error_if_user_not_found(mock_argilla_client):
+def test_whether_get_user_raises_error_if_user_not_found(mock_argilla_client):
     mock_client, _ = mock_argilla_client
     mock_client.users.return_value = None
 
     session = ArgillaSession()
 
-    with pytest.raises(ValueError, match="User 'nonexistent' not found"):
+    with pytest.raises(
+        ResourceDoesNotExistError, match="User 'nonexistent' doesn't exist"
+    ):
         session.get_user(username="nonexistent")
 
 
 def test_whether_create_user_creates_a_new_user(mock_argilla_client):
-    _, _ = mock_argilla_client
+    mock_client, _ = mock_argilla_client
+    # Mock that the user doesn't exist
+    mock_client.users.return_value = None
 
     with patch("knowledge_graph.labelling.User") as mock_user_class:
         mock_user = MagicMock()
@@ -325,7 +333,7 @@ def test_whether_create_user_creates_a_new_user(mock_argilla_client):
         mock_user.create.assert_called_once()
 
 
-def test_whether_create_user_returns_an_existing_user_if_it_already_exists(
+def test_whether_create_user_raises_error_if_user_already_exists(
     mock_argilla_client, mock_user
 ):
     mock_client, _ = mock_argilla_client
@@ -333,20 +341,12 @@ def test_whether_create_user_returns_an_existing_user_if_it_already_exists(
     existing_user = mock_user(username="bob")
     mock_client.users.return_value = existing_user
 
-    with patch("knowledge_graph.labelling.User") as mock_user_class:
-        mock_u = MagicMock()
-        mock_user_class.return_value = mock_u
-        # Simulate a "user already exists" error
-        mock_u.create.side_effect = ValueError(
-            "User with username 'bob' already exists"
-        )
+    session = ArgillaSession()
 
-        session = ArgillaSession()
-        result = session.create_user(username="bob")
+    with pytest.raises(ResourceAlreadyExistsError, match="'bob' already exists"):
+        session.create_user(username="bob")
 
-        # Should catch the error and call get_user instead
-        assert result == existing_user
-        mock_client.users.assert_called_once_with(username="bob")
+    mock_client.users.assert_called_once_with(username="bob")
 
 
 def test_whether_add_user_to_workspace_adds_a_user_to_a_workspace(
