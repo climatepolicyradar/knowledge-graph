@@ -8,7 +8,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
-import aioboto3
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
@@ -61,6 +60,7 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.cloud import get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -260,7 +260,10 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
             config, config.inference_document_source_prefix, s3_client
@@ -283,7 +286,10 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     Extracts the ids from the file, and returns them as a single list.
     """
     logger = get_logger()
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
             config, config.pipeline_state_prefix, s3_client
@@ -316,7 +322,10 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
 
     latest_key = latest["Key"]
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         data = await download_s3_file(config, latest_key, s3_client)
         content = json.loads(data)
@@ -365,7 +374,10 @@ async def determine_file_stems(
 
     requested_document_stems = []
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         for doc_id in requested_document_ids:
             document_key = os.path.join(
@@ -505,19 +517,19 @@ class SingleDocumentInferenceResult(BaseModel):
     document: Optional[BaseParserOutput]
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
-    wikibase_id: str
-    classifier_id: str
+    classifier_spec: ClassifierSpec
 
 
 def generate_s3_uri_output(
-    config: Config, inference: SingleDocumentInferenceResult
+    config: Config,
+    inference: SingleDocumentInferenceResult,
 ) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
             config.inference_document_target_prefix,
-            inference.wikibase_id,
-            inference.classifier_id,
+            inference.classifier_spec.wikibase_id,
+            inference.classifier_spec.classifier_id,
             f"{inference.document_stem}.json",
         ),
     )
@@ -547,12 +559,13 @@ async def labels_to_s3(
     else:
         raise ValueError(
             f"Error storing {inference.document_stem} for "
-            f"{inference.wikibase_id}:{inference.classifier_id}: {response}"
+            f"{inference.classifier_spec.wikibase_id}:{inference.classifier_spec.classifier_id}: {response}"
         )
 
 
 def batch_text_block_inference(
     classifier: Classifier,
+    classifier_spec: ClassifierSpec,
     all_text: list[str],
     all_block_ids: list[str],
     batch_size: int = 10,
@@ -566,20 +579,28 @@ def batch_text_block_inference(
 
         outputs.extend(
             _text_block_inference_for_single_batch(
-                classifier=classifier, text_batch=text_batch, block_ids=block_ids
+                classifier=classifier,
+                classifier_spec=classifier_spec,
+                text_batch=text_batch,
+                block_ids=block_ids,
             )
         )
     return outputs
 
 
 def _text_block_inference_for_single_batch(
-    classifier: Classifier, text_batch: list[str], block_ids: list[str]
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    text_batch: list[str],
+    block_ids: list[str],
 ) -> list[LabelledPassage]:
     """Runs predict on a batch of blocks."""
     spans: list[list[Span]] = classifier.predict_batch(text_batch)
 
     labelled_passages = [
-        _get_labelled_passage_from_prediction(classifier, spans, block_id, text)
+        _get_labelled_passage_from_prediction(
+            classifier, spans, block_id, text, classifier_spec
+        )
         for spans, block_id, text in zip(spans, block_ids, text_batch)
     ]
 
@@ -587,7 +608,10 @@ def _text_block_inference_for_single_batch(
 
 
 def text_block_inference(
-    classifier: Classifier, block_id: str, text: str
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    block_id: str,
+    text: str,
 ) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
@@ -619,14 +643,18 @@ def text_block_inference(
         )
 
     labelled_passage = _get_labelled_passage_from_prediction(
-        classifier, spans, block_id, text
+        classifier, spans, block_id, text, classifier_spec
     )
 
     return labelled_passage
 
 
 def _get_labelled_passage_from_prediction(
-    classifier: Classifier, spans: list[Span], block_id: str, text: str
+    classifier: Classifier,
+    spans: list[Span],
+    block_id: str,
+    text: str,
+    classifier_spec: ClassifierSpec,
 ) -> LabelledPassage:
     """Creates the LabelledPassage from the list of spans output by the classifier"""
     # If there were no inference results, don't include the concept
@@ -641,7 +669,10 @@ def _get_labelled_passage_from_prediction(
 
         concept = concept_no_labelled_passages.model_dump()
 
-        metadata = {"concept": concept}
+        metadata = {
+            "concept": concept,
+            "classifier_spec": classifier_spec.model_dump(),
+        }
 
     return LabelledPassage(
         id=block_id,
@@ -697,7 +728,10 @@ async def run_classifier_inference_on_document(
     assert result.document  # For typing, we already check this properly earlier
     for text, block_id in document_passages(result.document):
         labelled_passages = text_block_inference(
-            classifier=classifier, block_id=block_id, text=text
+            classifier=classifier,
+            block_id=block_id,
+            text=text,
+            classifier_spec=result.classifier_spec,
         )
         doc_labels.append(labelled_passages)
     result.labelled_passages = doc_labels
@@ -708,6 +742,7 @@ async def run_classifier_inference_on_document(
 
 
 async def create_inference_on_batch_summary_artifact(
+    classifier_spec: ClassifierSpec,
     successes: Sequence[SingleDocumentInferenceResult],
     failures: Sequence[tuple[DocumentStem, Exception]],
     unknown_failures: Sequence[BaseException],
@@ -724,6 +759,7 @@ async def create_inference_on_batch_summary_artifact(
 
 ## Overview
 - **Flow Run**: {flow_run_name or "Unknown"}
+- **Classifier**: {classifier_spec}
 - **Total documents processed**: {total_documents}
 - **Successful documents**: {successful_documents}
 - **Failed documents**: {failed_documents}
@@ -840,8 +876,7 @@ async def _inference_batch_of_documents(
                 document=None,
                 labelled_passages=[],
                 document_stem=document_stem,
-                wikibase_id=classifier.concept.wikibase_id,
-                classifier_id=classifier.id,
+                classifier_spec=classifier_spec,
             )
         )
 
@@ -853,7 +888,10 @@ async def _inference_batch_of_documents(
         read_timeout=config.s3_read_timeout,
     )
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
@@ -907,7 +945,10 @@ async def _inference_batch_of_documents(
     ) = process_single_document_inference(inferences_results)
 
     # Store labelled passages in s3
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         tasks = [
             wait_for_semaphore(
@@ -953,6 +994,7 @@ async def _inference_batch_of_documents(
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
+        classifier_spec,
         all_successes,
         all_failures,
         all_unknown_failures,
@@ -1088,7 +1130,10 @@ async def store_metadata(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
@@ -1142,7 +1187,10 @@ async def store_inference_result(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,

@@ -181,14 +181,19 @@ async def test_load_document(
 ):
     valid_doc, invalid_doc = mock_async_bucket_documents
 
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+
     # Invalid doc
     invalid_document_stem = Path(invalid_doc).stem
     invalid_document_result = SingleDocumentInferenceResult(
         document_stem=DocumentStem(invalid_document_stem),
         document=None,
         labelled_passages=[],
-        wikibase_id="",
-        classifier_id="",
+        classifier_spec=classifier_spec,
     )
 
     with pytest.raises(ValueError, match="non-English language"):
@@ -204,8 +209,7 @@ async def test_load_document(
         document_stem=DocumentStem(valid_document_stem),
         document=None,
         labelled_passages=[],
-        wikibase_id="",
-        classifier_id="",
+        classifier_spec=classifier_spec,
     )
     result = await load_document(
         test_config,
@@ -280,11 +284,15 @@ async def test_text_block_inference_with_results(
 
     text = "I love fishing. Aquaculture is the best."
     block_id = "fish_block"
-    labels = text_block_inference(classifier=classifier, block_id=block_id, text=text)
+    labels = text_block_inference(
+        classifier=classifier, classifier_spec=spec, block_id=block_id, text=text
+    )
 
     assert len(labels.spans) > 0
     assert labels.id == block_id
     assert labels.metadata != {}
+    assert "classifier_spec" in labels.metadata
+    assert labels.metadata["classifier_spec"] == spec.model_dump()
     # Set the labelled passages as empty as we are removing them.
     expected_concept_metadata = classifier.concept.model_dump()
     expected_concept_metadata["labelled_passages"] = []
@@ -313,10 +321,13 @@ async def test_text_block_inference_without_results(
 
     text = "Rockets are cool. We should build more rockets."
     block_id = "fish_block"
-    labels = text_block_inference(classifier=classifier, block_id=block_id, text=text)
+    labels = text_block_inference(
+        classifier=classifier, classifier_spec=spec, block_id=block_id, text=text
+    )
 
     assert len(labels.spans) == 0
     assert labels.id == block_id
+    # When there are no spans, metadata should be empty
     assert labels.metadata == {}
 
 
@@ -536,8 +547,7 @@ async def test_run_classifier_inference_on_document(
             ),
             pipeline_metadata={},
         ),
-        wikibase_id=classifier_spec.wikibase_id,
-        classifier_id=classifier_spec.classifier_id,
+        classifier_spec=classifier_spec,
     )
 
     result = await run_classifier_inference_on_document(
@@ -582,6 +592,9 @@ async def test_inference_batch_of_documents_cpu(
     )
 
     # Should not raise any exceptions for successful processing
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu"
+    )
     result_state = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
@@ -617,8 +630,7 @@ async def test_inference_batch_of_documents_cpu(
 
         assert artifact.description is not None, "Artifact should have a description"
         assert hasattr(artifact, "data"), "Artifact should have data"
-
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # Verify that inference outputs were stored in S3 using async s3 client
     expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
@@ -686,6 +698,9 @@ async def test_inference_batch_of_documents_cpu_with_failures(
     )
 
     with pytest.raises(Fault) as exc_info:
+        inference_batch_of_documents_cpu.flow_run_name = (
+            "test-inference-batch-of-documents-cpu-with-failures"
+        )
         _ = await inference_batch_of_documents_cpu(
             batch=batch,
             config_json=config_json,
@@ -714,7 +729,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
         )
 
         # Verify failure artifact data using snapshot
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # For failed documents, no S3 files should be created since the documents don't exist
     # The failure happens before store_labels is called
@@ -761,6 +776,9 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
     )
 
     # Should complete successfully with empty batch
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu-empty-batch"
+    )
     _ = await inference_batch_of_documents_cpu(
         batch=batch,
         config_json=config_json,
@@ -785,7 +803,7 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
         artifact = batch_artifacts[0]  # Most recently created
 
         # Verify empty batch artifact data using snapshot
-        assert snapshot == artifact.data
+        assert snapshot == (artifact.data, artifact.description)
 
     # For empty batch, no S3 files should be created since there are no documents to process
     # Since batch is empty, we don't need to check any specific files - there should be none created
@@ -1065,9 +1083,18 @@ def test_text_block_inference_span_validation_missing_timestamps():
     ]
     mock_classifier.predict.return_value = spans_missing_timestamps
 
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+
     with pytest.raises(ValueError, match="Found 1 span\\(s\\) with missing timestamps"):
         text_block_inference(
-            classifier=mock_classifier, block_id="test_block", text="test text"
+            classifier=mock_classifier,
+            classifier_spec=classifier_spec,
+            block_id="test_block",
+            text="test text",
         )
 
 
@@ -1081,9 +1108,18 @@ def test_text_block_inference_span_validation_missing_labellers():
     spans_missing_labellers = [mock_span_missing_labellers]
     mock_classifier.predict.return_value = spans_missing_labellers
 
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+
     with pytest.raises(ValueError, match="Found 1 span\\(s\\) with missing labellers"):
         text_block_inference(
-            classifier=mock_classifier, block_id="test_block", text="test text"
+            classifier=mock_classifier,
+            classifier_spec=classifier_spec,
+            block_id="test_block",
+            text="test text",
         )
 
 
@@ -1096,12 +1132,21 @@ def test_text_block_inference_span_validation_mismatched_lengths():
     spans_mismatched_lengths = [mock_span_mismatched]
     mock_classifier.predict.return_value = spans_mismatched_lengths
 
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+
     with pytest.raises(
         ValueError,
         match="Found 1 span\\(s\\) with mismatched timestamp/labeller lengths",
     ):
         text_block_inference(
-            classifier=mock_classifier, block_id="test_block", text="test text"
+            classifier=mock_classifier,
+            classifier_spec=classifier_spec,
+            block_id="test_block",
+            text="test text",
         )
 
 
@@ -1119,9 +1164,18 @@ def test_text_block_inference_span_validation_valid_spans():
     ]
     mock_classifier.predict.return_value = valid_spans
 
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+
     # This should not raise any exceptions
     result = text_block_inference(
-        classifier=mock_classifier, block_id="test_block", text="test text"
+        classifier=mock_classifier,
+        classifier_spec=classifier_spec,
+        block_id="test_block",
+        text="test text",
     )
 
     assert result.id == "test_block"
@@ -1562,12 +1616,16 @@ def test_get_inference_fault_metadata() -> None:
 
 def test_process_single_document_inference():
     doc_stem = DocumentStem("test_doc")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
     success_result = SingleDocumentInferenceResult(
         document=None,
         labelled_passages=[],
         document_stem=doc_stem,
-        wikibase_id="Q123",
-        classifier_id="test_classifier",
+        classifier_spec=classifier_spec,
     )
 
     results: list[
