@@ -618,7 +618,7 @@ metadata_dict_strategy = st.dictionaries(
 def test_whether_format_metadata_lowercases_keys(metadata):
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
-        result = session._format_metadata(metadata)
+        result = session._format_metadata_keys_for_argilla(metadata)
         for key in result.keys():
             assert key == key.lower(), f"Key '{key}' is not lowercase"
 
@@ -627,7 +627,7 @@ def test_whether_format_metadata_lowercases_keys(metadata):
 def test_whether_format_metadata_preserves_values(metadata):
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
-        result = session._format_metadata(metadata)
+        result = session._format_metadata_keys_for_argilla(metadata)
         original_values = sorted(str(v) for v in metadata.values())
         result_values = sorted(str(v) for v in result.values())
         assert original_values == result_values
@@ -637,8 +637,8 @@ def test_whether_format_metadata_preserves_values(metadata):
 def test_whether_format_metadata_property_idempotent(metadata):
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
-        result_once = session._format_metadata(metadata)
-        result_twice = session._format_metadata(result_once)
+        result_once = session._format_metadata_keys_for_argilla(metadata)
+        result_twice = session._format_metadata_keys_for_argilla(result_once)
         assert result_once == result_twice
 
 
@@ -646,6 +646,6 @@ def test_whether_format_metadata_property_idempotent(metadata):
 def test_whether_format_metadata_replaces_dots_with_hyphens(metadata):
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
-        result = session._format_metadata(metadata)
+        result = session._format_metadata_keys_for_argilla(metadata)
         for key in result.keys():
             assert "." not in key, f"Key '{key}' contains a dot"

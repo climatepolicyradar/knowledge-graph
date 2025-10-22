@@ -2,7 +2,7 @@ import os
 import uuid
 from functools import lru_cache
 from logging import getLogger
-from typing import Literal, Optional, Sequence, Union, overload
+from typing import Any, Literal, Optional, Sequence, Union, overload
 from uuid import UUID
 
 from argilla import (
@@ -407,7 +407,9 @@ class ArgillaSession:
                 {
                     "id": str(uuid.uuid4()),
                     "fields": {"text": passage.text},
-                    "metadata": self._format_metadata(passage.metadata),
+                    "metadata": self._format_metadata_keys_for_argilla(
+                        passage.metadata
+                    ),
                 }
             )
         logger.debug("Formatted %d records for Argilla ingestion", len(records))
@@ -512,7 +514,9 @@ class ArgillaSession:
         else:
             return passages
 
-    def _format_metadata(self, metadata: dict) -> dict:
+    def _format_metadata_keys_for_argilla(
+        self, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
         """Format metadata keys for Argilla by lowercasing and replacing dots with hyphens"""
         if not metadata:
             return {}
