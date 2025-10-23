@@ -95,7 +95,7 @@ def main(
             f"Running {classifier} on {len(df)} passages in batches of {batch_size}"
         ):
             all_spans = classifier.predict(
-                texts, batch_size=batch_size, show_progress=True
+                texts, batch_size=batch_size, show_progress=True, console=console
             )
 
         for (_, row), text, spans in zip(df.iterrows(), texts, all_spans):

@@ -10,6 +10,7 @@ from typing import (
     runtime_checkable,
 )
 
+from rich.console import Console
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -100,6 +101,7 @@ class Classifier(ABC):
         text: str | list[str],
         batch_size: int | None = None,
         show_progress: bool = False,
+        console: Console | None = None,
         **kwargs,
     ) -> list[Span] | list[list[Span]]:
         """
@@ -110,6 +112,8 @@ class Classifier(ABC):
             If not passed, defaults to predicting all texts in one batch.
         :param bool show_progress: Whether to show progress in predicting. Defaults to
             False.
+        :param Console console: Optional rich console used to render the progress bar.
+            This is to avoid flickering when multiple consoles are created.
         :return list[Span] | list[list[Span]]: A list of spans in the text or texts
         """
 
@@ -126,6 +130,7 @@ class Classifier(ABC):
                 BarColumn(),
                 MofNCompleteColumn(),
                 TimeRemainingColumn(),
+                console=console,
             ) as progress:
                 task = progress.add_task(
                     "Processing batches...", total=len(text_batches)
