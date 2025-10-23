@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -59,19 +60,52 @@ concept_label_strategy = st.one_of(
 
 
 @st.composite
-def concept_strategy(draw):
+def concept_strategy(draw, ensure_token_disjoint: bool = True):
+    """
+    Generate a random Concept for testing.
+
+    Args:
+        draw: Hypothesis strategy drawing function.
+        ensure_token_disjoint: If True (default), ensures that no tokens from negative
+                               labels appear in positive labels. This prevents issues with
+                               KeywordClassifier where overlapping tokens cause positive
+                               matches to be filtered out. Set to False if you want to test
+                               edge cases with token overlap.
+
+    Returns:
+        A randomly generated Concept.
+    """
     preferred_label = draw(concept_label_strategy)
     alt_labels = draw(st.lists(concept_label_strategy, max_size=5))
-    # negative_labels cannot overlap with the positive labels
     all_positive = alt_labels + [preferred_label]
-    negative_labels = draw(
-        st.lists(
-            st.one_of(single_word_label_strategy, multi_word_label_strategy()).filter(
-                lambda x: x.lower() not in [label.lower() for label in all_positive]
-            ),
-            max_size=5,
+
+    if ensure_token_disjoint:
+        # Ensure negative labels don't share tokens with positive labels
+        # This prevents KeywordClassifier from filtering out valid positive matches
+        negative_labels = draw(
+            st.lists(
+                st.one_of(
+                    single_word_label_strategy, multi_word_label_strategy()
+                ).filter(
+                    lambda x: _label_tokens_are_disjoint_from_labels(
+                        x, all_positive, r"[\s\-–—]+"
+                    )
+                ),
+                max_size=5,
+            )
         )
-    )
+    else:
+        # Only ensure negative labels aren't identical to positive labels
+        negative_labels = draw(
+            st.lists(
+                st.one_of(
+                    single_word_label_strategy, multi_word_label_strategy()
+                ).filter(
+                    lambda x: x.lower() not in [label.lower() for label in all_positive]
+                ),
+                max_size=5,
+            )
+        )
 
     return Concept(
         wikibase_id=WikibaseID(draw(wikibase_id_strategy)),
@@ -79,6 +113,35 @@ def concept_strategy(draw):
         alternative_labels=alt_labels,
         negative_labels=negative_labels,
     )
+
+
+def _label_tokens_are_disjoint_from_labels(
+    label: str, other_labels: list[str], separator_pattern: str
+) -> bool:
+    """
+    Check if a label's tokens are disjoint from all tokens in other labels.
+
+    Args:
+        label: The label to check.
+        other_labels: List of labels to compare against.
+        separator_pattern: Regex pattern to split labels into tokens.
+
+    Returns:
+        True if no tokens from label appear in any of the other_labels.
+    """
+    # First check if the label is identical to any other label
+    if label.lower() in [other.lower() for other in other_labels]:
+        return False
+
+    # Then check if any tokens overlap
+    label_tokens = {tok.lower() for tok in re.split(separator_pattern, label) if tok}
+    other_tokens = {
+        tok.lower()
+        for other_label in other_labels
+        for tok in re.split(separator_pattern, other_label)
+        if tok
+    }
+    return label_tokens.isdisjoint(other_tokens)
 
 
 @st.composite

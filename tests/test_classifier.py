@@ -2,7 +2,7 @@ import re
 from typing import Type
 
 import pytest
-from hypothesis import assume, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from knowledge_graph.classifier.classifier import Classifier
@@ -31,24 +31,6 @@ classifier_classes: list[Type[Classifier]] = [
 def test_whether_classifier_matches_concept_labels_in_text(
     classifier_class: Type[Classifier], concept: Concept, text_data: st.DataObject
 ):
-    # Skip concepts where any negative label token equals any token from a positive label.
-    # In those cases, a positive match would be correctly filtered by the classifier
-    # due to the overlapping negative label.
-    sep = KeywordClassifier.separator_pattern
-    positive_tokens = {
-        tok.lower()
-        for label in concept.all_labels
-        for tok in re.split(sep, label)
-        if tok
-    }
-    negative_tokens = {
-        tok.lower()
-        for label in concept.negative_labels
-        for tok in re.split(sep, label)
-        if tok
-    }
-    assume(positive_tokens.isdisjoint(negative_tokens))
-
     # Ensure the generated positive text does not accidentally include a negative label
     # (e.g. by appending extra tokens after the positive label that complete a negative label).
     text = text_data.draw(
@@ -457,15 +439,19 @@ def test_predict_sequence_returns_predictions_for_all_texts(
 
 @pytest.mark.xdist_group(name="classifier")
 @pytest.mark.parametrize("classifier_class", classifier_classes)
-@given(concept=concept_strategy())
+@given(concept=concept_strategy(), data=st.data())
 def test_predict_sequence_preserves_order(
-    classifier_class: Type[Classifier], concept: Concept
+    classifier_class: Type[Classifier], concept: Concept, data: st.DataObject
 ):
     """Test that predict_many returns predictions in the same order as input texts."""
+    positive_text_1 = data.draw(positive_text_strategy(labels=concept.all_labels))
+    negative_text = data.draw(negative_text_strategy(labels=concept.all_labels))
+    positive_text_2 = data.draw(positive_text_strategy(labels=concept.all_labels))
+
     texts = [
-        f"Some text with {concept.preferred_label} here",
-        "Some unrelated text without the concept",
-        f"Another text with {concept.preferred_label}",
+        positive_text_1,
+        negative_text,
+        positive_text_2,
     ]
 
     classifier = classifier_class(concept)
