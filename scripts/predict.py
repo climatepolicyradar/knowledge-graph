@@ -8,7 +8,6 @@ from rich.progress import track
 from knowledge_graph.classifier import Classifier, ModelPath, get_local_classifier_path
 from knowledge_graph.classifier.embedding import EmbeddingClassifier
 from knowledge_graph.classifier.keyword import KeywordClassifier
-from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
 from knowledge_graph.config import processed_data_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -67,7 +66,6 @@ def main(
 
     classifiers: list[Classifier] = [
         KeywordClassifier(concept),
-        StemmedKeywordClassifier(concept),
         EmbeddingClassifier(concept, threshold=0.6),
         EmbeddingClassifier(concept, threshold=0.625),
         EmbeddingClassifier(concept, threshold=0.65),
