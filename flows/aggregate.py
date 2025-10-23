@@ -1,11 +1,13 @@
 import json
 import os
 from collections.abc import AsyncGenerator, Sequence
-from typing import Any, TypeAlias, TypeVar
+from datetime import datetime
+from typing import Any, TypeAlias, TypeVar, Union
 
 import prefect.tasks as tasks
 import pydantic
 from botocore.exceptions import ClientError
+from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
@@ -14,12 +16,11 @@ from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, PositiveInt, ValidationError
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
     TextBlockId,
-    convert_labelled_passage_to_concepts,
     s3_copy_file,
     s3_object_write_text_async,
 )
@@ -48,7 +49,10 @@ from flows.utils import (
     map_as_sub_flow,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -62,8 +66,88 @@ METADATA_FILE_NAME = "metadata.json"
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
 
-# A serialised vespa concept, see cpr_sdk.models.search.Concept
+# A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
+
+
+class MiniClassifierSpec(BaseModel):
+    """Minimal classifier spec parsed from model field."""
+
+    model_config = pydantic.ConfigDict(frozen=True)
+
+    wikibase_id: WikibaseID
+    concept_id: ConceptID
+    classifier_id: ClassifierID
+
+    def to_string(self) -> str:
+        """
+        Serialise to string format.
+
+        Returns:
+            String in format "wikibase_id:concept_id:classifier_id"
+        """
+        return f"{self.wikibase_id}:{self.concept_id}:{self.classifier_id}"
+
+    @classmethod
+    def from_classifier_spec(cls, spec: ClassifierSpec) -> "MiniClassifierSpec | None":
+        """
+        Create MiniClassifierSpec from a ClassifierSpec.
+
+        Args:
+            spec: The classifier spec to convert
+
+        Returns:
+            MiniClassifierSpec with the same IDs, or None if any required field is missing
+
+        Raises:
+            ValueError: If any of the IDs are invalid
+        """
+        # Check if all required fields are present
+        if (
+            spec.wikibase_id is None
+            or spec.concept_id is None
+            or spec.classifier_id is None
+        ):
+            return None
+
+        return cls(
+            wikibase_id=WikibaseID(spec.wikibase_id),
+            concept_id=ConceptID(spec.concept_id),
+            classifier_id=ClassifierID(spec.classifier_id),
+        )
+
+
+def parse_model_field(model: str) -> MiniClassifierSpec | None:
+    """
+    Parse a classifier spec. representation out of a `model` v1 concept field.
+
+    New format: "wikibase_id:concept_id:classifier_id" (e.g., "Q1363:xyz78abc:vax7e3n7")
+    Old format: 'KeywordClassifier("concept_name")'
+
+    We do a simple best-effort for getting a classifier spec.
+    representation out. If there isn't one, then just return nothing.
+    """
+    parts = model.split(":")
+
+    if len(parts) == 3:
+        # Check if any part is the string "None", as that means that a
+        # model hasn't been retrained in some time, and is missing
+        # some data.
+        if any(part == "None" for part in parts):
+            return None
+
+        try:
+            return MiniClassifierSpec(
+                wikibase_id=WikibaseID(parts[0]),
+                concept_id=ConceptID(parts[1]),
+                classifier_id=ClassifierID(parts[2]),
+            )
+        # Handle validation errors from Pydantic, and more broad
+        # exceptions from the IDs.
+        except (ValidationError, ValueError):
+            return None
+
+    return None
 
 
 class AggregationFailure(Exception):
@@ -448,6 +532,147 @@ async def aggregate_batch_of_documents(
         )
 
     return run_output_identifier
+
+
+def get_parent_concepts_from_concept(
+    concept: Concept,
+) -> tuple[list[dict], str]:
+    """
+    Extract parent concepts from a Concept object.
+
+    Currently we pull the name from the Classifier used to label the passage, this
+    doesn't hold the concept id. This is a temporary solution that is not desirable as
+    the relationship between concepts can change frequently and thus shouldn't be
+    coupled with inference.
+    """
+    parent_concepts = [
+        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
+    ]
+    parent_concept_ids_flat = (
+        ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
+    )
+
+    return parent_concepts, parent_concept_ids_flat
+
+
+def get_model_from_span(
+    span: Span,
+    classifier_spec: ClassifierSpec | None,
+) -> str:
+    """
+    Get the model used to label the span.
+
+    There's 2 versions of the value. The deprecated one is from the
+    labellers. The new one is from the classifier spec.
+
+    Labellers are stored in a list, these can contain many labellers
+    as seen in the example below, referring to human and machine
+    annotators.
+
+    [
+        "alice",
+        "bob",
+        "68edec6f-fe74-413d-9cf1-39b1c3dad2c0",
+        'KeywordClassifier("extreme weather")',
+    ]
+
+    In the context of inference the labellers array should only hold
+    the model used to label the span as seen in the example below.
+
+    [
+        'KeywordClassifier("extreme weather")',
+    ]
+    """
+    if classifier_spec:
+        if mini_spec := MiniClassifierSpec.from_classifier_spec(classifier_spec):
+            return mini_spec.to_string()
+
+    # Fall back to using labellers if classifier_spec is None or
+    # missing required fields
+    if len(span.labellers) != 1:
+        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
+
+    return span.labellers[0]
+
+
+def convert_labelled_passage_to_concepts(
+    labelled_passage: LabelledPassage,
+) -> list[VespaPassage.Concept]:
+    """
+    Convert a labelled passage to a list of VespaPassage.Concept objects and their text block ID.
+
+    The labelled passage contains a list of spans relating to concepts
+    that we must convert to VespaPassage.Concept objects.
+    """
+    concepts: list[VespaPassage.Concept] = []
+    concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
+
+    if not concept_json and not labelled_passage.spans:
+        return concepts
+
+    if not concept_json and labelled_passage.spans:
+        raise ValueError(
+            "We have spans but no concept metadata for "
+            f"labelled passage {labelled_passage.id}"
+        )
+
+    # The concept used to label the passage holds some information on the parent
+    # concepts and thus this is being used as a temporary solution for providing
+    # the relationship between concepts. This has the downside that it ties a
+    # labelled passage to a particular concept when in fact the Spans that a
+    # labelled passage has can be labelled by multiple concepts.
+    concept = Concept.model_validate(concept_json)
+    parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
+        concept=concept
+    )
+
+    logger = get_logger()
+
+    classifier_spec: ClassifierSpec | None = None
+    if classifier_spec_json := labelled_passage.metadata.get("classifier_spec"):
+        try:
+            classifier_spec = ClassifierSpec(**classifier_spec_json)
+        except Exception as e:
+            logger.error(
+                f"metadata contained classifier spec. but it couldn't be parsed: {e}"
+            )
+
+    # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
+    for span_idx, span in enumerate(labelled_passage.spans):
+        if span.concept_id is None:
+            # Include the Span index since Span's don't have IDs
+            logger.error(
+                f"span concept ID is missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
+            )
+            continue
+
+        if not span.timestamps:
+            logger.error(
+                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
+            )
+            timestamp = datetime.now()
+        else:
+            timestamp = max(span.timestamps)
+
+        concepts.append(
+            VespaPassage.Concept(
+                id=span.concept_id,
+                name=concept.preferred_label,
+                parent_concepts=parent_concepts,
+                parent_concept_ids_flat=parent_concept_ids_flat,
+                model=get_model_from_span(
+                    span=span,
+                    classifier_spec=classifier_spec,
+                ),
+                end=span.end_index,
+                start=span.start_index,
+                # These timestamps _should_ all be the same,
+                # but just in case, take the latest.
+                timestamp=timestamp,
+            )
+        )
+
+    return concepts
 
 
 class Metadata(BaseModel):

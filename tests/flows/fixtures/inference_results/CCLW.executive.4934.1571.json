@@ -123,7 +123,7 @@
       "name": "concept_98",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_98\")",
+      "model": "Q309:xyzw6789:efgh6789",
       "end": 103,
       "start": 105,
       "timestamp": "2025-05-22T17:34:09.649548"
@@ -306,7 +306,7 @@
       "name": "concept_38",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_38\")",
+      "model": "Q237:ttbb2345:abcd2345",
       "end": 168,
       "start": 175,
       "timestamp": "2025-05-22T17:34:09.649548"
@@ -322,7 +322,7 @@
       "name": "concept_40",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_40\")",
+      "model": "Q371:hjkm9999:mnpq2468",
       "end": 146,
       "start": 147,
       "timestamp": "2025-05-22T17:34:09.649548"
