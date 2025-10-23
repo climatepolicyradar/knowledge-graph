@@ -10,7 +10,6 @@ import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
 from functools import partial
-from io import BytesIO
 from pathlib import Path
 from typing import (
     Annotated,
@@ -915,14 +914,15 @@ def get_logger() -> logging.Logger | LoggingAdapter:
         return prefect.logging.get_logger()
 
 
-def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> BytesIO:
+def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
     """
     Serialize a list of Pydantic models as JSONL (JSON Lines) format.
 
     Each model is serialized on a separate line using model_dump_json().
     """
     jsonl_content = "\n".join(model.model_dump_json() for model in models)
-    return BytesIO(jsonl_content.encode("utf-8"))
+
+    return jsonl_content
 
 
 def deserialise_pydantic_list_from_jsonl[T: BaseModel](

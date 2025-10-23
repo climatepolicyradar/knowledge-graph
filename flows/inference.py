@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
@@ -501,7 +502,8 @@ async def labels_to_s3(
 
     logger.info(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
-    body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+    jsonl = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+    body = BytesIO(jsonl.encode("utf-8"))
 
     response = await s3_client.put_object(
         Bucket=s3_uri.bucket,
