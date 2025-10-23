@@ -10,6 +10,7 @@ from typing import (
     runtime_checkable,
 )
 
+import wandb
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -257,6 +258,24 @@ class Classifier(ABC):
 
             classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
+
+    @classmethod
+    def load_from_wandb(
+        cls, wandb_path: str, model_to_cuda: bool = False
+    ) -> "Classifier":
+        """
+        Load a classifier from a W&B path. ''
+
+        :param str wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
+        :param bool model_to_cuda: Whether to load the model to CUDA if available
+        :return Classifier: The loaded classifier
+        """
+
+        api = wandb.Api()
+        model_artifact = api.artifact(wandb_path)
+        model_artifact_dir = model_artifact.download()
+        model_pickle_path = Path(model_artifact_dir) / "model.pickle"
+        return cls.load(model_pickle_path, model_to_cuda=model_to_cuda)
 
 
 class ZeroShotClassifier(ABC):
