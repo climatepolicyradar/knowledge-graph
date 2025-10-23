@@ -566,12 +566,8 @@ class ArgillaSession:
             normalized_key = key.replace(".", "-").lower()
             formatted[normalized_key] = value
 
-        for dataset in datasets[1:]:
-            if dataset.fields != fields:
-                raise ValueError("All datasets must have the same fields")
-            if dataset.questions != questions:
-                raise ValueError("All datasets must have the same questions")
         return formatted
+
 
 def label_passages_with_classifier(
     classifier: Classifier,
