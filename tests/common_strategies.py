@@ -43,7 +43,7 @@ def multi_word_label_strategy(
         list[str]
     ] = None,  # default to space-separated labels for most tests
 ):
-    """Generate a multi-word label, separated by the supplied separator characters"""
+    """Generate a multi-word label, separated by the supplied separator characters."""
     num_words = draw(st.integers(min_value=min_words, max_value=max_words))
     words = [draw(single_word_label_strategy) for _ in range(num_words)]
 
@@ -64,16 +64,13 @@ def concept_strategy(draw, ensure_token_disjoint: bool = True):
     """
     Generate a random Concept for testing.
 
-    Args:
-        draw: Hypothesis strategy drawing function.
-        ensure_token_disjoint: If True (default), ensures that no tokens from negative
-                               labels appear in positive labels. This prevents issues with
-                               KeywordClassifier where overlapping tokens cause positive
-                               matches to be filtered out. Set to False if you want to test
-                               edge cases with token overlap.
-
-    Returns:
-        A randomly generated Concept.
+    :param draw: Hypothesis strategy drawing function.
+    :param ensure_token_disjoint: If True (default), ensures that no tokens from negative
+                                  labels appear in positive labels. This prevents issues with
+                                  KeywordClassifier where overlapping tokens cause positive
+                                  matches to be filtered out. Set to False if you want to test
+                                  edge cases with token overlap.
+    :return: A randomly generated Concept.
     """
     preferred_label = draw(concept_label_strategy)
     alt_labels = draw(st.lists(concept_label_strategy, max_size=5))
@@ -121,13 +118,10 @@ def _label_tokens_are_disjoint_from_labels(
     """
     Check if a label's tokens are disjoint from all tokens in other labels.
 
-    Args:
-        label: The label to check.
-        other_labels: List of labels to compare against.
-        separator_pattern: Regex pattern to split labels into tokens.
-
-    Returns:
-        True if no tokens from label appear in any of the other_labels.
+    :param label: The label to check.
+    :param other_labels: List of labels to compare against.
+    :param separator_pattern: Regex pattern to split labels into tokens.
+    :return: True if no tokens from label appear in any of the other_labels.
     """
     # First check if the label is identical to any other label
     if label.lower() in [other.lower() for other in other_labels]:
@@ -149,10 +143,9 @@ def negative_text_strategy(draw, labels: list[str]):
     """
     Generate text which does not contain any of the concept's labels.
 
-    Args:
-        draw: Hypothesis strategy drawing function.
-        labels: Plain string labels (NOT regex patterns).
-                These should be the original concept labels before any transformation.
+    :param draw: Hypothesis strategy drawing function.
+    :param labels: Plain string labels (NOT regex patterns).
+                   These should be the original concept labels before any transformation.
     """
     return draw(
         st.text(min_size=1, max_size=1000).filter(
@@ -170,10 +163,9 @@ def positive_text_strategy(
     """
     Generate text containing one of the labels, with pre/post text that avoids negatives.
 
-    Args:
-        draw: Hypothesis strategy drawing function.
-        labels: Plain string labels (NOT regex patterns) to include in the generated text.
-        negative_labels: Plain string labels (NOT regex patterns) to avoid in the text.
+    :param draw: Hypothesis strategy drawing function.
+    :param labels: Plain string labels (NOT regex patterns) to include in the generated text.
+    :param negative_labels: Plain string labels (NOT regex patterns) to avoid in the text.
     """
     labels = labels or []
     negative_labels = negative_labels or []
