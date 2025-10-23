@@ -82,7 +82,7 @@ class Ensemble:
 
         # this is in the format classifier -> batch -> spans
         spans_per_batch_per_classifier = [
-            clf.predict_batch(texts) for clf in self.classifiers
+            clf.predict(texts, batch_size=len(texts)) for clf in self.classifiers
         ]
 
         # transpose to batch -> classifier -> spans

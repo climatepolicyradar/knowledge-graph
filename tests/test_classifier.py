@@ -2,7 +2,7 @@ import re
 from typing import Type
 
 import pytest
-from hypothesis import assume, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from knowledge_graph.classifier.classifier import Classifier
@@ -31,24 +31,6 @@ classifier_classes: list[Type[Classifier]] = [
 def test_whether_classifier_matches_concept_labels_in_text(
     classifier_class: Type[Classifier], concept: Concept, text_data: st.DataObject
 ):
-    # Skip concepts where any negative label token equals any token from a positive label.
-    # In those cases, a positive match would be correctly filtered by the classifier
-    # due to the overlapping negative label.
-    sep = KeywordClassifier.separator_pattern
-    positive_tokens = {
-        tok.lower()
-        for label in concept.all_labels
-        for tok in re.split(sep, label)
-        if tok
-    }
-    negative_tokens = {
-        tok.lower()
-        for label in concept.negative_labels
-        for tok in re.split(sep, label)
-        if tok
-    }
-    assume(positive_tokens.isdisjoint(negative_tokens))
-
     # Ensure the generated positive text does not accidentally include a negative label
     # (e.g. by appending extra tokens after the positive label that complete a negative label).
     text = text_data.draw(
@@ -322,7 +304,7 @@ def test_whether_a_classifier_which_does_not_specify_allowed_concept_ids_accepts
         def id(self) -> ClassifierID:
             return ClassifierID("unrestricted")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     concept1 = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
@@ -341,7 +323,7 @@ def test_whether_a_classifier_with_a_single_allowed_concept_id_validates_correct
         def id(self) -> ClassifierID:
             return ClassifierID("single_id")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     valid_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
@@ -364,7 +346,7 @@ def test_whether_a_classifier_with_multiple_allowed_concept_ids_validates_correc
         def id(self) -> ClassifierID:
             return ClassifierID("multi_id")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     valid_concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
@@ -387,7 +369,7 @@ def test_whether_allowed_concept_ids_validation_works_correctly_with_inheritance
         def id(self) -> ClassifierID:
             return ClassifierID("parent_id")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     class ChildClassifier(ParentClassifier):
@@ -426,12 +408,62 @@ def test_whether_an_empty_allowed_concept_ids_list_accepts_all_concepts():
         def id(self) -> ClassifierID:
             return ClassifierID("empty_id")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
 
     assert EmptyIDClassifier(concept)
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(concept=concept_strategy(), data=st.data())
+def test_predict_sequence_returns_predictions_for_all_texts(
+    classifier_class: Type[Classifier], concept: Concept, data: st.DataObject
+):
+    """Test that predict_many returns predictions for all input texts."""
+    # Generate multiple positive texts
+    num_texts = 5
+    texts = [
+        data.draw(positive_text_strategy(labels=concept.all_labels))
+        for _ in range(num_texts)
+    ]
+
+    classifier = classifier_class(concept)
+    predictions = classifier.predict(texts, batch_size=2)
+
+    assert len(predictions) == num_texts
+    assert all(isinstance(pred_list, list) for pred_list in predictions)
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@given(concept=concept_strategy(), data=st.data())
+def test_predict_sequence_preserves_order(
+    classifier_class: Type[Classifier], concept: Concept, data: st.DataObject
+):
+    """Test that predict_many returns predictions in the same order as input texts."""
+    positive_text_1 = data.draw(positive_text_strategy(labels=concept.all_labels))
+    negative_text = data.draw(negative_text_strategy(labels=concept.all_labels))
+    positive_text_2 = data.draw(positive_text_strategy(labels=concept.all_labels))
+
+    texts = [
+        positive_text_1,
+        negative_text,
+        positive_text_2,
+    ]
+
+    classifier = classifier_class(concept)
+    predictions = classifier.predict(texts, batch_size=2)
+
+    assert len(predictions) == 3
+    # First text should have predictions
+    assert len(predictions[0]) > 0
+    # Second text should have no predictions (doesn't contain the label)
+    assert len(predictions[1]) == 0
+    # Third text should have predictions
+    assert len(predictions[2]) > 0
 
 
 @st.composite
@@ -483,6 +515,29 @@ def test_whether_multi_word_labels_match_text_with_different_separators(
 
 
 @pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize("classifier_class", classifier_classes)
+@pytest.mark.parametrize("batch_size", [1, 2, 5, 10])
+@given(concept=concept_strategy(), data=st.data())
+def test_predict_sequence_works_with_different_batch_sizes(
+    classifier_class: Type[Classifier],
+    concept: Concept,
+    batch_size: int,
+    data: st.DataObject,
+):
+    """Test that predict_many produces consistent results with different batch sizes."""
+    num_texts = 10
+    texts = [
+        data.draw(positive_text_strategy(labels=concept.all_labels))
+        for _ in range(num_texts)
+    ]
+
+    classifier = classifier_class(concept)
+    predictions = classifier.predict(texts, batch_size=batch_size)
+
+    assert len(predictions) == num_texts
+    assert all(isinstance(pred_list, list) for pred_list in predictions)
+
+
 @pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(label_data=st.data(), negative_label_data=st.data(), text_data=st.data())
 @settings(max_examples=100, database=None)

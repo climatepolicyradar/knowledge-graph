@@ -595,7 +595,7 @@ def _text_block_inference_for_single_batch(
     block_ids: list[str],
 ) -> list[LabelledPassage]:
     """Runs predict on a batch of blocks."""
-    spans: list[list[Span]] = classifier.predict_batch(text_batch)
+    spans: list[list[Span]] = classifier.predict(text_batch)
 
     labelled_passages = [
         _get_labelled_passage_from_prediction(

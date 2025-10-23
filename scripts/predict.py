@@ -3,7 +3,6 @@ from typing import Annotated
 import pandas as pd
 import typer
 from rich.console import Console
-from rich.progress import track
 
 from knowledge_graph.classifier import Classifier, ModelPath, get_local_classifier_path
 from knowledge_graph.classifier.embedding import EmbeddingClassifier
@@ -89,29 +88,23 @@ def main(
 
         labelled_passages: list[LabelledPassage] = []
 
-        n_batches = len(df) // batch_size + (1 if len(df) % batch_size else 0)
-        for batch_start in track(
-            range(0, len(df), batch_size),
-            console=console,
-            transient=True,
-            total=n_batches,
-            description=f"Running {classifier} on {len(df)} passages in batches of {batch_size}",
+        texts = df["text_block.text"].fillna("").tolist()
+        with console.status(
+            f"Running {classifier} on {len(df)} passages in batches of {batch_size}"
         ):
-            batch_end = min(batch_start + batch_size, len(df))
-            batch_df = df.iloc[batch_start:batch_end]
+            all_spans = classifier.predict(
+                texts, batch_size=batch_size, show_progress=True, console=console
+            )
 
-            texts = batch_df["text_block.text"].fillna("").tolist()
-            spans_batch = classifier.predict_batch(texts)
-
-            for (_, row), text, spans in zip(batch_df.iterrows(), texts, spans_batch):
-                if spans:
-                    labelled_passages.append(
-                        LabelledPassage(
-                            text=text,
-                            spans=spans,
-                            metadata=row.to_dict(),
-                        )
+        for (_, row), text, spans in zip(df.iterrows(), texts, all_spans):
+            if spans:
+                labelled_passages.append(
+                    LabelledPassage(
+                        text=text,
+                        spans=spans,
+                        metadata=row.to_dict(),
                     )
+                )
 
         n_spans = sum(len(entry.spans) for entry in labelled_passages)
         n_positive_passages = sum(len(entry.spans) > 0 for entry in labelled_passages)

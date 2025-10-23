@@ -49,7 +49,7 @@ def test_whether_ensemble_id_is_deterministic(concept: Concept):
         def id(self) -> ClassifierID:
             return ClassifierID("testmck2")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     class MockClassifier2(Classifier):
@@ -57,7 +57,7 @@ def test_whether_ensemble_id_is_deterministic(concept: Concept):
         def id(self) -> ClassifierID:
             return ClassifierID("testmck3")
 
-        def predict(self, text: str) -> list[Span]:
+        def _predict(self, text: str) -> list[Span]:
             return []
 
     classifier1 = MockClassifier1(concept)
