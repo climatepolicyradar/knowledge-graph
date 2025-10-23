@@ -32,9 +32,6 @@ from flows.config import Config
 from flows.inference import (
     METADATA_FILE_NAME as INFERENCE_METADATA_FILE_NAME,
 )
-from flows.inference import (
-    deserialise_pydantic_list_with_fallback,
-)
 from flows.utils import (
     DocumentStem,
     ParameterisedFlow,
@@ -43,6 +40,7 @@ from flows.utils import (
     SlackNotify,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
+    deserialise_pydantic_list_with_fallback,
     get_logger,
     iterate_batch,
     map_as_sub_flow,
