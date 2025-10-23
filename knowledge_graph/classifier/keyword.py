@@ -43,24 +43,87 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         "The greenhouse gas emissions are a major contributor to climate change."
     """
 
+    valid_separator_characters = [
+        r"\-",  # hyphen (escaped because we're going to use it in a regex character class)
+        "–",  # en dash
+        "—",  # em dash
+    ]
+    separator_pattern = r"[\s" + "".join(valid_separator_characters) + r"]+"
+
     def __init__(self, concept: Concept):
-        """
+        r"""
         Create a new KeywordClassifier instance.
+
+        During initialization, concept labels undergo transformation:
+        1. Plain string labels (e.g., "greenhouse gas") are split by case sensitivity
+        2. Each label is transformed into a regex string with flexible separators
+           (e.g., "greenhouse gas" becomes "greenhouse[\s\-–—]+gas")
+        3. Transformed strings are then compiled into case-sensitive/insensitive regex
+           patterns
+
+        The stored label attributes (case_sensitive_positive_labels, etc.) contain
+        regex strings, NOT the original plain labels. If you need the original labels,
+        you can access them via the classifier.concept.all_labels and
+        classifier.concept.negative_labels attributes.
 
         :param Concept concept: The concept which the classifier will identify in text
         """
         super().__init__(concept)
 
+        def make_separator_flexible(label: str) -> str:
+            r"""
+            Convert a label to a regex pattern that matches different word separators.
+
+            This allows labels like "greenhouse gas" to match:
+            - "greenhouse gas" (space)
+            - "greenhouse-gas" (hyphen)
+            - "greenhouse\ngas" (newline)
+            - "greenhouse -gas" (multiple consecutive separators)
+
+            :param str label: The label to convert
+            :return str: A regex pattern string that matches the label with flexible separators
+            """
+            # Split by any common separator characters (space, hyphen, newline, etc.)
+            parts = re.split(self.separator_pattern, label.strip())
+
+            # Filter out empty parts and escape each word part
+            word_parts = [re.escape(part) for part in parts if part]
+
+            # If the label has no separators, return the escaped label as-is
+            if len(word_parts) == 1:
+                return word_parts[0]
+
+            # Join parts of the label using the separator pattern
+            return self.separator_pattern.join(word_parts)
+
         def create_pattern(
             labels: list[str], case_sensitive: bool = False
-        ) -> re.Pattern:
-            """Create a regex pattern from a list of labels."""
-            pattern = r"\b(?:" + "|".join(labels) + r")\b" if labels else ""
+        ) -> re.Pattern | None:
+            r"""
+            Create a regex pattern from a list of labels.
+
+            Args:
+                labels: List of regex pattern strings (e.g., "greenhouse[\s\-–—]+gas").
+                        Note: These are not plain labels - they've been transformed by
+                        make_separator_flexible() to include flexible separator matching.
+                case_sensitive: Whether to use case-sensitive matching.
+
+            Returns:
+                Compiled regex pattern with word boundaries, or None if labels is empty.
+            """
+            if not labels:
+                return None
+
+            pattern = r"(?<!\w)(?:" + "|".join(labels) + r")(?!\w)"
             flags = re.IGNORECASE if not case_sensitive else 0
             return re.compile(pattern, flags)
 
         def split_by_case_handling(labels: list[str]) -> tuple[list[str], list[str]]:
-            """Partition labels into case-sensitive and case-insensitive lists."""
+            """
+            Partition labels into case-sensitive and case-insensitive lists.
+
+            Returns the original labels, sorted by length (longest first).
+            """
             case_sensitive_labels = []
             case_insensitive_labels = []
 
@@ -73,22 +136,34 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
                         ord(char) > 127 for char in label
                     ):
                         # Labels including uppercase or non-ASCII characters are added to the case-sensitive list
-                        case_sensitive_labels.append(re.escape(label))
+                        case_sensitive_labels.append(label)
                     else:
                         # Only pure ASCII lowercase labels are added to the case-insensitive list
-                        case_insensitive_labels.append(re.escape(label))
+                        case_insensitive_labels.append(label)
 
             return case_sensitive_labels, case_insensitive_labels
 
-        # Process positive labels
-        self.case_sensitive_positive_labels, self.case_insensitive_positive_labels = (
-            split_by_case_handling(self.concept.all_labels)
+        # Split labels by case sensitivity
+        case_sensitive_positive, case_insensitive_positive = split_by_case_handling(
+            self.concept.all_labels
+        )
+        case_sensitive_negative, case_insensitive_negative = split_by_case_handling(
+            self.concept.negative_labels
         )
 
-        # Process negative labels
-        self.case_sensitive_negative_labels, self.case_insensitive_negative_labels = (
-            split_by_case_handling(self.concept.negative_labels)
-        )
+        # Apply separator flexibility to create regex patterns
+        self.case_sensitive_positive_labels = [
+            make_separator_flexible(label) for label in case_sensitive_positive
+        ]
+        self.case_insensitive_positive_labels = [
+            make_separator_flexible(label) for label in case_insensitive_positive
+        ]
+        self.case_sensitive_negative_labels = [
+            make_separator_flexible(label) for label in case_sensitive_negative
+        ]
+        self.case_insensitive_negative_labels = [
+            make_separator_flexible(label) for label in case_insensitive_negative
+        ]
 
         # Create positive patterns
         self.case_sensitive_positive_pattern = create_pattern(
