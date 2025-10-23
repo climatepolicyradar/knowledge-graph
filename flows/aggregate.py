@@ -3,7 +3,6 @@ import os
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, TypeAlias, TypeVar
 
-import aioboto3
 import prefect.tasks as tasks
 import pydantic
 from botocore.exceptions import ClientError
@@ -48,7 +47,7 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 
 T = TypeVar("T")
@@ -203,7 +202,10 @@ async def process_document(
     )
 
     try:
-        session = aioboto3.Session(region_name=config.bucket_region)
+        session = get_async_session(
+            region_name=config.bucket_region,
+            aws_env=config.aws_env,
+        )
         async with session.client("s3") as s3:
             concepts_for_vespa: dict[TextBlockId, SerialisedVespaConcept] = {}
             async for (
@@ -348,7 +350,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     document_stems: Sequence[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-    successes: Sequence[FlowRun],
+    successes: Sequence[RunOutputIdentifier],
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
@@ -491,7 +493,10 @@ async def store_metadata(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
@@ -579,7 +584,7 @@ async def aggregate(
         aws_env=config.aws_env,
         counter=n_batches,
         parameterised_batches=parameterised_batches,
-        unwrap_result=False,
+        unwrap_result=True,
     )
 
     await create_aggregate_inference_overall_summary_artifact(

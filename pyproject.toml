@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.16.1"
+version = "0.17.0"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
@@ -20,7 +20,7 @@ dependencies = [
   "more-itertools>=10.3.0",
   "argilla>=2.5",
   "griffe==1.5.7",
-  "cpr-sdk==1.19.1",
+  "cpr-sdk==1.24.0",
   "wandb>=0.21.0",
   "boto3>=1.35.31",
   "pyvespa>=0.54.0",
@@ -44,6 +44,7 @@ dependencies = [
   "nest-asyncio>=1.6.0",
   "matplotlib>=3.10.6",
   "pandas>=2.3.1",
+  "tabulate>=0.9.0",
 ]
 
 [project.optional-dependencies]

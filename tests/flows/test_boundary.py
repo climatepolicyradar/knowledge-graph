@@ -4,7 +4,6 @@ from datetime import datetime
 
 import pytest
 import vespa.querybuilder as qb
-from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import Passage as VespaPassage
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from vespa.exceptions import VespaError
@@ -29,8 +28,9 @@ from flows.boundary import (
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
 )
+from flows.classifier_specs.spec_interface import ClassifierSpec
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 from tests.flows.conftest import load_fixture
@@ -104,7 +104,7 @@ def test_convert_labelled_passges_to_concepts(
 ) -> None:
     """Test that we can correctly convert labelled passages to concepts."""
     concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
-    assert all([isinstance(concept, VespaConcept) for concept in concepts])
+    assert all([isinstance(concept, VespaPassage.Concept) for concept in concepts])
 
 
 def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
@@ -128,30 +128,78 @@ def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
     assert len(concepts) == 1
 
 
+def test_convert_labelled_passage_to_concepts_with_classifier_spec_in_metadata(
+    example_labelled_passages: list[LabelledPassage],
+) -> None:
+    """Test that convert_labelled_passage_to_concepts uses classifier_spec from metadata."""
+    # Create a ClassifierSpec and serialize it like the inference code does
+    classifier_spec = ClassifierSpec(
+        concept_id=ConceptID("xyz78abc"),
+        wikibase_id=WikibaseID("Q1363"),
+        classifier_id=ClassifierID("vax7e3n7"),
+        wandb_registry_version="v13",
+    )
+
+    # Add classifier_spec to the metadata using model_dump() like inference does
+    example_labelled_passages[0].metadata["classifier_spec"] = (
+        classifier_spec.model_dump()
+    )
+
+    concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
+
+    assert len(concepts) == 1
+    # Should use classifier_spec format instead of span.labellers
+    assert concepts[0].model == "Q1363:xyz78abc:vax7e3n7"
+
+
 def test_get_model_from_span():
     assert "KeywordClassifier" == get_model_from_span(
-        Span(
+        span=Span(
             text="Test text.",
             start_index=0,
             end_index=8,
             concept_id=None,
             labellers=["KeywordClassifier"],
             timestamps=[datetime.now()],
-        )
+        ),
+        classifier_spec=None,
     )
 
 
 def test_get_model_from_span_checks_length():
     with pytest.raises(ValueError, match="Span should have 1 labeller but has 0"):
         _ = get_model_from_span(
-            Span(
+            span=Span(
                 text="Test text.",
                 start_index=0,
                 end_index=8,
                 concept_id=None,
                 labellers=[],
-            )
+            ),
+            classifier_spec=None,
         )
+
+
+def test_get_model_from_span_with_classifier_spec():
+    """Test that get_model_from_span uses classifier_spec when provided."""
+    classifier_spec = ClassifierSpec(
+        concept_id=ConceptID("abcd2345"),
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("xyz78abc"),
+        wandb_registry_version="v1",
+    )
+
+    span = Span(
+        text="Test text.",
+        start_index=0,
+        end_index=8,
+        concept_id="Q123",
+        labellers=["KeywordClassifier"],
+        timestamps=[datetime.now()],
+    )
+
+    result = get_model_from_span(span=span, classifier_spec=classifier_spec)
+    assert result == "Q123:abcd2345:xyz78abc"
 
 
 def test_get_parent_concepts_from_concept() -> None:
