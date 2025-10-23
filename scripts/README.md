@@ -3,7 +3,7 @@
 This directory contains scripts that are used to run various processes around the concept store / knowledge graph. Generally, they should be run from the root of the repository using `uv run python scripts/<script_name>.py`, or using a specific `just` command (see [justfile](../justfile) for more details).
 
 Individual scripts' docstrings contain more information about their purpose and usage.
-
+For additional details and context, see [classifier model training and deployment](https://www.notion.so/climatepolicyradar/KG-Model-Deployment-28d9109609a480a5991fe0e75ecfaa79).
 
 ## Updating a Classifier
 
@@ -21,7 +21,13 @@ just train "Q123" --track --aws-env sandbox
 Then we promote:
 
 ```shell
-just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --primary
+just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
+```
+
+Finally, to update the classifier specs:
+
+```shell
+just update-inference-classifiers --aws-envs sandbox
 ```
 
 You can also achieve the above directly with:
@@ -75,6 +81,21 @@ At least one classififiers profile is required for promotion. You could set one 
 ```shell
 just classifier-metadata Q57 jq7535b6 sandbox --add-classifiers-profiles primary
 ```
+
+If a classifier specification should no longer be used, the inverse of a promotion should be done—a demotion. This will demote the latest version of the model for the AWS env specified in the registry by removing the tag and removing the classifiers profile.
+
+```shell
+just demote Q57 --aws-env sandbox
+```
+
+If you require a specific registry version to be demoted, you can add the registry version as a parameter.
+_Note: the wandb registry version is not the same as the project model version.
+
+```shell
+just demote Q57 --wandb-registry-version v10 --aws-env sandbox
+```
+
+Then, update the classifier specifications as per usual.
 
 ## Training Classifiers in Docker
 
@@ -134,7 +155,6 @@ docker run \
 - `~/.aws/sso/cache:/root/.aws/sso/cache:ro` - Read-only AWS SSO cache
 - `$(pwd)/flows/classifier_specs/v2:/flows/classifier_specs/v2` - Classifier specifications
 
-
 #### 3. Validate Installation + Authentication against AWS
 
 Verify AWS CLI is working correctly:
@@ -157,14 +177,24 @@ uv run deploy new \
 
 Note: If the classifier spec files in the local repo do not update after running the deploy script in docker then simply come out of the docker container and run `just update-inference-classifiers`.
 
-## Remove a Classifier Spec
-
-Within the Knowledge Graph full-pipeline the Aggregation step is designed to run on all classifiers as defined in the classifier spec file. Should you want to omit a classifier from running due to an issue with inference, then the classifier should be demoted and then the classifier spec updated. This can be done using the `just demote` command followed by the `just update-inference-classifiers` command.
-
-
 ## Troubleshooting
 
 - Ensure AWS credentials are properly configured locally prior to running the container
 - Verify the `.env` file contains all required environment variables
 - Check that the classifier specs directory is accessible from the container
 - Confirm the target Wikibase ID exists and has associated training data
+
+### Weights and biases: Permission Error
+
+If you experience the following error:
+
+```shell
+requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://api.wandb.ai/graphql
+
+ERROR Permission denied to access team/classifier/version
+```
+
+To resolve:
+
+- Ensure permissions for weights and biases are granted for the user for projects as well as for the  [model registry](https://docs.wandb.ai/guides/registry/configure_registry/)
+- If access for only projects is granted then the `train` scripts will be successful since they are accessing the projects however will fail during `promote` when the registry is accessed

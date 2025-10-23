@@ -1,6 +1,5 @@
 from typing import Annotated
 
-import argilla as rg
 import typer
 from rich.console import Console
 
@@ -61,54 +60,23 @@ def main(
     concept = wikibase.get_concept(wikibase_id)
     console.log(f"✅ Loaded metadata for {concept}")
 
-    # Find existing dataset in Argilla
+    # Get existing dataset from Argilla
     with console.status(f"Looking for existing dataset for {concept}..."):
-        dataset = argilla.client.datasets(
-            str(concept.wikibase_id), workspace=workspace_name
-        )
-
-    if not dataset:
-        raise ValueError(
-            f"No existing dataset found for {concept} in workspace '{workspace_name}'. "
-            f"Please create the dataset first using push_a_fresh_dataset_to_argilla.py"
-        )
-
+        dataset = argilla.get_dataset(wikibase_id, workspace=workspace_name)
     console.log(
         f"✅ Found existing dataset '{dataset.name}' with {len(list(dataset.records))} records"
     )
 
-    # Create Record objects from the labelled passages
-    with console.status("Preparing new records..."):
-
-        def reformat_metadata(metadata: dict) -> dict:
-            """Reformat metadata for Argilla compatibility"""
-            # Create a copy to avoid modifying the original
-            clean_metadata = metadata.copy()
-            # Remove fields that can't be serialized by Argilla
-            clean_metadata.pop("KeywordClassifier", None)
-            clean_metadata.pop("EmbeddingClassifier", None)
-            # Convert dots to hyphens and lowercase keys
-            return {
-                key.replace(".", "-").lower(): value
-                for key, value in clean_metadata.items()
-            }
-
-        records = [
-            rg.Record(
-                fields={"text": passage.text},
-                metadata=reformat_metadata(passage.metadata),
-            )
-            for passage in labelled_passages
-        ]
-
-    console.log(f"✅ Prepared {len(records)} new records")
-
-    # Add the new records to the existing dataset
-    with console.status(f"Adding {len(records)} records to dataset..."):
-        dataset.records.log(records)
+    # Push labelled passages to the dataset
+    with console.status(f"Adding {len(labelled_passages)} passages to dataset..."):
+        argilla.add_labelled_passages(
+            labelled_passages=labelled_passages,
+            wikibase_id=wikibase_id,
+            workspace=workspace_name,
+        )
 
     console.log(
-        f"✅ Successfully added {len(records)} records to dataset '{dataset.name}'"
+        f"✅ Successfully added {len(labelled_passages)} passages to dataset '{dataset.name}'"
     )
     console.log(f"Dataset now contains {len(list(dataset.records))} total records")
 

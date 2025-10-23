@@ -3,8 +3,10 @@ import json
 import os
 import subprocess
 import traceback
+import uuid
 from pathlib import Path
 from typing import Generator
+from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs
 
 import boto3
@@ -424,3 +426,66 @@ def MockedWikibaseSession(
     finally:
         # Restore original method
         WikibaseSession._get_client = original_get_client
+
+
+@pytest.fixture
+def mock_argilla_client():
+    """
+    Mock an Argilla client with a patched Argilla class.
+
+    Returns a tuple of (mock_client, mock_argilla_class) for cases where you need to
+    verify the class was called correctly.
+    """
+    with patch("knowledge_graph.labelling.Argilla") as mock_argilla_class:
+        mock_client = MagicMock()
+        mock_argilla_class.return_value = mock_client
+        yield mock_client, mock_argilla_class
+
+
+@pytest.fixture
+def mock_workspace():
+    """Factory fixture for creating mock Argilla workspaces"""
+
+    def _create_workspace(name="test-workspace", datasets=None):
+        mock_ws = MagicMock()
+        mock_ws.name = name
+        mock_ws.datasets = datasets or []
+        return mock_ws
+
+    return _create_workspace
+
+
+@pytest.fixture
+def mock_dataset():
+    """Factory fixture for creating mock Argilla datasets"""
+
+    def _create_dataset(name="Q123", records=None):
+        mock_ds = MagicMock()
+        mock_ds.name = name
+        if records is not None:
+            mock_ds.records.return_value = records
+        return mock_ds
+
+    return _create_dataset
+
+
+@pytest.fixture
+def mock_user():
+    """Factory fixture for creating mock Argilla users"""
+
+    def _create_user(username="test-user", user_id=None):
+        mock_u = MagicMock()
+        mock_u.username = username
+        mock_u.id = user_id or uuid.uuid4()
+        return mock_u
+
+    return _create_user
+
+
+@pytest.fixture
+def concept_without_a_wikibase_id():
+    """Test concept without wikibase_id for error testing"""
+    return Concept(
+        preferred_label="Test concept",
+        description="A concept without a wikibase ID",
+    )

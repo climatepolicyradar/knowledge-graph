@@ -20,6 +20,8 @@ from typing import (
     NamedTuple,
     NewType,
     ParamSpec,
+    Set,
+    TypeAlias,
     TypeVar,
     overload,
 )
@@ -34,6 +36,7 @@ from prefect.artifacts import (
     update_progress_artifact,
 )
 from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.context import TaskRunContext, get_run_context
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
@@ -41,6 +44,8 @@ from prefect.utilities.names import generate_slug
 from prefect_slack.credentials import SlackWebhook
 from pydantic import Field, PositiveInt, RootModel
 from types_aiobotocore_s3.client import S3Client
+from types_aiobotocore_s3.paginator import ListObjectsV2Paginator
+from types_aiobotocore_s3.type_defs import ListObjectsV2OutputTypeDef, ObjectTypeDef
 from typing_extensions import Self
 
 from knowledge_graph.cloud import (
@@ -67,6 +72,29 @@ DocumentStem = NewType("DocumentStem", str)
 DocumentImporter = NewType("DocumentImporter", tuple[DocumentStem, DocumentObjectUri])
 
 DOCUMENT_ID_PATTERN = re.compile(r"^((?:[^.]+\.){3}[^._]+)")
+
+
+# A unique identifier for the run output made from the run context
+RunOutputIdentifier: TypeAlias = str
+
+
+def build_run_output_identifier() -> RunOutputIdentifier:
+    """Builds an identifier from the start time and name of the flow run."""
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    if run_context.flow_run.start_time is None:
+        raise ValueError("flow run didn't have a start time.")
+
+    start_time = run_context.flow_run.start_time.replace(tzinfo=None).isoformat(
+        timespec="minutes"
+    )
+    run_name = run_context.flow_run.name
+    return f"{start_time}-{run_name}"
 
 
 def file_name_from_path(path: str) -> str:
@@ -362,17 +390,42 @@ async def collect_unique_file_stems_under_prefix(
     bucket_name: str,
     prefix: str,
     bucket_region: str,
+    disallow: Set[str] | None = None,
 ) -> list[DocumentStem]:
     """Collect all unique file stems under a prefix."""
-
+    logger = get_logger()
     session = aioboto3.Session(region_name=bucket_region)
     async with session.client("s3") as s3:
-        paginator = s3.get_paginator("list_objects_v2")
-        file_stems = []
+        paginator: ListObjectsV2Paginator = s3.get_paginator("list_objects_v2")
+        file_stems: list[DocumentStem] = []
+        page: ListObjectsV2OutputTypeDef
         async for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-            for obj in page.get("Contents", []):
-                if obj["Key"].endswith(".json"):  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                    file_stems.append(DocumentStem(Path(obj["Key"]).stem))  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            if "Contents" not in page:
+                logger.debug("`Contents` wasn't found in page")
+                continue
+
+            obj: ObjectTypeDef
+            for obj in page["Contents"]:
+                if "Key" not in obj:
+                    logger.debug("`Key` wasn't found in object")
+                    continue
+
+                path = Path(obj["Key"])
+                filename = path.name
+
+                if disallow and filename in disallow:
+                    logger.debug(
+                        f"filename wasn't allowed: `{filename}` was in `{','.join(disallow)}`"
+                    )
+                    continue
+
+                if path.suffix.lower() != ".json":
+                    logger.debug(
+                        f"filename didn't end with a JSON file extension: `{filename}`"
+                    )
+                    continue
+
+                file_stems.append(DocumentStem(path.stem))
     return list(set(file_stems))
 
 
@@ -570,6 +623,72 @@ class ParameterisedFlow(NamedTuple, Generic[P, R]):
     params: dict[str, Any]
 
 
+async def map_as_local(
+    aws_env: AwsEnv,
+    counter: PositiveInt,
+    parameterised_batches: Sequence[ParameterisedFlow[P, R]],
+    unwrap_result: bool,
+) -> tuple[Sequence[R], Sequence[BaseException | FlowRun]]:
+    """
+    Map over an iterable, running the function as a thread on same host.
+
+    The concurrency is limited to a semaphore with a counter.
+
+    The results are grouped by success and failure, based on if an
+    exception was returned or a flow run didn't complete, or some
+    value was returned.
+
+    The parameters are the same as `map_as_sub_flow` so it can be a
+    drop-in replacement.
+
+    You'll want to patch the function first, for example, if you want to run indexing:
+
+    ```
+    import flows.utils
+
+    flows.utils.map_as_sub_flow = flows.utils.map_as_local
+
+    from flows.index import (
+        index,
+    ...
+    ````
+    """
+    if not unwrap_result:
+        raise ValueError(
+            "this cannot be used for if you're expecting wrapped results, from Prefect"
+        )
+
+    semaphore = asyncio.Semaphore(counter)
+
+    tasks = []
+
+    for paramaterised_batch in parameterised_batches:
+        tasks.append(
+            wait_for_semaphore(
+                semaphore,
+                paramaterised_batch.fn(**paramaterised_batch.params),
+            )
+        )
+
+    results = await asyncio.gather(
+        *tasks,
+        # Normally this is True, but since there's the wrapper
+        # function to ensure that the ID is always included, which
+        # captures exceptions, it can be False here.
+        return_exceptions=False,
+    )
+
+    successes: list[R] = []
+    failures: list[BaseException] = []
+    for result in results:
+        if isinstance(result, Exception):
+            failures.append(result)
+        else:
+            successes.append(result)
+
+    return successes, failures
+
+
 @overload
 async def map_as_sub_flow(
     aws_env: AwsEnv,
@@ -607,8 +726,6 @@ async def map_as_sub_flow(
     timeout.
 
     Either return the flow run itself, or unwrap the result from it.
-
-    This assumes that the same parameters are used for each sub-flow run
     """
     semaphore = asyncio.Semaphore(counter)
 

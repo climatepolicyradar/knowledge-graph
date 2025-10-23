@@ -3,10 +3,10 @@ import os
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any, TypeAlias, TypeVar
 
-import aioboto3
 import prefect.tasks as tasks
 import pydantic
 from botocore.exceptions import ClientError
+from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun
@@ -14,7 +14,7 @@ from prefect.context import TaskRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import PositiveInt
+from pydantic import BaseModel, PositiveInt
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -30,19 +30,24 @@ from flows.classifier_specs.spec_interface import (
 )
 from flows.config import Config
 from flows.inference import (
+    METADATA_FILE_NAME as INFERENCE_METADATA_FILE_NAME,
+)
+from flows.inference import (
     deserialise_pydantic_list_with_fallback,
 )
 from flows.utils import (
     DocumentStem,
     ParameterisedFlow,
+    RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     get_logger,
     iterate_batch,
     map_as_sub_flow,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 
 T = TypeVar("T")
@@ -52,8 +57,7 @@ R = TypeVar("R")
 DEFAULT_N_DOCUMENTS_IN_BATCH: PositiveInt = 20
 DEFAULT_N_BATCHES: PositiveInt = 5
 
-# A unique identifier for the run output made from the run context
-RunOutputIdentifier: TypeAlias = str
+METADATA_FILE_NAME = "metadata.json"
 
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
@@ -72,25 +76,6 @@ class AggregationFailure(Exception):
         self.document_stem = document_stem
         self.exception = exception
         self.context = context
-
-
-def build_run_output_identifier() -> RunOutputIdentifier:
-    """Builds an identifier from the start time and name of the flow run."""
-    run_context = get_run_context()
-    if isinstance(run_context, TaskRunContext):
-        raise ValueError("expected flow run context but got task run context")
-
-    if run_context.flow_run is None:
-        raise ValueError("run context is missing flow run")
-
-    if run_context.flow_run.start_time is None:
-        raise ValueError("flow run didn't have a start time.")
-
-    start_time = run_context.flow_run.start_time.replace(tzinfo=None).isoformat(
-        timespec="minutes"
-    )
-    run_name = run_context.flow_run.name
-    return f"{start_time}-{run_name}"
 
 
 async def get_all_labelled_passages_for_one_document(
@@ -217,7 +202,10 @@ async def process_document(
     )
 
     try:
-        session = aioboto3.Session(region_name=config.bucket_region)
+        session = get_async_session(
+            region_name=config.bucket_region,
+            aws_env=config.aws_env,
+        )
         async with session.client("s3") as s3:
             concepts_for_vespa: dict[TextBlockId, SerialisedVespaConcept] = {}
             async for (
@@ -362,7 +350,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     document_stems: Sequence[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-    successes: Sequence[FlowRun],
+    successes: Sequence[RunOutputIdentifier],
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
@@ -398,6 +386,7 @@ async def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
                 bucket_name=config.cache_bucket_str,
                 prefix=prefix,
                 bucket_region=config.bucket_region,
+                disallow={INFERENCE_METADATA_FILE_NAME},
             )
         )
 
@@ -461,6 +450,70 @@ async def aggregate_batch_of_documents(
     return run_output_identifier
 
 
+class Metadata(BaseModel):
+    """Lineage information for this aggregate run."""
+
+    flow_run: FlowRun
+    run_output_identifier: RunOutputIdentifier
+    classifier_specs: list[ClassifierSpec]
+    config: Config
+
+
+async def store_metadata(
+    config: Config,
+    classifier_specs: list[ClassifierSpec],
+    run_output_identifier: RunOutputIdentifier,
+) -> None:
+    logger = get_logger()
+
+    run_context = get_run_context()
+    if isinstance(run_context, TaskRunContext):
+        raise ValueError("expected flow run context but got task run context")
+
+    if run_context.flow_run is None:
+        raise ValueError("run context is missing flow run")
+
+    metadata = Metadata(
+        flow_run=run_context.flow_run,
+        run_output_identifier=run_output_identifier,
+        classifier_specs=classifier_specs,
+        config=config,
+    )
+
+    metadata_json = metadata.model_dump_json()
+
+    logger.debug(f"writing metadata: {metadata_json}")
+
+    s3_uri = S3Uri(
+        bucket=config.cache_bucket_str,
+        key=os.path.join(
+            config.aggregate_inference_results_prefix,
+            run_output_identifier,
+            METADATA_FILE_NAME,
+        ),
+    )
+
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        response: PutObjectOutputTypeDef = await s3_client.put_object(
+            Bucket=s3_uri.bucket,
+            Key=s3_uri.key,
+            Body=metadata_json,
+            ContentType="application/json",
+        )
+
+        status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+        if status_code != 200:
+            raise ValueError(
+                f"Failed to store metadata to S3. Status code: {status_code}"
+            )
+
+    logger.debug(f"wrote metadata to {s3_uri}")
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -488,6 +541,16 @@ async def aggregate(
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = load_classifier_specs(config.aws_env)
+
+    try:
+        if config.cache_bucket:
+            await store_metadata(
+                config=config,
+                classifier_specs=classifier_specs,
+                run_output_identifier=run_output_identifier,
+            )
+    except Exception as e:
+        logger.error(f"failed to store metadata: {e}")
 
     logger.info(
         f"Aggregating inference results for {len(document_stems)} documents, using "
@@ -521,7 +584,7 @@ async def aggregate(
         aws_env=config.aws_env,
         counter=n_batches,
         parameterised_batches=parameterised_batches,
-        unwrap_result=False,
+        unwrap_result=True,
     )
 
     await create_aggregate_inference_overall_summary_artifact(

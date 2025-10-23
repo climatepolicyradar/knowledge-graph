@@ -2,26 +2,33 @@ import asyncio
 import json
 import os
 import tempfile
+import uuid
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pydantic
 import pytest
-from cpr_sdk.models.search import Concept as VespaConcept
+from cpr_sdk.models.search import Passage as VespaPassage
 from prefect import flow
 from prefect.artifacts import Artifact
+from prefect.client.schemas.objects import FlowRun
+from prefect.context import FlowRunContext
+from prefect.states import Running
 
 from flows.aggregate import (
     AggregationFailure,
+    Metadata,
     aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
     get_all_labelled_passages_for_one_document,
     process_document,
+    store_metadata,
     validate_passages_are_same_except_concepts,
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.utils import DocumentStem
+from knowledge_graph.identifiers import ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 from scripts.update_classifier_spec import write_spec_file
@@ -118,7 +125,7 @@ async def test_aggregate_batch_of_documents(
         for concepts in document_inference_output:
             for concept in concepts:
                 try:
-                    vespa_concept = VespaConcept.model_validate(concept)
+                    vespa_concept = VespaPassage.Concept.model_validate(concept)
                     collected_ids_for_document.append(vespa_concept.id)
                 except pydantic.ValidationError as e:
                     pytest.fail(
@@ -381,3 +388,66 @@ async def test_collect_stems_by_specs(
             "CPR.document.i00000549.n0000",
         ]
     )
+
+
+@pytest.mark.asyncio
+async def test_store_metadata(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+    snapshot,
+):
+    """Test that store_metadata correctly builds S3 URI and stores metadata."""
+    mock_tags = ["tag:value1", "sha:abc123", "branch:main"]
+    mock_run_output_id = "2025-01-15T10:30-test-flow-run"
+
+    # Create a real FlowRun object with proper data
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        state=Running(),
+        tags=mock_tags,
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    classifier_specs = [
+        ClassifierSpec(
+            concept_id=ConceptID("xyz78abc"),
+            wikibase_id=WikibaseID("Q788"),
+            classifier_id="abcd2345",
+            wandb_registry_version="v1",
+        )
+    ]
+
+    # Mock only the Prefect context, let moto handle S3
+    with patch("flows.aggregate.get_run_context", return_value=mock_context):
+        await store_metadata(
+            config=test_config,
+            classifier_specs=classifier_specs,
+            run_output_identifier=mock_run_output_id,
+        )
+
+    expected_key = os.path.join(
+        test_config.aggregate_inference_results_prefix,
+        mock_run_output_id,
+        "metadata.json",
+    )
+
+    response = await mock_s3_async_client.head_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    assert response["ContentLength"] > 0, (
+        f"Expected S3 object {expected_key} to have content"
+    )
+
+    response = await mock_s3_async_client.get_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    metadata_content = await response["Body"].read()
+    metadata_dict = json.loads(metadata_content.decode("utf-8"))
+
+    metadata = Metadata.model_validate(metadata_dict)
+    assert metadata == snapshot

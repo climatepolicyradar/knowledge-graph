@@ -55,7 +55,7 @@ async def get_concept_async(
 
     try:
         console.log("Fetching labelled passages from Argilla...")
-        labelled_passages = argilla.pull_labelled_passages(concept)
+        labelled_passages = argilla.get_labelled_passages(wikibase_id=wikibase_id)
         console.log(
             f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )

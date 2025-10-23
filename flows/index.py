@@ -8,23 +8,34 @@ from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-import aioboto3
 import httpx
 from cpr_sdk.models.search import Passage as VespaPassage
+from mypy_boto3_s3.type_defs import (
+    PutObjectOutputTypeDef,
+)
 from prefect import flow, task, unmapped
-from prefect.artifacts import create_markdown_artifact, create_table_artifact
-from prefect.client.schemas.objects import FlowRun
+from prefect.artifacts import (
+    create_markdown_artifact,
+    create_table_artifact,
+)
+from prefect.client.schemas import FlowRun
+from prefect.context import FlowRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
+from prefect.utilities.names import generate_slug
+from pydantic import (
+    BaseModel,
+    PositiveInt,
+)
 
 # generate_slug is being used, but in an implicit f-string
-from prefect.utilities.names import generate_slug  # noqa: F401
-from pydantic import PositiveInt
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.aggregate import (
-    RunOutputIdentifier,
+    METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME,
+)
+from flows.aggregate import (
     SerialisedVespaConcept,
 )
 from flows.boundary import (
@@ -45,6 +56,7 @@ from flows.utils import (
     DocumentStem,
     Fault,
     ParameterisedFlow,
+    RunOutputIdentifier,
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
@@ -55,7 +67,7 @@ from flows.utils import (
     return_with,
     wait_for_semaphore,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
@@ -64,13 +76,72 @@ DEFAULT_INDEXER_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 # How many document passages to index concurrently per document
 INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT: Final[PositiveInt] = 5
 
+METADATA_FILE_NAME = "metadata.json"
+
+
+class Metadata(BaseModel):
+    """Lineage information for this index run."""
+
+    flow_run: FlowRun
+    run_output_identifier: RunOutputIdentifier
+    config: Config
+
+
+async def store_metadata(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> None:
+    """Store metadata for the index run."""
+    logger = get_logger()
+
+    run_context = get_run_context()
+    if isinstance(run_context, FlowRunContext):
+        if run_context.flow_run is None:
+            raise ValueError("run context is missing flow run")
+
+        metadata = Metadata(
+            flow_run=run_context.flow_run,
+            run_output_identifier=run_output_identifier,
+            config=config,
+        )
+
+        metadata_json = metadata.model_dump_json()
+
+        logger.debug(f"writing index metadata: {metadata_json}")
+
+        s3_uri = S3Uri(
+            bucket=config.cache_bucket_str,
+            key=os.path.join(
+                config.index_results_prefix,
+                run_output_identifier,
+                METADATA_FILE_NAME,
+            ),
+        )
+
+        session = get_async_session(config.aws_env, config.bucket_region)
+        async with session.client("s3") as s3_client:
+            response: PutObjectOutputTypeDef = await s3_client.put_object(
+                Bucket=s3_uri.bucket,
+                Key=s3_uri.key,
+                Body=metadata_json,
+                ContentType="application/json",
+            )
+
+            status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+            if status_code != 200:
+                raise ValueError(
+                    f"Failed to store index metadata to S3. Status code: {status_code}"
+                )
+
+        logger.debug(f"wrote index metadata to {s3_uri}")
+
 
 async def load_async_json_data_from_s3(
     bucket: str, key: str, config: Config
 ) -> dict[str, Any]:
     """Load JSON data from an S3 URI asynchronously"""
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(config.aws_env, config.bucket_region)
     async with session.client("s3") as s3client:
         response = await s3client.get_object(Bucket=bucket, Key=key)
         body = await response["Body"].read()
@@ -142,7 +213,7 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[FlowRun],
+    successes: Sequence[None],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -480,6 +551,7 @@ async def index_all(
             cert_dir=temp_dir.name,
             vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
             vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+            aws_env=config.aws_env,
         )
 
         async with vespa_search_adapter.client.asyncio(
@@ -662,6 +734,15 @@ async def index(
 
     logger.info(f"Running indexing with config: {config}")
 
+    try:
+        if config.cache_bucket:
+            await store_metadata(
+                config=config,
+                run_output_identifier=run_output_identifier,
+            )
+    except Exception as e:
+        logger.error(f"Failed to store index metadata: {e}")
+
     if not document_stems:
         logger.info(
             f"Running on all documents under run_output_identifier: {run_output_identifier}"
@@ -671,9 +752,11 @@ async def index(
         ] = await collect_unique_file_stems_under_prefix(
             bucket_name=config.cache_bucket_str,
             prefix=os.path.join(
-                config.aggregate_inference_results_prefix, run_output_identifier
+                config.aggregate_inference_results_prefix,
+                run_output_identifier,
             ),
             bucket_region=config.bucket_region,
+            disallow={AGGREGATE_METADATA_FILE_NAME},
         )
         document_stems = collected_document_stems
         logger.info(f"Found {len(document_stems)} document import ids to process.")
@@ -703,7 +786,7 @@ async def index(
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         parameterised_batches=parameterised_batches,
-        unwrap_result=False,
+        unwrap_result=True,
     )
 
     await create_indexing_summary_artifact(

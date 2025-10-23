@@ -23,7 +23,8 @@
   - sabin
 - wikibase_id: Q123
   classifier_id: 8np4shsw
-  wandb_registry_version: v20
+  classifiers_profile: primary
+  wandb_registry_version: v22
   dont_run_on:
   - sabin
 - wikibase_id: Q218
@@ -446,7 +447,8 @@
   - sabin
 - wikibase_id: Q1653
   classifier_id: u86a8p2d
-  wandb_registry_version: v10
+  classifiers_profile: primary
+  wandb_registry_version: v12
   compute_environment:
     gpu: true
   dont_run_on:
