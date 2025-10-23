@@ -825,7 +825,6 @@ async def index_batch_of_documents(
     run_output_identifier: RunOutputIdentifier,
     document_stems: list[DocumentStem],
     config_json: dict[str, Any],
-    aggregate_metadata_json: dict[str, Any] | None = None,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
@@ -843,21 +842,6 @@ async def index_batch_of_documents(
     # This doesn't correctly parse the values into the dataclass.
     config = Config.model_validate(config_json)
     config.aws_env = AwsEnv(config.aws_env)
-
-    logger.info(
-        f"Loading aggregate metadata for run: Provided? {aggregate_metadata_json is not None}"
-    )
-    aggregate_metadata: AggregateMetadata | None = None
-    if aggregate_metadata_json:
-        try:
-            aggregate_metadata = AggregateMetadata.model_validate(
-                aggregate_metadata_json
-            )
-            logger.info(
-                f"Loaded aggregate metadata for run: {aggregate_metadata.run_output_identifier}"
-            )
-        except Exception as e:
-            logger.warning(f"Failed to parse aggregate metadata: {e}")
 
     logger.info(
         f"Running indexing for batch with config: {config}, "
@@ -965,23 +949,10 @@ async def index(
         logger.error(f"Failed to store index metadata: {e}")
 
     # Load metadata from aggregate run
-    aggregate_metadata_result = await load_aggregate_metadata(
+    _ = await load_aggregate_metadata(
         config=config,
         run_output_identifier=run_output_identifier,
     )
-
-    aggregate_metadata: AggregateMetadata | None = None
-    match aggregate_metadata_result:
-        case Ok(metadata):
-            aggregate_metadata = metadata
-            logger.info(
-                f"Loaded aggregate metadata from run {aggregate_metadata.run_output_identifier} "
-                f"with {len(aggregate_metadata.classifier_specs)} classifier specs"
-            )
-        case Err(error):
-            logger.warning(
-                f"No aggregate metadata found for run {run_output_identifier}: {error.msg}"
-            )
 
     if not document_stems:
         logger.info(
@@ -1007,9 +978,6 @@ async def index(
         return {
             "document_stems": batch,
             "config_json": config.model_dump(),
-            "aggregate_metadata_json": aggregate_metadata.model_dump()
-            if aggregate_metadata
-            else None,
             "run_output_identifier": run_output_identifier,
             "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
