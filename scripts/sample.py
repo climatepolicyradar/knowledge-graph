@@ -7,6 +7,7 @@ import typer
 import wandb
 from rich.console import Console
 
+from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.config import WANDB_ENTITY, equity_columns, processed_data_dir
@@ -223,9 +224,7 @@ def main(
         sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
 
         with open(sampled_passages_path, "w", encoding="utf-8") as f:
-            f.writelines(
-                [entry.model_dump_json() + "\n" for entry in labelled_passages]
-            )
+            f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
         console.log(f"Saved sampled passages to {sampled_passages_path}")
 

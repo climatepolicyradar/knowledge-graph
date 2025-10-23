@@ -7,6 +7,7 @@ from pathlib import Path
 import wandb
 from wandb.sdk.wandb_run import Run as WandbRun
 
+from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -58,8 +59,7 @@ def log_labelled_passages_artifact_to_wandb_run(
     with labelled_passages_artifact.new_file(
         "labelled_passages.jsonl", mode="w", encoding="utf-8"
     ) as f:
-        data = "\n".join([entry.model_dump_json() for entry in labelled_passages])
-        f.write(data)
+        f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
     run.log_artifact(labelled_passages_artifact)
 
