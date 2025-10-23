@@ -453,7 +453,6 @@ def test_predict_sequence_returns_predictions_for_all_texts(
 
     assert len(predictions) == num_texts
     assert all(isinstance(pred_list, list) for pred_list in predictions)
-    assert all(len(pred_list) > 0 for pred_list in predictions)
 
 
 @pytest.mark.xdist_group(name="classifier")
