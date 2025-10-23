@@ -481,6 +481,8 @@ def test_predict_sequence_preserves_order(
     assert len(predictions[1]) == 0
     # Third text should have predictions
     assert len(predictions[2]) > 0
+
+
 @st.composite
 def label_with_separator_variant_strategy(draw, label: str):
     r"""
@@ -551,6 +553,8 @@ def test_predict_sequence_works_with_different_batch_sizes(
 
     assert len(predictions) == num_texts
     assert all(isinstance(pred_list, list) for pred_list in predictions)
+
+
 @given(label_data=st.data(), negative_label_data=st.data(), text_data=st.data())
 @settings(max_examples=100, database=None)
 def test_whether_negative_labels_filter_matches_regardless_of_separator(
