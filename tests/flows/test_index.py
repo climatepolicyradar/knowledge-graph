@@ -281,6 +281,97 @@ async def test_index_batch_of_documents(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
+async def test_index_batch_of_documents_with_v2_concepts(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_async_bucket_inference_results: dict[str, dict[str, Any]],
+    aggregate_inference_results_document_stems: list[DocumentStem],
+    mock_run_output_identifier_str: str,
+    s3_prefix_inference_results: str,
+    test_config,
+    snapshot,
+) -> None:
+    """Test that we loaded the inference results from the mock bucket."""
+
+    run_output_identifier = RunOutputIdentifier(mock_run_output_identifier_str)
+
+    with patch(
+        "flows.index.get_vespa_search_adapter_from_aws_secrets",
+        return_value=local_vespa_search_adapter,
+    ):
+        await index_batch_of_documents(
+            run_output_identifier=run_output_identifier,
+            document_stems=aggregate_inference_results_document_stems,
+            config_json=test_config.model_dump(),
+            enable_v2_concepts=True,
+        )
+
+        # Verify that the final data in vespa matches the expected results
+        async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+            all_vespa_documents = []
+            for file_key in mock_async_bucket_inference_results.keys():
+                document_stem = DocumentStem(Path(file_key).stem)
+                document_id: DocumentImportId = remove_translated_suffix(document_stem)
+
+                passages_generator = get_document_passages_from_vespa__generator(
+                    document_import_id=document_id,
+                    vespa_connection_pool=vespa_connection_pool,
+                )
+
+                # Get all indexed passages for this document
+                final_passages = {}
+                async for vespa_passages in passages_generator:
+                    final_passages.update(vespa_passages)
+
+                # Find the corresponding file for this document ID
+                expected_concepts = mock_async_bucket_inference_results[file_key]
+
+                # Assert all text blocks were indexed with their concepts
+                assert set(final_passages.keys()) == set(expected_concepts.keys()), (
+                    f"Text blocks in Vespa don't match expected text blocks for document {document_id}"
+                )
+
+                # Check each passage has the correct concepts
+                for text_block_id, (_, vespa_passage) in final_passages.items():
+                    vespa_passage_concepts = vespa_passage.concepts or []
+                    # When parent concepts is empty we are loading it as None from Vespa
+                    # as opposed to an empty list.
+                    for concept in vespa_passage_concepts:
+                        if concept.parent_concepts is None:
+                            concept.parent_concepts = []
+
+                    passage_expected_concepts = [
+                        VespaPassage.Concept.model_validate(c)
+                        for c in expected_concepts[text_block_id]
+                    ]
+
+                    assert len(vespa_passage_concepts) == len(
+                        passage_expected_concepts
+                    ), (
+                        f"Passage {text_block_id} has {len(vespa_passage_concepts)} concepts, "
+                        f"expected {len(passage_expected_concepts)}"
+                    )
+
+                    for concept in vespa_passage_concepts:
+                        assert concept in passage_expected_concepts, (
+                            f"Concept {concept} not found in expected concepts for passage "
+                            f"{text_block_id}."
+                        )
+
+                # Verify that concept_counts were updated on family_document in Vespa
+                # Get the family document from Vespa
+                _vespa_hit_id, vespa_document = get_document_from_vespa(
+                    document_import_id=document_id,
+                    vespa_search_adapter=local_vespa_search_adapter,
+                )
+
+                all_vespa_documents.append(vespa_document)
+
+            assert all_vespa_documents == snapshot
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
 async def test_index_batch_of_documents__failure(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
@@ -973,7 +1064,7 @@ def test_build_v2_document_concepts__empty_inputs():
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_document_passages__with_aggregate_metadata(
+async def test_index_document_passages__with_v2_concepts(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     mock_async_bucket_inference_results: dict[str, dict[str, Any]],
@@ -1002,6 +1093,7 @@ async def test_index_document_passages__with_aggregate_metadata(
                 run_output_identifier=run_output_identifier,
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
+                enable_v2_concepts=True,
             )
 
             # Get the final vespa passages
@@ -1079,7 +1171,7 @@ async def test_index_document_passages__with_aggregate_metadata(
 
 @pytest.mark.vespa
 @pytest.mark.asyncio
-async def test_index_family_document__with_aggregate_metadata(
+async def test_index_family_document__with_v2_concepts(
     vespa_app,
     local_vespa_search_adapter: VespaSearchAdapter,
     aggregate_inference_results_document_stems: list[DocumentStem],
@@ -1131,6 +1223,7 @@ async def test_index_family_document__with_aggregate_metadata(
             document_id=document_id,
             vespa_connection_pool=vespa_connection_pool,
             simple_concepts=simple_concepts,
+            enable_v2_concepts=True,
         )
 
         # Assert the operation was successful

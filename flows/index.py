@@ -61,6 +61,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    JsonDict,
     ParameterisedFlow,
     RunOutputIdentifier,
     S3Uri,
@@ -328,6 +329,7 @@ async def index_document_passages(
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
+    enable_v2_concepts: bool = False,
 ) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
     aggregated_results_s3_uri = generate_s3_uri_input_document_passages(
@@ -385,10 +387,13 @@ async def index_document_passages(
             results.append(Err(error))
             continue
 
-        serialised_spans = build_v2_passage_spans(
-            text_block_id=text_block_id,
-            serialised_concepts=serialised_concepts,
-        )
+        if enable_v2_concepts:
+            serialised_spans = build_v2_passage_spans(
+                text_block_id=text_block_id,
+                serialised_concepts=serialised_concepts,
+            )
+        else:
+            serialised_spans = []
 
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
         vespa_data_id: VespaDataId = get_data_id_from_vespa_hit_id(vespa_hit_id)
@@ -607,6 +612,7 @@ async def index_family_document(
     document_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
     simple_concepts: list[SimpleConcept],
+    enable_v2_concepts: bool = False,
 ) -> Result[None, Error]:
     """Index document concept counts in Vespa via partial update."""
     logger = get_logger()
@@ -630,11 +636,16 @@ async def index_family_document(
         namespace="doc_search",
         group=None,
     )
-    fields = {
-        # NB: The schema is misnamed in Vespa
-        "concept_counts": concepts_counts_with_names,
-        "concepts_v2": concepts_v2,
-    }
+    fields: JsonDict = JsonDict(
+        {
+            # NB: The schema is misnamed in Vespa
+            "concept_counts": concepts_counts_with_names,
+        }
+    )
+
+    if enable_v2_concepts:
+        fields["concepts_v2"] = concepts_v2
+
     logger.debug(f"update data at path {path} with fields {fields}")
 
     response: VespaResponse = await vespa_connection_pool.update_data(
@@ -747,6 +758,7 @@ async def index_all(
     run_output_identifier: RunOutputIdentifier,
     indexer_document_passages_concurrency_limit: PositiveInt,
     indexer_max_vespa_connections: PositiveInt,
+    enable_v2_concepts: bool = False,
 ) -> DocumentStem:
     """Indexes all (document passages and family documents) data."""
     try:
@@ -769,6 +781,7 @@ async def index_all(
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
                 indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+                enable_v2_concepts=enable_v2_concepts,
             )
 
             simple_concepts: list[SimpleConcept] = []
@@ -786,6 +799,7 @@ async def index_all(
                 document_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
                 simple_concepts=simple_concepts,
+                enable_v2_concepts=enable_v2_concepts,
             )
 
             if is_err(result):
@@ -829,6 +843,7 @@ async def index_batch_of_documents(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
+    enable_v2_concepts: bool = False,
 ) -> None:
     """Index aggregated inference results into Vespa for family documents and document passages."""
 
@@ -860,6 +875,7 @@ async def index_batch_of_documents(
                     indexer_document_passages_concurrency_limit
                 ),
                 indexer_max_vespa_connections=indexer_max_vespa_connections,
+                enable_v2_concepts=enable_v2_concepts,
             )
         )
 
@@ -901,6 +917,7 @@ async def index(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
+    enable_v2_concepts: bool = False,
 ) -> None:
     """
     Index aggregated inference results from a list of S3 URIs into Vespa.
@@ -930,6 +947,10 @@ async def index(
 
     indexer_max_vespa_connections : int
         The maximum number of Vespa connections to use within each indexing flow.
+
+    enable_v2_concepts : bool
+        Whether to index them into Vespa or not. Not all environments
+        currently have support.
     """
 
     logger = get_logger()
@@ -981,6 +1002,7 @@ async def index(
             "run_output_identifier": run_output_identifier,
             "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
+            "enable_v2_concepts": enable_v2_concepts,
         }
 
     parameterised_batches: Sequence[ParameterisedFlow] = []
