@@ -1,6 +1,5 @@
 from typing import Annotated
 
-import argilla as rg
 import typer
 from rich.console import Console
 
@@ -59,23 +58,19 @@ def main(
             f"  just sample {wikibase_id}"
         ) from e
 
-    # Get existing workspace
-    with console.status(f"Looking for workspace '{workspace_name}'..."):
-        workspace = argilla.client.workspaces(name=workspace_name)
+    # Create dataset for the concept
+    with console.status(f"Creating dataset in workspace '{workspace_name}'..."):
+        dataset = argilla.create_dataset(concept, workspace=workspace_name)
+    console.log(f'✅ Created dataset "{dataset.name}" for {concept}')
 
-    if not workspace:
-        raise ValueError(
-            f"Workspace '{workspace_name}' not found. Please create the workspace first."
+    # Push labelled passages to the dataset
+    with console.status(f"Pushing {len(labelled_passages)} passages to dataset..."):
+        argilla.add_labelled_passages(
+            labelled_passages=labelled_passages,
+            wikibase_id=wikibase_id,
+            workspace=workspace_name,
         )
-
-    assert isinstance(workspace, rg.Workspace)
-    console.log(f'✅ Found workspace "{workspace.name}", with id: {workspace.id}')
-
-    dataset = argilla.labelled_passages_to_dataset(
-        labelled_passages, concept, workspace
-    )
-
-    console.log(f'✅ Created dataset for "{concept}" at {dataset.name}')
+    console.log(f"✅ Pushed {len(labelled_passages)} passages to dataset")
 
 
 if __name__ == "__main__":
