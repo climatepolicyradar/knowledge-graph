@@ -555,6 +555,7 @@ def test_predict_sequence_works_with_different_batch_sizes(
     assert all(isinstance(pred_list, list) for pred_list in predictions)
 
 
+@pytest.mark.parametrize("classifier_class", classifier_classes)
 @given(label_data=st.data(), negative_label_data=st.data(), text_data=st.data())
 @settings(max_examples=100, database=None)
 def test_whether_negative_labels_filter_matches_regardless_of_separator(
