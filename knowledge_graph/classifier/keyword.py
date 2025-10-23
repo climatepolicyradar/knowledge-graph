@@ -79,7 +79,7 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
             - "greenhouse-gas" (hyphen)
             - "greenhouse\ngas" (newline)
             - "greenhouse -gas" (multiple consecutive separators)
-            
+
             :param str label: The label to convert
             :return str: A regex pattern string that matches the label with flexible separators
             """
