@@ -54,11 +54,6 @@ def __getattr__(name):
         # pyproject.toml file (see: f53a404).
         module = importlib.import_module(".embedding", __package__)
         return getattr(module, name)
-    elif name == "StemmedKeywordClassifier":
-        # For similar reasons, only import the stemmed keyword classifier and download
-        # the nltk data when we actually request it.
-        module = importlib.import_module(".stemmed_keyword", __package__)
-        return getattr(module, name)
     elif name == "BertBasedClassifier":
         module = importlib.import_module(".bert_based", __package__)
         return getattr(module, name)
@@ -80,7 +75,6 @@ __all__ = [
     "Classifier",
     "KeywordClassifier",
     "EmbeddingClassifier",  # type: ignore
-    "StemmedKeywordClassifier",  # type: ignore
     "EmissionsReductionTargetClassifier",  # type: ignore
     "NetZeroTargetClassifier",  # type: ignore
     "TargetClassifier",  # type: ignore
