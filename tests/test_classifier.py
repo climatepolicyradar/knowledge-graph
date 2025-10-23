@@ -7,7 +7,6 @@ from hypothesis import strategies as st
 
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.classifier.keyword import KeywordClassifier
-from knowledge_graph.classifier.stemmed_keyword import StemmedKeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
@@ -22,7 +21,6 @@ from tests.common_strategies import (
 
 classifier_classes: list[Type[Classifier]] = [
     KeywordClassifier,
-    StemmedKeywordClassifier,
 ]
 
 
