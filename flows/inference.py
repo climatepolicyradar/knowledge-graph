@@ -28,7 +28,6 @@ from pydantic import (
     ConfigDict,
     PositiveInt,
     SecretStr,
-    ValidationError,
 )
 from types_aiobotocore_s3.client import S3Client
 from wandb.sdk.wandb_run import Run
@@ -57,6 +56,7 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
     return_with,
+    serialise_pydantic_list_as_jsonl,
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
@@ -468,49 +468,6 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
-def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> BytesIO:
-    """
-    Serialize a list of Pydantic models as JSONL (JSON Lines) format.
-
-    Each model is serialized on a separate line using model_dump_json().
-    """
-    jsonl_content = "\n".join(model.model_dump_json() for model in models)
-    return BytesIO(jsonl_content.encode("utf-8"))
-
-
-def deserialise_pydantic_list_from_jsonl[T: BaseModel](
-    jsonl_content: str, model_class: type[T]
-) -> list[T]:
-    """
-    Deserialize JSONL (JSON Lines) format to a list of Pydantic models.
-
-    Each line should contain a JSON object that can be parsed by the model_class.
-    """
-    models = []
-    for line in jsonl_content.strip().split("\n"):
-        if line.strip():  # Skip empty lines
-            model = model_class.model_validate_json(line)
-            models.append(model)
-    return models
-
-
-def deserialise_pydantic_list_with_fallback[T: BaseModel](
-    content: str, model_class: type[T]
-) -> list[T]:
-    """
-    Deserialize content to a list of Pydantic models with fallback support.
-
-    First tries JSONL format, then falls back to original format (JSON array of JSON strings).
-    """
-    # Try JSONL format first
-    try:
-        return deserialise_pydantic_list_from_jsonl(content, model_class)
-    except ValidationError:
-        # Fall back to original format (array of JSON strings)
-        data = json.loads(content)
-        return [model_class.model_validate_json(passage) for passage in data]
-
-
 class SingleDocumentInferenceResult(BaseModel):
     """Labelled passages from inference on a single document."""
 
@@ -545,7 +502,8 @@ async def labels_to_s3(
 
     logger.info(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
-    body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+    jsonl = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+    body = BytesIO(jsonl.encode("utf-8"))
 
     response = await s3_client.put_object(
         Bucket=s3_uri.bucket,

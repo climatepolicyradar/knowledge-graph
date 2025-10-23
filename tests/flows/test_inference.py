@@ -29,8 +29,6 @@ from flows.inference import (
     SingleDocumentInferenceResult,
     _inference_batch_of_documents,
     _stringify,
-    deserialise_pydantic_list_from_jsonl,
-    deserialise_pydantic_list_with_fallback,
     determine_file_stems,
     did_inference_fail,
     document_passages,
@@ -46,12 +44,19 @@ from flows.inference import (
     parse_client_error_details,
     process_single_document_inference,
     run_classifier_inference_on_document,
-    serialise_pydantic_list_as_jsonl,
     store_inference_result,
     store_metadata,
     text_block_inference,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault, JsonDict
+from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    Fault,
+    JsonDict,
+    deserialise_pydantic_list_from_jsonl,
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
@@ -897,7 +902,8 @@ def test_jsonl_serialization_roundtrip():
 
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".jsonl", delete=False) as f:
         try:
-            serialized_data = serialise_pydantic_list_as_jsonl(test_passages)
+            jsonl_string = serialise_pydantic_list_as_jsonl(test_passages)
+            serialized_data = BytesIO(jsonl_string.encode("utf-8"))
             f.write(serialized_data.read().decode("utf-8"))
             f.flush()
 
