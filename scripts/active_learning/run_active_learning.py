@@ -24,7 +24,8 @@ def load_concept_and_labelled_passages(
     """Load a concept and its labelled passages."""
 
     concept = wikibase.get_concept(concept_id)
-    concept.labelled_passages = argilla.pull_labelled_passages(concept)
+    labelled_passages = argilla.get_labelled_passages(wikibase_id=concept_id)
+    concept.labelled_passages = labelled_passages
 
     if max_passages_per_concept is not None:
         concept.labelled_passages = concept.labelled_passages[:max_passages_per_concept]
