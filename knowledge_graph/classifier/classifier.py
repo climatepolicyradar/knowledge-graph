@@ -84,6 +84,7 @@ class Classifier(ABC):
         text: str,
         batch_size: int | None = None,
         show_progress: bool = False,
+        console: Console | None = None,
         **kwargs,
     ) -> list[Span]: ...
 
@@ -93,6 +94,7 @@ class Classifier(ABC):
         text: list[str],
         batch_size: int | None = None,
         show_progress: bool = False,
+        console: Console | None = None,
         **kwargs,
     ) -> list[list[Span]]: ...
 
