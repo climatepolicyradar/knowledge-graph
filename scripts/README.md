@@ -16,9 +16,9 @@ just train "Q123" --track --aws-env sandbox
 ```
 
 > [!NOTE]
-> Promoting requires at least once classifiers profile. Set it in the metadata.
+> Promoting requires a classifiers profile - each promoted classifier id should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
 
-Then we promote:
+We promote with:
 
 ```shell
 just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
