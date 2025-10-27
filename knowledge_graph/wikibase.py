@@ -739,6 +739,42 @@ class WikibaseSession:
             if include_recursive_subconcept_of:
                 concept.recursive_subconcept_of = results[result_index]
 
+        if include_labels_from_subconcepts:
+            # there's a really disgusting edge case where a concept can have subconcepts
+            # whose positive labels overlap with another subconcept's negative labels.
+            # For example:
+            #    fossil fuels
+            #    ├── oil
+            #    │   ├── petroleum
+            #    │   └── oil shale
+            #    ├── gas
+            #    │   ├── ethane
+            #    │   ├── propane
+            #    │   ├── butane
+            #    │   └── coal bed methane
+            #    └── coal (has negative concept: coal bed methane)
+            #        ├── bituminous coal
+            #        └── lignite
+            # If we try to fetch 'fossil fuels' with `include_labels_from_subconcepts` set
+            # to True, then the resulting 'fossil fuels' concept will pick up all of the
+            # positive labels from all of its subconcepts, including the labels from
+            # 'coal bed methane' as positives.
+            # However, it will _also_ include the _same_ labels as negatives, because they
+            # are stored as negatives on the concept of 'coal'. As a result, the 'fossil
+            # fuels' concept will include the same labels as both positives and
+            # negatives, causing concept class validators to fail.
+            # According to the policy team, the right move here is to include any positive
+            # labels from subconcepts as positives, regardless of whether they are also
+            # negative labels on some of the subconcepts. eg From the POV of the 'fossil
+            # fuels' concept, these labels are are positive - they would all count as
+            # mentions of fossil fuels if observed in text. As such, they should be
+            # included as positives and removed from the concept's negative labels.
+            # To rectify this, we need to remove any overlapping labels from the concept's
+            # negative labels before returning the concept.
+            concept.negative_labels = list(
+                set(concept.negative_labels) - set(concept.all_labels)
+            )
+
         return concept
 
     @async_to_sync
