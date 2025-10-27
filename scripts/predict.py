@@ -12,7 +12,7 @@ from flows.utils import (
     deserialise_pydantic_list_with_fallback,
     serialise_pydantic_list_as_jsonl,
 )
-from knowledge_graph.classifier import Classifier
+from knowledge_graph.classifier import load_classifier_from_wandb
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
 from knowledge_graph.identifiers import WikibaseID
@@ -174,7 +174,7 @@ def main(
         os.environ["AWS_PROFILE"] = aws_env
         get_s3_client(aws_env, region_name)
 
-        classifier = Classifier.load_from_wandb(classifier_wandb_path)
+        classifier = load_classifier_from_wandb(classifier_wandb_path)
 
         # 3. predict using model
         output_labelled_passages = label_passages_with_classifier(
