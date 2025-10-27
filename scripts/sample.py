@@ -125,10 +125,12 @@ def main(
         models: list[Classifier] = [
             model_class(concept) for model_class in model_classes
         ]
+        classifier_ids: list[str] = []
 
         for model in models:
             model.fit()
             console.log(f"🤖 Created a {model}")
+            classifier_ids.append(model.id)
 
             predictions = model.predict(
                 raw_text_passages, batch_size=100, show_progress=True
@@ -140,6 +142,9 @@ def main(
                 f"📊 Found {sum(bool(pred) for pred in predictions)} positive passages "
                 f"using the {model}"
             )
+
+        if track_and_upload and run:
+            run.summary["classifier_ids"] = classifier_ids
 
         # Calculate the optimal number of positive samples to take per classifier
         samples_per_classifier = {
