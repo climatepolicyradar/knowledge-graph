@@ -423,6 +423,7 @@ def evaluate_classifier(
     model_labelled_passages = label_passages_with_classifier(
         classifier,
         gold_standard_labelled_passages,  # type: ignore
+        show_progress=True,
     )
     n_annotations = count_annotations(model_labelled_passages)
     console.log(
