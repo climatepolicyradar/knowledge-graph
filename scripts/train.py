@@ -355,8 +355,8 @@ def main(
     :type classifier_type: Optional[str]
     :param classifier_kwarg: List of classifier kwargs in key=value format
     :type classifier_kwarg: Optional[list[str]]
-    :param concept_properties: List of concept property overrides in key=value format (e.g., description, labels)
-    :type concept_properties: Optional[list[str]]
+    :param concept_property: List of concept property overrides in key=value format (e.g., description, labels)
+    :type concept_property: Optional[list[str]]
     """
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
     concept_properties = parse_classifier_kwargs(concept_property)
