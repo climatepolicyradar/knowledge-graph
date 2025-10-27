@@ -29,8 +29,6 @@ from flows.inference import (
     SingleDocumentInferenceResult,
     _inference_batch_of_documents,
     _stringify,
-    deserialise_pydantic_list_from_jsonl,
-    deserialise_pydantic_list_with_fallback,
     determine_file_stems,
     did_inference_fail,
     document_passages,
@@ -41,17 +39,24 @@ from flows.inference import (
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
-    load_classifier,
+    load_classifier_from_model_registry,
     load_document,
     parse_client_error_details,
     process_single_document_inference,
     run_classifier_inference_on_document,
-    serialise_pydantic_list_as_jsonl,
     store_inference_result,
     store_metadata,
     text_block_inference,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault, JsonDict
+from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    Fault,
+    JsonDict,
+    deserialise_pydantic_list_from_jsonl,
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
@@ -165,7 +170,7 @@ async def test_load_classifier__existing_classifier(
         classifier_id=classifier_id,  # no longer used but required for validation
         wandb_registry_version=wandb_registry_version,
     )
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         spec,
@@ -276,7 +281,7 @@ async def test_text_block_inference_with_results(
         classifier_id=ClassifierID.generate("Q9081", "v3"),
         wandb_registry_version="v3",
     )
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         spec,
@@ -313,7 +318,7 @@ async def test_text_block_inference_without_results(
         classifier_id=ClassifierID.generate("Q9081", "v3"),
         wandb_registry_version="v3",
     )
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         spec,
@@ -507,7 +512,7 @@ async def test_run_classifier_inference_on_document(
     )
 
     # Load classifier
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         classifier_spec,
@@ -897,7 +902,8 @@ def test_jsonl_serialization_roundtrip():
 
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".jsonl", delete=False) as f:
         try:
-            serialized_data = serialise_pydantic_list_as_jsonl(test_passages)
+            jsonl_string = serialise_pydantic_list_as_jsonl(test_passages)
+            serialized_data = BytesIO(jsonl_string.encode("utf-8"))
             f.write(serialized_data.read().decode("utf-8"))
             f.flush()
 
