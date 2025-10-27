@@ -398,10 +398,15 @@ async def determine_file_stems(
     return requested_document_stems
 
 
-async def load_classifier(
+async def load_classifier_from_model_registry(
     run: Run, config: Config, classifier_spec: ClassifierSpec
 ) -> Classifier:
-    """Load a classifier into memory."""
+    """
+    Load a classifier into memory from the model registry.
+
+    Only works with models which have been promoted. For models that have not, use
+    the function in knowledge_graph/classifier/classifier.py.
+    """
     async with concurrency("load_classifier", occupy=5):
         artifact_id = f"{config.wandb_model_registry}/{classifier_spec.wikibase_id}:{classifier_spec.wandb_registry_version}"
         downloaded_model_path = run.use_model(artifact_id)
@@ -820,7 +825,7 @@ async def _inference_batch_of_documents(
     )
     classifier_spec = ClassifierSpec(**classifier_spec_json)
     logger.info(f"Loading classifier {classifier_spec}")
-    classifier = await load_classifier(run, config, classifier_spec)
+    classifier = await load_classifier_from_model_registry(run, config, classifier_spec)
     if not classifier.concept.wikibase_id:
         raise ValueError(
             "Invalid classifier requested, associated concept has no wikibase_id"

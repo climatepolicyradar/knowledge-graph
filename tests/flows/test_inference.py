@@ -39,7 +39,7 @@ from flows.inference import (
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
-    load_classifier,
+    load_classifier_from_model_registry,
     load_document,
     parse_client_error_details,
     process_single_document_inference,
@@ -170,7 +170,7 @@ async def test_load_classifier__existing_classifier(
         classifier_id=classifier_id,  # no longer used but required for validation
         wandb_registry_version=wandb_registry_version,
     )
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         spec,
@@ -281,7 +281,7 @@ async def test_text_block_inference_with_results(
         classifier_id=ClassifierID.generate("Q9081", "v3"),
         wandb_registry_version="v3",
     )
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         spec,
@@ -318,7 +318,7 @@ async def test_text_block_inference_without_results(
         classifier_id=ClassifierID.generate("Q9081", "v3"),
         wandb_registry_version="v3",
     )
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         spec,
@@ -512,7 +512,7 @@ async def test_run_classifier_inference_on_document(
     )
 
     # Load classifier
-    classifier = await load_classifier(
+    classifier = await load_classifier_from_model_registry(
         mock_run,
         test_config,
         classifier_spec,
