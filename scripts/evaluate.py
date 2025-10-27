@@ -424,8 +424,8 @@ def log_validation_set_predictions_to_wandb(
             "correct": passage_level_correct,
             "gold_span_count": len(gold_passage.spans),
             "predicted_span_count": len(model_passage.spans),
-            "gold_spans": "; ".join(gold_spans_text) if gold_spans_text else "",
-            "predicted_spans": "; ".join(model_spans_text) if model_spans_text else "",
+            "gold_spans": "|".join(gold_spans_text) if gold_spans_text else "",
+            "predicted_spans": "|".join(model_spans_text) if model_spans_text else "",
         }
 
         for equity_column in equity_columns:
