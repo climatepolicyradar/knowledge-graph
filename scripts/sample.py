@@ -1,7 +1,8 @@
 import math
 from contextlib import nullcontext
-from typing import Annotated, Literal
+from typing import Annotated
 
+import click
 import pandas as pd
 import typer
 import wandb
@@ -35,9 +36,10 @@ def main(
     min_negative_proportion: float = typer.Option(
         0.1, help="The minimum proportion of negative samples to take"
     ),
-    dataset_name: Literal["balanced", "combined"] = typer.Option(
+    dataset_name: str = typer.Option(
         "balanced",
         help="Dataset to use",
+        click_type=click.Choice(["balanced", "combined"]),
     ),
     max_size_to_sample_from: int = typer.Option(
         500_000,
