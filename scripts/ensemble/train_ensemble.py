@@ -9,7 +9,11 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.ensemble import create_ensemble
 from knowledge_graph.identifiers import WikibaseID
 from scripts.get_concept import get_concept_async
-from scripts.train import parse_classifier_kwargs, train_classifier
+from scripts.train import (
+    load_training_data_from_wandb,
+    parse_classifier_kwargs,
+    train_classifier,
+)
 
 app = typer.Typer()
 
@@ -30,6 +34,12 @@ async def train_ensemble(
         Optional[list[str]],
         typer.Option(
             help="Classifier kwargs in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
+    training_data_wandb_run_path: Annotated[
+        Optional[str],
+        typer.Option(
+            help="W&B run path (entity/project/run_id) to fetch training data from instead of using concept's labelled passages",
         ),
     ] = None,
 ):
@@ -54,6 +64,12 @@ async def train_ensemble(
         include_recursive_has_subconcept=True,
     )
 
+    labelled_passages = None
+    if training_data_wandb_run_path:
+        labelled_passages = load_training_data_from_wandb(
+            training_data_wandb_run_path, console
+        )
+
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
     ensemble = create_ensemble(
         concept=concept,
@@ -72,6 +88,10 @@ async def train_ensemble(
         "experimental_model_type": True,
         "classifier_kwargs": classifier_kwargs,
     }
+    if training_data_wandb_run_path:
+        extra_wandb_config["training_data_wandb_run_path"] = (
+            training_data_wandb_run_path
+        )
 
     classifiers = ensemble.classifiers
 
@@ -88,6 +108,7 @@ async def train_ensemble(
                 evaluate=True,
                 aws_env=AwsEnv.labs,
                 extra_wandb_config=extra_wandb_config,
+                train_validation_data=labelled_passages,
             )
             progress.update(task, advance=1)
 
@@ -118,6 +139,12 @@ def main(
             help="Classifier kwargs in key=value format. Can be specified multiple times.",
         ),
     ] = None,
+    training_data_wandb_run_path: Annotated[
+        Optional[str],
+        typer.Option(
+            help="W&B run path (entity/project/run_id) to fetch training data from instead of using concept's labelled passages",
+        ),
+    ] = None,
 ):
     """
     Train an ensemble of classifiers of the same type on a concept.
@@ -134,6 +161,7 @@ def main(
             classifier_type=classifier_type,
             n_classifiers=n_classifiers,
             classifier_kwarg=classifier_kwarg,
+            training_data_wandb_run_path=training_data_wandb_run_path,
         )
     )
 
