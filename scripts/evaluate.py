@@ -388,6 +388,59 @@ def log_metrics_to_wandb(
         run.summary[metric_name] = metric_value
 
 
+def log_validation_set_predictions_to_wandb(
+    run: Run,
+    gold_standard_labelled_passages: list[LabelledPassage],
+    model_labelled_passages: list[LabelledPassage],
+):
+    """Log individual validation set predictions to W&B as a table."""
+
+    table_data = []
+    for gold_passage, model_passage in zip(
+        gold_standard_labelled_passages, model_labelled_passages
+    ):
+        text = gold_passage.text
+        passage_id = gold_passage.id
+
+        gold_spans_text = [
+            text[span.start_index : span.end_index] for span in gold_passage.spans
+        ]
+        gold_has_spans = len(gold_passage.spans) > 0
+
+        model_spans_text = [
+            text[span.start_index : span.end_index] for span in model_passage.spans
+        ]
+        model_has_spans = len(model_passage.spans) > 0
+
+        passage_level_correct = gold_has_spans == model_has_spans
+
+        metadata = gold_passage.metadata or {}
+
+        row = {
+            "passage_id": passage_id,
+            "text": text,
+            "gold_has_concept": gold_has_spans,
+            "predicted_has_concept": model_has_spans,
+            "correct": passage_level_correct,
+            "gold_span_count": len(gold_passage.spans),
+            "predicted_span_count": len(model_passage.spans),
+            "gold_spans": "|".join(gold_spans_text) if gold_spans_text else "",
+            "predicted_spans": "|".join(model_spans_text) if model_spans_text else "",
+        }
+
+        for equity_column in equity_columns:
+            if equity_column in metadata:
+                row[equity_column] = metadata[equity_column]
+
+        table_data.append(row)
+
+    df = pd.DataFrame(table_data)
+
+    predictions_df = wandb.Table(dataframe=df)
+
+    run.log({"validation_set_predictions": predictions_df})
+
+
 def evaluate_classifier(
     classifier: Classifier,
     labelled_passages: list[LabelledPassage],
@@ -423,6 +476,7 @@ def evaluate_classifier(
     model_labelled_passages = label_passages_with_classifier(
         classifier,
         gold_standard_labelled_passages,  # type: ignore
+        show_progress=True,
     )
     n_annotations = count_annotations(model_labelled_passages)
     console.log(
@@ -444,6 +498,12 @@ def evaluate_classifier(
 
     if wandb_run:
         log_metrics_to_wandb(wandb_run, df)  # type: ignore
+        console.log("📊 Logging validation set predictions to W&B")
+        log_validation_set_predictions_to_wandb(
+            wandb_run,
+            gold_standard_labelled_passages,
+            model_labelled_passages,
+        )
 
     return df, model_labelled_passages
 
