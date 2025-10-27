@@ -9,7 +9,7 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.ensemble import create_ensemble
 from knowledge_graph.identifiers import WikibaseID
 from scripts.get_concept import get_concept_async
-from scripts.train import parse_classifier_kwargs, train_classifier
+from scripts.train import parse_kwargs_from_strings, train_classifier
 
 app = typer.Typer()
 
@@ -54,7 +54,7 @@ async def train_ensemble(
         include_recursive_has_subconcept=True,
     )
 
-    classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
+    classifier_kwargs = parse_kwargs_from_strings(classifier_kwarg)
     ensemble = create_ensemble(
         concept=concept,
         classifier_type=classifier_type,

@@ -45,13 +45,13 @@ from scripts.evaluate import evaluate_classifier
 app = typer.Typer()
 
 
-def parse_classifier_kwargs(classifier_kwarg: Optional[list[str]]) -> dict[str, Any]:
-    """Parse classifier kwargs from key=value strings."""
-    if not classifier_kwarg:
+def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
+    """Parse key=value strings into dicts that can be used as kwargs."""
+    if not key_value_strings:
         return {}
 
     kwargs = {}
-    for kv in classifier_kwarg:
+    for kv in key_value_strings:
         if "=" not in kv:
             raise typer.BadParameter(
                 f"Invalid format for classifier kwarg: '{kv}'. Expected key=value format."
@@ -358,8 +358,8 @@ def main(
     :param concept_property: List of concept property overrides in key=value format (e.g., description, labels)
     :type concept_property: Optional[list[str]]
     """
-    classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
-    concept_properties = parse_classifier_kwargs(concept_property)
+    classifier_kwargs = parse_kwargs_from_strings(classifier_kwarg)
+    concept_properties = parse_kwargs_from_strings(concept_property)
 
     if use_coiled_gpu:
         flow_name = "train-on-gpu"
