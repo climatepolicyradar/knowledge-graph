@@ -26,10 +26,10 @@ async def train_ensemble(
         int,
         typer.Option(help="Number of classifiers to include in the ensemble."),
     ],
-    classifier_kwarg: Annotated[
+    classifier_override: Annotated[
         Optional[list[str]],
         typer.Option(
-            help="Classifier kwargs in key=value format. Can be specified multiple times.",
+            help="Classifier kwarg overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
 ):
@@ -54,7 +54,7 @@ async def train_ensemble(
         include_recursive_has_subconcept=True,
     )
 
-    classifier_kwargs = parse_kwargs_from_strings(classifier_kwarg)
+    classifier_kwargs = parse_kwargs_from_strings(classifier_override)
     ensemble = create_ensemble(
         concept=concept,
         classifier_type=classifier_type,
@@ -133,7 +133,7 @@ def main(
             wikibase_id=wikibase_id,
             classifier_type=classifier_type,
             n_classifiers=n_classifiers,
-            classifier_kwarg=classifier_kwarg,
+            classifier_override=classifier_kwarg,
         )
     )
 
