@@ -320,6 +320,12 @@ def main(
             help="Classifier kwargs in key=value format. Can be specified multiple times.",
         ),
     ] = None,
+    concept_property: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Concept property overrides in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
     add_classifiers_profiles: Annotated[
         list[str] | None,
         typer.Option(help="Adds 1 or more classifiers profiles."),
@@ -349,8 +355,11 @@ def main(
     :type classifier_type: Optional[str]
     :param classifier_kwarg: List of classifier kwargs in key=value format
     :type classifier_kwarg: Optional[list[str]]
+    :param concept_properties: List of concept property overrides in key=value format (e.g., description, labels)
+    :type concept_properties: Optional[list[str]]
     """
     classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
+    concept_properties = parse_classifier_kwargs(concept_property)
 
     if use_coiled_gpu:
         flow_name = "train-on-gpu"
@@ -366,6 +375,7 @@ def main(
                 "evaluate": evaluate,
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
+                "concept_properties": concept_properties,
                 "add_classifiers_profiles": add_classifiers_profiles,
                 "training_data_wandb_run_path": training_data_wandb_run_path,
             },
@@ -385,6 +395,7 @@ def main(
                 evaluate=evaluate,
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
+                concept_properties=concept_properties,
                 add_classifiers_profiles=add_classifiers_profiles,
                 training_data_wandb_run_path=training_data_wandb_run_path,
             )
@@ -538,6 +549,7 @@ async def run_training(
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
+    concept_properties: Optional[dict[str, Any]] = None,
     add_classifiers_profiles: list[str] | None = None,
     training_data_wandb_run_path: Optional[str] = None,
 ) -> Classifier:
@@ -557,6 +569,17 @@ async def run_training(
         include_recursive_has_subconcept=True,
         wikibase_config=wikibase_config,
     )
+
+    if concept_properties:
+        console.log(f"🔧 Applying custom concept properties: {concept_properties}")
+        for key, value in concept_properties.items():
+            if hasattr(concept, key):
+                setattr(concept, key, value)
+                console.log(f"  ✓ Set concept.{key} = {value}")
+            else:
+                console.log(
+                    f"  ⚠️  Warning: concept has no attribute '{key}'", style="yellow"
+                )
 
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
@@ -581,7 +604,10 @@ async def run_training(
 
     extra_wandb_config: dict[str, object] = {
         "experimental_model_type": classifier_type is not None,
+        "experimental_concept": concept_properties is not None
+        and len(concept_properties) > 0,
         "classifier_kwargs": classifier_kwargs,
+        "concept_properties": concept_properties,
     }
     if training_data_wandb_run_path:
         extra_wandb_config["training_data_wandb_run_path"] = (
