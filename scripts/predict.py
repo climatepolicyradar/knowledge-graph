@@ -5,7 +5,7 @@ from typing import Annotated, Optional
 
 import typer
 import wandb
-from dotenv import find_dotenv, load_dotenv
+from dotenv import load_dotenv
 from rich.console import Console
 
 from flows.utils import (
@@ -29,7 +29,7 @@ console = Console()
 
 app = typer.Typer()
 
-load_dotenv(find_dotenv())
+load_dotenv()
 
 
 def deduplicate_labelled_passages(
