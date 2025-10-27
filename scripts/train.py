@@ -314,13 +314,13 @@ def main(
             help="Classifier type to use (e.g., LLMClassifier, KeywordClassifier). If not specified, uses ClassifierFactory default.",
         ),
     ] = None,
-    classifier_kwarg: Annotated[
+    classifier_override: Annotated[
         Optional[list[str]],
         typer.Option(
-            help="Classifier kwargs in key=value format. Can be specified multiple times.",
+            help="Classifier kwarg overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
-    concept_property: Annotated[
+    concept_override: Annotated[
         Optional[list[str]],
         typer.Option(
             help="Concept property overrides in key=value format. Can be specified multiple times.",
@@ -353,13 +353,13 @@ def main(
     :param classifier_type: The classifier type to use, optional. Defaults to the
     classifier chosen by ClassifierFactory otherwise
     :type classifier_type: Optional[str]
-    :param classifier_kwarg: List of classifier kwargs in key=value format
-    :type classifier_kwarg: Optional[list[str]]
-    :param concept_property: List of concept property overrides in key=value format (e.g., description, labels)
-    :type concept_property: Optional[list[str]]
+    :param classifier_override: List of classifier kwargs in key=value format
+    :type classifier_override: Optional[list[str]]
+    :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
+    :type concept_override: Optional[list[str]]
     """
-    classifier_kwargs = parse_kwargs_from_strings(classifier_kwarg)
-    concept_properties = parse_kwargs_from_strings(concept_property)
+    classifier_overrides = parse_kwargs_from_strings(classifier_override)
+    concept_overrides = parse_kwargs_from_strings(concept_override)
 
     if use_coiled_gpu:
         flow_name = "train-on-gpu"
@@ -374,8 +374,8 @@ def main(
                 "aws_env": aws_env,
                 "evaluate": evaluate,
                 "classifier_type": classifier_type,
-                "classifier_kwargs": classifier_kwargs,
-                "concept_properties": concept_properties,
+                "classifier_overrides": classifier_overrides,
+                "concept_overrides": concept_overrides,
                 "add_classifiers_profiles": add_classifiers_profiles,
                 "training_data_wandb_run_path": training_data_wandb_run_path,
             },
@@ -394,8 +394,8 @@ def main(
                 aws_env=aws_env,
                 evaluate=evaluate,
                 classifier_type=classifier_type,
-                classifier_kwargs=classifier_kwargs,
-                concept_properties=concept_properties,
+                classifier_overrides=classifier_overrides,
+                concept_overrides=concept_overrides,
                 add_classifiers_profiles=add_classifiers_profiles,
                 training_data_wandb_run_path=training_data_wandb_run_path,
             )
@@ -548,8 +548,8 @@ async def run_training(
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
-    classifier_kwargs: Optional[dict[str, Any]] = None,
-    concept_properties: Optional[dict[str, Any]] = None,
+    classifier_overrides: Optional[dict[str, Any]] = None,
+    concept_overrides: Optional[dict[str, Any]] = None,
     add_classifiers_profiles: list[str] | None = None,
     training_data_wandb_run_path: Optional[str] = None,
 ) -> Classifier:
@@ -570,9 +570,9 @@ async def run_training(
         wikibase_config=wikibase_config,
     )
 
-    if concept_properties:
-        console.log(f"🔧 Applying custom concept properties: {concept_properties}")
-        for key, value in concept_properties.items():
+    if concept_overrides:
+        console.log(f"🔧 Applying custom concept properties: {concept_overrides}")
+        for key, value in concept_overrides.items():
             if hasattr(concept, key):
                 setattr(concept, key, value)
                 console.log(f"  ✓ Set concept.{key} = {value}")
@@ -599,15 +599,15 @@ async def run_training(
     classifier = ClassifierFactory.create(
         concept=concept,
         classifier_type=classifier_type,
-        classifier_kwargs=classifier_kwargs or {},
+        classifier_kwargs=classifier_overrides or {},
     )
 
     extra_wandb_config: dict[str, object] = {
         "experimental_model_type": classifier_type is not None,
-        "experimental_concept": concept_properties is not None
-        and len(concept_properties) > 0,
-        "classifier_kwargs": classifier_kwargs,
-        "concept_properties": concept_properties,
+        "experimental_concept": concept_overrides is not None
+        and len(concept_overrides) > 0,
+        "classifier_overrides": classifier_overrides,
+        "concept_overrides": concept_overrides,
     }
     if training_data_wandb_run_path:
         extra_wandb_config["training_data_wandb_run_path"] = (
