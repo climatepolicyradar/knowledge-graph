@@ -470,7 +470,7 @@ async def train_classifier(
         )
 
         classifier.fit(
-            train_validation_data=deduplicated_training_data,
+            labelled_passages=deduplicated_training_data,
             enable_wandb=track_and_upload,
         )
 
