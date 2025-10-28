@@ -1,6 +1,16 @@
 import logging
-from typing import Any, Sequence, cast
+from typing import Any, Sequence, cast, overload
 
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+)
+
+from flows.utils import iterate_batch
 from knowledge_graph.classifier import ClassifierFactory
 from knowledge_graph.classifier.classifier import Classifier, VariantEnabledClassifier
 from knowledge_graph.concept import Concept
@@ -59,7 +69,78 @@ class Ensemble:
                 reason="All classifiers in the ensemble must be unique."
             )
 
-    def predict(self, text: str) -> list[list[Span]]:
+    @overload
+    def predict(
+        self,
+        text: str,
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        **kwargs,
+    ) -> list[list[Span]]: ...
+
+    @overload
+    def predict(
+        self,
+        text: list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        **kwargs,
+    ) -> list[list[list[Span]]]: ...
+
+    def predict(
+        self,
+        text: str | list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        **kwargs,
+    ) -> list[list[Span]] | list[list[list[Span]]]:
+        """
+        Predict whether the supplied text contains instances of the concept using the ensemble.
+
+        :param str | list[str] text: The text to predict on
+        :param int | None batch_size: Batch size to use if predicting on multiple texts.
+            If not passed, defaults to predicting all texts in one batch.
+        :param bool show_progress: Whether to show progress in predicting. Defaults to
+            False.
+        :param Console console: Optional rich console used to render the progress bar.
+            This is to avoid flickering when multiple consoles are created.
+        :return list[list[Span]] | list[list[list[Span]]]: A list of spans per classifier
+            for single text, or a list of spans per classifier per text for multiple texts
+        """
+
+        if isinstance(text, str):
+            return self._predict(text, **kwargs)
+
+        batch_size = batch_size or len(text)
+        text_batches = list(iterate_batch(text, batch_size))
+        preds = []
+
+        if show_progress:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    "Processing batches...", total=len(text_batches)
+                )
+                for batch in text_batches:
+                    batch_preds = self._predict_batch(batch, **kwargs)  # type: ignore
+                    preds.extend(batch_preds)
+                    progress.advance(task)
+        else:
+            for batch in text_batches:
+                batch_preds = self._predict_batch(batch, **kwargs)  # type: ignore
+                preds.extend(batch_preds)
+
+        return preds
+
+    def _predict(self, text: str) -> list[list[Span]]:
         """
         Run prediction for each classifier in the ensemble on the input text.
 
@@ -69,7 +150,7 @@ class Ensemble:
 
         return [clf.predict(text) for clf in self.classifiers]
 
-    def predict_batch(self, texts: list[str]) -> list[list[list[Span]]]:
+    def _predict_batch(self, texts: list[str]) -> list[list[list[Span]]]:
         """
         Run prediction for each classifier in the ensemble on the input text batch.
 
