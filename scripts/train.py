@@ -60,16 +60,16 @@ def load_training_data_from_wandb(
     return labelled_passages
 
 
-def parse_classifier_kwargs(classifier_kwarg: Optional[list[str]]) -> dict[str, Any]:
-    """Parse classifier kwargs from key=value strings."""
-    if not classifier_kwarg:
+def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
+    """Parse key=value strings into dicts that can be used as kwargs."""
+    if not key_value_strings:
         return {}
 
     kwargs = {}
-    for kv in classifier_kwarg:
+    for kv in key_value_strings:
         if "=" not in kv:
             raise typer.BadParameter(
-                f"Invalid format for classifier kwarg: '{kv}'. Expected key=value format."
+                f"Invalid format for kwarg: '{kv}'. Expected key=value format."
             )
 
         key, value = kv.split("=", 1)
@@ -329,10 +329,16 @@ def main(
             help="Classifier type to use (e.g., LLMClassifier, KeywordClassifier). If not specified, uses ClassifierFactory default.",
         ),
     ] = None,
-    classifier_kwarg: Annotated[
+    classifier_override: Annotated[
         Optional[list[str]],
         typer.Option(
-            help="Classifier kwargs in key=value format. Can be specified multiple times.",
+            help="Classifier kwarg overrides in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
+    concept_override: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
     add_classifiers_profiles: Annotated[
@@ -362,10 +368,13 @@ def main(
     :param classifier_type: The classifier type to use, optional. Defaults to the
     classifier chosen by ClassifierFactory otherwise
     :type classifier_type: Optional[str]
-    :param classifier_kwarg: List of classifier kwargs in key=value format
-    :type classifier_kwarg: Optional[list[str]]
+    :param classifier_override: List of classifier kwargs in key=value format
+    :type classifier_override: Optional[list[str]]
+    :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
+    :type concept_override: Optional[list[str]]
     """
-    classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
+    classifier_kwargs = parse_kwargs_from_strings(classifier_override)
+    concept_overrides = parse_kwargs_from_strings(concept_override)
 
     if use_coiled_gpu:
         flow_name = "train-on-gpu"
@@ -381,6 +390,7 @@ def main(
                 "evaluate": evaluate,
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
+                "concept_overrides": concept_overrides,
                 "add_classifiers_profiles": add_classifiers_profiles,
                 "training_data_wandb_run_path": training_data_wandb_run_path,
             },
@@ -400,6 +410,7 @@ def main(
                 evaluate=evaluate,
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
+                concept_overrides=concept_overrides,
                 add_classifiers_profiles=add_classifiers_profiles,
                 training_data_wandb_run_path=training_data_wandb_run_path,
             )
@@ -553,6 +564,7 @@ async def run_training(
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
+    concept_overrides: Optional[dict[str, Any]] = None,
     add_classifiers_profiles: list[str] | None = None,
     training_data_wandb_run_path: Optional[str] = None,
 ) -> Classifier:
@@ -573,6 +585,17 @@ async def run_training(
         wikibase_config=wikibase_config,
     )
 
+    if concept_overrides:
+        console.log(f"🔧 Applying custom concept properties: {concept_overrides}")
+        for key, value in concept_overrides.items():
+            if hasattr(concept, key):
+                setattr(concept, key, value)
+                console.log(f"  ✓ Set concept.{key} = {value}")
+            else:
+                console.log(
+                    f"  ⚠️  Warning: concept has no attribute '{key}'", style="yellow"
+                )
+
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
     if training_data_wandb_run_path:
@@ -588,7 +611,10 @@ async def run_training(
 
     extra_wandb_config: dict[str, object] = {
         "experimental_model_type": classifier_type is not None,
+        "experimental_concept": concept_overrides is not None
+        and len(concept_overrides) > 0,
         "classifier_kwargs": classifier_kwargs,
+        "concept_overrides": concept_overrides,
     }
     if training_data_wandb_run_path:
         extra_wandb_config["training_data_wandb_run_path"] = (

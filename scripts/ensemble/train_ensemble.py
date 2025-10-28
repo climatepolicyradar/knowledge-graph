@@ -11,7 +11,7 @@ from knowledge_graph.identifiers import WikibaseID
 from scripts.get_concept import get_concept_async
 from scripts.train import (
     load_training_data_from_wandb,
-    parse_classifier_kwargs,
+    parse_kwargs_from_strings,
     train_classifier,
 )
 
@@ -30,10 +30,10 @@ async def train_ensemble(
         int,
         typer.Option(help="Number of classifiers to include in the ensemble."),
     ],
-    classifier_kwarg: Annotated[
+    classifier_override: Annotated[
         Optional[list[str]],
         typer.Option(
-            help="Classifier kwargs in key=value format. Can be specified multiple times.",
+            help="Classifier kwarg overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
     training_data_wandb_run_path: Annotated[
@@ -70,7 +70,7 @@ async def train_ensemble(
             training_data_wandb_run_path, console
         )
 
-    classifier_kwargs = parse_classifier_kwargs(classifier_kwarg)
+    classifier_kwargs = parse_kwargs_from_strings(classifier_kwarg)
     ensemble = create_ensemble(
         concept=concept,
         classifier_type=classifier_type,
@@ -160,7 +160,7 @@ def main(
             wikibase_id=wikibase_id,
             classifier_type=classifier_type,
             n_classifiers=n_classifiers,
-            classifier_kwarg=classifier_kwarg,
+            classifier_override=classifier_kwarg,
             training_data_wandb_run_path=training_data_wandb_run_path,
         )
     )
