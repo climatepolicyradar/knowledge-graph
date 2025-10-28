@@ -195,41 +195,35 @@ class Ensemble:
 
 
 def create_ensemble(
-    concept: Concept,
+    classifier: Classifier,
     n_classifiers: int,
-    classifier_type: str,
-    classifier_kwargs: dict[str, Any] = {},
 ) -> Ensemble:
     """
-    Create an ensemble of classifiers for a concept.
+    Create an ensemble from a classifier.
 
-    :raises ValueError: if the classifier_type is not variant-enabled.
+    :param classifier: A classifier. Must be a VariantEnabledClassifier, and must have
+        been fit if it's fittable.
+    :param n_classifiers: Total number of classifiers to include in the ensemble
+    :return Ensemble: An ensemble containing the fitted classifier and its variants
+    :raises ValueError: if n_classifiers < 1 or if classifier is not variant-enabled
     """
-
-    initial_classifier = ClassifierFactory.create(
-        concept=concept,
-        classifier_type=classifier_type,
-        classifier_kwargs=classifier_kwargs,
-    )
-    if not isinstance(initial_classifier, VariantEnabledClassifier):
+    if not isinstance(classifier, VariantEnabledClassifier):
         raise ValueError(
-            f"Classifier type must be variant-enabled to be part of an ensemble.\nClassifier type {classifier_type} is not."
+            f"Classifier must be variant-enabled to be part of an ensemble.\nClassifier type {classifier.name} is not."
         )
 
-    # TODO: warn that random seed will be ignored for LLMClassifier
+    if n_classifiers < 1:
+        raise ValueError(f"n_classifiers must be at least 1, got {n_classifiers}")
 
     # cast is needed here as list is invariant, so list[Classifier] is incompatible
     # with list[VariantEnabledClassifier]
     classifiers: list[Classifier] = [
-        initial_classifier,
-        *[
-            cast(Classifier, initial_classifier.get_variant())
-            for _ in range(n_classifiers - 1)
-        ],
+        classifier,
+        *[cast(Classifier, classifier.get_variant()) for _ in range(n_classifiers - 1)],
     ]
 
     ensemble = Ensemble(
-        concept=concept,
+        concept=classifier.concept,
         classifiers=classifiers,
     )
 
