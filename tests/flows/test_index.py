@@ -26,6 +26,7 @@ from flows.index import (
     METADATA_FILE_NAME,
     Metadata,
     SimpleConcept,
+    _update_vespa_passage_concepts,
     build_v2_document_concepts,
     build_v2_passage_spans,
     index,
@@ -1282,3 +1283,119 @@ async def test_index_family_document__with_v2_concepts(
             f"Got: {final_vespa_document.concepts_v2}, "
             f"Expected: {expected_concepts_v2}"
         )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_update_vespa_passage_concepts__without_v2_concepts(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_async_bucket_inference_results: dict[str, dict[str, Any]],
+) -> None:
+    """Test that spans field is not included when enable_v2_concepts is False."""
+    vespa_data_id = "CCLW.executive.10014.4470.1039"
+
+    serialised_concepts = [
+        {
+            "id": "Q123",
+            "name": "Climate Change",
+            "parent_concepts": [],
+            "parent_concept_ids_flat": "",
+            "model": "Q123:ttbb2345:abcd2345",
+            "start": 0,
+            "end": 10,
+            "timestamp": "2025-01-01T00:00:00",
+        }
+    ]
+
+    serialised_spans = []
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        with patch.object(vespa_connection_pool, "update_data") as mock_update_data:
+            mock_update_data.return_value = VespaResponse(
+                status_code=200,
+                operation_type="update",
+                json={"pathId": vespa_data_id},
+                url="http://mocked-vespa-url",
+            )
+
+            await _update_vespa_passage_concepts(
+                vespa_data_id=vespa_data_id,
+                serialised_concepts=serialised_concepts,
+                serialised_spans=serialised_spans,
+                vespa_connection_pool=vespa_connection_pool,
+                enable_v2_concepts=False,
+            )
+
+            mock_update_data.assert_called_once()
+            call_kwargs = mock_update_data.call_args.kwargs
+            assert "fields" in call_kwargs
+            assert "concepts" in call_kwargs["fields"]
+            assert "spans" not in call_kwargs["fields"], (
+                "spans field should not be present when enable_v2_concepts is False"
+            )
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_update_vespa_passage_concepts__with_v2_concepts(
+    vespa_app,
+    local_vespa_search_adapter: VespaSearchAdapter,
+    mock_async_bucket_inference_results: dict[str, dict[str, Any]],
+) -> None:
+    """Test that spans field is included when enable_v2_concepts is True."""
+    vespa_data_id = "CCLW.executive.10014.4470.1039"
+
+    serialised_concepts = [
+        {
+            "id": "Q123",
+            "name": "Climate Change",
+            "parent_concepts": [],
+            "parent_concept_ids_flat": "",
+            "model": "Q123:ttbb2345:abcd2345",
+            "start": 0,
+            "end": 10,
+            "timestamp": "2025-01-01T00:00:00",
+        }
+    ]
+
+    serialised_spans = [
+        {
+            "start": 0,
+            "end": 10,
+            "concepts_v2": [
+                {
+                    "concept_id": "ttbb2345",
+                    "concept_wikibase_id": "Q123",
+                    "classifier_id": "abcd2345",
+                }
+            ],
+        }
+    ]
+
+    async with local_vespa_search_adapter.client.asyncio() as vespa_connection_pool:
+        with patch.object(vespa_connection_pool, "update_data") as mock_update_data:
+            mock_update_data.return_value = VespaResponse(
+                status_code=200,
+                operation_type="update",
+                json={"pathId": vespa_data_id},
+                url="http://mocked-vespa-url",
+            )
+
+            await _update_vespa_passage_concepts(
+                vespa_data_id=vespa_data_id,
+                serialised_concepts=serialised_concepts,
+                serialised_spans=serialised_spans,
+                vespa_connection_pool=vespa_connection_pool,
+                enable_v2_concepts=True,
+            )
+
+            # Verify update_data was called with fields that DO contain 'spans'
+            mock_update_data.assert_called_once()
+            call_kwargs = mock_update_data.call_args.kwargs
+            assert "fields" in call_kwargs
+            assert "concepts" in call_kwargs["fields"]
+            assert "spans" in call_kwargs["fields"], (
+                "spans field should be present when enable_v2_concepts is True"
+            )
+            assert call_kwargs["fields"]["spans"] == serialised_spans
