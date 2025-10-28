@@ -11,8 +11,11 @@ from rich.progress import (
 )
 
 from flows.utils import iterate_batch
-from knowledge_graph.classifier import ClassifierFactory
-from knowledge_graph.classifier.classifier import Classifier, VariantEnabledClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    VariantEnabledClassifier,
+    ZeroShotClassifier,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
@@ -210,6 +213,14 @@ def create_ensemble(
     if not isinstance(classifier, VariantEnabledClassifier):
         raise ValueError(
             f"Classifier must be variant-enabled to be part of an ensemble.\nClassifier type {classifier.name} is not."
+        )
+
+    if not getattr(classifier, "_is_fitted", False) and not isinstance(
+        classifier, ZeroShotClassifier
+    ):
+        raise ValueError(
+            f"Classifier must be fitted before creating an ensemble.\n"
+            f"Call {classifier.name}.fit() before creating the ensemble."
         )
 
     if n_classifiers < 1:
