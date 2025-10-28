@@ -29,7 +29,9 @@ from pydantic import (
     PositiveInt,
     SecretStr,
 )
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from types_aiobotocore_s3.client import S3Client
+from wandb.errors import AuthenticationError
 from wandb.sdk.wandb_run import Run
 
 from flows.classifier_specs.spec_interface import (
@@ -398,6 +400,11 @@ async def determine_file_stems(
     return requested_document_stems
 
 
+@retry(
+    stop=stop_after_attempt(2),
+    retry=retry_if_exception_type(AuthenticationError),
+    reraise=True,
+)
 async def load_classifier_from_model_registry(
     run: Run, config: Config, classifier_spec: ClassifierSpec
 ) -> Classifier:
