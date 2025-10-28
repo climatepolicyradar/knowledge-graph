@@ -70,7 +70,7 @@ async def train_ensemble(
             training_data_wandb_run_path, console
         )
 
-    classifier_kwargs = parse_kwargs_from_strings(classifier_kwarg)
+    classifier_kwargs = parse_kwargs_from_strings(classifier_override)
     ensemble = create_ensemble(
         concept=concept,
         classifier_type=classifier_type,
