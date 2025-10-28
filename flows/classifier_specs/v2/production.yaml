@@ -53,6 +53,11 @@
   concept_id: 6muuvqpm
   classifier_id: 9cfzu8vh
   wandb_registry_version: v30
+- wikibase_id: Q567
+  concept_id: 596hws3c
+  classifier_id: 534fxa9d
+  classifiers_profile: primary
+  wandb_registry_version: v2
 - wikibase_id: Q572
   concept_id: jfzuzpcy
   classifier_id: 9x5fdgft
@@ -77,6 +82,11 @@
   concept_id: gaghy24b
   classifier_id: gxgdn95e
   wandb_registry_version: v2
+- wikibase_id: Q638
+  concept_id: f6etym28
+  classifier_id: dfj6rq9c
+  classifiers_profile: primary
+  wandb_registry_version: v5
 - wikibase_id: Q639
   concept_id: 9a3aj2vs
   classifier_id: zp9e66p9
