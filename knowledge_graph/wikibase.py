@@ -11,7 +11,12 @@ import html2text
 import httpx
 from httpx import HTTPError, HTTPStatusError, RequestError
 from more_itertools import chunked
-from pydantic import SecretStr, ValidationError
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    SecretStr,
+    ValidationError,
+)
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -43,6 +48,14 @@ class StatementRank(Enum):
     PREFERRED = "preferred"
     NORMAL = "normal"
     DEPRECATED = "deprecated"
+
+
+class WikibaseAuth(BaseModel):
+    """For creating a WikibaseSession."""
+
+    username: str
+    password: SecretStr
+    url: AnyHttpUrl
 
 
 class WikibaseSession:
