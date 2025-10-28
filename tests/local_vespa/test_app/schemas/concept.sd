@@ -58,6 +58,7 @@ schema concept {
     document-summary search_summary {
         summary id {}
         summary wikibase_id {}
+        summary wikibase_revision {}
         summary wikibase_url {}
         summary preferred_label {}
         summary description {}
