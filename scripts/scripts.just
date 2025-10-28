@@ -23,8 +23,8 @@ promote id +OPTS="":
     uv run promote --wikibase-id {{id}} {{OPTS}}
 
 # demote a model for a specific wikibase ID
-demote id aws_env:
-    uv run demote --wikibase-id {{id}} --aws-env {{aws_env}}
+demote id +OPTS="":
+    uv run demote --wikibase-id {{id}} {{OPTS}}
 
 # Deploy (Get, train & deploy) new model to primary for the given AWS environment.
 # Example: just deploy-classifiers sandbox Q123
