@@ -181,6 +181,7 @@ def main(
             classifier=classifier,
             labelled_passages=labelled_passages,
             batch_size=batch_size,
+            show_progress=True,
         )
 
         # 4. save to local (and wandb)
