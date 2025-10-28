@@ -199,6 +199,7 @@ async def _update_vespa_passage_concepts(
     serialised_concepts: Sequence[SerialisedVespaConcept],
     serialised_spans: Sequence[SerialisedVespaSpan],
     vespa_connection_pool: VespaAsync,
+    enable_v2_concepts: bool = False,
 ) -> VespaResponse:
     """Update a passage in Vespa with the given concepts."""
 
@@ -210,8 +211,9 @@ async def _update_vespa_passage_concepts(
     )
     fields = {
         "concepts": serialised_concepts,
-        "spans": serialised_spans,
     }
+    if enable_v2_concepts:
+        fields["spans"] = serialised_spans
 
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
@@ -408,6 +410,7 @@ async def index_document_passages(
                         serialised_concepts=serialised_concepts,
                         serialised_spans=serialised_spans,
                         vespa_connection_pool=vespa_connection_pool,
+                        enable_v2_concepts=enable_v2_concepts,
                     ),
                 ),
             )
