@@ -47,16 +47,15 @@ app = typer.Typer()
 
 def load_training_data_from_wandb(
     training_data_wandb_run_path: str,
-    console: Console,
 ) -> list[LabelledPassage]:
     """Load training data from a W&B run."""
-    console.log(
+    Console().log(
         f"📥 Fetching training data from W&B run: {training_data_wandb_run_path}"
     )
     api = wandb.Api()
     wandb_run = api.run(training_data_wandb_run_path)
     labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
-    console.log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
+    Console().log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
     return labelled_passages
 
 
@@ -599,9 +598,7 @@ async def run_training(
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
     if training_data_wandb_run_path:
-        labelled_passages = load_training_data_from_wandb(
-            training_data_wandb_run_path, console
-        )
+        labelled_passages = load_training_data_from_wandb(training_data_wandb_run_path)
 
     classifier = ClassifierFactory.create(
         concept=concept,
