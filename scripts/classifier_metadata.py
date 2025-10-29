@@ -120,11 +120,11 @@ def update(
     ] = AwsEnv.labs,
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more items to the metadata."),
+        typer.Option(help="Adds 1 classifiers profile to the metadata."),
     ] = None,
     remove_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Removes 1 or more items to the metadata."),
+        typer.Option(help="Removes 1 or more classifiers profiles from the metadata."),
     ] = None,
     update_specs: Annotated[
         bool,

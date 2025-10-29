@@ -47,7 +47,7 @@ def existing(
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
+        typer.Option(help="Adds 1 classifiers profile."),
     ] = None,
     remove_classifiers_profiles: Annotated[
         list[str] | None,
@@ -66,6 +66,11 @@ def existing(
     if dupes := add_class_prof & remove_class_prof:
         raise typer.BadParameter(
             f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
+        )
+
+    if len(add_class_prof) > 1:
+        raise typer.BadParameter(
+            f"Classifier must have a maximum of one classifiers profile. Provided: `{','.join(add_class_prof)}`"
         )
 
     specs = parse_spec_file(from_aws_env)
