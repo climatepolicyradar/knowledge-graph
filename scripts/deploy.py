@@ -70,7 +70,7 @@ def existing(
 
     if len(add_class_prof) > 1:
         raise typer.BadParameter(
-            f"Classifier must have a maximum of one classifiers profile. Provided: `{','.join(add_class_prof)}`"
+            f"Artifact must have maximum of one classifiers profile in metadata, or you must specify 1 to remove. Provided: `{','.join(add_class_prof)}`"
         )
 
     specs = parse_spec_file(from_aws_env)
@@ -124,7 +124,7 @@ def new(
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
+        typer.Option(help="Adds 1 classifiers profile."),
     ] = None,
 ):
     """Deploy new models by training and promoting them."""
@@ -132,6 +132,15 @@ def new(
     for wikibase_id in wikibase_ids:
         try:
             print(f"\nprocessing {wikibase_id}")
+
+            add_class_prof: set[str] = (
+                set(add_classifiers_profiles) if add_classifiers_profiles else set()
+            )
+
+            if len(add_class_prof) > 1:
+                raise typer.BadParameter(
+                    f"Artifact must have maximum of one classifiers profile in metadata. Provided: `{','.join(add_class_prof)}`"
+                )
 
             if train:
                 print("training")
