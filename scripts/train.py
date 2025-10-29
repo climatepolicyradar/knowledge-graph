@@ -342,7 +342,7 @@ def main(
     ] = None,
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
+        typer.Option(help="Adds 1 classifiers profile."),
     ] = None,
     training_data_wandb_run_path: Annotated[
         Optional[str],

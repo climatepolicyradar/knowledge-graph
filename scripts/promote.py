@@ -54,7 +54,7 @@ def main(
     ],
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
+        typer.Option(help="Adds 1 classifiers profile."),
     ] = None,
     remove_classifiers_profiles: Annotated[
         list[str] | None,
@@ -129,14 +129,19 @@ def main(
         current_class_prof = set(artifact.metadata.get("classifiers_profiles", []))
         if not current_class_prof and not add_class_prof:
             raise typer.BadParameter(
-                "Artifact must have at least one classifiers profile in metadata, or you must specify at least 1 to add. "
+                "Artifact must have a classifiers profile in metadata, or you must specify 1 to add."
             )
 
         if (
             classifiers_profiles := (current_class_prof | add_class_prof)
             - remove_class_prof
         ):
-            artifact.metadata["classifiers_profiles"] = classifiers_profiles
+            if len(classifiers_profiles) > 1:
+                raise typer.BadParameter(
+                    f"Artifact must have maximum of one classifiers profile in metadata, or you must specify 1 to remove. Current classifiers profiles `{current_class_prof}`"
+                )
+            else:
+                artifact.metadata["classifiers_profiles"] = classifiers_profiles
         else:
             artifact.metadata.pop("classifiers_profiles", None)
 

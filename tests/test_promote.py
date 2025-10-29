@@ -49,13 +49,55 @@ from scripts.promote import main
             False,
             typer.BadParameter,
         ),
+        (
+            {  # Labs environment, logged in, adding extra classifier profile
+                "wikibase_id": "Q123",
+                "classifier_id": "abcd2345",
+                "aws_env": AwsEnv.labs,
+                "add_classifiers_profiles": ["new_profile"],
+            },
+            True,
+            typer.BadParameter,
+        ),
+        (
+            {  # Labs environment, logged in, add classifier profile that exists
+                "wikibase_id": "Q123",
+                "classifier_id": "abcd2345",
+                "aws_env": AwsEnv.labs,
+                "add_classifiers_profiles": ["test_profile"],
+            },
+            True,
+            None,
+        ),
+        (
+            {  # Labs environment, logged in, remove existing classifier profile, add new one
+                "wikibase_id": "Q123",
+                "classifier_id": "abcd2345",
+                "aws_env": AwsEnv.labs,
+                "remove_classifiers_profiles": ["test_profile"],
+                "add_classifiers_profiles": ["new_profile"],
+            },
+            True,
+            None,
+        ),
+        (
+            {  # Labs environment, logged in, add and remove same classifier profile
+                "wikibase_id": "Q123",
+                "classifier_id": "abcd2345",
+                "aws_env": AwsEnv.labs,
+                "remove_classifiers_profiles": ["new_profile"],
+                "add_classifiers_profiles": ["new_profile"],
+            },
+            True,
+            typer.BadParameter,
+        ),
     ],
 )
 @mock_aws
 def test_main(test_case, logged_in, expected_exception, monkeypatch):
     os.environ["USE_AWS_PROFILES"] = "false"
     os.environ["WANDB_API_KEY"] = "test_wandb_api_key"
-
+    artifact_profile = "test_profile"
     # Mock the wandb.init function
     init_mock = Mock(return_value=nullcontext(Mock()))
 
@@ -63,7 +105,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
     artifact_mock = Mock()
     artifact_mock.version = "v1"
     artifact_mock.metadata = {
-        "classifiers_profiles": ["test_profile"],
+        "classifiers_profiles": [artifact_profile],
     }
     artifact_mock.tags = []
     artifact_mock.save = Mock()
@@ -101,4 +143,13 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
             api_mock.artifacts.asset_called_once_with(
                 type_name="model",
                 name=f"{test_case['wikibase_id']}/{test_case['classifier_id']}",
+            )
+            assert list(
+                set(artifact_mock.metadata.get("classifiers_profiles"))
+            ) == list(
+                set(
+                    (test_case.get("add_classifiers_profiles") or [])
+                    + [artifact_profile]
+                )
+                - set(test_case.get("remove_classifiers_profiles") or [])
             )

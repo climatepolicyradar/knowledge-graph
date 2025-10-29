@@ -48,7 +48,7 @@ def mock_wandb_api():
                 "id": "2345abcd",
                 "dont_run_on": ["sabin"],
                 "compute_environment": {"gpu": True},
-                "classifiers_profiles": ["primary", "experimental"],
+                "classifiers_profiles": ["experimental"],
             },
         ]:
             mock_artifact = Mock()
