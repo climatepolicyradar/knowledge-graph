@@ -45,6 +45,20 @@ from scripts.evaluate import evaluate_classifier
 app = typer.Typer()
 
 
+def load_training_data_from_wandb(
+    training_data_wandb_run_path: str,
+) -> list[LabelledPassage]:
+    """Load training data from a W&B run."""
+    Console().log(
+        f"📥 Fetching training data from W&B run: {training_data_wandb_run_path}"
+    )
+    api = wandb.Api()
+    wandb_run = api.run(training_data_wandb_run_path)
+    labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
+    Console().log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
+    return labelled_passages
+
+
 def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
     """Parse key=value strings into dicts that can be used as kwargs."""
     if not key_value_strings:
@@ -455,7 +469,7 @@ async def train_classifier(
         )
 
         classifier.fit(
-            train_validation_data=deduplicated_training_data,
+            labelled_passages=deduplicated_training_data,
             enable_wandb=track_and_upload,
         )
 
@@ -584,17 +598,7 @@ async def run_training(
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
     if training_data_wandb_run_path:
-        console.log(
-            f"📥 Fetching training data from W&B run: {training_data_wandb_run_path}"
-        )
-        api = wandb.Api()
-        wandb_run = api.run(training_data_wandb_run_path)
-        labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
-        console.log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
-    else:
-        console.log(
-            f"📚 Using {len(concept.labelled_passages)} labelled passages from concept"
-        )
+        labelled_passages = load_training_data_from_wandb(training_data_wandb_run_path)
 
     classifier = ClassifierFactory.create(
         concept=concept,

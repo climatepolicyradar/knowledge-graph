@@ -284,8 +284,6 @@ class BertBasedClassifier(
         Returns:
             BertBasedClassifier: The trained classifier
         """
-        super().fit(**kwargs)
-
         if len(labelled_passages) < 10:
             raise ValueError(
                 f"Not enough labelled passages to train a {self.name} for "
@@ -447,4 +445,5 @@ class BertBasedClassifier(
             logger.info("📊 Final F1 score: %.4f", final_f1)
 
         logger.info("✅ Training complete for concept %s!", self.concept.id)
+        self._is_fitted = True
         return self

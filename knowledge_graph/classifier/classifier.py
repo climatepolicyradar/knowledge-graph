@@ -42,6 +42,7 @@ class Classifier(ABC):
     ):
         self.concept = concept
         self.version = version
+        self._is_fitted = False
 
         if self.allowed_concept_ids:
             self._validate_concept_id(self.allowed_concept_ids)
@@ -76,6 +77,7 @@ class Classifier(ABC):
 
         :returns Classifier: The trained classifier
         """
+        self._is_fitted = True
         return self
 
     @overload
