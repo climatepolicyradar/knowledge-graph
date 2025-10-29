@@ -16,7 +16,7 @@ just train "Q123" --track --aws-env sandbox
 ```
 
 > [!NOTE]
-> Promoting requires a classifiers profile - each promoted classifier id should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
+> Promoting requires a classifiers profile - each promoted classifier ID should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
 
 We promote with:
 
