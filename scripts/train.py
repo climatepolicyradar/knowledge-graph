@@ -171,7 +171,7 @@ def create_and_link_model_artifact(
     """
 
     metadata: dict[str, Any] = {
-        "aws_env": storage_link.aws_env.value,
+        "aws_env": storage_link.aws_env.name,
         "classifier_name": classifier.name,
         "concept_id": classifier.concept.id,
         "concept_wikibase_revision": classifier.concept.wikibase_revision,
@@ -258,7 +258,7 @@ def upload_model_artifact(
     :return: The bucket name and the key of the uploaded artifact.
     :rtype: tuple[str, str]
     """
-    bucket = f"cpr-{storage_upload.aws_env.value}-models"
+    bucket = f"cpr-{storage_upload.aws_env.value}-models"  # TODO: this should be 'prod' for production
 
     key = os.path.join(
         storage_upload.target_path,
