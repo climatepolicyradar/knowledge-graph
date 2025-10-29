@@ -13,7 +13,7 @@ from knowledge_graph.span import Span
 class DummyClassifier(Classifier):
     """A dummy classifier for testing purposes."""
 
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str) -> list[Span]:
         """Predicts nothing."""
         return []
 

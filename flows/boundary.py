@@ -7,7 +7,7 @@ import logging
 import math
 import re
 from collections.abc import AsyncGenerator, Sequence
-from datetime import datetime, timedelta
+from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import (
@@ -16,7 +16,6 @@ from typing import (
     NewType,
     Optional,
     TypeVar,
-    Union,
 )
 
 import tenacity
@@ -41,11 +40,9 @@ from flows.utils import (
     get_logger,
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
-from knowledge_graph.concept import Concept
 from knowledge_graph.exceptions import QueryError
 from knowledge_graph.identifiers import FamilyDocumentID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.span import Span
 
 # Provide a generic type to use instead of `Any` for types hints
 T = TypeVar("T")
@@ -217,121 +214,6 @@ def load_labelled_passages_by_uri(
         object_json = [json.loads(labelled_passage) for labelled_passage in object_json]
 
     return [LabelledPassage(**labelled_passage) for labelled_passage in object_json]
-
-
-def get_model_from_span(span: Span) -> str:
-    """
-    Get the model used to label the span.
-
-    Labellers are stored in a list, these can contain many labellers as seen in the
-    example below, referring to human and machine annotators.
-
-    [
-        "alice",
-        "bob",
-        "68edec6f-fe74-413d-9cf1-39b1c3dad2c0",
-        'KeywordClassifier("extreme weather")',
-    ]
-
-    In the context of inference the labellers array should only hold the model used to
-    label the span as seen in the example below.
-
-    [
-        'KeywordClassifier("extreme weather")',
-    ]
-    """
-    if len(span.labellers) != 1:
-        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
-    return span.labellers[0]
-
-
-def get_parent_concepts_from_concept(
-    concept: Concept,
-) -> tuple[list[dict], str]:
-    """
-    Extract parent concepts from a Concept object.
-
-    Currently we pull the name from the Classifier used to label the passage, this
-    doesn't hold the concept id. This is a temporary solution that is not desirable as
-    the relationship between concepts can change frequently and thus shouldn't be
-    coupled with inference.
-    """
-    parent_concepts = [
-        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
-    ]
-    parent_concept_ids_flat = (
-        ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
-    )
-
-    return parent_concepts, parent_concept_ids_flat
-
-
-def convert_labelled_passage_to_concepts(
-    labelled_passage: LabelledPassage,
-) -> list[VespaPassage.Concept]:
-    """
-    Convert a labelled passage to a list of VespaPassage.Concept objects and their text block ID.
-
-    The labelled passage contains a list of spans relating to concepts
-    that we must convert to VespaPassage.Concept objects.
-    """
-    concepts: list[VespaPassage.Concept] = []
-    concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
-
-    if not concept_json and not labelled_passage.spans:
-        return concepts
-
-    if not concept_json and labelled_passage.spans:
-        raise ValueError(
-            "We have spans but no concept metadata for "
-            f"labelled passage {labelled_passage.id}"
-        )
-
-    # The concept used to label the passage holds some information on the parent
-    # concepts and thus this is being used as a temporary solution for providing
-    # the relationship between concepts. This has the downside that it ties a
-    # labelled passage to a particular concept when in fact the Spans that a
-    # labelled passage has can be labelled by multiple concepts.
-    concept = Concept.model_validate(concept_json)
-    parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
-        concept=concept
-    )
-
-    logger = get_logger()
-
-    # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
-    for span_idx, span in enumerate(labelled_passage.spans):
-        if span.concept_id is None:
-            # Include the Span index since Span's don't have IDs
-            logger.error(
-                f"span concept ID is missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
-            )
-            continue
-
-        if not span.timestamps:
-            logger.error(
-                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
-            )
-            timestamp = datetime.now()
-        else:
-            timestamp = max(span.timestamps)
-
-        concepts.append(
-            VespaPassage.Concept(
-                id=span.concept_id,
-                name=concept.preferred_label,
-                parent_concepts=parent_concepts,
-                parent_concept_ids_flat=parent_concept_ids_flat,
-                model=get_model_from_span(span),
-                end=span.end_index,
-                start=span.start_index,
-                # These timestamps _should_ all be the same,
-                # but just in case, take the latest.
-                timestamp=timestamp,
-            )
-        )
-
-    return concepts
 
 
 @vespa_retry()

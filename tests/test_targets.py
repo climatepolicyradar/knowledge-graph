@@ -35,7 +35,7 @@ def test_target_classifier():
         ]
     )
 
-    results = classifier.predict_batch(["text1", "text2"], threshold=0.5)
+    results = classifier.predict(["text1", "text2"], threshold=0.5)
     assert len([r for r in results if r]) == 2
 
 
@@ -67,7 +67,7 @@ def test_net_zero_target_classifier():
         ]
     )
 
-    results = classifier.predict_batch(["text1", "text2", "text3"], threshold=0.5)
+    results = classifier.predict(["text1", "text2", "text3"], threshold=0.5)
     assert len([r for r in results if r]) == 2
 
 
@@ -112,7 +112,7 @@ def test_emissions_reduction_target_classifier():
         ]
     )
 
-    results = classifier.predict_batch(
+    results = classifier.predict(
         ["text1", "text2", "text3", "text4", "text5"], threshold=0.5
     )
     assert len([r for r in results if r]) == 4

@@ -15,21 +15,16 @@ from flows.boundary import (
     VESPA_MAX_LIMIT,
     DocumentObjectUri,
     TextBlockId,
-    convert_labelled_passage_to_concepts,
     get_continuation_tokens_from_query_response,
     get_data_id_from_vespa_hit_id,
     get_document_passage_from_vespa,
     get_document_passages_from_vespa,
     get_document_passages_from_vespa__generator,
-    get_model_from_span,
-    get_parent_concepts_from_concept,
     get_text_block_id_from_vespa_data_id,
     get_vespa_passages_from_query_response,
     get_vespa_search_adapter_from_aws_secrets,
     load_labelled_passages_by_uri,
 )
-from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 from tests.flows.conftest import load_fixture
@@ -96,76 +91,6 @@ def test_vespa_search_adapter_from_aws_secrets(
     )
     assert vespa_search_adapter.client.cert == str(cert_path)
     assert vespa_search_adapter.client.key == str(key_path)
-
-
-def test_convert_labelled_passges_to_concepts(
-    example_labelled_passages: list[LabelledPassage],
-) -> None:
-    """Test that we can correctly convert labelled passages to concepts."""
-    concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
-    assert all([isinstance(concept, VespaPassage.Concept) for concept in concepts])
-
-
-def test_convert_labelled_passges_to_concepts_skips_invalid_spans(
-    example_labelled_passages: list[LabelledPassage],
-) -> None:
-    """Test that we ignore a Span has no concept ID or timestamps."""
-    # Add a span without concept_id
-    example_labelled_passages[0].spans.append(
-        Span(
-            text="Test text.",
-            start_index=0,
-            end_index=8,
-            concept_id=None,
-            labellers=[],
-        )
-    )
-
-    concepts = convert_labelled_passage_to_concepts(example_labelled_passages[0])
-
-    # Verify that the problematic spans were skipped but valid one was processed
-    assert len(concepts) == 1
-
-
-def test_get_model_from_span():
-    assert "KeywordClassifier" == get_model_from_span(
-        Span(
-            text="Test text.",
-            start_index=0,
-            end_index=8,
-            concept_id=None,
-            labellers=["KeywordClassifier"],
-            timestamps=[datetime.now()],
-        )
-    )
-
-
-def test_get_model_from_span_checks_length():
-    with pytest.raises(ValueError, match="Span should have 1 labeller but has 0"):
-        _ = get_model_from_span(
-            Span(
-                text="Test text.",
-                start_index=0,
-                end_index=8,
-                concept_id=None,
-                labellers=[],
-            )
-        )
-
-
-def test_get_parent_concepts_from_concept() -> None:
-    """Test that we can correctly retrieve the parent concepts from a concept."""
-    assert get_parent_concepts_from_concept(
-        concept=Concept(
-            preferred_label="forestry sector",
-            alternative_labels=[],
-            negative_labels=[],
-            wikibase_id=WikibaseID("Q10014"),
-            subconcept_of=[WikibaseID("Q4470")],
-            has_subconcept=[WikibaseID("Q4471")],
-            labelled_passages=[],
-        )
-    ) == ([{"id": "Q4470", "name": ""}], "Q4470,")
 
 
 @pytest.mark.vespa

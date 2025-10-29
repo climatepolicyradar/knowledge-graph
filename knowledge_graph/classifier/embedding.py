@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.concept import Concept
@@ -58,7 +58,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         """Return a hash of the classifier."""
         return hash(self.id)
 
-    def predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
+    def _predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
@@ -85,9 +85,9 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             ]
         return spans
 
-    def predict_batch(
+    def _predict_batch(
         self,
-        texts: list[str],
+        texts: Sequence[str],
         threshold: Optional[float] = None,
         show_progress_bar: bool = False,
     ) -> list[list[Span]]:
@@ -99,7 +99,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         """
         threshold = threshold or self.threshold
         text_embeddings = self.embedding_model.encode(
-            texts, show_progress_bar=show_progress_bar
+            list(texts), show_progress_bar=show_progress_bar
         )
         spans_per_text = []
 

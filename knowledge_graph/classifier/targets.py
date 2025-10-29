@@ -1,7 +1,7 @@
 import warnings
 from abc import abstractmethod
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Sequence
 
 from knowledge_graph.classifier.classifier import (
     Classifier,
@@ -88,12 +88,12 @@ class BaseTargetClassifier(
         :return PredictionProbability: a score for the target type
         """
 
-    def predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
+    def _predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
         """Predict whether the supplied text contains a target."""
-        return self.predict_batch([text], threshold=threshold)[0]
+        return self._predict_batch([text], threshold=threshold)[0]
 
-    def predict_batch(
-        self, texts: list[str], threshold: float = DEFAULT_THRESHOLD
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float = DEFAULT_THRESHOLD
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain targets."""
 

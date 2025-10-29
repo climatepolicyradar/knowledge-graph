@@ -98,6 +98,7 @@ async def test_run_training(
     mock_concept = Mock()
     mock_concept.id = "5d4xcy5g"
     mock_concept.wikibase_revision = 12300
+    mock_concept.labelled_passages = []
     mock_classifier.concept = mock_concept
 
     mock_path = Path("tests/fixtures/data/processed/classifiers")
@@ -128,7 +129,7 @@ async def test_run_training(
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
     ):
         mock_argilla_instance = Mock()
-        mock_argilla_instance.pull_labelled_passages.return_value = []
+        mock_argilla_instance.get_labelled_passages.return_value = []
         mock_argilla_session.return_value = mock_argilla_instance
 
         mock_metrics_df = Mock()
@@ -350,7 +351,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
     ):
         mock_argilla_instance = Mock()
-        mock_argilla_instance.pull_labelled_passages.return_value = []
+        mock_argilla_instance.get_labelled_passages.return_value = []
         mock_argilla_session.return_value = mock_argilla_instance
 
         # Configure evaluate_classifier to return mock data

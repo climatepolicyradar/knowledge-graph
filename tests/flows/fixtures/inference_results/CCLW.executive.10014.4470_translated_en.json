@@ -436,7 +436,7 @@
       "name": "concept_94",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_94\")",
+      "model": "Q237:ttbb2345:abcd2345",
       "end": 182,
       "start": 187,
       "timestamp": "2025-05-22T17:34:09.649548"
@@ -713,7 +713,7 @@
       "name": "concept_75",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_75\")",
+      "model": "Q371:hjkm9999:mnpq2468",
       "end": 115,
       "start": 120,
       "timestamp": "2025-05-22T17:34:09.649548"
@@ -1576,7 +1576,7 @@
       "name": "concept_23",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_23\")",
+      "model": "Q309:xyzw6789:efgh6789",
       "end": 162,
       "start": 170,
       "timestamp": "2025-05-22T17:34:09.649548"
@@ -5245,7 +5245,7 @@
       "name": "concept_52",
       "parent_concepts": [],
       "parent_concept_ids_flat": "",
-      "model": "KeywordClassifier(\"concept_52\")",
+      "model": "Q237:ttbb2345:abcd2345",
       "end": 193,
       "start": 200,
       "timestamp": "2025-05-22T17:34:09.649548"

@@ -8,7 +8,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, NamedTuple, Optional, TypeAlias
 
-import aioboto3
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
@@ -29,9 +28,10 @@ from pydantic import (
     ConfigDict,
     PositiveInt,
     SecretStr,
-    ValidationError,
 )
+from tenacity import retry, retry_if_exception_type, stop_after_attempt
 from types_aiobotocore_s3.client import S3Client
+from wandb.errors import AuthenticationError
 from wandb.sdk.wandb_run import Run
 
 from flows.classifier_specs.spec_interface import (
@@ -58,9 +58,11 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
     return_with,
+    serialise_pydantic_list_as_jsonl,
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.cloud import get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -260,7 +262,10 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
     """
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
             config, config.inference_document_source_prefix, s3_client
@@ -283,7 +288,10 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     Extracts the ids from the file, and returns them as a single list.
     """
     logger = get_logger()
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         page_iterator = await get_bucket_paginator(
             config, config.pipeline_state_prefix, s3_client
@@ -316,7 +324,10 @@ async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImport
     latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
 
     latest_key = latest["Key"]
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         data = await download_s3_file(config, latest_key, s3_client)
         content = json.loads(data)
@@ -365,7 +376,10 @@ async def determine_file_stems(
 
     requested_document_stems = []
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         for doc_id in requested_document_ids:
             document_key = os.path.join(
@@ -386,10 +400,20 @@ async def determine_file_stems(
     return requested_document_stems
 
 
-async def load_classifier(
+@retry(
+    stop=stop_after_attempt(2),
+    retry=retry_if_exception_type(AuthenticationError),
+    reraise=True,
+)
+async def load_classifier_from_model_registry(
     run: Run, config: Config, classifier_spec: ClassifierSpec
 ) -> Classifier:
-    """Load a classifier into memory."""
+    """
+    Load a classifier into memory from the model registry.
+
+    Only works with models which have been promoted. For models that have not, use
+    the function in knowledge_graph/classifier/classifier.py.
+    """
     async with concurrency("load_classifier", occupy=5):
         artifact_id = f"{config.wandb_model_registry}/{classifier_spec.wikibase_id}:{classifier_spec.wandb_registry_version}"
         downloaded_model_path = run.use_model(artifact_id)
@@ -456,68 +480,25 @@ def document_passages(
             yield _stringify(text_block.text), text_block.text_block_id
 
 
-def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> BytesIO:
-    """
-    Serialize a list of Pydantic models as JSONL (JSON Lines) format.
-
-    Each model is serialized on a separate line using model_dump_json().
-    """
-    jsonl_content = "\n".join(model.model_dump_json() for model in models)
-    return BytesIO(jsonl_content.encode("utf-8"))
-
-
-def deserialise_pydantic_list_from_jsonl[T: BaseModel](
-    jsonl_content: str, model_class: type[T]
-) -> list[T]:
-    """
-    Deserialize JSONL (JSON Lines) format to a list of Pydantic models.
-
-    Each line should contain a JSON object that can be parsed by the model_class.
-    """
-    models = []
-    for line in jsonl_content.strip().split("\n"):
-        if line.strip():  # Skip empty lines
-            model = model_class.model_validate_json(line)
-            models.append(model)
-    return models
-
-
-def deserialise_pydantic_list_with_fallback[T: BaseModel](
-    content: str, model_class: type[T]
-) -> list[T]:
-    """
-    Deserialize content to a list of Pydantic models with fallback support.
-
-    First tries JSONL format, then falls back to original format (JSON array of JSON strings).
-    """
-    # Try JSONL format first
-    try:
-        return deserialise_pydantic_list_from_jsonl(content, model_class)
-    except ValidationError:
-        # Fall back to original format (array of JSON strings)
-        data = json.loads(content)
-        return [model_class.model_validate_json(passage) for passage in data]
-
-
 class SingleDocumentInferenceResult(BaseModel):
     """Labelled passages from inference on a single document."""
 
     document: Optional[BaseParserOutput]
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
-    wikibase_id: str
-    classifier_id: str
+    classifier_spec: ClassifierSpec
 
 
 def generate_s3_uri_output(
-    config: Config, inference: SingleDocumentInferenceResult
+    config: Config,
+    inference: SingleDocumentInferenceResult,
 ) -> S3Uri:
     return S3Uri(
         bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
         key=os.path.join(
             config.inference_document_target_prefix,
-            inference.wikibase_id,
-            inference.classifier_id,
+            inference.classifier_spec.wikibase_id,
+            inference.classifier_spec.classifier_id,
             f"{inference.document_stem}.json",
         ),
     )
@@ -533,7 +514,8 @@ async def labels_to_s3(
 
     logger.info(f"Storing labels for document {inference.document_stem} at {s3_uri}")
 
-    body = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+    jsonl = serialise_pydantic_list_as_jsonl(inference.labelled_passages)
+    body = BytesIO(jsonl.encode("utf-8"))
 
     response = await s3_client.put_object(
         Bucket=s3_uri.bucket,
@@ -547,12 +529,13 @@ async def labels_to_s3(
     else:
         raise ValueError(
             f"Error storing {inference.document_stem} for "
-            f"{inference.wikibase_id}:{inference.classifier_id}: {response}"
+            f"{inference.classifier_spec.wikibase_id}:{inference.classifier_spec.classifier_id}: {response}"
         )
 
 
 def batch_text_block_inference(
     classifier: Classifier,
+    classifier_spec: ClassifierSpec,
     all_text: list[str],
     all_block_ids: list[str],
     batch_size: int = 10,
@@ -566,20 +549,28 @@ def batch_text_block_inference(
 
         outputs.extend(
             _text_block_inference_for_single_batch(
-                classifier=classifier, text_batch=text_batch, block_ids=block_ids
+                classifier=classifier,
+                classifier_spec=classifier_spec,
+                text_batch=text_batch,
+                block_ids=block_ids,
             )
         )
     return outputs
 
 
 def _text_block_inference_for_single_batch(
-    classifier: Classifier, text_batch: list[str], block_ids: list[str]
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    text_batch: list[str],
+    block_ids: list[str],
 ) -> list[LabelledPassage]:
     """Runs predict on a batch of blocks."""
-    spans: list[list[Span]] = classifier.predict_batch(text_batch)
+    spans: list[list[Span]] = classifier.predict(text_batch)
 
     labelled_passages = [
-        _get_labelled_passage_from_prediction(classifier, spans, block_id, text)
+        _get_labelled_passage_from_prediction(
+            classifier, spans, block_id, text, classifier_spec
+        )
         for spans, block_id, text in zip(spans, block_ids, text_batch)
     ]
 
@@ -587,7 +578,10 @@ def _text_block_inference_for_single_batch(
 
 
 def text_block_inference(
-    classifier: Classifier, block_id: str, text: str
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    block_id: str,
+    text: str,
 ) -> LabelledPassage:
     """Run predict on a single text block."""
     spans: list[Span] = classifier.predict(text)
@@ -619,14 +613,18 @@ def text_block_inference(
         )
 
     labelled_passage = _get_labelled_passage_from_prediction(
-        classifier, spans, block_id, text
+        classifier, spans, block_id, text, classifier_spec
     )
 
     return labelled_passage
 
 
 def _get_labelled_passage_from_prediction(
-    classifier: Classifier, spans: list[Span], block_id: str, text: str
+    classifier: Classifier,
+    spans: list[Span],
+    block_id: str,
+    text: str,
+    classifier_spec: ClassifierSpec,
 ) -> LabelledPassage:
     """Creates the LabelledPassage from the list of spans output by the classifier"""
     # If there were no inference results, don't include the concept
@@ -641,7 +639,10 @@ def _get_labelled_passage_from_prediction(
 
         concept = concept_no_labelled_passages.model_dump()
 
-        metadata = {"concept": concept}
+        metadata = {
+            "concept": concept,
+            "classifier_spec": classifier_spec.model_dump(),
+        }
 
     return LabelledPassage(
         id=block_id,
@@ -697,7 +698,10 @@ async def run_classifier_inference_on_document(
     assert result.document  # For typing, we already check this properly earlier
     for text, block_id in document_passages(result.document):
         labelled_passages = text_block_inference(
-            classifier=classifier, block_id=block_id, text=text
+            classifier=classifier,
+            block_id=block_id,
+            text=text,
+            classifier_spec=result.classifier_spec,
         )
         doc_labels.append(labelled_passages)
     result.labelled_passages = doc_labels
@@ -708,6 +712,7 @@ async def run_classifier_inference_on_document(
 
 
 async def create_inference_on_batch_summary_artifact(
+    classifier_spec: ClassifierSpec,
     successes: Sequence[SingleDocumentInferenceResult],
     failures: Sequence[tuple[DocumentStem, Exception]],
     unknown_failures: Sequence[BaseException],
@@ -724,6 +729,7 @@ async def create_inference_on_batch_summary_artifact(
 
 ## Overview
 - **Flow Run**: {flow_run_name or "Unknown"}
+- **Classifier**: {classifier_spec}
 - **Total documents processed**: {total_documents}
 - **Successful documents**: {successful_documents}
 - **Failed documents**: {failed_documents}
@@ -826,7 +832,7 @@ async def _inference_batch_of_documents(
     )
     classifier_spec = ClassifierSpec(**classifier_spec_json)
     logger.info(f"Loading classifier {classifier_spec}")
-    classifier = await load_classifier(run, config, classifier_spec)
+    classifier = await load_classifier_from_model_registry(run, config, classifier_spec)
     if not classifier.concept.wikibase_id:
         raise ValueError(
             "Invalid classifier requested, associated concept has no wikibase_id"
@@ -840,8 +846,7 @@ async def _inference_batch_of_documents(
                 document=None,
                 labelled_passages=[],
                 document_stem=document_stem,
-                wikibase_id=classifier.concept.wikibase_id,
-                classifier_id=classifier.id,
+                classifier_spec=classifier_spec,
             )
         )
 
@@ -853,7 +858,10 @@ async def _inference_batch_of_documents(
         read_timeout=config.s3_read_timeout,
     )
     semaphore = asyncio.Semaphore(config.s3_concurrency_limit)
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3", config=boto_config) as s3_client:
         tasks = [
             wait_for_semaphore(
@@ -907,7 +915,10 @@ async def _inference_batch_of_documents(
     ) = process_single_document_inference(inferences_results)
 
     # Store labelled passages in s3
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         tasks = [
             wait_for_semaphore(
@@ -953,6 +964,7 @@ async def _inference_batch_of_documents(
         flow_run_name = None
 
     await create_inference_on_batch_summary_artifact(
+        classifier_spec,
         all_successes,
         all_failures,
         all_unknown_failures,
@@ -1010,13 +1022,34 @@ async def inference_batch_of_documents_gpu(
     )
 
 
+def is_a_sabin_placeholder(stem: DocumentStem):
+    """
+    Returns True if document matches the naming convention of a Sabin Placeholder document
+
+    Sabin Placeholder Document stems have dummy files which can not be processed at Inference time
+    See https://linear.app/climate-policy-radar/issue/APP-391/spike-getting-families-with-no-documents-into-vespa
+    """
+
+    return stem.lower().startswith("sabin") and stem.lower().endswith("placeholder")
+
+
 def filter_document_batch(
     file_stems: Sequence[DocumentStem], spec: ClassifierSpec
 ) -> FilterResult:
+    """
+    Given a Sequence of DocumentStems, applies filtering rules to return a FilterResult contain the lists of accepted and removed DocumentStems according to both the ClassifierSpec rules and the Sabin placeholder filter rules.
+
+    Filters out DocumentStems according to the Classifier Spec rules to prevent them from being submitted for Inference.
+    Filters out Sabin placeholder DocumentStems, to prevent them from being submitted for Inference. The Sabin placeholder
+    Document stems have dummy files which can not be processed at Inference time
+    """
+
     removed_file_stems = []
     accepted_file_stems = []
     for stem in file_stems:
-        if should_skip_doc(stem, spec):
+        if is_a_sabin_placeholder(stem):
+            removed_file_stems.append(stem)
+        elif should_skip_doc(stem, spec):
             removed_file_stems.append(stem)
         else:
             accepted_file_stems.append(stem)
@@ -1067,7 +1100,10 @@ async def store_metadata(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
@@ -1121,7 +1157,10 @@ async def store_inference_result(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
