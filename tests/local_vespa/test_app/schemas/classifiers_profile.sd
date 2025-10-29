@@ -20,11 +20,18 @@ schema classifiers_profile {
         field mappings type array<mapping> {
             indexing: summary
         }
+
+        # Whether this classifiers profile can have multiple mappings
+        # per Wikibase ID.
+        field multi type bool {
+            indexing: attribute | summary
+        }
     }
 
     document-summary search_summary {
         summary id {}
         summary name {}
         summary mappings {}
+        summary multi {}
     }
 }
