@@ -258,7 +258,7 @@ def upload_model_artifact(
     :return: The bucket name and the key of the uploaded artifact.
     :rtype: tuple[str, str]
     """
-    bucket = f"cpr-{storage_upload.aws_env.value}-models"  # TODO: this should be 'prod' for production
+    bucket = f"cpr-{storage_upload.aws_env.value}-models"
 
     key = os.path.join(
         storage_upload.target_path,
