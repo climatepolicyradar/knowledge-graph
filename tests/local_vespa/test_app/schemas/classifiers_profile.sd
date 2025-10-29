@@ -20,21 +20,11 @@ schema classifiers_profile {
         field mappings type array<mapping> {
             indexing: summary
         }
-
-        struct root {
-            field concept_id type string {}
-            field concept_wikibase_id type string {}
-        }
-
-        field roots type array<root> {
-            indexing: summary
-        }
     }
 
     document-summary search_summary {
         summary id {}
         summary name {}
         summary mappings {}
-        summary roots {}
     }
 }
