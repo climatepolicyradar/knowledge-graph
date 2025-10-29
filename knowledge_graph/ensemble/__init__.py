@@ -215,9 +215,7 @@ def create_ensemble(
             f"Classifier must be variant-enabled to be part of an ensemble.\nClassifier type {classifier.name} is not."
         )
 
-    if not getattr(classifier, "_is_fitted", False) and not isinstance(
-        classifier, ZeroShotClassifier
-    ):
+    if not classifier._is_fitted and not isinstance(classifier, ZeroShotClassifier):
         raise ValueError(
             f"Classifier must be fitted before creating an ensemble.\n"
             f"Call {classifier.name}.fit() before creating the ensemble."
