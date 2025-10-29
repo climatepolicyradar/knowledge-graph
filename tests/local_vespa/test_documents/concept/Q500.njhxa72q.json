@@ -1,0 +1,19 @@
+{
+  "id": "id:doc_search:concept::Q500.njhxa72q",
+  "fields": {
+    "id": "njhxa72q",
+    "wikibase_id": "Q500",
+    "wikibase_revision": 66862,
+    "wikibase_url": "https://wikibase.example.org/wiki/Item:Q500",
+    "preferred_label": "economic sectors",
+    "description": "",
+    "definition": "",
+    "alternative_labels": [],
+    "negative_labels": [],
+    "subconcept_of": [],
+    "has_subconcept": [],
+    "related_concepts": [],
+    "recursive_subconcept_of": [],
+    "recursive_has_subconcept": []
+  }
+}
