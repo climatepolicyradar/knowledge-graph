@@ -131,24 +131,30 @@ async def wikibase_to_vespa():
     current_df = concepts_to_dataframe(concepts)
     logger.info(f"dataframe shape: {current_df.shape}")
 
-    output_path = Path("./tmp/concepts_delta")
+    output_path = Path("./tmp/concepts_parquet")
 
-    # Check if Delta Lake table exists (by checking for _delta_log directory)
-    delta_log_path = output_path / "_delta_log"
-    if not delta_log_path.exists():
+    # Check if any parquet files exist
+    parquet_files = (
+        list(output_path.glob("**/*.parquet")) if output_path.exists() else []
+    )
+
+    if not parquet_files:
         # First run - write initial state
-        logger.info(f"no existing data, writing initial state to {output_path}")
-        current_df.write_delta(output_path, mode="overwrite")
+        output_path.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        initial_path = output_path / f"concepts_{timestamp}.parquet"
+        logger.info(f"no existing data, writing initial state to {initial_path}")
+        current_df.write_parquet(initial_path)
         logger.info(
-            f"successfully wrote {len(current_df)} initial rows to {output_path}"
+            f"successfully wrote {len(current_df)} initial rows to {initial_path}"
         )
 
         # TODO: Insert all into Vespa
         return
 
-    # Load current data state from Delta Lake
+    # Load previous state from all Parquet files
     logger.info(f"loading previous state from {output_path}")
-    previous_df = pl.read_delta(output_path)
+    previous_df = pl.read_parquet(output_path / "**" / "*.parquet")
     logger.info(f"found {len(previous_df)} existing rows")
 
     # Get all existing concept IDs from previous state
@@ -163,11 +169,13 @@ async def wikibase_to_vespa():
     )
 
     if len(new_versions) > 0:
-        # Append only new versions
-        logger.info(f"appending {len(new_versions)} new versions to {output_path}")
+        # Append new versions with timestamp-based filename
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        append_path = output_path / f"concepts_{timestamp}.parquet"
+        logger.info(f"appending {len(new_versions)} new versions to {append_path}")
         logger.info(f"new versions: {new_versions}")
         if False:
-            new_versions.write_delta(output_path, mode="append")
+            new_versions.write_parquet(append_path)
         logger.info(f"successfully appended {len(new_versions)} rows")
 
         # TODO: Insert new versions into Vespa
