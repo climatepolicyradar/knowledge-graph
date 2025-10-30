@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
-from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.exceptions import MissingContextError
@@ -448,7 +448,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
-    markdown_content = f"""# Aggregate Inference Overall Summary
+    overview_description = f"""# Aggregate Inference Overall Summary
 
 ## Overview
 - **Environment**: {aws_env.value}
@@ -459,9 +459,46 @@ async def create_aggregate_inference_overall_summary_artifact(
 - **Failed batches**: {len(failures)}
 """
 
-    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    details = []
+
+    # Add successful batches to the table
+    for success in successes:
+        details.append(
+            {
+                "Status": "✓",
+                "Run Output Identifier": success,
+                "Details": "N/A",
+            }
+        )
+
+    # Add failed batches to the table
+    for failure in failures:
+        if isinstance(failure, BaseException):
+            details.append(
+                {
+                    "Status": "✗",
+                    "Run Output Identifier": "N/A",
+                    "Details": f"Exception: {type(failure).__name__}: {str(failure)}",
+                }
+            )
+        elif isinstance(failure, FlowRun):
+            state_info = (
+                f"State: {failure.state.type.value if failure.state else 'Unknown'}"
+            )
+            if failure.state and failure.state.message:
+                state_info += f", Message: {failure.state.message}"
+            details.append(
+                {
+                    "Status": "✗",
+                    "Run Output Identifier": failure.name or str(failure.id),
+                    "Details": state_info,
+                }
+            )
+
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"aggregate-inference-overall-{aws_env.value}",
-        markdown=markdown_content,
+        table=details,
+        description=overview_description,
     )
 
 
@@ -732,7 +769,7 @@ async def store_metadata(
 
     metadata_json = metadata.model_dump_json()
 
-    logger.debug(f"writing metadata: {metadata_json}")
+    logger.info(f"writing metadata: {metadata_json}")
 
     s3_uri = S3Uri(
         bucket=config.cache_bucket_str,
@@ -761,7 +798,7 @@ async def store_metadata(
                 f"Failed to store metadata to S3. Status code: {status_code}"
             )
 
-    logger.debug(f"wrote metadata to {s3_uri}")
+    logger.info(f"wrote metadata to {s3_uri}")
 
 
 async def _document_stems_from_parameters(
@@ -790,14 +827,14 @@ async def _document_stems_from_parameters(
 
     match (document_stems, run_output_identifier):
         case (None, None):
-            logger.debug(
+            logger.info(
                 "no document stems provided or run output identifier, collecting all available from S3 under prefix: "
                 + f"{config.aggregate_document_source_prefix}"
             )
             document_stems = await collect_stems_by_specs(config)
             return document_stems
         case (document_stems, None):
-            logger.debug("using document stems")
+            logger.info("using document stems")
             return document_stems
         case (None, run_output_identifier):
             logger.info("using run output identifier")
@@ -841,7 +878,7 @@ async def aggregate(
     logger = get_logger()
 
     if not config:
-        logger.debug("no config provided, creating one")
+        logger.info("no config provided, creating one")
         config = await Config.create()
 
     document_stems = await _document_stems_from_parameters(
@@ -881,12 +918,17 @@ async def aggregate(
             "run_output_identifier": run_output_identifier,
         }
 
+    fn = aggregate_batch_of_documents.with_options(  # pyright: ignore[reportFunctionMemberAccess]
+        persist_result=True,
+        result_storage=f"s3-bucket/cpr-{config.aws_env.value}-prefect-results-cache",
+    )
+
     parameterised_batches: Sequence[ParameterisedFlow] = []
     for batch in batches:
         parameterised_batches.append(
             ParameterisedFlow(
                 # The typing doesn't pick up the Flow decorator
-                fn=aggregate_batch_of_documents,  # pyright: ignore[reportArgumentType]
+                fn=fn,  # pyright: ignore[reportArgumentType]
                 params=parameters(batch),
             )
         )
