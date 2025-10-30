@@ -2,6 +2,7 @@
 - wikibase_id: Q53
   concept_id: kgtd77zy
   classifier_id: r4xsb4ff
+  classifiers_profile: primary
   wandb_registry_version: v5
 - wikibase_id: Q58
   concept_id: hfd68r3n
