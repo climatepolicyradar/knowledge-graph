@@ -89,7 +89,7 @@ just demote Q57 --aws-env sandbox
 ```
 
 If you require a specific registry version to be demoted, you can add the registry version as a parameter.
-_Note: the wandb registry version is not the same as the project model version.
+_Note: the wandb registry version is not the same as the project model version._
 
 ```shell
 just demote Q57 --wandb-registry-version v10 --aws-env sandbox
