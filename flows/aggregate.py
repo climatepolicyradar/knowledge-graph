@@ -40,6 +40,7 @@ from flows.utils import (
     RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_inference_result_s3_uri,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     deserialise_pydantic_list_with_fallback,
@@ -179,7 +180,13 @@ async def get_all_labelled_passages_for_one_document(
             classifier_spec=spec,
             document_stem=document_stem,
         )
-        response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        try:
+            response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code == "NoSuchKey":
+                e.add_note(f"S3 URI: {s3_uri}")
+            raise
         body = await response["Body"].read()
         content = body.decode("utf-8")
 
@@ -757,13 +764,75 @@ async def store_metadata(
     logger.debug(f"wrote metadata to {s3_uri}")
 
 
+async def _document_stems_from_parameters(
+    config: Config,
+    document_stems: Sequence[DocumentStem] | None = None,
+    run_output_identifier: RunOutputIdentifier | None = None,
+) -> Sequence[DocumentStem]:
+    """
+    Gets a list of document stems from the caller's parameters.
+
+    You can only use 1 of the approaches at the same time. Either
+    passing a list of document IDs, possibly with a well-known
+    translation suffix (hence why the input and outputs for this
+    function are both document stems), or a pointer to results that
+    can be loaded from S3.
+
+    If neither are used, then a default list is constructed from the
+    config.
+    """
+    logger = get_logger()
+
+    if document_stems and run_output_identifier:
+        raise ValueError(
+            "only one of document_stems and run_output_identifier can be used"
+        )
+
+    match (document_stems, run_output_identifier):
+        case (None, None):
+            logger.debug(
+                "no document stems provided or run output identifier, collecting all available from S3 under prefix: "
+                + f"{config.aggregate_document_source_prefix}"
+            )
+            document_stems = await collect_stems_by_specs(config)
+            return document_stems
+        case (document_stems, None):
+            logger.debug("using document stems")
+            return document_stems
+        case (None, run_output_identifier):
+            logger.info("using run output identifier")
+            s3_uri = build_inference_result_s3_uri(
+                cache_bucket_str=config.cache_bucket_str,
+                inference_document_target_prefix=config.inference_document_target_prefix,
+                run_output_identifier=run_output_identifier,
+            )
+            session = get_async_session(
+                region_name=config.bucket_region,
+                aws_env=config.aws_env,
+            )
+            async with session.client("s3") as s3_client:
+                response = await s3_client.get_object(
+                    Bucket=s3_uri.bucket, Key=s3_uri.key
+                )
+                body = await response["Body"].read()
+                result_data: dict[str, list[DocumentStem]] = json.loads(
+                    body.decode("utf-8")
+                )
+                return result_data["successful_document_stems"]
+        case _:
+            raise ValueError(
+                "only 1 of document_stems and run_output_identifier can be used"
+            )
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
     timeout_seconds=None,
 )
 async def aggregate(
-    document_stems: None | Sequence[DocumentStem] = None,
+    document_stems: Sequence[DocumentStem] | None = None,
+    run_output_identifier: RunOutputIdentifier | None = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
@@ -775,12 +844,11 @@ async def aggregate(
         logger.debug("no config provided, creating one")
         config = await Config.create()
 
-    if not document_stems:
-        logger.debug(
-            "no document stems provided, collecting all available from S3 under prefix: "
-            + f"{config.aggregate_document_source_prefix}"
-        )
-        document_stems = await collect_stems_by_specs(config)
+    document_stems = await _document_stems_from_parameters(
+        config=config,
+        document_stems=document_stems,
+        run_output_identifier=run_output_identifier,
+    )
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = load_classifier_specs(config.aws_env)
