@@ -1347,6 +1347,7 @@ async def inference(
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
         removal_details=removal_details,
+        run_output_identifier=run_output_identifier,
     )
 
     try:
@@ -1415,6 +1416,7 @@ async def create_inference_summary_artifact(
     successful_classifier_specs: list[ClassifierSpec],
     failed_classifier_specs: list[ClassifierSpec],
     removal_details: dict[ClassifierSpec, int],
+    run_output_identifier: RunOutputIdentifier,
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
@@ -1428,6 +1430,7 @@ async def create_inference_summary_artifact(
 - **Successful classifiers**: {len(successful_classifier_specs)}
 - **Failed classifiers**: {len(failed_classifier_specs)}
 - **Classifiers with removals**: {len(removal_details)}
+- **Run output identifier**: {run_output_identifier}
 """
     # Create classifier details table
     classifier_details = [
