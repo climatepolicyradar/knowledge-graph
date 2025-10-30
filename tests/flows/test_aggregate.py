@@ -20,6 +20,7 @@ from flows.aggregate import (
     AggregationFailure,
     Metadata,
     MiniClassifierSpec,
+    _document_stems_from_parameters,
     aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
@@ -33,7 +34,8 @@ from flows.aggregate import (
     validate_passages_are_same_except_concepts,
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
-from flows.utils import DocumentStem
+from flows.config import Config
+from flows.utils import DocumentStem, build_inference_result_s3_uri
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -629,3 +631,129 @@ def test_convert_labelled_passage_to_concepts_with_classifier_spec_in_metadata(
     assert len(concepts) == 1
     # Should use classifier_spec format instead of span.labellers
     assert concepts[0].model == "Q1363:xyz78abc:vax7e3n7"
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_neither(
+    test_config: Config,
+    mock_classifier_specs,
+    mock_bucket_labelled_passages_large,
+):
+    actual = await _document_stems_from_parameters(
+        config=test_config,
+        document_stems=None,
+        run_output_identifier=None,
+    )
+
+    assert set(actual) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_both(test_config: Config):
+    run_output_identifier = "2025-01-15T10:30-test-flow-run"
+
+    with pytest.raises(
+        ValueError,
+        match="only one of document_stems and run_output_identifier can be used",
+    ):
+        _ = await _document_stems_from_parameters(
+            config=test_config,
+            document_stems=[
+                DocumentStem("UNFCCC.non-party.467.0"),
+                DocumentStem("CCLW.executive.10061.4515"),
+                DocumentStem("AF.document.i00000021.n0000_translated_en"),
+                DocumentStem("UNFCCC.party.492.0"),
+                DocumentStem("CPR.document.i00000549.n0000"),
+            ],
+            run_output_identifier=run_output_identifier,
+        )
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_document_stems(
+    test_config: Config,
+    mock_classifier_specs,
+    mock_bucket_labelled_passages_large,
+):
+    actual = await _document_stems_from_parameters(
+        config=test_config,
+        document_stems=[
+            DocumentStem("UNFCCC.non-party.467.0"),
+            DocumentStem("CCLW.executive.10061.4515"),
+            DocumentStem("AF.document.i00000021.n0000_translated_en"),
+            DocumentStem("UNFCCC.party.492.0"),
+            DocumentStem("CPR.document.i00000549.n0000"),
+        ],
+        run_output_identifier=None,
+    )
+
+    assert set(actual) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_pointer(
+    test_config: Config,
+    mock_classifier_specs,
+    mock_bucket_labelled_passages_large,
+    mock_s3_async_client,
+):
+    run_output_identifier = "2025-01-15T10:30-test-flow-run"
+
+    inference_result_s3_uri = build_inference_result_s3_uri(
+        cache_bucket_str=test_config.cache_bucket_str,
+        inference_document_target_prefix=test_config.inference_document_target_prefix,
+        run_output_identifier=run_output_identifier,
+    )
+
+    document_stems = [
+        "UNFCCC.non-party.467.0",
+        "CCLW.executive.10061.4515",
+        "AF.document.i00000021.n0000_translated_en",
+        "UNFCCC.party.492.0",
+        "CPR.document.i00000549.n0000",
+    ]
+
+    result_data = {
+        "successful_document_stems": list(document_stems),
+    }
+
+    result_json = json.dumps(result_data)
+
+    _ = await mock_s3_async_client.put_object(
+        Bucket=inference_result_s3_uri.bucket,
+        Key=inference_result_s3_uri.key,
+        Body=result_json,
+        ContentType="application/json",
+    )
+
+    actual = await _document_stems_from_parameters(
+        config=test_config,
+        document_stems=None,
+        run_output_identifier=run_output_identifier,
+    )
+
+    assert set(actual) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )
