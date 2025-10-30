@@ -97,7 +97,7 @@ def main(
     collection_name = wikibase_id
     model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
 
-    log.info(f"Getting latest model version for AWS environment {aws_env.value}...")
+    log.info(f"Getting latest model version for AWS environment {aws_env.name}...")
     api = wandb.Api()
     artifacts = api.artifacts(type_name="model", name=f"{model_path}")
     classifier_version = get_latest_model_version(artifacts, aws_env)
@@ -149,10 +149,10 @@ def main(
 
         # Add AWS environment as a tag
         current_tags = set(artifact.tags or [])
-        current_tags.add(aws_env.value)
+        current_tags.add(aws_env.name)
         artifact.tags = list(current_tags)
         artifact.save()
-        log.info(f"Added AWS environment tag: {aws_env.value}")
+        log.info(f"Added AWS environment tag: {aws_env.name}")
 
         # Link the artifact to a collection
         log.info(f"Linking artifact to collection: {target_path}...")

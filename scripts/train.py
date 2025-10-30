@@ -170,7 +170,7 @@ def create_and_link_model_artifact(
     """
 
     metadata: dict[str, Any] = {
-        "aws_env": storage_link.aws_env.value,
+        "aws_env": storage_link.aws_env.name,
         "classifier_name": classifier.name,
         "concept_id": classifier.concept.id,
         "concept_wikibase_revision": classifier.concept.wikibase_revision,

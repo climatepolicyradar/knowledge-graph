@@ -66,19 +66,24 @@ def test_get_latest_model_version():
     class MockArtifact:
         def __init__(self, version, aws_env):
             self.version = version
-            self.metadata = {"aws_env": aws_env}
+            self.metadata = {"aws_env": aws_env.name}
 
     artifacts = [
-        MockArtifact("v1", "labs"),
-        MockArtifact("v2", "labs"),
-        MockArtifact("v1", "staging"),
-        MockArtifact("v2", "staging"),
-        MockArtifact("v3", "labs"),
+        MockArtifact("v1", AwsEnv("labs")),
+        MockArtifact("v2", AwsEnv("labs")),
+        MockArtifact("v1", AwsEnv("staging")),
+        MockArtifact("v2", AwsEnv("staging")),
+        MockArtifact("v3", AwsEnv("labs")),
+        MockArtifact("v6", AwsEnv("production")),
+        MockArtifact("v8", AwsEnv("prod")),
     ]
 
     latest_version = get_latest_model_version(artifacts, AwsEnv.labs)
     assert str(latest_version) == "v3"
     assert type(latest_version) is Version
 
-    latest_version_prod = get_latest_model_version(artifacts, AwsEnv.staging)
-    assert str(latest_version_prod) == "v2"
+    latest_version_staging = get_latest_model_version(artifacts, AwsEnv.staging)
+    assert str(latest_version_staging) == "v2"
+
+    latest_version_prod = get_latest_model_version(artifacts, AwsEnv.production)
+    assert str(latest_version_prod) == "v8"
