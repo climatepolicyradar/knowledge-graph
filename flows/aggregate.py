@@ -12,7 +12,8 @@ from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
 from prefect.artifacts import create_markdown_artifact, create_table_artifact
 from prefect.client.schemas.objects import FlowRun
-from prefect.context import TaskRunContext, get_run_context
+from prefect.context import FlowRunContext, TaskRunContext, get_run_context
+from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
@@ -400,6 +401,7 @@ async def create_aggregate_inference_summary_artifact(
     config: Config,
     success_stems: list[DocumentStem],
     failures: list[AggregationFailure],
+    flow_run_name: str | None,
 ) -> None:
     """Create a summary artifact of the aggregated inference results."""
 
@@ -420,8 +422,11 @@ async def create_aggregate_inference_summary_artifact(
         for failure in failures
     ]
 
+    if not flow_run_name:
+        flow_run_name = f"unknown-{generate_slug(2)}"
+
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"aggregate-inference-{config.aws_env.value}",
+        key=f"batch-aggregate-{flow_run_name}",
         table=details,
         description=overview_description,
     )
@@ -516,12 +521,27 @@ async def aggregate_batch_of_documents(
     # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/src/prefect/task_runners.py#L183-L213
     futures: PrefectFutureList[DocumentStem] = PrefectFutureList(tasks)  # pyright: ignore[reportAbstractUsage]
     results = futures.result(raise_on_failure=False)
-    success_stems, failures = handle_results(results)
+
+    success_stems, failures = handle_results(
+        results,
+    )
+
+    # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
+    try:
+        run_context = get_run_context()
+        flow_run_name: str | None
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
+            flow_run_name = str(run_context.flow_run.name)
+        else:
+            flow_run_name = None
+    except MissingContextError:
+        flow_run_name = None
 
     await create_aggregate_inference_summary_artifact(
         config=config,
         success_stems=success_stems,
         failures=failures,
+        flow_run_name=flow_run_name,
     )
 
     if failures:

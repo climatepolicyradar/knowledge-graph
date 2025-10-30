@@ -98,12 +98,25 @@ async def test_aggregate_batch_of_documents(
         DocumentStem("UNFCCC.party.492.0"),
     ]
 
-    run_reference = await aggregate_batch_of_documents(
-        document_stems=document_stems,
-        config_json=test_config.model_dump(),
-        classifier_specs=classifier_specs,
-        run_output_identifier="test-run",
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        state=Running(),
     )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    with (
+        patch("flows.aggregate.get_run_context", return_value=mock_context),
+    ):
+        run_reference = await aggregate_batch_of_documents(
+            document_stems=document_stems,
+            config_json=test_config.model_dump(),
+            classifier_specs=classifier_specs,
+            run_output_identifier="test-run",
+        )
 
     all_collected_ids = []
     for document_stem in document_stems:
@@ -155,7 +168,7 @@ async def test_aggregate_batch_of_documents(
         f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
     )
 
-    summary_artifact = await Artifact.get("aggregate-inference-sandbox")
+    summary_artifact = await Artifact.get("batch-aggregate-test-flow-run")
     assert summary_artifact and summary_artifact.description
     assert summary_artifact.data == "[]"
 
@@ -171,7 +184,20 @@ async def test_aggregate_batch_of_documents__with_failures(
     ]
     document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
 
-    with pytest.raises(ValueError):
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        state=Running(),
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    with (
+        pytest.raises(ValueError),
+        patch("flows.aggregate.get_run_context", return_value=mock_context),
+    ):
         await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
@@ -179,7 +205,7 @@ async def test_aggregate_batch_of_documents__with_failures(
             run_output_identifier="test-run",
         )
 
-    summary_artifact = await Artifact.get("aggregate-inference-sandbox")
+    summary_artifact = await Artifact.get("batch-aggregate-test-flow-run")
     assert summary_artifact and summary_artifact.description
     artifact_data = json.loads(summary_artifact.data)
     failure_stems = [f["Failed document Stem"] for f in artifact_data]
