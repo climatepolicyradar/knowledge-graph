@@ -85,7 +85,6 @@ def existing(
                 wikibase_id=WikibaseID(spec.name),
                 track_and_upload=True,
                 aws_env=to_aws_env,
-                add_classifiers_profiles=add_classifiers_profiles,
             )
             if not classifier:
                 raise ValueError("No classifier returned from training.")
@@ -148,7 +147,6 @@ def new(
                     wikibase_id=wikibase_id,
                     track_and_upload=True,
                     aws_env=aws_env,
-                    add_classifiers_profiles=add_classifiers_profiles,
                 )
 
                 if not classifier:

@@ -223,50 +223,6 @@ def test_create_and_link_model_artifact():
         mock_run.log_artifact.return_value.wait.assert_called_once()
 
 
-def test_create_and_link_model_artifact_with_classifier_profiles():
-    """Test that classifier profiles are added to artifact metadata."""
-    mock_run = Mock()
-    mock_classifier = Mock()
-    mock_classifier.name = "test_classifier"
-    mock_classifier.concept = Mock()
-    mock_classifier.concept.id = "5d4xcy5g"
-    mock_classifier.concept.wikibase_revision = 12300
-    bucket = "cpr-labs-models"
-    key = "Q123/v4prnc54/v3/model.pickle"
-    aws_env = AwsEnv.labs
-
-    storage_link = StorageLink(
-        bucket=bucket,
-        key=key,
-        aws_env=aws_env,
-    )
-
-    # When it's linked from S3 to a W&B artifact with classifier profiles
-    with patch("wandb.Artifact") as mock_artifact_class:
-        mock_artifact_instance = Mock()
-        mock_artifact_class.return_value = mock_artifact_instance
-
-        create_and_link_model_artifact(
-            mock_run,
-            mock_classifier,
-            storage_link,
-            add_classifiers_profiles=["profile1", "profile2"],
-        )
-
-        # Then the artifact was created with classifier profiles in metadata
-        mock_artifact_class.assert_called_once_with(
-            name=mock_classifier.id,
-            type="model",
-            metadata={
-                "aws_env": aws_env.value,
-                "classifier_name": "test_classifier",
-                "concept_id": "5d4xcy5g",
-                "concept_wikibase_revision": 12300,
-                "classifiers_profiles": ["profile1", "profile2"],
-            },
-        )
-
-
 @patch("wandb.Api")
 def test_get_next_version_with_existing(mock_api):
     mock_artifact = Mock()
