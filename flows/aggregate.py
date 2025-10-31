@@ -444,7 +444,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     document_stems: Sequence[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-    successes: Sequence[RunOutputIdentifier],
+    successes: Sequence[FlowRun],
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
@@ -461,24 +461,11 @@ async def create_aggregate_inference_overall_summary_artifact(
 
     details = []
 
-    # Add successful batches to the table
-    for success in successes:
-        details.append(
-            {
-                "Status": "✓",
-                "Run Output Identifier": success,
-                "Details": "N/A",
-            }
-        )
-
-    # Add failed batches to the table
     for failure in failures:
         if isinstance(failure, BaseException):
             details.append(
                 {
-                    "Status": "✗",
-                    "Run Output Identifier": "N/A",
-                    "Details": f"Exception: {type(failure).__name__}: {str(failure)}",
+                    "Failure": f"Exception: {type(failure).__name__}: {str(failure)}",
                 }
             )
         elif isinstance(failure, FlowRun):
@@ -489,9 +476,7 @@ async def create_aggregate_inference_overall_summary_artifact(
                 state_info += f", Message: {failure.state.message}"
             details.append(
                 {
-                    "Status": "✗",
-                    "Run Output Identifier": failure.name or str(failure.id),
-                    "Details": state_info,
+                    "Failure": state_info,
                 }
             )
 
@@ -918,17 +903,12 @@ async def aggregate(
             "run_output_identifier": run_output_identifier,
         }
 
-    fn = aggregate_batch_of_documents.with_options(  # pyright: ignore[reportFunctionMemberAccess]
-        persist_result=True,
-        result_storage=f"s3-bucket/cpr-{config.aws_env.value}-prefect-results-cache",
-    )
-
     parameterised_batches: Sequence[ParameterisedFlow] = []
     for batch in batches:
         parameterised_batches.append(
             ParameterisedFlow(
                 # The typing doesn't pick up the Flow decorator
-                fn=fn,  # pyright: ignore[reportArgumentType]
+                fn=aggregate_batch_of_documents,  # pyright: ignore[reportArgumentType]
                 params=parameters(batch),
             )
         )
@@ -937,7 +917,7 @@ async def aggregate(
         aws_env=config.aws_env,
         counter=n_batches,
         parameterised_batches=parameterised_batches,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_aggregate_inference_overall_summary_artifact(
