@@ -263,7 +263,7 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[None],
+    successes: Sequence[FlowRun],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -1043,7 +1043,7 @@ async def index(
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         parameterised_batches=parameterised_batches,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_indexing_summary_artifact(
