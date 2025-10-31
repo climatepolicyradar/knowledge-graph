@@ -1232,6 +1232,7 @@ async def test_store_metadata(
         await store_metadata(
             config=test_config,
             classifier_specs=classifier_specs,
+            run_output_identifier=mock_run_output_id,
         )
 
     expected_key = os.path.join(
@@ -1291,6 +1292,7 @@ async def test_store_inference_result(
         await store_inference_result(
             config=test_config,
             successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
+            run_output_identifier=mock_run_output_id,
         )
 
     expected_key = os.path.join(

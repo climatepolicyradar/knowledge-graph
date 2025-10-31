@@ -16,7 +16,6 @@ from mypy_boto3_s3.type_defs import (
 )
 from prefect import flow, task
 from prefect.artifacts import (
-    create_markdown_artifact,
     create_table_artifact,
 )
 from prefect.client.schemas import FlowRun
@@ -264,7 +263,7 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[None],
+    successes: Sequence[FlowRun],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -275,7 +274,7 @@ async def create_indexing_summary_artifact(
     failed_document_batches_count = len(failures)
 
     # Format the overview information as a string for the description
-    indexing_report = f"""# Aggregate Indexing Summary
+    overview_description = f"""# Aggregate Indexing Summary
 
 ## Overview
 - **Environment**: {config.aws_env.value}
@@ -284,10 +283,32 @@ async def create_indexing_summary_artifact(
 - **Failed Batches**: {failed_document_batches_count}
 """
 
-    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    details = []
+    for failure in failures:
+        if isinstance(failure, BaseException):
+            details.append(
+                {
+                    "Failure": f"Exception: {type(failure).__name__}: {str(failure)}",
+                    "Flow Run": "N/A",
+                }
+            )
+        elif isinstance(failure, FlowRun):
+            state_info = (
+                f"State: {failure.state.type.value if failure.state else 'Unknown'}"
+            )
+            if failure.state and failure.state.message:
+                state_info += f", Message: {failure.state.message}"
+            details.append(
+                {
+                    "Failure": state_info,
+                    "Flow Run": failure.name,
+                }
+            )
+
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"indexing-aggregate-results-summary-{config.aws_env.value}",
-        description="Summary of the passages indexing run to update concept counts.",
-        markdown=indexing_report,
+        table=details,
+        description=overview_description,
     )
 
 
@@ -1022,7 +1043,7 @@ async def index(
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         parameterised_batches=parameterised_batches,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_indexing_summary_artifact(
