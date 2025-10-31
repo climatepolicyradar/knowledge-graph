@@ -1,0 +1,19 @@
+{
+  "id": "id:doc_search:concept::Q290.w2m7ymf7",
+  "fields": {
+    "id": "w2m7ymf7",
+    "wikibase_id": "Q290",
+    "wikibase_revision": 3715,
+    "wikibase_url": "https://wikibase.example.org/wiki/Item:Q290",
+    "preferred_label": "pollution",
+    "description": "",
+    "definition": "",
+    "alternative_labels": [],
+    "negative_labels": [],
+    "subconcept_of": ["hzaw3hdg"],
+    "has_subconcept": [],
+    "related_concepts": [],
+    "recursive_subconcept_of": [],
+    "recursive_has_subconcept": []
+  }
+}

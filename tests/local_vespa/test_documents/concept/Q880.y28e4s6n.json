@@ -1,0 +1,19 @@
+{
+  "id": "id:doc_search:concept::Q880.y28e4s6n",
+  "fields": {
+    "id": "y28e4s6n",
+    "wikibase_id": "Q880",
+    "wikibase_url": "https://wikibase.example.org/wiki/Item:Q880",
+    "wikibase_revision": 54410,
+    "preferred_label": "air pollution",
+    "description": "air pollution",
+    "definition": "",
+    "alternative_labels": [],
+    "negative_labels": [],
+    "subconcept_of": ["5d4xcy5g", "w2m7ymf7"],
+    "has_subconcept": [],
+    "related_concepts": [],
+    "recursive_subconcept_of": [],
+    "recursive_has_subconcept": []
+  }
+}
