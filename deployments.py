@@ -264,22 +264,7 @@ if __name__ == "__main__":
                     "document_ids": [
                         "AF.document.061MCLAR.n0000_translated_en",
                         "CCLW.executive.10512.5360",
-                    ],
-                    "classifier_specs": [
-                        # CPU-based
-                        {
-                            "wikibase_id": "Q708",
-                            "classifier_id": "x9kfsd8s",
-                            "wandb_registry_version": "v14",
-                        },
-                        # GPU-based
-                        {
-                            "wikibase_id": "Q1651",
-                            "classifier_id": "6rys3abe",
-                            "wandb_registry_version": "v13",
-                            "compute_environment": {"gpu": True},
-                        },
-                    ],
+                    ]
                 }
             ),
         },
