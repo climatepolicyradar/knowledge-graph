@@ -174,7 +174,17 @@ class Concept(BaseModel):
         """Return a list of all unique labels for the concept"""
         return list(set([self.preferred_label] + self.alternative_labels))
 
-    def to_markdown(self, wikibase: Optional["WikibaseSession"] = None) -> str:
+    def to_markdown(
+        self,
+        wikibase: Optional["WikibaseSession"] = None,
+        include_description: bool = True,
+        include_definition: bool = True,
+        include_alternative_labels: bool = True,
+        include_negative_labels: bool = True,
+        include_concept_neighbourhood: bool = True,
+        include_example_passages: bool = True,
+        use_markdown_headers: bool = True,
+    ) -> str:
         """
         Return a complete representation of the concept in natural language
 
@@ -182,37 +192,52 @@ class Concept(BaseModel):
         output should be human-readable, suitable for human or LLM consumption.
 
         :param WikibaseSession wikibase: A Wikibase session
+        :param bool include_description: Include the description field
+        :param bool include_definition: Include the definition field
+        :param bool include_alternative_labels: Include alternative labels
+        :param bool include_negative_labels: Include negative labels
+        :param bool include_concept_neighbourhood: Include concept neighbourhood graph
+        :param bool include_example_passages: Include example passages
+        :param bool use_markdown_headers: Use markdown headers (##) for sections
         """
         sections = []
 
         # Title
-        sections.append(f"# {self.preferred_label}")
+        if use_markdown_headers:
+            sections.append(f"# {self.preferred_label}")
+        else:
+            sections.append(self.preferred_label)
 
         # Description and Definition
-        if self.description:
-            sections.append("## Description")
+        if include_description and self.description:
+            if use_markdown_headers:
+                sections.append("## Description")
             sections.append(self.description)
 
-        if self.definition:
-            sections.append("## Definition")
+        if include_definition and self.definition:
+            if use_markdown_headers:
+                sections.append("## Definition")
             sections.append(self.definition)
 
         # Labels
-        if self.alternative_labels:
-            sections.append(
-                "## Alternative labels, synonyms, acronyms, and related terms"
-            )
+        if include_alternative_labels and self.alternative_labels:
+            if use_markdown_headers:
+                sections.append(
+                    "## Alternative labels, synonyms, acronyms, and related terms"
+                )
             sections.append(
                 "\n".join(f"- {label}" for label in self.alternative_labels)
             )
 
-        if self.negative_labels:
-            sections.append("## Not to be confused with")
+        if include_negative_labels and self.negative_labels:
+            if use_markdown_headers:
+                sections.append("## Not to be confused with")
             sections.append("\n".join(f"- {label}" for label in self.negative_labels))
 
         # Concept neighbourhood
-        if wikibase:
-            sections.append("## Concept neighbourhood")
+        if include_concept_neighbourhood and wikibase:
+            if use_markdown_headers:
+                sections.append("## Concept neighbourhood")
             sections.append(
                 "This concept exists within a knowledge graph of other concepts, "
                 "with hierarchical and non-hierarchical relationships. Solid arrows "
@@ -269,21 +294,22 @@ class Concept(BaseModel):
             sections.append("```mermaid\n" + "\n".join(mermaid_lines) + "\n```")
 
         # Example passages
-
-        if positive_passages := [
-            passage
-            for passage in self.labelled_passages
-            if any(span.concept_id == self.wikibase_id for span in passage.spans)
-        ]:
-            sections.append("## Example passages")
-            sections.append(
-                "These are examples of passages from real documents which mention the "
-                "concept. They are not exhaustive, but should give a sense of the "
-                "concept's meaning and usage."
-            )
-            sample_size = min(5, len(positive_passages))
-            for passage in random.sample(positive_passages, sample_size):
-                sections.append("> " + passage.text.replace("\n", "\n> "))
+        if include_example_passages:
+            if positive_passages := [
+                passage
+                for passage in self.labelled_passages
+                if any(span.concept_id == self.wikibase_id for span in passage.spans)
+            ]:
+                if use_markdown_headers:
+                    sections.append("## Example passages")
+                sections.append(
+                    "These are examples of passages from real documents which mention the "
+                    "concept. They are not exhaustive, but should give a sense of the "
+                    "concept's meaning and usage."
+                )
+                sample_size = min(5, len(positive_passages))
+                for passage in random.sample(positive_passages, sample_size):
+                    sections.append("> " + passage.text.replace("\n", "\n> "))
 
         return "\n\n".join(sections)
 
