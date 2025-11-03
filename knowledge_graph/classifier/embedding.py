@@ -29,6 +29,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         threshold: float = 0.65,
         document_prefix: str = "",
         query_prefix: str = "",
+        device: str | None = None,
     ):
         super().__init__(concept)
         try:
@@ -36,7 +37,23 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
                 SentenceTransformer,  # type: ignore[import-untyped]
             )
 
-            self.embedding_model = SentenceTransformer(embedding_model_name)
+            if (
+                embedding_model_name.startswith("Snowflake/")
+                or embedding_model_name.startswith("nomic-ai/")
+                or embedding_model_name.startswith("Alibaba-NLP/")
+            ):
+                logger.warning(
+                    "EmbeddingClassifier has been set to trust remote code. Don't use this in production – create a fork of the repo, or pin a commit to load from."
+                )
+                _trust_remote_code = True
+            else:
+                _trust_remote_code = False
+
+            self.embedding_model = SentenceTransformer(
+                embedding_model_name,
+                device=device,
+                trust_remote_code=_trust_remote_code,
+            )
         except ImportError:
             raise ImportError(
                 f"The `sentence-transformers` library is required to run {self.name}s. "
