@@ -22,6 +22,8 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         concept: Concept,
         embedding_model_name: str = "BAAI/bge-small-en-v1.5",
         threshold: float = 0.65,
+        document_prefix: str = "",
+        query_prefix: str = "",
     ):
         super().__init__(concept)
         try:
@@ -37,9 +39,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             )
 
         self.threshold = threshold
+        self.document_prefix = document_prefix
+        self.query_prefix = query_prefix
 
         self.concept_text = self.concept.to_markdown()
-        self.concept_embedding = self.embedding_model.encode(self.concept_text)
+        concept_text_with_prefix = f"{self.document_prefix}{self.concept_text}"
+        self.concept_embedding = self.embedding_model.encode(concept_text_with_prefix)
 
     def __repr__(self):
         """Return a string representation of the classifier."""
@@ -51,7 +56,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
     def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
         return ClassifierID.generate(
-            self.name, self.concept.id, self.embedding_model, self.threshold
+            self.name,
+            self.concept.id,
+            self.embedding_model,
+            self.threshold,
+            self.document_prefix,
+            self.query_prefix,
         )
 
     def __hash__(self) -> int:
@@ -69,7 +79,9 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         returned.
         """
         threshold = threshold or self.threshold
-        query_embedding = self.embedding_model.encode(text)
+
+        text_with_prefix = f"{self.query_prefix}{text}"
+        query_embedding = self.embedding_model.encode(text_with_prefix)
         similarity = self.concept_embedding @ query_embedding.T
         spans = []
         if similarity > threshold:
@@ -98,8 +110,10 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         :return list[list[Span]]: A list of spans in the texts for each text
         """
         threshold = threshold or self.threshold
+
+        texts_with_prefix = [f"{self.query_prefix}{text}" for text in texts]
         text_embeddings = self.embedding_model.encode(
-            list(texts), show_progress_bar=show_progress_bar
+            texts_with_prefix, show_progress_bar=show_progress_bar
         )
         spans_per_text = []
 
