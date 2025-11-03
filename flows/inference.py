@@ -1225,6 +1225,12 @@ async def inference(
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
       there is no need to change this outside of local dev
+    - return_pointer: Either return a pointer to the results, a run
+      output identifier, or the return the results themselves
+      directly. Since there can be a large amount of document IDs, the
+      direct results may be too big to pass, if running in Prefect.
+      Instead, you can load the results in the next place, via the
+      pointer.
     """
     logger = get_logger()
     if not config:
