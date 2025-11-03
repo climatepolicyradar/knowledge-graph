@@ -1,10 +1,15 @@
+import logging
 from datetime import datetime
 from typing import Optional, Sequence
+
+import numpy as np
 
 from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingClassifier(Classifier, ZeroShotClassifier):
@@ -45,6 +50,18 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         self.concept_text = self.concept.to_markdown()
         concept_text_with_prefix = f"{self.document_prefix}{self.concept_text}"
         self.concept_embedding = self.embedding_model.encode(concept_text_with_prefix)
+
+        # Verify that embeddings are normalized (L2 norm ≈ 1.0)
+        # This ensures that dot product equals cosine similarity
+        embedding_norm = np.linalg.norm(self.concept_embedding)
+        if not np.isclose(embedding_norm, 1.0, atol=0.01):
+            logger.warning(
+                "Embedding from %s is not L2-normalized (norm=%.4f). "
+                "Dot product may not equal cosine similarity. "
+                "Consider normalizing embeddings explicitly.",
+                embedding_model_name,
+                embedding_norm,
+            )
 
     def __repr__(self):
         """Return a string representation of the classifier."""
