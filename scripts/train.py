@@ -1,5 +1,6 @@
 import asyncio
 import os
+import random
 import re
 from contextlib import nullcontext
 from pathlib import Path
@@ -115,6 +116,63 @@ def deduplicate_training_data(
     )
 
     return filtered
+
+
+def limit_training_samples(
+    training_data: list[LabelledPassage],
+    max_samples: int,
+) -> list[LabelledPassage]:
+    """
+    Limit the number of training samples, aiming for a balanced set.
+
+    If a perfect split isn't possible, take all available from the smaller group and
+    the remainder from the larger group.
+
+    :param training_data: The list of labelled passages to limit.
+    :type training_data: list[LabelledPassage]
+    :param max_samples: Maximum number of samples to keep in total.
+    :type max_samples: int
+    :return: A (mostly) balanced subset of the training data.
+    :rtype: list[LabelledPassage]
+    """
+    console = Console()
+
+    positive_passages = [p for p in training_data if p.spans]
+    negative_passages = [p for p in training_data if not p.spans]
+
+    console.log(
+        f"📊 Starting with {len(positive_passages)} positive and "
+        f"{len(negative_passages)} negative passages"
+    )
+
+    half = max_samples // 2
+    # Take up to half from each group, or as many as you can
+    pos_count = min(len(positive_passages), half)
+    neg_count = min(len(negative_passages), half)
+
+    # Fill up with remainder from the group that still has samples left
+    remainder = max_samples - (pos_count + neg_count)
+    if remainder > 0:
+        if pos_count < len(positive_passages):
+            extra = min(remainder, len(positive_passages) - pos_count)
+            pos_count += extra
+            remainder -= extra
+        if remainder > 0 and neg_count < len(negative_passages):
+            extra = min(remainder, len(negative_passages) - neg_count)
+            neg_count += extra
+
+    limited_positive = positive_passages[:pos_count]
+    limited_negative = negative_passages[:neg_count]
+
+    console.log(
+        f"✂️  Limited to {len(limited_positive)} positive and "
+        f"{len(limited_negative)} negative passages "
+        f"({len(limited_positive) + len(limited_negative)} total)"
+    )
+
+    limited_dataset = limited_positive + limited_negative
+    random.shuffle(limited_dataset)
+    return limited_dataset
 
 
 class StorageUpload(BaseModel):
@@ -460,6 +518,7 @@ async def train_classifier(
             if train_validation_data is not None
             else classifier.concept.labelled_passages
         )
+        training_data = limit_training_samples(training_data, 2000)
 
         # Remove any passages from training that appear in evaluation set
         evaluation_data = classifier.concept.labelled_passages
