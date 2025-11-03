@@ -12,6 +12,10 @@ import subprocess
 from typing import Any, ParamSpec, TypeVar
 
 from prefect.blocks.system import JSON
+from prefect.client.schemas.objects import (
+    ConcurrencyLimitConfig,
+    ConcurrencyLimitStrategy,
+)
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
@@ -30,6 +34,7 @@ from flows.train import train_on_gpu
 from flows.update_neo4j import update_neo4j
 from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
+from flows.wikibase_to_vespa import wikibase_to_vespa
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -88,6 +93,7 @@ def create_deployment(
     env_schedules: dict[AwsEnv, str] | None = None,
     extra_tags: list[str] = [],
     env_parameters: dict[AwsEnv, JsonDict] = {},
+    concurrency_limit: int | ConcurrencyLimitConfig | None = None,
 ) -> None:
     """Create a deployment for the specified flow"""
     logger = get_logger()
@@ -173,6 +179,7 @@ def create_deployment(
         schedule=schedule,
         build=False,
         push=False,
+        concurrency_limit=concurrency_limit,
     )
 
 
@@ -283,6 +290,21 @@ if __name__ == "__main__":
         #         # Not needed in labs
         #         # AwsEnv.labs: "0 15 3 * *",
         #     },
+    )
+
+    create_deployment(
+        flow=wikibase_to_vespa,
+        description="Upload concepts from Wikibase to Vespa",
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.CANCEL_NEW,
+        ),
+        env_schedules={
+            # Temporarily disabled for stability
+            # AwsEnv.production: "0 9 * * *",
+            AwsEnv.staging: "0 9 * * *",
+            AwsEnv.sandbox: "0 9 * * *",
+        },
     )
 
     # Sync Neo4j with Wikibase
