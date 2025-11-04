@@ -321,17 +321,6 @@ async def update_concepts_in_vespa(
             )
             continue
 
-        if not kg_concept.wikibase_url:
-            results.append(
-                Err(
-                    Error(
-                        msg="concept missing Wikibase URL",
-                        metadata={"concept": kg_concept},
-                    )
-                )
-            )
-            continue
-
         # Update concept in Vespa
         result = await update_concept_in_vespa(
             kg_concept=kg_concept,
@@ -468,6 +457,8 @@ async def wikibase_to_vespa(
         wikibase_password = SecretStr(get_aws_ssm_param(WIKIBASE_PASSWORD_SSM_NAME))
         wikibase_username = get_aws_ssm_param(WIKIBASE_USERNAME_SSM_NAME)
         wikibase_url = get_aws_ssm_param(WIKIBASE_URL_SSM_NAME)
+        # Set as env var so Concept.wikibase_url property can access it
+        os.environ["WIKIBASE_URL"] = wikibase_url
         wikibase_auth = WikibaseAuth(
             username=wikibase_username,
             password=wikibase_password,
