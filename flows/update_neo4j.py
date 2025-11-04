@@ -3,17 +3,28 @@ A prefect flow to update our Neo4j database with the latest version of the knowl
 
 Nightly runs of this flow keep the Neo4j database in sync with our Concept Store.
 
-The flow creates ConceptNode nodes (by `wikibase_id`) and rebuilds the graph of 
+The flow creates ConceptNode nodes (by `wikibase_id`) and rebuilds the graph of
 concept-to-concept relationships (`RELATED_TO` and `SUBCONCEPT_OF`).
 
 When a user sets `refresh_documents=True`, the flow will also create DocumentNode
-and PassageNode nodes and (re)creates a set of extra relationships, establishing a 
+and PassageNode nodes and (re)creates a set of extra relationships, establishing a
 complete knowledge graph:
 - `(:DocumentNode)-[:HAS_PASSAGE]->(:PassageNode)`
 - `(:PassageNode)-[:MENTIONS]->(:ConceptNode)`
 
 The document refresh will not run automatically, it must be enabled by the user running
 the flow manually, either locally or in the prefect console.
+
+Document Metadata from HuggingFace
+-----------------------------------
+When refreshing documents, the flow downloads document metadata from the HuggingFace
+dataset "ClimatePolicyRadar/all-document-text-data" and enriches DocumentNode nodes with:
+- title, source_url, collection_title, corpus_type_name
+- category, type, geographies (array), languages (array)
+- family_title, family_slug
+
+The metadata is cached locally in `data/processed/huggingface_cache/` to avoid
+unnecessary re-downloads.
 
 Refreshing document nodes and relationships requires a local set of aggregated inference
 results from S3, under `data/processed/aggregated/*.json`. To download those files, run
@@ -28,7 +39,7 @@ Command line usage
 Refresh concepts only (default):
     python -m flows.update_neo4j
 
-Refresh concepts and documents:
+Refresh concepts and documents (with HuggingFace metadata):
     python -m flows.update_neo4j -- --refresh-documents true
 """
 
@@ -39,7 +50,9 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import botocore.exceptions
+import polars as pl
 from cpr_sdk.ssm import get_aws_ssm_param
+from huggingface_hub import snapshot_download
 from neomodel import db
 from prefect import flow
 
@@ -51,6 +64,88 @@ from knowledge_graph.wikibase import WikibaseSession
 CONCEPT_BATCH_SIZE = 5000
 RELATIONSHIP_BATCH_SIZE = 1000
 DOCUMENT_BATCH_SIZE = 100
+
+# HuggingFace dataset configuration
+HUGGINGFACE_REPO_ID = "ClimatePolicyRadar/all-document-text-data"
+HUGGINGFACE_CACHE_DIR = processed_data_dir / "huggingface_cache"
+
+
+def load_document_metadata_from_huggingface() -> dict[str, dict[str, Any]]:
+    """
+    Download and load document metadata from HuggingFace.
+
+    Returns a dictionary mapping document_id to metadata dict containing:
+    - title, source_url, collection_title, corpus_type_name, category, type,
+    - geographies (list), languages (list), family_title, family_slug
+    """
+    logger = get_logger()
+    logger.info("Loading document metadata from HuggingFace: %s", HUGGINGFACE_REPO_ID)
+
+    # Download the dataset from HuggingFace
+    logger.info("Downloading dataset to: %s", HUGGINGFACE_CACHE_DIR)
+    snapshot_download(
+        repo_id=HUGGINGFACE_REPO_ID,
+        repo_type="dataset",
+        local_dir=str(HUGGINGFACE_CACHE_DIR),
+        revision="main",
+        allow_patterns=["*.parquet"],
+    )
+
+    # Load all parquet files
+    parquet_files = list(HUGGINGFACE_CACHE_DIR.glob("*.parquet"))
+    logger.info("Found %s parquet files", len(parquet_files))
+
+    if not parquet_files:
+        logger.warning("No parquet files found in HuggingFace cache")
+        return {}
+
+    # Read and combine all parquet files using Polars
+    df = pl.concat([pl.read_parquet(f) for f in parquet_files])
+    logger.info("Loaded %s rows from HuggingFace dataset", len(df))
+
+    # Select unique documents with their metadata
+    # Group by document_id and take first occurrence (metadata should be same for all rows)
+    document_metadata = (
+        df.select(
+            [
+                "document_id",
+                "document_title",
+                "source_url",
+                "collection_title",
+                "corpus_type_name",
+                "category",
+                "type",
+                "geographies",
+                "languages",
+                "family_title",
+                "family_slug",
+            ]
+        )
+        .unique(subset=["document_id"])
+        .to_dicts()
+    )
+
+    # Convert to dictionary keyed by document_id
+    metadata_dict = {}
+    for row in document_metadata:
+        doc_id = row.get("document_id")
+        if doc_id:
+            # Handle potential None values and convert to appropriate types
+            metadata_dict[doc_id] = {
+                "title": row.get("document_title") or "",
+                "source_url": row.get("source_url") or "",
+                "collection_title": row.get("collection_title") or "",
+                "corpus_type_name": row.get("corpus_type_name") or "",
+                "category": row.get("category") or "",
+                "type": row.get("type") or "",
+                "geographies": row.get("geographies") or [],
+                "languages": row.get("languages") or [],
+                "family_title": row.get("family_title") or "",
+                "family_slug": row.get("family_slug") or "",
+            }
+
+    logger.info("Loaded metadata for %s documents", len(metadata_dict))
+    return metadata_dict
 
 
 def _setup_env_from_ssm() -> None:
@@ -169,7 +264,12 @@ def create_relationships(
     execute_cypher(query, {"batch": list(batch)}, dry_run=dry_run)
 
 
-def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> None:
+def process_document_batch(
+    doc_paths_batch: Sequence[str],
+    document_metadata: dict[str, dict[str, Any]],
+    *,
+    dry_run: bool,
+) -> None:
     """
     Upsert document/passages and link passages to concepts for a batch of files.
 
@@ -183,13 +283,13 @@ def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> 
         }
 
     The filename stem is treated as the `document_id`. For each file we:
-    - MERGE a `(:DocumentNode {document_id})`
+    - MERGE a `(:DocumentNode {document_id})` with metadata from HuggingFace
     - MERGE `(:PassageNode {document_passage_id})` per text block
     - MERGE `(:DocumentNode)-[:HAS_PASSAGE]->(:PassageNode)` for each text block
     - MERGE `(:PassageNode)-[:MENTIONS]->(:ConceptNode)` for each concept mention
     """
     logger = get_logger()
-    all_documents: list[dict[str, str]] = []
+    all_documents: list[dict[str, Any]] = []
     all_passages: list[dict[str, str]] = []
     all_doc_passage_rels: list[dict[str, str]] = []
     all_passage_concept_rels: list[dict[str, str]] = []
@@ -200,7 +300,25 @@ def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> 
                 document = json.load(f)
 
             document_id = Path(doc_path).stem
-            all_documents.append({"document_id": document_id})
+
+            # Get metadata from HuggingFace dataset
+            metadata = document_metadata.get(document_id, {})
+
+            all_documents.append(
+                {
+                    "document_id": document_id,
+                    "title": metadata.get("title", ""),
+                    "source_url": metadata.get("source_url", ""),
+                    "collection_title": metadata.get("collection_title", ""),
+                    "corpus_type_name": metadata.get("corpus_type_name", ""),
+                    "category": metadata.get("category", ""),
+                    "type": metadata.get("type", ""),
+                    "geographies": metadata.get("geographies", []),
+                    "languages": metadata.get("languages", []),
+                    "family_title": metadata.get("family_title", ""),
+                    "family_slug": metadata.get("family_slug", ""),
+                }
+            )
 
             for passage_id, concepts in document.items():
                 if concepts:
@@ -234,6 +352,16 @@ def process_document_batch(doc_paths_batch: Sequence[str], *, dry_run: bool) -> 
             """
             UNWIND $docs AS doc
             MERGE (d:DocumentNode {document_id: doc.document_id})
+            SET d.title = doc.title,
+                d.source_url = doc.source_url,
+                d.collection_title = doc.collection_title,
+                d.corpus_type_name = doc.corpus_type_name,
+                d.category = doc.category,
+                d.type = doc.type,
+                d.geographies = doc.geographies,
+                d.languages = doc.languages,
+                d.family_title = doc.family_title,
+                d.family_slug = doc.family_slug
             """,
             {"docs": all_documents},
             dry_run=dry_run,
@@ -461,13 +589,18 @@ async def update_documents(*, dry_run: bool = False) -> None:
     """Refresh document/passages and MENTIONS relationships using local data."""
     logger = get_logger()
     logger.info("Starting document link refresh from local aggregated results...")
+
+    # Load document metadata from HuggingFace
+    logger.info("Loading document metadata from HuggingFace...")
+    document_metadata = load_document_metadata_from_huggingface()
+
     document_paths = [
         str(p) for p in (processed_data_dir / "aggregated").glob("*.json")
     ]
     logger.info("Found %s aggregated documents", len(document_paths))
     for i in range(0, len(document_paths), DOCUMENT_BATCH_SIZE):
         batch_paths = document_paths[i : i + DOCUMENT_BATCH_SIZE]
-        process_document_batch(batch_paths, dry_run=dry_run)
+        process_document_batch(batch_paths, document_metadata, dry_run=dry_run)
     logger.info("Document link refresh finished")
 
 

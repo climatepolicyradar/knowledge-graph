@@ -3,6 +3,7 @@ from time import sleep
 
 from neo4j.exceptions import ServiceUnavailable
 from neomodel import (
+    ArrayProperty,
     Relationship,
     RelationshipFrom,
     RelationshipTo,
@@ -111,6 +112,15 @@ class DocumentNode(StructuredNode):
 
     title = StringProperty()
     document_id = StringProperty(required=True, unique_index=True)
+    source_url = StringProperty()
+    collection_title = StringProperty()
+    corpus_type_name = StringProperty()
+    category = StringProperty()
+    type = StringProperty()
+    geographies = ArrayProperty(StringProperty())
+    languages = ArrayProperty(StringProperty())
+    family_title = StringProperty()
+    family_slug = StringProperty()
     passages = RelationshipTo("PassageNode", "HAS_PASSAGE")
 
 
