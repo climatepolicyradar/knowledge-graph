@@ -25,7 +25,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
     def __init__(
         self,
         concept: Concept,
-        embedding_model_name: str = "BAAI/bge-small-en-v1.5",
+        embedding_model_name: str = "ibm-granite/granite-embedding-107m-multilingual",
         threshold: float = 0.65,
         document_prefix: str = "",
         query_prefix: str = "",
@@ -64,7 +64,14 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         self.document_prefix = document_prefix
         self.query_prefix = query_prefix
 
-        self.concept_text = self.concept.to_markdown()
+        self.concept_text = self.concept.to_markdown(
+            include_alternative_labels=True,
+            include_definition=True,
+            include_description=True,
+            include_concept_neighbourhood=False,
+            include_example_passages=False,
+            use_markdown_headers=True,
+        )
         concept_text_with_prefix = f"{self.document_prefix}{self.concept_text}"
         self.concept_embedding = self.embedding_model.encode(concept_text_with_prefix)
 
