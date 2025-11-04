@@ -8,9 +8,10 @@ from knowledge_graph.classifiers_profiles import (
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 
 
-def test_validate_no_errors():
-    """Test that validation passes when there are no errors."""
-    profiles = ClassifiersProfiles(
+@pytest.fixture
+def mock_profiles():
+    """Classifiers profiles that pass validation"""
+    return ClassifiersProfiles(
         [
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q100"),
@@ -30,8 +31,11 @@ def test_validate_no_errors():
         ]
     )
 
+
+def test_validate_no_errors(mock_profiles):
+    """Test that validation passes when there are no errors."""
     # No exception should be raised
-    profiles.validate()
+    mock_profiles.validate()
 
 
 def test_validate_too_many_retired_profiles():
@@ -126,7 +130,7 @@ def test_append_valid_profile():
 
 
 def test_append_invalid_profile():
-    """Test that appending an invalid profile raises an error."""
+    """Test that appending an invalid profile raises an error and removes all invalid wikibase IDs from profiles."""
     profiles = ClassifiersProfiles(
         [
             ClassifiersProfile(
@@ -145,6 +149,7 @@ def test_append_invalid_profile():
                 classifier_profile=Profile.PRIMARY,
             )
         )
+    assert len(profiles) == 0
 
 
 def test_extend_valid_profiles():
@@ -170,27 +175,25 @@ def test_extend_valid_profiles():
     assert profiles[1].classifier_id == ClassifierID("wwww8484")
 
 
-def test_extend_invalid_profiles():
-    """Test that extending with invalid profiles raises an error."""
-    profiles = ClassifiersProfiles(
-        [
-            ClassifiersProfile(
-                wikibase_id=WikibaseID("Q999"),
-                classifier_id=ClassifierID("abcd2345"),
-                classifier_profile=Profile.EXPERIMENTAL,
-            ),
-        ]
-    )
+def test_extend_invalid_profiles(mock_profiles):
+    """Test that extending with invalid profiles raises an error and removes invalid wikibase IDs from classifiers profiles."""
+    profiles = mock_profiles
+    new_profiles = [
+        ClassifiersProfile(
+            wikibase_id=WikibaseID("Q999"),
+            classifier_id=ClassifierID("abcd2345"),
+            classifier_profile=Profile.EXPERIMENTAL,
+        ),
+        ClassifiersProfile(
+            wikibase_id=WikibaseID("Q999"),
+            classifier_id=ClassifierID("dacb2345"),
+            classifier_profile=Profile.EXPERIMENTAL,
+        ),
+    ]
 
     with pytest.raises(
         ValueError, match="Wikibase ID 'Q999' has 2 experimental profiles"
     ):
-        profiles.extend(
-            [
-                ClassifiersProfile(
-                    wikibase_id=WikibaseID("Q999"),
-                    classifier_id=ClassifierID("dacb2345"),
-                    classifier_profile=Profile.EXPERIMENTAL,
-                ),
-            ]
-        )
+        profiles.extend(new_profiles)
+
+    assert len(profiles) == len(mock_profiles)
