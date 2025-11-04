@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from prefect.artifacts import Artifact
@@ -50,13 +50,33 @@ async def test_full_pipeline_no_config_provided(
             "flows.full_pipeline.Config.create",
             new_callable=AsyncMock,
         ) as mock_pipeline_config_create,
+        patch(
+            "flows.full_pipeline.get_async_session",
+        ) as mock_get_session,
     ):
         # Setup mocks
         mock_pipeline_config_create.return_value = test_config
 
+        # Mock S3 loading for document stems
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["CCLW.executive.4934.1571", "CCLW.executive.10014.4470_translated_en"]}'
+                )
+            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
+
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
-            data=set(aggregate_inference_results_document_stems),
+            data=mock_run_output_identifier_str,
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -83,8 +103,8 @@ async def test_full_pipeline_no_config_provided(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert sorted(call_args.kwargs["document_stems"]) == sorted(
-            aggregate_inference_results_document_stems
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
@@ -130,16 +150,37 @@ async def test_full_pipeline_with_full_config(
             "flows.full_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
+        patch(
+            "flows.full_pipeline.get_async_session",
+        ) as mock_get_session,
     ):
         classifier_spec = ClassifierSpec(
             wikibase_id=WikibaseID("Q100"),
             classifier_id="zzzz9999",
             wandb_registry_version="v1",
         )
+
+        # Mock S3 loading for document stems
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["CCLW.executive.4934.1571", "CCLW.executive.10014.4470_translated_en"]}'
+                )
+            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
+
         # Setup mocks
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
-            data=set(aggregate_inference_results_document_stems),
+            data=mock_run_output_identifier_str,
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
@@ -185,8 +226,8 @@ async def test_full_pipeline_with_full_config(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert sorted(call_args.kwargs["document_stems"]) == sorted(
-            aggregate_inference_results_document_stems
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == 50
@@ -251,7 +292,10 @@ async def test_full_pipeline_with_inference_failure(
             data=Fault(
                 msg="Some inference batches had failures!",
                 metadata={},
-                data=set(document_stems_successful),
+                data={
+                    "successful_document_stems": set(document_stems_successful),
+                    "run_output_identifier": mock_run_output_identifier_str,
+                },
             ),
         )
         mock_aggregate.return_value = State(
@@ -295,8 +339,8 @@ async def test_full_pipeline_with_inference_failure(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert sorted(call_args.kwargs["document_stems"]) == sorted(
-            document_stems_successful
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
         )
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
