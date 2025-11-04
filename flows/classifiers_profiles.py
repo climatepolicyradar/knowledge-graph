@@ -1,12 +1,16 @@
 # Flow that updates classifiers profiles changes detected in wikibase
 # assumes that the classifier model has been trained in wandb
+import json
 import os
 from pathlib import Path
 
 from prefect import flow
+from prefect.artifacts import acreate_table_artifact
 
 from flows.classifier_specs.spec_interface import load_classifier_specs
-from flows.utils import SlackNotify, get_logger
+from flows.config import Config
+from flows.result import Err, Error, Ok, Result
+from flows.utils import get_logger
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfile,
     ClassifiersProfiles,
@@ -106,11 +110,12 @@ async def read_concept_store(wikibase: WikibaseSession) -> list[Concept]:
 
 async def get_classifier_profiles(
     wikibase: WikibaseSession, concepts: list[Concept]
-) -> tuple[list[ClassifiersProfile], list[dict[str, str]]]:
+) -> tuple[ClassifiersProfiles, list[Result[WikibaseID, Error]]]:
     logger = get_logger()
 
+    results: list[Result[WikibaseID, Error]] = []
     classifier_profiles = ClassifiersProfiles()
-    validation_errors = []
+
     for concept in concepts:
         logger.info(f"Concept wikibase id: {concept.wikibase_id}")
         try:
@@ -118,6 +123,17 @@ async def get_classifier_profiles(
             concept_classifier_profiles = await wikibase.get_classifier_ids_async(
                 wikibase_id=wikibase_id
             )
+            if len(concept_classifier_profiles) == 0:
+                results.append(
+                    Err(
+                        Error(
+                            msg="No classifier ID in wikibase",
+                            metadata={"wikibase_id": wikibase_id},
+                        )
+                    )
+                )
+                continue
+
             for rank, classifier_id in concept_classifier_profiles:
                 classifier_profiles.append(
                     ClassifiersProfile(
@@ -129,30 +145,84 @@ async def get_classifier_profiles(
             logger.info(
                 f"Got {len(concept_classifier_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
             )
+            results.append(Ok(wikibase_id))
         except Exception as e:
             logger.info(f"{e}")
-            validation_errors.append(
-                {"wikibase_id": concept.wikibase_id, "Error": str(e)}
+            results.append(
+                Err(
+                    Error(
+                        msg=str(e),
+                        metadata={"wikibase_id": concept.wikibase_id},
+                    )
+                )
             )
             continue
 
-    return classifier_profiles, validation_errors
+    return classifier_profiles, results
 
 
-@flow(on_failure=[SlackNotify.message])
+async def create_validation_artifact(results: list[Result[WikibaseID, Error]]):
+    """Create an artifact with a summary of the classifiers profiles changes"""
+
+    successes = [r._value for r in results if isinstance(r, Ok)]
+    failures = [r._error for r in results if isinstance(r, Err)]
+
+    total_concepts = len(results)
+    successful_cps = len(successes)
+    failed_cps = len(failures)
+
+    overview_description = f"""# Classifiers Profiles Validation Summary
+## Overview
+- **Total concepts found**: {total_concepts}
+- **Successful wikibase IDs**: {successful_cps}
+- **Failed wikibase IDs**: {failed_cps}
+"""
+
+    cp_details = [
+        {
+            "Wikibase ID": str(wikibase_id),
+            "Status": "✓",
+            "Error": "N/A",
+        }
+        for wikibase_id in successes
+    ] + [
+        {
+            "Wikibase ID": str((error.metadata or {}).get("wikibase_id", "Unknown")),
+            "Status": "✗",
+            "Error": (
+                f"{error.msg}: {json.dumps((error.metadata or {}).get('response'))}"  # pyright: ignore[reportOptionalMemberAccess]
+                if error.metadata and error.metadata.get("response")
+                else error.msg
+            ),
+        }
+        for error in failures
+    ]
+
+    await acreate_table_artifact(
+        key="classifiers-profiles-validation",
+        table=cp_details,
+        description=overview_description,
+    )
+
+
+@flow(
+    # on_failure=[SlackNotify.message],
+)
 async def classifiers_profiles_lifecycle(
     aws_env: AwsEnv = AwsEnv.staging,
-    # config: Config | None = None,
+    config: Config | None = None,
 ):
     """Update classifier profile for a given aws environment."""
 
     logger = get_logger()
 
-    # if not config:
-    #     logger.info("No pipeline config provided, creating default...")
-    #     config = await Config.create()
+    if not config:
+        logger.info("No pipeline config provided, creating default...")
+        config = await Config.create()
 
-    # logger.info(f"Running the full pipeline with the config: {config}, ")
+    logger.info(
+        f"Running the classifiers profiles lifecycle with the config: {config}, "
+    )
 
     # 1 - read classifier specs file (NOT YET USED)
     specs = load_classifier_specs(aws_env)
@@ -164,31 +234,21 @@ async def classifiers_profiles_lifecycle(
     concepts = await read_concept_store(wikibase)
 
     # 2a - get classifier profiles for all concepts
-    classifier_profiles, validation_errors = await get_classifier_profiles(
-        wikibase, concepts
-    )
+    classifier_profiles, results = await get_classifier_profiles(wikibase, concepts)
 
-    logger.info(
-        f"Successful classifiers {len(classifier_profiles)}, validation errors {len(validation_errors)}"
-    )
-
+    logger.info(f"Successful classifiers {len(classifier_profiles)}")
     logger.info(f"Valid profiles: {classifier_profiles}")
 
-    if validation_errors:
-        raise ValueError(
-            f"{len(validation_errors)} validation errors, {len(classifier_profiles)} successful classifier profiles"
-        )
-    # now:
-    # 6 - send notification if validation fails
-    # 6a - create artifact for success / failures
+    # 6a - create artifact for validation success / failures
+    # Create artifact with results
+    await create_validation_artifact(
+        results=results,
+    )
 
     # next:
-    # 3 - read vespa classififier profiles (TODO??)
     # 4 - create dataframe to compare current vs updates
     # * - check classifier exists in w&b
     # 7 - for each row in dataframe flag for add / remove / update profile
-    # * - send notification of planned changes
-    # * - save artifact of planned changes
 
     # later / separate PLA-948:
     # 8 - run promote / demote / update

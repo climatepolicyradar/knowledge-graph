@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from flows.classifiers_profiles import get_classifier_profiles
+from flows.result import Err
 from knowledge_graph.classifiers_profiles import ClassifiersProfile, Profile
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
@@ -56,7 +57,7 @@ async def test_get_classifier_profiles():
     ]
 
     # Call the function under test
-    classifier_profiles, validation_errors = await get_classifier_profiles(
+    classifier_profiles, results = await get_classifier_profiles(
         wikibase=mock_wikibase, concepts=list_concepts
     )
 
@@ -74,11 +75,11 @@ async def test_get_classifier_profiles():
     )
 
     # assert validation errors
-    assert len(validation_errors) == 3
-    assert validation_errors[0] == {
-        "wikibase_id": "Q100",
-        "Error": "Failed to fetch classifier profiles for Q100",
-    }
+    failures = [r._error for r in results if isinstance(r, Err)]
+
+    assert len(failures) == 3
+    assert failures[0].metadata.get("wikibase_id") == "Q100"
+    assert failures[0].msg == "Failed to fetch classifier profiles for Q100"
 
     # check mocked method called
     assert mock_wikibase.get_classifier_ids_async.call_count == 4
