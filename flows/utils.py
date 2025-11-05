@@ -9,6 +9,7 @@ import textwrap
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import (
@@ -972,3 +973,7 @@ def build_inference_result_s3_uri(
             "results.json",
         ),
     )
+
+
+def total_milliseconds(td: timedelta) -> int:
+    return int(td.total_seconds() * 1_000)

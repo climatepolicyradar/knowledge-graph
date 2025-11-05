@@ -4,7 +4,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from knowledge_graph.identifiers import ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -142,6 +142,7 @@ class Concept(BaseModel):
         """Return a short string representation of the concept"""
         return self.__repr__()
 
+    @computed_field
     @property
     def id(self) -> ConceptID:
         """Return a unique ID for the concept"""
