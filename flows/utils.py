@@ -42,7 +42,7 @@ from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
-from prefect_slack.credentials import SlackWebhook
+from prefect_slack.credentials import AsyncWebClient, SlackCredentials, SlackWebhook
 from pydantic import BaseModel, Field, PositiveInt, RootModel, ValidationError
 from types_aiobotocore_s3.client import S3Client
 from types_aiobotocore_s3.paginator import ListObjectsV2Paginator
@@ -106,6 +106,24 @@ def file_name_from_path(path: str) -> str:
 def get_flow_run_ui_url(flow_run: FlowRun):
     """Determine the prefect console URL for a flow run."""
     return f"{get_current_settings().ui_url}/flow-runs/flow-run/{flow_run.id}"
+
+
+async def get_slack_client(
+    credentials: SlackCredentials | None = None,
+) -> AsyncWebClient:
+    """
+    Get a Slack client for the Navigator Notifier bot.
+
+    Can be used in any channel, just make sure to invite it: `/invite
+    @navigator-notifier`.
+
+    Optionally you may have already loaded some credentials, and if
+    so, can pass them in.
+    """
+    if not credentials:
+        credentials = await SlackCredentials.load("slack-navigator-notifier-bot")  # pyright: ignore[reportAssignmentType, reportGeneralTypeIssues]
+
+    return credentials.get_client()  # pyright: ignore[reportOptionalMemberAccess]
 
 
 class SlackNotify:
