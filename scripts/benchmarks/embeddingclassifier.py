@@ -198,6 +198,10 @@ def generate_config_hash(
         f"{field_preset.use_markdown_headers}|"
         f"{query_prefix}|{document_prefix}"
     )
+    # TODO: it could be better to use `Identifier.generate()` here, to take advantage
+    # of the best practices developed there. This would cause checking against the
+    # current runs based on their hash to break, so it's only worth doing should we
+    # adapt this for a new benchmark or delete all the runs in the current benchmark.
     return hashlib.sha256(config_str.encode()).hexdigest()[:16]
 
 
