@@ -307,19 +307,19 @@ if __name__ == "__main__":
             AwsEnv.sandbox: "0 9 * * *",
         },
     )
-    
+
     # Classifiers Profiles Lifecycle
 
     create_deployment(
         flow=classifiers_profiles_lifecycle,
         description="Compare wikibase classifiers profiles with classifiers specs",
         # Temporarily disabled while testing
-        # Schedule 2x daily during working week
+        # Schedule 2x daily during working week days
         # env_schedules={
         #     AwsEnv.production: "0 10,17 * * 1-4"
         # }
     )
-    
+
     # Sync Neo4j with Wikibase
 
     create_deployment(
