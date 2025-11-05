@@ -446,23 +446,26 @@ async def train_classifier(
     ) as run:
         # Determine training data and deduplicate against evaluation set
         training_data = (
-            train_validation_data
-            if train_validation_data is not None
-            else classifier.concept.labelled_passages
+            train_validation_data if train_validation_data is not None else []
         )
 
         # Remove any passages from training that appear in evaluation set
         evaluation_data = classifier.concept.labelled_passages
-        deduplicated_training_data = deduplicate_training_data(
-            training_data=training_data,
-            evaluation_data=evaluation_data,
-        )
+        if training_data:
+            deduplicated_training_data = deduplicate_training_data(
+                training_data=training_data,
+                evaluation_data=evaluation_data,
+            )
 
-        train_num_positives = len([p for p in deduplicated_training_data if p.spans])
-        train_num_negatives = len(deduplicated_training_data) - train_num_positives
-        Console().print(
-            f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
-        )
+            train_num_positives = len(
+                [p for p in deduplicated_training_data if p.spans]
+            )
+            train_num_negatives = len(deduplicated_training_data) - train_num_positives
+            Console().print(
+                f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
+            )
+        else:
+            deduplicated_training_data = []
 
         classifier.fit(
             labelled_passages=deduplicated_training_data,
