@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
-from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.exceptions import MissingContextError
@@ -40,6 +40,7 @@ from flows.utils import (
     RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_inference_result_s3_uri,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     deserialise_pydantic_list_with_fallback,
@@ -179,7 +180,13 @@ async def get_all_labelled_passages_for_one_document(
             classifier_spec=spec,
             document_stem=document_stem,
         )
-        response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        try:
+            response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code == "NoSuchKey":
+                e.add_note(f"S3 URI: {s3_uri}")
+            raise
         body = await response["Body"].read()
         content = body.decode("utf-8")
 
@@ -437,11 +444,11 @@ async def create_aggregate_inference_overall_summary_artifact(
     document_stems: Sequence[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-    successes: Sequence[RunOutputIdentifier],
+    successes: Sequence[FlowRun],
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
-    markdown_content = f"""# Aggregate Inference Overall Summary
+    overview_description = f"""# Aggregate Inference Overall Summary
 
 ## Overview
 - **Environment**: {aws_env.value}
@@ -452,9 +459,31 @@ async def create_aggregate_inference_overall_summary_artifact(
 - **Failed batches**: {len(failures)}
 """
 
-    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    details = []
+
+    for failure in failures:
+        if isinstance(failure, BaseException):
+            details.append(
+                {
+                    "Failure": f"Exception: {type(failure).__name__}: {str(failure)}",
+                }
+            )
+        elif isinstance(failure, FlowRun):
+            state_info = (
+                f"State: {failure.state.type.value if failure.state else 'Unknown'}"
+            )
+            if failure.state and failure.state.message:
+                state_info += f", Message: {failure.state.message}"
+            details.append(
+                {
+                    "Failure": state_info,
+                }
+            )
+
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"aggregate-inference-overall-{aws_env.value}",
-        markdown=markdown_content,
+        table=details,
+        description=overview_description,
     )
 
 
@@ -725,7 +754,7 @@ async def store_metadata(
 
     metadata_json = metadata.model_dump_json()
 
-    logger.debug(f"writing metadata: {metadata_json}")
+    logger.info(f"writing metadata: {metadata_json}")
 
     s3_uri = S3Uri(
         bucket=config.cache_bucket_str,
@@ -754,7 +783,68 @@ async def store_metadata(
                 f"Failed to store metadata to S3. Status code: {status_code}"
             )
 
-    logger.debug(f"wrote metadata to {s3_uri}")
+    logger.info(f"wrote metadata to {s3_uri}")
+
+
+async def _document_stems_from_parameters(
+    config: Config,
+    document_stems: Sequence[DocumentStem] | None = None,
+    run_output_identifier: RunOutputIdentifier | None = None,
+) -> Sequence[DocumentStem]:
+    """
+    Gets a list of document stems from the caller's parameters.
+
+    You can only use 1 of the approaches at the same time. Either
+    passing a list of document IDs, possibly with a well-known
+    translation suffix (hence why the input and outputs for this
+    function are both document stems), or a pointer to results that
+    can be loaded from S3.
+
+    If neither are used, then a default list is constructed from the
+    config.
+    """
+    logger = get_logger()
+
+    if document_stems and run_output_identifier:
+        raise ValueError(
+            "only one of document_stems and run_output_identifier can be used"
+        )
+
+    match (document_stems, run_output_identifier):
+        case (None, None):
+            logger.info(
+                "no document stems provided or run output identifier, collecting all available from S3 under prefix: "
+                + f"{config.aggregate_document_source_prefix}"
+            )
+            document_stems = await collect_stems_by_specs(config)
+            return document_stems
+        case (document_stems, None):
+            logger.info("using document stems")
+            return document_stems
+        case (None, run_output_identifier):
+            logger.info("using run output identifier")
+            s3_uri = build_inference_result_s3_uri(
+                cache_bucket_str=config.cache_bucket_str,
+                inference_document_target_prefix=config.inference_document_target_prefix,
+                run_output_identifier=run_output_identifier,
+            )
+            session = get_async_session(
+                region_name=config.bucket_region,
+                aws_env=config.aws_env,
+            )
+            async with session.client("s3") as s3_client:
+                response = await s3_client.get_object(
+                    Bucket=s3_uri.bucket, Key=s3_uri.key
+                )
+                body = await response["Body"].read()
+                result_data: dict[str, list[DocumentStem]] = json.loads(
+                    body.decode("utf-8")
+                )
+                return result_data["successful_document_stems"]
+        case _:
+            raise ValueError(
+                "only 1 of document_stems and run_output_identifier can be used"
+            )
 
 
 @flow(
@@ -763,7 +853,8 @@ async def store_metadata(
     timeout_seconds=None,
 )
 async def aggregate(
-    document_stems: None | Sequence[DocumentStem] = None,
+    document_stems: Sequence[DocumentStem] | None = None,
+    run_output_identifier: RunOutputIdentifier | None = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
@@ -772,15 +863,14 @@ async def aggregate(
     logger = get_logger()
 
     if not config:
-        logger.debug("no config provided, creating one")
+        logger.info("no config provided, creating one")
         config = await Config.create()
 
-    if not document_stems:
-        logger.debug(
-            "no document stems provided, collecting all available from S3 under prefix: "
-            + f"{config.aggregate_document_source_prefix}"
-        )
-        document_stems = await collect_stems_by_specs(config)
+    document_stems = await _document_stems_from_parameters(
+        config=config,
+        document_stems=document_stems,
+        run_output_identifier=run_output_identifier,
+    )
 
     run_output_identifier = build_run_output_identifier()
     classifier_specs = load_classifier_specs(config.aws_env)
@@ -827,7 +917,7 @@ async def aggregate(
         aws_env=config.aws_env,
         counter=n_batches,
         parameterised_batches=parameterised_batches,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_aggregate_inference_overall_summary_artifact(

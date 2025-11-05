@@ -1,0 +1,19 @@
+{
+  "id": "id:doc_search:concept::Q730.hzaw3hdg",
+  "fields": {
+    "id": "hzaw3hdg",
+    "wikibase_id": "Q730",
+    "wikibase_revision": 99872,
+    "wikibase_url": "https://wikibase.example.org/wiki/Item:Q730",
+    "preferred_label": "fishing sector",
+    "description": "",
+    "definition": "",
+    "alternative_labels": [],
+    "negative_labels": [],
+    "subconcept_of": ["njhxa72q"],
+    "has_subconcept": [],
+    "related_concepts": [],
+    "recursive_subconcept_of": [],
+    "recursive_has_subconcept": []
+  }
+}

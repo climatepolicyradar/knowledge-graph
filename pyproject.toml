@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.18.0"
+version = "0.20.0"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
@@ -20,7 +20,7 @@ dependencies = [
   "more-itertools>=10.3.0",
   "argilla>=2.5",
   "griffe==1.5.7",
-  "cpr-sdk==1.24.0",
+  "cpr-sdk>=4.0.1",
   "wandb>=0.21.0",
   "boto3>=1.35.31",
   "pyvespa>=0.54.0",
@@ -45,6 +45,9 @@ dependencies = [
   "matplotlib>=3.10.6",
   "pandas>=2.3.1",
   "tabulate>=0.9.0",
+  "polars>=1.34.0",
+  "datalake>=2.5.8",
+  "deltalake>=1.2.1",
 ]
 
 [project.optional-dependencies]
@@ -76,7 +79,7 @@ coiled = [
   "tornado>=6.5.1",
 ]
 dev = [
-  "azure-pdf-parser @ git+https://github.com/climatepolicyradar/azure-pdf-parser.git@v0.4.3",
+  "azure-pdf-parser @ git+https://github.com/climatepolicyradar/azure-pdf-parser.git@v0.5.0",
   "pytest>=8.3.2",
   "hypothesis>=6.112.2",
   "mkdocs-material>=9.5.39",

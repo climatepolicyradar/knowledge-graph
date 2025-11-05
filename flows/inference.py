@@ -6,7 +6,7 @@ from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Final, NamedTuple, Optional, TypeAlias
+from typing import Any, Final, Literal, NamedTuple, Optional, TypeAlias, overload
 
 import wandb
 from aiobotocore.config import AioConfig
@@ -51,6 +51,7 @@ from flows.utils import (
     RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_inference_result_s3_uri,
     build_run_output_identifier,
     filter_non_english_language_file_stems,
     get_file_stems_for_document_id,
@@ -1068,6 +1069,7 @@ class Metadata(BaseModel):
 async def store_metadata(
     config: Config,
     classifier_specs: list[ClassifierSpec],
+    run_output_identifier: RunOutputIdentifier,
 ) -> None:
     logger = get_logger()
 
@@ -1077,8 +1079,6 @@ async def store_metadata(
 
     if run_context.flow_run is None:
         raise ValueError("run context is missing flow run")
-
-    run_output_identifier = build_run_output_identifier()
 
     metadata = Metadata(
         flow_run=run_context.flow_run,
@@ -1124,6 +1124,7 @@ async def store_metadata(
 async def store_inference_result(
     config: Config,
     successful_document_stems: set[DocumentStem],
+    run_output_identifier: RunOutputIdentifier,
 ) -> None:
     """Store the inference result to S3 for later use."""
     logger = get_logger()
@@ -1138,8 +1139,6 @@ async def store_inference_result(
     if run_context.flow_run.start_time is None:
         raise ValueError("flow run didn't have a start time")
 
-    run_output_identifier = build_run_output_identifier()
-
     result_data = {
         "successful_document_stems": list(successful_document_stems),
     }
@@ -1148,13 +1147,10 @@ async def store_inference_result(
 
     logger.debug(f"writing inference result: {len(result_json)} bytes")
 
-    s3_uri = S3Uri(
-        bucket=config.cache_bucket_str,
-        key=os.path.join(
-            config.inference_document_target_prefix,
-            run_output_identifier,
-            "results.json",
-        ),
+    s3_uri = build_inference_result_s3_uri(
+        cache_bucket_str=config.cache_bucket_str,
+        inference_document_target_prefix=config.inference_document_target_prefix,
+        run_output_identifier=run_output_identifier,
     )
 
     session = get_async_session(
@@ -1178,6 +1174,30 @@ async def store_inference_result(
     logger.debug(f"wrote inference result to {s3_uri}")
 
 
+@overload
+async def inference(
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
+    use_new_and_updated: bool = False,
+    config: Config | None = None,
+    batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
+    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    return_pointer: Literal[False] = False,
+) -> set[DocumentStem] | Fault: ...
+
+
+@overload
+async def inference(
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
+    document_ids: Sequence[DocumentImportId] | None = None,
+    use_new_and_updated: bool = False,
+    config: Config | None = None,
+    batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
+    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    return_pointer: Literal[True] = ...,
+) -> RunOutputIdentifier | Fault: ...
+
+
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -1189,7 +1209,8 @@ async def inference(
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
-) -> set[DocumentStem] | Fault:
+    return_pointer: bool = False,
+) -> set[DocumentStem] | RunOutputIdentifier | Fault:
     """
     Flow to run inference on documents within a bucket prefix.
 
@@ -1204,11 +1225,19 @@ async def inference(
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
       there is no need to change this outside of local dev
+    - return_pointer: Either return a pointer to the results, a run
+      output identifier, or the return the results themselves
+      directly. Since there can be a large amount of document IDs, the
+      direct results may be too big to pass, if running in Prefect.
+      Instead, you can load the results in the next place, via the
+      pointer.
     """
     logger = get_logger()
     if not config:
         config = await Config.create()
     logger.info(f"Running with config: {config}")
+
+    run_output_identifier = build_run_output_identifier()
 
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
@@ -1228,6 +1257,7 @@ async def inference(
             await store_metadata(
                 config=config,
                 classifier_specs=list(classifier_specs),
+                run_output_identifier=run_output_identifier,
             )
     except Exception as e:
         logger.error(f"Failed to store metadata: {e}")
@@ -1323,12 +1353,15 @@ async def inference(
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
         removal_details=removal_details,
+        run_output_identifier=run_output_identifier,
     )
 
     try:
         if config.cache_bucket:
             await store_inference_result(
-                config=config, successful_document_stems=successful_document_stems
+                config=config,
+                successful_document_stems=successful_document_stems,
+                run_output_identifier=run_output_identifier,
             )
     except Exception as e:
         logger.error(f"Failed to store inference result: {e}")
@@ -1347,9 +1380,16 @@ async def inference(
         raise Fault(
             msg="Some inference batches had failures.",
             metadata=metadata_json,
-            data=successful_document_stems,
+            data={
+                "successful_document_stems": successful_document_stems,
+                "run_output_identifier": run_output_identifier,
+            },
         )
-    return successful_document_stems
+
+    if return_pointer:
+        return run_output_identifier
+    else:
+        return successful_document_stems
 
 
 async def create_dont_run_on_docs_summary_artifact(
@@ -1382,6 +1422,7 @@ async def create_inference_summary_artifact(
     successful_classifier_specs: list[ClassifierSpec],
     failed_classifier_specs: list[ClassifierSpec],
     removal_details: dict[ClassifierSpec, int],
+    run_output_identifier: RunOutputIdentifier,
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
@@ -1395,6 +1436,7 @@ async def create_inference_summary_artifact(
 - **Successful classifiers**: {len(successful_classifier_specs)}
 - **Failed classifiers**: {len(failed_classifier_specs)}
 - **Classifiers with removals**: {len(removal_details)}
+- **Run output identifier**: {run_output_identifier}
 """
     # Create classifier details table
     classifier_details = [

@@ -9,6 +9,7 @@ import textwrap
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import (
@@ -956,3 +957,23 @@ def deserialise_pydantic_list_with_fallback[T: BaseModel](
         # Fall back to original format (array of JSON strings)
         data = json.loads(content)
         return [model_class.model_validate_json(passage) for passage in data]
+
+
+def build_inference_result_s3_uri(
+    cache_bucket_str: str,
+    inference_document_target_prefix: str,
+    run_output_identifier: RunOutputIdentifier,
+) -> S3Uri:
+    """Build S3 URI for inference results file."""
+    return S3Uri(
+        bucket=cache_bucket_str,
+        key=os.path.join(
+            inference_document_target_prefix,
+            run_output_identifier,
+            "results.json",
+        ),
+    )
+
+
+def total_milliseconds(td: timedelta) -> int:
+    return int(td.total_seconds() * 1_000)
