@@ -1,11 +1,12 @@
+---
 # Concept IDs to use for benchmarks
 # One Wikibase ID per line (e.g., Q123)
 # Lines starting with # are ignored
 # Add your concept IDs below:
-Q1016
-Q567
-Q1744
-Q53
-Q615
-Q69
-Q715
+- Q1016
+- Q567
+- Q1744
+- Q53
+- Q615
+- Q69
+- Q715

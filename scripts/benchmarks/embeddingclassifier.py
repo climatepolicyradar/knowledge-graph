@@ -4,12 +4,12 @@ import hashlib
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Sequence
 
 import torch
 import typer
 import wandb
-from pydantic import ValidationError
+import yaml
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -233,7 +233,7 @@ def check_run_exists_in_wandb(
         return False
 
 
-def load_concept_ids_from_file(file_path: Path) -> list[WikibaseID]:
+def load_concept_ids_from_file(file_path: Path) -> set[WikibaseID]:
     """
     Load concept IDs from a text file.
 
@@ -246,30 +246,21 @@ def load_concept_ids_from_file(file_path: Path) -> list[WikibaseID]:
     """
     if not file_path.exists():
         console.log(f"Concepts file not found at: {file_path}")
-        return []
+        return set()
 
     concepts = []
     with open(file_path, "r") as f:
-        for line_num, line in enumerate(f, 1):
-            line = line.strip()
-
-            if not line or line.startswith("#"):
-                continue
-            try:
-                concept_id = WikibaseID(line)
-                concepts.append(concept_id)
-            except ValidationError:
-                console.log(
-                    f"Warning: Line {line_num} doesn't look like a Wikibase ID: {line}"
-                )
-                continue
+        concepts_file_contents = yaml.safe_load(f)
+        concepts = set(
+            [WikibaseID(concept_id) for concept_id in concepts_file_contents]
+        )
 
     console.log(f"Loaded {len(concepts)} concept IDs from {file_path}")
     return concepts
 
 
 async def get_concepts_with_validation_data(
-    concept_ids: Optional[list[WikibaseID]] = None,
+    concept_ids: Optional[Sequence[WikibaseID]] = None,
 ) -> list[Concept]:
     """
     Fetch concepts from Wikibase and labelled passages from Argilla.
@@ -403,15 +394,15 @@ def main(
     console.log("Starting embedding classifier benchmark")
 
     # Determine which concepts to evaluate
-    # Priority: --concepts > default concepts.txt > all concepts
+    # Priority: --concepts > default concepts.yaml > all concepts
     concept_ids = None
     if concepts:
         console.log(f"Using {len(concepts)} concepts from command-line arguments")
         concept_ids = [WikibaseID(c) for c in concepts]
     else:
-        concepts_file = Path(__file__).parent / "concepts.txt"
+        concepts_file = Path(__file__).parent / "concepts.yaml"
         if concepts_file.exists():
-            concept_ids = load_concept_ids_from_file(concepts_file)
+            concept_ids = list(load_concept_ids_from_file(concepts_file))
             if not concept_ids:
                 console.log(
                     "concepts.txt is empty, will evaluate all concepts with validation data"
