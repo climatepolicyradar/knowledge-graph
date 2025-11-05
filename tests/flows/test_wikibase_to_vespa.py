@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import polars as pl
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 from vespa.io import VespaResponse
 
 from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
@@ -11,9 +12,11 @@ from flows.wikibase_to_vespa import (
     dataframe_to_concepts,
     get_new_versions,
     load_concepts,
+    send_concept_validation_alert,
     update_concept_in_vespa,
     update_concepts_in_vespa,
 )
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseAuth
 
@@ -597,3 +600,332 @@ async def test_update_concepts_in_vespa__real_vespa(
 
         assert len(results) == len(mock_concepts)
         assert all(is_ok(r) for r in results)
+
+
+# Slack notification tests
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__validation_errors_only():
+    """Test Slack alert with only validation errors."""
+    # Create a validation error
+    try:
+        Concept(preferred_label="")
+    except PydanticValidationError as e:
+        validation_error = e
+
+    failures = [
+        Error(
+            msg="validation error",
+            metadata={
+                "concept": {"wikibase_id": "Q123", "preferred_label": ""},
+                "validations": validation_error,
+            },
+        )
+    ]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": True, "ts": "1234567890.123456"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,
+            aws_env=AwsEnv.staging,
+        )
+
+    # Verify main message was posted
+    assert mock_slack_client.chat_postMessage.call_count == 2  # Main + 1 thread
+    main_call = mock_slack_client.chat_postMessage.call_args_list[0]
+
+    # Check main message structure
+    assert "attachments" in main_call.kwargs
+    assert main_call.kwargs["attachments"][0]["color"] in ["#e01e5a", "#ecb22e"]
+
+    # Check thread message for validation errors
+    thread_call = mock_slack_client.chat_postMessage.call_args_list[1]
+    assert "blocks" in thread_call.kwargs
+    blocks = thread_call.kwargs["blocks"]
+
+    # Should have section + table
+    assert len(blocks) == 2
+    assert blocks[0]["type"] == "section"
+    assert "Data Quality Issues" in blocks[0]["text"]["text"]
+    assert blocks[1]["type"] == "table"
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__system_errors_only():
+    """Test Slack alert with only system errors."""
+    failures = [
+        Error(
+            msg="Vespa update failed",
+            metadata={
+                "concept": {"wikibase_id": "Q456"},
+            },
+        ),
+        Error(
+            msg="Connection timeout",
+            metadata={
+                "concept": {"wikibase_id": "Q789"},
+            },
+        ),
+    ]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": True, "ts": "1234567890.123456"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,
+            aws_env=AwsEnv.staging,
+        )
+
+    # Verify main message + system errors thread
+    assert mock_slack_client.chat_postMessage.call_count == 2  # Main + 1 thread
+
+    # Check thread message for system errors
+    thread_call = mock_slack_client.chat_postMessage.call_args_list[1]
+    blocks = thread_call.kwargs["blocks"]
+
+    assert blocks[0]["type"] == "section"
+    assert "System Errors" in blocks[0]["text"]["text"]
+    assert blocks[1]["type"] == "table"
+
+    # Verify table has header + 2 data rows
+    table_rows = blocks[1]["rows"]
+    assert len(table_rows) == 3  # Header + 2 errors
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__mixed_errors():
+    """Test Slack alert with both validation and system errors."""
+    # Create a validation error
+    try:
+        Concept(preferred_label="")
+    except PydanticValidationError as e:
+        validation_error = e
+
+    failures = [
+        Error(
+            msg="validation error",
+            metadata={
+                "concept": {"wikibase_id": "Q111"},
+                "validations": validation_error,
+            },
+        ),
+        Error(
+            msg="Vespa update failed",
+            metadata={
+                "concept": {"wikibase_id": "Q222"},
+            },
+        ),
+    ]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": True, "ts": "1234567890.123456"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,
+            aws_env=AwsEnv.staging,
+        )
+
+    # Verify main message + 2 threads (validation + system)
+    assert mock_slack_client.chat_postMessage.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__colour_red_high_failure_rate():
+    """Test that red colour is used when failure rate >= 50%."""
+    failures = [
+        Error(msg="error", metadata={"concept": {"wikibase_id": f"Q{i}"}})
+        for i in range(5)
+    ]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": True, "ts": "1234567890.123456"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,  # 50% failure rate
+            aws_env=AwsEnv.staging,
+        )
+
+    main_call = mock_slack_client.chat_postMessage.call_args_list[0]
+    colour = main_call.kwargs["attachments"][0]["color"]
+    assert colour == "#e01e5a"  # Red
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__colour_orange_low_failure_rate():
+    """Test that orange colour is used when failure rate < 50%."""
+    failures = [Error(msg="error", metadata={"concept": {"wikibase_id": "Q1"}})]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": True, "ts": "1234567890.123456"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,  # 10% failure rate
+            aws_env=AwsEnv.staging,
+        )
+
+    main_call = mock_slack_client.chat_postMessage.call_args_list[0]
+    colour = main_call.kwargs["attachments"][0]["color"]
+    assert colour == "#ecb22e"  # Orange
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__table_format():
+    """Test that thread messages use proper table format with concept IDs."""
+    failures = [
+        Error(
+            msg="Vespa update failed",
+            metadata={"concept": {"wikibase_id": "Q100"}},
+        ),
+        Error(
+            msg="Connection timeout",
+            metadata={"concept": {"wikibase_id": "Q200"}},
+        ),
+    ]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": True, "ts": "1234567890.123456"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,
+            aws_env=AwsEnv.staging,
+        )
+
+    thread_call = mock_slack_client.chat_postMessage.call_args_list[1]
+    table = thread_call.kwargs["blocks"][1]
+
+    assert table["type"] == "table"
+    rows = table["rows"]
+
+    # Check header row
+    header_row = rows[0]
+    assert header_row[0]["elements"][0]["elements"][0]["text"] == "Concept ID"
+    assert header_row[1]["elements"][0]["elements"][0]["text"] == "Error"
+
+    # Check data rows contain wikibase IDs
+    assert rows[1][0]["elements"][0]["elements"][0]["text"] == "Q100"
+    assert rows[2][0]["elements"][0]["elements"][0]["text"] == "Q200"
+
+
+@pytest.mark.asyncio
+async def test_send_concept_validation_alert__slack_api_error():
+    """Test that Slack API errors are handled gracefully."""
+    failures = [Error(msg="error", metadata={"concept": {"wikibase_id": "Q1"}})]
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage = AsyncMock(
+        return_value={"ok": False, "error": "channel_not_found"}
+    )
+
+    # Mock the Prefect run context
+    mock_flow_run = AsyncMock()
+    mock_flow_run.name = "test-flow-run"
+    mock_context = AsyncMock()
+    mock_context.flow_run = mock_flow_run
+
+    with (
+        patch(
+            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
+        ),
+        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+    ):
+        # Should not raise - errors are caught and logged
+        await send_concept_validation_alert(
+            failures=failures,
+            total_concepts=10,
+            aws_env=AwsEnv.staging,
+        )
+
+    # Verify that chat_postMessage was called
+    assert mock_slack_client.chat_postMessage.call_count == 1
