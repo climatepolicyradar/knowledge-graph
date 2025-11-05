@@ -458,6 +458,12 @@ async def train_classifier(
             evaluation_data=evaluation_data,
         )
 
+        train_num_positives = len([p for p in deduplicated_training_data if p.spans])
+        train_num_negatives = len(deduplicated_training_data) - train_num_positives
+        Console().print(
+            f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
+        )
+
         classifier.fit(
             labelled_passages=deduplicated_training_data,
             enable_wandb=track_and_upload,

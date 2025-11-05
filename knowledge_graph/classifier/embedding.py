@@ -1,10 +1,15 @@
+import logging
 from datetime import datetime
 from typing import Optional, Sequence
+
+import numpy as np
 
 from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingClassifier(Classifier, ZeroShotClassifier):
@@ -20,8 +25,11 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
     def __init__(
         self,
         concept: Concept,
-        embedding_model_name: str = "BAAI/bge-small-en-v1.5",
+        embedding_model_name: str = "ibm-granite/granite-embedding-107m-multilingual",
         threshold: float = 0.65,
+        document_prefix: str = "",
+        query_prefix: str = "",
+        device: str | None = None,
     ):
         super().__init__(concept)
         try:
@@ -29,7 +37,23 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
                 SentenceTransformer,  # type: ignore[import-untyped]
             )
 
-            self.embedding_model = SentenceTransformer(embedding_model_name)
+            if (
+                embedding_model_name.startswith("Snowflake/")
+                or embedding_model_name.startswith("nomic-ai/")
+                or embedding_model_name.startswith("Alibaba-NLP/")
+            ):
+                logger.warning(
+                    "EmbeddingClassifier has been set to trust remote code. Don't use this in production – create a fork of the repo, or pin a commit to load from."
+                )
+                _trust_remote_code = True
+            else:
+                _trust_remote_code = False
+
+            self.embedding_model = SentenceTransformer(
+                embedding_model_name,
+                device=device,
+                trust_remote_code=_trust_remote_code,
+            )
         except ImportError:
             raise ImportError(
                 f"The `sentence-transformers` library is required to run {self.name}s. "
@@ -37,9 +61,31 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             )
 
         self.threshold = threshold
+        self.document_prefix = document_prefix
+        self.query_prefix = query_prefix
 
-        self.concept_text = self.concept.to_markdown()
-        self.concept_embedding = self.embedding_model.encode(self.concept_text)
+        self.concept_text = self.concept.to_markdown(
+            include_alternative_labels=True,
+            include_definition=True,
+            include_description=True,
+            include_concept_neighbourhood=False,
+            include_example_passages=False,
+            use_markdown_headers=True,
+        )
+        concept_text_with_prefix = f"{self.document_prefix}{self.concept_text}"
+        self.concept_embedding = self.embedding_model.encode(concept_text_with_prefix)
+
+        # Verify that embeddings are normalized (L2 norm ≈ 1.0)
+        # This ensures that dot product equals cosine similarity
+        embedding_norm = np.linalg.norm(self.concept_embedding)
+        if not np.isclose(embedding_norm, 1.0, atol=0.01):
+            logger.warning(
+                "Embedding from %s is not L2-normalized (norm=%.4f). "
+                "Dot product may not equal cosine similarity. "
+                "Consider normalizing embeddings explicitly.",
+                embedding_model_name,
+                embedding_norm,
+            )
 
     def __repr__(self):
         """Return a string representation of the classifier."""
@@ -51,7 +97,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
     def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
         return ClassifierID.generate(
-            self.name, self.concept.id, self.embedding_model, self.threshold
+            self.name,
+            self.concept.id,
+            self.embedding_model,
+            self.threshold,
+            self.document_prefix,
+            self.query_prefix,
         )
 
     def __hash__(self) -> int:
@@ -69,7 +120,9 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         returned.
         """
         threshold = threshold or self.threshold
-        query_embedding = self.embedding_model.encode(text)
+
+        text_with_prefix = f"{self.query_prefix}{text}"
+        query_embedding = self.embedding_model.encode(text_with_prefix)
         similarity = self.concept_embedding @ query_embedding.T
         spans = []
         if similarity > threshold:
@@ -98,8 +151,10 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         :return list[list[Span]]: A list of spans in the texts for each text
         """
         threshold = threshold or self.threshold
+
+        texts_with_prefix = [f"{self.query_prefix}{text}" for text in texts]
         text_embeddings = self.embedding_model.encode(
-            list(texts), show_progress_bar=show_progress_bar
+            texts_with_prefix, show_progress_bar=show_progress_bar
         )
         spans_per_text = []
 
