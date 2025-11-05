@@ -16,17 +16,17 @@ def mock_profiles():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q100"),
                 classifier_id=ClassifierID("aaaa2222"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q111"),
                 classifier_id=ClassifierID("bbbb3333"),
-                classifier_profile=Profile.EXPERIMENTAL,
+                classifiers_profile=Profile.EXPERIMENTAL,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q123"),
                 classifier_id=ClassifierID("cccc3333"),
-                classifier_profile=Profile.RETIRED,
+                classifiers_profile=Profile.RETIRED,
             ),
         ]
     )
@@ -45,22 +45,22 @@ def test_validate_too_many_retired_profiles():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("abcd2345"),
-                classifier_profile=Profile.RETIRED,
+                classifiers_profile=Profile.RETIRED,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("zzzz3333"),
-                classifier_profile=Profile.RETIRED,
+                classifiers_profile=Profile.RETIRED,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("tttt7777"),
-                classifier_profile=Profile.RETIRED,
+                classifiers_profile=Profile.RETIRED,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("eeee3333"),
-                classifier_profile=Profile.RETIRED,
+                classifiers_profile=Profile.RETIRED,
             ),
         ]
     )
@@ -76,12 +76,12 @@ def test_validate_too_many_primary_profiles():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("aaaa5555"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("jjjj5555"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             ),
         ]
     )
@@ -97,12 +97,12 @@ def test_validate_duplicate_classifier_ids():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1"),
                 classifier_id=ClassifierID("aaaa4444"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q2"),
                 classifier_id=ClassifierID("aaaa4444"),
-                classifier_profile=Profile.EXPERIMENTAL,
+                classifiers_profile=Profile.EXPERIMENTAL,
             ),
         ]
     )
@@ -121,7 +121,7 @@ def test_append_valid_profile():
         ClassifiersProfile(
             wikibase_id=WikibaseID("Q123"),
             classifier_id=ClassifierID("aabb3344"),
-            classifier_profile=Profile.PRIMARY,
+            classifiers_profile=Profile.PRIMARY,
         )
     )
 
@@ -136,7 +136,7 @@ def test_append_invalid_profile():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q100"),
                 classifier_id=ClassifierID("cxcx2929"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             ),
         ]
     )
@@ -146,7 +146,7 @@ def test_append_invalid_profile():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q100"),
                 classifier_id=ClassifierID("xyxy9292"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             )
         )
     assert len(profiles) == 0
@@ -160,12 +160,12 @@ def test_extend_valid_profiles():
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1111"),
                 classifier_id=ClassifierID("abdd2323"),
-                classifier_profile=Profile.PRIMARY,
+                classifiers_profile=Profile.PRIMARY,
             ),
             ClassifiersProfile(
                 wikibase_id=WikibaseID("Q1111"),
                 classifier_id=ClassifierID("wwww8484"),
-                classifier_profile=Profile.EXPERIMENTAL,
+                classifiers_profile=Profile.EXPERIMENTAL,
             ),
         ]
     )
@@ -182,12 +182,12 @@ def test_extend_invalid_profiles(mock_profiles):
         ClassifiersProfile(
             wikibase_id=WikibaseID("Q999"),
             classifier_id=ClassifierID("abcd2345"),
-            classifier_profile=Profile.EXPERIMENTAL,
+            classifiers_profile=Profile.EXPERIMENTAL,
         ),
         ClassifiersProfile(
             wikibase_id=WikibaseID("Q999"),
             classifier_id=ClassifierID("dacb2345"),
-            classifier_profile=Profile.EXPERIMENTAL,
+            classifiers_profile=Profile.EXPERIMENTAL,
         ),
     ]
 

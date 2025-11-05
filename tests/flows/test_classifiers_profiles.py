@@ -1,10 +1,19 @@
 from unittest.mock import AsyncMock
 
+import polars as pl
 import pytest
 
-from flows.classifiers_profiles import get_classifier_profiles
+from flows.classifier_specs.spec_interface import ClassifierSpec
+from flows.classifiers_profiles import (
+    compare_classifiers_profiles,
+    get_classifiers_profiles,
+)
 from flows.result import Err
-from knowledge_graph.classifiers_profiles import ClassifiersProfile, Profile
+from knowledge_graph.classifiers_profiles import (
+    ClassifiersProfile,
+    ClassifiersProfiles,
+    Profile,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.wikibase import StatementRank, WikibaseSession
@@ -23,7 +32,7 @@ def test_update_classifier_profile():
 
 
 @pytest.mark.asyncio
-async def test_get_classifier_profiles():
+async def test_get_classifiers_profiles():
     # mock concepts
     list_concepts = [
         Concept(wikibase_id="Q123", preferred_label="Concept 123"),
@@ -57,7 +66,7 @@ async def test_get_classifier_profiles():
     ]
 
     # Call the function under test
-    classifier_profiles, results = await get_classifier_profiles(
+    classifier_profiles, results = await get_classifiers_profiles(
         wikibase=mock_wikibase, concepts=list_concepts
     )
 
@@ -66,12 +75,12 @@ async def test_get_classifier_profiles():
     assert classifier_profiles[0] == ClassifiersProfile(
         wikibase_id=WikibaseID("Q123"),
         classifier_id=ClassifierID("aaaa2222"),
-        classifier_profile=Profile.PRIMARY,
+        classifiers_profile=Profile.PRIMARY,
     )
     assert classifier_profiles[1] == ClassifiersProfile(
         wikibase_id=WikibaseID("Q123"),
         classifier_id=ClassifierID("yyyy9999"),
-        classifier_profile=Profile.RETIRED,
+        classifiers_profile=Profile.RETIRED,
     )
 
     # assert validation errors
@@ -83,3 +92,61 @@ async def test_get_classifier_profiles():
 
     # check mocked method called
     assert mock_wikibase.get_classifier_ids_async.call_count == 4
+
+
+def test_compare_classifiers_profiles():
+    # Mock classifier specs (left dataframe)
+    classifier_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            concept_id="aaaa2222",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q100",
+            classifier_id="nnnn5555",
+            classifiers_profile="experimental",
+            concept_id="nnnn5555",
+            wandb_registry_version="v1",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q1",
+            classifier_id="abcd2345",
+            classifiers_profile="primary",
+            concept_id="abcd2345",
+            wandb_registry_version="v1",
+        ),
+    ]
+
+    # Mock classifiers profiles (right dataframe)
+    classifiers_profiles = ClassifiersProfiles(
+        [
+            ClassifiersProfile(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile="experimental",
+            ),
+            ClassifiersProfile(
+                wikibase_id=WikibaseID("Q100"),
+                classifier_id=ClassifierID("nnnn5555"),
+                classifiers_profile="experimental",
+            ),
+            ClassifiersProfile(
+                wikibase_id=WikibaseID("Q222"),
+                classifier_id=ClassifierID("abab4444"),
+                classifiers_profile="primary",
+            ),
+        ]
+    )
+
+    updates_df = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
+
+    # Assert the results
+    assert len(updates_df) == 4
+    assert updates_df.filter(pl.col("status") == "same").height == 1
+    assert updates_df.filter(pl.col("status") == "add").height == 1
+    assert updates_df.filter(pl.col("status") == "remove").height == 1
+    assert updates_df.filter(pl.col("status") == "update").height == 1
+    assert updates_df.filter(pl.col("status") == "unknown").height == 0

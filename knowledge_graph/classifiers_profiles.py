@@ -42,7 +42,7 @@ class ClassifiersProfile(BaseModel):
 
     wikibase_id: WikibaseID = Field(description="Wikibase ID")
     classifier_id: ClassifierID = Field(description="Classifier ID")
-    classifier_profile: Profile = Field(
+    classifiers_profile: Profile = Field(
         description=("The classifiers profile for specified classifier ID"),
     )
 
@@ -77,7 +77,7 @@ class ClassifiersProfiles(list[ClassifiersProfile]):
         counts = Counter(
             profile.wikibase_id
             for profile in self
-            if profile.classifier_profile == profile_validation
+            if profile.classifiers_profile == profile_validation
         )
         errors = [
             f"Validation error: Wikibase ID '{wikibase_id}' has {count} {str(profile_validation)} profiles (maximum allowed is {max_count})."
