@@ -132,7 +132,10 @@ class BatchInferenceResult(BaseModel):
     def failed(self) -> bool:
         """Whether the batch failed, True if failed."""
 
-        return len(self.batch_document_stems) != len(self.successful_document_stems)
+        documents_sent_for_inference: bool = len(self.batch_document_stems) > 0
+        no_successful_documents: bool = len(self.successful_document_stems) == 0
+
+        return documents_sent_for_inference and no_successful_documents
 
 
 def get_inference_fault_metadata(
@@ -979,11 +982,7 @@ async def _inference_batch_of_documents(
     )
 
     if batch_inference_result.failed:
-        message = (
-            "Failed to run inference on "
-            f"{batch_inference_result.failed_document_count}/"
-            f"{batch_inference_result.all_document_count} documents."
-        )
+        message = "Failed to run inference on all documents in the batch."
         raise Fault(
             msg=message,
             metadata={},
