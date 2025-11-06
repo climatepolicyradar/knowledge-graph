@@ -110,10 +110,10 @@ def validate_unique_classifier_ids(
     return errors
 
 
-def remove_invalid_wikibase_ids(
+def get_valid_wikibase_ids(
     profiles: List[ClassifiersProfileMapping], invalid_wikibase_ids: Set[WikibaseID]
 ) -> List[ClassifiersProfileMapping]:
-    """Remove wikibase IDs with invalid profiles"""
+    """Return only wikibase ids that have passed validation"""
     return [
         profile
         for profile in profiles
@@ -139,7 +139,7 @@ def validate_classifiers_profiles_mappings(
         for wikibase_id in (error.metadata or {}).get("wikibase_id", set())
     }
 
-    # Remove all profiles with invalid wikibase IDs
-    valid_profiles = remove_invalid_wikibase_ids(profiles, invalid_wikibase_ids)
+    # Identify all profiles with invalid wikibase IDs
+    valid_profiles = get_valid_wikibase_ids(profiles, invalid_wikibase_ids)
 
     return valid_profiles, errors
