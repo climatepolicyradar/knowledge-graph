@@ -967,6 +967,7 @@ def test_batch_inference_result_failed_document_stems():
     )
     assert set(result.failed_document_stems) == {doc2, doc3}
     assert result.failed_document_count == 2
+    assert not result.failed
 
 
 def test_batch_inference_result_all_document_count():
