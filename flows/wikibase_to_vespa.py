@@ -30,7 +30,7 @@ from flows.utils import (
     get_slack_client,
     total_milliseconds,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 
@@ -215,35 +215,48 @@ async def update_concept_in_vespa(
         )
 
 
+async def s3_prefix_has_objects(s3_uri: S3Uri, region: str, aws_env: AwsEnv) -> bool:
+    """
+    Check if an S3 prefix has any objects.
+
+    I found the Polars errors to be misleading, about the remote state
+    of the data. This explicit check is not misleading.
+
+    Returns `False` if the prefix has no objects.
+    """
+    session = get_async_session(
+        region_name=region,
+        aws_env=aws_env,
+    )
+    async with session.client("s3") as s3:
+        response = await s3.list_objects_v2(
+            Bucket=s3_uri.bucket,
+            Prefix=s3_uri.key,
+            MaxKeys=1,
+        )
+        # Empty prefix returns successfully with no Contents key
+        return "Contents" in response and len(response["Contents"]) > 0
+
+
 @task(cache_policy=NONE)
 async def get_new_versions(
     current_df: pl.LazyFrame,
-    existing_ids: pl.LazyFrame,
-    concepts_archive_path: Path | S3Uri,
+    existing_ids: pl.LazyFrame | None,
 ) -> pl.DataFrame:
     """
     Get new versions not yet synced.
 
-    Concepts whose content-based ID doesn't exist in previous state
-    The ID is a hash of the concept's content, so any change creates a
-    new ID.
+    Concepts whose content-based ID doesn't exist in previous state.
+    The ID is a hash of the concept's content, so any change creates a new ID.
     """
-    logger = get_logger()
+    if existing_ids is None:
+        return current_df.collect()
 
-    try:
-        return current_df.join(
-            existing_ids,
-            on="id",
-            how="anti",  # Anti-join: rows in current DF NOT in existing IDs
-        ).collect()
-    except pl.exceptions.ComputeError as e:
-        if "expanded paths were empty" in str(e):
-            logger.info(
-                f"no existing data at {concepts_archive_path}, all concepts are new"
-            )
-            return current_df.collect()
-        else:
-            raise
+    return current_df.join(
+        existing_ids,
+        on="id",
+        how="anti",  # Anti-join: rows in current DF NOT in existing IDs
+    ).collect()
 
 
 @task(persist_result=False)
@@ -904,35 +917,46 @@ async def wikibase_to_vespa(
     current_df = concepts_to_dataframe(concepts).lazy()
     logger.info("converted to dataframe")
 
-    # Load previous state from all Parquet files
-    parquet_pattern = f"{concepts_archive_path}/*.parquet"
+    credential_provider: pl.CredentialProvider | None = None
+    if isinstance(concepts_archive_path, S3Uri):
+        credential_provider = pl.CredentialProviderAWS(region_name="eu-west-1")
 
-    credential_provider = pl.CredentialProviderAWS(
-        region_name="eu-west-1",
-    )
+    # Check if archive(s) exists before trying to scan it
+    logger.info("checking for existing archive(s)")
+    match concepts_archive_path:
+        case S3Uri():
+            archives_exist = await s3_prefix_has_objects(
+                concepts_archive_path,
+                "eu-west-1",
+                aws_env,
+            )
+        case Path():
+            archives_exist = concepts_archive_path.exists()
+    logger.info(f"found existing archive(s): {archives_exist}")
 
-    logger.info("getting existing versions")
-    existing_ids = (
-        pl.scan_parquet(
-            parquet_pattern,
-            credential_provider=credential_provider,
+    # Load previous state from all Parquet files if archive exists
+    existing_ids: pl.LazyFrame | None = None
+    if archives_exist:
+        logger.info("loading existing ID(s) from archive(s)")
+        parquet_pattern = f"{concepts_archive_path}/*.parquet"
+        existing_ids = (
+            pl.scan_parquet(
+                parquet_pattern,
+                credential_provider=credential_provider,
+            )
+            .select("id")
+            .unique()
         )
-        .select("id")
-        .unique()
-    )
 
     logger.info("getting new versions")
-
     new_versions = await get_new_versions(
         current_df,
         existing_ids,
-        concepts_archive_path,
     )
 
     logger.info(f"new versions found: {new_versions}")
 
     if not len(new_versions):
-        logger.info("no new versions to sync")
         return
 
     kg_concepts = dataframe_to_concepts(new_versions)
