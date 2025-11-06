@@ -85,7 +85,7 @@ __all__ = [
 
 
 def create_classifier(
-    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
+    concept: Concept, classifier_type: str, classifier_kwargs: dict[str, Any]
 ) -> Classifier:
     """
     Create a classifier from its type and any kwargs.
