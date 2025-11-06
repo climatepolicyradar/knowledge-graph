@@ -1,5 +1,5 @@
 import asyncio
-import tempfile
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -7,111 +7,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import typer
-import wandb
 from rich.console import Console
-from rich.progress import Progress
 from sklearn.metrics import f1_score
 
+from knowledge_graph.classifier import load_classifier_from_wandb
+from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import ensemble_metrics_dir
+from knowledge_graph.ensemble import create_ensemble
 from knowledge_graph.ensemble.metrics import (
     Disagreement,
     PredictionProbabilityStandardDeviation,
 )
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelling import label_passages_with_classifier
 from scripts.get_concept import get_concept_async
 
 app = typer.Typer()
 console = Console()
-
-
-def load_labelled_passages_json(json_path: Path) -> list[LabelledPassage]:
-    """Load labelled passages JSON."""
-
-    with open(json_path, "r", encoding="utf-8") as f:
-        labelled_passages = [LabelledPassage.model_validate_json(line) for line in f]
-
-    return labelled_passages
-
-
-def load_ensemble_runs_from_wandb(
-    ensemble_name: str,
-    wikibase_id: str,
-) -> tuple[list[dict], list[list[LabelledPassage]]]:
-    """
-    Load ensemble runs and their labelled_passages artifacts from W&B.
-
-    :returns list[dict] run_metadata_list: Metadata of the W&B runs
-    :returns list[list[LabelledPassage]] predictions_per_classifier: one list of
-        labelled passages per classifier
-    """
-
-    console.log(
-        f"Fetching runs with ensemble_name = {ensemble_name} from {wikibase_id}"
-    )
-
-    api = wandb.Api()
-    runs = api.runs(wikibase_id, filters={"config.ensemble_name": ensemble_name})
-
-    run_metadata = []
-    predictions_per_classifier = []
-
-    console.log(f"Found {len(runs)} runs for ensemble {ensemble_name}")
-
-    with Progress() as progress:
-        task = progress.add_task(
-            f"Loading predictions from {len(runs)} classifiers...", total=len(runs)
-        )
-
-        for run in runs:
-            # Get run metadata
-            metadata = {
-                "run_id": run.id,
-                "run_name": run.name,
-                "state": run.state,
-                "config": run.config,
-                "summary": run.summary._json_dict,
-            }
-            run_metadata.append(metadata)
-
-            # Find the labelled_passages artifact
-            labelled_passages_artifact = None
-            for artifact in run.logged_artifacts():
-                if artifact.type == "labelled_passages":
-                    labelled_passages_artifact = artifact
-                    break
-
-            if labelled_passages_artifact is None:
-                console.log(f"⚠️ No labelled_passages artifact found for run {run.name}")
-                predictions_per_classifier.append([])
-                progress.update(task, advance=1)
-                continue
-
-            with tempfile.TemporaryDirectory() as temp_dir:
-                artifact_dir = labelled_passages_artifact.download(root=temp_dir)
-                jsonl_files = list(Path(artifact_dir).glob("*.jsonl"))
-
-                if not jsonl_files:
-                    console.log(
-                        f"⚠️ No JSON files found in labelled_passages artifact for run {run.name}"
-                    )
-                    predictions_per_classifier.append([])
-                    progress.update(task, advance=1)
-                    continue
-
-                classifier_predictions = []
-                for json_file in jsonl_files:
-                    classifier_predictions += load_labelled_passages_json(json_file)
-
-                predictions_per_classifier.append(classifier_predictions)
-
-            progress.update(task, advance=1)
-
-    console.log(
-        f"✅ Loaded predictions from {len(predictions_per_classifier)} classifiers"
-    )
-
-    return run_metadata, predictions_per_classifier
 
 
 def create_predictions_dataframe(
@@ -355,22 +268,23 @@ def calculate_cumulative_f1_curve(
 
 
 async def calculate_ensemble_metrics(
-    ensemble_name: str,
     wikibase_id: WikibaseID,
+    classifier_wandb_path: str,
+    n_classifiers: int,
+    batch_size: int,
 ) -> None:
     """
-    Analyse a classifier ensemble with respect to ensemble metrics.
+    Analyse classifier variants with respect to ensemble metrics.
 
     Saves all outputs to a subdir of the ensemble_metrics_dir defined in config.
 
-    :param str ensemble_name: name of the ensemble stored in W&B
     :param WikibaseID wikibase_id: wikibase ID of the concept used
+    :param str classifier_wandb_path: W&B path to the classifier artifact
+    :param int n_classifiers: number of classifier variants to create
+    :param int batch_size: batch size for inference
     """
 
-    output_dir = ensemble_metrics_dir / f"{wikibase_id}_ensemble_{ensemble_name}"
-
-    output_dir.mkdir(exist_ok=True)
-
+    # Load concept and ground truth
     console.log(f"Getting concept {wikibase_id} and its labelled passages")
     concept = await get_concept_async(
         wikibase_id=wikibase_id,
@@ -382,15 +296,30 @@ async def calculate_ensemble_metrics(
         console.log("❌ No evaluation data found. Exiting.")
         return
 
-    console.log("Loading ensemble runs from Weights & Biases...")
-    run_metadata, predictions_per_classifier = load_ensemble_runs_from_wandb(
-        ensemble_name=ensemble_name,
-        wikibase_id=wikibase_id,
-    )
+    console.log("Setting up AWS credentials...")
+    region_name = "eu-west-1"
+    aws_env = AwsEnv.labs
+    os.environ["AWS_PROFILE"] = aws_env
+    get_s3_client(aws_env, region_name)
 
-    if not predictions_per_classifier:
-        console.log("❌ No predictions found for ensemble. Exiting.")
-        return
+    console.log(f"Loading classifier from W&B: {classifier_wandb_path}")
+    classifier = load_classifier_from_wandb(classifier_wandb_path)
+
+    console.log(f"Creating ensemble with {n_classifiers} variants...")
+    ensemble = create_ensemble(classifier, n_classifiers=n_classifiers)
+
+    console.log(f"Running inference on {len(concept.labelled_passages)} passages...")
+    predictions_per_classifier = []
+
+    for i, variant_classifier in enumerate(ensemble.classifiers):
+        console.log(f"Running variant {i + 1}/{n_classifiers}...")
+        variant_predictions = label_passages_with_classifier(
+            classifier=variant_classifier,
+            labelled_passages=concept.labelled_passages,
+            batch_size=batch_size,
+            show_progress=True,
+        )
+        predictions_per_classifier.append(variant_predictions)
 
     console.log("Calculating dataset of ensemble predictions vs ground truth...")
     df = create_predictions_dataframe(
@@ -400,24 +329,22 @@ async def calculate_ensemble_metrics(
 
     console.log(f"Analyzing {len(df)} predictions...")
 
+    classifier_id = classifier.id if hasattr(classifier, "id") else "classifier"
+    output_dir = ensemble_metrics_dir / f"{wikibase_id}_classifier_{classifier_id}"
+    output_dir.mkdir(exist_ok=True, parents=True)
+
     console.log("Creating plots...")
     create_plots(df, output_dir)
 
     # Save summary statistics
     console.log("Generating summary statistics...")
     summary_stats = {
-        "Ensemble name": ensemble_name,
+        "Classifier path": classifier_wandb_path,
         "Concept": str(wikibase_id),
-        "Number of classifiers": len(predictions_per_classifier),
+        "Number of variants": n_classifiers,
         "Total predictions": len(df),
+        "Batch size": batch_size,
     }
-
-    summary_stats["Run details"] = "\n" + "\n".join(
-        [
-            f"  - {run['run_name']} ({run['run_id']}): {run['state']}"
-            for run in run_metadata
-        ]
-    )
 
     with open(output_dir / "summary_stats.txt", "w") as f:
         for key, value in summary_stats.items():
@@ -431,18 +358,12 @@ async def calculate_ensemble_metrics(
     console.log(
         "  - ensemble_metric_vs_f1_vs_referral_rate_plot.png: F1 vs threshold & referral rate"
     )
-    console.log("  - summary_stats.txt: Summary statistics and run details")
+    console.log("  - summary_stats.txt: Summary statistics")
     console.log("  - evaluation_data.csv: Raw evaluation data")
 
 
 @app.command()
 def main(
-    ensemble_name: Annotated[
-        str,
-        typer.Option(
-            help="Name/ID of the trained ensemble to evaluate (from W&B config.ensemble_name)"
-        ),
-    ],
     wikibase_id: Annotated[
         WikibaseID,
         typer.Option(
@@ -451,19 +372,36 @@ def main(
             parser=WikibaseID,
         ),
     ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
+    n_classifiers: Annotated[
+        int,
+        typer.Option(help="Number of classifier variants to create for the ensemble"),
+    ] = 5,
+    batch_size: Annotated[
+        int,
+        typer.Option(help="Number of passages to process in each batch"),
+    ] = 15,
 ):
     """
-    Analyse a classifier ensemble with respect to ensemble metrics.
+    Analyse classifier variants with respect to ensemble metrics.
 
-    This script loads ensemble runs from Weights & Biases, calculates uncertainty
+    This script loads a primary classifier from Weights & Biases, creates variants
+    at inference time, runs predictions on evaluation data, calculates uncertainty
     metrics for each prediction, and plots these against F1 score. This helps to pick
     metrics and values of these for downstream applications, like active learning.
     """
 
     return asyncio.run(
         calculate_ensemble_metrics(
-            ensemble_name=ensemble_name,
             wikibase_id=wikibase_id,
+            classifier_wandb_path=classifier_wandb_path,
+            n_classifiers=n_classifiers,
+            batch_size=batch_size,
         )
     )
 
