@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock
 
-import polars as pl
 import pytest
 
 from flows.classifier_specs.spec_interface import ClassifierSpec
@@ -141,12 +140,11 @@ def test_compare_classifiers_profiles():
         ),
     ]
 
-    updates_df = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
+    results = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
 
+    print([d for d in results])
     # Assert the results
-    assert len(updates_df) == 4
-    assert updates_df.filter(pl.col("status") == "same").height == 1
-    assert updates_df.filter(pl.col("status") == "add").height == 1
-    assert updates_df.filter(pl.col("status") == "remove").height == 1
-    assert updates_df.filter(pl.col("status") == "update").height == 1
-    assert updates_df.filter(pl.col("status") == "unknown").height == 0
+    assert len([d for d in results if d.get("status") == "ignore"]) == 1
+    assert len([d for d in results if d.get("status") == "add"]) == 1
+    assert len([d for d in results if d.get("status") == "remove"]) == 1
+    assert len([d for d in results if d.get("status") == "update"]) == 1

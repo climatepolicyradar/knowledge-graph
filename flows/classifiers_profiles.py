@@ -137,36 +137,7 @@ async def get_classifiers_profiles(
     for concept in concepts:
         logger.info(f"getting classifier profile for concept: {concept.wikibase_id}")
         try:
-            if concept.wikibase_id:
-                concept_classifiers_profiles = await wikibase.get_classifier_ids_async(
-                    wikibase_id=concept.wikibase_id
-                )
-                # TODO: potentially remove this check
-                if len(concept_classifiers_profiles) == 0:
-                    results.append(
-                        Err(
-                            Error(
-                                msg="No classifier ID in wikibase",
-                                metadata={"wikibase_id": concept.wikibase_id},
-                            )
-                        )
-                    )
-                    continue
-
-                for rank, classifier_id in concept_classifiers_profiles:
-                    classifiers_profiles.append(
-                        ClassifiersProfileMapping(
-                            wikibase_id=concept.wikibase_id,
-                            classifier_id=classifier_id,
-                            classifiers_profile=Profile.generate(rank),
-                        )
-                    )
-
-                logger.info(
-                    f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
-                )
-
-            else:
+            if not concept.wikibase_id:
                 results.append(
                     Err(
                         Error(
@@ -175,6 +146,35 @@ async def get_classifiers_profiles(
                         )
                     )
                 )
+                continue
+
+            concept_classifiers_profiles = await wikibase.get_classifier_ids_async(
+                wikibase_id=concept.wikibase_id
+            )
+            # TODO: potentially remove this check
+            if len(concept_classifiers_profiles) == 0:
+                results.append(
+                    Err(
+                        Error(
+                            msg="No classifier ID in Concept",
+                            metadata={"wikibase_id": concept.wikibase_id},
+                        )
+                    )
+                )
+                continue
+
+            for rank, classifier_id in concept_classifiers_profiles:
+                classifiers_profiles.append(
+                    ClassifiersProfileMapping(
+                        wikibase_id=concept.wikibase_id,
+                        classifier_id=classifier_id,
+                        classifiers_profile=Profile.generate(rank),
+                    )
+                )
+
+            logger.info(
+                f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
+            )
 
         except Exception as e:
             logger.info(f"Error getting classifier ID from wikibase: {e}")
@@ -244,68 +244,6 @@ async def create_validation_artifact(results: list[Result[WikibaseID, Error]]):
     )
 
 
-async def create_model_changes_artifact(updates: pl.DataFrame):
-    """Create an artifact with a summary of the classifiers profiles changes"""
-
-    unchanged = updates.filter(pl.col("status") == "same").to_dicts()
-    proposed_updates = updates.filter(
-        pl.col("status").is_in(["add", "remove", "update"])
-    ).to_dicts()
-    failures = updates.filter(pl.col("status") == "unknown").to_dicts()
-
-    total_classifiers = len(updates)
-    failed_classifiers = len(failures)
-    proposed_changes = len(proposed_updates)
-    unchanged_classifiers = len(unchanged)
-
-    overview_description = f"""# Classifiers Profiles Validation Summary
-## Overview
-- **Total classifiers found in specs and wikibase**: {total_classifiers}
-- **Proposed changes**: {proposed_changes}
-- **No changes needed**: {unchanged_classifiers}
-- **Failed classifiers**: {failed_classifiers}
-"""
-
-    cp_details = (
-        [
-            {
-                "Wikibase ID": classifier.get("wikibase_id"),
-                "Classifier ID": classifier.get("classifier_id"),
-                "Classifiers Profile": classifier.get("classifiers_profile_changes"),
-                "Change": classifier.get("status"),
-                "Status": "✓",
-            }
-            for classifier in proposed_updates
-        ]
-        + [
-            {
-                "Wikibase ID": classifier.get("wikibase_id"),
-                "Classifier ID": classifier.get("classifier_id"),
-                "Classifiers Profile": classifier.get("classifiers_profile"),
-                "Change": classifier.get("status"),
-                "Status": "✗",
-            }
-            for classifier in failures
-        ]
-        + [
-            {
-                "Wikibase ID": classifier.get("wikibase_id"),
-                "Classifier ID": classifier.get("classifier_id"),
-                "Classifiers Profile": classifier.get("classifiers_profile"),
-                "Change": classifier.get("status"),
-                "Status": "-",
-            }
-            for classifier in unchanged
-        ]
-    )
-
-    await acreate_table_artifact(
-        key="classifiers-profiles-changes",
-        table=cp_details,
-        description=overview_description,
-    )
-
-
 def classifier_specs_to_dataframe(
     classifier_specs: list[ClassifierSpec],
 ) -> pl.DataFrame:
@@ -346,80 +284,64 @@ def classifiers_profiles_to_dataframe(
     return df
 
 
+def convert_to_classifier_dict(
+    dataset: list[ClassifierSpec] | list[ClassifiersProfileMapping],
+) -> dict:
+    classifier_dict = {}
+
+    for item in dataset:
+        # get explicit values
+        values = vars(item).copy()
+        key = (item.wikibase_id, item.classifier_id)
+        classifier_dict[key] = values
+
+    return classifier_dict
+
+
 def compare_classifiers_profiles(
     classifier_specs: list[ClassifierSpec],
     classifiers_profiles: list[ClassifiersProfileMapping],
-) -> pl.DataFrame:
-    specs_df = classifier_specs_to_dataframe(classifier_specs)
-    cp_df = classifiers_profiles_to_dataframe(classifiers_profiles)
+) -> list[dict]:
+    """
+    Compare current classifiers specs to valid classifiers profiles from wikibase
 
-    updates_df = specs_df.join(
-        cp_df, on=["wikibase_id", "classifier_id"], how="full", suffix="_update"
-    )
+    Classify action to take for each
+    wikibase_id, classifier_id pair.
+    Actions: add, remove, update, ignore.
+    """
 
-    updates_df = updates_df.with_columns(
-        pl.when(
-            pl.col("wikibase_id").is_not_null()
-            & (pl.col("wikibase_id") == pl.col("wikibase_id_update"))
-            & pl.col("classifier_id").is_not_null()
-            & (pl.col("classifier_id") == pl.col("classifier_id_update"))
-            & pl.col("classifiers_profile").is_not_null()
-            & (pl.col("classifiers_profile") == pl.col("classifiers_profile_update"))
-        )
-        .then(pl.lit("same"))
-        .when(
-            pl.col("wikibase_id").is_not_null()
-            & (pl.col("wikibase_id") == pl.col("wikibase_id_update"))
-            & pl.col("classifier_id").is_not_null()
-            & (pl.col("classifier_id") == pl.col("classifier_id_update"))
-            & pl.col("classifiers_profile").is_not_null()
-            & pl.col("classifiers_profile_update").is_not_null()
-            & (pl.col("classifiers_profile") != pl.col("classifiers_profile_update"))
-        )
-        .then(pl.lit("update"))
-        .when(
-            pl.col("wikibase_id").is_not_null()
-            & pl.col("classifier_id").is_not_null()
-            & pl.col("classifiers_profile").is_not_null()
-            & pl.col("wikibase_id_update").is_null()
-            & pl.col("classifier_id_update").is_null()
-            & pl.col("classifiers_profile_update").is_null()
-        )
-        .then(pl.lit("remove"))
-        .when(
-            pl.col("wikibase_id").is_null()
-            & pl.col("classifier_id").is_null()
-            & pl.col("classifiers_profile").is_null()
-            & pl.col("wikibase_id_update").is_not_null()
-            & pl.col("classifier_id_update").is_not_null()
-            & pl.col("classifiers_profile_update").is_not_null()
-        )
-        .then(pl.lit("add"))
-        .otherwise(pl.lit("unknown"))  # Handle any unmatched rows
-        .alias("status")
-    )
-    updates_df = updates_df.with_columns(
-        pl.coalesce([pl.col("wikibase_id"), pl.col("wikibase_id_update")]).alias(
-            "wikibase_id"
-        ),
-        pl.coalesce([pl.col("classifier_id"), pl.col("classifier_id_update")]).alias(
-            "classifier_id"
-        ),
-    ).drop(["wikibase_id_update", "classifier_id_update"])
+    data_current = convert_to_classifier_dict(classifier_specs)
+    data_new = convert_to_classifier_dict(classifiers_profiles)
 
-    updates_df = (
-        updates_df.with_columns(
-            pl.format(
-                "{} → {}",
-                pl.col("classifiers_profile"),
-                pl.col("classifiers_profile_update"),
-            ).alias("classifiers_profile_changes")
-        )
-        .drop(["classifiers_profile"])
-        .rename({"classifiers_profile_update": "classifiers_profile"})
-    )
+    current_keys = set(data_current.keys())
+    new_keys = set(data_new.keys())
 
-    return updates_df
+    to_remove = [
+        {"key": k, **data_current[k], "status": "remove"}
+        for k in (current_keys - new_keys)
+    ]
+
+    to_add = [
+        {"key": k, **data_new[k], "status": "add"} for k in (new_keys - current_keys)
+    ]
+
+    common = current_keys & new_keys
+
+    to_update = [
+        {"key": k, "status": "update", "current": data_current[k], "new": data_new[k]}
+        for k in common
+        if data_current[k]["classifiers_profile"] != data_new[k]["classifiers_profile"]
+    ]
+
+    to_ignore = [
+        {"key": k, **data_current[k], "status": "ignore"}
+        for k in common
+        if data_current[k]["classifiers_profile"] == data_new[k]["classifiers_profile"]
+    ]
+
+    combined_results = [to_remove, to_add, to_update, to_ignore]
+
+    return [d for sublist in combined_results for d in sublist]
 
 
 @flow(on_failure=[SlackNotify.message])
@@ -449,19 +371,12 @@ async def sync_classifiers_profiles(
 
     logger.info(f"Successful classifiers {len(classifiers_profiles)}")
 
-    updates_df = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
+    updates = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
 
-    # TODO: combine into 1 artifact with all results
+    # TODO: update artifact to include successful results
+    # saves all validation errors only
     await create_validation_artifact(
         results=results,
     )
-    await create_model_changes_artifact(updates_df)
 
-    # TODO(PLA-948):
-    # * - check classifier exists in w&b
-    # * - validation checks
-    # 8 - run promote / demote / update
-    # 9 - update classifier spec file
-    # 10 - commit changes to git repo
-    # 11 - trigger full-pipeline (Optional?)
-    # 12 - update vespa classifiers profiles
+    logger.info(f"Processed {len(updates)} updates")
