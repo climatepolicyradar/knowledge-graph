@@ -9,6 +9,7 @@ import textwrap
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import (
@@ -41,7 +42,7 @@ from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
-from prefect_slack.credentials import SlackWebhook
+from prefect_slack.credentials import AsyncWebClient, SlackCredentials, SlackWebhook
 from pydantic import BaseModel, Field, PositiveInt, RootModel, ValidationError
 from types_aiobotocore_s3.client import S3Client
 from types_aiobotocore_s3.paginator import ListObjectsV2Paginator
@@ -105,6 +106,24 @@ def file_name_from_path(path: str) -> str:
 def get_flow_run_ui_url(flow_run: FlowRun):
     """Determine the prefect console URL for a flow run."""
     return f"{get_current_settings().ui_url}/flow-runs/flow-run/{flow_run.id}"
+
+
+async def get_slack_client(
+    credentials: SlackCredentials | None = None,
+) -> AsyncWebClient:
+    """
+    Get a Slack client for the Navigator Notifier bot.
+
+    Can be used in any channel, just make sure to invite it: `/invite
+    @navigator-notifier`.
+
+    Optionally you may have already loaded some credentials, and if
+    so, can pass them in.
+    """
+    if not credentials:
+        credentials = await SlackCredentials.load("slack-navigator-notifier-bot")  # pyright: ignore[reportAssignmentType, reportGeneralTypeIssues]
+
+    return credentials.get_client()  # pyright: ignore[reportOptionalMemberAccess]
 
 
 class SlackNotify:
@@ -956,3 +975,23 @@ def deserialise_pydantic_list_with_fallback[T: BaseModel](
         # Fall back to original format (array of JSON strings)
         data = json.loads(content)
         return [model_class.model_validate_json(passage) for passage in data]
+
+
+def build_inference_result_s3_uri(
+    cache_bucket_str: str,
+    inference_document_target_prefix: str,
+    run_output_identifier: RunOutputIdentifier,
+) -> S3Uri:
+    """Build S3 URI for inference results file."""
+    return S3Uri(
+        bucket=cache_bucket_str,
+        key=os.path.join(
+            inference_document_target_prefix,
+            run_output_identifier,
+            "results.json",
+        ),
+    )
+
+
+def total_milliseconds(td: timedelta) -> int:
+    return int(td.total_seconds() * 1_000)

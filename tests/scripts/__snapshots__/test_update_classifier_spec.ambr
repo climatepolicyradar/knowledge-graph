@@ -8,14 +8,6 @@
     wandb_registry_version: v1
   - wikibase_id: Q222
     classifier_id: 2345abcd
-    classifiers_profile: primary
-    wandb_registry_version: v1
-    compute_environment:
-      gpu: true
-    dont_run_on:
-    - sabin
-  - wikibase_id: Q222
-    classifier_id: 2345abcd
     classifiers_profile: experimental
     wandb_registry_version: v1
     compute_environment:

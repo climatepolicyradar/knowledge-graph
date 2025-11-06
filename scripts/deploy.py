@@ -47,7 +47,7 @@ def existing(
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
+        typer.Option(help="Adds 1 classifiers profile."),
     ] = None,
     remove_classifiers_profiles: Annotated[
         list[str] | None,
@@ -68,6 +68,11 @@ def existing(
             f"duplicate values found for adding and removing classifiers profiles: `{','.join(dupes)}`"
         )
 
+    if len(add_class_prof) > 1:
+        raise typer.BadParameter(
+            f"Artifact must have maximum of one classifiers profile in metadata, or you must specify 1 to remove. Provided: `{','.join(add_class_prof)}`"
+        )
+
     specs = parse_spec_file(from_aws_env)
     print(f"loaded {len(specs)} classifier specifications")
 
@@ -80,7 +85,6 @@ def existing(
                 wikibase_id=WikibaseID(spec.name),
                 track_and_upload=True,
                 aws_env=to_aws_env,
-                add_classifiers_profiles=add_classifiers_profiles,
             )
             if not classifier:
                 raise ValueError("No classifier returned from training.")
@@ -119,7 +123,7 @@ def new(
     promote: Annotated[bool, typer.Option(help="Whether to promote models")] = True,
     add_classifiers_profiles: Annotated[
         list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
+        typer.Option(help="Adds 1 classifiers profile."),
     ] = None,
 ):
     """Deploy new models by training and promoting them."""
@@ -128,13 +132,21 @@ def new(
         try:
             print(f"\nprocessing {wikibase_id}")
 
+            add_class_prof: set[str] = (
+                set(add_classifiers_profiles) if add_classifiers_profiles else set()
+            )
+
+            if len(add_class_prof) > 1:
+                raise typer.BadParameter(
+                    f"Artifact must have maximum of one classifiers profile in metadata. Provided: `{','.join(add_class_prof)}`"
+                )
+
             if train:
                 print("training")
                 classifier = scripts.train.main(
                     wikibase_id=wikibase_id,
                     track_and_upload=True,
                     aws_env=aws_env,
-                    add_classifiers_profiles=add_classifiers_profiles,
                 )
 
                 if not classifier:

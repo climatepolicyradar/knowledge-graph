@@ -84,7 +84,7 @@ def main(
     validate_login(aws_env, use_aws_profiles)
 
     if not wandb_registry_version:
-        log.info(f"Getting latest model version for AWS environment {aws_env.value}...")
+        log.info(f"Getting latest model version for AWS environment {aws_env.name}...")
         api = wandb.Api()
 
         registry_filters = {"name": {"$regex": "model"}}
@@ -98,11 +98,11 @@ def main(
         )
         classifier_version = get_latest_model_version(artifacts, aws_env)
         log.info(
-            f"Latest model version for AWS environment {aws_env.value} is {classifier_version}"
+            f"Latest model version for AWS environment {aws_env.name} is {classifier_version}"
         )
     else:
         log.info(
-            f"Demoting specific registry version {wandb_registry_version} for wikibase id {wikibase_id} with AWS environment {aws_env.value}..."
+            f"Demoting specific registry version {wandb_registry_version} for wikibase id {wikibase_id} with AWS environment {aws_env.name}..."
         )
         classifier_version = wandb_registry_version
 
@@ -115,21 +115,21 @@ def main(
         model: wandb.Artifact = run.use_artifact(artifact_id)
 
         # validate tag exists
-        if model.tags is None or aws_env.value not in model.tags:
+        if model.tags is None or aws_env.name not in model.tags:
             raise typer.BadParameter(
-                f"Model {artifact_id} does not contain tag: {aws_env.value}"
+                f"Model {artifact_id} does not contain tag: {aws_env.name}"
             )
         # validate model trained for this aws env
-        if model.metadata.get("aws_env") != aws_env.value:
+        if model.metadata.get("aws_env") != aws_env.name:
             raise typer.BadParameter(
-                f"Model {artifact_id} is not promoted in AWS environment {aws_env.value}"
+                f"Model {artifact_id} is not promoted in AWS environment {aws_env.name}"
             )
 
         # remove all classifiers profiles
         model.metadata.pop("classifiers_profiles", None)
 
         # remove aws env tag
-        model.tags.remove(aws_env.value)
+        model.tags.remove(aws_env.name)
         model.save()
 
         log.info(f"Model {artifact_id} demoted")

@@ -445,6 +445,7 @@ def evaluate_classifier(
     classifier: Classifier,
     labelled_passages: list[LabelledPassage],
     wandb_run: Optional[Run] = None,
+    batch_size: int = 16,
 ) -> tuple[pd.DataFrame, list[LabelledPassage]]:
     """
     Evaluate the performance of a classifier using an evaluation dataset.
@@ -476,6 +477,7 @@ def evaluate_classifier(
     model_labelled_passages = label_passages_with_classifier(
         classifier,
         gold_standard_labelled_passages,  # type: ignore
+        batch_size=batch_size,
         show_progress=True,
     )
     n_annotations = count_annotations(model_labelled_passages)

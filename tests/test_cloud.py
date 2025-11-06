@@ -24,6 +24,14 @@ def test_init_awsenv():
     assert AwsEnv.staging == AwsEnv("dev")
 
 
+def test_prod_awsenv():
+    assert AwsEnv.production == AwsEnv("prod")
+    aws_envs = [AwsEnv("prod"), AwsEnv("production")]
+    for aws_env in aws_envs:
+        assert aws_env.name == "production"
+        assert aws_env.value == "prod"
+
+
 @pytest.mark.parametrize(
     "aws_env, use_aws_profiles, is_logged_in_result",
     [
