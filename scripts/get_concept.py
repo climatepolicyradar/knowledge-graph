@@ -8,7 +8,7 @@ from rich.console import Console
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import concept_dir
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelling import ArgillaSession
+from knowledge_graph.labelling import ArgillaSession, ResourceDoesNotExistError
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 
 console = Console()
@@ -60,7 +60,7 @@ async def get_concept_async(
             f"🏷️ Found {len(labelled_passages)} labelled passages for {wikibase_id} in Argilla"
         )
         concept.labelled_passages = labelled_passages
-    except ValueError:
+    except (ValueError, ResourceDoesNotExistError):
         console.log(
             f"⚠️ No labelled passages found for {wikibase_id} in Argilla",
             style="yellow",

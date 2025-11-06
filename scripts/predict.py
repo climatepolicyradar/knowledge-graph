@@ -165,6 +165,7 @@ def main(
 
         if limit:
             labelled_passages = labelled_passages[:limit]
+            console.print(f"Limited number of passages to {len(labelled_passages)}")
 
         # 2. load model
         region_name = "eu-west-1"
