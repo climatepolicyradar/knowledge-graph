@@ -1,5 +1,9 @@
-# Flow that updates classifiers profiles changes detected in wikibase
-# assumes that the classifier model has been trained in wandb
+"""
+Flow that updates classifiers profiles changes detected in wikibase
+
+Assumes that the classifier model has been trained in wandb
+"""
+
 import json
 from pathlib import Path
 
@@ -21,7 +25,7 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.wikibase import WikibaseSession
 
-# these are in config, update to use config for this
+# TODO: these are in config, update to use config for this
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
 WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
@@ -58,6 +62,7 @@ def update_classifier_profile(
 
 
 def get_wikibase_session(aws_env: AwsEnv):
+    #  TODO: update to wikibaseauth
     username = get_aws_ssm_param(
         WIKIBASE_USERNAME_SSM_NAME,
         aws_env=aws_env,
@@ -128,37 +133,48 @@ async def get_classifiers_profiles(
 
     results: list[Result[WikibaseID, Error]] = []
     classifiers_profiles = ClassifiersProfiles()
-
     for concept in concepts:
-        logger.info(f"Concept wikibase id: {concept.wikibase_id}")
+        logger.info(f"getting classifier profile for concept: {concept.wikibase_id}")
         try:
-            wikibase_id = WikibaseID(concept.wikibase_id)
-            concept_classifiers_profiles = await wikibase.get_classifier_ids_async(
-                wikibase_id=wikibase_id
-            )
-            if len(concept_classifiers_profiles) == 0:
+            if concept.wikibase_id:
+                concept_classifiers_profiles = await wikibase.get_classifier_ids_async(
+                    wikibase_id=concept.wikibase_id
+                )
+                # TODO: potentially remove this check
+                if len(concept_classifiers_profiles) == 0:
+                    results.append(
+                        Err(
+                            Error(
+                                msg="No classifier ID in wikibase",
+                                metadata={"wikibase_id": concept.wikibase_id},
+                            )
+                        )
+                    )
+                    continue
+
+                for rank, classifier_id in concept_classifiers_profiles:
+                    classifiers_profiles.append(
+                        ClassifiersProfile(
+                            wikibase_id=concept.wikibase_id,
+                            classifier_id=classifier_id,
+                            classifiers_profile=Profile.generate(rank),
+                        )
+                    )
+
+                logger.info(
+                    f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
+                )
+                results.append(Ok(concept.wikibase_id))
+            else:
                 results.append(
                     Err(
                         Error(
-                            msg="No classifier ID in wikibase",
-                            metadata={"wikibase_id": wikibase_id},
+                            msg="No wikibase ID for concept",
+                            metadata={"preferred_label": concept.preferred_label},
                         )
                     )
                 )
-                continue
 
-            for rank, classifier_id in concept_classifiers_profiles:
-                classifiers_profiles.append(
-                    ClassifiersProfile(
-                        wikibase_id=wikibase_id,
-                        classifier_id=classifier_id,
-                        classifiers_profile=Profile.generate(rank),
-                    )
-                )
-            logger.info(
-                f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
-            )
-            results.append(Ok(wikibase_id))
         except Exception as e:
             logger.info(f"{e}")
             results.append(
