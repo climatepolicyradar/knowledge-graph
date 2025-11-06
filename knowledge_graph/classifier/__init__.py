@@ -110,6 +110,7 @@ class ClassifierFactory:
         WikibaseID("Q1651"): ("TargetClassifier", ".targets"),
         WikibaseID("Q1652"): ("EmissionsReductionTargetClassifier", ".targets"),
         WikibaseID("Q1653"): ("NetZeroTargetClassifier", ".targets"),
+        WikibaseID("Q1829"): ("BertBasedClassifier", ".bert_based"),
     }
 
     @staticmethod
