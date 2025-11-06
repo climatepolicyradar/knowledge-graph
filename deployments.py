@@ -297,13 +297,13 @@ if __name__ == "__main__":
         description="Upload concepts from Wikibase to Vespa",
         concurrency_limit=ConcurrencyLimitConfig(
             limit=1,
-            collision_strategy=ConcurrencyLimitStrategy.CANCEL_NEW,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
         ),
         env_schedules={
             # Temporarily disabled for stability
             # AwsEnv.production: "0 9 * * *",
             AwsEnv.staging: "0 9 * * *",
-            AwsEnv.sandbox: "0 9 * * *",
+            AwsEnv.sandbox: "0 10 * * *",
         },
     )
 
