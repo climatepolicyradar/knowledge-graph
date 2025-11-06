@@ -11,7 +11,12 @@ import html2text
 import httpx
 from httpx import HTTPError, HTTPStatusError, RequestError
 from more_itertools import chunked
-from pydantic import SecretStr, ValidationError
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    SecretStr,
+    ValidationError,
+)
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -43,6 +48,14 @@ class StatementRank(Enum):
     PREFERRED = "preferred"
     NORMAL = "normal"
     DEPRECATED = "deprecated"
+
+
+class WikibaseAuth(BaseModel):
+    """For creating a WikibaseSession."""
+
+    username: str
+    password: SecretStr
+    url: AnyHttpUrl
 
 
 class WikibaseSession:
@@ -83,7 +96,9 @@ class WikibaseSession:
         """Initialize session - login happens on first use"""
         self.username = username or os.getenv("WIKIBASE_USERNAME")
         self.password = password or os.getenv("WIKIBASE_PASSWORD")
-        self.base_url = url or os.getenv("WIKIBASE_URL")
+        base_url = url or os.getenv("WIKIBASE_URL")
+        # Strip the trailing slash, since one is added below
+        self.base_url = base_url.rstrip("/") if base_url else base_url
         self.api_url = f"{self.base_url}/w/api.php"
 
         if not self.username or not self.password or not self.base_url:

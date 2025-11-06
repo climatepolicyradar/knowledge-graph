@@ -16,9 +16,9 @@ just train "Q123" --track --aws-env sandbox
 ```
 
 > [!NOTE]
-> Promoting requires at least once classifiers profile. Set it in the metadata.
+> Promoting requires a classifiers profile - each promoted classifier ID should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
 
-Then we promote:
+We promote with:
 
 ```shell
 just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
@@ -89,7 +89,7 @@ just demote Q57 --aws-env sandbox
 ```
 
 If you require a specific registry version to be demoted, you can add the registry version as a parameter.
-_Note: the wandb registry version is not the same as the project model version.
+_Note: the wandb registry version is not the same as the project model version._
 
 ```shell
 just demote Q57 --wandb-registry-version v10 --aws-env sandbox

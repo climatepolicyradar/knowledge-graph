@@ -109,7 +109,7 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
 
     for env in aws_envs:
         spec_path = determine_spec_file_path(env)
-        sorted_specs = sort_specs(specs[env])
+        sorted_specs = sort_specs(specs[env.name])
         write_spec_file(spec_path, data=sorted_specs)
 
     console.log("Finished!")

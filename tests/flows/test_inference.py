@@ -612,6 +612,7 @@ async def test_inference_batch_of_documents_cpu(
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
     assert result.classifier_spec == classifier_spec
+    assert not result.failed
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -864,12 +865,130 @@ async def test__inference_batch_of_documents(
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
     assert result.classifier_spec == classifier_spec
+    assert result.failed is False, "All documents succeeded, so failed should be False"
+    assert result.failed_document_count == 0
+    assert result.all_document_count == 1
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
         entity=test_config.wandb_entity,
         job_type="concept_inference",
     )
+
+    # Test partial success
+    batch = [
+        DocumentStem(Path(mock_async_bucket_documents[0]).stem),  # Real document
+        DocumentStem("NonExistent.doc.1"),  # Will fail
+    ]
+
+    with patch("flows.inference.get_run_context", return_value=mock_context):
+        result_partial = await _inference_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+        )
+
+        assert isinstance(result_partial, BatchInferenceResult)
+        assert result_partial.batch_document_stems == batch
+        assert len(result_partial.successful_document_stems) == 1
+        assert result_partial.failed is False  # Not failed because some succeeded
+        assert result_partial.failed_document_count > 0
+
+
+def test_batch_inference_result_failed_property():
+    """Test BatchInferenceResult.failed property."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v7",
+    )
+
+    doc1 = DocumentStem("TEST.doc.1.1")
+    doc2 = DocumentStem("TEST.doc.1.2")
+
+    # Empty batch - not failed
+    result_empty = BatchInferenceResult(
+        batch_document_stems=[],
+        successful_document_stems=[],
+        classifier_spec=classifier_spec,
+    )
+    assert result_empty.failed is False
+
+    # All successful - not failed
+    result_all_success = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[doc1, doc2],
+        classifier_spec=classifier_spec,
+    )
+    assert result_all_success.failed is False
+
+    # Partial success - not failed (some succeeded)
+    result_partial = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[doc1],
+        classifier_spec=classifier_spec,
+    )
+    assert result_partial.failed is False
+
+    # All failed - is failed
+    result_all_failed = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[],
+        classifier_spec=classifier_spec,
+    )
+    assert result_all_failed.failed is True
+
+
+def test_batch_inference_result_failed_document_stems():
+    """Test BatchInferenceResult.failed_document_stems property."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v7",
+    )
+
+    doc1 = DocumentStem("TEST.doc.1.1")
+    doc2 = DocumentStem("TEST.doc.1.2")
+    doc3 = DocumentStem("TEST.doc.1.3")
+
+    # All successful
+    result = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2, doc3],
+        successful_document_stems=[doc1, doc2, doc3],
+        classifier_spec=classifier_spec,
+    )
+    assert result.failed_document_stems == []
+
+    # Some failed
+    result = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2, doc3],
+        successful_document_stems=[doc1],
+        classifier_spec=classifier_spec,
+    )
+    assert set(result.failed_document_stems) == {doc2, doc3}
+    assert result.failed_document_count == 2
+    assert not result.failed
+
+
+def test_batch_inference_result_all_document_count():
+    """Test BatchInferenceResult.all_document_count property."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v7",
+    )
+
+    doc1 = DocumentStem("TEST.doc.1.1")
+    doc2 = DocumentStem("TEST.doc.1.2")
+
+    result = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[doc1],
+        classifier_spec=classifier_spec,
+    )
+    assert result.all_document_count == 2
+    assert len(result.successful_document_stems) == 1
+    assert not result.failed
 
 
 def test_jsonl_serialization_roundtrip():
@@ -1024,6 +1143,8 @@ def test_document_passages(
                 "Sabin.document.9869.10352.json",
                 "CPR.document.i00003835.n0000.json",
                 "Sabin.document.2524.placeholder",
+                "UNCDB.document.1.1",
+                "UNCDB.document.2.2.json",
             ],
         ),
     ],
@@ -1039,6 +1160,8 @@ def test_filter_document_batch(dont_run_on, removed):
         "Sabin.document.9869.10352.json",
         "CPR.document.i00003835.n0000.json",
         "Sabin.document.2524.placeholder",
+        "UNCDB.document.1.1",
+        "UNCDB.document.2.2.json",
     ]
     accepted = [f for f in file_stems if f not in removed]
 
@@ -1232,6 +1355,7 @@ async def test_store_metadata(
         await store_metadata(
             config=test_config,
             classifier_specs=classifier_specs,
+            run_output_identifier=mock_run_output_id,
         )
 
     expected_key = os.path.join(
@@ -1291,6 +1415,7 @@ async def test_store_inference_result(
         await store_inference_result(
             config=test_config,
             successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
+            run_output_identifier=mock_run_output_id,
         )
 
     expected_key = os.path.join(

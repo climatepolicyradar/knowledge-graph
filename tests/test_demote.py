@@ -49,7 +49,7 @@ def test_main(
     artifact_mock = Mock()
     artifact_mock.tags = MockTags(["labs", "staging"])
     artifact_mock.metadata = (
-        {"aws_env": aws_env.value}
+        {"aws_env": aws_env.name}
         if aws_env != AwsEnv.production
         else {"aws_env": "test"}
     )
@@ -60,8 +60,8 @@ def test_main(
     # Mock wandb API
     api_mock = Mock()
     artifacts_mock = [
-        Mock(version="v1", metadata={"aws_env": aws_env.value}),
-        Mock(version="v2", metadata={"aws_env": aws_env.value}),
+        Mock(version="v1", metadata={"aws_env": aws_env.name}),
+        Mock(version="v2", metadata={"aws_env": aws_env.name}),
     ]
     mock_registries = Mock()
     api_mock.registries.return_value = mock_registries

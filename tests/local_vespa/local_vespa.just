@@ -31,6 +31,7 @@ vespa_feed_data:
 	vespa feed --target local tests/local_vespa/test_documents/search_weights.json
 	vespa feed --target local tests/local_vespa/test_documents/family_document.json
 	vespa feed --target local tests/local_vespa/test_documents/document_passage.json
+	vespa feed --target local tests/local_vespa/test_documents/concept/*
 
 # Feeds some large test data into local Vespa instance
 vespa_feed_large_data:
@@ -45,6 +46,7 @@ vespa_delete_data:
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/search_weights/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/family_document/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/document_passage/docid?selection=true&cluster=family-document-passage"
+	curl -X DELETE "http://localhost:8080/document/v1/doc_search/concept/docid?selection=true&cluster=family-document-passage"
 
 
 copy_query_profiles_to_appn_pkg:

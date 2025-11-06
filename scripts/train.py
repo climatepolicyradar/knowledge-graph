@@ -213,7 +213,6 @@ def create_and_link_model_artifact(
     run: Run,
     classifier: Classifier,
     storage_link: StorageLink,
-    add_classifiers_profiles: list[str] | None = None,
 ) -> wandb.Artifact:
     """
     Links a model artifact, stored in S3, to a Weights & Biases run.
@@ -229,13 +228,11 @@ def create_and_link_model_artifact(
     """
 
     metadata: dict[str, Any] = {
-        "aws_env": storage_link.aws_env.value,
+        "aws_env": storage_link.aws_env.name,
         "classifier_name": classifier.name,
         "concept_id": classifier.concept.id,
         "concept_wikibase_revision": classifier.concept.wikibase_revision,
     }
-    if add_classifiers_profiles:
-        metadata["classifiers_profiles"] = list(add_classifiers_profiles)
     if isinstance(classifier, GPUBoundClassifier):
         Console().log("Adding GPU requirement to metadata")
         compute_environment: ComputeEnvironment = {"gpu": True}
@@ -398,10 +395,6 @@ def main(
             help="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
-    add_classifiers_profiles: Annotated[
-        list[str] | None,
-        typer.Option(help="Adds 1 or more classifiers profiles."),
-    ] = None,
     training_data_wandb_run_path: Annotated[
         Optional[str],
         typer.Option(
@@ -448,7 +441,6 @@ def main(
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
                 "concept_overrides": concept_overrides,
-                "add_classifiers_profiles": add_classifiers_profiles,
                 "training_data_wandb_run_path": training_data_wandb_run_path,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
@@ -468,7 +460,6 @@ def main(
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
                 concept_overrides=concept_overrides,
-                add_classifiers_profiles=add_classifiers_profiles,
                 training_data_wandb_run_path=training_data_wandb_run_path,
             )
         )
@@ -482,7 +473,6 @@ async def train_classifier(
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
     extra_wandb_config: dict[str, Any] = {},
-    add_classifiers_profiles: list[str] | None = None,
     train_validation_data: Optional[list[LabelledPassage]] = None,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
@@ -514,18 +504,27 @@ async def train_classifier(
     ) as run:
         # Determine training data and deduplicate against evaluation set
         training_data = (
-            train_validation_data
-            if train_validation_data is not None
-            else classifier.concept.labelled_passages
+            train_validation_data if train_validation_data is not None else []
         )
         training_data = limit_training_samples(training_data, 2000)
 
         # Remove any passages from training that appear in evaluation set
         evaluation_data = classifier.concept.labelled_passages
-        deduplicated_training_data = deduplicate_training_data(
-            training_data=training_data,
-            evaluation_data=evaluation_data,
-        )
+        if training_data:
+            deduplicated_training_data = deduplicate_training_data(
+                training_data=training_data,
+                evaluation_data=evaluation_data,
+            )
+
+            train_num_positives = len(
+                [p for p in deduplicated_training_data if p.spans]
+            )
+            train_num_negatives = len(deduplicated_training_data) - train_num_positives
+            Console().print(
+                f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
+            )
+        else:
+            deduplicated_training_data = []
 
         classifier.fit(
             labelled_passages=deduplicated_training_data,
@@ -590,7 +589,6 @@ async def train_classifier(
                 run,  # type: ignore
                 classifier,
                 storage_link,
-                add_classifiers_profiles,
             )
 
         if evaluate:
@@ -623,7 +621,6 @@ async def run_training(
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
     concept_overrides: Optional[dict[str, Any]] = None,
-    add_classifiers_profiles: list[str] | None = None,
     training_data_wandb_run_path: Optional[str] = None,
 ) -> Classifier:
     """
@@ -685,7 +682,6 @@ async def run_training(
         s3_client=s3_client,
         evaluate=evaluate,
         extra_wandb_config=extra_wandb_config,
-        add_classifiers_profiles=add_classifiers_profiles,
         train_validation_data=labelled_passages,
     )
 
