@@ -129,11 +129,15 @@ async def read_concept_store(wikibase: WikibaseSession) -> list[Concept]:
 async def get_classifiers_profiles(
     wikibase: WikibaseSession, concepts: list[Concept]
 ) -> tuple[list[ClassifiersProfileMapping], list[Result[WikibaseID, Error]]]:
+    """
+    Return valid classifiers profiles and different kids of validation errors.
+
+    Validation errors can be invalid concepts and violated business constraints.
+    """
     logger = get_logger()
 
     results: list[Result[WikibaseID, Error]] = []
     classifiers_profiles = []
-    valid_classifiers_profiles = []
     for concept in concepts:
         logger.info(f"getting classifier profile for concept: {concept.wikibase_id}")
         try:
@@ -189,6 +193,7 @@ async def get_classifiers_profiles(
             continue
 
     # run validation
+    valid_classifiers_profiles = []
     try:
         valid_classifiers_profiles, validation_results = (
             validate_classifiers_profiles_mappings(classifiers_profiles)
