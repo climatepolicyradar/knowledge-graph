@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from sklearn.metrics import f1_score
 
-from knowledge_graph.classifier import load_classifier_from_wandb
+from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import ensemble_metrics_dir
 from knowledge_graph.ensemble import create_ensemble
@@ -116,7 +116,9 @@ def create_predictions_dataframe(
     return pd.DataFrame(results)
 
 
-def create_plots(predictions_df: pd.DataFrame, output_dir: Path) -> None:
+def create_plots(
+    predictions_df: pd.DataFrame, output_dir: Path, classifier: Classifier
+) -> None:
     """
     Create plot for each metric of cumulative F1 score against metric value.
 
@@ -205,7 +207,9 @@ def create_plots(predictions_df: pd.DataFrame, output_dir: Path) -> None:
             label=f"Best: {best_f1:.3f} (thresh={best_threshold:.2f}, rate={best_referral_rate:.2f})",
         )
 
-        axes[i].set_title(f"F1 vs Threshold & Referral Rate\n({title})")
+        axes[i].set_title(
+            f"F1 vs Threshold & Referral Rate\n({title})\nclassifier {str(classifier)}"
+        )
         axes[i].grid(True, alpha=0.3)
         axes[i].legend(loc="lower right")
         axes[i].set_ylim(0, 1)
@@ -334,7 +338,7 @@ async def calculate_ensemble_metrics(
     output_dir.mkdir(exist_ok=True, parents=True)
 
     console.log("Creating plots...")
-    create_plots(df, output_dir)
+    create_plots(df, output_dir, classifier)
 
     # Save summary statistics
     console.log("Generating summary statistics...")
