@@ -57,10 +57,20 @@ class ClassifiersProfiles(list[ClassifiersProfileMapping]):
         errors = []
         invalid_wikibase_ids = set()
 
-        errors.extend(self._validate_profiles(Profile.RETIRED, 3, invalid_wikibase_ids))
-        errors.extend(self._validate_profiles(Profile.PRIMARY, 1, invalid_wikibase_ids))
         errors.extend(
-            self._validate_profiles(Profile.EXPERIMENTAL, 1, invalid_wikibase_ids)
+            self._validate_mappings_multiplicity(
+                Profile.RETIRED, 3, invalid_wikibase_ids
+            )
+        )
+        errors.extend(
+            self._validate_mappings_multiplicity(
+                Profile.PRIMARY, 1, invalid_wikibase_ids
+            )
+        )
+        errors.extend(
+            self._validate_mappings_multiplicity(
+                Profile.EXPERIMENTAL, 1, invalid_wikibase_ids
+            )
         )
         errors.extend(self._validate_unique_classifier_ids(invalid_wikibase_ids))
 
@@ -72,10 +82,10 @@ class ClassifiersProfiles(list[ClassifiersProfileMapping]):
         if errors:
             raise ValueError("\n".join(errors))
 
-    def _validate_profiles(
+    def _validate_mappings_multiplicity(
         self, profile_validation, max_count, invalid_wikibase_ids: set
     ) -> list[str]:
-        """Ensure no wikibase_id has more than 3 retired profiles"""
+        """Ensure no concept is present in more than the specified number of classifiers"""
         counts = Counter(
             profile.wikibase_id
             for profile in self
