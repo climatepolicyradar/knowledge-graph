@@ -1025,6 +1025,8 @@ def test_document_passages(
                 "Sabin.document.9869.10352.json",
                 "CPR.document.i00003835.n0000.json",
                 "Sabin.document.2524.placeholder",
+                "UNCDB.document.1.1",
+                "UNCDB.document.2.2.json",
             ],
         ),
     ],
@@ -1040,6 +1042,8 @@ def test_filter_document_batch(dont_run_on, removed):
         "Sabin.document.9869.10352.json",
         "CPR.document.i00003835.n0000.json",
         "Sabin.document.2524.placeholder",
+        "UNCDB.document.1.1",
+        "UNCDB.document.2.2.json",
     ]
     accepted = [f for f in file_stems if f not in removed]
 
