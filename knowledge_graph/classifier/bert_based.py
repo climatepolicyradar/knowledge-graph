@@ -244,7 +244,7 @@ class BertBasedClassifier(
         self,
         labelled_passages: list[LabelledPassage],
         validation_size: float = 0.2,
-        enable_wandb: bool = False,
+        wandb_run=None,
         **kwargs,
     ) -> "BertBasedClassifier":
         """
@@ -279,7 +279,8 @@ class BertBasedClassifier(
         Args:
             labelled_passages: The labelled passages to train the classifier on.
             validation_size: The proportion of labelled passages to use for validation.
-            enable_wandb: Whether to enable W&B logging for training metrics and model checkpoints.
+            wandb_run: Optional W&B run for logging training metrics and model checkpoints.
+                      If provided, W&B logging is enabled. If None, training proceeds without W&B.
             **kwargs: Additional keyword arguments passed to the base class
         Returns:
             BertBasedClassifier: The trained classifier
@@ -393,11 +394,13 @@ class BertBasedClassifier(
                 metric_for_best_model="eval_f1",
                 greater_is_better=True,
                 dataloader_num_workers=2,
-                report_to=["wandb"] if enable_wandb else [],
+                report_to=["wandb"] if wandb_run is not None else [],
                 disable_tqdm=True,
                 # W&B-specific settings when enabled
-                run_name=f"{self.concept.id}_{self.name}" if enable_wandb else None,
-                log_level="info" if enable_wandb else "warning",
+                run_name=f"{self.concept.id}_{self.name}"
+                if wandb_run is not None
+                else None,
+                log_level="info" if wandb_run is not None else "warning",
             )
 
             trainer = WeightedTrainer(

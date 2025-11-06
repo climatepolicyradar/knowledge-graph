@@ -466,7 +466,7 @@ async def train_classifier(
 
         classifier.fit(
             labelled_passages=deduplicated_training_data,
-            enable_wandb=track_and_upload,
+            wandb_run=run,
         )
 
         target_path = ModelPath(
