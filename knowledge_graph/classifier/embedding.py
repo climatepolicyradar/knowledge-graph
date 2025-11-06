@@ -300,37 +300,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         will be returned, covering the full text. Otherwise, an empty list will be
         returned.
         """
-        threshold = threshold or self.threshold
 
-        query_embedding = None
-        cache_key = None
+        predictions = self._predict_batch(
+            [text], threshold=threshold, show_progress_bar=False
+        )
 
-        # try to get embedding from cache
-        if self._cache is not None:
-            cache_key = self._generate_cache_key(text)
-            query_embedding = self._cache.get(cache_key)
-
-        # if not in cache, compute and store it
-        if query_embedding is None:
-            text_with_prefix = f"{self.query_prefix}{text}"
-            query_embedding = self._encode(text_with_prefix, show_progress_bar=False)
-            if self._cache is not None and cache_key is not None:
-                self._cache.set(cache_key, query_embedding)
-
-        similarity = self.concept_embedding @ query_embedding.T
-        spans = []
-        if similarity > threshold:
-            spans = [
-                Span(
-                    text=text,
-                    concept_id=self.concept.wikibase_id,
-                    start_index=0,
-                    end_index=len(text),
-                    labellers=[str(self)],
-                    timestamps=[datetime.now()],
-                )
-            ]
-        return spans
+        return predictions[0]
 
     def _predict_batch(
         self,
