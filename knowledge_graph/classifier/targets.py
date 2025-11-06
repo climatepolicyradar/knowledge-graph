@@ -71,6 +71,8 @@ class BaseTargetClassifier(
             device=device,
         )
 
+        self._is_fitted = True
+
     @property
     def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
