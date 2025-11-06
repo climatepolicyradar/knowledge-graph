@@ -119,18 +119,18 @@ def test_classifier_cache_integration(temp_cache_dir, simple_concept, monkeypatc
         embedding_model_name="ibm-granite/granite-embedding-107m-multilingual",
         use_cache=True,
     )
-
+    assert classifier._cache is not None  # for type checker
     text = "This is a test about climate finance"
 
     # First prediction should be a cache miss
     classifier.predict(text)
-    stats1 = classifier.get_cache_stats()
+    stats1 = classifier._cache.get_stats()
     assert stats1["misses"] == 1
     assert stats1["hits"] == 0
 
     # Second prediction should be a cache hit
     classifier.predict(text)
-    stats2 = classifier.get_cache_stats()
+    stats2 = classifier._cache.get_stats()
     assert stats2["misses"] == 1
     assert stats2["hits"] == 1
 
@@ -156,13 +156,13 @@ def test_classifier_batch_cache(temp_cache_dir, simple_concept, monkeypatch):
 
     # First batch should cache all unique texts
     classifier.predict(texts)
-    stats1 = classifier.get_cache_stats()
+    stats1 = classifier._cache.get_stats()
     assert stats1["misses"] == 2  # Only 2 unique texts
     assert stats1["hits"] == 1  # One duplicate
 
     # Second batch should be all hits
     classifier.predict(texts)
-    stats2 = classifier.get_cache_stats()
+    stats2 = classifier._cache.get_stats()
     assert stats2["misses"] == 2  # No new misses
     assert stats2["hits"] == 4  # 3 more hits
 
@@ -186,10 +186,8 @@ def test_classifier_cache_disabled(temp_cache_dir, simple_concept, monkeypatch):
     classifier.predict(text)
     classifier.predict(text)
 
-    # Stats should show no hits/misses because cache is disabled
-    stats = classifier.get_cache_stats()
-    assert stats["hits"] == 0
-    assert stats["misses"] == 0
+    # Cache should be None when disabled
+    assert classifier._cache is None
 
 
 def test_cache_key_generation(simple_concept, temp_cache_dir, monkeypatch):

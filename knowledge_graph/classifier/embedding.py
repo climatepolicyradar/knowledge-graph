@@ -401,22 +401,3 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             spans_per_text.append(spans)
 
         return spans_per_text
-
-    def get_cache_stats(self) -> dict:
-        """
-        Get embedding cache statistics.
-
-        :return: Dictionary with cache hits, misses, total requests, and hit rate
-        """
-        if self._cache is None:
-            return {"hits": 0, "misses": 0, "total_requests": 0, "hit_rate": 0.0}
-
-        stats = self._cache.get_stats()
-        if stats["total_requests"] > 0:
-            logger.info(
-                "Embedding cache stats: %d hits, %d misses, %.1f%% hit rate",
-                stats["hits"],
-                stats["misses"],
-                stats["hit_rate"] * 100,
-            )
-        return stats
