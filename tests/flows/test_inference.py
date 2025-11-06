@@ -612,6 +612,7 @@ async def test_inference_batch_of_documents_cpu(
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
     assert result.classifier_spec == classifier_spec
+    assert not result.failed
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
