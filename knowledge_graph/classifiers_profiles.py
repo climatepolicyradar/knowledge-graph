@@ -1,9 +1,10 @@
 from collections import Counter
 from enum import Enum
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, List, Set
 
 from pydantic import BaseModel, Field
 
+from flows.result import Err, Error, Result
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.wikibase import StatementRank
 
@@ -40,108 +41,105 @@ class Profile(str, Enum):
 class ClassifiersProfileMapping(BaseModel):
     """Base class for a classifier profile"""
 
-    wikibase_id: WikibaseID = Field(description="Wikibase ID")
-    classifier_id: ClassifierID = Field(description="Classifier ID")
+    wikibase_id: WikibaseID = Field(description="Wikibase ID (e.g. Q100)")
+    classifier_id: ClassifierID = Field(description="Canonical Classifier ID")
     classifiers_profile: Profile = Field(
         description=("The classifiers profile for specified classifier ID"),
     )
 
 
-# TODO: update naming similar to mapping
-# TODO: update class structure
-class ClassifiersProfiles(list[ClassifiersProfileMapping]):
-    """Class for managing and validating a list of ClassifiersProfileMapping objects"""
+def validate_mappings_multiplicity(
+    profiles: List[ClassifiersProfileMapping],
+    profile_validation: Profile,
+    max_count: int,
+) -> List[Result[WikibaseID, Error]]:
+    """Ensure no concept is present in more than the specified number of classifiers"""
+    errors = []
+    counts = Counter(
+        profile.wikibase_id
+        for profile in profiles
+        if profile.classifiers_profile == profile_validation
+    )
 
-    def validate(self):
-        """Perform validation on the list of ClassifiersProfileMapping objects"""
-        errors = []
-        invalid_wikibase_ids = set()
-
-        errors.extend(
-            self._validate_mappings_multiplicity(
-                Profile.RETIRED, 3, invalid_wikibase_ids
-            )
-        )
-        errors.extend(
-            self._validate_mappings_multiplicity(
-                Profile.PRIMARY, 1, invalid_wikibase_ids
-            )
-        )
-        errors.extend(
-            self._validate_mappings_multiplicity(
-                Profile.EXPERIMENTAL, 1, invalid_wikibase_ids
-            )
-        )
-        errors.extend(self._validate_unique_classifier_ids(invalid_wikibase_ids))
-
-        # Remove all profiles with invalid wikibase IDs
-        if invalid_wikibase_ids:
-            self._remove_invalid_wikibase_ids(invalid_wikibase_ids)
-
-        # Raise an exception if there are validation errors
-        if errors:
-            raise ValueError("\n".join(errors))
-
-    def _validate_mappings_multiplicity(
-        self, profile_validation, max_count, invalid_wikibase_ids: set
-    ) -> list[str]:
-        """Ensure no concept is present in more than the specified number of classifiers"""
-        counts = Counter(
-            profile.wikibase_id
-            for profile in self
-            if profile.classifiers_profile == profile_validation
-        )
-        errors = [
-            f"Validation error: Wikibase ID '{wikibase_id}' has {count} {str(profile_validation)} profiles (maximum allowed is {max_count})."
-            for wikibase_id, count in counts.items()
-            if count > max_count
-        ]
-        invalid_wikibase_ids.update(
-            wikibase_id for wikibase_id, count in counts.items() if count > max_count
-        )
-        return errors
-
-    def _validate_unique_classifier_ids(self, invalid_wikibase_ids: set) -> list[str]:
-        """Ensure no classifier_id has more than 1 profile"""
-        classifier_to_wikibase = {}
-        errors = []
-
-        for profile in self:
-            if profile.classifier_id in classifier_to_wikibase:
-                # Duplicate classifier_id found
-                errors.append(
-                    f"Validation error: Classifier ID '{profile.classifier_id}' is associated with multiple wikibase IDs "
-                    f"('{classifier_to_wikibase[profile.classifier_id]}' and '{profile.wikibase_id}')."
+    for wikibase_id, count in counts.items():
+        if count > max_count:
+            errors.append(
+                Err(
+                    Error(
+                        msg="Validation Error: classifier multiplicity",
+                        metadata={
+                            "wikibase_id": {wikibase_id},
+                            "profile": {str(profile_validation)},
+                            "count": {count},
+                        },
+                    )
                 )
-                # Add both wikibase_ids to invalid_wikibase_ids
-                invalid_wikibase_ids.add(profile.wikibase_id)
-            else:
-                classifier_to_wikibase[profile.classifier_id] = profile.wikibase_id
-
-        return errors
-
-    def _remove_invalid_wikibase_ids(self, invalid_wikibase_ids: set):
-        """Remove wikibase IDs with invalid profiles"""
-        self[:] = [
-            profile
-            for profile in self
-            if profile.wikibase_id not in invalid_wikibase_ids
-        ]
-
-    def append(self, item: ClassifiersProfileMapping):
-        """Override append to validate the item before adding it"""
-        if not isinstance(item, ClassifiersProfileMapping):
-            raise TypeError(
-                "Only ClassifiersProfileMapping objects can be added to ClassifiersProfiles."
             )
-        super().append(item)
-        self.validate()
 
-    def extend(self, items: Iterable[ClassifiersProfileMapping]):
-        """Override extend to validate the items before adding them"""
-        if not all(isinstance(item, ClassifiersProfileMapping) for item in items):
-            raise TypeError(
-                "Only ClassifiersProfileMapping objects can be added to ClassifiersProfiles."
+    return errors
+
+
+def validate_unique_classifier_ids(
+    profiles: List[ClassifiersProfileMapping],
+) -> List[Result[WikibaseID, Error]]:
+    """Ensure no classifier_id has more than 1 profile"""
+    classifier_to_wikibase = {}
+    errors = []
+
+    for profile in profiles:
+        if profile.classifier_id in classifier_to_wikibase:
+            # Duplicate classifier_id found
+            errors.append(
+                Err(
+                    Error(
+                        msg="Validation Error: classifiers ID has multiple wikibase IDs",
+                        metadata={
+                            "wikibase_id": {
+                                profile.wikibase_id,
+                                classifier_to_wikibase[profile.classifier_id],
+                            },
+                            "classifier_id": {profile.classifier_id},
+                        },
+                    )
+                )
             )
-        super().extend(items)
-        self.validate()
+
+        else:
+            classifier_to_wikibase[profile.classifier_id] = profile.wikibase_id
+
+    return errors
+
+
+def remove_invalid_wikibase_ids(
+    profiles: List[ClassifiersProfileMapping], invalid_wikibase_ids: Set[WikibaseID]
+) -> List[ClassifiersProfileMapping]:
+    """Remove wikibase IDs with invalid profiles"""
+    return [
+        profile
+        for profile in profiles
+        if profile.wikibase_id not in invalid_wikibase_ids
+    ]
+
+
+def validate_classifiers_profiles_mappings(
+    profiles: List[ClassifiersProfileMapping],
+) -> tuple[List[ClassifiersProfileMapping], List[Result[WikibaseID, Error]]]:
+    """Perform validation on the list of ClassifiersProfileMapping objects"""
+    errors: list[Result[WikibaseID, Error]] = []
+
+    errors.extend(validate_mappings_multiplicity(profiles, Profile.RETIRED, 3))
+    errors.extend(validate_mappings_multiplicity(profiles, Profile.PRIMARY, 1))
+    errors.extend(validate_mappings_multiplicity(profiles, Profile.EXPERIMENTAL, 1))
+    errors.extend(validate_unique_classifier_ids(profiles))
+
+    failures = [r._error for r in errors if isinstance(r, Err)]
+    invalid_wikibase_ids = {
+        wikibase_id
+        for error in failures
+        for wikibase_id in (error.metadata or {}).get("wikibase_id", set())
+    }
+
+    # Remove all profiles with invalid wikibase IDs
+    valid_profiles = remove_invalid_wikibase_ids(profiles, invalid_wikibase_ids)
+
+    return valid_profiles, errors

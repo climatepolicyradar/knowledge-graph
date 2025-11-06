@@ -11,7 +11,6 @@ from flows.classifiers_profiles import (
 from flows.result import Err
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
-    ClassifiersProfiles,
     Profile,
 )
 from knowledge_graph.concept import Concept
@@ -85,10 +84,13 @@ async def test_get_classifiers_profiles():
 
     # assert validation errors
     failures = [r._error for r in results if isinstance(r, Err)]
-
     assert len(failures) == 3
+
     assert failures[0].metadata.get("wikibase_id") == "Q100"
-    assert failures[0].msg == "Failed to fetch classifier profiles for Q100"
+    assert (
+        failures[0].msg
+        == "Error getting classifier ID from wikibase: Failed to fetch classifier profiles for Q100"
+    )
 
     # check mocked method called
     assert mock_wikibase.get_classifier_ids_async.call_count == 4
@@ -121,25 +123,23 @@ def test_compare_classifiers_profiles():
     ]
 
     # Mock classifiers profiles (right dataframe)
-    classifiers_profiles = ClassifiersProfiles(
-        [
-            ClassifiersProfileMapping(
-                wikibase_id=WikibaseID("Q123"),
-                classifier_id=ClassifierID("aaaa2222"),
-                classifiers_profile="experimental",
-            ),
-            ClassifiersProfileMapping(
-                wikibase_id=WikibaseID("Q100"),
-                classifier_id=ClassifierID("nnnn5555"),
-                classifiers_profile="experimental",
-            ),
-            ClassifiersProfileMapping(
-                wikibase_id=WikibaseID("Q222"),
-                classifier_id=ClassifierID("abab4444"),
-                classifiers_profile="primary",
-            ),
-        ]
-    )
+    classifiers_profiles = [
+        ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile="experimental",
+        ),
+        ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id=ClassifierID("nnnn5555"),
+            classifiers_profile="experimental",
+        ),
+        ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q222"),
+            classifier_id=ClassifierID("abab4444"),
+            classifiers_profile="primary",
+        ),
+    ]
 
     updates_df = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
 

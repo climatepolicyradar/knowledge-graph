@@ -17,8 +17,8 @@ from flows.result import Err, Error, Ok, Result
 from flows.utils import SlackNotify, get_logger
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
-    ClassifiersProfiles,
     Profile,
+    validate_classifiers_profiles_mappings,
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.concept import Concept
@@ -128,11 +128,12 @@ async def read_concept_store(wikibase: WikibaseSession) -> list[Concept]:
 
 async def get_classifiers_profiles(
     wikibase: WikibaseSession, concepts: list[Concept]
-) -> tuple[ClassifiersProfiles, list[Result[WikibaseID, Error]]]:
+) -> tuple[list[ClassifiersProfileMapping], list[Result[WikibaseID, Error]]]:
     logger = get_logger()
 
     results: list[Result[WikibaseID, Error]] = []
-    classifiers_profiles = ClassifiersProfiles()
+    classifiers_profiles = []
+    valid_classifiers_profiles = []
     for concept in concepts:
         logger.info(f"getting classifier profile for concept: {concept.wikibase_id}")
         try:
@@ -164,7 +165,7 @@ async def get_classifiers_profiles(
                 logger.info(
                     f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
                 )
-                results.append(Ok(concept.wikibase_id))
+
             else:
                 results.append(
                     Err(
@@ -180,14 +181,23 @@ async def get_classifiers_profiles(
             results.append(
                 Err(
                     Error(
-                        msg=str(e),
+                        msg=f"Error getting classifier ID from wikibase: {e}",
                         metadata={"wikibase_id": concept.wikibase_id},
                     )
                 )
             )
             continue
 
-    return classifiers_profiles, results
+    # run validation
+    try:
+        valid_classifiers_profiles, validation_results = (
+            validate_classifiers_profiles_mappings(classifiers_profiles)
+        )
+        results.extend(validation_results)
+    except Exception as e:
+        raise Exception(f"Error validating classifiers profiles {e}")
+
+    return valid_classifiers_profiles, results
 
 
 async def create_validation_artifact(results: list[Result[WikibaseID, Error]]):
@@ -317,7 +327,7 @@ def classifier_specs_to_dataframe(
 
 
 def classifiers_profiles_to_dataframe(
-    classifiers_profiles: ClassifiersProfiles,
+    classifiers_profiles: list[ClassifiersProfileMapping],
 ) -> pl.DataFrame:
     df = pl.DataFrame(
         [
@@ -337,7 +347,8 @@ def classifiers_profiles_to_dataframe(
 
 
 def compare_classifiers_profiles(
-    classifier_specs: list[ClassifierSpec], classifiers_profiles: ClassifiersProfiles
+    classifier_specs: list[ClassifierSpec],
+    classifiers_profiles: list[ClassifiersProfileMapping],
 ) -> pl.DataFrame:
     specs_df = classifier_specs_to_dataframe(classifier_specs)
     cp_df = classifiers_profiles_to_dataframe(classifiers_profiles)
