@@ -1,15 +1,169 @@
 import logging
+import sqlite3
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Sequence
 
 import numpy as np
 
+from knowledge_graph import config
 from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.identifiers import ClassifierID, Identifier
 from knowledge_graph.span import Span
 
 logger = logging.getLogger(__name__)
+
+
+class _EmbeddingCache:
+    """
+    An SQLite cache for storing text embeddings.
+
+    This cache stores embeddings as binary blobs indexed by a cache key. The cache key
+    is generated from the embedding model name, query and document prefixes prefixes,
+    and input text.
+    """
+
+    def __init__(self, cache_dir: Path):
+        """
+        Initialize the embedding cache.
+
+        :param cache_dir: Directory to store the cache database
+        """
+        self.cache_dir = cache_dir
+        self.hits = 0
+        self.misses = 0
+
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = self.cache_dir / "embeddings.db"
+
+        self._init_db()
+
+    def _init_db(self):
+        """Initialize the SQLite database with the required schema."""
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS embeddings (
+                    cache_key TEXT PRIMARY KEY,
+                    embedding BLOB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.commit()
+
+    def get(self, cache_key: str) -> Optional[np.ndarray]:
+        """
+        Retrieve an embedding from the cache.
+
+        :param cache_key: The cache key to lookup
+        :return: The cached embedding as a numpy array, or None if not found
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT embedding FROM embeddings WHERE cache_key = ?",
+                (cache_key,),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            self.misses += 1
+            return None
+
+        self.hits += 1
+
+        return np.frombuffer(row[0], dtype=np.float32)
+
+    def get_batch(self, cache_keys: list[str]) -> dict[str, np.ndarray]:
+        """
+        Retrieve multiple embeddings from the cache in a single query.
+
+        :param cache_keys: List of cache keys to lookup
+        :return: Dictionary mapping cache keys to their embeddings (only for hits)
+        """
+        if not cache_keys:
+            return {}
+
+        placeholders = ",".join("?" * len(cache_keys))
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                f"SELECT cache_key, embedding FROM embeddings WHERE cache_key IN ({placeholders})",
+                cache_keys,
+            )
+            rows = cursor.fetchall()
+
+        results = {}
+        for cache_key, embedding_bytes in rows:
+            results[cache_key] = np.frombuffer(embedding_bytes, dtype=np.float32)
+
+        unique_keys = len(set(cache_keys))
+
+        # misses = unique keys not found in cache
+        cache_hits = len(results)
+        cache_misses = unique_keys - cache_hits
+        self.misses += cache_misses
+
+        # hits = keys found in cache + duplicate keys in the request. although duplicate
+        # keys aren't found in the SQlite database, it still makes sense to count them
+        # as hits as we don't need to recompute the embeddings
+        self.hits += len(cache_keys) - cache_misses
+
+        return results
+
+    def set(self, cache_key: str, embedding: np.ndarray):
+        """
+        Store an embedding in the cache.
+
+        :param cache_key: The cache key to store under
+        :param embedding: The embedding to store
+        """
+
+        embedding_bytes = embedding.astype(np.float32).tobytes()
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO embeddings (cache_key, embedding) VALUES (?, ?)",
+                (cache_key, embedding_bytes),
+            )
+            conn.commit()
+
+    def set_batch(self, items: dict[str, np.ndarray]):
+        """
+        Store multiple embeddings in the cache in a single transaction.
+
+        :param items: Dictionary mapping cache keys to embeddings
+        """
+        if not items:
+            return
+
+        data = [
+            (cache_key, embedding.astype(np.float32).tobytes())
+            for cache_key, embedding in items.items()
+        ]
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "INSERT OR REPLACE INTO embeddings (cache_key, embedding) VALUES (?, ?)",
+                data,
+            )
+            conn.commit()
+
+    def get_stats(self) -> dict:
+        """
+        Get cache statistics.
+
+        :return: Dictionary with cache hits, misses, and hit rate
+        """
+        total = self.hits + self.misses
+        hit_rate = self.hits / total if total > 0 else 0.0
+        return {
+            "hits": self.hits,
+            "misses": self.misses,
+            "total_requests": total,
+            "hit_rate": hit_rate,
+        }
 
 
 class EmbeddingClassifier(Classifier, ZeroShotClassifier):
@@ -30,6 +184,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         document_prefix: str = "",
         query_prefix: str = "",
         device: str | None = None,
+        use_cache: bool = True,
     ):
         super().__init__(concept)
         try:
@@ -60,9 +215,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
                 "Install it with 'uv install --extra transformers'"
             )
 
+        self.embedding_model_name = embedding_model_name
         self.threshold = threshold
         self.document_prefix = document_prefix
         self.query_prefix = query_prefix
+
+        self._cache = _EmbeddingCache(config.embedding_cache_dir) if use_cache else None
 
         self.concept_text = self.concept.to_markdown(
             include_alternative_labels=True,
@@ -109,6 +267,29 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         """Return a hash of the classifier."""
         return hash(self.id)
 
+    def _generate_cache_key(self, text: str) -> str:
+        """
+        Generate a deterministic cache key for the given text.
+
+        :param text: The input text to generate a key for
+        :return: An 8-character identifier
+        """
+        return str(
+            Identifier.generate(
+                self.embedding_model_name,
+                self.query_prefix,
+                self.document_prefix,
+                text,
+            )
+        )
+
+    def _encode(self, texts: str | list[str], show_progress_bar: bool) -> np.ndarray:
+        return self.embedding_model.encode(
+            texts,
+            show_progress_bar=show_progress_bar,
+            convert_to_numpy=True,
+        )
+
     def _predict(self, text: str, threshold: Optional[float] = None) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
@@ -119,24 +300,12 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         will be returned, covering the full text. Otherwise, an empty list will be
         returned.
         """
-        threshold = threshold or self.threshold
 
-        text_with_prefix = f"{self.query_prefix}{text}"
-        query_embedding = self.embedding_model.encode(text_with_prefix)
-        similarity = self.concept_embedding @ query_embedding.T
-        spans = []
-        if similarity > threshold:
-            spans = [
-                Span(
-                    text=text,
-                    concept_id=self.concept.wikibase_id,
-                    start_index=0,
-                    end_index=len(text),
-                    labellers=[str(self)],
-                    timestamps=[datetime.now()],
-                )
-            ]
-        return spans
+        predictions = self._predict_batch(
+            [text], threshold=threshold, show_progress_bar=False
+        )
+
+        return predictions[0]
 
     def _predict_batch(
         self,
@@ -152,14 +321,46 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         """
         threshold = threshold or self.threshold
 
-        texts_with_prefix = [f"{self.query_prefix}{text}" for text in texts]
-        text_embeddings = self.embedding_model.encode(
-            texts_with_prefix, show_progress_bar=show_progress_bar
-        )
-        spans_per_text = []
+        # get embeddings for all text
+        if self._cache is None:
+            # if there's no cache, calculate all embeddings
+            texts_with_prefix = [f"{self.query_prefix}{text}" for text in texts]
+            text_embeddings = self._encode(
+                texts_with_prefix, show_progress_bar=show_progress_bar
+            )
+            # idxs are converted to string here so type checker always deals with
+            # dict[str, Any]
+            embeddings_dict = {
+                str(idx): embedding for (idx, embedding) in enumerate(text_embeddings)
+            }
+            keys = [str(idx) for idx in range(len(texts))]
+        else:
+            # if there's a cache, go and find all the embedding that exist there and
+            # only calculate the ones that don't (the 'misses')
+            cache_keys = [self._generate_cache_key(text) for text in texts]
+            embeddings_dict = self._cache.get_batch(cache_keys)
 
-        for text, text_embedding in zip(texts, text_embeddings):
-            similarity = self.concept_embedding @ text_embedding.T
+            if cache_misses := {
+                key: text
+                for key, text in zip(cache_keys, texts)
+                if key not in embeddings_dict
+            }:
+                texts_with_prefix = [
+                    f"{self.query_prefix}{text}" for text in cache_misses.values()
+                ]
+                new_embeddings = self._encode(
+                    texts_with_prefix,
+                    show_progress_bar=show_progress_bar,
+                )
+                new_items = {k: v for k, v in zip(cache_misses.keys(), new_embeddings)}
+                self._cache.set_batch(new_items)
+                embeddings_dict.update(new_items)
+
+            keys = cache_keys
+
+        spans_per_text = []
+        for text, key in zip(texts, keys):
+            similarity = self.concept_embedding @ embeddings_dict[key].T
             spans = []
             if similarity > threshold:
                 spans = [

@@ -3,6 +3,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import httpx
 import polars as pl
@@ -13,14 +14,22 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
 from prefect.cache_policies import NONE
-from pydantic import AnyHttpUrl, SecretStr
+from prefect.context import FlowRunContext, get_run_context
+from pydantic import AnyHttpUrl, SecretStr, ValidationError
 from tenacity import RetryError
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.result import Err, Error, Ok, Result
-from flows.utils import JsonDict, S3Uri, SlackNotify, get_logger, total_milliseconds
+from flows.utils import (
+    JsonDict,
+    S3Uri,
+    SlackNotify,
+    get_logger,
+    get_slack_client,
+    total_milliseconds,
+)
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
@@ -143,7 +152,7 @@ async def update_concept_in_vespa(
         return Err(
             Error(
                 msg=f"Failed to create VespaConcept: {e}",
-                metadata={"concept": kg_concept},
+                metadata={"concept": kg_concept, "validations": e},
             )
         )
 
@@ -410,6 +419,420 @@ async def create_vespa_sync_summary_artifact(
     )
 
 
+async def send_concept_validation_alert(
+    failures: list[Error],
+    total_concepts: int,
+    aws_env: AwsEnv,
+):
+    """
+    Send a Slack alert about concept validation failures.
+
+    Posts a summary message, then threads detailed validation errors
+    and other exceptions.
+
+    Whilst there should only be validation errors, we don't want to
+    lose out on visibility of other ones.
+    """
+    logger = get_logger()
+    slack_client = await get_slack_client()
+
+    failure_rate = (len(failures) / total_concepts * 100) if total_concepts > 0 else 0
+
+    # Separate ValidationErrors from other errors
+    validation_errors: list[Error] = []
+    other_errors: list[Error] = []
+
+    for error in failures:
+        # Check if this error has a Pydantic ValidationError in metadata
+        validation_error = error.metadata.get("validations") if error.metadata else None
+        if validation_error and isinstance(validation_error, ValidationError):
+            validation_errors.append(error)
+        else:
+            other_errors.append(error)
+
+    # Build main summary message
+    summary_blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{len(failures)} of {total_concepts} concepts failed to sync to Vespa.",
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Data Quality Issues*\n{len(validation_errors)}",
+                },
+                {"type": "mrkdwn", "text": f"*System Errors*\n{len(other_errors)}"},
+            ],
+        },
+    ]
+
+    # Get flow run context for footer
+    run_context = get_run_context()
+    # Set a default, just in case, to prioritise getting an alert out
+    flow_run_name = "unknown"
+    if isinstance(run_context, FlowRunContext) and run_context.flow_run:
+        flow_run_name = run_context.flow_run.name
+
+    # Add context footer
+
+    # Get it as a timestamp so Slack can format it.
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+
+    summary_blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"Flow Run: `{flow_run_name}` | <!date^{timestamp}^{{date_num}} {{time_secs}}|{datetime.now(timezone.utc).isoformat()}>",
+                },
+            ],
+        }
+    )
+
+    try:
+        # Determine colour based on failure rate
+        if failure_rate >= 50:
+            color = "#e01e5a"  # Red
+        else:
+            color = "#ecb22e"  # Orange
+
+        # Post main summary message
+        main_response = await slack_client.chat_postMessage(
+            channel="alerts-concept-store",
+            text="Concept Sync Failures",
+            attachments=[
+                {
+                    "color": color,
+                    "blocks": summary_blocks,
+                }
+            ],
+        )
+
+        if not main_response.get("ok"):
+            logger.error(f"Slack API response: {main_response}")
+            raise Exception(f"failed to send main response to Slack: {main_response}")
+
+        logger.info(f"sent main alert to Slack: {main_response['ok']}")
+
+        # Get thread_ts for threading replies
+        if thread_ts := main_response.get("ts"):
+            # Post issues to thread
+            if validation_errors:
+                await _post_validation_errors_thread(
+                    slack_client=slack_client,
+                    channel="alerts-platform-sandbox",
+                    thread_ts=thread_ts,
+                    validation_errors=validation_errors,
+                )
+
+            if other_errors:
+                await _post_other_errors_thread(
+                    slack_client=slack_client,
+                    channel="alerts-platform-sandbox",
+                    thread_ts=thread_ts,
+                    other_errors=other_errors,
+                )
+        else:
+            raise ValueError(f"no thread TS in main response: {main_response}")
+
+    except Exception as e:
+        logger.error(f"failed to send Slack alert: {e}")
+
+
+async def _post_validation_errors_thread(
+    slack_client,
+    channel: str,
+    thread_ts: str,
+    validation_errors: list[Error],
+):
+    """Post validation errors details as a thread."""
+    logger = get_logger()
+
+    # Build table with header row
+    table_rows = [
+        [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Concept ID",
+                                "style": {"bold": True},
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Issue",
+                                "style": {"bold": True},
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    ]
+
+    # Add data rows
+    for error in validation_errors:
+        # Get Wikibase ID from metadata
+        if error.metadata and "concept" in error.metadata:
+            if "wikibase_id" in error.metadata["concept"]:
+                wikibase_id = error.metadata["concept"].get("wikibase_id")
+            else:
+                logger.warning(
+                    f"error metadata was missing concept Wikibase ID: {error.metadata['concept']}"
+                )
+                continue
+        else:
+            logger.warning(f"error metadata was missing concept: {error.metadata}")
+            continue
+
+        # Check if this error has a Pydantic ValidationError in metadata
+        validation_error = error.metadata.get("validations") if error.metadata else None
+
+        if validation_error and isinstance(validation_error, ValidationError):
+            # Format Pydantic validation errors in a user-friendly way
+            for err in validation_error.errors():
+                field = (
+                    " → ".join(str(x) for x in err["loc"])
+                    if err.get("loc")
+                    else "unknown field"
+                )
+                msg = err.get("msg", "validation failed")
+                error_type = err.get("type", "")
+
+                # Create a readable error message
+                if error_type == "missing":
+                    formatted_msg = f"missing required field: {field}"
+                elif error_type.startswith("string"):
+                    formatted_msg = f"invalid text in {field}: {msg}"
+                elif error_type.startswith("value_error"):
+                    formatted_msg = f"invalid value in {field}: {msg}"
+                else:
+                    formatted_msg = f"{field}: {msg}"
+
+                table_rows.append(
+                    [
+                        {
+                            "type": "rich_text",
+                            "elements": [
+                                {
+                                    "type": "rich_text_section",
+                                    "elements": [
+                                        {
+                                            "type": "text",
+                                            "text": wikibase_id,
+                                        },
+                                    ],
+                                }
+                            ],
+                        },
+                        {
+                            "type": "rich_text",
+                            "elements": [
+                                {
+                                    "type": "rich_text_section",
+                                    "elements": [
+                                        {
+                                            "type": "text",
+                                            "text": formatted_msg,
+                                        }
+                                    ],
+                                }
+                            ],
+                        },
+                    ]
+                )
+        else:
+            # Fall back to the error message if no ValidationError in
+            # metadata, though ideally these were already filtered out.
+            table_rows.append(
+                [
+                    {
+                        "type": "rich_text",
+                        "elements": [
+                            {
+                                "type": "rich_text_section",
+                                "elements": [
+                                    {
+                                        "type": "text",
+                                        "text": wikibase_id,
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "type": "rich_text",
+                        "elements": [
+                            {
+                                "type": "rich_text_section",
+                                "elements": [
+                                    {
+                                        "type": "text",
+                                        "text": error.msg,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                ]
+            )
+
+    validation_blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Data Quality Issues* ({len(validation_errors)} total)",
+            },
+        },
+        {"type": "table", "rows": table_rows},
+    ]
+
+    try:
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f"Data Quality Issues: {len(validation_errors)} concepts",
+            blocks=validation_blocks,
+        )
+        logger.info("posted Data Quality Issues thread")
+    except Exception as e:
+        logger.error(f"failed to post Data Quality Issues thread: {e}")
+
+
+async def _post_other_errors_thread(
+    slack_client,
+    channel: str,
+    thread_ts: str,
+    other_errors: list[Error],
+):
+    """Post other exceptions details as a thread."""
+    logger = get_logger()
+
+    # Build table with header row
+    table_rows = [
+        [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Concept ID",
+                                "style": {"bold": True},
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Error",
+                                "style": {
+                                    "bold": True,
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    ]
+
+    # Add data rows
+    for error in other_errors:
+        # Get Wikibase ID from metadata
+        if error.metadata and "concept" in error.metadata:
+            if "wikibase_id" in error.metadata["concept"]:
+                wikibase_id = error.metadata["concept"].get("wikibase_id")
+            else:
+                logger.warning(
+                    f"error metadata was missing concept Wikibase ID: {error.metadata['concept']}"
+                )
+                continue
+        else:
+            logger.warning(f"error metadata was missing concept: {(error.metadata,)}")
+            continue
+
+        table_rows.append(
+            [
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "text",
+                                    "text": wikibase_id,
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [{"type": "text", "text": error.msg}],
+                        }
+                    ],
+                },
+            ]
+        )
+
+    other_blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*System Errors* ({len(other_errors)} total)",
+            },
+        },
+        {"type": "table", "rows": table_rows},
+    ]
+
+    try:
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f"System Errors: {len(other_errors)} concepts",
+            blocks=other_blocks,
+        )
+        logger.info("posted System Errors thread")
+    except Exception as e:
+        logger.error(f"failed to post System Errors thread: {e}")
+
+
 @flow(
     persist_result=False,
     on_failure=[SlackNotify.message],
@@ -533,16 +956,25 @@ async def wikibase_to_vespa(
             vespa_connection_pool=vespa_connection_pool,
         )
 
-    # Filter to only successful Vespa updates
-    successful_concepts = [r._value for r in results if isinstance(r, Ok)]
+    successes = [r._value for r in results if isinstance(r, Ok)]
+
+    if failures := [r._error for r in results if isinstance(r, Err)]:
+        try:
+            await send_concept_validation_alert(
+                failures=failures,
+                total_concepts=len(results),
+                aws_env=aws_env,
+            )
+        except Exception as e:
+            logger.error(f"failed to send validation alert: {e}")
 
     # Only write Parquet if we have successful syncs
     append_path: str | Path | None = None
-    if successful_concepts:
-        logger.info(f"successfully synced {len(successful_concepts)} concepts to Vespa")
+    if successes:
+        logger.info(f"successfully synced {len(successes)} concepts to Vespa")
 
         # Convert successful concepts back to DataFrame
-        successful_df = concepts_to_dataframe(successful_concepts)
+        successful_df = concepts_to_dataframe(successes)
 
         # Append successful concepts with timestamp-based filename
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -554,15 +986,11 @@ async def wikibase_to_vespa(
             case Path():
                 append_path = concepts_archive_path / obj_name
 
-        logger.info(
-            f"appending {len(successful_concepts)} successful syncs to {append_path}"
-        )
+        logger.info(f"appending {len(successes)} successful syncs to {append_path}")
         successful_df.write_parquet(
             append_path, credential_provider=credential_provider
         )
-        logger.info(
-            f"successfully appended {len(successful_concepts)} rows to dataframe"
-        )
+        logger.info(f"successfully appended {len(successes)} rows to dataframe")
     else:
         logger.warning(
             "no concepts successfully synced to Vespa, skipping Parquet write"
