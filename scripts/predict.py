@@ -103,6 +103,12 @@ def main(
         True,
         help="Remove duplicate passages based on text content before prediction",
     ),
+    stop_after_n_positives: Annotated[
+        Optional[int],
+        typer.Option(
+            help="Stop prediction after finding this many positive passages",
+        ),
+    ] = None,
 ):
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
@@ -117,6 +123,7 @@ def main(
         "classifier_path": classifier_wandb_path,
         "labelled_passages_path": labelled_passages_path,
         "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "stop_after_n_positives": stop_after_n_positives,
     }
     wandb_job_type = "predict_adhoc"
 
@@ -177,12 +184,50 @@ def main(
         classifier = load_classifier_from_wandb(classifier_wandb_path)
 
         # 3. predict using model
-        output_labelled_passages = label_passages_with_classifier(
-            classifier=classifier,
-            labelled_passages=labelled_passages,
-            batch_size=batch_size,
-            show_progress=True,
-        )
+        if stop_after_n_positives is None:
+            output_labelled_passages = label_passages_with_classifier(
+                classifier=classifier,
+                labelled_passages=labelled_passages,
+                batch_size=batch_size,
+                show_progress=True,
+            )
+        else:
+            # Early stopping: process batch-by-batch until we have enough positives
+            output_labelled_passages = []
+            positives_found = 0
+            passages_processed = 0
+
+            console.print(
+                f"[cyan]Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages[/cyan]"
+            )
+
+            for i in range(0, len(labelled_passages), batch_size):
+                batch = labelled_passages[i : i + batch_size]
+
+                batch_output = label_passages_with_classifier(
+                    classifier=classifier,
+                    labelled_passages=batch,
+                    batch_size=batch_size,
+                    show_progress=True,
+                )
+
+                batch_positives = sum(1 for p in batch_output if len(p.spans) > 0)
+                positives_found += batch_positives
+                passages_processed += len(batch)
+
+                output_labelled_passages.extend(batch_output)
+
+                console.print(
+                    f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages, "
+                    f"found {positives_found} positives ({batch_positives} in batch)[/cyan]"
+                )
+
+                if positives_found >= stop_after_n_positives:
+                    console.print(
+                        f"[green]✓ Reached target of {stop_after_n_positives} positives. "
+                        f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)[/green]"
+                    )
+                    break
 
         # 4. save to local (and wandb)
         labelled_passages_filename = (
