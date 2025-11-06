@@ -10,7 +10,7 @@ from flows.classifiers_profiles import (
 )
 from flows.result import Err
 from knowledge_graph.classifiers_profiles import (
-    ClassifiersProfile,
+    ClassifiersProfileMapping,
     ClassifiersProfiles,
     Profile,
 )
@@ -72,12 +72,12 @@ async def test_get_classifiers_profiles():
 
     # assert successful profiles
     assert len(classifier_profiles) == 2
-    assert classifier_profiles[0] == ClassifiersProfile(
+    assert classifier_profiles[0] == ClassifiersProfileMapping(
         wikibase_id=WikibaseID("Q123"),
         classifier_id=ClassifierID("aaaa2222"),
         classifiers_profile=Profile.PRIMARY,
     )
-    assert classifier_profiles[1] == ClassifiersProfile(
+    assert classifier_profiles[1] == ClassifiersProfileMapping(
         wikibase_id=WikibaseID("Q123"),
         classifier_id=ClassifierID("yyyy9999"),
         classifiers_profile=Profile.RETIRED,
@@ -123,17 +123,17 @@ def test_compare_classifiers_profiles():
     # Mock classifiers profiles (right dataframe)
     classifiers_profiles = ClassifiersProfiles(
         [
-            ClassifiersProfile(
+            ClassifiersProfileMapping(
                 wikibase_id=WikibaseID("Q123"),
                 classifier_id=ClassifierID("aaaa2222"),
                 classifiers_profile="experimental",
             ),
-            ClassifiersProfile(
+            ClassifiersProfileMapping(
                 wikibase_id=WikibaseID("Q100"),
                 classifier_id=ClassifierID("nnnn5555"),
                 classifiers_profile="experimental",
             ),
-            ClassifiersProfile(
+            ClassifiersProfileMapping(
                 wikibase_id=WikibaseID("Q222"),
                 classifier_id=ClassifierID("abab4444"),
                 classifiers_profile="primary",

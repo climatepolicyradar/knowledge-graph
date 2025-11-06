@@ -16,7 +16,7 @@ from flows.config import Config
 from flows.result import Err, Error, Ok, Result
 from flows.utils import SlackNotify, get_logger
 from knowledge_graph.classifiers_profiles import (
-    ClassifiersProfile,
+    ClassifiersProfileMapping,
     ClassifiersProfiles,
     Profile,
 )
@@ -154,7 +154,7 @@ async def get_classifiers_profiles(
 
                 for rank, classifier_id in concept_classifiers_profiles:
                     classifiers_profiles.append(
-                        ClassifiersProfile(
+                        ClassifiersProfileMapping(
                             wikibase_id=concept.wikibase_id,
                             classifier_id=classifier_id,
                             classifiers_profile=Profile.generate(rank),
@@ -176,7 +176,7 @@ async def get_classifiers_profiles(
                 )
 
         except Exception as e:
-            logger.info(f"{e}")
+            logger.info(f"Error getting classifier ID from wikibase: {e}")
             results.append(
                 Err(
                     Error(
@@ -197,14 +197,14 @@ async def create_validation_artifact(results: list[Result[WikibaseID, Error]]):
     failures = [r._error for r in results if isinstance(r, Err)]
 
     total_concepts = len(results)
-    successful_cps = len(successes)
-    failed_cps = len(failures)
+    successful_concepts = len(successes)
+    failed_concepts = len(failures)
 
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
 - **Total concepts found**: {total_concepts}
-- **Successful wikibase IDs**: {successful_cps}
-- **Failed wikibase IDs**: {failed_cps}
+- **Successful Wikibase IDs**: {successful_concepts}
+- **Failed Wikibase IDs**: {failed_concepts}
 """
 
     cp_details = [
@@ -412,8 +412,8 @@ def compare_classifiers_profiles(
 
 
 @flow(on_failure=[SlackNotify.message])
-async def classifiers_profiles_lifecycle(
-    aws_env: AwsEnv = AwsEnv.staging,
+async def sync_classifiers_profiles(
+    aws_env: AwsEnv,
     config: Config | None = None,
 ):
     """Update classifier profile for a given aws environment."""
@@ -437,7 +437,6 @@ async def classifiers_profiles_lifecycle(
     classifiers_profiles, results = await get_classifiers_profiles(wikibase, concepts)
 
     logger.info(f"Successful classifiers {len(classifiers_profiles)}")
-    logger.info(f"Valid profiles: {classifiers_profiles}")
 
     updates_df = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
 

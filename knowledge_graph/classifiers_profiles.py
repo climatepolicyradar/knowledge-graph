@@ -37,7 +37,7 @@ class Profile(str, Enum):
             raise ValueError(f"Unknown StatementRank: {rank}")
 
 
-class ClassifiersProfile(BaseModel):
+class ClassifiersProfileMapping(BaseModel):
     """Base class for a classifier profile"""
 
     wikibase_id: WikibaseID = Field(description="Wikibase ID")
@@ -47,11 +47,13 @@ class ClassifiersProfile(BaseModel):
     )
 
 
-class ClassifiersProfiles(list[ClassifiersProfile]):
-    """Class for managing and validating a list of ClassifiersProfile objects"""
+# TODO: update naming similar to mapping
+# TODO: update class structure
+class ClassifiersProfiles(list[ClassifiersProfileMapping]):
+    """Class for managing and validating a list of ClassifiersProfileMapping objects"""
 
     def validate(self):
-        """Perform validation on the list of ClassifiersProfile objects"""
+        """Perform validation on the list of ClassifiersProfileMapping objects"""
         errors = []
         invalid_wikibase_ids = set()
 
@@ -116,20 +118,20 @@ class ClassifiersProfiles(list[ClassifiersProfile]):
             if profile.wikibase_id not in invalid_wikibase_ids
         ]
 
-    def append(self, item: ClassifiersProfile):
+    def append(self, item: ClassifiersProfileMapping):
         """Override append to validate the item before adding it"""
-        if not isinstance(item, ClassifiersProfile):
+        if not isinstance(item, ClassifiersProfileMapping):
             raise TypeError(
-                "Only ClassifiersProfile objects can be added to ClassifiersProfiles."
+                "Only ClassifiersProfileMapping objects can be added to ClassifiersProfiles."
             )
         super().append(item)
         self.validate()
 
-    def extend(self, items: Iterable[ClassifiersProfile]):
+    def extend(self, items: Iterable[ClassifiersProfileMapping]):
         """Override extend to validate the items before adding them"""
-        if not all(isinstance(item, ClassifiersProfile) for item in items):
+        if not all(isinstance(item, ClassifiersProfileMapping) for item in items):
             raise TypeError(
-                "Only ClassifiersProfile objects can be added to ClassifiersProfiles."
+                "Only ClassifiersProfileMapping objects can be added to ClassifiersProfiles."
             )
         super().extend(items)
         self.validate()

@@ -21,7 +21,7 @@ from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
-from flows.classifiers_profiles import classifiers_profiles_lifecycle
+from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.full_pipeline import full_pipeline
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     # Classifiers Profiles Lifecycle
 
     create_deployment(
-        flow=classifiers_profiles_lifecycle,
+        flow=sync_classifiers_profiles,
         description="Compare wikibase classifiers profiles with classifiers specs",
         # Temporarily disabled while testing
         # Schedule 2x daily during working week days
