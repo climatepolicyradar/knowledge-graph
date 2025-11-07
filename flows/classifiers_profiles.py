@@ -4,7 +4,6 @@ Flow that updates classifiers profiles changes detected in wikibase
 Assumes that the classifier model has been trained in wandb
 """
 
-import json
 import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -437,36 +436,23 @@ async def create_classifiers_profiles_artifact(results: list[Result[Dict, Error]
 - **Failed Wikibase IDs**: {failed_concepts}
 """
 
-    cp_details = [
-        {
-            "Wikibase ID": str(concept.get("wikibase_id")),
-            "Classifier ID": str(concept.get("classifier_id")),
+    def format_cp_details(
+        concept: dict, status: str, error: Optional[str] = None
+    ) -> dict:
+        return {
+            "Wikibase ID": str(concept.get("wikibase_id", "Unknown")),
+            "Classifier ID": str(concept.get("classifier_id", "Unknown")),
             "Classifiers Profile": (
                 f"{str(concept.get('add_classifiers_profile', [None])[0])} to {str(concept.get('remove_classifiers_profile', [None])[0])} ({concept.get('status')})"
                 if concept.get("add_classifiers_profile")
-                else f"{str(concept.get('classifiers_profile'))} ({concept.get('status')})"
+                else f"{str(concept.get('classifiers_profile'))} ({concept.get('status', '')})"
             ),
-            "Status": "✓",
-            "Error": "N/A",
+            "Status": status,
+            "Error": error or "N/A",
         }
-        for concept in successes
-    ] + [
-        {
-            "Wikibase ID": str((error.metadata or {}).get("wikibase_id", "Unknown")),
-            "Classifier ID": str(
-                (error.metadata or {}).get("classifier_id", "Unknown")
-            ),
-            "Classifiers Profile": str(
-                (error.metadata or {}).get("classifiers_profile", "Unknown")
-            ),
-            "Status": "✗",
-            "Error": (
-                f"{error.msg}: {json.dumps((error.metadata or {}).get('response'))}"  # pyright: ignore[reportOptionalMemberAccess]
-                if error.metadata and error.metadata.get("response")
-                else error.msg
-            ),
-        }
-        for error in failures
+
+    cp_details = [format_cp_details(concept, "✓") for concept in successes] + [
+        format_cp_details(error.metadata or {}, "✗", error.msg) for error in failures
     ]
 
     # TODO remove print statements
