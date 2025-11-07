@@ -6,7 +6,7 @@ Assumes that the classifier model has been trained in wandb
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TypedDict
 
 import wandb
 from prefect.artifacts import acreate_table_artifact
@@ -480,10 +480,23 @@ def convert_to_classifier_dict(
     return classifier_dict
 
 
+class CompareResult(TypedDict):
+    """
+    Class with results of comparing classifiers profiles.
+
+    Contains current classifier specs and new classifiers profiles from wikibase.
+    """
+
+    key: tuple[WikibaseID, ClassifierID]
+    status: str
+    current: ClassifierSpec | None
+    new: ClassifiersProfileMapping | None
+
+
 def compare_classifiers_profiles(
     classifier_specs: list[ClassifierSpec],
     classifiers_profiles: list[ClassifiersProfileMapping],
-) -> list[dict]:
+) -> list[CompareResult]:
     """
     Compare current classifiers specs to valid classifiers profiles from wikibase
 
@@ -499,7 +512,7 @@ def compare_classifiers_profiles(
     new_keys = set(data_new.keys())
 
     # TODO: update convert_dict_to_classifier_spec to instead retrieve from ClassifierSpec
-    to_remove = [
+    to_remove: list[CompareResult] = [
         {
             "key": k,
             "status": "remove",
@@ -509,7 +522,7 @@ def compare_classifiers_profiles(
         for k in (current_keys - new_keys)
     ]
 
-    to_add = [
+    to_add: list[CompareResult] = [
         {
             "key": k,
             "status": "add",
@@ -521,7 +534,7 @@ def compare_classifiers_profiles(
 
     common = current_keys & new_keys
 
-    to_update = [
+    to_update: list[CompareResult] = [
         {
             "key": k,
             "status": "update",
