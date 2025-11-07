@@ -482,7 +482,7 @@ async def create_classifiers_profiles_artifact(results: list[Result[Dict, Error]
 
 def convert_to_classifier_dict(
     dataset: list[ClassifierSpec] | list[ClassifiersProfileMapping],
-) -> dict:
+) -> dict[tuple[WikibaseID, ClassifierID], dict]:
     classifier_dict = {}
 
     for item in dataset:
