@@ -539,7 +539,7 @@ async def send_concept_validation_alert(
             if validation_errors:
                 await _post_validation_errors_thread(
                     slack_client=slack_client,
-                    channel="alerts-platform-sandbox",
+                    channel=f"alerts-platform-{aws_env.name}",
                     thread_ts=thread_ts,
                     validation_errors=validation_errors,
                 )
@@ -547,7 +547,7 @@ async def send_concept_validation_alert(
             if other_errors:
                 await _post_other_errors_thread(
                     slack_client=slack_client,
-                    channel="alerts-platform-sandbox",
+                    channel=f"alerts-platform-{aws_env.name}",
                     thread_ts=thread_ts,
                     other_errors=other_errors,
                 )
