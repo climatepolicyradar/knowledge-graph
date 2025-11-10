@@ -917,9 +917,11 @@ async def wikibase_to_vespa(
     current_df = concepts_to_dataframe(concepts).lazy()
     logger.info("converted to dataframe")
 
+    region = "eu-west-2" if aws_env == AwsEnv.sandbox else "eu-west-1"
+
     credential_provider: pl.CredentialProvider | None = None
     if isinstance(concepts_archive_path, S3Uri):
-        credential_provider = pl.CredentialProviderAWS(region_name="eu-west-1")
+        credential_provider = pl.CredentialProviderAWS(region_name=region)
 
     # Check if archive(s) exists before trying to scan it
     logger.info("checking for existing archive(s)")
@@ -927,7 +929,7 @@ async def wikibase_to_vespa(
         case S3Uri():
             archives_exist = await s3_prefix_has_objects(
                 concepts_archive_path,
-                "eu-west-1",
+                region,
                 aws_env,
             )
         case Path():
