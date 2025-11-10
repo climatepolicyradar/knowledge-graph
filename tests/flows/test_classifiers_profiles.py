@@ -23,7 +23,7 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version
-from knowledge_graph.wikibase import StatementRank, WikibaseSession
+from knowledge_graph.wikibase import StatementRank
 
 
 @pytest.fixture
@@ -55,34 +55,40 @@ async def test_get_classifiers_profiles():
         Concept(wikibase_id="Q200", preferred_label="Concept 200"),
     ]
 
-    # mock response from wikibase.get_classifier_ids_async
-    mock_wikibase = AsyncMock(spec=WikibaseSession)
+    with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
+        # mock response from wikibase.get_classifier_ids_async
+        mock_wikibase_auth = Mock()
+        mock_wikibase = mock_wikibase_session.return_value
 
-    # 1 success, 3 failures
-    mock_wikibase.get_classifier_ids_async.side_effect = [
-        # Q123: success
-        [
-            (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
-            (StatementRank.DEPRECATED, ClassifierID("yyyy9999")),
-        ],
-        # Q100: failure
-        Exception("Failed to fetch classifier profiles for Q100"),
-        # Q999: fail validation - 2 primary profiles
-        [
-            (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
-            (StatementRank.PREFERRED, ClassifierID("cccc4444")),
-        ],
-        # Q200: fail validation - same classifier ID in 2 profiles
-        [
-            (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
-            (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
-        ],
-    ]
+        # 1 success, 3 failures
+        mock_wikibase.get_classifier_ids_async = AsyncMock(
+            side_effect=[
+                # Q123: success
+                [
+                    (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
+                    (StatementRank.DEPRECATED, ClassifierID("yyyy9999")),
+                ],
+                # Q100: failure
+                Exception("Failed to fetch classifier profiles for Q100"),
+                # Q999: fail validation - 2 primary profiles
+                [
+                    (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
+                    (StatementRank.PREFERRED, ClassifierID("cccc4444")),
+                ],
+                # Q200: fail validation - same classifier ID in 2 profiles
+                [
+                    (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
+                    (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
+                ],
+            ]
+        )
 
-    # Call the function under test
-    results = await get_classifiers_profiles(
-        wikibase=mock_wikibase, concepts=list_concepts
-    )
+        # Call the function under test
+        results = await get_classifiers_profiles(
+            wikibase_auth=mock_wikibase_auth, concepts=list_concepts
+        )
+
+    assert mock_wikibase.get_classifier_ids_async.call_count == 4
 
     # assert successful profiles
     classifier_profiles = [r._value for r in results if isinstance(r, Ok)]

@@ -5,17 +5,20 @@ Assumes that the classifier model has been trained in wandb
 """
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypedDict
 
 import wandb
+from prefect import flow
 from prefect.artifacts import acreate_table_artifact
+from prefect.context import FlowRunContext, get_run_context
 from pydantic import AnyHttpUrl, SecretStr
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from flows.config import Config
 from flows.result import Err, Error, Ok, Result
-from flows.utils import get_logger
+from flows.utils import get_logger, get_slack_client
 from knowledge_graph.classifier import ModelPath
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
@@ -27,6 +30,7 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
+from scripts.update_classifier_spec import refresh_all_available_classifiers
 
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
@@ -35,8 +39,6 @@ WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
 
 def log_and_return_error(logger, msg: str, metadata: dict) -> Err:
     logger.info(msg)
-    # TODO remove print statement
-    print(msg)
     return Err(Error(msg=msg, metadata=metadata))
 
 
@@ -197,6 +199,7 @@ def promote_classifier_profile(
 
     Use new_specs to get the details for promotion.
     """
+    logger = get_logger()
     #     scripts.promote.main(
     #         wikibase_id=wikibase_id,
     #         classifier_id=classifier_id,
@@ -212,7 +215,10 @@ def promote_classifier_profile(
             "classifier_id": new_specs.classifier_id,
             "classifiers_profile": [str(new_specs.classifiers_profile)],
         },
-        action_function=lambda w_id, env, classifier_id, classifiers_profile: print(
+        action_function=lambda w_id,
+        env,
+        classifier_id,
+        classifiers_profile: logger.info(
             f"Promoting {w_id}, {classifier_id}, {classifiers_profile}, {env}"
         ),
     )
@@ -228,6 +234,8 @@ def demote_classifier_profile(
 
     Use current_specs to get the details for demotion.
     """
+    logger = get_logger()
+
     #     scripts.demote.main(
     #         wikibase_id=wikibase_id,
     #         wandb_registry_version=wandb_registry_version,
@@ -249,7 +257,9 @@ def demote_classifier_profile(
         wikibase_id=current_specs.wikibase_id,
         aws_env=aws_env,
         additional_args=additional_args,
-        action_function=lambda w_id, env, **kwargs: print(f"Demoting {w_id}, {env}"),
+        action_function=lambda w_id, env, **kwargs: logger.info(
+            f"Demoting {w_id}, {env}"
+        ),
     )
 
 
@@ -263,6 +273,8 @@ def update_classifier_profile(
 
     Use current_specs and new_specs to get the details for update.
     """
+    logger = get_logger()
+
     # scripts.classifier_metadata.update(
     #     wikibase_id=wikibase_id,
     #     classifier_id=classifier_id,
@@ -284,7 +296,7 @@ def update_classifier_profile(
         env,
         classifier_id,
         add_classifiers_profile,
-        remove_classifiers_profile: print(
+        remove_classifiers_profile: logger.info(
             f"Updating {w_id}, {env}, {classifier_id}, {str(add_classifiers_profile[0])}, {str(remove_classifiers_profile[0])}"
         ),
     )
@@ -455,10 +467,6 @@ async def create_classifiers_profiles_artifact(results: list[Result[Dict, Error]
         format_cp_details(error.metadata or {}, "✗", error.msg) for error in failures
     ]
 
-    # TODO remove print statements
-    print(overview_description)
-    print(cp_details)
-
     await acreate_table_artifact(
         key="classifiers-profiles-validation",
         table=cp_details,
@@ -545,7 +553,7 @@ def compare_classifiers_profiles(
         if data_current[k]["classifiers_profile"] != data_new[k]["classifiers_profile"]
     ]
 
-    combined_results = [to_remove, to_add, to_update]  # not including no changes
+    combined_results = [to_remove, to_add, to_update]  # not including unchanged
 
     return [d for sublist in combined_results for d in sublist]
 
@@ -587,7 +595,272 @@ def convert_dict_to_classifiers_profile_mapping(
     )
 
 
-# @flow(on_failure=[SlackNotify.message])
+async def send_classifiers_profile_slack_alert(
+    validation_errors: list[Error],
+    other_errors: list[Error],
+    successes: list[Dict],
+):
+    """
+    Send slack alert with failures from the classifiers profiles lifecycle sync.
+
+    Posts a summary message to slack channel and thread with table of failures.
+    """
+    logger = get_logger()
+    slack_client = await get_slack_client()
+
+    total_concepts = len(successes) + len(validation_errors) + len(other_errors)
+    failures = len(validation_errors) + len(other_errors)
+
+    failure_rate = (failures / total_concepts) * 100 if total_concepts > 0 else 0
+    # Create summary blocks
+    summary_blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{failures} of {total_concepts} classifiers profiles failed with wikibase validation errors.",
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Data Quality Issues*\n{len(validation_errors)}",
+                },
+                {"type": "mrkdwn", "text": f"*System Errors*\n{len(other_errors)}"},
+            ],
+        },
+    ]
+
+    run_context = get_run_context()
+    # Set a default, just in case, to prioritise getting an alert out
+    flow_run_name = "unknown"
+    if isinstance(run_context, FlowRunContext) and run_context.flow_run:
+        flow_run_name = run_context.flow_run.name
+
+    # Add context footer
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+
+    summary_blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"Flow Run: `{flow_run_name}` | <!date^{timestamp}^{{date_num}} {{time_secs}}|{datetime.now(timezone.utc).isoformat()}>",
+                },
+            ],
+        }
+    )
+
+    try:
+        # Determine colour based on failure rate
+        if failure_rate >= 50:
+            color = "#e01e5a"  # Red
+        else:
+            color = "#ecb22e"  # Orange
+
+        # Post main summary message
+        main_response = await slack_client.chat_postMessage(
+            # channel="alerts-concept-store",
+            channel="alerts-platform-staging",
+            text="Classifiers Profile Sync Summary",
+            attachments=[
+                {
+                    "color": color,
+                    "blocks": summary_blocks,
+                }
+            ],
+        )
+
+        if not main_response.get("ok"):
+            logger.error(f"Slack API response: {main_response}")
+            raise Exception(f"failed to send main response to Slack: {main_response}")
+
+        logger.info(f"sent main alert to Slack: {main_response['ok']}")
+
+        # Get thread_ts for threading replies
+        if thread_ts := main_response.get("ts"):
+            # Post issues to thread
+            if validation_errors:
+                await _post_errors_thread(
+                    slack_client=slack_client,
+                    # channel="alerts-concept-store",
+                    channel="alerts-platform-staging",
+                    thread_ts=thread_ts,
+                    errors=validation_errors,
+                    error_type="Data Quality Issues",
+                )
+
+            if other_errors:
+                await _post_errors_thread(
+                    slack_client=slack_client,
+                    # channel="alerts-concept-store",
+                    channel="alerts-platform-staging",
+                    thread_ts=thread_ts,
+                    errors=other_errors,
+                    error_type="System Errors",
+                )
+        else:
+            raise ValueError(f"no thread TS in main response: {main_response}")
+    except Exception as e:
+        logger.error(f"failed to send Slack alert: {e}")
+    return
+
+
+async def _post_errors_thread(
+    slack_client,
+    channel: str,
+    thread_ts: str,
+    errors: list[Error],
+    error_type: str,
+):
+    """Post errors details as a thread with table of wikibase_id, classifier_id and error message."""
+    logger = get_logger()
+
+    # Build table with header row
+    table_rows = [
+        [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Wikibase ID",
+                                "style": {"bold": True},
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Classifier ID",
+                                "style": {"bold": True},
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [
+                            {
+                                "type": "text",
+                                "text": "Issue",
+                                "style": {"bold": True},
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    ]
+
+    # Helper function to convert sets to comma-separated strings
+    def convert_set_to_string(value: Any) -> str:
+        if isinstance(value, set):
+            return ", ".join(map(str, value))  # Convert set to comma-separated string
+        return str(value)
+
+    # Add data rows
+    for error in errors:
+        # Get Wikibase ID from metadata
+        if error.metadata and "wikibase_id" in error.metadata:
+            wikibase_id = convert_set_to_string(error.metadata.get("wikibase_id"))
+        else:
+            logger.warning(f"error metadata was missing Wikibase ID: {error.metadata}")
+            continue
+
+        if error.metadata and "classifier_id" in error.metadata:
+            classifier_id = convert_set_to_string(error.metadata.get("classifier_id"))
+        else:
+            classifier_id = "N/A"
+
+        table_rows.append(
+            [
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "text",
+                                    "text": wikibase_id,
+                                },
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "text",
+                                    "text": classifier_id,
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "text",
+                                    "text": error.msg,
+                                }
+                            ],
+                        }
+                    ],
+                },
+            ]
+        )
+
+    validation_blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{error_type}* ({len(errors)} total)",
+            },
+        },
+        {"type": "table", "rows": table_rows},
+    ]
+
+    try:
+        await slack_client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f"{error_type}: {len(errors)} issues found",
+            blocks=validation_blocks,
+        )
+        logger.info(f"posted {error_type} thread")
+    except Exception as e:
+        logger.error(f"failed to post {error_type} thread: {e}")
+
+
+@flow()
 async def sync_classifiers_profiles(
     aws_env: AwsEnv,
     config: Config | None = None,
@@ -599,7 +872,7 @@ async def sync_classifiers_profiles(
 
     logger = get_logger()
 
-    print("Wikibase Cache Path:", wikibase_cache_path)
+    logger.info("Wikibase Cache Path:", wikibase_cache_path)
     if not config:
         logger.info("No pipeline config provided, creating default...")
         config = await Config.create()
@@ -643,13 +916,13 @@ async def sync_classifiers_profiles(
         r._value for r in results if isinstance(r, Ok)
     ]
 
-    logger.info(f"Valid concept retrieved from wikibase: {len(classifiers_profiles)}")
+    logger.info(f"Valid concepts retrieved from wikibase: {len(classifiers_profiles)}")
+    logger.info(f"Validation errors from wikibase: {len(validation_errors)}")
 
-    print(f"Validation errors: {len(validation_errors)}")
-    print(f"Successful classifiers profiles: {len(classifiers_profiles)}")
-
-    updates = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
-    logger.info(f"Identified {len(updates)} updates")
+    classifiers_profiles_to_update = compare_classifiers_profiles(
+        classifier_specs, classifiers_profiles
+    )
+    logger.info(f"Identified {len(classifiers_profiles_to_update)} updates for syncing")
 
     wandb.login(key=config.wandb_api_key.get_secret_value())
 
@@ -660,39 +933,42 @@ async def sync_classifiers_profiles(
         "update": update_classifier_profile,
     }
 
-    for update in updates:
-        if status := update.get("status"):
+    for classifier_profile in classifiers_profiles_to_update:
+        if status := classifier_profile.get("status"):
             if handler := UPDATE_HANDLERS.get(status):
                 wandb_results.append(
                     handler(
-                        current_specs=update.get("current", None),
-                        new_specs=update.get("new", None),
+                        current_specs=classifier_profile.get("current", None),
+                        new_specs=classifier_profile.get("new", None),
                         aws_env=aws_env,
                     )
                 )
             else:
-                print(f"Unhandled status: {status}")
+                logger.info(f"Unhandled status: {status}")
 
-    # update classifiers specs
-    # refresh_all_available_classifiers([aws_env])
+    successes = [r._value for r in results if isinstance(r, Ok)]
+    logger.info(
+        f"Successfully synced {len(successes)} classifier profile updates to wandb"
+    )
+
+    # update classifiers specs yaml file
+    refresh_all_available_classifiers([aws_env])
 
     # combine validation errors with wandb errors and successes
     final_results: list[Result[Dict, Error]] = validation_errors + wandb_results
 
+    try:
+        await send_classifiers_profile_slack_alert(
+            validation_errors=[
+                r._error for r in validation_errors if isinstance(r, Err)
+            ],
+            other_errors=[r._error for r in wandb_results if isinstance(r, Err)],
+            successes=[r._value for r in final_results if isinstance(r, Ok)],
+        )
+    except Exception as e:
+        logger.error(f"failed to send validation alert: {e}")
+
     # create artifact with summary
     await create_classifiers_profiles_artifact(
         results=final_results,
-    )
-
-
-if __name__ == "__main__":
-    # sync_classifiers_profiles.serve(name="classifiers-profiles-lifecycle")
-    import asyncio
-
-    asyncio.run(
-        sync_classifiers_profiles(
-            aws_env=AwsEnv.staging,
-            wikibase_cache_path=Path("./tmp/concepts_cache_q218.jsonl"),
-            wikibase_cache_save_if_missing=True,
-        )
     )
