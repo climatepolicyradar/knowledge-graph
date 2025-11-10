@@ -302,9 +302,9 @@ if __name__ == "__main__":
         ),
         env_schedules={
             # Temporarily disabled for stability
-            # AwsEnv.production: "0 9 * * *",
-            AwsEnv.staging: "0 9 * * *",
-            AwsEnv.sandbox: "0 10 * * *",
+            # AwsEnv.production: "0 8 * * MON-THU",
+            AwsEnv.staging: "0 9 * * MON-THU",
+            AwsEnv.sandbox: "0 10 * * MON-THU",
         },
     )
 
