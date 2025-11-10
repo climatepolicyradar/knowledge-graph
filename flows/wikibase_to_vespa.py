@@ -15,6 +15,7 @@ from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
 from prefect.cache_policies import NONE
 from prefect.context import FlowRunContext, get_run_context
+from prefect_slack.credentials import AsyncWebClient
 from pydantic import AnyHttpUrl, SecretStr, ValidationError
 from tenacity import RetryError
 from vespa.application import VespaAsync
@@ -449,8 +450,6 @@ async def send_concept_validation_alert(
     logger = get_logger()
     slack_client = await get_slack_client()
 
-    failure_rate = (len(failures) / total_concepts * 100) if total_concepts > 0 else 0
-
     # Separate ValidationErrors from other errors
     validation_errors: list[Error] = []
     other_errors: list[Error] = []
@@ -463,25 +462,91 @@ async def send_concept_validation_alert(
         else:
             other_errors.append(error)
 
+    # First, send validation errors
+    try:
+        if validation_errors:
+            channel = "alerts-concept-store"
+            main_validation_response = await _post_validation_main(
+                slack_client, channel, len(validation_errors), total_concepts
+            )
+
+            if not main_validation_response.get("ok"):
+                logger.error(f"Slack API response: {main_validation_response}")
+                raise Exception(
+                    f"failed to send main response to Slack channel `#{channel}`: {main_validation_response}"
+                )
+
+            logger.info(
+                f"sent main alert to Slack channel `#{channel}`: {main_validation_response['ok']}"
+            )
+
+            # Get thread_ts for threading replies
+            if thread_ts := main_validation_response.get("ts"):
+                # Post issues to thread
+                await _post_validation_errors_thread(
+                    slack_client=slack_client,
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    validation_errors=validation_errors,
+                )
+            else:
+                raise ValueError(
+                    f"no thread TS in main response: {main_validation_response}"
+                )
+
+    except Exception as e:
+        logger.error(f"failed to send Slack alert: {e}")
+
+    # Second, send other errors
+    if other_errors:
+        try:
+            channel = f"alerts-platform-{aws_env.name}"
+            main_other_response = await _post_validation_main(
+                slack_client, channel, len(other_errors), total_concepts
+            )
+
+            if not main_other_response.get("ok"):
+                logger.error(f"Slack API response: {main_other_response}")
+                raise Exception(
+                    f"failed to send main response to Slack channel `#{channel}`: {main_other_response}"
+                )
+
+            logger.info(
+                f"sent main alert to Slack channel `#{channel}`: {main_other_response['ok']}"
+            )
+
+            # Get thread_ts for threading replies
+            if thread_ts := main_other_response.get("ts"):
+                await _post_other_errors(
+                    slack_client=slack_client,
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    other_errors=other_errors,
+                )
+            else:
+                raise ValueError(
+                    f"no thread TS in main response: {main_other_response}"
+                )
+
+        except Exception as e:
+            logger.error(f"failed to send Slack alert: {e}")
+
+
+async def _post_validation_main(
+    slack_client: AsyncWebClient,
+    channel: str,
+    failures_n: int,
+    concepts_n: int,
+):
     # Build main summary message
     summary_blocks: list[dict[str, Any]] = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"{len(failures)} of {total_concepts} concepts failed to sync to Vespa.",
+                "text": f"{failures_n} of {concepts_n} concepts failed to sync to Vespa.",
             },
-        },
-        {
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Data Quality Issues*\n{len(validation_errors)}",
-                },
-                {"type": "mrkdwn", "text": f"*System Errors*\n{len(other_errors)}"},
-            ],
-        },
+        }
     ]
 
     # Get flow run context for footer
@@ -508,58 +573,29 @@ async def send_concept_validation_alert(
         }
     )
 
-    try:
-        # Determine colour based on failure rate
-        if failure_rate >= 50:
-            color = "#e01e5a"  # Red
-        else:
-            color = "#ecb22e"  # Orange
+    failure_rate = (failures_n / concepts_n * 100) if concepts_n > 0 else 0
 
-        # Post main summary message
-        main_response = await slack_client.chat_postMessage(
-            channel="alerts-concept-store",
-            text="Concept Sync Failures",
-            attachments=[
-                {
-                    "color": color,
-                    "blocks": summary_blocks,
-                }
-            ],
-        )
+    # Determine colour based on failure rate
+    if failure_rate >= 50:
+        color = "#e01e5a"  # Red
+    else:
+        color = "#ecb22e"  # Orange
 
-        if not main_response.get("ok"):
-            logger.error(f"Slack API response: {main_response}")
-            raise Exception(f"failed to send main response to Slack: {main_response}")
-
-        logger.info(f"sent main alert to Slack: {main_response['ok']}")
-
-        # Get thread_ts for threading replies
-        if thread_ts := main_response.get("ts"):
-            # Post issues to thread
-            if validation_errors:
-                await _post_validation_errors_thread(
-                    slack_client=slack_client,
-                    channel=f"alerts-platform-{aws_env.name}",
-                    thread_ts=thread_ts,
-                    validation_errors=validation_errors,
-                )
-
-            if other_errors:
-                await _post_other_errors_thread(
-                    slack_client=slack_client,
-                    channel=f"alerts-platform-{aws_env.name}",
-                    thread_ts=thread_ts,
-                    other_errors=other_errors,
-                )
-        else:
-            raise ValueError(f"no thread TS in main response: {main_response}")
-
-    except Exception as e:
-        logger.error(f"failed to send Slack alert: {e}")
+    # Post main summary message
+    return await slack_client.chat_postMessage(
+        channel=channel,
+        text="Concept Sync Failures",
+        attachments=[
+            {
+                "color": color,
+                "blocks": summary_blocks,
+            }
+        ],
+    )
 
 
 async def _post_validation_errors_thread(
-    slack_client,
+    slack_client: AsyncWebClient,
     channel: str,
     thread_ts: str,
     validation_errors: list[Error],
@@ -733,8 +769,8 @@ async def _post_validation_errors_thread(
         logger.error(f"failed to post Data Quality Issues thread: {e}")
 
 
-async def _post_other_errors_thread(
-    slack_client,
+async def _post_other_errors(
+    slack_client: AsyncWebClient,
     channel: str,
     thread_ts: str,
     other_errors: list[Error],
