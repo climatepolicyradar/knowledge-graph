@@ -11,6 +11,7 @@ import wandb
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from sklearn.metrics import precision_recall_curve, roc_curve
 from wandb.wandb_run import Run
 
 from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
@@ -400,8 +401,129 @@ def evaluate_classifier(
             gold_standard_labelled_passages,
             model_labelled_passages,
         )
+        create_wandb_model_evaluation_charts(
+            wandb_run,
+            predictions=model_labelled_passages,
+            ground_truth=gold_standard_labelled_passages,
+        )
 
     return df, model_labelled_passages
+
+
+def create_wandb_model_evaluation_charts(
+    wandb_run: Run,
+    predictions: list[LabelledPassage],
+    ground_truth: list[LabelledPassage],
+) -> None:
+    """
+    Plot ROC, precision-recall and confusion matrix plots in the W&B run.
+
+    The first two are only plotted if predictions have probabilities
+    """
+
+    ground_truth_labels = [1 if lp.spans else 0 for lp in ground_truth]
+    binary_predictions = [1 if lp.spans else 0 for lp in predictions]
+
+    if all(
+        [
+            span.prediction_probability is not None
+            for pred in predictions
+            for span in pred.spans
+        ]
+    ):
+        pred_probabilities = [
+            max(
+                [
+                    span.prediction_probability
+                    for span in pred.spans
+                    if span.prediction_probability is not None
+                ]
+                or [0.0]
+            )
+            for pred in predictions
+        ]
+
+        precision, recall, pr_thresholds = precision_recall_curve(
+            ground_truth_labels, pred_probabilities
+        )
+        fpr, tpr, roc_thresholds = roc_curve(ground_truth_labels, pred_probabilities)
+
+        # Find optimal threshold using ROC (maximise TPR-FPR)
+        optimal_idx_roc = (tpr - fpr).argmax()
+        optimal_threshold_roc = float(roc_thresholds[optimal_idx_roc])
+
+        # Find optimal threshold using F1 score
+        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-10)
+        optimal_idx_f1 = f1_scores.argmax()
+        optimal_threshold_f1 = (
+            float(pr_thresholds[optimal_idx_f1])
+            if optimal_idx_f1 < len(pr_thresholds)
+            else 0.5
+        )
+
+        # Log threshold recommendations and metrics. These are logged alphabetically
+        # in the run summary.
+        threshold_recommendations = {
+            "optimal_ROC_threshold": optimal_threshold_roc,
+            "optimal_ROC_threshold_tpr": float(tpr[optimal_idx_roc]),
+            "optimal_ROC_threshold_fpr": float(fpr[optimal_idx_roc]),
+            "optimal_f1_threshold": optimal_threshold_f1,
+            "optimal_f1_threshold_precision": float(precision[optimal_idx_f1]),
+            "optimal_f1_threshold_recall": float(recall[optimal_idx_f1]),
+            "optimal_f1_threshold_f1_score": float(f1_scores[optimal_idx_f1]),
+        }
+        for k, v in threshold_recommendations.items():
+            wandb_run.summary[k] = v
+
+        Console().log(
+            f"[bold]Optimal threshold (ROC):[/bold] {optimal_threshold_roc:.4f} (TPR: {tpr[optimal_idx_roc]:.4f}, FPR: {fpr[optimal_idx_roc]:.4f})"
+        )
+        Console().log(
+            f"[bold]Optimal threshold (F1):[/bold] {optimal_threshold_f1:.4f} (Precision: {precision[optimal_idx_f1]:.4f}, Recall: {recall[optimal_idx_f1]:.4f}, F1: {f1_scores[optimal_idx_f1]:.4f})"
+        )
+
+        pr_data = [
+            [r, p, t]
+            for r, p, t in zip(
+                recall.tolist(), precision.tolist(), pr_thresholds.tolist()
+            )
+        ]
+        pr_table = wandb.Table(
+            data=pr_data, columns=["recall", "precision", "threshold"]
+        )
+
+        wandb_run.log(
+            {
+                "precision-recall-curve": wandb.plot.line(
+                    pr_table, "recall", "precision", title="Precision-Recall Curve"
+                )
+            }
+        )
+
+        roc_data = [
+            [f, t, th]
+            for f, t, th in zip(fpr.tolist(), tpr.tolist(), roc_thresholds.tolist())
+        ]
+        roc_table = wandb.Table(data=roc_data, columns=["fpr", "tpr", "threshold"])
+
+        wandb_run.log(
+            {"roc-curve": wandb.plot.line(roc_table, "fpr", "tpr", title="ROC Curve")}
+        )
+    else:
+        Console().log(
+            "Skipping ROC and precision-recall plots because classifier predictions don't have probabilities."
+        )
+
+    wandb_run.log(
+        {
+            "confusion_matrix": wandb.plot.confusion_matrix(
+                y_true=ground_truth_labels,
+                preds=binary_predictions,
+                class_names=["false", "true"],
+                title="Confusion Matrix",
+            )
+        }
+    )
 
 
 app = typer.Typer()
