@@ -599,6 +599,7 @@ async def send_classifiers_profile_slack_alert(
     validation_errors: list[Error],
     other_errors: list[Error],
     successes: list[Dict],
+    aws_env: AwsEnv,
 ):
     """
     Send slack alert with failures from the classifiers profiles lifecycle sync.
@@ -609,9 +610,98 @@ async def send_classifiers_profile_slack_alert(
     slack_client = await get_slack_client()
 
     total_concepts = len(successes) + len(validation_errors) + len(other_errors)
+
+    try:
+        channel = f"alerts-platform-{aws_env}"
+        # TODO: change channel once CP data populated
+        # channel = "alerts-concept-store"
+        if len(validation_errors) > 0:
+            channel = channel
+            main_response = await _post_errors_main(
+                slack_client=slack_client,
+                channel=channel,
+                total_concepts=total_concepts,
+                validation_errors=validation_errors,
+                other_errors=other_errors,
+            )
+
+            if not main_response.get("ok"):
+                logger.error(f"Slack API response: {main_response}")
+                raise Exception(
+                    f"failed to send main response to Slack channel #{channel}: {main_response}"
+                )
+
+            logger.info(
+                f"sent main alert to Slack channel #{channel}: {main_response['ok']}"
+            )
+
+            # Get thread_ts for threading replies
+            if thread_ts := main_response.get("ts"):
+                # Post issues to thread
+                if validation_errors:
+                    await _post_errors_thread(
+                        slack_client=slack_client,
+                        channel=channel,
+                        thread_ts=thread_ts,
+                        errors=validation_errors,
+                        error_type="Data Quality Issues",
+                    )
+            else:
+                raise ValueError(
+                    f"no thread TS in main response for Data Quality Issues: {main_response}"
+                )
+
+        if len(other_errors) > 0:
+            channel = f"alerts-platform-{aws_env}"
+
+            main_response = await _post_errors_main(
+                slack_client=slack_client,
+                channel=channel,
+                total_concepts=total_concepts,
+                validation_errors=validation_errors,
+                other_errors=other_errors,
+            )
+
+            if not main_response.get("ok"):
+                logger.error(f"Slack API response: {main_response}")
+                raise Exception(
+                    f"failed to send main response to Slack channel #{channel}: {main_response}"
+                )
+
+            logger.info(
+                f"sent main alert to Slack channel #{channel}: {main_response['ok']}"
+            )
+
+            # Get thread_ts for threading replies
+            if thread_ts := main_response.get("ts"):
+                if other_errors:
+                    await _post_errors_thread(
+                        slack_client=slack_client,
+                        # channel="alerts-concept-store",
+                        channel="alerts-platform-staging",
+                        thread_ts=thread_ts,
+                        errors=other_errors,
+                        error_type="System Errors",
+                    )
+            else:
+                raise ValueError(
+                    f"no thread TS in main response for System Errors: {main_response}"
+                )
+    except Exception as e:
+        logger.error(f"failed to send Slack alerts: {e}")
+    return
+
+
+async def _post_errors_main(
+    slack_client,
+    channel: str,
+    total_concepts: int,
+    validation_errors: list[Error],
+    other_errors: list[Error],
+):
+    get_logger()
     failures = len(validation_errors) + len(other_errors)
 
-    failure_rate = (failures / total_concepts) * 100 if total_concepts > 0 else 0
     # Create summary blocks
     summary_blocks: list[dict[str, Any]] = [
         {
@@ -654,59 +744,23 @@ async def send_classifiers_profile_slack_alert(
         }
     )
 
-    try:
-        # Determine colour based on failure rate
-        if failure_rate >= 50:
-            color = "#e01e5a"  # Red
-        else:
-            color = "#ecb22e"  # Orange
+    failure_rate = (failures / total_concepts) * 100 if total_concepts > 0 else 0
+    # Determine colour based on failure rate
+    if failure_rate >= 50:
+        color = "#e01e5a"  # Red
+    else:
+        color = "#ecb22e"  # Orange
 
-        # Post main summary message
-        main_response = await slack_client.chat_postMessage(
-            # channel="alerts-concept-store",
-            channel="alerts-platform-staging",
-            text="Classifiers Profile Sync Summary",
-            attachments=[
-                {
-                    "color": color,
-                    "blocks": summary_blocks,
-                }
-            ],
-        )
-
-        if not main_response.get("ok"):
-            logger.error(f"Slack API response: {main_response}")
-            raise Exception(f"failed to send main response to Slack: {main_response}")
-
-        logger.info(f"sent main alert to Slack: {main_response['ok']}")
-
-        # Get thread_ts for threading replies
-        if thread_ts := main_response.get("ts"):
-            # Post issues to thread
-            if validation_errors:
-                await _post_errors_thread(
-                    slack_client=slack_client,
-                    # channel="alerts-concept-store",
-                    channel="alerts-platform-staging",
-                    thread_ts=thread_ts,
-                    errors=validation_errors,
-                    error_type="Data Quality Issues",
-                )
-
-            if other_errors:
-                await _post_errors_thread(
-                    slack_client=slack_client,
-                    # channel="alerts-concept-store",
-                    channel="alerts-platform-staging",
-                    thread_ts=thread_ts,
-                    errors=other_errors,
-                    error_type="System Errors",
-                )
-        else:
-            raise ValueError(f"no thread TS in main response: {main_response}")
-    except Exception as e:
-        logger.error(f"failed to send Slack alert: {e}")
-    return
+    return await slack_client.chat_postMessage(
+        channel=channel,
+        text="Classifiers Profile Sync Summary",
+        attachments=[
+            {
+                "color": color,
+                "blocks": summary_blocks,
+            }
+        ],
+    )
 
 
 async def _post_errors_thread(
@@ -872,7 +926,7 @@ async def sync_classifiers_profiles(
 
     logger = get_logger()
 
-    logger.info("Wikibase Cache Path:", wikibase_cache_path)
+    logger.info(f"Wikibase Cache Path: {wikibase_cache_path}")
     if not config:
         logger.info("No pipeline config provided, creating default...")
         config = await Config.create()
@@ -964,6 +1018,7 @@ async def sync_classifiers_profiles(
             ],
             other_errors=[r._error for r in wandb_results if isinstance(r, Err)],
             successes=[r._value for r in final_results if isinstance(r, Ok)],
+            aws_env=aws_env,
         )
     except Exception as e:
         logger.error(f"failed to send validation alert: {e}")
