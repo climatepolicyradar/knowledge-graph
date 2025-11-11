@@ -7,6 +7,7 @@ from prefect import flow
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.wikibase import WikibaseConfig
 from scripts.train import run_training
 
@@ -33,6 +34,8 @@ async def train_on_gpu(
         or not config.wikibase_username
         or not config.wikibase_password
         or not config.wikibase_url
+        or not config.argilla_api_key
+        or not config.argilla_api_url
     ):
         raise ValueError("Missing values in config.")
 
@@ -44,6 +47,11 @@ async def train_on_gpu(
         url=config.wikibase_url,
     )
 
+    argilla_config = ArgillaConfig(
+        api_key=config.argilla_api_key,
+        url=config.argilla_api_url,
+    )
+
     s3_client = boto3.client("s3", region_name=config.bucket_region)
 
     return await run_training(
@@ -51,6 +59,7 @@ async def train_on_gpu(
         track_and_upload=track_and_upload,
         aws_env=aws_env,
         wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
         s3_client=s3_client,
         evaluate=evaluate,
         classifier_type=classifier_type,

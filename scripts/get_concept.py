@@ -8,7 +8,11 @@ from rich.console import Console
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import concept_dir
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelling import ArgillaSession, ResourceDoesNotExistError
+from knowledge_graph.labelling import (
+    ArgillaConfig,
+    ArgillaSession,
+    ResourceDoesNotExistError,
+)
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 
 console = Console()
@@ -20,6 +24,7 @@ async def get_concept_async(
     include_recursive_has_subconcept: bool = True,
     include_labels_from_subconcepts: bool = True,
     wikibase_config: Optional[WikibaseConfig] = None,
+    argilla_config: Optional[ArgillaConfig] = None,
 ) -> Concept:
     """Async function to get concept and labelled passages."""
     console.log("Connecting to Wikibase...")
@@ -34,7 +39,13 @@ async def get_concept_async(
     console.log("✅ Connected to Wikibase")
 
     console.log("Connecting to Argilla...")
-    argilla = ArgillaSession()
+    if argilla_config:
+        argilla = ArgillaSession(
+            api_url=argilla_config.url,
+            api_key=argilla_config.api_key.get_secret_value(),
+        )
+    else:
+        argilla = ArgillaSession()
     console.log("✅ Connected to Argilla")
 
     concept = await wikibase.get_concept_async(

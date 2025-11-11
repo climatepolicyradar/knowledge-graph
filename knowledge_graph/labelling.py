@@ -2,7 +2,7 @@ import os
 import uuid
 from functools import lru_cache
 from logging import getLogger
-from typing import Any, Literal, Optional, Sequence, Union, overload
+from typing import Any, Literal, NamedTuple, Optional, Sequence, Union, overload
 from uuid import UUID
 
 from argilla import (
@@ -18,6 +18,7 @@ from argilla import (
 )
 from argilla._models import Role
 from dotenv import find_dotenv, load_dotenv
+from pydantic import SecretStr
 
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.identifiers import WikibaseID
@@ -655,3 +656,12 @@ def label_passages_with_classifier(
     ]
 
     return output_labelled_passages
+
+
+ArgillaConfig = NamedTuple(
+    "ArgillaConfig",
+    [
+        ("api_key", SecretStr),
+        ("url", str),
+    ],
+)
