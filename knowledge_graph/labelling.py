@@ -247,6 +247,64 @@ class ArgillaSession:
         )
         return created_dataset
 
+    def copy_dataset(
+        self,
+        wikibase_id: WikibaseID,
+        workspace: Optional[str] = None,
+        new_workspace: Optional[str] = None,
+        new_name: Optional[str] = None,
+    ) -> Dataset:
+        """
+        Copy a dataset to a new dataset name or workspace.
+
+        :param dataset: Existing dataset in Argilla
+        :param workspace: Name of the workspace to get the dataset from. If not
+            provided, uses the session's default_workspace.
+        :param new_workspace: Workspace to push new dataset to
+        :param new_name: Name of new dataset
+        :return Dataset: new dataset
+        """
+
+        if not new_workspace or new_name:
+            raise ValueError("One of new_workspace or new_name must be specified.")
+
+        existing_dataset = self.get_dataset(
+            wikibase_id=wikibase_id,
+            workspace=workspace,
+        )
+        existing_records = list(existing_dataset.records)
+
+        if new_workspace:
+            new_workspace_object = self.get_workspace(new_workspace)
+        else:
+            new_workspace_object = existing_dataset.workspace
+
+        new_dataset_name = new_name or existing_dataset.name
+
+        if (
+            new_workspace_object == existing_dataset.workspace
+            and new_dataset_name == existing_dataset.name
+        ):
+            raise ResourceAlreadyExistsError(
+                "Dataset",
+                resource_name=f"{new_dataset_name} (workspace {new_workspace_object.name})",
+            )
+
+        logger.info(
+            f"Copying dataset {existing_dataset.name} (workspace {existing_dataset.workspace.name}) to new dataset {new_dataset_name} in {new_workspace_object.name}"
+        )
+
+        new_dataset = Dataset(
+            name=new_dataset_name,
+            workspace=new_workspace_object,
+            settings=existing_dataset.settings,
+        )
+
+        new_dataset.create()
+        new_dataset.records.log(existing_records)
+
+        return new_dataset
+
     @lru_cache(maxsize=64)
     def _get_user_by_id(self, user_id: Union[UUID, str]) -> User | None:
         """

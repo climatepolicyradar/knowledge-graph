@@ -325,6 +325,11 @@ async def calculate_ensemble_metrics(
         )
         predictions_per_classifier.append(variant_predictions)
 
+        positive_count = sum(1 for p in variant_predictions if p.spans)
+        console.log(
+            f"  Variant {i + 1} predicted {positive_count}/{len(variant_predictions)} positive passages"
+        )
+
     console.log("Calculating dataset of ensemble predictions vs ground truth...")
     df = create_predictions_dataframe(
         predictions_per_classifier=predictions_per_classifier,
@@ -332,6 +337,21 @@ async def calculate_ensemble_metrics(
     )
 
     console.log(f"Analyzing {len(df)} predictions...")
+
+    if "disagreement" in df.columns:
+        disagreements = df["disagreement"]
+        console.log("  Disagreement stats:")
+        console.log(f"    Mean: {disagreements.mean():.4f}")
+        console.log(f"    Max: {disagreements.max():.4f}")
+        console.log(f"    Non-zero: {(disagreements > 0).sum()}/{len(disagreements)}")
+
+    if "prob_std" in df.columns:
+        prob_stds = df["prob_std"].dropna()
+        if len(prob_stds) > 0:
+            console.log("  Probability std dev stats:")
+            console.log(f"    Mean: {prob_stds.mean():.4f}")
+            console.log(f"    Max: {prob_stds.max():.4f}")
+            console.log(f"    Non-zero: {(prob_stds > 0).sum()}/{len(prob_stds)}")
 
     classifier_id = classifier.id if hasattr(classifier, "id") else "classifier"
     output_dir = ensemble_metrics_dir / f"{wikibase_id}_classifier_{classifier_id}"
@@ -389,7 +409,7 @@ def main(
     batch_size: Annotated[
         int,
         typer.Option(help="Number of passages to process in each batch"),
-    ] = 15,
+    ] = 50,
 ):
     """
     Analyse classifier variants with respect to ensemble metrics.
