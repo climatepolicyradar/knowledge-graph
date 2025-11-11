@@ -409,7 +409,7 @@ def main(
     batch_size: Annotated[
         int,
         typer.Option(help="Number of passages to process in each batch"),
-    ] = 15,
+    ] = 50,
 ):
     """
     Analyse classifier variants with respect to ensemble metrics.
