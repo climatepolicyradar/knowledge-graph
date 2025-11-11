@@ -129,7 +129,7 @@ def validate_artifact_metadata_rules(
     if artifact.metadata.get("classifier_name") in restricted_classifier_names:
         return log_and_return_error(
             logger,
-            msg="Error artifact validation failed for classifier type",
+            msg=f"Error artifact validation failed: classifier name {artifact.metadata.get('classifier_name')} violates classifier name rules",
             metadata={},
         )
 
@@ -144,7 +144,7 @@ def validate_artifact_metadata_rules(
             ):
                 return log_and_return_error(
                     logger,
-                    msg="Error artifact validation failed for run config",
+                    msg=f"Error artifact validation failed: run config {key} violates run config rules",
                     metadata={},
                 )
     return Ok(artifact)
