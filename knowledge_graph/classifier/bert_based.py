@@ -379,7 +379,7 @@ class BertBasedClassifier(
                 max_grad_norm=1.0,
                 learning_rate=5e-4,
                 weight_decay=0.01,
-                warmup_ratio=0.06,
+                warmup_ratio=0.1,
                 lr_scheduler_type="cosine",
                 optim="adamw_torch_fused",
                 fp16=False,

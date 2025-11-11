@@ -1,5 +1,6 @@
 import asyncio
 import os
+import random
 import re
 from contextlib import nullcontext
 from pathlib import Path
@@ -115,6 +116,63 @@ def deduplicate_training_data(
     )
 
     return filtered
+
+
+def limit_training_samples(
+    training_data: list[LabelledPassage],
+    max_samples: int,
+) -> list[LabelledPassage]:
+    """
+    Limit the number of training samples, aiming for a balanced set.
+
+    If a perfect split isn't possible, take all available from the smaller group and
+    the remainder from the larger group.
+
+    :param training_data: The list of labelled passages to limit.
+    :type training_data: list[LabelledPassage]
+    :param max_samples: Maximum number of samples to keep in total.
+    :type max_samples: int
+    :return: A (mostly) balanced subset of the training data.
+    :rtype: list[LabelledPassage]
+    """
+    console = Console()
+
+    positive_passages = [p for p in training_data if p.spans]
+    negative_passages = [p for p in training_data if not p.spans]
+
+    console.log(
+        f"📊 Starting with {len(positive_passages)} positive and "
+        f"{len(negative_passages)} negative passages"
+    )
+
+    half = max_samples // 2
+    # Take up to half from each group, or as many as you can
+    pos_count = min(len(positive_passages), half)
+    neg_count = min(len(negative_passages), half)
+
+    # Fill up with remainder from the group that still has samples left
+    remainder = max_samples - (pos_count + neg_count)
+    if remainder > 0:
+        if pos_count < len(positive_passages):
+            extra = min(remainder, len(positive_passages) - pos_count)
+            pos_count += extra
+            remainder -= extra
+        if remainder > 0 and neg_count < len(negative_passages):
+            extra = min(remainder, len(negative_passages) - neg_count)
+            neg_count += extra
+
+    limited_positive = positive_passages[:pos_count]
+    limited_negative = negative_passages[:neg_count]
+
+    console.log(
+        f"✂️  Limited to {len(limited_positive)} positive and "
+        f"{len(limited_negative)} negative passages "
+        f"({len(limited_positive) + len(limited_negative)} total)"
+    )
+
+    limited_dataset = limited_positive + limited_negative
+    random.shuffle(limited_dataset)
+    return limited_dataset
 
 
 class StorageUpload(BaseModel):
@@ -343,6 +401,12 @@ def main(
             help="W&B run path (entity/project/run_id) to fetch training data from instead of using concept's labelled passages",
         ),
     ] = None,
+    limit_training_samples: Annotated[
+        Optional[int],
+        typer.Option(
+            help="Maximum number of training samples to use. Samples are selected in a way that achieves the best possible class balance. If not specified, all samples are used.",
+        ),
+    ] = None,
 ) -> Classifier | None:
     """
     Main function to train the model and optionally upload the artifact.
@@ -364,6 +428,8 @@ def main(
     :type classifier_override: Optional[list[str]]
     :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
     :type concept_override: Optional[list[str]]
+    :param limit_training_samples: Maximum number of training samples to use
+    :type limit_training_samples: Optional[int]
     """
     classifier_kwargs = parse_kwargs_from_strings(classifier_override)
     concept_overrides = parse_kwargs_from_strings(concept_override)
@@ -384,6 +450,7 @@ def main(
                 "classifier_kwargs": classifier_kwargs,
                 "concept_overrides": concept_overrides,
                 "training_data_wandb_run_path": training_data_wandb_run_path,
+                "limit_training_samples": limit_training_samples,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -403,6 +470,7 @@ def main(
                 classifier_kwargs=classifier_kwargs,
                 concept_overrides=concept_overrides,
                 training_data_wandb_run_path=training_data_wandb_run_path,
+                limit_training_samples=limit_training_samples,
             )
         )
 
@@ -416,6 +484,7 @@ async def train_classifier(
     evaluate: bool = True,
     extra_wandb_config: dict[str, Any] = {},
     train_validation_data: Optional[list[LabelledPassage]] = None,
+    max_training_samples: Optional[int] = None,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -448,6 +517,8 @@ async def train_classifier(
         training_data = (
             train_validation_data if train_validation_data is not None else []
         )
+        if max_training_samples is not None:
+            training_data = limit_training_samples(training_data, max_training_samples)
 
         # Remove any passages from training that appear in evaluation set
         evaluation_data = classifier.concept.labelled_passages
@@ -563,6 +634,7 @@ async def run_training(
     classifier_kwargs: Optional[dict[str, Any]] = None,
     concept_overrides: Optional[dict[str, Any]] = None,
     training_data_wandb_run_path: Optional[str] = None,
+    limit_training_samples: Optional[int] = None,
 ) -> Classifier:
     """
     Get a concept and create a classifier, then train the classifier.
@@ -614,6 +686,8 @@ async def run_training(
         extra_wandb_config["training_data_wandb_run_path"] = (
             training_data_wandb_run_path
         )
+    if limit_training_samples is not None:
+        extra_wandb_config["limit_training_samples"] = limit_training_samples
 
     return await train_classifier(
         classifier=classifier,
@@ -624,6 +698,7 @@ async def run_training(
         evaluate=evaluate,
         extra_wandb_config=extra_wandb_config,
         train_validation_data=labelled_passages,
+        max_training_samples=limit_training_samples,
     )
 
 
