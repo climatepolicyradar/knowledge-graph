@@ -19,7 +19,7 @@ from knowledge_graph.classifiers_profiles import (
     Profile,
 )
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.compare_result_operation import Add, Ignore, Remove, Update
+from knowledge_graph.compare_result_operation import Demote, Ignore, Promote, Update
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version
@@ -185,16 +185,16 @@ def test_compare_classifiers_profiles():
     assert (
         len([d for d in results if isinstance(d, Ignore)]) == 0
     )  # ignores are not returned, otherwise should be 1
-    assert len([d for d in results if isinstance(d, Add)]) == 1
-    assert len([d for d in results if isinstance(d, Remove)]) == 1
+    assert len([d for d in results if isinstance(d, Promote)]) == 1
+    assert len([d for d in results if isinstance(d, Demote)]) == 1
     assert len([d for d in results if isinstance(d, Update)]) == 1
 
-    # check Add
-    assert [d for d in results if isinstance(d, Add)][
+    # check Promote
+    assert [d for d in results if isinstance(d, Promote)][
         0
     ].classifiers_profile_mapping == classifiers_profile_mapping_add[0]
-    # check Remove
-    assert [d for d in results if isinstance(d, Remove)][
+    # check Demote
+    assert [d for d in results if isinstance(d, Demote)][
         0
     ].classifier_spec == mock_spec_remove
     # check Update

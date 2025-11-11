@@ -8,14 +8,14 @@ class CompareResultOperation(BaseModel):
     """Base class for compare result operation"""
 
 
-class Add(CompareResultOperation):
-    """Class to represent adding a classifier profile mapping"""
+class Promote(CompareResultOperation):
+    """Class to represent promoting a classifier profile mapping"""
 
     classifiers_profile_mapping: ClassifiersProfileMapping
 
 
-class Remove(CompareResultOperation):
-    """Class to represent removing classifier specs"""
+class Demote(CompareResultOperation):
+    """Class to represent demoting classifier specs"""
 
     classifier_spec: ClassifierSpec
 

@@ -27,9 +27,9 @@ from knowledge_graph.classifiers_profiles import (
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.compare_result_operation import (
-    Add,
     CompareResultOperation,
-    Remove,
+    Demote,
+    Promote,
     Update,
 )
 from knowledge_graph.concept import Concept
@@ -489,20 +489,21 @@ def compare_classifiers_profiles(
                     )
                 )
             else:
+                # Skipping for now
                 # results.append(Ignore(classifier_spec=spec))
                 pass  # ignores are not returned
         else:
-            # If the classifier does not exist in classifiers_profile_mappings but is in classifier_specs, it should be removed (remove)
-            results.append(Remove(classifier_spec=spec))
+            # If the classifier does not exist in classifiers_profile_mappings but is in classifier_specs, it should be removed (demote)
+            results.append(Demote(classifier_spec=spec))
 
-    # Check for mappings that are in classifiers_profile_mappings but not in classifier_specs (add)
+    # Check for mappings that are in classifiers_profile_mappings but not in classifier_specs (promote)
     for mapping in classifiers_profile_mappings:
         if not any(
             spec.wikibase_id == mapping.wikibase_id
             and spec.classifier_id == mapping.classifier_id
             for spec in classifier_specs
         ):
-            results.append(Add(classifiers_profile_mapping=mapping))
+            results.append(Promote(classifiers_profile_mapping=mapping))
 
     return results
 
@@ -898,7 +899,7 @@ async def sync_classifiers_profiles(
 
     for classifiers in classifiers_to_update:
         match classifiers:
-            case Add() as a:
+            case Promote() as a:
                 logger.info(
                     f"promote called for {a.classifiers_profile_mapping.wikibase_id}, {a.classifiers_profile_mapping.classifier_id}, {a.classifiers_profile_mapping.classifiers_profile}"
                 )
@@ -935,7 +936,7 @@ async def sync_classifiers_profiles(
                     )
                 )
 
-            case Remove() as r:
+            case Demote() as r:
                 logger.info(
                     f"demote called for {r.classifier_spec.wikibase_id}, {r.classifier_spec.classifier_id}, {r.classifier_spec.classifiers_profile}"
                 )
