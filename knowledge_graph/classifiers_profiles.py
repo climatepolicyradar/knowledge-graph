@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Set
 
 from pydantic import BaseModel, Field
 
-from flows.result import Err, Error, Result
+from flows.result import Err, Error, Ok, Result
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.wikibase import StatementRank
 
@@ -52,7 +52,7 @@ def validate_mappings_multiplicity(
     profiles: List[ClassifiersProfileMapping],
     profile_validation: Profile,
     max_count: int,
-) -> List[Result[WikibaseID, Error]]:
+) -> List[Result[ClassifiersProfileMapping, Error]]:
     """Ensure no concept is present in more than the specified number of classifiers"""
     errors = []
     counts = Counter(
@@ -81,7 +81,7 @@ def validate_mappings_multiplicity(
 
 def validate_unique_classifier_ids(
     profiles: List[ClassifiersProfileMapping],
-) -> List[Result[WikibaseID, Error]]:
+) -> List[Result[ClassifiersProfileMapping, Error]]:
     """Ensure no classifier_id has more than 1 profile"""
     classifier_to_wikibase = {}
     errors = []
@@ -123,16 +123,16 @@ def get_valid_wikibase_ids(
 
 def validate_classifiers_profiles_mappings(
     profiles: List[ClassifiersProfileMapping],
-) -> tuple[List[ClassifiersProfileMapping], List[Result[WikibaseID, Error]]]:
+) -> List[Result[ClassifiersProfileMapping, Error]]:
     """Perform validation on the list of ClassifiersProfileMapping objects"""
-    errors: list[Result[WikibaseID, Error]] = []
+    results: list[Result[ClassifiersProfileMapping, Error]] = []
 
-    errors.extend(validate_mappings_multiplicity(profiles, Profile.RETIRED, 3))
-    errors.extend(validate_mappings_multiplicity(profiles, Profile.PRIMARY, 1))
-    errors.extend(validate_mappings_multiplicity(profiles, Profile.EXPERIMENTAL, 1))
-    errors.extend(validate_unique_classifier_ids(profiles))
+    results.extend(validate_mappings_multiplicity(profiles, Profile.RETIRED, 3))
+    results.extend(validate_mappings_multiplicity(profiles, Profile.PRIMARY, 1))
+    results.extend(validate_mappings_multiplicity(profiles, Profile.EXPERIMENTAL, 1))
+    results.extend(validate_unique_classifier_ids(profiles))
 
-    failures = [r._error for r in errors if isinstance(r, Err)]
+    failures = [r._error for r in results if isinstance(r, Err)]
     invalid_wikibase_ids = {
         wikibase_id
         for error in failures
@@ -141,5 +141,5 @@ def validate_classifiers_profiles_mappings(
 
     # Identify all profiles with invalid wikibase IDs
     valid_profiles = get_valid_wikibase_ids(profiles, invalid_wikibase_ids)
-
-    return valid_profiles, errors
+    results.extend([Ok(p) for p in valid_profiles])
+    return results

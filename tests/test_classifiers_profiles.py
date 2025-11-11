@@ -1,6 +1,6 @@
 import pytest
 
-from flows.result import Err
+from flows.result import Err, Ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -34,8 +34,12 @@ def mock_profiles():
 def test_validate_no_errors(mock_profiles):
     """Test that validation passes when there are no errors."""
     # No exception should be raised
-    valid_profiles, errors = validate_classifiers_profiles_mappings(mock_profiles)
+    results = validate_classifiers_profiles_mappings(mock_profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
+
     assert len(errors) == 0
+    assert len(valid_profiles) == 3
 
 
 def test_validate_too_many_retired_profiles():
@@ -63,17 +67,19 @@ def test_validate_too_many_retired_profiles():
         ),
     ]
 
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
+
     assert len(errors) == 1
     assert len(valid_profiles) == 0
 
-    failures = [r._error for r in errors if isinstance(r, Err)]
-    assert failures[0].metadata == {
+    assert errors[0].metadata == {
         "wikibase_id": {"Q1"},
         "profile": {"retired"},
         "count": {4},
     }
-    assert failures[0].msg == "Validation Error: classifier multiplicity"
+    assert errors[0].msg == "Validation Error: classifier multiplicity"
 
 
 def test_validate_too_many_primary_profiles():
@@ -91,17 +97,19 @@ def test_validate_too_many_primary_profiles():
         ),
     ]
 
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
+
     assert len(errors) == 1
     assert len(valid_profiles) == 0
 
-    failures = [r._error for r in errors if isinstance(r, Err)]
-    assert failures[0].metadata == {
+    assert errors[0].metadata == {
         "wikibase_id": {"Q1"},
         "profile": {"primary"},
         "count": {2},
     }
-    assert failures[0].msg == "Validation Error: classifier multiplicity"
+    assert errors[0].msg == "Validation Error: classifier multiplicity"
 
 
 def test_validate_duplicate_classifier_ids():
@@ -119,18 +127,18 @@ def test_validate_duplicate_classifier_ids():
         ),
     ]
 
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
+
     assert len(errors) == 1
     assert len(valid_profiles) == 0
 
-    failures = [r._error for r in errors if isinstance(r, Err)]
-    assert failures[0].metadata == {
+    assert errors[0].metadata == {
         "wikibase_id": {"Q1", "Q2"},
         "classifier_id": {"aaaa4444"},
     }
-    assert (
-        failures[0].msg == "Validation Error: classifiers ID has multiple wikibase IDs"
-    )
+    assert errors[0].msg == "Validation Error: classifiers ID has multiple wikibase IDs"
 
 
 def test_append_valid_profile():
@@ -143,7 +151,9 @@ def test_append_valid_profile():
             classifiers_profile=Profile.PRIMARY,
         )
     )
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
 
     assert len(valid_profiles) == 1
     assert valid_profiles[0].wikibase_id == WikibaseID("Q123")
@@ -168,13 +178,14 @@ def test_append_invalid_profile():
         )
     )
 
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
 
     assert len(valid_profiles) == 0
     assert len(errors) == 1
 
-    failures = [r._error for r in errors if isinstance(r, Err)]
-    assert failures[0].msg == "Validation Error: classifier multiplicity"
+    assert errors[0].msg == "Validation Error: classifier multiplicity"
 
 
 def test_extend_valid_profiles():
@@ -194,7 +205,9 @@ def test_extend_valid_profiles():
             ),
         ],
     )
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
 
     assert len(valid_profiles) == 2
     assert profiles[0].classifier_id == ClassifierID("abdd2323")
@@ -220,10 +233,11 @@ def test_extend_invalid_profiles(mock_profiles):
     ]
     profiles.extend(new_profiles)
 
-    valid_profiles, errors = validate_classifiers_profiles_mappings(profiles)
+    results = validate_classifiers_profiles_mappings(profiles)
+    errors = [r._error for r in results if isinstance(r, Err)]
+    valid_profiles = [r._value for r in results if isinstance(r, Ok)]
 
     assert len(valid_profiles) == len(mock_profiles)
     assert len(errors) == 1
 
-    failures = [r._error for r in errors if isinstance(r, Err)]
-    assert failures[0].msg == "Validation Error: classifier multiplicity"
+    assert errors[0].msg == "Validation Error: classifier multiplicity"
