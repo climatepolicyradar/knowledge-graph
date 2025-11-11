@@ -815,7 +815,7 @@ async def _post_errors_thread(
         logger.error(f"failed to post {error_type} thread: {e}")
 
 
-@flow(on_failure=[SlackNotify.message])
+@flow(on_failure=[SlackNotify.message], on_crashed=[SlackNotify.message])
 async def sync_classifiers_profiles(
     aws_env: AwsEnv,
     config: Config | None = None,
