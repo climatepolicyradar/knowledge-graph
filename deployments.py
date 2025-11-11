@@ -21,6 +21,7 @@ from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
+from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.full_pipeline import full_pipeline
@@ -301,10 +302,22 @@ if __name__ == "__main__":
         ),
         env_schedules={
             # Temporarily disabled for stability
-            # AwsEnv.production: "0 9 * * *",
-            AwsEnv.staging: "0 9 * * *",
-            AwsEnv.sandbox: "0 10 * * *",
+            # AwsEnv.production: "0 8 * * MON-THU",
+            AwsEnv.staging: "0 9 * * MON-THU",
+            AwsEnv.sandbox: "0 10 * * MON-THU",
         },
+    )
+
+    # Classifiers Profiles Lifecycle
+
+    create_deployment(
+        flow=sync_classifiers_profiles,
+        description="Compare wikibase classifiers profiles with classifiers specs",
+        # Temporarily disabled while testing
+        # Schedule 2x daily during working week days
+        # env_schedules={
+        #     AwsEnv.production: "0 10,17 * * 1-4"
+        # }
     )
 
     # Sync Neo4j with Wikibase

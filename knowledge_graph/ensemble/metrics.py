@@ -133,9 +133,23 @@ class PredictionProbabilityStandardDeviation(ProbabilityBasedEnsembleMetric):
         :raises ValueError: if there is more than one Span predicted per piece of text
             per classifier. This metric does not handle aggregating prediction
             probabilities for several spans on a passage of text.
+        :raises ValueError: if there are insufficient spans to calculate standard deviation
+            (need at least 2 spans with probabilities)
         """
 
         spans_flat = [span for spans in spans_per_classifier for span in spans]
+
+        if len(spans_flat) == 0:
+            raise ValueError(
+                "Can't calculate probability standard deviation: "
+                "no classifiers predicted positive (all span lists are empty)."
+            )
+
+        if len(spans_flat) < 2:
+            raise ValueError(
+                "Can't calculate probability standard deviation: "
+                f"only {len(spans_flat)} span(s) found. Need at least 2 to calculate standard deviation."
+            )
 
         if not all_spans_have_probability(spans_flat):
             raise ValueError(

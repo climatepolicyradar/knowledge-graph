@@ -5,23 +5,16 @@ import pandas as pd
 import pytest
 import typer
 from syrupy.assertion import SnapshotAssertion
-from wandb.wandb_run import Run
 
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.version import Version
 from scripts.evaluate import (
-    Source,
     build_metrics_path,
     calculate_performance_metrics,
     create_gold_standard_labelled_passages,
     load_classifier_local,
-    load_classifier_remote,
     log_metrics_to_wandb,
     print_metrics,
     save_metrics,
-    validate_args,
-    validate_local_args,
-    validate_remote_args,
 )
 
 
@@ -34,108 +27,6 @@ def test_print_metrics(capsys, metrics_df: pd.DataFrame):
     assert "0.99" in captured.out  # F1
     assert "0.3" in captured.out  # Precision
     assert "215" in captured.out  # Support
-
-
-@pytest.mark.parametrize(
-    "classifier,version,expected_error",
-    [
-        (None, None, None),
-        (
-            "TestClassifier",
-            None,
-            "classifier and version should not be specified",
-        ),
-        (
-            None,
-            Version("v1"),
-            "classifier and version should not be specified",
-        ),
-        (
-            "TestClassifier",
-            Version("v1"),
-            "classifier and version should not be specified",
-        ),
-    ],
-)
-def test_validate_local_args(classifier, version, expected_error):
-    if expected_error is None:
-        validate_local_args(classifier, version)  # Should not raise
-    else:
-        with pytest.raises(typer.BadParameter) as excinfo:
-            validate_local_args(classifier, version)
-        assert expected_error in str(excinfo.value)
-
-
-@pytest.mark.parametrize(
-    "track,classifier,version,expected_error",
-    [
-        (True, "TestClassifier", Version("v1"), None),
-        (False, None, None, None),
-        (
-            False,
-            "TestClassifier",
-            None,
-            "script was told not to track",
-        ),
-        (
-            False,
-            None,
-            Version("v1"),
-            "script was told not to track",
-        ),
-        (
-            True,
-            None,
-            Version("v1"),
-            "without a classifier name",
-        ),
-        (
-            True,
-            "TestClassifier",
-            None,
-            "without a version",
-        ),
-    ],
-)
-def test_validate_remote_args(track, classifier, version, expected_error):
-    if expected_error is None:
-        validate_remote_args(track, classifier, version)  # Should not raise
-    else:
-        with pytest.raises(typer.BadParameter) as excinfo:
-            validate_remote_args(track, classifier, version)
-        assert expected_error in str(excinfo.value)
-
-
-@pytest.mark.parametrize(
-    "track,classifier,version,expected_exception",
-    [
-        (True, None, None, None),
-        (True, None, Version("v1"), pytest.raises(typer.BadParameter)),
-        (True, "TestClassifier", None, pytest.raises(typer.BadParameter)),
-        (True, "TestClassifier", Version("v1"), None),
-        (False, None, Version("v1"), pytest.raises(typer.BadParameter)),
-        (False, "TestClassifier", None, pytest.raises(typer.BadParameter)),
-        (False, None, None, None),
-        (False, "TestClassifier", Version("v1"), pytest.raises(typer.BadParameter)),
-    ],
-)
-def test_validate_args(
-    track: bool,
-    classifier: str,
-    version: Version,
-    expected_exception: Exception,
-    snapshot: SnapshotAssertion,
-):
-    source = Source.REMOTE if classifier and version else Source.LOCAL
-    if expected_exception:
-        # Instead of using the `match` arg on `pytest.raises`, this gives
-        # a roundabout way for the snapshot to be used.
-        with expected_exception as excinfo:
-            validate_args(track, classifier, version, source)
-        assert str(excinfo.value) == snapshot
-    else:
-        result = validate_args(track, classifier, version, source)
-        assert result == snapshot
 
 
 @pytest.mark.parametrize(
@@ -207,31 +98,6 @@ def test_load_classifier_local_not_found(mock_classifier, tmp_path):
 
         assert "Classifier for Q999 not found" in str(exc_info.value)
         assert "just train Q999" in str(exc_info.value)
-
-
-def test_load_classifier_remote(mock_classifier):
-    # Setup
-    run = Mock(spec=Run)
-    run.config = {}  # Add dict for config
-    classifier_name = "TestClassifier"
-    version = Version("v1")
-    wikibase_id = WikibaseID("Q123")
-
-    # Mock the artifact
-    mock_artifact = Mock()
-    mock_artifact.download.return_value = "downloaded_path"
-    run.use_artifact.return_value = mock_artifact
-
-    # Call function
-    result = load_classifier_remote(run, classifier_name, version, wikibase_id)
-
-    # Verify artifact was retrieved correctly
-    run.use_artifact.assert_called_once_with("Q123/TestClassifier:v1", type="model")
-
-    # Verify classifier was loaded from downloaded path
-    mock_classifier.load.assert_called_once_with(Path("downloaded_path/model.pickle"))
-
-    assert result == mock_classifier.load.return_value
 
 
 def test_calculate_performance_metrics(concept, snapshot: SnapshotAssertion):

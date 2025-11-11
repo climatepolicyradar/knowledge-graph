@@ -1,7 +1,7 @@
+import asyncio
 import os
 from collections import defaultdict
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
@@ -11,23 +11,17 @@ import wandb
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from sklearn.metrics import precision_recall_curve, roc_curve
 from wandb.wandb_run import Run
 
-from knowledge_graph.classifier import Classifier
-from knowledge_graph.cloud import (
-    AwsEnv,
-    Namespace,
-    is_logged_in,
-    parse_aws_env,
-    throw_not_logged_in,
-)
+from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
+from knowledge_graph.cloud import AwsEnv, Namespace, parse_aws_env
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import (
     classifier_dir,
     concept_dir,
     equity_columns,
     metrics_dir,
-    model_artifact_name,
 )
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -38,7 +32,6 @@ from knowledge_graph.metrics import (
     count_span_level_metrics,
 )
 from knowledge_graph.span import Span, group_overlapping_spans
-from knowledge_graph.version import Version
 from scripts.get_concept import get_concept_async
 
 console = Console()
@@ -60,7 +53,7 @@ def load_concept(wikibase_id: WikibaseID) -> Concept:
 def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
     """Load a classifier from local storage by its Wikibase ID."""
     classifier_path = classifier_dir / wikibase_id
-    if not classifier_path.exists() or not list(classifier_path.glob("*.pickle")):
+    if not classifier_path.exists() or not list(classifier_path.glob("**/*.pickle")):
         raise typer.BadParameter(
             f"Classifier for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
@@ -69,7 +62,7 @@ def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
 
     try:
         most_recent_classifier_path = max(
-            classifier_path.glob("*.pickle"), key=os.path.getctime
+            classifier_path.glob("**/*.pickle"), key=os.path.getctime
         )
         return Classifier.load(most_recent_classifier_path)
     except (FileNotFoundError, ValueError) as e:
@@ -78,42 +71,6 @@ def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
             "If you haven't already, you should run:\n"
             f"  just train {wikibase_id}\n"
         ) from e
-
-
-def load_classifier_remote(
-    run: Run,
-    classifier: str,
-    version: Version,
-    wikibase_id: WikibaseID,
-) -> Classifier:
-    """
-    Load a classifier from W&B artifacts storage.
-
-    Authentication is a Prerequisite, since it downloads the contents of the artifact.
-    Raises ValueError should download fail
-    """
-    artifact_id = f"{wikibase_id}/{classifier}:{version}"
-    artifact = run.use_artifact(artifact_id, type="model")
-
-    artifact_dir = artifact.download()
-    artifact_path = Path(artifact_dir) / model_artifact_name
-    return Classifier.load(artifact_path)
-
-
-def add_artifact_to_run_lineage_local(
-    run: Run,
-    classifier: Classifier,
-    wikibase_id: WikibaseID,
-) -> None:
-    """Add a local model artifact to the W&B run lineage."""
-    # Attempt to get a version, otherwise, have none for the lineage.
-    #
-    # The model have been trained and saved without a version.
-    if classifier.version is not None:
-        # It must have been tracked and uploaded, during training
-        artifact_id = f"{wikibase_id}/{classifier.name}:{classifier.version}"
-        console.log(f"Using artifact: {artifact_id}")
-        run.use_artifact(artifact_id)
 
 
 def create_gold_standard_labelled_passages(
@@ -289,68 +246,6 @@ def group_passages_by_equity_strata(
     return groups
 
 
-class Source(str, Enum):
-    """Source of the classifier model."""
-
-    LOCAL = "local"
-    REMOTE = "remote"
-
-
-def validate_local_args(
-    classifier: Optional[str],
-    version: Optional[Version],
-) -> None:
-    """Validate arguments for local source."""
-    if classifier is not None or version is not None:
-        raise typer.BadParameter(
-            "classifier and version should not be specified for local source"
-        )
-
-
-def validate_remote_args(
-    track: bool,
-    classifier: Optional[str],
-    version: Optional[Version],
-) -> None:
-    """Validate arguments for remote source."""
-    if not track:
-        if version is not None:
-            raise typer.BadParameter(
-                f"A remote version ({version}) was specified, but the script "
-                "was told not to track. Tracking must be enabled to use a "
-                "remote version."
-            )
-        if classifier is not None:
-            raise typer.BadParameter(
-                f"A remote classifier ({classifier}) was specified, but the "
-                "script was told not to track. Tracking must be enabled to use"
-                " a remote classifier."
-            )
-    else:
-        if version is not None and classifier is None:
-            raise typer.BadParameter(
-                "cannot track a remote model artifact without a classifier name"
-            )
-        if classifier is not None and version is None:
-            raise typer.BadParameter(
-                "cannot track a remote model artifact without a version"
-            )
-
-
-def validate_args(
-    track: bool,
-    classifier: Optional[str],
-    version: Optional[Version],
-    source: Source,
-) -> None:
-    """Validate command line arguments for model evaluation."""
-    match source:
-        case Source.LOCAL:
-            validate_local_args(classifier, version)
-        case Source.REMOTE:
-            validate_remote_args(track, classifier, version)
-
-
 def log_metrics_to_wandb(
     run: Run,
     df: pd.DataFrame,
@@ -506,134 +401,237 @@ def evaluate_classifier(
             gold_standard_labelled_passages,
             model_labelled_passages,
         )
+        create_wandb_model_evaluation_charts(
+            wandb_run,
+            predictions=model_labelled_passages,
+            ground_truth=gold_standard_labelled_passages,
+        )
 
     return df, model_labelled_passages
+
+
+def create_wandb_model_evaluation_charts(
+    wandb_run: Run,
+    predictions: list[LabelledPassage],
+    ground_truth: list[LabelledPassage],
+) -> None:
+    """
+    Plot ROC, precision-recall and confusion matrix plots in the W&B run.
+
+    The first two are only plotted if predictions have probabilities
+    """
+
+    ground_truth_labels = [1 if lp.spans else 0 for lp in ground_truth]
+    binary_predictions = [1 if lp.spans else 0 for lp in predictions]
+
+    if all(
+        [
+            span.prediction_probability is not None
+            for pred in predictions
+            for span in pred.spans
+        ]
+    ):
+        pred_probabilities = [
+            max(
+                [
+                    span.prediction_probability
+                    for span in pred.spans
+                    if span.prediction_probability is not None
+                ]
+                or [0.0]
+            )
+            for pred in predictions
+        ]
+
+        precision, recall, pr_thresholds = precision_recall_curve(
+            ground_truth_labels, pred_probabilities
+        )
+        fpr, tpr, roc_thresholds = roc_curve(ground_truth_labels, pred_probabilities)
+
+        # Find optimal threshold using ROC (maximise TPR-FPR)
+        optimal_idx_roc = (tpr - fpr).argmax()
+        optimal_threshold_roc = float(roc_thresholds[optimal_idx_roc])
+
+        # Find optimal threshold using F1 score
+        f1_scores = 2 * (precision * recall) / (precision + recall + 1e-10)
+        optimal_idx_f1 = f1_scores.argmax()
+        optimal_threshold_f1 = (
+            float(pr_thresholds[optimal_idx_f1])
+            if optimal_idx_f1 < len(pr_thresholds)
+            else 0.5
+        )
+
+        # Log threshold recommendations and metrics. These are logged alphabetically
+        # in the run summary.
+        threshold_recommendations = {
+            "optimal_ROC_threshold": optimal_threshold_roc,
+            "optimal_ROC_threshold_tpr": float(tpr[optimal_idx_roc]),
+            "optimal_ROC_threshold_fpr": float(fpr[optimal_idx_roc]),
+            "optimal_f1_threshold": optimal_threshold_f1,
+            "optimal_f1_threshold_precision": float(precision[optimal_idx_f1]),
+            "optimal_f1_threshold_recall": float(recall[optimal_idx_f1]),
+            "optimal_f1_threshold_f1_score": float(f1_scores[optimal_idx_f1]),
+        }
+        for k, v in threshold_recommendations.items():
+            wandb_run.summary[k] = v
+
+        Console().log(
+            f"[bold]Optimal threshold (ROC):[/bold] {optimal_threshold_roc:.4f} (TPR: {tpr[optimal_idx_roc]:.4f}, FPR: {fpr[optimal_idx_roc]:.4f})"
+        )
+        Console().log(
+            f"[bold]Optimal threshold (F1):[/bold] {optimal_threshold_f1:.4f} (Precision: {precision[optimal_idx_f1]:.4f}, Recall: {recall[optimal_idx_f1]:.4f}, F1: {f1_scores[optimal_idx_f1]:.4f})"
+        )
+
+        pr_data = [
+            [r, p, t]
+            for r, p, t in zip(
+                recall.tolist(), precision.tolist(), pr_thresholds.tolist()
+            )
+        ]
+        pr_table = wandb.Table(
+            data=pr_data, columns=["recall", "precision", "threshold"]
+        )
+
+        wandb_run.log(
+            {
+                "precision-recall-curve": wandb.plot.line(
+                    pr_table, "recall", "precision", title="Precision-Recall Curve"
+                )
+            }
+        )
+
+        roc_data = [
+            [f, t, th]
+            for f, t, th in zip(fpr.tolist(), tpr.tolist(), roc_thresholds.tolist())
+        ]
+        roc_table = wandb.Table(data=roc_data, columns=["fpr", "tpr", "threshold"])
+
+        wandb_run.log(
+            {"roc-curve": wandb.plot.line(roc_table, "fpr", "tpr", title="ROC Curve")}
+        )
+    else:
+        Console().log(
+            "Skipping ROC and precision-recall plots because classifier predictions don't have probabilities."
+        )
+
+    wandb_run.log(
+        {
+            "confusion_matrix": wandb.plot.confusion_matrix(
+                y_true=ground_truth_labels,
+                preds=binary_predictions,
+                class_names=["false", "true"],
+                title="Confusion Matrix",
+            )
+        }
+    )
 
 
 app = typer.Typer()
 
 
 @app.command()
-async def main(
+def main(
     wikibase_id: Annotated[
         WikibaseID,
         typer.Option(
             ...,
-            help="The Wikibase ID of the concept classifier to train",
+            help="The Wikibase ID of the concept",
             parser=WikibaseID,
         ),
     ],
+    wandb_model_path: Annotated[
+        Optional[str],
+        typer.Option(
+            help="W&B model artifact path (e.g. 'climatepolicyradar/Q1829/abcdefg:v0'). "
+            "If not provided, loads the most recent local classifier.",
+        ),
+    ] = None,
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
             help="AWS environment to evaluate the model artifact within",
             parser=parse_aws_env,
         ),
-    ],
+    ] = AwsEnv.labs,
     track: Annotated[
         bool,
         typer.Option(
-            ...,
-            help="Whether to track the training run with Weights & Biases",
+            help="Whether to track the evaluation run in Weights & Biases",
         ),
-    ] = False,
-    classifier: Annotated[
-        Optional[str],
-        typer.Option(
-            help="Classifier name that aligns with the Python class name",
-        ),
-    ] = None,
-    version: Annotated[
-        Optional[Version],
-        typer.Option(
-            help="Version of the model (e.g., v3) to download through W&B",
-            parser=Version,
-        ),
-    ] = None,
-    source: Annotated[
-        Source,
-        typer.Option(
-            help="Source of the classifier model (local or remote)",
-        ),
-    ] = Source.LOCAL,
+    ] = True,
 ):
-    """
-    Measure classifier performance.
+    """Evaluate a classifier against its validation dataset."""
+    console.log("🚀 Starting model evaluation")
 
-    This is done against human-labelled gold-standard datasets.
-    """
-    validate_args(
-        track,
-        classifier,
-        version,
-        source,
+    if os.environ.get("USE_AWS_PROFILES", "true").lower() == "true":
+        os.environ["AWS_PROFILE"] = aws_env.value
+        console.log(f"🔑 Set AWS_PROFILE={aws_env.value}")
+
+    if wandb_model_path:
+        loaded_classifier = load_classifier_from_wandb(wandb_model_path)
+    else:
+        console.log("Loading local classifier...")
+        loaded_classifier = load_classifier_local(wikibase_id)
+        console.log(f"🤖 Loaded classifier {loaded_classifier} from {classifier_dir}")
+
+    console.log(f'📚 Loading concept "{wikibase_id}" from Wikibase and Argilla')
+    concept = asyncio.run(
+        get_concept_async(
+            wikibase_id=wikibase_id,
+            include_labels_from_subconcepts=True,
+            include_recursive_has_subconcept=True,
+        )
     )
 
-    console.log("Validating AWS login...")
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-    if not is_logged_in(aws_env, use_aws_profiles):
+    console.log(
+        f"📊 Found {len(concept.labelled_passages)} labelled passages for evaluation"
+    )
+
+    if not concept.labelled_passages:
         console.log(
-            "AWS credentials required to access Weights & Biases repository in order to permit download of models"
+            "[yellow]⚠️  Warning: No labelled passages found. Cannot evaluate.[/yellow]"
         )
-        throw_not_logged_in(aws_env)
+        raise typer.Exit(code=1)
 
-    # set explicitly to avoid run being possibly unbound later on
-    run = None
-
+    wandb_run = None
     if track:
         entity = "climatepolicyradar"
         project = wikibase_id
         namespace = Namespace(project=project, entity=entity)
-        job_type = "evaluate_model"
 
-        run = wandb.init(
+        wandb_run = wandb.init(
             entity=namespace.entity,
             project=namespace.project,
-            job_type=job_type,
+            job_type="evaluate_model",
+            config={
+                "classifier_type": loaded_classifier.name,
+                "concept_id": concept.id,
+            },
+        )
+        if wandb_model_path:
+            wandb_run.config["model_artifact_path"] = wandb_model_path  # type: ignore
+        console.log(f"📊 Tracking evaluation in W&B: {wandb_run.url}")
+
+        if wandb_model_path:
+            wandb_run.use_artifact(wandb_model_path)
+
+    try:
+        df, _ = evaluate_classifier(
+            classifier=loaded_classifier,
+            labelled_passages=concept.labelled_passages,
+            wandb_run=wandb_run,
         )
 
-    tracking = "on" if track else "off"
-    console.log(
-        f"🚀 Starting classifier performance measurement with tracking {tracking}"
-    )
+        # Save metrics to local file
+        metrics_dir.mkdir(parents=True, exist_ok=True)
+        metrics_path = save_metrics(df, wikibase_id)
+        console.log(f"📄 Saved performance metrics to {metrics_path}")
 
-    metrics_dir.mkdir(parents=True, exist_ok=True)
-
-    console.log(f'📚 Loading concept with ID "{wikibase_id}" from Wikibase and Argilla')
-    concept = await get_concept_async(wikibase_id=wikibase_id)
-
-    if track:
-        run.config["preferred_label"] = concept.preferred_label  # type: ignore
-
-    console.log("Loading classifier...")
-    match source:
-        case Source.LOCAL:
-            loaded_classifier = load_classifier_local(wikibase_id)
-            console.log(
-                f"🤖 Loaded classifier {loaded_classifier} from {classifier_dir}"
-            )
-            if track:
-                add_artifact_to_run_lineage_local(run, classifier, wikibase_id)  # type: ignore
-        case Source.REMOTE:
-            loaded_classifier = load_classifier_remote(
-                run,  # type: ignore
-                classifier,  # type: ignore
-                version,  # type: ignore
-                wikibase_id,
-            )
-    assert isinstance(classifier, Classifier)
-
-    df, labelled_passages = evaluate_classifier(
-        classifier=classifier,
-        labelled_passages=concept.labelled_passages,
-        wandb_run=run if track else None,
-    )
-
-    if track:
-        run.finish()  # type: ignore
-
-    metrics_path = save_metrics(df, wikibase_id)
-    console.log(f"📄 Saved performance metrics to {metrics_path}")
+        if track and wandb_run:
+            console.log(f"📊 View results at: {wandb_run.url}")
+    finally:
+        if wandb_run:
+            wandb_run.finish()
 
 
 if __name__ == "__main__":

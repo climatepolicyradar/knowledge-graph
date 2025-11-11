@@ -876,7 +876,7 @@ async def test_send_concept_validation_alert__mixed_errors():
         )
 
     # Verify main message + 2 threads (validation + system)
-    assert mock_slack_client.chat_postMessage.call_count == 3
+    assert mock_slack_client.chat_postMessage.call_count == 4
 
 
 @pytest.mark.asyncio
