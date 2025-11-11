@@ -436,7 +436,10 @@ def test_wandb_validation__failure_restricted_classifier():
     result = validate_artifact_metadata_rules(artifact=mock_artifact)
 
     assert isinstance(result, Err)
-    assert "artifact validation failed for classifier type" in result._error.msg
+    assert (
+        f"artifact validation failed: classifier name {mock_artifact.metadata.get('classifier_name')} violates classifier name rules"
+        in result._error.msg
+    )
 
 
 def test_wandb_validation__failure_restricted_run_config():
@@ -453,4 +456,4 @@ def test_wandb_validation__failure_restricted_run_config():
     result = validate_artifact_metadata_rules(artifact=mock_artifact)
 
     assert isinstance(result, Err)
-    assert "artifact validation failed for run config" in result._error.msg
+    assert "artifact validation failed: run config" in result._error.msg
