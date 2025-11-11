@@ -930,11 +930,6 @@ async def sync_classifiers_profiles(
                 )
 
                 current_spec = r.classifier_spec
-                classifier_profile = (
-                    current_spec.classifiers_profile
-                    if current_spec.classifiers_profile
-                    else None
-                )
 
                 wandb_results.append(
                     handle_classifier_profile_action(
@@ -944,7 +939,7 @@ async def sync_classifiers_profiles(
                         action_function=demote_classifier_profile,
                         wandb_registry_version=current_spec.wandb_registry_version,
                         classifier_id=current_spec.classifier_id,
-                        classifier_profile=classifier_profile,
+                        classifier_profile=current_spec.classifiers_profile,
                     )
                 )
 
