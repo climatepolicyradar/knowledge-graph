@@ -209,11 +209,7 @@ def promote_classifier_profile(
     classifiers_profile: Profile,
     aws_env: AwsEnv,
 ):
-    """
-    Promote a classifier and add classifiers profile.
-
-    Use new_specs to get the details for promotion.
-    """
+    """Promote a classifier and add classifiers profile"""
     logger = get_logger()
     #     scripts.promote.main(
     #         wikibase_id=wikibase_id,
@@ -233,11 +229,7 @@ def demote_classifier_profile(
     wandb_registry_version: Version,
     classifier_id: Optional[ClassifierID] = None,
 ):
-    """
-    Demote a classifier based on model registry and remove classifiers profile".
-
-    Use current_specs to get the details for demotion.
-    """
+    """Demote a classifier based on model registry and remove classifiers profile"""
     logger = get_logger()
 
     #     scripts.demote.main(
@@ -258,11 +250,7 @@ def update_classifier_profile(
     remove_classifiers_profiles: list[Profile],
     aws_env: AwsEnv,
 ):
-    """
-    Update classifiers profile for already promoted model.
-
-    Use current_specs and new_specs to get the details for update.
-    """
+    """Update classifiers profile for already promoted model"""
     logger = get_logger()
 
     # scripts.classifier_metadata.update(
@@ -904,15 +892,15 @@ async def sync_classifiers_profiles(
                     f"promote called for {a.classifiers_profile_mapping.wikibase_id}, {a.classifiers_profile_mapping.classifier_id}, {a.classifiers_profile_mapping.classifiers_profile}"
                 )
 
-                new_specs = a.classifiers_profile_mapping
+                new_spec = a.classifiers_profile_mapping
                 wandb_results.append(
                     handle_classifier_profile_action(
                         action="promoting",
-                        wikibase_id=new_specs.wikibase_id,
+                        wikibase_id=new_spec.wikibase_id,
                         aws_env=aws_env,
                         action_function=promote_classifier_profile,
-                        classifier_id=new_specs.classifier_id,
-                        classifiers_profile=[str(new_specs.classifiers_profile)],
+                        classifier_id=new_spec.classifier_id,
+                        classifiers_profile=[str(new_spec.classifiers_profile)],
                     )
                 )
 
@@ -921,18 +909,18 @@ async def sync_classifiers_profiles(
                     f"update called for {u.classifier_spec.wikibase_id}, {u.classifier_spec.classifier_id}, {u.classifier_spec.classifiers_profile} to {u.classifiers_profile_mapping.classifiers_profile}"
                 )
 
-                current_specs = u.classifier_spec
-                new_specs = u.classifiers_profile_mapping
+                current_spec = u.classifier_spec
+                new_spec = u.classifiers_profile_mapping
 
                 wandb_results.append(
                     handle_classifier_profile_action(
                         action="updating",
-                        wikibase_id=current_specs.wikibase_id,
+                        wikibase_id=current_spec.wikibase_id,
                         aws_env=aws_env,
                         action_function=update_classifier_profile,
-                        classifier_id=current_specs.classifier_id,
-                        remove_classifiers_profiles=[current_specs.classifiers_profile],
-                        add_classifiers_profiles=[new_specs.classifiers_profile.value],
+                        classifier_id=current_spec.classifier_id,
+                        remove_classifiers_profiles=[current_spec.classifiers_profile],
+                        add_classifiers_profiles=[new_spec.classifiers_profile.value],
                     )
                 )
 
@@ -941,21 +929,21 @@ async def sync_classifiers_profiles(
                     f"demote called for {r.classifier_spec.wikibase_id}, {r.classifier_spec.classifier_id}, {r.classifier_spec.classifiers_profile}"
                 )
 
-                current_specs = r.classifier_spec
+                current_spec = r.classifier_spec
                 classifier_profile = (
-                    current_specs.classifiers_profile
-                    if current_specs.classifiers_profile
+                    current_spec.classifiers_profile
+                    if current_spec.classifiers_profile
                     else None
                 )
 
                 wandb_results.append(
                     handle_classifier_profile_action(
                         action="demoting",
-                        wikibase_id=current_specs.wikibase_id,
+                        wikibase_id=current_spec.wikibase_id,
                         aws_env=aws_env,
                         action_function=demote_classifier_profile,
-                        wandb_registry_version=current_specs.wandb_registry_version,
-                        classifier_id=current_specs.classifier_id,
+                        wandb_registry_version=current_spec.wandb_registry_version,
+                        classifier_id=current_spec.classifier_id,
                         classifier_profile=classifier_profile,
                     )
                 )
