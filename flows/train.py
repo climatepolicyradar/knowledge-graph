@@ -19,6 +19,9 @@ async def train_on_gpu(
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
+    concept_overrides: Optional[dict[str, Any]] = None,
+    training_data_wandb_run_path: Optional[str] = None,
+    limit_training_samples: Optional[int] = None,
     config: Config | None = None,
 ):
     """Trigger the training script in prefect using coiled."""
@@ -52,4 +55,7 @@ async def train_on_gpu(
         evaluate=evaluate,
         classifier_type=classifier_type,
         classifier_kwargs=classifier_kwargs,
+        concept_overrides=concept_overrides,
+        training_data_wandb_run_path=training_data_wandb_run_path,
+        limit_training_samples=limit_training_samples,
     )
