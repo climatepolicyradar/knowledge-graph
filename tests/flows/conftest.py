@@ -68,6 +68,8 @@ def test_config():
         wikibase_password=SecretStr("test_password"),
         wikibase_username="test_username",
         wikibase_url="https://test.test.test",
+        argilla_api_url="https://test.argilla.url",
+        argilla_api_key=SecretStr("test_argilla_api_key"),
     )
 
 
