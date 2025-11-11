@@ -16,7 +16,7 @@ from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 import scripts.get_concept
-from flows.utils import get_flow_run_ui_url
+from flows.utils import get_flow_run_ui_url, serialise_pydantic_list_as_jsonl
 from knowledge_graph.classifier import (
     Classifier,
     ClassifierFactory,
@@ -535,6 +535,28 @@ async def train_classifier(
             Console().print(
                 f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
             )
+
+            if track_and_upload and run and deduplicated_training_data:
+                console.log("📄 Creating training data artifact")
+                training_artifact = wandb.Artifact(
+                    name="training-data",
+                    type="labelled_passages",
+                    metadata={
+                        "concept_wikibase_revision": classifier.concept.wikibase_revision,
+                        "passage_count": len(deduplicated_training_data),
+                        "num_positives": train_num_positives,
+                        "num_negatives": train_num_negatives,
+                    },
+                )
+                with training_artifact.new_file(
+                    "training_data.jsonl", mode="w", encoding="utf-8"
+                ) as f:
+                    f.write(
+                        serialise_pydantic_list_as_jsonl(deduplicated_training_data)
+                    )
+
+                run.log_artifact(training_artifact)
+                console.log("✅ Training data artifact uploaded successfully")
         else:
             deduplicated_training_data = []
 
