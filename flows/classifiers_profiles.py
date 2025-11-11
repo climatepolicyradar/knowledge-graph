@@ -7,7 +7,7 @@ Assumes that the classifier model has been trained in wandb
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypedDict
+from typing import Any, Callable, Dict, Optional
 
 import wandb
 from prefect import flow
@@ -17,8 +17,8 @@ from pydantic import AnyHttpUrl, SecretStr
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from flows.config import Config
-from flows.result import Err, Error, Ok, Result
-from flows.utils import get_logger, get_slack_client
+from flows.result import Err, Error, Ok, Result, unwrap_err, unwrap_ok
+from flows.utils import SlackNotify, get_logger, get_slack_client
 from knowledge_graph.classifier import ModelPath
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
@@ -26,6 +26,12 @@ from knowledge_graph.classifiers_profiles import (
     validate_classifiers_profiles_mappings,
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
+from knowledge_graph.compare_result_operation import (
+    Add,
+    CompareResultOperation,
+    Remove,
+    Update,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version, get_latest_model_version
@@ -55,11 +61,11 @@ def wandb_validation(
     artifact_path = ""
 
     try:
+        # using wandb_registry_version is directly accessing artifact and takes priority
         if wikibase_id and wandb_registry_version:
             artifact_path = (
                 f"wandb-registry-model/{wikibase_id}:{wandb_registry_version}"
             )
-
         elif wikibase_id and classifier_id:
             model_path = ModelPath(wikibase_id=wikibase_id, classifier_id=classifier_id)
 
@@ -70,7 +76,7 @@ def wandb_validation(
         if artifact_path == "":
             return log_and_return_error(
                 logger,
-                msg="Error artifact not found",
+                msg="Error artifact not found, check input parameters",
                 metadata={
                     "wikibase_id": wikibase_id,
                     "classifier_id": classifier_id,
@@ -148,14 +154,19 @@ def handle_classifier_profile_action(
     action: str,
     wikibase_id: WikibaseID,
     aws_env: AwsEnv,
-    additional_args: dict,
     action_function: Callable[..., Any],
+    **kwargs,
 ) -> Result[Dict, Error]:
-    """Run promote/demote/update based on params"""
+    """
+    Run wandb validation and execute action function based on params
+
+    The action function should be one of promote, demote, update classifier profile functions.
+    Returns a Result with the action and parameters or an error.
+    """
     logger = get_logger()
 
-    wandb_registry_version = additional_args.get("wandb_registry_version", None)
-    classifier_id = additional_args.get("classifier_id", None)
+    wandb_registry_version = kwargs.get("wandb_registry_version", None)
+    classifier_id = kwargs.get("classifier_id", None)
 
     result = wandb_validation(
         wikibase_id=wikibase_id,
@@ -166,8 +177,11 @@ def handle_classifier_profile_action(
     if isinstance(result, Err):
         return result
 
+    # Remove keys with None values from kwargs for action function
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
     try:
-        action_function(wikibase_id, aws_env, **additional_args)
+        action_function(wikibase_id=wikibase_id, aws_env=aws_env, **kwargs)
 
     except Exception as e:
         return log_and_return_error(
@@ -176,24 +190,25 @@ def handle_classifier_profile_action(
             {
                 "wikibase_id": wikibase_id,
                 "classifier_id": classifier_id,
-                **additional_args,
+                **kwargs,
             },
         )
 
     result = {
         "wikibase_id": wikibase_id,
         "classifier_id": classifier_id,
-        **additional_args,
+        **kwargs,
         "status": action,
     }
     return Ok(result)
 
 
 def promote_classifier_profile(
-    current_specs: ClassifierSpec | None,
-    new_specs: ClassifiersProfileMapping,
+    wikibase_id: WikibaseID,
+    classifier_id: ClassifierID,
+    classifiers_profile: Profile,
     aws_env: AwsEnv,
-) -> Result[Dict, Error]:
+):
     """
     Promote a classifier and add classifiers profile.
 
@@ -207,28 +222,17 @@ def promote_classifier_profile(
     #         add_classifiers_profiles=classifiers_profile,
     #     )
 
-    return handle_classifier_profile_action(
-        action="promoting",
-        wikibase_id=new_specs.wikibase_id,
-        aws_env=aws_env,
-        additional_args={
-            "classifier_id": new_specs.classifier_id,
-            "classifiers_profile": [str(new_specs.classifiers_profile)],
-        },
-        action_function=lambda w_id,
-        env,
-        classifier_id,
-        classifiers_profile: logger.info(
-            f"Promoting {w_id}, {classifier_id}, {classifiers_profile}, {env}"
-        ),
+    logger.info(
+        f"Promoting {wikibase_id}, {classifier_id}, {classifiers_profile}, {aws_env}"
     )
 
 
 def demote_classifier_profile(
-    current_specs: ClassifierSpec,
-    new_specs: ClassifiersProfileMapping | None,
+    wikibase_id: WikibaseID,
     aws_env: AwsEnv,
-) -> Result[Dict, Error]:
+    wandb_registry_version: Version,
+    classifier_id: Optional[ClassifierID] = None,
+):
     """
     Demote a classifier based on model registry and remove classifiers profile".
 
@@ -241,33 +245,19 @@ def demote_classifier_profile(
     #         wandb_registry_version=wandb_registry_version,
     #         aws_env=aws_env
     #     )
-    additional_args: dict = {
-        "wandb_registry_version": current_specs.wandb_registry_version
-    }
-    # Check if classifier_id is not None and add it to additional_args
-    if current_specs.classifier_id is not None:
-        additional_args["classifier_id"] = current_specs.classifier_id
 
-    # Check if classifiers_profile is not None and add it to additional_args
-    if current_specs.classifiers_profile is not None:
-        additional_args["classifiers_profile"] = current_specs.classifiers_profile
-
-    return handle_classifier_profile_action(
-        action="demoting",
-        wikibase_id=current_specs.wikibase_id,
-        aws_env=aws_env,
-        additional_args=additional_args,
-        action_function=lambda w_id, env, **kwargs: logger.info(
-            f"Demoting {w_id}, {env}"
-        ),
+    logger.info(
+        f"Demoting {wikibase_id}, {aws_env}, {classifier_id}, {wandb_registry_version}"
     )
 
 
 def update_classifier_profile(
-    current_specs: ClassifierSpec,
-    new_specs: ClassifiersProfileMapping,
+    wikibase_id: WikibaseID,
+    classifier_id: ClassifierID,
+    add_classifiers_profiles: list[Profile],
+    remove_classifiers_profiles: list[Profile],
     aws_env: AwsEnv,
-) -> Result[Dict, Error]:
+):
     """
     Update classifiers profile for already promoted model.
 
@@ -278,27 +268,13 @@ def update_classifier_profile(
     # scripts.classifier_metadata.update(
     #     wikibase_id=wikibase_id,
     #     classifier_id=classifier_id,
-    #     add_classifiers_profiles=[add_classifiers_profile],
-    #     remove_classifiers_profiles=remove_classifiers_profile_value,
+    #     add_classifiers_profiles=add_classifiers_profile,
+    #     remove_classifiers_profiles=remove_classifiers_profile,
     #     aws_env=aws_env,
     #     update_specs = False
     # )
-    return handle_classifier_profile_action(
-        action="updating",
-        wikibase_id=current_specs.wikibase_id,
-        aws_env=aws_env,
-        additional_args={
-            "classifier_id": current_specs.classifier_id,
-            "remove_classifiers_profile": [current_specs.classifiers_profile],
-            "add_classifiers_profile": [new_specs.classifiers_profile],
-        },
-        action_function=lambda w_id,
-        env,
-        classifier_id,
-        add_classifiers_profile,
-        remove_classifiers_profile: logger.info(
-            f"Updating {w_id}, {env}, {classifier_id}, {str(add_classifiers_profile[0])}, {str(remove_classifiers_profile[0])}"
-        ),
+    logger.info(
+        f"Updating {wikibase_id}, {aws_env}, {classifier_id}, {str(add_classifiers_profiles[0])}, {str(remove_classifiers_profiles[0])}"
     )
 
 
@@ -431,15 +407,16 @@ async def get_classifiers_profiles(
     return results
 
 
-async def create_classifiers_profiles_artifact(results: list[Result[Dict, Error]]):
+async def create_classifiers_profiles_artifact(
+    validation_errors: list[Error], other_errors: list[Error], successes: list[Dict]
+):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
-    successes = [r._value for r in results if isinstance(r, Ok)]
-    failures = [r._error for r in results if isinstance(r, Err)]
-
-    total_concepts = len(results)
+    total_concepts = len(successes) + len(validation_errors) + len(other_errors)
     successful_concepts = len(successes)
-    failed_concepts = len(failures)
+
+    all_failures = validation_errors + other_errors
+    failed_concepts = len(all_failures)
 
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
@@ -464,7 +441,8 @@ async def create_classifiers_profiles_artifact(results: list[Result[Dict, Error]
         }
 
     cp_details = [format_cp_details(concept, "✓") for concept in successes] + [
-        format_cp_details(error.metadata or {}, "✗", error.msg) for error in failures
+        format_cp_details(error.metadata or {}, "✗", error.msg)
+        for error in all_failures
     ]
 
     await acreate_table_artifact(
@@ -474,125 +452,59 @@ async def create_classifiers_profiles_artifact(results: list[Result[Dict, Error]
     )
 
 
-def convert_to_classifier_dict(
-    dataset: list[ClassifierSpec] | list[ClassifiersProfileMapping],
-) -> dict[tuple[WikibaseID, ClassifierID], dict]:
-    classifier_dict = {}
-
-    for item in dataset:
-        # get explicit values
-        values = vars(item).copy()
-        key = (item.wikibase_id, item.classifier_id)
-        classifier_dict[key] = values
-
-    return classifier_dict
-
-
-class CompareResult(TypedDict):
-    """
-    Class with results of comparing classifiers profiles.
-
-    Contains current classifier specs and new classifiers profiles from wikibase.
-    """
-
-    key: tuple[WikibaseID, ClassifierID]
-    status: str
-    current: ClassifierSpec | None
-    new: ClassifiersProfileMapping | None
-
-
 def compare_classifiers_profiles(
     classifier_specs: list[ClassifierSpec],
-    classifiers_profiles: list[ClassifiersProfileMapping],
-) -> list[CompareResult]:
+    classifiers_profile_mappings: list[ClassifiersProfileMapping],
+) -> list[CompareResultOperation]:
     """
-    Compare current classifiers specs to valid classifiers profiles from wikibase
+    Compare current classifiers specs to valid classifiers profile mappings from wikibase
 
-    Classify action to take for each
-    wikibase_id, classifier_id pair.
+    Classify action to take for each classifier based on wikibase_id, classifier_id.
     Actions: add, remove, update, ignore.
     """
 
-    data_current = convert_to_classifier_dict(classifier_specs)
-    data_new = convert_to_classifier_dict(classifiers_profiles)
+    results: list[CompareResultOperation] = []
 
-    current_keys = set(data_current.keys())
-    new_keys = set(data_new.keys())
+    # Iterate over classifier_specs and classifiers_profiles
+    for spec in classifier_specs:
+        # Check if the classifier spec exists in classifiers_profile_mappings
+        if matching_classifier := next(
+            (
+                mapping
+                for mapping in classifiers_profile_mappings
+                if mapping.wikibase_id == spec.wikibase_id
+                and mapping.classifier_id == spec.classifier_id
+            ),
+            None,
+        ):
+            # If the classifier exists in both, check whether classifiers profile matches (ignore) or not (update)
+            if (
+                spec.classifiers_profile
+                != matching_classifier.classifiers_profile.value
+            ):
+                results.append(
+                    Update(
+                        classifier_spec=spec,
+                        classifiers_profile_mapping=matching_classifier,
+                    )
+                )
+            else:
+                # results.append(Ignore(classifier_spec=spec))
+                pass  # ignores are not returned
+        else:
+            # If the classifier does not exist in classifiers_profile_mappings but is in classifier_specs, it should be removed (remove)
+            results.append(Remove(classifier_spec=spec))
 
-    # TODO: update convert_dict_to_classifier_spec to instead retrieve from ClassifierSpec
-    to_remove: list[CompareResult] = [
-        {
-            "key": k,
-            "status": "remove",
-            "current": convert_dict_to_classifier_spec(data_current[k]),
-            "new": None,
-        }
-        for k in (current_keys - new_keys)
-    ]
+    # Check for mappings that are in classifiers_profile_mappings but not in classifier_specs (add)
+    for mapping in classifiers_profile_mappings:
+        if not any(
+            spec.wikibase_id == mapping.wikibase_id
+            and spec.classifier_id == mapping.classifier_id
+            for spec in classifier_specs
+        ):
+            results.append(Add(classifiers_profile_mapping=mapping))
 
-    to_add: list[CompareResult] = [
-        {
-            "key": k,
-            "status": "add",
-            "current": None,
-            "new": convert_dict_to_classifiers_profile_mapping(data_new[k]),
-        }
-        for k in (new_keys - current_keys)
-    ]
-
-    common = current_keys & new_keys
-
-    to_update: list[CompareResult] = [
-        {
-            "key": k,
-            "status": "update",
-            "current": convert_dict_to_classifier_spec(data_current[k]),
-            "new": convert_dict_to_classifiers_profile_mapping(data_new[k]),
-        }
-        for k in common
-        if data_current[k]["classifiers_profile"] != data_new[k]["classifiers_profile"]
-    ]
-
-    combined_results = [to_remove, to_add, to_update]  # not including unchanged
-
-    return [d for sublist in combined_results for d in sublist]
-
-
-def convert_dict_to_classifier_spec(
-    data: dict,
-) -> ClassifierSpec:
-    # check required fields are in data
-    required_fields = ["wikibase_id", "classifier_id", "wandb_registry_version"]
-    for field in required_fields:
-        if field not in data:
-            raise ValueError(
-                f"Error converting dict to ClassifierSpec, missing required field: {field}"
-            )
-
-    return ClassifierSpec(
-        wikibase_id=WikibaseID(data.get("wikibase_id")),
-        classifier_id=ClassifierID(data.get("classifier_id")),
-        wandb_registry_version=str(data.get("wandb_registry_version")),  # type: ignore
-        classifiers_profile=data.get("classifiers_profile", None),
-    )
-
-
-def convert_dict_to_classifiers_profile_mapping(
-    data: dict,
-) -> ClassifiersProfileMapping:
-    # check required fields are in data
-    required_fields = ["wikibase_id", "classifier_id", "classifiers_profile"]
-    for field in required_fields:
-        if field not in data:
-            raise ValueError(
-                f"Error converting dict to ClassifiersProfileMapping, missing required field: {field}"
-            )
-
-    return ClassifiersProfileMapping(
-        wikibase_id=WikibaseID(data.get("wikibase_id")),
-        classifier_id=ClassifierID(data.get("classifier_id")),
-        classifiers_profile=Profile(data.get("classifiers_profile")),
-    )
+    return results
 
 
 async def send_classifiers_profile_slack_alert(
@@ -914,7 +826,7 @@ async def _post_errors_thread(
         logger.error(f"failed to post {error_type} thread: {e}")
 
 
-@flow()
+@flow(on_failure=[SlackNotify.message])
 async def sync_classifiers_profiles(
     aws_env: AwsEnv,
     config: Config | None = None,
@@ -961,63 +873,109 @@ async def sync_classifiers_profiles(
     # returns Result with valid classifiers profiles and validation errors
     results = await get_classifiers_profiles(wikibase_auth, concepts)
 
-    validation_errors: list[Result[Dict, Error]] = [
-        Err(Error(msg=r._error.msg, metadata=r._error.metadata))
-        for r in results
-        if isinstance(r, Err)
+    # retrieve validation errors and valid classifiers profiles
+    validation_errors: list[Error] = [
+        unwrap_err(r) for r in results if isinstance(r, Err)
     ]
-    classifiers_profiles: list[ClassifiersProfileMapping] = [
-        r._value for r in results if isinstance(r, Ok)
+    classifiers_profiles_mappings: list[ClassifiersProfileMapping] = [
+        unwrap_ok(r) for r in results if isinstance(r, Ok)
     ]
 
-    logger.info(f"Valid concepts retrieved from wikibase: {len(classifiers_profiles)}")
+    logger.info(
+        f"Valid concepts retrieved from wikibase: {len(classifiers_profiles_mappings)}"
+    )
     logger.info(f"Validation errors from wikibase: {len(validation_errors)}")
 
-    classifiers_profiles_to_update = compare_classifiers_profiles(
-        classifier_specs, classifiers_profiles
+    # compare current specs to valid classifiers profiles from wikibase to identify changes
+    classifiers_to_update = compare_classifiers_profiles(
+        classifier_specs, classifiers_profiles_mappings
     )
-    logger.info(f"Identified {len(classifiers_profiles_to_update)} updates for syncing")
+    logger.info(f"Identified {len(classifiers_to_update)} updates for syncing")
 
     wandb.login(key=config.wandb_api_key.get_secret_value())
 
     wandb_results: list[Result[Dict, Error]] = []
-    UPDATE_HANDLERS = {
-        "add": promote_classifier_profile,
-        "remove": demote_classifier_profile,
-        "update": update_classifier_profile,
-    }
 
-    for classifier_profile in classifiers_profiles_to_update:
-        if status := classifier_profile.get("status"):
-            if handler := UPDATE_HANDLERS.get(status):
+    for classifiers in classifiers_to_update:
+        match classifiers:
+            case Add() as a:
+                logger.info(
+                    f"promote called for {a.classifiers_profile_mapping.wikibase_id}, {a.classifiers_profile_mapping.classifier_id}, {a.classifiers_profile_mapping.classifiers_profile}"
+                )
+
+                new_specs = a.classifiers_profile_mapping
                 wandb_results.append(
-                    handler(
-                        current_specs=classifier_profile.get("current", None),
-                        new_specs=classifier_profile.get("new", None),
+                    handle_classifier_profile_action(
+                        action="promoting",
+                        wikibase_id=new_specs.wikibase_id,
                         aws_env=aws_env,
+                        action_function=promote_classifier_profile,
+                        classifier_id=new_specs.classifier_id,
+                        classifiers_profile=[str(new_specs.classifiers_profile)],
                     )
                 )
-            else:
-                logger.info(f"Unhandled status: {status}")
 
-    successes = [r._value for r in results if isinstance(r, Ok)]
+            case Update() as u:
+                logger.info(
+                    f"update called for {u.classifier_spec.wikibase_id}, {u.classifier_spec.classifier_id}, {u.classifier_spec.classifiers_profile} to {u.classifiers_profile_mapping.classifiers_profile}"
+                )
+
+                current_specs = u.classifier_spec
+                new_specs = u.classifiers_profile_mapping
+
+                wandb_results.append(
+                    handle_classifier_profile_action(
+                        action="updating",
+                        wikibase_id=current_specs.wikibase_id,
+                        aws_env=aws_env,
+                        action_function=update_classifier_profile,
+                        classifier_id=current_specs.classifier_id,
+                        remove_classifiers_profiles=[current_specs.classifiers_profile],
+                        add_classifiers_profiles=[new_specs.classifiers_profile.value],
+                    )
+                )
+
+            case Remove() as r:
+                logger.info(
+                    f"demote called for {r.classifier_spec.wikibase_id}, {r.classifier_spec.classifier_id}, {r.classifier_spec.classifiers_profile}"
+                )
+
+                current_specs = r.classifier_spec
+                classifier_profile = (
+                    current_specs.classifiers_profile
+                    if current_specs.classifiers_profile
+                    else None
+                )
+
+                wandb_results.append(
+                    handle_classifier_profile_action(
+                        action="demoting",
+                        wikibase_id=current_specs.wikibase_id,
+                        aws_env=aws_env,
+                        action_function=demote_classifier_profile,
+                        wandb_registry_version=current_specs.wandb_registry_version,
+                        classifier_id=current_specs.classifier_id,
+                        classifier_profile=classifier_profile,
+                    )
+                )
+
+    successes = [unwrap_ok(r) for r in wandb_results if isinstance(r, Ok)]
+    other_errors = [unwrap_err(r) for r in wandb_results if isinstance(r, Err)]
     logger.info(
-        f"Successfully synced {len(successes)} classifier profile updates to wandb"
+        f"Total concepts processed: {len(wandb_results) + len(validation_errors)}"
+    )
+    logger.info(
+        f"Successful updates: {len(successes)}, Validation errors: {len(validation_errors)}, Other errors: {len(other_errors)}"
     )
 
     # update classifiers specs yaml file
     refresh_all_available_classifiers([aws_env])
 
-    # combine validation errors with wandb errors and successes
-    final_results: list[Result[Dict, Error]] = validation_errors + wandb_results
-
     try:
         await send_classifiers_profile_slack_alert(
-            validation_errors=[
-                r._error for r in validation_errors if isinstance(r, Err)
-            ],
-            other_errors=[r._error for r in wandb_results if isinstance(r, Err)],
-            successes=[r._value for r in final_results if isinstance(r, Ok)],
+            validation_errors=validation_errors,
+            other_errors=other_errors,
+            successes=successes,
             aws_env=aws_env,
         )
     except Exception as e:
@@ -1025,5 +983,7 @@ async def sync_classifiers_profiles(
 
     # create artifact with summary
     await create_classifiers_profiles_artifact(
-        results=final_results,
+        validation_errors=validation_errors,
+        other_errors=other_errors,
+        successes=successes,
     )

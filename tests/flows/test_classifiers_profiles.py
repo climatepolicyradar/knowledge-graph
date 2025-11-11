@@ -5,21 +5,21 @@ import pytest
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
     compare_classifiers_profiles,
-    convert_dict_to_classifier_spec,
-    convert_dict_to_classifiers_profile_mapping,
     demote_classifier_profile,
     get_classifiers_profiles,
+    handle_classifier_profile_action,
     promote_classifier_profile,
     update_classifier_profile,
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok
+from flows.result import Err, Error, Ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
 )
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.compare_result_operation import Add, Ignore, Remove, Update
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version
@@ -91,7 +91,7 @@ async def test_get_classifiers_profiles():
     assert mock_wikibase.get_classifier_ids_async.call_count == 4
 
     # assert successful profiles
-    classifier_profiles = [r._value for r in results if isinstance(r, Ok)]
+    classifier_profiles = [unwrap_ok(r) for r in results if isinstance(r, Ok)]
     assert len(classifier_profiles) == 2
     assert classifier_profiles[0] == ClassifiersProfileMapping(
         wikibase_id=WikibaseID("Q123"),
@@ -105,7 +105,7 @@ async def test_get_classifiers_profiles():
     )
 
     # assert validation errors
-    failures = [r._error for r in results if isinstance(r, Err)]
+    failures = [unwrap_err(r) for r in results if isinstance(r, Err)]
     assert len(failures) == 3
 
     assert failures[0].metadata.get("wikibase_id") == "Q100"
@@ -119,7 +119,7 @@ async def test_get_classifiers_profiles():
 
 
 def test_compare_classifiers_profiles():
-    # Mock classifier specs (left dataframe)
+    # Mock classifier specs
     classifier_specs = [
         ClassifierSpec(
             wikibase_id="Q123",
@@ -135,56 +135,92 @@ def test_compare_classifiers_profiles():
             concept_id="nnnn5555",
             wandb_registry_version="v1",
         ),
-        ClassifierSpec(
-            wikibase_id="Q1",
-            classifier_id="abcd2345",
-            classifiers_profile="primary",
-            concept_id="abcd2345",
-            wandb_registry_version="v1",
-        ),
     ]
 
-    # Mock classifiers profiles (right dataframe)
-    classifiers_profiles = [
+    # add spec to be identified to remove
+    mock_spec_remove = ClassifierSpec(
+        wikibase_id="Q1",
+        classifier_id="abcd2345",
+        classifiers_profile="primary",
+        concept_id="abcd2345",
+        wandb_registry_version="v1",
+    )
+    classifier_specs.append(mock_spec_remove)
+
+    # Mock classifiers profiles mappings
+    classifiers_profile_mapping_ignore = [
         ClassifiersProfileMapping(
             wikibase_id=WikibaseID("Q123"),
             classifier_id=ClassifierID("aaaa2222"),
-            classifiers_profile="experimental",
-        ),
-        ClassifiersProfileMapping(
-            wikibase_id=WikibaseID("Q100"),
-            classifier_id=ClassifierID("nnnn5555"),
-            classifiers_profile="experimental",
-        ),
+            classifiers_profile=Profile.PRIMARY,
+        )
+    ]
+
+    classifiers_profile_mapping_add = [
         ClassifiersProfileMapping(
             wikibase_id=WikibaseID("Q222"),
             classifier_id=ClassifierID("abab4444"),
-            classifiers_profile="primary",
-        ),
+            classifiers_profile=Profile.PRIMARY,
+        )
     ]
 
-    results = compare_classifiers_profiles(classifier_specs, classifiers_profiles)
+    classifiers_profile_mapping_update = [
+        ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q100"),
+            classifier_id=ClassifierID("nnnn5555"),
+            classifiers_profile=Profile.RETIRED,
+        )
+    ]
+
+    classifiers_profile_mappings = (
+        classifiers_profile_mapping_ignore
+        + classifiers_profile_mapping_add
+        + classifiers_profile_mapping_update
+    )
+
+    results = compare_classifiers_profiles(
+        classifier_specs, classifiers_profile_mappings
+    )
 
     assert (
-        len([d for d in results if d.get("status") == "ignore"]) == 0
-    )  # ignores are not returned
-    assert len([d for d in results if d.get("status") == "add"]) == 1
-    assert len([d for d in results if d.get("status") == "remove"]) == 1
-    assert len([d for d in results if d.get("status") == "update"]) == 1
+        len([d for d in results if isinstance(d, Ignore)]) == 0
+    )  # ignores are not returned, otherwise should be 1
+    assert len([d for d in results if isinstance(d, Add)]) == 1
+    assert len([d for d in results if isinstance(d, Remove)]) == 1
+    assert len([d for d in results if isinstance(d, Update)]) == 1
+
+    # check Add
+    assert [d for d in results if isinstance(d, Add)][
+        0
+    ].classifiers_profile_mapping == classifiers_profile_mapping_add[0]
+    # check Remove
+    assert [d for d in results if isinstance(d, Remove)][
+        0
+    ].classifier_spec == mock_spec_remove
+    # check Update
+    assert [d for d in results if isinstance(d, Update)][
+        0
+    ].classifiers_profile_mapping == classifiers_profile_mapping_update[0]
 
 
-def test_promote_classifiers_profiles(mock_profile_mapping):
-    """Test promoting classifiers profiles for successful validation."""
+def test_handle_classifier_profile_action(mock_profile_mapping):
+    """Test handling different classifier profile actions from action_function"""
 
-    # mock response to wandb_validation
-    with (
-        patch("flows.classifiers_profiles.wandb_validation") as mock_wandb_validation,
-        patch("scripts.promote.main") as mock_promote,
-    ):
-        result = promote_classifier_profile(
-            current_specs=None,
-            new_specs=mock_profile_mapping,
+    with patch("flows.classifiers_profiles.wandb_validation") as mock_wandb_validation:
+        mock_wandb_validation.return_value = Ok(mock_profile_mapping.wikibase_id)
+
+        def mock_action_function(wikibase_id, aws_env, **kwargs):
+            print(
+                f"Action Function Called: wikibase_id={wikibase_id}, aws_env={aws_env}, kwargs={kwargs}"
+            )
+
+        result = handle_classifier_profile_action(
+            action="test_action",
+            wikibase_id=mock_profile_mapping.wikibase_id,
             aws_env=AwsEnv.staging,
+            action_function=mock_action_function,
+            classifier_id=mock_profile_mapping.classifier_id,
+            classifiers_profile=mock_profile_mapping.classifiers_profile,
         )
 
         # Ensure wandb_validation was called with the correct arguments
@@ -192,6 +228,29 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
             wikibase_id=mock_profile_mapping.wikibase_id,
             classifier_id=mock_profile_mapping.classifier_id,
             wandb_registry_version=None,
+            aws_env=AwsEnv.staging,
+        )
+
+        assert isinstance(result, Ok)
+        assert result._value.get("wikibase_id") == mock_profile_mapping.wikibase_id
+        assert result._value.get("classifier_id") == mock_profile_mapping.classifier_id
+        assert (
+            result._value.get("classifiers_profile")
+            == mock_profile_mapping.classifiers_profile
+        )
+
+
+def test_promote_classifiers_profiles(mock_profile_mapping):
+    """Test promoting classifiers profiles for successful validation."""
+
+    # mock response to wandb_validation
+    with (
+        patch("scripts.promote.main") as mock_promote,
+    ):
+        promote_classifier_profile(
+            wikibase_id=mock_profile_mapping.wikibase_id,
+            classifier_id=mock_profile_mapping.classifier_id,
+            classifiers_profile=mock_profile_mapping.classifiers_profile,
             aws_env=AwsEnv.staging,
         )
 
@@ -203,14 +262,8 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
         #     add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
         #     aws_env=AwsEnv.staging,
         # )
-        mock_promote.assert_not_called()  # Remove when uncommented above
 
-        assert isinstance(result, Ok)
-        assert result._value.get("wikibase_id") == mock_profile_mapping.wikibase_id
-        assert result._value.get("classifier_id") == mock_profile_mapping.classifier_id
-        assert result._value.get("classifiers_profile") == [
-            str(mock_profile_mapping.classifiers_profile)
-        ]
+        mock_promote.assert_not_called()  # Remove when uncommented above
 
 
 def test_demote_classifiers_profiles(mock_specs):
@@ -218,21 +271,13 @@ def test_demote_classifiers_profiles(mock_specs):
 
     # mock response to wandb_validation
     with (
-        patch("flows.classifiers_profiles.wandb_validation") as mock_wandb_validation,
         patch("scripts.demote.main") as mock_demote,
     ):
-        result = demote_classifier_profile(
-            current_specs=mock_specs,
-            new_specs=None,
-            aws_env=AwsEnv.staging,
-        )
-
-        # Ensure wandb_validation was called with the correct arguments
-        mock_wandb_validation.assert_called_once_with(
+        demote_classifier_profile(
             wikibase_id=mock_specs.wikibase_id,
-            classifier_id=mock_specs.classifier_id,
             wandb_registry_version=mock_specs.wandb_registry_version,
             aws_env=AwsEnv.staging,
+            classifier_id=mock_specs.classifier_id,
         )
 
         # Ensure scripts.demote.main was called with the correct arguments
@@ -244,35 +289,20 @@ def test_demote_classifiers_profiles(mock_specs):
         # )
         mock_demote.assert_not_called()  # Remove when uncommented above
 
-        assert isinstance(result, Ok)
-        assert result._value.get("wikibase_id") == mock_specs.wikibase_id
-        assert result._value.get("classifier_id") == mock_specs.classifier_id
-        assert (
-            result._value.get("wandb_registry_version")
-            == mock_specs.wandb_registry_version
-        )
-
 
 def test_update_classifier_profile(mock_specs, mock_profile_mapping):
     """Test updating a classifier profile for successful validation."""
 
     # mock response to wandb_validation
     with (
-        patch("flows.classifiers_profiles.wandb_validation") as mock_wandb_validation,
         patch("scripts.classifier_metadata.update") as mock_update,
     ):
-        result = update_classifier_profile(
-            current_specs=mock_specs,
-            new_specs=mock_profile_mapping,
-            aws_env=AwsEnv.staging,
-        )
-
-        # Ensure wandb_validation was called with the correct arguments
-        mock_wandb_validation.assert_called_once_with(
+        update_classifier_profile(
             wikibase_id=mock_specs.wikibase_id,
             classifier_id=mock_specs.classifier_id,
-            wandb_registry_version=None,
             aws_env=AwsEnv.staging,
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
+            remove_classifiers_profiles=[mock_specs.classifiers_profile],
         )
 
         # Ensure scripts.classifier_metadata.update was called with the correct arguments
@@ -287,36 +317,29 @@ def test_update_classifier_profile(mock_specs, mock_profile_mapping):
         # )
         mock_update.assert_not_called()  # Remove when uncommented above
 
-        assert isinstance(result, Ok)
-        assert result._value.get("wikibase_id") == mock_specs.wikibase_id
-        assert result._value.get("classifier_id") == mock_specs.classifier_id
-        assert result._value.get("remove_classifiers_profile") == [
-            str(mock_specs.classifiers_profile)
-        ]
-        assert result._value.get("add_classifiers_profile") == [
-            str(mock_profile_mapping.classifiers_profile)
-        ]
 
-
-def test_update_classifier_profile__failed_validation(mock_specs, mock_profile_mapping):
+def test_handle_classifier_profile_action__failed_validation(mock_specs):
     """Test updating a classifier profile for failed validation."""
 
     # mock response to wandb_validation
     with (
         patch("flows.classifiers_profiles.wandb_validation") as mock_wandb_validation,
-        patch("scripts.classifier_metadata.update") as mock_update,
     ):
         mock_wandb_validation.return_value = Err(
             Error(msg="Validation failed", metadata={})
         )
 
-        result = update_classifier_profile(
-            current_specs=mock_specs,
-            new_specs=mock_profile_mapping,
+        mock_action_function = Mock()
+
+        result = handle_classifier_profile_action(
+            action="test_action",
+            wikibase_id=mock_specs.wikibase_id,
             aws_env=AwsEnv.staging,
+            action_function=mock_action_function,
+            classifier_id=mock_specs.classifier_id,
         )
 
-        mock_update.assert_not_called()
+        mock_action_function.assert_not_called()
         assert isinstance(result, Err)
         assert result._error.msg == "Validation failed"
 
@@ -431,43 +454,3 @@ def test_wandb_validation__failure_restricted_run_config():
 
     assert isinstance(result, Err)
     assert "artifact validation failed for run config" in result._error.msg
-
-
-def test_convert_dict_to_classifier_spec(mock_specs):
-    """Test converting a dictionary to a ClassifierSpec object."""
-    # Test with required fields plus classifiers_profile
-    input_data = {
-        "wikibase_id": "Q123",
-        "classifier_id": "abcd3456",
-        "classifiers_profile": "primary",
-        "wandb_registry_version": "v20",
-    }
-
-    result = convert_dict_to_classifier_spec(input_data)
-
-    assert result.wikibase_id == mock_specs.wikibase_id
-    assert result.classifier_id == mock_specs.classifier_id
-    assert result.classifiers_profile == mock_specs.classifiers_profile
-    assert result.wandb_registry_version == mock_specs.wandb_registry_version
-
-
-def test_convert_dict_to_classifiers_profile_mapping():
-    """Test converting a dictionary to a ClassifiersProfileMapping object."""
-    # Test will more than required fields
-    input_data = {
-        "wikibase_id": "Q123",
-        "classifier_id": "abcd3456",
-        "classifiers_profile": "primary",
-    }
-
-    expected_mapping = ClassifiersProfileMapping(
-        wikibase_id="Q123",
-        classifier_id="abcd3456",
-        classifiers_profile="primary",
-    )
-
-    result = convert_dict_to_classifiers_profile_mapping(input_data)
-
-    assert result.wikibase_id == expected_mapping.wikibase_id
-    assert result.classifier_id == expected_mapping.classifier_id
-    assert result.classifiers_profile == expected_mapping.classifiers_profile
