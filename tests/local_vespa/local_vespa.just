@@ -32,6 +32,9 @@ vespa_feed_data:
 	vespa feed --target local tests/local_vespa/test_documents/family_document.json
 	vespa feed --target local tests/local_vespa/test_documents/document_passage.json
 	vespa feed --target local tests/local_vespa/test_documents/concept/*
+	vespa feed --target local tests/local_vespa/test_documents/classifiers_profile/*
+	vespa feed --target local tests/local_vespa/test_documents/classifiers_profiles/*
+
 
 # Feeds some large test data into local Vespa instance
 vespa_feed_large_data:
@@ -39,7 +42,7 @@ vespa_feed_large_data:
 	vespa feed --target local tests/local_vespa/test_documents/family_document_UNFCCC.party.309.0.json
 	vespa feed --target local tests/local_vespa/test_documents/document_passage_UNFCCC.party.309.0.json
 
-# Deletes some test data into local Vespa instance
+# Deletes some test data from local Vespa instance
 #
 # Alternative approaches: https://docs.vespa.ai/en/operations/batch-delete.html
 vespa_delete_data:
@@ -47,6 +50,8 @@ vespa_delete_data:
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/family_document/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/document_passage/docid?selection=true&cluster=family-document-passage"
 	curl -X DELETE "http://localhost:8080/document/v1/doc_search/concept/docid?selection=true&cluster=family-document-passage"
+	curl -X DELETE "http://localhost:8080/document/v1/doc_search/classifiers_profile/docid?selection=true&cluster=family-document-passage"
+	curl -X DELETE "http://localhost:8080/document/v1/doc_search/classifiers_profiles/docid?selection=true&cluster=family-document-passage"
 
 
 copy_query_profiles_to_appn_pkg:

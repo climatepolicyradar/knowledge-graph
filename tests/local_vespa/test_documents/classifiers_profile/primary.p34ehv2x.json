@@ -1,0 +1,15 @@
+{
+  "id": "id:doc_search:classifiers_profile::primary.p34ehv2x",
+  "fields": {
+    "id": "p34ehv2x",
+    "name": "primary",
+    "multi": false,
+    "mappings": [
+      {
+        "concept_id": "r3dkctge",
+        "concept_wikibase_id": "Q789",
+        "classifier_id": "kx7m3p9w"
+      }
+    ]
+  }
+}

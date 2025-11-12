@@ -1,0 +1,20 @@
+{
+  "id": "id:doc_search:classifiers_profile::retired.39vikj2a",
+  "fields": {
+    "id": "39vikj2a",
+    "name": "retired",
+    "multi": true,
+    "mappings": [
+      {
+        "concept_id": "x4djcbba",
+        "concept_wikibase_id": "Q789",
+        "classifier_id": "ab273b2w"
+      },
+      {
+        "concept_id": "jl2n0naa",
+        "concept_wikibase_id": "Q789",
+        "classifier_id": "ju1x9a0b"
+      }
+    ]
+  }
+}
