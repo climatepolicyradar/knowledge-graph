@@ -87,7 +87,7 @@ class WikibaseSession:
     )
     classifier_id_property_id = os.getenv("WIKIBASE_CLASSIFIER_ID_PROPERTY_ID", "P20")
 
-    def __init__(
+    async def __init__(
         self,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -108,11 +108,15 @@ class WikibaseSession:
                 "and WIKIBASE_URL"
             )
 
-        # These will be initialized on first use
-        self._client: Optional[httpx.AsyncClient] = None
-        self._csrf_token: Optional[str] = None
-        self._redirects: Optional[dict[WikibaseID, WikibaseID]] = None
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        # Try to connect to Wikibase on instantiation, meaning we fail early instead
+        # of waiting for the first downstream connection attempt. This mirrors the
+        # behaviour of ArgillaSession.
+        try:
+            self._client = await self._get_client()
+        except Exception as e:
+            raise Exception(
+                f"Failed to connect to Wikibase using the provided credentials with error:\n{e}"
+            )
 
     def __repr__(self) -> str:
         """Return a string representation of the Wikibase session"""
