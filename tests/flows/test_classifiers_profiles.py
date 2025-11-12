@@ -2,9 +2,15 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+# from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
+from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
+from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
+
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
     compare_classifiers_profiles,
+    create_vespa_classifiers_profile,
+    create_vespa_profile_mapping,
     demote_classifier_profile,
     get_classifiers_profiles,
     handle_classifier_profile_action,
@@ -457,3 +463,38 @@ def test_wandb_validation__failure_restricted_run_config():
 
     assert isinstance(result, Err)
     assert "artifact validation failed: run config" in result._error.msg
+
+
+def test_create_vespa_classifiers_profile():
+    mappings = [
+        VespaClassifiersProfile.Mapping(
+            concept_id="aaaa2345",
+            concept_wikibase_id=VespaWikibaseId("Q1"),
+            classifier_id="bbbb3456",
+        )
+    ]
+    profile = create_vespa_classifiers_profile("primary", mappings)
+    assert profile.name == "primary"
+    assert len(profile.mappings) == 1
+    assert isinstance(profile, VespaClassifiersProfile)
+
+
+def test_create_vespa_profile_mapping():
+    classifier_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v12",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q100",
+            classifier_id="nnnn5555",
+            classifiers_profile="primary]",
+            wandb_registry_version="v2",
+        ),
+    ]
+    profile_mappings = create_vespa_profile_mapping(classifier_specs)
+
+    assert len(profile_mappings) == 2
+    assert isinstance(profile_mappings[0], VespaClassifiersProfile.Mapping)
