@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
@@ -11,12 +12,16 @@ from rich.console import Console
 import knowledge_graph.ensemble.metrics as ensemble_metrics
 from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
+from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.ensemble import create_ensemble
 from knowledge_graph.ensemble.metrics import EnsembleMetric, MajorityVote
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span, UnitInterval
-from knowledge_graph.wandb_helpers import load_labelled_passages_from_wandb_run
+from knowledge_graph.wandb_helpers import (
+    load_labelled_passages_from_wandb_run,
+    log_labelled_passages_artifact_to_wandb_run,
+)
 
 app = typer.Typer()
 
@@ -183,6 +188,12 @@ def main(
             help="Optional limit on the number of passages to annotate",
         ),
     ] = None,
+    track_and_upload: Annotated[
+        bool,
+        typer.Option(
+            help="Whether to track the run with Weights & Biases and upload artifacts",
+        ),
+    ] = True,
 ):
     """
     Run active learning annotation using ensemble-based uncertainty estimation.
@@ -193,104 +204,169 @@ def main(
     """
     console = Console()
 
-    # load classifiers
-    console.print("Loading classifiers from W&B...")
-    bert_classifier = load_classifier_from_wandb(classifier_wandb_path_bert)
-    if not bert_classifier._is_fitted:
-        raise ValueError(
-            "BERT classifier must have been fit before running active learning."
-        )
-
-    llm_classifier = load_classifier_from_wandb(classifier_wandb_path_llm)
-
-    # load labelled passages
-    console.print(
-        f"Loading labelled passages from W&B run: {labelled_passages_wandb_run_path}"
-    )
-    wandb_api = wandb.Api()
-    wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
-    labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
-
-    console.print(f"Loaded {len(labelled_passages)} passages")
-
-    console.print("Loading BERT classifier's training data from W&B...")
-    model_artifact = wandb_api.artifact(classifier_wandb_path_bert)
-    artifact_creator_run = model_artifact.logged_by()
-
-    try:
-        assert artifact_creator_run is not None
-        bert_training_data = load_labelled_passages_from_wandb_run(
-            artifact_creator_run,  # type: ignore
-            artifact_name="training-data",
-        )
-        console.print(
-            f"Loaded {len(bert_training_data)} passages from BERT training data"
-        )
-    except Exception as e:
-        console.print(
-            f"[yellow]Warning: Could not load training data from classifier run: {e}[/yellow]"
-        )
-        console.print(
-            "[yellow]This model may have been trained before training data logging was added.[/yellow]"
-        )
-        bert_training_data = []
-
-    evaluation_data = bert_classifier.concept.labelled_passages
-    console.print(
-        f"Loaded {len(evaluation_data)} passages from concept evaluation data"
-    )
-
-    console.print("Filtering out passages that were used in training or evaluation...")
-    passage_text_to_exclude = {
-        passage.text for passage in bert_training_data + evaluation_data
+    wandb_config = {
+        "batch_size": batch_size,
+        "limit": limit,
+        "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "classifier_wandb_path_bert": classifier_wandb_path_bert,
+        "classifier_wandb_path_llm": classifier_wandb_path_llm,
+        "ensemble_config_bert": {
+            "n_classifiers": ensemble_config_bert.n_classifiers,
+            "ensemble_metric": ensemble_config_bert.ensemble_metric.name,
+            "ensemble_metric_threshold": float(
+                ensemble_config_bert.ensemble_metric_threshold
+            ),
+        },
+        "ensemble_config_llm": {
+            "n_classifiers": ensemble_config_llm.n_classifiers,
+            "ensemble_metric": ensemble_config_llm.ensemble_metric.name,
+            "ensemble_metric_threshold": float(
+                ensemble_config_llm.ensemble_metric_threshold
+            ),
+        },
     }
-    original_count = len(labelled_passages)
-    labelled_passages = [
-        p for p in labelled_passages if p.text not in passage_text_to_exclude
-    ]
-    filtered_count = original_count - len(labelled_passages)
-    console.print(
-        f"Removed {filtered_count} passages (training + eval data), "
-        f"{len(labelled_passages)} passages remaining for annotation"
-    )
+    wandb_job_type = "active_learning"
 
-    if limit is not None:
-        labelled_passages = labelled_passages[:limit]
-        console.print(f"Limited labelled passages to {len(labelled_passages)}")
+    with (
+        wandb.init(
+            entity=WANDB_ENTITY,
+            project=wikibase_id,
+            job_type=wandb_job_type,
+            config=wandb_config,
+        )
+        if track_and_upload
+        else nullcontext()
+    ) as run:
+        # load classifiers
+        console.print("Loading classifiers from W&B...")
+        bert_classifier = load_classifier_from_wandb(classifier_wandb_path_bert)
+        if not bert_classifier._is_fitted:
+            raise ValueError(
+                "BERT classifier must have been fit before running active learning."
+            )
 
-    # run classifier escalation
-    annotated_passages, remaining_passages = annotate_passages(
-        labelled_passages=labelled_passages,
-        wikibase_id=wikibase_id,
-        bert_classifier=bert_classifier,
-        llm_classifier=llm_classifier,
-        ensemble_config_bert=ensemble_config_bert,
-        ensemble_config_llm=ensemble_config_llm,
-        batch_size=batch_size,
-    )
+        llm_classifier = load_classifier_from_wandb(classifier_wandb_path_llm)
 
-    # Save passages to local files
-    output_dir = Path("active_learning_output")
-    output_dir.mkdir(exist_ok=True)
+        # load labelled passages
+        console.print(
+            f"Loading labelled passages from W&B run: {labelled_passages_wandb_run_path}"
+        )
+        wandb_api = wandb.Api()
+        labelled_passages_wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
+        labelled_passages = load_labelled_passages_from_wandb_run(
+            labelled_passages_wandb_run
+        )
 
-    annotated_filename = f"annotated_passages_{wikibase_id}.jsonl"
-    annotated_path = output_dir / annotated_filename
-    annotated_jsonl = serialise_pydantic_list_as_jsonl(annotated_passages)
-    annotated_path.write_text(annotated_jsonl)
-    console.print(
-        f"✅ Saved {len(annotated_passages)} annotated passages to {annotated_path}"
-    )
+        console.print(f"Loaded {len(labelled_passages)} passages")
 
-    remaining_filename = f"remaining_passages_{wikibase_id}.jsonl"
-    remaining_path = output_dir / remaining_filename
-    remaining_jsonl = serialise_pydantic_list_as_jsonl(remaining_passages)
-    remaining_path.write_text(remaining_jsonl)
-    console.print(
-        f"✅ Saved {len(remaining_passages)} remaining passages to {remaining_path}"
-    )
+        if track_and_upload and run:
+            # declare models as inputs to this run
+            run.use_artifact(classifier_wandb_path_bert)
+            run.use_artifact(classifier_wandb_path_llm)
+            # TODO: we should load labelled passages from an artifact rather than a run,
+            # meaning we can also declare them as inputs to runs here
 
-    # FIXME: upload LPs to W&B
-    # FIXME: upload LPs to argilla
+        console.print("Loading BERT classifier's training data from W&B...")
+        model_artifact = wandb_api.artifact(classifier_wandb_path_bert)
+        artifact_creator_run = model_artifact.logged_by()
+
+        try:
+            assert artifact_creator_run is not None
+            bert_training_data = load_labelled_passages_from_wandb_run(
+                artifact_creator_run,  # type: ignore
+                artifact_name="training-data",
+            )
+            console.print(
+                f"Loaded {len(bert_training_data)} passages from BERT training data"
+            )
+        except Exception as e:
+            console.print(
+                f"[yellow]Warning: Could not load training data from classifier run: {e}[/yellow]"
+            )
+            console.print(
+                "[yellow]This model may have been trained before training data logging was added.[/yellow]"
+            )
+            bert_training_data = []
+
+        evaluation_data = bert_classifier.concept.labelled_passages
+        console.print(
+            f"Loaded {len(evaluation_data)} passages from concept evaluation data"
+        )
+
+        console.print(
+            "Filtering out passages that were used in training or evaluation..."
+        )
+        passage_text_to_exclude = {
+            passage.text for passage in bert_training_data + evaluation_data
+        }
+        original_count = len(labelled_passages)
+        labelled_passages = [
+            p for p in labelled_passages if p.text not in passage_text_to_exclude
+        ]
+        filtered_count = original_count - len(labelled_passages)
+        console.print(
+            f"Removed {filtered_count} passages (training + eval data), "
+            f"{len(labelled_passages)} passages remaining for annotation"
+        )
+
+        if limit is not None:
+            labelled_passages = labelled_passages[:limit]
+            console.print(f"Limited labelled passages to {len(labelled_passages)}")
+
+        # run classifier escalation
+        annotated_passages, remaining_passages = annotate_passages(
+            labelled_passages=labelled_passages,
+            wikibase_id=wikibase_id,
+            bert_classifier=bert_classifier,
+            llm_classifier=llm_classifier,
+            ensemble_config_bert=ensemble_config_bert,
+            ensemble_config_llm=ensemble_config_llm,
+            batch_size=batch_size,
+        )
+
+        # Save passages to local files
+        output_dir = Path("active_learning_output")
+        output_dir.mkdir(exist_ok=True)
+
+        annotated_filename = f"annotated_passages_{wikibase_id}.jsonl"
+        annotated_path = output_dir / annotated_filename
+        annotated_jsonl = serialise_pydantic_list_as_jsonl(annotated_passages)
+        annotated_path.write_text(annotated_jsonl)
+        console.print(
+            f"✅ Saved {len(annotated_passages)} annotated passages to {annotated_path}"
+        )
+
+        remaining_filename = f"remaining_passages_{wikibase_id}.jsonl"
+        remaining_path = output_dir / remaining_filename
+        remaining_jsonl = serialise_pydantic_list_as_jsonl(remaining_passages)
+        remaining_path.write_text(remaining_jsonl)
+        console.print(
+            f"✅ Saved {len(remaining_passages)} remaining passages to {remaining_path}"
+        )
+
+        # Upload artifacts to W&B
+        if track_and_upload and run:
+            console.print("[cyan]Uploading artifacts to W&B...[/cyan]")
+
+            # Upload annotated passages (auto-labelled by ensembles)
+            log_labelled_passages_artifact_to_wandb_run(
+                annotated_passages,
+                run=run,
+                concept=bert_classifier.concept,
+            )
+            console.print(
+                f"✅ Uploaded {len(annotated_passages)} annotated passages to W&B"
+            )
+
+            # Upload remaining passages (need human annotation)
+            log_labelled_passages_artifact_to_wandb_run(
+                remaining_passages,
+                run=run,
+                concept=bert_classifier.concept,
+            )
+            console.print(
+                f"✅ Uploaded {len(remaining_passages)} remaining passages to W&B"
+            )
 
 
 if __name__ == "__main__":
