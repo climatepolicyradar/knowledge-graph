@@ -41,15 +41,30 @@ def log_labelled_passages_artifact_to_wandb_run(
     run: WandbRun,
     concept: Concept,
     classifier: Classifier | None = None,
+    artifact_name_prefix: str | None = None,
 ):
     """Upload a list of labelled passages from a classifier to Weights & Biases."""
 
-    artifact_name = (
-        f"{classifier.id}-labelled-passages" if classifier else "labelled-passages"
-    )
+    if classifier and artifact_name_prefix:
+        raise ValueError(
+            "artifact_name_prefix and classifier can not both be provided, as the classifier's ID will be used as prefix to the labelled passages artifact name"
+        )
+
+    if classifier:
+        artifact_name = f"{classifier.id}-labelled-passages"
+    elif artifact_name_prefix:
+        artifact_name = f"{artifact_name_prefix}-labelled-passages"
+    else:
+        artifact_name = "labelled-passages"
+
+    n_positives = len([p for p in labelled_passages if p.spans])
+    n_negatives = len(labelled_passages) - n_positives
+
     artifact_metadata = {
         "concept_wikibase_revision": concept.wikibase_revision,
         "passage_count": len(labelled_passages),
+        "n_positives": n_positives,
+        "n_negatives": n_negatives,
     }
 
     if classifier:

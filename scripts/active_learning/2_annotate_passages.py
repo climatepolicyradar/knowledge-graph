@@ -392,6 +392,10 @@ def main(
             )
         )
 
+        # Make updated BERT training data from its initial training data, plus all the
+        # passages labelled by the LLM ensemble.
+        updated_bert_training_data = bert_training_data + llm_labelled_passages
+
         # Save passages to local files
         output_dir = Path("active_learning_output")
         output_dir.mkdir(exist_ok=True)
@@ -420,6 +424,18 @@ def main(
             f"✅ Saved {len(unlabelled_passages)} unlabelled passages to {unlabelled_path}"
         )
 
+        updated_bert_training_filename = (
+            f"updated_bert_training_data_{wikibase_id}.jsonl"
+        )
+        updated_bert_training_path = output_dir / updated_bert_training_filename
+        updated_bert_training_jsonl = serialise_pydantic_list_as_jsonl(
+            updated_bert_training_data
+        )
+        updated_bert_training_path.write_text(updated_bert_training_jsonl)
+        console.print(
+            f"✅ Saved updated BERT training data ({len(updated_bert_training_data)} passages) to {updated_bert_training_path}"
+        )
+
         # Upload artifacts to W&B
         if track_and_upload and run:
             console.print("[cyan]Uploading artifacts to W&B...[/cyan]")
@@ -429,6 +445,7 @@ def main(
                 bert_labelled_passages,
                 run=run,
                 concept=bert_classifier.concept,
+                classifier=bert_classifier,
             )
             console.print(
                 f"✅ Uploaded {len(bert_labelled_passages)} BERT-labelled passages to W&B"
@@ -439,6 +456,7 @@ def main(
                 llm_labelled_passages,
                 run=run,
                 concept=bert_classifier.concept,
+                classifier=llm_classifier,
             )
             console.print(
                 f"✅ Uploaded {len(llm_labelled_passages)} LLM-labelled passages to W&B"
@@ -449,9 +467,22 @@ def main(
                 unlabelled_passages,
                 run=run,
                 concept=bert_classifier.concept,
+                artifact_name_prefix="unlabelled",
             )
             console.print(
                 f"✅ Uploaded {len(unlabelled_passages)} unlabelled passages to W&B"
+            )
+
+            # Upload updated BERT training data
+            log_labelled_passages_artifact_to_wandb_run(
+                updated_bert_training_data,
+                run=run,
+                concept=bert_classifier.concept,
+                classifier=bert_classifier,
+                artifact_name_prefix="updated_bert_training_data",
+            )
+            console.print(
+                f"✅ Uploaded {len(updated_bert_training_data)} updated BERT training passages to W&B"
             )
 
 
