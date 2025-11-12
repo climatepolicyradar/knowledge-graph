@@ -187,7 +187,7 @@ def annotate_passages(
     console.print(
         f"Complete: {total_labelled} ({percent_labelled}%) labelled "
         f"(BERT: {len(bert_labelled_passages)}, LLM: {len(llm_labelled_passages)}), "
-        f"{len(unlabelled_passages)} ({percent_unlabelled}%) unlabelled (both ensembles uncertain)."
+        f"{len(unlabelled_passages)} ({percent_unlabelled}%) unlabelled."
     )
 
     return bert_labelled_passages, llm_labelled_passages, unlabelled_passages
@@ -337,7 +337,7 @@ def main(
                 f"Loading from artifact: {training_data_artifact.name}:{training_data_artifact.version}"
             )
             artifact_dir = training_data_artifact.download()
-            labelled_passages_file = Path(artifact_dir) / "labelled_passages.jsonl"
+            labelled_passages_file = Path(artifact_dir) / "training_data.jsonl"
 
             bert_training_data = deserialise_pydantic_list_with_fallback(
                 labelled_passages_file.read_text(), LabelledPassage
@@ -478,11 +478,17 @@ def main(
                 updated_bert_training_data,
                 run=run,
                 concept=bert_classifier.concept,
-                classifier=bert_classifier,
                 artifact_name_prefix="updated_bert_training_data",
             )
             console.print(
                 f"✅ Uploaded {len(updated_bert_training_data)} updated BERT training passages to W&B"
+            )
+
+            run.summary["num_bert_labelled_passages"] = len(bert_labelled_passages)
+            run.summary["num_llm_labelled_passages"] = len(llm_labelled_passages)
+            run.summary["num_unlabelled_passages"] = len(unlabelled_passages)
+            run.summary["num_updated_bert_training_data"] = len(
+                updated_bert_training_data
             )
 
 
