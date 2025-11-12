@@ -85,6 +85,7 @@ def test_default_values_are_valid():
     assert config.inference_document_source_prefix
     assert config.inference_document_target_prefix
     assert config.pipeline_state_prefix
+    assert config.skip_existing_inference_results is True
 
 
 def test_nested_s3_prefix_without_trailing_slash():
@@ -107,3 +108,19 @@ def test_nested_s3_prefix_with_trailing_slash():
         aggregate_document_source_prefix="path/to/documents/",
     )
     assert config.aggregate_document_source_prefix == "path/to/documents/"
+
+
+def test_skip_existing_inference_results_in_to_json():
+    """Test that skip_existing_inference_results is included in to_json()."""
+    config = Config(
+        cache_bucket="test-bucket",
+        skip_existing_inference_results=False,
+    )
+    json_dict = config.to_json()
+    assert "skip_existing_inference_results" in json_dict
+    assert json_dict["skip_existing_inference_results"] is False
+
+    # Test with default value (True)
+    config_default = Config(cache_bucket="test-bucket")
+    json_dict_default = config_default.to_json()
+    assert json_dict_default["skip_existing_inference_results"] is True
