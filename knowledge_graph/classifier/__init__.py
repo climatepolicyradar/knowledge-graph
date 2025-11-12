@@ -158,8 +158,9 @@ def load_classifier_from_wandb(
     :param bool model_to_cuda: Whether to load the model to CUDA if available
     :return Classifier: The loaded classifier
     """
+    from knowledge_graph.config import model_artifact_name
 
     model_pickle_path = load_artifact_file_from_wandb(
-        wandb_path=wandb_path, filename="model.pickle"
+        wandb_path=wandb_path, filename=model_artifact_name
     )
     return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)

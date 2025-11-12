@@ -31,7 +31,10 @@ from knowledge_graph.cloud import (
     get_s3_client,
     is_logged_in,
 )
-from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
+from knowledge_graph.config import (
+    WANDB_ENTITY,
+    wandb_model_artifact_filename,
+)
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -319,7 +322,7 @@ def upload_model_artifact(
     key = os.path.join(
         storage_upload.target_path,
         storage_upload.next_version,
-        "model.pickle",
+        model_artifact_name,
     )
 
     Console().log(f"Uploading {classifier.name} to {key} in bucket {bucket}")

@@ -6,6 +6,7 @@ import pytest
 import typer
 from syrupy.assertion import SnapshotAssertion
 
+from knowledge_graph.config import model_artifact_name
 from knowledge_graph.identifiers import WikibaseID
 from scripts.evaluate import (
     build_metrics_path,
@@ -78,7 +79,7 @@ def test_load_classifier_local(mock_classifier, tmp_path):
         wikibase_id = WikibaseID("Q123")
         classifier_path = tmp_path / wikibase_id
         classifier_path.mkdir(parents=True)
-        pickle_path = classifier_path / "model.pickle"
+        pickle_path = classifier_path / model_artifact_name
         pickle_path.touch()  # Create an empty file
 
         # Call function
