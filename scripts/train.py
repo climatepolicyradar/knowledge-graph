@@ -40,7 +40,7 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
-    load_labelled_passages_from_wandb_run,
+    load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
 from knowledge_graph.wikibase import WikibaseConfig
@@ -59,7 +59,7 @@ def load_training_data_from_wandb(
     )
     api = wandb.Api()
     wandb_run = api.run(training_data_wandb_run_path)
-    labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
+    labelled_passages = load_labelled_passages_from_wandb(run=wandb_run)
     Console().log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
     return labelled_passages
 

@@ -12,7 +12,6 @@ from flows.utils import (
     deserialise_pydantic_list_with_fallback,
     serialise_pydantic_list_as_jsonl,
 )
-from knowledge_graph.classifier import load_classifier_from_wandb
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
 from knowledge_graph.identifiers import WikibaseID
@@ -21,7 +20,8 @@ from knowledge_graph.labelled_passage import (
 )
 from knowledge_graph.labelling import label_passages_with_classifier
 from knowledge_graph.wandb_helpers import (
-    load_labelled_passages_from_wandb_run,
+    load_classifier_from_wandb,
+    load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
 
@@ -155,7 +155,7 @@ def main(
             )
         elif labelled_passages_wandb_run_path:
             wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
-            labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
+            labelled_passages = load_labelled_passages_from_wandb(run=wandb_run)
         else:
             raise ValueError(
                 "One of `labelled_passages_path` and `labelled_passages_run_name` must be defined."

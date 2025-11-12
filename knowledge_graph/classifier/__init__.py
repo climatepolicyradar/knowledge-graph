@@ -14,7 +14,6 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
-from knowledge_graph.wandb_helpers import load_artifact_file_from_wandb
 
 
 class ModelPath(BaseModel):
@@ -142,25 +141,3 @@ class ClassifierFactory:
 
         # Then handle more generic cases
         return KeywordClassifier(concept)
-
-
-def load_classifier_from_wandb(
-    wandb_path: str, model_to_cuda: bool = False
-) -> "Classifier":
-    """
-    Load a classifier from a W&B path.
-
-    This works for any classifier and W&B team. A separate, CPR-specific method
-    to load models from the model registry exists in flows/inference and is more robust
-    for use in production pipelines.
-
-    :param str wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
-    :param bool model_to_cuda: Whether to load the model to CUDA if available
-    :return Classifier: The loaded classifier
-    """
-    from knowledge_graph.config import wandb_model_artifact_filename
-
-    model_pickle_path = load_artifact_file_from_wandb(
-        wandb_path=wandb_path, filename=wandb_model_artifact_filename
-    )
-    return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)
