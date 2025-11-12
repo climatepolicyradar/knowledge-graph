@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.20.0"
+version = "0.21.0"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
@@ -111,6 +111,7 @@ collect_prefect_artifacts = "scripts.audit.collect_prefect_artifacts:app"
 
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 env = [
   "AWS_ENV=sandbox",
   "WIKIBASE_USERNAME=test_username",
