@@ -875,7 +875,7 @@ wheels = [
 
 [[package]]
 name = "cpr-sdk"
-version = "4.0.1"
+version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aws-error-utils" },
@@ -890,9 +890,9 @@ dependencies = [
     { name = "rich" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/9b/3a106300f3337e2c42cc11781c11ab1e8b683b3cccebc7177e04b960ff37/cpr_sdk-4.0.1.tar.gz", hash = "sha256:585a70c195bfa984fe1a49cc12a212bfb8c18ad98e4f8db5240032bb5f8b0396", size = 75199, upload-time = "2025-10-29T17:22:04.547Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cd/46/e6fd9ba57147e7521674a57660e67b13870ce13a17b3013ab6b506751d32/cpr_sdk-4.2.0.tar.gz", hash = "sha256:31e2e44322dab45c6719c1f6c988c8e78923d7b544f42bd0cb3994263c396ff8", size = 76541, upload-time = "2025-11-05T11:13:44.399Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/fa/74f9b482fb6404e28b6b1c2f20686cfa7d91f47fb2ce4f259d97f37ca958/cpr_sdk-4.0.1-py3-none-any.whl", hash = "sha256:4be857bf5cdf2da15234c463a68e9e7c04517fa08479b06bb9cd380b9392d332", size = 80817, upload-time = "2025-10-29T17:22:03.577Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/58/a1c53b946446721f5bb231d27961c5fb17782df334b9f00f4656fa9a267e/cpr_sdk-4.2.0-py3-none-any.whl", hash = "sha256:7e92e7fdc8e1aa3c195f1eac9be7ed1ce58ed0929a59b8bfeeb80bf9f9df79d2", size = 82133, upload-time = "2025-11-05T11:13:43.093Z" },
 ]
 
 [[package]]
@@ -2284,7 +2284,7 @@ requires-dist = [
     { name = "cloudpickle", marker = "extra == 'coiled'", specifier = ">=3.1.1" },
     { name = "coiled", specifier = ">=1.115.0" },
     { name = "coiled", marker = "extra == 'coiled'", specifier = ">=1.117.0" },
-    { name = "cpr-sdk", specifier = ">=4.0.1" },
+    { name = "cpr-sdk", specifier = ">=4.2.0" },
     { name = "dask", marker = "extra == 'coiled'", specifier = ">=2025.7.0" },
     { name = "datalake", specifier = ">=2.5.8" },
     { name = "datasets", specifier = ">=2.18.0" },
