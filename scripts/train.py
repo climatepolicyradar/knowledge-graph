@@ -322,7 +322,7 @@ def upload_model_artifact(
     key = os.path.join(
         storage_upload.target_path,
         storage_upload.next_version,
-        model_artifact_name,
+        wandb_model_artifact_filename,
     )
 
     Console().log(f"Uploading {classifier.name} to {key} in bucket {bucket}")

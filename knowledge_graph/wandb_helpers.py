@@ -13,7 +13,7 @@ from flows.utils import (
 )
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.concept import Concept
-from knowledge_graph.config import labelled_passages_filename
+from knowledge_graph.config import wandb_labelled_passages_artifact_filename
 from knowledge_graph.labelled_passage import LabelledPassage
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ def log_labelled_passages_artifact_to_wandb_run(
     )
 
     with labelled_passages_artifact.new_file(
-        labelled_passages_filename, mode="w", encoding="utf-8"
+        wandb_labelled_passages_artifact_filename, mode="w", encoding="utf-8"
     ) as f:
         f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
@@ -187,7 +187,7 @@ def load_labelled_passages_from_wandb(wandb_path: str) -> list[LabelledPassage]:
 
     file_path = load_artifact_file_from_wandb(
         wandb_path=wandb_path,
-        filename=labelled_passages_filename,
+        filename=wandb_labelled_passages_artifact_filename,
     )
 
     labelled_passages = deserialise_pydantic_list_with_fallback(

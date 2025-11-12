@@ -38,9 +38,9 @@ class ModelPath(BaseModel):
 
 def get_local_classifier_path(target_path: ModelPath, version: str) -> Path:
     """Returns a path for a classifier file."""
-    from knowledge_graph.config import classifier_dir, model_artifact_name
+    from knowledge_graph.config import classifier_dir, wandb_model_artifact_filename
 
-    return classifier_dir / target_path / version / model_artifact_name
+    return classifier_dir / target_path / version / wandb_model_artifact_filename
 
 
 def __getattr__(name):
@@ -158,9 +158,9 @@ def load_classifier_from_wandb(
     :param bool model_to_cuda: Whether to load the model to CUDA if available
     :return Classifier: The loaded classifier
     """
-    from knowledge_graph.config import model_artifact_name
+    from knowledge_graph.config import wandb_model_artifact_filename
 
     model_pickle_path = load_artifact_file_from_wandb(
-        wandb_path=wandb_path, filename=model_artifact_name
+        wandb_path=wandb_path, filename=wandb_model_artifact_filename
     )
     return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)

@@ -7,7 +7,7 @@ from wandb.errors.errors import CommError
 
 from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.config import model_artifact_name
+from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from scripts.train import (
     Namespace,
@@ -35,7 +35,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     mock_classifier.name = "test_classifier"
 
     # Create a temporary file to upload
-    test_file_path = Path(os.path.join(tmp_path, model_artifact_name))
+    test_file_path = Path(os.path.join(tmp_path, wandb_model_artifact_filename))
     with open(test_file_path, "w") as f:
         f.write("test model content")
 
@@ -61,7 +61,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     assert bucket == expected_bucket
 
     # Assert the key structure is correct
-    assert key == f"Q123/v4prnc54/v3/{model_artifact_name}"
+    assert key == f"Q123/v4prnc54/v3/{wandb_model_artifact_filename}"
 
     # Verify that the upload_file method was called with correct arguments
     mock_s3_client.upload_file.assert_called_once_with(
@@ -177,7 +177,7 @@ def test_create_and_link_model_artifact():
     mock_classifier.concept.id = "5d4xcy5g"
     mock_classifier.concept.wikibase_revision = 12300
     bucket = "cpr-labs-models"
-    key = f"Q123/v4prnc54/v3/{model_artifact_name}"
+    key = f"Q123/v4prnc54/v3/{wandb_model_artifact_filename}"
     aws_env = AwsEnv.labs
 
     storage_link = StorageLink(
