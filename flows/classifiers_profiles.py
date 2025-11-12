@@ -912,6 +912,8 @@ def update_vespa_with_classifiers_profiles(
     # validate classifier_profile and concept_id is not None
     validate_spec_results = validate_classifier_specs(classifier_specs)
     valid_specs = [unwrap_ok(r) for r in validate_spec_results if isinstance(r, Ok)]
+    # append errors to results
+    results.extend([r for r in validate_spec_results if isinstance(r, Err)])
 
     # create profile mappings from classifier specs split by classifier profiles: primary, experimental, retired
     profile_mappings = {}
@@ -965,10 +967,20 @@ def update_vespa_with_classifiers_profiles(
     try:
         for profile_name, profile in vespa_classifiers_profile.items():
             fields = JsonDict(profile.model_dump(mode="json", exclude={"response_raw"}))
+            doc_id = f"{profile.name}.{profile.id}"
+
+            # response: VespaResponse = await vespa_connection_pool.update_data(
+            #     schema="classifiers_profile",
+            #     namespace="doc_search",
+            #     document_id=doc_id,
+            #     create=True,  # create document if it doesn't exist
+            #     fields=fields,
+            # )
 
             logger.info(
-                f"Syncing VespaClassifiersProfile {profile_name} to Vespa with {len(profile.mappings)} mappings with fields {fields}"
+                f"Syncing VespaClassifiersProfile {profile_name} to Vespa with {len(profile.mappings)} mappings for doc id {doc_id} with fields {fields}"
             )
+
     except Exception as e:
         results.append(
             log_and_return_error(
@@ -979,15 +991,15 @@ def update_vespa_with_classifiers_profiles(
         )
         return results
 
-    # create final VespaClassifiersProfiles object
+    # create VespaClassifiersProfiles object from VespaClassifiersProfile objects
     try:
         # create mappings dynamically from vespa_classifiers_profile
         mappings = {}
         for profile_name, profile in vespa_classifiers_profile.items():
             mappings[profile_name] = f"{profile.name}.{profile.id}"
-        id = Identifier.generate(mappings)
+
         vespa_classifiers_profiles = VespaClassifiersProfiles(
-            id=str(id),
+            id="default",
             mappings=mappings,
             response_raw={},
         )
@@ -1002,15 +1014,25 @@ def update_vespa_with_classifiers_profiles(
 
     logger.info("Created VespaClassifiersProfiles object")
 
-    # sync to VespaClassifiersProfiles to vespa
+    # sync to VespaClassifiersProfiles to vespa with default id
     try:
         fields = JsonDict(
             vespa_classifiers_profiles.model_dump(mode="json", exclude={"response_raw"})
         )
+        doc_id = "default"
+
+        # vespa_connection_pool.update_data(
+        #     schema="classifiers_profiles",
+        #     namespace="doc_search",
+        #     document_id=doc_id,
+        #     create=True,  # create document if it doesn't exist
+        #     fields=fields,
+        # )
 
         logger.info(
-            f"Syncing VespaClassifiersProfiles to Vespa with mappings: {vespa_classifiers_profiles.mappings} and fields {fields}"
+            f"Syncing VespaClassifiersProfiles to doc id {doc_id}, with mappings: {vespa_classifiers_profiles.mappings} and fields {fields}"
         )
+
     except Exception as e:
         results.append(
             log_and_return_error(
