@@ -941,7 +941,7 @@ async def index(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
-    enable_v2_concepts: bool = False,
+    enable_v2_concepts: bool | None = None,
 ) -> None:
     """
     Index aggregated inference results from a list of S3 URIs into Vespa.
@@ -983,6 +983,19 @@ async def index(
         config = await Config.create()
 
     logger.info(f"Running indexing with config: {config}")
+
+    # `None` indicates that there wasn't a human set value, and thus
+    # we can programmatically set a value.
+    #
+    # Disable for production, until ready. Labs is treated as
+    # different to the other 3, as per usual.
+    if enable_v2_concepts is None:
+        enable_v2_concepts = config.aws_env in [
+            AwsEnv.sandbox,
+            AwsEnv.staging,
+        ]
+
+    logger.info(f"v2 concepts enabled: {enable_v2_concepts}")
 
     try:
         if config.cache_bucket:

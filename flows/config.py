@@ -17,6 +17,8 @@ INDEX_RESULTS_PREFIX: str = "index_concepts/"
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
 WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
+ARGILLA_URL_SSM_NAME = "/Argilla/APIURL"
+ARGILLA_API_KEY_SSM_NAME = "/Argilla/Owner/APIKey"
 
 
 def validate_s3_prefix(value: str) -> str:
@@ -126,6 +128,15 @@ class Config(BaseModel):
         description="Use to adjust the time before an s3 read times out.",
     )
 
+    argilla_api_url: Optional[str] = Field(
+        default=None, description="URL for Argilla instance"
+    )
+
+    argilla_api_key: Optional[SecretStr] = Field(
+        default=None,
+        description="API key for Argilla. Used to authenticate with an ArgillaSession",
+    )
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
@@ -160,6 +171,20 @@ class Config(BaseModel):
         if not config.wikibase_url:
             config.wikibase_url = get_aws_ssm_param(
                 WIKIBASE_URL_SSM_NAME,
+                aws_env=config.aws_env,
+            )
+
+        if not config.argilla_api_key:
+            config.argilla_api_key = SecretStr(
+                get_aws_ssm_param(
+                    ARGILLA_API_KEY_SSM_NAME,
+                    aws_env=config.aws_env,
+                )
+            )
+
+        if not config.argilla_api_url:
+            config.argilla_api_url = get_aws_ssm_param(
+                ARGILLA_URL_SSM_NAME,
                 aws_env=config.aws_env,
             )
 

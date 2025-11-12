@@ -34,6 +34,7 @@ from knowledge_graph.cloud import (
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
     load_labelled_passages_from_wandb_run,
@@ -650,6 +651,7 @@ async def run_training(
     track_and_upload: bool,
     aws_env: AwsEnv,
     wikibase_config: Optional[WikibaseConfig] = None,
+    argilla_config: Optional[ArgillaConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
     classifier_type: Optional[str] = None,

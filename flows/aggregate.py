@@ -822,7 +822,7 @@ async def _document_stems_from_parameters(
             logger.info("using document stems")
             return document_stems
         case (None, run_output_identifier):
-            logger.info("using run output identifier")
+            logger.info(f"using run output identifier `{run_output_identifier}`")
             s3_uri = build_inference_result_s3_uri(
                 cache_bucket_str=config.cache_bucket_str,
                 inference_document_target_prefix=config.inference_document_target_prefix,

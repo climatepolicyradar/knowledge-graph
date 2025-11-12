@@ -1238,6 +1238,8 @@ async def inference(
 
     run_output_identifier = build_run_output_identifier()
 
+    logger.info(f"using run output identifier `{run_output_identifier}`")
+
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
         config=config,
