@@ -14,6 +14,7 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.wandb_helpers import load_artifact_file_from_wandb
 
 
 class ModelPath(BaseModel):
@@ -159,8 +160,7 @@ def load_classifier_from_wandb(
     :return Classifier: The loaded classifier
     """
 
-    api = wandb.Api()
-    model_artifact = api.artifact(wandb_path)
-    model_artifact_dir = model_artifact.download()
-    model_pickle_path = Path(model_artifact_dir) / "model.pickle"
+    model_pickle_path = load_artifact_file_from_wandb(
+        wandb_path=wandb_path, filename="model.pickle"
+    )
     return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)

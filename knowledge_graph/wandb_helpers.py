@@ -7,7 +7,10 @@ from pathlib import Path
 import wandb
 from wandb.sdk.wandb_run import Run as WandbRun
 
-from flows.utils import serialise_pydantic_list_as_jsonl
+from flows.utils import (
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -138,5 +141,42 @@ def load_labelled_passages_from_wandb_run(
             ]
 
         labelled_passages += file_labelled_passages
+
+    return labelled_passages
+
+
+def load_artifact_file_from_wandb(
+    wandb_path: str,
+    filename: str,
+) -> Path:
+    """
+    Load an artifact file with a known filename from W&B.
+
+    Returns the path to the downloaded file.
+    """
+
+    api = wandb.Api()
+    artifact = api.artifact(wandb_path)
+    artifact_dir = artifact.download()
+
+    return Path(artifact_dir) / filename
+
+
+def load_labelled_passages_from_wandb(wandb_path: str) -> list[LabelledPassage]:
+    """
+    Load labelled passages from a W&B path.
+
+    :param str wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
+    :return list[LabelledPassage]: List of labelled passages
+    """
+
+    file_path = load_artifact_file_from_wandb(
+        wandb_path=wandb_path,
+        filename="labelled_passages.jsonl",
+    )
+
+    labelled_passages = deserialise_pydantic_list_with_fallback(
+        file_path.read_text(), LabelledPassage
+    )
 
     return labelled_passages

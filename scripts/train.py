@@ -549,7 +549,7 @@ async def train_classifier(
                     },
                 )
                 with training_artifact.new_file(
-                    "training_data.jsonl", mode="w", encoding="utf-8"
+                    "labelled_passages.jsonl", mode="w", encoding="utf-8"
                 ) as f:
                     f.write(
                         serialise_pydantic_list_as_jsonl(deduplicated_training_data)
