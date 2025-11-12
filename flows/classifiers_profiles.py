@@ -5,23 +5,35 @@ Assumes that the classifier model has been trained in wandb
 """
 
 import os
-from datetime import datetime, timezone
+import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+import httpx
 import wandb
 from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
 from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
 from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
+from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
 from prefect.context import FlowRunContext, get_run_context
 from pydantic import AnyHttpUrl, SecretStr
+from vespa.application import VespaAsync
+from vespa.io import VespaResponse
 
+from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from flows.config import Config
 from flows.result import Err, Error, Ok, Result, unwrap_err, unwrap_ok
-from flows.utils import JsonDict, SlackNotify, get_logger, get_slack_client
+from flows.utils import (
+    JsonDict,
+    SlackNotify,
+    get_logger,
+    get_slack_client,
+    total_milliseconds,
+)
 from knowledge_graph.classifier import ModelPath
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
@@ -41,6 +53,9 @@ from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 
 # from scripts.update_classifier_spec import refresh_all_available_classifiers
+
+VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
+VESPA_CONNECTION_POOL_SIZE: int = 5
 
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
@@ -232,6 +247,7 @@ def demote_classifier_profile(
     aws_env: AwsEnv,
     wandb_registry_version: Version,
     classifier_id: Optional[ClassifierID] = None,
+    classifiers_profile: Optional[Profile] = None,
 ):
     """Demote a classifier based on model registry and remove classifiers profile"""
     logger = get_logger()
@@ -243,7 +259,7 @@ def demote_classifier_profile(
     #     )
 
     logger.info(
-        f"Demoting {wikibase_id}, {aws_env}, {classifier_id}, {wandb_registry_version}"
+        f"Demoting {wikibase_id}, {aws_env}, {classifier_id}, {wandb_registry_version}, {classifiers_profile}"
     )
 
 
@@ -819,31 +835,6 @@ async def _post_errors_thread(
         logger.error(f"failed to post {error_type} thread: {e}")
 
 
-def validate_classifier_specs(
-    classifier_specs: list[ClassifierSpec],
-) -> list[Result[ClassifierSpec, Error]]:
-    """Validate classifier specs for required fields."""
-    logger = get_logger()
-    results = []
-    for spec in classifier_specs:
-        if spec.classifiers_profile is None or spec.concept_id is None:
-            results.append(
-                log_and_return_error(
-                    logger,
-                    msg="Sync to Vespa: Classifier spec missing classifiers profile or concept ID",
-                    metadata={
-                        "wikibase_id": spec.wikibase_id,
-                        "classifier_id": spec.classifier_id,
-                        "classifiers_profile": spec.classifiers_profile,
-                        "concept_id": spec.concept_id,
-                    },
-                )
-            )
-        else:
-            results.append(Ok(spec))
-    return results
-
-
 def create_vespa_profile_mapping(
     classifier_specs: list[ClassifierSpec],
 ) -> list[VespaClassifiersProfile.Mapping]:
@@ -894,54 +885,39 @@ def create_vespa_classifiers_profile(
 
 
 @task
-def update_vespa_with_classifiers_profiles(
+async def update_vespa_with_classifiers_profiles(
     classifier_specs: list[ClassifierSpec],
-) -> list[Result[ClassifierSpec, Error]]:
+    vespa_connection_pool: VespaAsync,
+) -> list[Result[str, Error]]:
     """
     Update Vespa with the latest classifiers profiles from classifier specs
 
     Returns a list of Result indicating success or failure for syncing to vespa
     """
     logger = get_logger()
-    results: list[Result[ClassifierSpec, Error]] = []
+    results: list[Result[str, Error]] = []
 
     logger.info(
         f"Processing {len(classifier_specs)} classifier specs for Vespa update."
     )
 
-    # validate classifier_profile and concept_id is not None
-    validate_spec_results = validate_classifier_specs(classifier_specs)
-    valid_specs = [unwrap_ok(r) for r in validate_spec_results if isinstance(r, Ok)]
-    # append errors to results
-    results.extend([r for r in validate_spec_results if isinstance(r, Err)])
-
-    # create profile mappings from classifier specs split by classifier profiles: primary, experimental, retired
-    profile_mappings = {}
     try:
+        # create profile mappings from classifier specs split by classifier profiles: primary, experimental, retired
+        profile_mappings = {}
         for profile in [Profile.PRIMARY, Profile.EXPERIMENTAL, Profile.RETIRED]:
             profile_mappings[profile.value] = create_vespa_profile_mapping(
                 [
                     spec
-                    for spec in valid_specs
+                    for spec in classifier_specs
                     if spec.classifiers_profile == profile.value
                 ],
             )
-    except Exception as e:
-        results.append(
-            log_and_return_error(
-                logger,
-                msg=f"Error creating VespaClassifiersProfile.Mapping objects: {e}",
-                metadata={},
-            )
+
+        logger.info(
+            f"Created VespaClassifiersProfile.Mapping objects, with mappings {profile_mappings}"
         )
-        return results
 
-    logger.info(
-        f"Created VespaClassifiersProfile.Mapping objects, with mappings {profile_mappings}"
-    )
-
-    # convert to VespaClassifiersProfile
-    try:
+        # convert to VespaClassifiersProfile
         vespa_classifiers_profile = {}
         for profiles_name, mappings in profile_mappings.items():
             # skip creating VespaClassifiersProfile if no mappings
@@ -951,48 +927,10 @@ def update_vespa_with_classifiers_profiles(
             vespa_classifiers_profile[profiles_name] = create_vespa_classifiers_profile(
                 profiles_name, mappings
             )
-    except Exception as e:
-        results.append(
-            log_and_return_error(
-                logger,
-                msg=f"Error creating VespaClassifiersProfile objects: {e}",
-                metadata={},
-            )
-        )
-        return results
 
-    logger.info("Created VespaClassifiersProfile objects")
+        logger.info("Created VespaClassifiersProfile objects")
 
-    # sync to VespaClassifiersProfile to vespa
-    try:
-        for profile_name, profile in vespa_classifiers_profile.items():
-            fields = JsonDict(profile.model_dump(mode="json", exclude={"response_raw"}))
-            doc_id = f"{profile.name}.{profile.id}"
-
-            # response: VespaResponse = await vespa_connection_pool.update_data(
-            #     schema="classifiers_profile",
-            #     namespace="doc_search",
-            #     document_id=doc_id,
-            #     create=True,  # create document if it doesn't exist
-            #     fields=fields,
-            # )
-
-            logger.info(
-                f"Syncing VespaClassifiersProfile {profile_name} to Vespa with {len(profile.mappings)} mappings for doc id {doc_id} with fields {fields}"
-            )
-
-    except Exception as e:
-        results.append(
-            log_and_return_error(
-                logger,
-                msg=f"Error syncing VespaClassifiersProfile to Vespa: {e}",
-                metadata={},
-            )
-        )
-        return results
-
-    # create VespaClassifiersProfiles object from VespaClassifiersProfile objects
-    try:
+        # create VespaClassifiersProfiles object from VespaClassifiersProfile objects
         # create mappings dynamically from vespa_classifiers_profile
         mappings = {}
         for profile_name, profile in vespa_classifiers_profile.items():
@@ -1007,41 +945,75 @@ def update_vespa_with_classifiers_profiles(
     except Exception as e:
         results.append(
             log_and_return_error(
-                logger, msg=f"Error creating VespaClassifiersProfiles: {e}", metadata={}
-            )
-        )
-        return results
-
-    logger.info("Created VespaClassifiersProfiles object")
-
-    # sync to VespaClassifiersProfiles to vespa with default id
-    try:
-        fields = JsonDict(
-            vespa_classifiers_profiles.model_dump(mode="json", exclude={"response_raw"})
-        )
-        doc_id = "default"
-
-        # vespa_connection_pool.update_data(
-        #     schema="classifiers_profiles",
-        #     namespace="doc_search",
-        #     document_id=doc_id,
-        #     create=True,  # create document if it doesn't exist
-        #     fields=fields,
-        # )
-
-        logger.info(
-            f"Syncing VespaClassifiersProfiles to doc id {doc_id}, with mappings: {vespa_classifiers_profiles.mappings} and fields {fields}"
-        )
-
-    except Exception as e:
-        results.append(
-            log_and_return_error(
                 logger,
-                msg=f"Error syncing VespaClassifiersProfiles to Vespa: {e}",
+                msg=f"Error creating VespaClassifiersProfile(s) objects: {e}",
                 metadata={},
             )
         )
         return results
+
+    # sync to vespa
+    # sync VespaClassifiersProfile to vespa
+    for profile_name, profile in vespa_classifiers_profile.items():
+        fields = JsonDict(profile.model_dump(mode="json", exclude={"response_raw"}))
+        doc_id = f"{profile.name}.{profile.id}"
+
+        response: VespaResponse = await vespa_connection_pool.update_data(
+            schema="classifiers_profile",
+            namespace="doc_search",
+            data_id=doc_id,
+            create=True,  # create document if it doesn't exist
+            fields=fields,
+        )
+
+        if not response.is_successful():
+            results.append(
+                log_and_return_error(
+                    logger,
+                    msg=f"Error syncing VespaClassifiersProfile {profile_name} to Vespa",
+                    metadata={
+                        "response": response.get_json(),
+                        "classifiers_profile": profile_name,
+                    },
+                )
+            )
+            return results
+
+        logger.info(
+            f"Synced VespaClassifiersProfile {profile_name} to Vespa with {len(profile.mappings)} mappings for doc id {doc_id}"
+        )
+
+    # sync VespaClassifiersProfiles to vespa with default id
+    fields = JsonDict(
+        vespa_classifiers_profiles.model_dump(
+            mode="json", exclude={"response_raw", "id"}
+        )
+    )
+    doc_id = "default"
+
+    response: VespaResponse = await vespa_connection_pool.update_data(
+        schema="classifiers_profiles",
+        namespace="doc_search",
+        data_id=doc_id,
+        create=True,  # create document if it doesn't exist
+        fields=fields,
+    )
+
+    if not response.is_successful():
+        results.append(
+            log_and_return_error(
+                logger,
+                msg="Error syncing VespaClassifiersProfiles to Vespa",
+                metadata={"response": response.get_json(), "fields": fields},
+            )
+        )
+        return results
+
+    logger.info(
+        f"Synced VespaClassifiersProfiles to doc id {doc_id}, with mappings: {vespa_classifiers_profiles.mappings} and fields {fields}"
+    )
+
+    results.append(Ok("synced to vespa"))
 
     print("Vespa Mappings:", profile_mappings)
     print("Vespa Profiles:", vespa_classifiers_profile)
@@ -1262,6 +1234,7 @@ async def sync_classifiers_profiles(
     wikibase_auth: WikibaseAuth | None = None,
     wikibase_cache_path: Path | None = None,
     wikibase_cache_save_if_missing: bool = False,
+    vespa_search_adapter: VespaSearchAdapter | None = None,
 ):
     """Update classifier profile for a given aws environment."""
 
@@ -1379,7 +1352,7 @@ async def sync_classifiers_profiles(
                         action_function=demote_classifier_profile,
                         wandb_registry_version=current_spec.wandb_registry_version,
                         classifier_id=current_spec.classifier_id,
-                        classifier_profile=current_spec.classifiers_profile,
+                        classifiers_profile=current_spec.classifiers_profile,
                     )
                 )
 
@@ -1401,27 +1374,41 @@ async def sync_classifiers_profiles(
         # reload classifier specs to confirm updates
         updated_classifier_specs = load_classifier_specs(aws_env)
 
-        # update vespa with latest classifiers profiles
-        vespa_results.append(
-            update_vespa_with_classifiers_profiles(updated_classifier_specs)
+        if not vespa_search_adapter:
+            # Create Vespa connection inside the task to avoid serialization issues
+            temp_dir = tempfile.TemporaryDirectory()
+            vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+                cert_dir=temp_dir.name,
+                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+                aws_env=config.aws_env,
+            )
+
+        async with vespa_search_adapter.client.asyncio(
+            connections=VESPA_CONNECTION_POOL_SIZE,
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),
+        ) as vespa_connection_pool:
+            # update vespa with latest classifiers profiles
+            vespa_results = await update_vespa_with_classifiers_profiles(
+                updated_classifier_specs, vespa_connection_pool
+            )
+
+    try:
+        await send_classifiers_profile_slack_alert(
+            validation_errors=validation_errors,
+            other_errors=other_errors,
+            successes=successes,
+            aws_env=aws_env,
         )
+    except Exception as e:
+        logger.error(f"failed to send validation alert: {e}")
 
-    # try:
-    #     await send_classifiers_profile_slack_alert(
-    #         validation_errors=validation_errors,
-    #         other_errors=other_errors,
-    #         successes=successes,
-    #         aws_env=aws_env,
-    #     )
-    # except Exception as e:
-    #     logger.error(f"failed to send validation alert: {e}")
-
-    # # create artifact with summary
-    # await create_classifiers_profiles_artifact(
-    #     validation_errors=validation_errors,
-    #     other_errors=other_errors,
-    #     successes=successes,
-    # )
+    # create artifact with summary
+    await create_classifiers_profiles_artifact(
+        validation_errors=validation_errors,
+        other_errors=other_errors,
+        successes=successes,
+    )
 
     # if vespa errors, fail the flow
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]

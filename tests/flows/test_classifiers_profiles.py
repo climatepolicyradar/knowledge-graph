@@ -20,7 +20,7 @@ from flows.classifiers_profiles import (
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -507,11 +507,11 @@ def test_create_vespa_profile_mapping(mock_specs_2profiles):
     assert all(isinstance(m, VespaClassifiersProfile.Mapping) for m in profile_mappings)
 
 
-def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profiles):
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profiles):
     """Test successful updates to Vespa with valid classifiers specs"""
 
     with (
-        patch("flows.classifiers_profiles.validate_classifier_specs") as mock_validate,
         patch(
             "flows.classifiers_profiles.create_vespa_profile_mapping"
         ) as mock_create_vespa_mapping,
@@ -519,10 +519,8 @@ def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profiles):
             "flows.classifiers_profiles.create_vespa_classifiers_profile"
         ) as mock_create_vespa_profile,
         patch("flows.classifiers_profiles.JsonDict") as mock_json_dict,
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
     ):
-        # Mock validation
-        mock_validate.return_value = [Ok(spec) for spec in mock_specs_2profiles]
-
         # Mock profile mappings
         mock_create_vespa_mapping.side_effect = lambda specs: [
             Mock(concept_id=spec.concept_id) for spec in specs
@@ -536,12 +534,20 @@ def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profiles):
         # Mock JSON serialization
         mock_json_dict.return_value = {}
 
+        # Mock Vespa connection pool
+        mock_vespa_connection_pool.update_data = AsyncMock(
+            return_value=Mock(is_successful=lambda: True)
+        )
+
         # Call the function
-        results = update_vespa_with_classifiers_profiles(mock_specs_2profiles)
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
 
         # Assertions
-        assert len(results) == 0  # No errors
-        mock_validate.assert_called_once_with(mock_specs_2profiles)
+        assert len(results) == 1  # No errors
+        assert all(is_ok(r) for r in results)
         assert (
             mock_create_vespa_mapping.call_count == 3
         )  # For primary, experimental, retired
@@ -549,70 +555,53 @@ def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profiles):
             mock_create_vespa_profile.call_count == 2
         )  # Only primary and experimental profiles created
         mock_json_dict.assert_called()
+        assert (
+            mock_vespa_connection_pool.update_data.call_count
+            == len(mock_specs_2profiles) + 1
+        )  # 2 profiles + 1 classifiers_profiles
 
 
-def test_update_vespa_with_classifiers_profiles__validation_errors(mock_specs):
-    """Test Vespa update with invalid classifiers specs leading to validation errors"""
-
-    with patch("flows.classifiers_profiles.validate_classifier_specs") as mock_validate:
-        # Mock validation to return an error
-        mock_validate.return_value = [
-            Err(
-                Error(
-                    msg="Invalid spec", metadata={"wikibase_id": mock_specs.wikibase_id}
-                )
-            )
-        ]
-
-        # Call the function
-        results = update_vespa_with_classifiers_profiles([mock_specs])
-
-        # Assertions
-        assert len(results) == 1  # 1 error
-        assert isinstance(results[0], Err)
-        assert results[0]._error.msg == "Invalid spec"
-        mock_validate.assert_called_once_with([mock_specs])
-
-
-def test_update_vespa_with_classifiers__profiles_mapping_failure(mock_specs_2profiles):
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers__profiles_mapping_failure(
+    mock_specs_2profiles,
+):
     """Test Vespa update with mapping creation failure."""
     with (
-        patch("flows.classifiers_profiles.validate_classifier_specs") as mock_validate,
         patch(
             "flows.classifiers_profiles.create_vespa_profile_mapping"
         ) as mock_create_mapping,
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
     ):
-        # Mock validation
-        mock_validate.return_value = [Ok(spec) for spec in mock_specs_2profiles]
-
         # Mock mapping creation to raise an exception
         mock_create_mapping.side_effect = ValueError("Mapping creation failed")
 
         # Call the function
-        results = update_vespa_with_classifiers_profiles(mock_specs_2profiles)
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
 
         # Assertions
         assert len(results) == 1  # One error
         assert isinstance(results[0], Err)
         assert "Mapping creation failed" in results[0]._error.msg
+        mock_vespa_connection_pool.assert_not_called()
 
 
-def test_update_vespa_with_classifiers_profiles__profile_creation_failure(
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__profile_creation_failure(
     mock_specs_2profiles,
 ):
     """Test Vespa update with profile creation failure."""
     with (
-        patch("flows.classifiers_profiles.validate_classifier_specs") as mock_validate,
         patch(
             "flows.classifiers_profiles.create_vespa_profile_mapping"
         ) as mock_create_mapping,
         patch(
             "flows.classifiers_profiles.create_vespa_classifiers_profile"
         ) as mock_create_profile,
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
     ):
-        # Mock validation
-        mock_validate.return_value = [Ok(spec) for spec in mock_specs_2profiles]
-
         # Mock profile mappings
         mock_create_mapping.side_effect = lambda specs: [
             Mock(concept_id=spec.concept_id) for spec in specs
@@ -622,20 +611,24 @@ def test_update_vespa_with_classifiers_profiles__profile_creation_failure(
         mock_create_profile.side_effect = ValueError("Profile creation failed")
 
         # Call the function
-        results = update_vespa_with_classifiers_profiles(mock_specs_2profiles)
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
 
         # Assertions
         assert len(results) == 1  # One error
         assert isinstance(results[0], Err)
         assert "Profile creation failed" in results[0]._error.msg
+        mock_vespa_connection_pool.assert_not_called()
 
 
-def test_update_vespa_with_classifiers_profiles__vespa_sync_failure(
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__vespa_sync_failure(
     mock_specs_2profiles,
 ):
     """Test Vespa update with sync failure."""
     with (
-        patch("flows.classifiers_profiles.validate_classifier_specs") as mock_validate,
         patch(
             "flows.classifiers_profiles.create_vespa_profile_mapping"
         ) as mock_create_mapping,
@@ -643,10 +636,8 @@ def test_update_vespa_with_classifiers_profiles__vespa_sync_failure(
             "flows.classifiers_profiles.create_vespa_classifiers_profile"
         ) as mock_create_profile,
         patch("flows.classifiers_profiles.JsonDict") as mock_json_dict,
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
     ):
-        # Mock validation
-        mock_validate.return_value = [Ok(spec) for spec in mock_specs_2profiles]
-
         # Mock profile mappings
         mock_create_mapping.side_effect = lambda specs: [
             Mock(concept_id=spec.concept_id) for spec in specs
@@ -657,14 +648,46 @@ def test_update_vespa_with_classifiers_profiles__vespa_sync_failure(
             name=name, mappings=mappings, id="mock_id"
         )
 
-        # TODO: update this so vespa update_data function fails in future
-        # Mock JSON serialization to raise an exception
-        mock_json_dict.side_effect = ValueError("Sync failed")
+        # Mock JSON serialization
+        mock_json_dict.return_value = {}
+
+        # Mock Vespa connection pool to simulate a sync failure
+        mock_vespa_connection_pool.update_data = AsyncMock(
+            return_value=Mock(is_successful=lambda: False)
+        )
 
         # Call the function
-        results = update_vespa_with_classifiers_profiles(mock_specs_2profiles)
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
 
         # Assertions
         assert len(results) == 1  # One error
         assert isinstance(results[0], Err)
-        assert "Sync failed" in results[0]._error.msg
+        assert "Error syncing VespaClassifiersProfile" in results[0]._error.msg
+        assert mock_create_mapping.call_count == 3
+        assert mock_create_profile.call_count == len(
+            set(spec.classifiers_profile for spec in mock_specs_2profiles)
+        )
+        mock_json_dict.assert_called()
+        assert (
+            mock_vespa_connection_pool.update_data.call_count == 1
+        )  # fails and returns
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__real_vespa(
+    mock_specs_2profiles, local_vespa_search_adapter
+):
+    """Test update_vespa_with_classifiers_profiles with real Vespa and mock classifier specs."""
+    async with local_vespa_search_adapter.client.asyncio(
+        connections=1
+    ) as vespa_connection_pool:
+        results = await update_vespa_with_classifiers_profiles(
+            mock_specs_2profiles, vespa_connection_pool
+        )
+
+        assert len(results) == 1  # One for the classifiers_profiles update
+        assert all(is_ok(r) for r in results), f"All results should be Ok, {results}"
