@@ -41,19 +41,41 @@ def log_labelled_passages_artifact_to_wandb_run(
     run: WandbRun,
     concept: Concept,
     classifier: Classifier | None = None,
+    artifact_name: str | None = None,
+    additional_metadata: dict | None = None,
 ):
-    """Upload a list of labelled passages from a classifier to Weights & Biases."""
+    """
+    Upload a list of labelled passages from a classifier to Weights & Biases.
 
-    artifact_name = (
-        f"{classifier.id}-labelled-passages" if classifier else "labelled-passages"
-    )
+    :param labelled_passages: List of labelled passages to upload
+    :param run: The W&B run to log the artifact to
+    :param concept: The concept associated with these passages
+    :param classifier: Optional classifier, adds classifier_id to metadata if provided
+    :param artifact_name: Optional custom artifact name. Defaults to
+        "{classifier.id}-labelled-passages" or "labelled-passages"
+    :param additional_metadata: Optional additional metadata fields to include
+    """
+
+    if artifact_name is None:
+        artifact_name = (
+            f"{classifier.id}-labelled-passages" if classifier else "labelled-passages"
+        )
+
+    num_positives = len([p for p in labelled_passages if p.spans])
+    num_negatives = len(labelled_passages) - num_positives
+
     artifact_metadata = {
         "concept_wikibase_revision": concept.wikibase_revision,
         "passage_count": len(labelled_passages),
+        "num_positives": num_positives,
+        "num_negatives": num_negatives,
     }
 
     if classifier:
         artifact_metadata |= {"classifier_id": classifier.id}
+
+    if additional_metadata:
+        artifact_metadata |= additional_metadata
 
     labelled_passages_artifact = wandb.Artifact(
         name=artifact_name, type="labelled_passages", metadata=artifact_metadata

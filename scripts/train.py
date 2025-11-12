@@ -31,7 +31,7 @@ from knowledge_graph.cloud import (
     get_s3_client,
     is_logged_in,
 )
-from knowledge_graph.config import WANDB_ENTITY
+from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -536,6 +536,17 @@ async def train_classifier(
             Console().print(
                 f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
             )
+
+            if track_and_upload and run and deduplicated_training_data:
+                console.log("📄 Creating training data artifact")
+                log_labelled_passages_artifact_to_wandb_run(
+                    labelled_passages=deduplicated_training_data,
+                    run=run,
+                    concept=classifier.concept,
+                    classifier=classifier,
+                    artifact_name="training-data",
+                )
+                console.log("✅ Training data artifact uploaded successfully")
         else:
             deduplicated_training_data = []
 
