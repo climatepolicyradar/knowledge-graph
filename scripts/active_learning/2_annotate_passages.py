@@ -10,7 +10,10 @@ from pydantic import BaseModel
 from rich.console import Console
 
 import knowledge_graph.ensemble.metrics as ensemble_metrics
-from flows.utils import serialise_pydantic_list_as_jsonl
+from flows.utils import (
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.ensemble import create_ensemble
@@ -51,6 +54,88 @@ ensemble_config_llm = EnsembleConfig(
 )
 
 
+def annotate_passages_with_ensemble(
+    passages: list[LabelledPassage],
+    wikibase_id: WikibaseID,
+    model: Classifier,
+    ensemble_config: EnsembleConfig,
+    batch_size: int = 50,
+) -> tuple[list[LabelledPassage], list[LabelledPassage]]:
+    """
+    Annotate passages using a single ensemble model.
+
+    :param passages: Passages to annotate
+    :param wikibase_id: The concept being classified
+    :param model: The base classifier to create ensemble from
+    :param ensemble_config: Configuration for ensemble and thresholding
+    :param batch_size: Number of passages to process in each batch
+    :return: Tuple of (annotated_passages, uncertain_passages) where annotated_passages
+        contains passages with metric <= threshold (confident predictions) and
+        uncertain_passages contains passages with metric > threshold (need further review)
+    """
+    console = Console()
+
+    console.print(
+        f"Creating ensemble with {ensemble_config.n_classifiers} variants from base classifier {model}"
+    )
+    ensemble = create_ensemble(
+        classifier=model,
+        n_classifiers=ensemble_config.n_classifiers,
+    )
+
+    # predict all passages using ensemble
+    console.print(f"Predicting on {len(passages)} passages...")
+    text_to_predict = [passage.text for passage in passages]
+    ensemble_predicted_spans = ensemble.predict(
+        text_to_predict,
+        batch_size=batch_size,
+    )
+
+    # get uncertainties
+    ensemble_metrics = [
+        ensemble_config.ensemble_metric(spans) for spans in ensemble_predicted_spans
+    ]
+    majority_vote_metric = MajorityVote()
+    ensemble_majority_votes = [
+        majority_vote_metric(spans) for spans in ensemble_predicted_spans
+    ]
+
+    # for uncertainties <= threshold, add these passages to annotated_passages
+    # and remove them from passages_to_annotate
+    annotated_passages: list[LabelledPassage] = []
+    uncertain_passages: list[LabelledPassage] = []
+
+    for passage, metric_value, majority_vote_value in zip(
+        passages, ensemble_metrics, ensemble_majority_votes
+    ):
+        if metric_value <= ensemble_config.ensemble_metric_threshold:
+            # NOTE: here we use the prediction_probability field of Span to indicate
+            # whether a model predicted the mention of a concept in text. This goes
+            # against the convention in a lot of this code where a negative prediction
+            # on a passage is indicated by empty spans. This is done here because
+            # we want to store the model which made the negative prediction in the
+            # span's `labellers` field.
+
+            span = Span(
+                text=passage.text,
+                start_index=0,
+                end_index=len(passage.text),
+                prediction_probability=majority_vote_value,
+                concept_id=wikibase_id,
+                labellers=[str(model)],
+                timestamps=[datetime.now()],
+            )
+            annotated_passages.append(passage.model_copy(update={"spans": [span]}))
+        else:
+            uncertain_passages.append(passage)
+
+    console.print(
+        f"Annotated {len(annotated_passages)} passages with metric {ensemble_config.ensemble_metric.name} <= {ensemble_config.ensemble_metric_threshold}. {len(uncertain_passages)} remaining."
+    )
+
+    return annotated_passages, uncertain_passages
+
+
 def annotate_passages(
     labelled_passages: list[LabelledPassage],
     wikibase_id: WikibaseID,
@@ -59,90 +144,53 @@ def annotate_passages(
     ensemble_config_bert: EnsembleConfig,
     ensemble_config_llm: EnsembleConfig,
     batch_size: int = 50,
-) -> tuple[list[LabelledPassage], list[LabelledPassage]]:
-    """Annotate passages using ensemble-based uncertainty estimation."""
+) -> tuple[list[LabelledPassage], list[LabelledPassage], list[LabelledPassage]]:
+    """
+    Annotate passages using ensemble-based uncertainty estimation.
+
+    :param labelled_passages: All passages to annotate
+    :param wikibase_id: The concept being classified
+    :param bert_classifier: BERT-based classifier for first ensemble
+    :param llm_classifier: LLM-based classifier for second ensemble
+    :param ensemble_config_bert: Configuration for BERT ensemble
+    :param ensemble_config_llm: Configuration for LLM ensemble
+    :param batch_size: Number of passages to process in each batch
+    :return: Tuple of (bert_labelled_passages, llm_labelled_passages, unlabelled_passages)
+        where bert_labelled_passages are passages labelled by BERT ensemble,
+        llm_labelled_passages are passages labelled by LLM ensemble (that BERT was uncertain about),
+        and unlabelled_passages are passages both ensembles were uncertain about
+    """
     console = Console()
 
-    models_and_ensemble_configs = [
-        (bert_classifier, ensemble_config_bert),
-        (llm_classifier, ensemble_config_llm),
-    ]
-    passages_to_annotate: list[LabelledPassage] = labelled_passages
-    already_annotated_passages: list[LabelledPassage] = []
-
-    for model, ensemble_config in models_and_ensemble_configs:
-        console.print(
-            f"Creating ensemble with {ensemble_config.n_classifiers} variants from base classifier {model}"
-        )
-        ensemble = create_ensemble(
-            classifier=model,
-            n_classifiers=ensemble_config.n_classifiers,
-        )
-
-        # predict all passages using ensemble
-        console.print(f"Predicting on {len(passages_to_annotate)} passages...")
-        text_to_predict = [passage.text for passage in passages_to_annotate]
-        ensemble_predicted_spans = ensemble.predict(
-            text_to_predict,
-            batch_size=batch_size,
-        )
-
-        # get uncertainties
-        ensemble_metrics = [
-            ensemble_config.ensemble_metric(spans) for spans in ensemble_predicted_spans
-        ]
-        majority_vote_metric = MajorityVote()
-        ensemble_majority_votes = [
-            majority_vote_metric(spans) for spans in ensemble_predicted_spans
-        ]
-
-        # for uncertainties <= threshold, add these passages to annotated_passages
-        # and remove them from passages_to_annotate
-        new_passages_to_annotate: list[LabelledPassage] = []
-        annotated_count = 0
-
-        for passage, metric_value, majority_vote_value in zip(
-            passages_to_annotate, ensemble_metrics, ensemble_majority_votes
-        ):
-            if metric_value <= ensemble_config.ensemble_metric_threshold:
-                # NOTE: here we use the prediction_probability field of Span to indicate
-                # whether a model predicted the mention of a concept in text. This goes
-                # against the convention in a lot of this code where a negative prediction
-                # on a passage is indicated by empty spans. This is done here because
-                # we want to store the model which made the negative prediction in the
-                # span's `labellers` field.
-
-                span = Span(
-                    text=passage.text,
-                    start_index=0,
-                    end_index=len(passage.text),
-                    prediction_probability=majority_vote_value,
-                    concept_id=wikibase_id,
-                    labellers=[str(model)],
-                    timestamps=[datetime.now()],
-                )
-                already_annotated_passages.append(
-                    passage.model_copy(update={"spans": [span]})
-                )
-                annotated_count += 1
-            else:
-                new_passages_to_annotate.append(passage)
-
-        passages_to_annotate = new_passages_to_annotate
-        console.print(
-            f"Annotated {annotated_count} passages with metric {ensemble_config.ensemble_metric.name} greater than {ensemble_config.ensemble_metric_threshold}. {len(passages_to_annotate)} remaining."
-        )
-
-    percent_annotated = round(
-        len(already_annotated_passages) / len(labelled_passages) * 100, 1
+    # Run BERT ensemble annotation
+    bert_labelled_passages, passages_after_bert = annotate_passages_with_ensemble(
+        passages=labelled_passages,
+        wikibase_id=wikibase_id,
+        model=bert_classifier,
+        ensemble_config=ensemble_config_bert,
+        batch_size=batch_size,
     )
-    percent_to_annotate = round(100 - percent_annotated, 1)
+
+    # Run LLM ensemble annotation on passages that BERT was uncertain about
+    llm_labelled_passages, unlabelled_passages = annotate_passages_with_ensemble(
+        passages=passages_after_bert,
+        wikibase_id=wikibase_id,
+        model=llm_classifier,
+        ensemble_config=ensemble_config_llm,
+        batch_size=batch_size,
+    )
+
+    total_labelled = len(bert_labelled_passages) + len(llm_labelled_passages)
+    percent_labelled = round(total_labelled / len(labelled_passages) * 100, 1)
+    percent_unlabelled = round(100 - percent_labelled, 1)
 
     console.print(
-        f"🎉 Complete: {len(already_annotated_passages)} ({percent_annotated}%) annotated, {len(passages_to_annotate)} ({percent_to_annotate}%) remaining which both ensembles were uncertain about."
+        f"Complete: {total_labelled} ({percent_labelled}%) labelled "
+        f"(BERT: {len(bert_labelled_passages)}, LLM: {len(llm_labelled_passages)}), "
+        f"{len(unlabelled_passages)} ({percent_unlabelled}%) unlabelled (both ensembles uncertain)."
     )
 
-    return already_annotated_passages, passages_to_annotate
+    return bert_labelled_passages, llm_labelled_passages, unlabelled_passages
 
 
 @app.command()
@@ -263,8 +311,6 @@ def main(
             # declare models as inputs to this run
             run.use_artifact(classifier_wandb_path_bert)
             run.use_artifact(classifier_wandb_path_llm)
-            # TODO: we should load labelled passages from an artifact rather than a run,
-            # meaning we can also declare them as inputs to runs here
 
         console.print("Loading BERT classifier's training data from W&B...")
         model_artifact = wandb_api.artifact(classifier_wandb_path_bert)
@@ -272,9 +318,29 @@ def main(
 
         try:
             assert artifact_creator_run is not None
-            bert_training_data = load_labelled_passages_from_wandb_run(
-                artifact_creator_run,  # type: ignore
-                artifact_name="training-data",
+
+            training_data_artifact = None
+            for artifact in artifact_creator_run.logged_artifacts():
+                if (
+                    artifact.type == "labelled_passages"
+                    and "training-data" in artifact.name
+                ):
+                    training_data_artifact = artifact
+                    break
+
+            if training_data_artifact is None:
+                raise ValueError(
+                    "No training data artifact found in the model's creating run"
+                )
+
+            console.print(
+                f"Loading from artifact: {training_data_artifact.name}:{training_data_artifact.version}"
+            )
+            artifact_dir = training_data_artifact.download()
+            labelled_passages_file = Path(artifact_dir) / "labelled_passages.jsonl"
+
+            bert_training_data = deserialise_pydantic_list_with_fallback(
+                labelled_passages_file.read_text(), LabelledPassage
             )
             console.print(
                 f"Loaded {len(bert_training_data)} passages from BERT training data"
@@ -314,58 +380,78 @@ def main(
             console.print(f"Limited labelled passages to {len(labelled_passages)}")
 
         # run classifier escalation
-        annotated_passages, remaining_passages = annotate_passages(
-            labelled_passages=labelled_passages,
-            wikibase_id=wikibase_id,
-            bert_classifier=bert_classifier,
-            llm_classifier=llm_classifier,
-            ensemble_config_bert=ensemble_config_bert,
-            ensemble_config_llm=ensemble_config_llm,
-            batch_size=batch_size,
+        bert_labelled_passages, llm_labelled_passages, unlabelled_passages = (
+            annotate_passages(
+                labelled_passages=labelled_passages,
+                wikibase_id=wikibase_id,
+                bert_classifier=bert_classifier,
+                llm_classifier=llm_classifier,
+                ensemble_config_bert=ensemble_config_bert,
+                ensemble_config_llm=ensemble_config_llm,
+                batch_size=batch_size,
+            )
         )
 
         # Save passages to local files
         output_dir = Path("active_learning_output")
         output_dir.mkdir(exist_ok=True)
 
-        annotated_filename = f"annotated_passages_{wikibase_id}.jsonl"
-        annotated_path = output_dir / annotated_filename
-        annotated_jsonl = serialise_pydantic_list_as_jsonl(annotated_passages)
-        annotated_path.write_text(annotated_jsonl)
+        bert_labelled_filename = f"bert_labelled_passages_{wikibase_id}.jsonl"
+        bert_labelled_path = output_dir / bert_labelled_filename
+        bert_labelled_jsonl = serialise_pydantic_list_as_jsonl(bert_labelled_passages)
+        bert_labelled_path.write_text(bert_labelled_jsonl)
         console.print(
-            f"✅ Saved {len(annotated_passages)} annotated passages to {annotated_path}"
+            f"✅ Saved {len(bert_labelled_passages)} BERT-labelled passages to {bert_labelled_path}"
         )
 
-        remaining_filename = f"remaining_passages_{wikibase_id}.jsonl"
-        remaining_path = output_dir / remaining_filename
-        remaining_jsonl = serialise_pydantic_list_as_jsonl(remaining_passages)
-        remaining_path.write_text(remaining_jsonl)
+        llm_labelled_filename = f"llm_labelled_passages_{wikibase_id}.jsonl"
+        llm_labelled_path = output_dir / llm_labelled_filename
+        llm_labelled_jsonl = serialise_pydantic_list_as_jsonl(llm_labelled_passages)
+        llm_labelled_path.write_text(llm_labelled_jsonl)
         console.print(
-            f"✅ Saved {len(remaining_passages)} remaining passages to {remaining_path}"
+            f"✅ Saved {len(llm_labelled_passages)} LLM-labelled passages to {llm_labelled_path}"
+        )
+
+        unlabelled_filename = f"unlabelled_passages_{wikibase_id}.jsonl"
+        unlabelled_path = output_dir / unlabelled_filename
+        unlabelled_jsonl = serialise_pydantic_list_as_jsonl(unlabelled_passages)
+        unlabelled_path.write_text(unlabelled_jsonl)
+        console.print(
+            f"✅ Saved {len(unlabelled_passages)} unlabelled passages to {unlabelled_path}"
         )
 
         # Upload artifacts to W&B
         if track_and_upload and run:
             console.print("[cyan]Uploading artifacts to W&B...[/cyan]")
 
-            # Upload annotated passages (auto-labelled by ensembles)
+            # Upload BERT-labelled passages
             log_labelled_passages_artifact_to_wandb_run(
-                annotated_passages,
+                bert_labelled_passages,
                 run=run,
                 concept=bert_classifier.concept,
             )
             console.print(
-                f"✅ Uploaded {len(annotated_passages)} annotated passages to W&B"
+                f"✅ Uploaded {len(bert_labelled_passages)} BERT-labelled passages to W&B"
             )
 
-            # Upload remaining passages (need human annotation)
+            # Upload LLM-labelled passages
             log_labelled_passages_artifact_to_wandb_run(
-                remaining_passages,
+                llm_labelled_passages,
                 run=run,
                 concept=bert_classifier.concept,
             )
             console.print(
-                f"✅ Uploaded {len(remaining_passages)} remaining passages to W&B"
+                f"✅ Uploaded {len(llm_labelled_passages)} LLM-labelled passages to W&B"
+            )
+
+            # Upload unlabelled passages (need human annotation)
+            log_labelled_passages_artifact_to_wandb_run(
+                unlabelled_passages,
+                run=run,
+                concept=bert_classifier.concept,
+            )
+            console.print(
+                f"✅ Uploaded {len(unlabelled_passages)} unlabelled passages to W&B"
             )
 
 
