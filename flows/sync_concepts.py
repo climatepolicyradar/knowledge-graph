@@ -887,7 +887,7 @@ async def _post_other_errors(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-async def wikibase_to_vespa(
+async def sync_concepts(
     aws_env: AwsEnv | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     vespa_search_adapter: VespaSearchAdapter | None = None,
