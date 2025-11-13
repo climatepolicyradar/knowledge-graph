@@ -422,6 +422,7 @@ async def create_classifiers_profiles_artifact(
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
+    # vespa errors can be per vespa request or per concept and are excluded from total concepts count
     total_concepts = len(successes) + len(validation_errors) + len(wandb_errors)
     successful_concepts = len(successes)
 
@@ -540,6 +541,7 @@ async def send_classifiers_profile_slack_alert(
     logger = get_logger()
     slack_client = await get_slack_client()
 
+    # vespa_errors can be per vespa request or per concept and are excluded from total concepts count
     total_concepts = len(successes) + len(validation_errors) + len(wandb_errors)
     other_errors = wandb_errors + vespa_errors
     try:
@@ -552,9 +554,9 @@ async def send_classifiers_profile_slack_alert(
                 slack_client=slack_client,
                 channel=channel,
                 total_concepts=total_concepts,
-                validation_errors=validation_errors,
-                other_errors=other_errors,
+                errors=len(validation_errors),
                 upload_to_vespa=upload_to_vespa,
+                error_type="Data Quality Issues",
             )
 
             if not main_response.get("ok"):
@@ -590,9 +592,9 @@ async def send_classifiers_profile_slack_alert(
                 slack_client=slack_client,
                 channel=channel,
                 total_concepts=total_concepts,
-                validation_errors=validation_errors,
-                other_errors=other_errors,
+                errors=len(other_errors),
                 upload_to_vespa=upload_to_vespa,
+                error_type="System Errors",
             )
 
             if not main_response.get("ok"):
@@ -607,14 +609,23 @@ async def send_classifiers_profile_slack_alert(
 
             # Get thread_ts for threading replies
             if thread_ts := main_response.get("ts"):
-                if other_errors:
+                if wandb_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
                         # channel="alerts-concept-store",
                         channel="alerts-platform-staging",
                         thread_ts=thread_ts,
-                        errors=other_errors,
-                        error_type="System Errors",
+                        errors=wandb_errors,
+                        error_type="WandB Errors",
+                    )
+                if vespa_errors:
+                    await _post_errors_thread(
+                        slack_client=slack_client,
+                        # channel="alerts-concept-store",
+                        channel="alerts-platform-staging",
+                        thread_ts=thread_ts,
+                        errors=vespa_errors,
+                        error_type="Vespa Errors",
                     )
             else:
                 raise ValueError(
@@ -629,30 +640,18 @@ async def _post_errors_main(
     slack_client,
     channel: str,
     total_concepts: int,
-    validation_errors: list[Error],
-    other_errors: list[Error],
+    errors: int,
     upload_to_vespa: bool,
+    error_type: str,
 ):
-    failures = len(validation_errors) + len(other_errors)
-
     # Create summary blocks
     summary_blocks: list[dict[str, Any]] = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"{failures} of {total_concepts} classifiers profiles failed with wikibase validation errors.",
+                "text": f"<{error_type}>: {errors} of {total_concepts} classifiers profiles failed.",
             },
-        },
-        {
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Data Quality Issues*\n{len(validation_errors)}",
-                },
-                {"type": "mrkdwn", "text": f"*System Errors*\n{len(other_errors)}"},
-            ],
         },
     ]
 
@@ -677,7 +676,7 @@ async def _post_errors_main(
         }
     )
 
-    failure_rate = (failures / total_concepts) * 100 if total_concepts > 0 else 0
+    failure_rate = (errors / total_concepts) * 100 if total_concepts > 0 else 0
     # Determine colour based on failure rate
     if failure_rate >= 50:
         color = "#e01e5a"  # Red
@@ -776,7 +775,8 @@ async def _post_errors_thread(
             wikibase_id = convert_set_to_string(error.metadata.get("wikibase_id"))
         else:
             logger.warning(f"error metadata was missing Wikibase ID: {error.metadata}")
-            continue
+            # not be set for vespa sync errors
+            wikibase_id = "N/A"
 
         if error.metadata and "classifier_id" in error.metadata:
             classifier_id = convert_set_to_string(error.metadata.get("classifier_id"))
