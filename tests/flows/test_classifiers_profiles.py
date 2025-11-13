@@ -691,3 +691,48 @@ async def test_update_vespa_with_classifiers_profiles__real_vespa(
 
         assert len(results) == 1  # One for the classifiers_profiles update
         assert all(is_ok(r) for r in results), f"All results should be Ok, {results}"
+
+
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__vespa_upload_false(
+    mock_specs_2profiles,
+):
+    """Test Vespa update with flag upload_to_vespa set to False."""
+    with (
+        patch(
+            "flows.classifiers_profiles.create_vespa_profile_mapping"
+        ) as mock_create_mapping,
+        patch(
+            "flows.classifiers_profiles.create_vespa_classifiers_profile"
+        ) as mock_create_profile,
+        patch("flows.classifiers_profiles.JsonDict") as mock_json_dict,
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
+    ):
+        # Mock profile mappings
+        mock_create_mapping.side_effect = lambda specs: [
+            Mock(concept_id=spec.concept_id) for spec in specs
+        ]
+
+        # Mock Vespa profile creation
+        mock_create_profile.side_effect = lambda name, mappings: Mock(
+            name=name, mappings=mappings, id="mock_id"
+        )
+
+        # Mock JSON serialization
+        mock_json_dict.return_value = {}
+
+        # Call the function
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+            upload_to_vespa=False,
+        )
+
+        # Assertions
+        assert len(results) == 1  # Ok for no upload
+        assert isinstance(results[0], Ok)
+
+        mock_vespa_connection_pool.update_data.assert_not_called()
+        assert (
+            unwrap_ok(results[0]) == "skipped sync to vespa as per upload_to_vespa flag"
+        )
