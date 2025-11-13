@@ -62,16 +62,16 @@ def annotate_passages_with_ensemble(
     batch_size: int = 50,
 ) -> tuple[list[LabelledPassage], list[LabelledPassage]]:
     """
-    Annotate passages using a single ensemble model.
+    Annotate passages using an ensemble of classifiers.
 
+    :param wikibase_id: The ID of the concept being classified
     :param passages: Passages to annotate
-    :param wikibase_id: The concept being classified
     :param model: The base classifier to create ensemble from
     :param ensemble_config: Configuration for ensemble and thresholding
     :param batch_size: Number of passages to process in each batch
-    :return: Tuple of (annotated_passages, uncertain_passages) where annotated_passages
+    :return: Tuple of (annotated_passages, unannotated_passages) where annotated_passages
         contains passages with metric <= threshold (confident predictions) and
-        uncertain_passages contains passages with metric > threshold (need further review)
+        uncertain_passages contains the rest of the passages
     """
     console = Console()
 
@@ -89,6 +89,7 @@ def annotate_passages_with_ensemble(
     ensemble_predicted_spans = ensemble.predict(
         text_to_predict,
         batch_size=batch_size,
+        show_progress=True,
     )
 
     # get uncertainties
@@ -103,7 +104,7 @@ def annotate_passages_with_ensemble(
     # for uncertainties <= threshold, add these passages to annotated_passages
     # and remove them from passages_to_annotate
     annotated_passages: list[LabelledPassage] = []
-    uncertain_passages: list[LabelledPassage] = []
+    unannotated_passages: list[LabelledPassage] = []
 
     for passage, metric_value, majority_vote_value in zip(
         passages, ensemble_metrics, ensemble_majority_votes
@@ -127,18 +128,18 @@ def annotate_passages_with_ensemble(
             )
             annotated_passages.append(passage.model_copy(update={"spans": [span]}))
         else:
-            uncertain_passages.append(passage)
+            unannotated_passages.append(passage)
 
     console.print(
-        f"Annotated {len(annotated_passages)} passages with metric {ensemble_config.ensemble_metric.name} <= {ensemble_config.ensemble_metric_threshold}. {len(uncertain_passages)} remaining."
+        f"Annotated {len(annotated_passages)} passages with metric {ensemble_config.ensemble_metric.name} <= {ensemble_config.ensemble_metric_threshold}. {len(unannotated_passages)} remaining."
     )
 
-    return annotated_passages, uncertain_passages
+    return annotated_passages, unannotated_passages
 
 
-def annotate_passages(
-    labelled_passages: list[LabelledPassage],
+def run_active_learning(
     wikibase_id: WikibaseID,
+    labelled_passages: list[LabelledPassage],
     bert_classifier: Classifier,
     llm_classifier: Classifier,
     ensemble_config_bert: EnsembleConfig,
@@ -146,10 +147,10 @@ def annotate_passages(
     batch_size: int = 50,
 ) -> tuple[list[LabelledPassage], list[LabelledPassage], list[LabelledPassage]]:
     """
-    Annotate passages using ensemble-based uncertainty estimation.
+    Run prediction using a BERT then LLM ensemble, escalating uncertain predictions.
 
-    :param labelled_passages: All passages to annotate
     :param wikibase_id: The concept being classified
+    :param labelled_passages: Passages to annotate
     :param bert_classifier: BERT-based classifier for first ensemble
     :param llm_classifier: LLM-based classifier for second ensemble
     :param ensemble_config_bert: Configuration for BERT ensemble
@@ -255,6 +256,7 @@ def main(
     wandb_config = {
         "batch_size": batch_size,
         "limit": limit,
+        # FIXME: use artifact path instead of run path. waiting for other PR to go in.
         "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
         "classifier_wandb_path_bert": classifier_wandb_path_bert,
         "classifier_wandb_path_llm": classifier_wandb_path_llm,
@@ -381,9 +383,9 @@ def main(
 
         # run classifier escalation
         bert_labelled_passages, llm_labelled_passages, unlabelled_passages = (
-            annotate_passages(
-                labelled_passages=labelled_passages,
+            run_active_learning(
                 wikibase_id=wikibase_id,
+                labelled_passages=labelled_passages,
                 bert_classifier=bert_classifier,
                 llm_classifier=llm_classifier,
                 ensemble_config_bert=ensemble_config_bert,
@@ -396,9 +398,9 @@ def main(
         # passages labelled by the LLM ensemble.
         updated_bert_training_data = bert_training_data + llm_labelled_passages
 
-        # Save passages to local files
-        output_dir = Path("active_learning_output")
-        output_dir.mkdir(exist_ok=True)
+        timestr = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(f"data/processed/active_learning/{wikibase_id}_{timestr}")
+        output_dir.mkdir(exist_ok=True, parents=True)
 
         bert_labelled_filename = f"bert_labelled_passages_{wikibase_id}.jsonl"
         bert_labelled_path = output_dir / bert_labelled_filename
