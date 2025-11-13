@@ -910,6 +910,10 @@ async def update_vespa_with_classifiers_profiles(
     Update Vespa with the latest classifiers profiles from classifier specs
 
     Returns a list of Result indicating success or failure for syncing to vespa
+
+    ClassifierSpec are used instead of ClassifiersProfileMapping to include
+    all unchanged classifiers as well as those that have been promoted/demoted/updated.
+    ClassifiersProfileMapping also doesn't include concept_id which is required for Vespa mappings.
     """
     logger = get_logger()
     results: list[Result[str, Error]] = []
