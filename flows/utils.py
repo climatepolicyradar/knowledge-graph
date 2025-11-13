@@ -241,8 +241,8 @@ class SlackNotify:
                         "type": "mrkdwn",
                         "text": f"*Timestamp*\n`{state.timestamp}`",
                     },
-                    cls.slack_runtime_block(flow_run),
-                ],
+                ]
+                + cls.slack_created_by_block(flow_run),
             },
             {"type": "divider"},
             {
@@ -253,6 +253,32 @@ class SlackNotify:
                     "text": f"*State message:*\n\n>{state_message}",
                 },
             },
+        ]
+
+    @staticmethod
+    def slack_created_by_block(flow_run: FlowRun):
+        """Create the created by Slack Block"""
+
+        if not flow_run.created_by:
+            return []
+
+        # There's nothing to show
+        if not any(
+            [
+                flow_run.created_by.id,
+                flow_run.created_by.type,
+                flow_run.created_by.display_value,
+            ]
+        ):
+            return []
+
+        if_none = lambda x: x if x else "-"  # noqa: E731
+
+        return [
+            {
+                "type": "mrkdwn",
+                "text": f"*Creator*\nDisplay: {if_none(flow_run.created_by.display_value)} / Type: {if_none(flow_run.created_by.type)}",
+            }
         ]
 
     @staticmethod
