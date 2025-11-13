@@ -53,8 +53,6 @@ from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 from scripts.update_classifier_spec import refresh_all_available_classifiers
 
-# from scripts.update_classifier_spec import refresh_all_available_classifiers
-
 VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
 VESPA_CONNECTION_POOL_SIZE: int = 5
 
