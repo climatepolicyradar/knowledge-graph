@@ -10,7 +10,7 @@ from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
     compare_classifiers_profiles,
     create_vespa_classifiers_profile,
-    create_vespa_profile_mapping,
+    create_vespa_profile_mappings,
     demote_classifier_profile,
     get_classifiers_profiles,
     handle_classifier_profile_action,
@@ -494,14 +494,14 @@ def test_create_vespa_classifiers_profile():
             classifier_id="bbbb3456",
         )
     ]
-    profile = create_vespa_classifiers_profile("primary", mappings)
+    profile = create_vespa_classifiers_profile(Profile.PRIMARY, mappings)
     assert profile.name == "primary"
     assert len(profile.mappings) == 1
     assert isinstance(profile, VespaClassifiersProfile)
 
 
-def test_create_vespa_profile_mapping(mock_specs_2profiles):
-    profile_mappings = create_vespa_profile_mapping(mock_specs_2profiles)
+def test_create_vespa_profile_mappings(mock_specs_2profiles):
+    profile_mappings = create_vespa_profile_mappings(mock_specs_2profiles)
 
     assert len(profile_mappings) == len(mock_specs_2profiles)
     assert all(isinstance(m, VespaClassifiersProfile.Mapping) for m in profile_mappings)
@@ -513,7 +513,7 @@ async def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profi
 
     with (
         patch(
-            "flows.classifiers_profiles.create_vespa_profile_mapping"
+            "flows.classifiers_profiles.create_vespa_profile_mappings"
         ) as mock_create_vespa_mapping,
         patch(
             "flows.classifiers_profiles.create_vespa_classifiers_profile"
@@ -568,7 +568,7 @@ async def test_update_vespa_with_classifiers__profiles_mapping_failure(
     """Test Vespa update with mapping creation failure."""
     with (
         patch(
-            "flows.classifiers_profiles.create_vespa_profile_mapping"
+            "flows.classifiers_profiles.create_vespa_profile_mappings"
         ) as mock_create_mapping,
         patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
     ):
@@ -595,7 +595,7 @@ async def test_update_vespa_with_classifiers_profiles__profile_creation_failure(
     """Test Vespa update with profile creation failure."""
     with (
         patch(
-            "flows.classifiers_profiles.create_vespa_profile_mapping"
+            "flows.classifiers_profiles.create_vespa_profile_mappings"
         ) as mock_create_mapping,
         patch(
             "flows.classifiers_profiles.create_vespa_classifiers_profile"
@@ -630,7 +630,7 @@ async def test_update_vespa_with_classifiers_profiles__vespa_sync_failure(
     """Test Vespa update with sync failure."""
     with (
         patch(
-            "flows.classifiers_profiles.create_vespa_profile_mapping"
+            "flows.classifiers_profiles.create_vespa_profile_mappings"
         ) as mock_create_mapping,
         patch(
             "flows.classifiers_profiles.create_vespa_classifiers_profile"
@@ -700,7 +700,7 @@ async def test_update_vespa_with_classifiers_profiles__vespa_upload_false(
     """Test Vespa update with flag upload_to_vespa set to False."""
     with (
         patch(
-            "flows.classifiers_profiles.create_vespa_profile_mapping"
+            "flows.classifiers_profiles.create_vespa_profile_mappings"
         ) as mock_create_mapping,
         patch(
             "flows.classifiers_profiles.create_vespa_classifiers_profile"

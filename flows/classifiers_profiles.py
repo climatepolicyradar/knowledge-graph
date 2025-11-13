@@ -433,6 +433,8 @@ async def create_classifiers_profiles_artifact(
 - **Total concepts found**: {total_concepts}
 - **Successful Wikibase IDs**: {successful_concepts}
 - **Failed Wikibase IDs**: {failed_concepts}
+- **WandB Errors**: {len(wandb_errors)}
+- **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
 """
 
@@ -479,6 +481,9 @@ def compare_classifiers_profiles(
     # Iterate over classifier_specs and classifiers_profiles
     for spec in classifier_specs:
         # Check if the classifier spec exists in classifiers_profile_mappings
+        # comparing wikibase_id and classifier_id
+        # concept_id is not required
+        # classifier_id should be sufficient for matching as it uses the concept parameters to generate the canonical ID
         if matching_classifier := next(
             (
                 mapping
@@ -525,6 +530,7 @@ async def send_classifiers_profile_slack_alert(
     vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
+    upload_to_vespa: bool,
 ):
     """
     Send slack alert with failures from the classifiers profiles lifecycle sync.
@@ -548,6 +554,7 @@ async def send_classifiers_profile_slack_alert(
                 total_concepts=total_concepts,
                 validation_errors=validation_errors,
                 other_errors=other_errors,
+                upload_to_vespa=upload_to_vespa,
             )
 
             if not main_response.get("ok"):
@@ -585,6 +592,7 @@ async def send_classifiers_profile_slack_alert(
                 total_concepts=total_concepts,
                 validation_errors=validation_errors,
                 other_errors=other_errors,
+                upload_to_vespa=upload_to_vespa,
             )
 
             if not main_response.get("ok"):
@@ -623,6 +631,7 @@ async def _post_errors_main(
     total_concepts: int,
     validation_errors: list[Error],
     other_errors: list[Error],
+    upload_to_vespa: bool,
 ):
     failures = len(validation_errors) + len(other_errors)
 
@@ -676,11 +685,10 @@ async def _post_errors_main(
         color = "#ecb22e"  # Orange
 
     header = "Classifiers Profile Sync Summary:"
-    if run_context.parameters:
-        if run_context.parameters.get("upload_to_vespa"):
-            header += " uploading to vespa"
-        else:
-            header += " (dry run, not uploading to vespa)"
+    if upload_to_vespa:
+        header += " uploading to vespa"
+    else:
+        header += " (dry run, not uploading to vespa)"
 
     return await slack_client.chat_postMessage(
         channel=channel,
@@ -845,7 +853,7 @@ async def _post_errors_thread(
         logger.error(f"failed to post {error_type} thread: {e}")
 
 
-def create_vespa_profile_mapping(
+def create_vespa_profile_mappings(
     classifier_specs: list[ClassifierSpec],
 ) -> list[VespaClassifiersProfile.Mapping]:
     """Create VespaClassifiersProfile.Mapping objects from classifier specs."""
@@ -872,24 +880,24 @@ def create_vespa_profile_mapping(
 
 
 def create_vespa_classifiers_profile(
-    name: str,
+    name: Profile,
     mappings: list[VespaClassifiersProfile.Mapping],
 ) -> VespaClassifiersProfile:
     """Create VespaClassifiersProfile object from mappings."""
     try:
-        id = Identifier.generate(name, mappings)
+        id = Identifier.generate(name.value, mappings)
         vespa_profile = VespaClassifiersProfile(
             id=str(id),
-            name=name,
+            name=name.value,
             mappings=mappings,
-            multi=(name == "retired"),
+            multi=(name == Profile.RETIRED),
             response_raw={},
         )
         return vespa_profile
 
     except Exception as e:
         raise ValueError(
-            f"Failed to create VespaClassifiersProfile for {name} with mappings {mappings}: {e}"
+            f"Failed to create VespaClassifiersProfile for {name.value} with mappings {mappings}: {e}"
         )
 
 
@@ -914,7 +922,7 @@ async def update_vespa_with_classifiers_profiles(
         # create VespaClassifiersProfiles.Mappings from classifier specs split by classifier profiles: primary, experimental, retired
         vespa_classifiers_profile = {}
         for profile in [Profile.PRIMARY, Profile.EXPERIMENTAL, Profile.RETIRED]:
-            profile_mappings = create_vespa_profile_mapping(
+            profile_mappings = create_vespa_profile_mappings(
                 [
                     spec
                     for spec in classifier_specs
@@ -929,10 +937,13 @@ async def update_vespa_with_classifiers_profiles(
             # convert to VespaClassifiersProfile
             # skip creating VespaClassifiersProfile if no mappings
             if len(profile_mappings) == 0:
+                logger.info(
+                    f"No mappings for profile {profile.value}, skipping VespaClassifiersProfile creation."
+                )
                 continue
 
             vespa_classifiers_profile[profile.value] = create_vespa_classifiers_profile(
-                profile.value, profile_mappings
+                profile, profile_mappings
             )
 
             logger.info(f"Created VespaClassifiersProfile object for {profile.value}")
@@ -960,7 +971,10 @@ async def update_vespa_with_classifiers_profiles(
         return results
 
     # sync to vespa
-    if upload_to_vespa:
+    if not upload_to_vespa:
+        logger.info("Upload to Vespa is not enabled. Skipping upload step.")
+        results.append(Ok("skipped sync to vespa as per upload_to_vespa flag"))
+    else:
         logger.info("Syncing classifiers profiles to Vespa...")
         # sync VespaClassifiersProfile to vespa
         for profile_name, profile in vespa_classifiers_profile.items():
@@ -1023,9 +1037,6 @@ async def update_vespa_with_classifiers_profiles(
         )
 
         results.append(Ok("synced to vespa"))
-    else:
-        logger.info("Upload to Vespa is not enabled. Skipping upload step.")
-        results.append(Ok("skipped sync to vespa as per upload_to_vespa flag"))
 
     return results
 
@@ -1173,7 +1184,7 @@ async def sync_classifiers_profiles(
     vespa_results = []
     if len(successes) > 0:
         logger.info(
-            "Changes made to wandb, updating Vespa with the latest classifiers profiles..."
+            f"Changes made to wandb: {len(successes)}, updating Vespa with the latest classifiers profiles..."
         )
         # update classifiers specs yaml file
         refresh_all_available_classifiers([aws_env])
@@ -1209,6 +1220,7 @@ async def sync_classifiers_profiles(
             vespa_errors=vespa_errors,
             successes=successes,
             aws_env=aws_env,
+            upload_to_vespa=upload_to_vespa,
         )
     except Exception as e:
         logger.error(f"failed to send validation alert: {e}")
