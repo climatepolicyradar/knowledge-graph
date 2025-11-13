@@ -96,12 +96,14 @@ def log_labelled_passages_artifact_to_wandb_run(
 def load_artifact_from_wandb_run(
     run: WandbRun,
     artifact_type: str,
+    artifact_name: str | None = None,
 ) -> Path:
     """
     Loads a model artifact from a W&B run and returns the path to the downloaded artifact.
 
     :param run: The WandB run to load from
     :param artifact_type: The type of artifact to load (e.g., "model", "checkpoint")
+    :param artifact_name: Optional name of the artifact to filter by (e.g., "training-data")
     :raises WandbArtifactNotFoundError: if no artifacts of the specified type are found
     :raises WandbMultipleArtifactsFoundError: if multiple artifacts of the specified
         type are found
@@ -113,6 +115,9 @@ def load_artifact_from_wandb_run(
         for artifact in run.logged_artifacts()  # type: ignore[attr-defined]
         if artifact.type == artifact_type
     ]
+
+    if artifact_name is not None:
+        artifacts = [a for a in artifacts if a.name == artifact_name]
 
     if len(artifacts) == 0:
         raise WandbArtifactNotFoundError(str(run), artifact_type=artifact_type)

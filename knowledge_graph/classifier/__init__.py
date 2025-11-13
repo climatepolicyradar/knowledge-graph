@@ -14,6 +14,7 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.wandb_helpers import load_artifact_file_from_wandb
 
 
 class ModelPath(BaseModel):
@@ -85,7 +86,7 @@ __all__ = [
 
 
 def create_classifier(
-    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
+    concept: Concept, classifier_type: str, classifier_kwargs: dict[str, Any]
 ) -> Classifier:
     """
     Create a classifier from its type and any kwargs.
@@ -110,6 +111,7 @@ class ClassifierFactory:
         WikibaseID("Q1651"): ("TargetClassifier", ".targets"),
         WikibaseID("Q1652"): ("EmissionsReductionTargetClassifier", ".targets"),
         WikibaseID("Q1653"): ("NetZeroTargetClassifier", ".targets"),
+        WikibaseID("Q1829"): ("BertBasedClassifier", ".bert_based"),
     }
 
     @staticmethod
