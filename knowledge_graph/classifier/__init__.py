@@ -38,9 +38,9 @@ class ModelPath(BaseModel):
 
 def get_local_classifier_path(target_path: ModelPath, version: str) -> Path:
     """Returns a path for a classifier file."""
-    from knowledge_graph.config import classifier_dir, model_artifact_name
+    from knowledge_graph.config import classifier_dir, wandb_model_artifact_filename
 
-    return classifier_dir / target_path / version / model_artifact_name
+    return classifier_dir / target_path / version / wandb_model_artifact_filename
 
 
 def __getattr__(name):
@@ -143,24 +143,3 @@ class ClassifierFactory:
 
         # Then handle more generic cases
         return KeywordClassifier(concept)
-
-
-def load_classifier_from_wandb(
-    wandb_path: str, model_to_cuda: bool = False
-) -> "Classifier":
-    """
-    Load a classifier from a W&B path.
-
-    This works for any classifier and W&B team. A separate, CPR-specific method
-    to load models from the model registry exists in flows/inference and is more robust
-    for use in production pipelines.
-
-    :param str wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
-    :param bool model_to_cuda: Whether to load the model to CUDA if available
-    :return Classifier: The loaded classifier
-    """
-
-    model_pickle_path = load_artifact_file_from_wandb(
-        wandb_path=wandb_path, filename="model.pickle"
-    )
-    return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)

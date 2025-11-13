@@ -31,13 +31,16 @@ from knowledge_graph.cloud import (
     get_s3_client,
     is_logged_in,
 )
-from knowledge_graph.config import WANDB_ENTITY
+from knowledge_graph.config import (
+    WANDB_ENTITY,
+    wandb_model_artifact_filename,
+)
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
-    load_labelled_passages_from_wandb_run,
+    load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
 from knowledge_graph.wikibase import WikibaseConfig
@@ -45,20 +48,6 @@ from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
-
-
-def load_training_data_from_wandb(
-    training_data_wandb_run_path: str,
-) -> list[LabelledPassage]:
-    """Load training data from a W&B run."""
-    Console().log(
-        f"📥 Fetching training data from W&B run: {training_data_wandb_run_path}"
-    )
-    api = wandb.Api()
-    wandb_run = api.run(training_data_wandb_run_path)
-    labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
-    Console().log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
-    return labelled_passages
 
 
 def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
@@ -319,7 +308,7 @@ def upload_model_artifact(
     key = os.path.join(
         storage_upload.target_path,
         storage_upload.next_version,
-        "model.pickle",
+        wandb_model_artifact_filename,
     )
 
     Console().log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
@@ -396,10 +385,10 @@ def main(
             help="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
-    training_data_wandb_run_path: Annotated[
+    training_data_wandb_path: Annotated[
         Optional[str],
         typer.Option(
-            help="W&B run path (entity/project/run_id) to fetch training data from instead of using concept's labelled passages",
+            help="W&B artifact path (e.g., 'entity/project/artifact:version') to fetch training data from.",
         ),
     ] = None,
     limit_training_samples: Annotated[
@@ -450,7 +439,7 @@ def main(
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
                 "concept_overrides": concept_overrides,
-                "training_data_wandb_run_path": training_data_wandb_run_path,
+                "training_data_wandb_path": training_data_wandb_path,
                 "limit_training_samples": limit_training_samples,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
@@ -470,7 +459,7 @@ def main(
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
                 concept_overrides=concept_overrides,
-                training_data_wandb_run_path=training_data_wandb_run_path,
+                training_data_wandb_path=training_data_wandb_path,
                 limit_training_samples=limit_training_samples,
             )
         )
@@ -521,6 +510,12 @@ async def train_classifier(
         if max_training_samples is not None:
             training_data = limit_training_samples(training_data, max_training_samples)
 
+        if training_data and wandb_config.get("training_data_wandb_path") and run:
+            unprocessed_training_data_artifact_path = wandb_config[
+                "training_data_wandb_path"
+            ]
+            run.use_artifact(unprocessed_training_data_artifact_path)
+
         # Remove any passages from training that appear in evaluation set
         evaluation_data = classifier.concept.labelled_passages
         if training_data:
@@ -538,25 +533,14 @@ async def train_classifier(
             )
 
             if track_and_upload and run and deduplicated_training_data:
-                console.log("📄 Creating training data artifact")
-                training_artifact = wandb.Artifact(
-                    name="training-data",
-                    type="labelled_passages",
-                    metadata={
-                        "concept_wikibase_revision": classifier.concept.wikibase_revision,
-                        "passage_count": len(deduplicated_training_data),
-                        "num_positives": train_num_positives,
-                        "num_negatives": train_num_negatives,
-                    },
+                console.log("📄 Creating artifact for deduplicated training data")
+                log_labelled_passages_artifact_to_wandb_run(
+                    labelled_passages=deduplicated_training_data,
+                    run=run,
+                    concept=classifier.concept,
+                    classifier=classifier,
+                    artifact_name="training-data",
                 )
-                with training_artifact.new_file(
-                    "labelled_passages.jsonl", mode="w", encoding="utf-8"
-                ) as f:
-                    f.write(
-                        serialise_pydantic_list_as_jsonl(deduplicated_training_data)
-                    )
-
-                run.log_artifact(training_artifact)
                 console.log("✅ Training data artifact uploaded successfully")
         else:
             deduplicated_training_data = []
@@ -657,7 +641,7 @@ async def run_training(
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
     concept_overrides: Optional[dict[str, Any]] = None,
-    training_data_wandb_run_path: Optional[str] = None,
+    training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
 ) -> Classifier:
     """
@@ -690,8 +674,14 @@ async def run_training(
 
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
-    if training_data_wandb_run_path:
-        labelled_passages = load_training_data_from_wandb(training_data_wandb_run_path)
+    if training_data_wandb_path:
+        console.log(
+            f"📥 Fetching training data from W&B artifact path: {training_data_wandb_path}"
+        )
+        labelled_passages = load_labelled_passages_from_wandb(
+            wandb_path=training_data_wandb_path
+        )
+        console.log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
 
     classifier = ClassifierFactory.create(
         concept=concept,
@@ -706,10 +696,8 @@ async def run_training(
         "classifier_kwargs": classifier_kwargs,
         "concept_overrides": concept_overrides,
     }
-    if training_data_wandb_run_path:
-        extra_wandb_config["training_data_wandb_run_path"] = (
-            training_data_wandb_run_path
-        )
+    if training_data_wandb_path:
+        extra_wandb_config["training_data_wandb_path"] = training_data_wandb_path
     if limit_training_samples is not None:
         extra_wandb_config["limit_training_samples"] = limit_training_samples
 
