@@ -282,8 +282,8 @@ class SlackNotify:
         ]
 
     @staticmethod
-    def slack_runtime_block(flow_run: FlowRun):
-        """Create the runtime Slack Block"""
+    def slack_duration_block(flow_run: FlowRun):
+        """Create the duration Slack Block"""
 
         match (flow_run.start_time, flow_run.end_time):
             case (start, end) if start is not None and end is not None:
