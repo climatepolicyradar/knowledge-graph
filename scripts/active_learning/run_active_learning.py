@@ -247,9 +247,17 @@ def main(
     """
     Run active learning annotation using ensemble-based uncertainty estimation.
 
-    Loads unlabeled passages and uses two classifier ensembles (BERT and LLM) to identify
-    passages where both models are uncertain. These passages are the best candidates for
-    human annotation.
+    Loads unlabeled passages and uses two classifier ensembles (BERT and then LLM) to
+    identify passages where both models are uncertain. These passages are the best
+    candidates for human annotation.
+
+    Saves separate labelled passages files to a local directory and W&B:
+    - passages predicted confidently by the BERT ensemble
+    - passages predicted confidently by the LLM ensemble, out of the ones that the BERT
+        ensemble didn't predict confidently
+    - the remaining passages, which weren't predicted confidently by either ensemble
+    - new BERT training data: the training data from the BERT model, plus the new LLM-
+        ensemble predicted passages
     """
     console = Console()
 
