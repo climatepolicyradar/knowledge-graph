@@ -253,6 +253,11 @@
   concept_id: dugfcdzm
   classifier_id: 6vn29j93
   wandb_registry_version: v17
+- wikibase_id: Q1016
+  concept_id: 4uqjca5b
+  classifier_id: 78tewr6s
+  classifiers_profile: primary
+  wandb_registry_version: v18
 - wikibase_id: Q1167
   concept_id: rhs8xgsy
   classifier_id: jp8e4k7h
