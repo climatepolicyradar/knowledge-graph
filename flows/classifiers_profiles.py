@@ -905,7 +905,7 @@ async def update_vespa_with_classifiers_profiles(
     classifier_specs: list[ClassifierSpec],
     vespa_connection_pool: VespaAsync,
     upload_to_vespa: bool = True,
-) -> list[Result[str, Error]]:
+) -> list[Result[None, Error]]:
     """
     Update Vespa with the latest classifiers profiles from classifier specs
 
@@ -916,7 +916,7 @@ async def update_vespa_with_classifiers_profiles(
     ClassifiersProfileMapping also doesn't include concept_id which is required for Vespa mappings.
     """
     logger = get_logger()
-    results: list[Result[str, Error]] = []
+    results: list[Result[None, Error]] = []
 
     logger.info(
         f"Processing {len(classifier_specs)} classifier specs for Vespa update."
@@ -977,7 +977,7 @@ async def update_vespa_with_classifiers_profiles(
     # sync to vespa
     if not upload_to_vespa:
         logger.info("Upload to Vespa is not enabled. Skipping upload step.")
-        results.append(Ok("skipped sync to vespa as per upload_to_vespa flag"))
+        results.append(Ok(None))
     else:
         logger.info("Syncing classifiers profiles to Vespa...")
         # sync VespaClassifiersProfile to vespa
@@ -1040,7 +1040,7 @@ async def update_vespa_with_classifiers_profiles(
             f"Synced VespaClassifiersProfiles to doc id {doc_id}, with mappings: {vespa_classifiers_profiles.mappings} and fields {fields}"
         )
 
-        results.append(Ok("synced to vespa"))
+        results.append(Ok(None))
 
     return results
 
