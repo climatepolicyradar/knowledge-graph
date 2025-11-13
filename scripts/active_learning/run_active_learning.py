@@ -22,7 +22,7 @@ from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span, UnitInterval
 from knowledge_graph.wandb_helpers import (
-    load_labelled_passages_from_wandb_run,
+    load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
 
@@ -204,11 +204,11 @@ def main(
             parser=WikibaseID,
         ),
     ],
-    labelled_passages_wandb_run_path: Annotated[
+    labelled_passages_wandb_path: Annotated[
         str,
         typer.Option(
             ...,
-            help="W&B run path to load labelled passages from (e.g., 'entity/project/run_id')",
+            help="W&B path to load labelled passages from (e.g., 'entity/project/artifact_id:version')",
         ),
     ],
     classifier_wandb_path_bert: Annotated[
@@ -256,8 +256,7 @@ def main(
     wandb_config = {
         "batch_size": batch_size,
         "limit": limit,
-        # FIXME: use artifact path instead of run path. waiting for other PR to go in.
-        "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "labelled_passages_wandb_path": labelled_passages_wandb_path,
         "classifier_wandb_path_bert": classifier_wandb_path_bert,
         "classifier_wandb_path_llm": classifier_wandb_path_llm,
         "ensemble_config_bert": {
@@ -299,20 +298,20 @@ def main(
 
         # load labelled passages
         console.print(
-            f"Loading labelled passages from W&B run: {labelled_passages_wandb_run_path}"
+            f"Loading labelled passages from W&B: {labelled_passages_wandb_path}"
         )
         wandb_api = wandb.Api()
-        labelled_passages_wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
-        labelled_passages = load_labelled_passages_from_wandb_run(
-            labelled_passages_wandb_run
+        labelled_passages = load_labelled_passages_from_wandb(
+            labelled_passages_wandb_path
         )
 
         console.print(f"Loaded {len(labelled_passages)} passages")
 
         if track_and_upload and run:
-            # declare models as inputs to this run
+            # declare models and labelled passages as inputs to this run
             run.use_artifact(classifier_wandb_path_bert)
             run.use_artifact(classifier_wandb_path_llm)
+            run.use_artifact(labelled_passages_wandb_path)
 
         console.print("Loading BERT classifier's training data from W&B...")
         model_artifact = wandb_api.artifact(classifier_wandb_path_bert)
@@ -339,7 +338,7 @@ def main(
                 f"Loading from artifact: {training_data_artifact.name}:{training_data_artifact.version}"
             )
             artifact_dir = training_data_artifact.download()
-            labelled_passages_file = Path(artifact_dir) / "training_data.jsonl"
+            labelled_passages_file = Path(artifact_dir) / "labelled_passages.jsonl"
 
             bert_training_data = deserialise_pydantic_list_with_fallback(
                 labelled_passages_file.read_text(), LabelledPassage
@@ -469,7 +468,7 @@ def main(
                 unlabelled_passages,
                 run=run,
                 concept=bert_classifier.concept,
-                artifact_name_prefix="unlabelled",
+                artifact_name="unlabelled",
             )
             console.print(
                 f"✅ Uploaded {len(unlabelled_passages)} unlabelled passages to W&B"
@@ -480,7 +479,7 @@ def main(
                 updated_bert_training_data,
                 run=run,
                 concept=bert_classifier.concept,
-                artifact_name_prefix="updated_bert_training_data",
+                artifact_name="updated_bert_training_data",
             )
             console.print(
                 f"✅ Uploaded {len(updated_bert_training_data)} updated BERT training passages to W&B"
