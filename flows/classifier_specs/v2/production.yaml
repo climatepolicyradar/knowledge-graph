@@ -286,6 +286,8 @@
   concept_id: ns3mswx8
   classifier_id: smhdpm2v
   wandb_registry_version: v17
+  dont_run_on:
+    - sabin
 - wikibase_id: Q1278
   concept_id: ak3eprz2
   classifier_id: 5b3ndxc3
