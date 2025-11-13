@@ -14,7 +14,7 @@ from rich.table import Table
 from sklearn.metrics import precision_recall_curve, roc_curve
 from wandb.wandb_run import Run
 
-from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
+from knowledge_graph.classifier import Classifier
 from knowledge_graph.cloud import AwsEnv, Namespace, parse_aws_env
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import (
@@ -32,6 +32,7 @@ from knowledge_graph.metrics import (
     count_span_level_metrics,
 )
 from knowledge_graph.span import Span, group_overlapping_spans
+from knowledge_graph.wandb_helpers import load_classifier_from_wandb
 from scripts.get_concept import get_concept_async
 
 console = Console()

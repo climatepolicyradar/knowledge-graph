@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from sklearn.metrics import f1_score
 
-from knowledge_graph.classifier import Classifier, load_classifier_from_wandb
+from knowledge_graph.classifier import Classifier
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import ensemble_metrics_dir
 from knowledge_graph.ensemble import create_ensemble
@@ -21,6 +21,7 @@ from knowledge_graph.ensemble.metrics import (
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
+from knowledge_graph.wandb_helpers import load_classifier_from_wandb
 from scripts.get_concept import get_concept_async
 
 app = typer.Typer()

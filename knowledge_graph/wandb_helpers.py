@@ -7,9 +7,16 @@ from pathlib import Path
 import wandb
 from wandb.sdk.wandb_run import Run as WandbRun
 
-from flows.utils import serialise_pydantic_list_as_jsonl
+from flows.utils import (
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.concept import Concept
+from knowledge_graph.config import (
+    wandb_labelled_passages_artifact_filename,
+    wandb_model_artifact_filename,
+)
 from knowledge_graph.labelled_passage import LabelledPassage
 
 logger = logging.getLogger(__name__)
@@ -37,27 +44,49 @@ def log_labelled_passages_artifact_to_wandb_run(
     labelled_passages: list[LabelledPassage],
     run: WandbRun,
     concept: Concept,
-    classifier: Classifier | None = None,
+    classifier: "Classifier | None" = None,
+    artifact_name: str | None = None,
+    additional_metadata: dict | None = None,
 ):
-    """Upload a list of labelled passages from a classifier to Weights & Biases."""
+    """
+    Upload a list of labelled passages from a classifier to Weights & Biases.
 
-    artifact_name = (
-        f"{classifier.id}-labelled-passages" if classifier else "labelled-passages"
-    )
+    :param labelled_passages: List of labelled passages to upload
+    :param run: The W&B run to log the artifact to
+    :param concept: The concept associated with these passages
+    :param classifier: Optional classifier, adds classifier_id to metadata if provided
+    :param artifact_name: Optional custom artifact name. Defaults to
+        "{classifier.id}-labelled-passages" or "labelled-passages"
+    :param additional_metadata: Optional additional metadata fields to include
+    """
+
+    if artifact_name is None:
+        artifact_name = (
+            f"{classifier.id}-labelled-passages" if classifier else "labelled-passages"
+        )
+
+    num_positives = len([p for p in labelled_passages if p.spans])
+    num_negatives = len(labelled_passages) - num_positives
+
     artifact_metadata = {
         "concept_wikibase_revision": concept.wikibase_revision,
         "passage_count": len(labelled_passages),
+        "num_positives": num_positives,
+        "num_negatives": num_negatives,
     }
 
     if classifier:
         artifact_metadata |= {"classifier_id": classifier.id}
+
+    if additional_metadata:
+        artifact_metadata |= additional_metadata
 
     labelled_passages_artifact = wandb.Artifact(
         name=artifact_name, type="labelled_passages", metadata=artifact_metadata
     )
 
     with labelled_passages_artifact.new_file(
-        "labelled_passages.jsonl", mode="w", encoding="utf-8"
+        wandb_labelled_passages_artifact_filename, mode="w", encoding="utf-8"
     ) as f:
         f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
@@ -99,36 +128,97 @@ def load_artifact_from_wandb_run(
     return Path(artifact_dir)
 
 
-def load_labelled_passages_from_wandb_run(
-    run: WandbRun,
+def _load_labelled_passages_from_artifact_dir(
+    artifact_dir: Path,
 ) -> list[LabelledPassage]:
     """
-    Loads labelled passages from a W&B run.
+    Load labelled passages from all .jsonl files in an artifact directory.
 
-    These are any logged artifact with type 'labelled_passages' and suffix '.jsonl'.
-
-    :raises WandbArtifactNotFoundError: if no labelled passage artifacts are found for
-        the given run
+    :param artifact_dir: Path to the downloaded artifact directory
+    :return: List of labelled passages from all .jsonl files
     """
-
-    artifact_dir = load_artifact_from_wandb_run(
-        run=run, artifact_type="labelled_passages"
-    )
-
-    jsonl_files = list(Path(artifact_dir).glob("*.jsonl"))
+    jsonl_files = list(artifact_dir.glob("*.jsonl"))
 
     if not jsonl_files:
-        logger.warning(
-            f"⚠️ No JSON files found in labelled_passages artifact for run {run.name}"
-        )
+        logger.warning(f"⚠️ No .jsonl files found in artifact directory {artifact_dir}")
 
     labelled_passages = []
     for json_file in jsonl_files:
-        with open(json_file, "r", encoding="utf-8") as f:
-            file_labelled_passages = [
-                LabelledPassage.model_validate_json(line) for line in f
-            ]
-
-        labelled_passages += file_labelled_passages
+        file_labelled_passages = deserialise_pydantic_list_with_fallback(
+            json_file.read_text(), LabelledPassage
+        )
+        labelled_passages.extend(file_labelled_passages)
 
     return labelled_passages
+
+
+def load_labelled_passages_from_wandb(
+    wandb_path: str | None = None,
+    run: WandbRun | None = None,
+) -> list[LabelledPassage]:
+    """
+    Load labelled passages from a W&B artifact path or run.
+
+    Provide exactly one of wandb_path or run.
+
+    :param wandb_path: W&B artifact path (e.g. 'climatepolicyradar/Q913/rsgz5ygh:v0')
+    :param run: W&B run object to load labelled passages artifact from
+    :return: List of labelled passages
+    :raises ValueError: if neither or both parameters are provided
+    :raises WandbArtifactNotFoundError: if no labelled passage artifacts are found
+    :raises WandbMultipleArtifactsFoundError: if multiple artifacts found when loading from run
+    """
+    if (wandb_path is None) == (run is None):
+        raise ValueError(
+            "Must provide exactly one of 'wandb_path' or 'run', not both or neither"
+        )
+
+    if wandb_path is not None:
+        api = wandb.Api()
+        artifact = api.artifact(wandb_path)
+        artifact_dir = Path(artifact.download())
+    else:
+        assert run is not None
+        artifact_dir = load_artifact_from_wandb_run(
+            run=run, artifact_type="labelled_passages"
+        )
+
+    return _load_labelled_passages_from_artifact_dir(artifact_dir)
+
+
+def load_artifact_file_from_wandb(
+    wandb_path: str,
+    filename: str,
+) -> Path:
+    """
+    Load an artifact file with a known filename from W&B.
+
+    Returns the path to the downloaded file.
+    """
+
+    api = wandb.Api()
+    artifact = api.artifact(wandb_path)
+    artifact_dir = artifact.download()
+
+    return Path(artifact_dir) / filename
+
+
+def load_classifier_from_wandb(
+    wandb_path: str, model_to_cuda: bool = False
+) -> Classifier:
+    """
+    Load a classifier from a W&B path.
+
+    This works for any classifier and W&B team. A separate, CPR-specific method
+    to load models from the model registry exists in flows/inference and is more robust
+    for use in production pipelines.
+
+    :param wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
+    :param model_to_cuda: Whether to load the model to CUDA if available
+    :return: The loaded classifier
+    """
+
+    model_pickle_path = load_artifact_file_from_wandb(
+        wandb_path=wandb_path, filename=wandb_model_artifact_filename
+    )
+    return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)

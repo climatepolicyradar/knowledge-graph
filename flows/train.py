@@ -21,7 +21,7 @@ async def train_on_gpu(
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
     concept_overrides: Optional[dict[str, Any]] = None,
-    training_data_wandb_run_path: Optional[str] = None,
+    training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
     config: Config | None = None,
 ):
@@ -65,6 +65,6 @@ async def train_on_gpu(
         classifier_type=classifier_type,
         classifier_kwargs=classifier_kwargs,
         concept_overrides=concept_overrides,
-        training_data_wandb_run_path=training_data_wandb_run_path,
+        training_data_wandb_path=training_data_wandb_path,
         limit_training_samples=limit_training_samples,
     )

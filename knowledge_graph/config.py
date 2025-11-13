@@ -34,7 +34,8 @@ concept_dir = processed_data_dir / "concepts"
 predictions_dir = processed_data_dir / "predictions"
 embedding_cache_dir = processed_data_dir / "embedding_cache"
 
-model_artifact_name = os.getenv("MODEL_ARTIFACT_NAME", "model.pickle")
+wandb_model_artifact_filename = "model.pickle"
+wandb_labelled_passages_artifact_filename = "labelled_passages.jsonl"
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
 
