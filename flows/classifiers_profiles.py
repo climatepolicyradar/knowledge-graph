@@ -678,9 +678,9 @@ async def _post_errors_main(
     header = "Classifiers Profile Sync Summary:"
     if run_context.parameters:
         if run_context.parameters.get("upload_to_vespa"):
-            header += " uploading to vepsa"
+            header += " uploading to vespa"
         else:
-            header += " (dry run, not uploading to vepsa)"
+            header += " (dry run, not uploading to vespa)"
 
     return await slack_client.chat_postMessage(
         channel=channel,
