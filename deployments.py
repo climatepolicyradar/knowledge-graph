@@ -31,11 +31,11 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.sync_concepts import sync_concepts
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_neo4j
 from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
-from flows.wikibase_to_vespa import wikibase_to_vespa
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     )
 
     create_deployment(
-        flow=wikibase_to_vespa,
+        flow=sync_concepts,
         description="Upload concepts from Wikibase to Vespa",
         concurrency_limit=ConcurrencyLimitConfig(
             limit=1,
