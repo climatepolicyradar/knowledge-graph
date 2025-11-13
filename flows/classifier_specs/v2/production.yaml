@@ -46,6 +46,11 @@
   concept_id: 5m964t43
   classifier_id: 2dpw38rj
   wandb_registry_version: v26
+- wikibase_id: Q374
+  concept_id: 2nf7bhjg
+  classifier_id: argh45s5
+  classifiers_profile: primary
+  wandb_registry_version: v27
 - wikibase_id: Q404
   concept_id: ybg68eaw
   classifier_id: fd5t9bhw
