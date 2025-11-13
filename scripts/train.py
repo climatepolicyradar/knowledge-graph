@@ -16,7 +16,7 @@ from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 import scripts.get_concept
-from flows.utils import get_flow_run_ui_url, serialise_pydantic_list_as_jsonl
+from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
     ClassifierFactory,
