@@ -21,6 +21,7 @@ from flows.aggregate import (
     Metadata,
     MiniClassifierSpec,
     _document_stems_from_parameters,
+    aggregate,
     aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
@@ -36,6 +37,7 @@ from flows.aggregate import (
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
 from flows.utils import DocumentStem, build_inference_result_s3_uri
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -84,6 +86,26 @@ def mock_classifier_specs():
         write_spec_file(spec_file_path, classifier_specs)
         with patch("flows.classifier_specs.spec_interface.SPEC_DIR", temp_spec_dir):
             yield spec_file_path, classifier_specs
+
+
+@pytest.mark.asyncio
+async def test_aggregate_dont_allow_prod_classifier_specs(test_config):
+    test_config.aws_env = AwsEnv.production
+
+    with pytest.raises(
+        ValueError, match="in production you must use the full classifier specs. list"
+    ):
+        _ = await aggregate(
+            config=test_config,
+            classifier_specs=[
+                ClassifierSpec(
+                    wikibase_id="Q1286",
+                    classifier_id="7bt99yeu",
+                    wandb_registry_version="v3",
+                    dont_run_on=["sabin", "cclw"],
+                ),
+            ],
+        )
 
 
 @pytest.mark.asyncio
