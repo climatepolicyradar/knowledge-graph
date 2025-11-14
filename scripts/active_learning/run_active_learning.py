@@ -110,23 +110,21 @@ def annotate_passages_with_ensemble(
         passages, ensemble_metrics, ensemble_majority_votes
     ):
         if metric_value <= ensemble_config.ensemble_metric_threshold:
-            # NOTE: here we use the prediction_probability field of Span to indicate
-            # whether a model predicted the mention of a concept in text. This goes
-            # against the convention in a lot of this code where a negative prediction
-            # on a passage is indicated by empty spans. This is done here because
-            # we want to store the model which made the negative prediction in the
-            # span's `labellers` field.
+            if majority_vote_value > 0:
+                span = Span(
+                    text=passage.text,
+                    start_index=0,
+                    end_index=len(passage.text),
+                    prediction_probability=majority_vote_value,
+                    concept_id=wikibase_id,
+                    labellers=[str(model)],
+                    timestamps=[datetime.now()],
+                )
+                spans = [span]
+            else:
+                spans = []
 
-            span = Span(
-                text=passage.text,
-                start_index=0,
-                end_index=len(passage.text),
-                prediction_probability=majority_vote_value,
-                concept_id=wikibase_id,
-                labellers=[str(model)],
-                timestamps=[datetime.now()],
-            )
-            annotated_passages.append(passage.model_copy(update={"spans": [span]}))
+            annotated_passages.append(passage.model_copy(update={"spans": spans}))
         else:
             unannotated_passages.append(passage)
 
