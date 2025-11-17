@@ -295,6 +295,7 @@ async def filter_existing_inference_results(
 ) -> tuple[
     list[DocumentStem],
     set[DocumentStem],
+    int,
 ]:
     logger = get_logger()
 
@@ -311,11 +312,11 @@ async def filter_existing_inference_results(
     # Track which documents were skipped
     skipped_stems = set(filter_result.accepted) - set(documents_to_process)
     logger.info(
-        f"skipping {len(skipped_stems)} documents with existing results "
-        f"for {classifier_spec}"
+        f"found {len(existing_results)} existing results for {classifier_spec}, "
+        f"skipping {len(skipped_stems)} of {len(filter_result.accepted)} documents"
     )
 
-    return (documents_to_process, skipped_stems)
+    return (documents_to_process, skipped_stems, len(existing_results))
 
 
 async def get_existing_inference_results(
@@ -1368,24 +1369,30 @@ async def inference(
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
     skipped_by_cache: dict[ClassifierSpec, set[DocumentStem]] = {}
+    existing_results_count: dict[ClassifierSpec, int] = {}
+    accepted_documents_count: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
+        accepted_documents_count[classifier_spec] = len(filter_result.accepted)
 
         # Check for existing results if caching is enabled
         if config.skip_existing_inference_results:
             (
                 documents_to_process,
                 skipped_stems,
+                existing_count,
             ) = await filter_existing_inference_results(
                 config=config,
                 classifier_spec=classifier_spec,
                 filter_result=filter_result,
             )
             skipped_by_cache[classifier_spec] = skipped_stems
+            existing_results_count[classifier_spec] = existing_count
         else:
             documents_to_process = filter_result.accepted
             skipped_by_cache[classifier_spec] = set()
+            existing_results_count[classifier_spec] = 0
 
         # Track all documents we were asked to process (including skipped ones)
         requested_document_stems.update(documents_to_process)
@@ -1408,6 +1415,8 @@ async def inference(
         config=config,
         removal_details=removal_details,
         skipped_by_cache=skipped_by_cache,
+        existing_results_count=existing_results_count,
+        accepted_documents_count=accepted_documents_count,
     )
 
     all_raw_successes = []
@@ -1510,6 +1519,8 @@ async def create_dont_run_on_docs_summary_artifact(
     config: Config,
     removal_details: dict[ClassifierSpec, int],
     skipped_by_cache: dict[ClassifierSpec, set[DocumentStem]],
+    existing_results_count: dict[ClassifierSpec, int],
+    accepted_documents_count: dict[ClassifierSpec, int],
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
@@ -1520,7 +1531,9 @@ async def create_dont_run_on_docs_summary_artifact(
             "Classifier ID": spec.classifier_id,
             "Dont Run Ons": [s.value for s in (spec.dont_run_on or [])],
             "Removals": count,
-            "Cached (Skipped)": len(skipped_by_cache.get(spec, set())),
+            "Accepted": accepted_documents_count.get(spec, 0),
+            "Existing Results": existing_results_count.get(spec, 0),
+            "Skipped": len(skipped_by_cache.get(spec, set())),
         }
         for spec, count in removal_details.items()
     ]
