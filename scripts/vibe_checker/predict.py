@@ -65,11 +65,11 @@ def main(
 
     classifiers: list[Classifier] = [
         KeywordClassifier(concept),
-        EmbeddingClassifier(concept, threshold=0.6),
-        EmbeddingClassifier(concept, threshold=0.625),
-        EmbeddingClassifier(concept, threshold=0.65),
-        EmbeddingClassifier(concept, threshold=0.675),
-        EmbeddingClassifier(concept, threshold=0.7),
+        EmbeddingClassifier(concept).set_prediction_threshold(0.6),
+        EmbeddingClassifier(concept).set_prediction_threshold(0.625),
+        EmbeddingClassifier(concept).set_prediction_threshold(0.65),
+        EmbeddingClassifier(concept).set_prediction_threshold(0.675),
+        EmbeddingClassifier(concept).set_prediction_threshold(0.7),
     ]
 
     for classifier in classifiers:

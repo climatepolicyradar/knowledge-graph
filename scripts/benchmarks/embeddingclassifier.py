@@ -516,12 +516,11 @@ def main(
                             classifier = EmbeddingClassifier(
                                 concept=concept_for_eval,  # type: ignore[arg-type]
                                 embedding_model_name=model_name,
-                                threshold=threshold,
                                 document_prefix=document_prefix,
                                 query_prefix=query_prefix,
                                 # Avoids MPS out of memory errors
                                 device="cpu",
-                            )
+                            ).set_prediction_threshold(threshold)
 
                             # Evaluate classifier
                             start_time = time.time()
