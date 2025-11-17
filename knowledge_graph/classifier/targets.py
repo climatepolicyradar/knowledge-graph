@@ -77,7 +77,11 @@ class BaseTargetClassifier(
     def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
         return ClassifierID.generate(
-            self.name, self.concept.id, self.model_name, self.commit_hash
+            self.name,
+            self.concept.id,
+            self.model_name,
+            self.commit_hash,
+            self.prediction_threshold,
         )
 
     @abstractmethod

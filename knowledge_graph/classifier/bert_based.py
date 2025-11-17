@@ -145,6 +145,7 @@ class BertBasedClassifier(
             self.name,
             self.concept.id,
             self.base_model,
+            self.prediction_threshold,
         )
 
     @contextmanager
