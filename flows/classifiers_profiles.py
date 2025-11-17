@@ -1115,6 +1115,17 @@ async def sync_classifiers_profiles(
     logger.info(
         f"Running the classifiers profiles lifecycle with the config: {config}, "
     )
+
+    if not upload_to_wandb:
+        logger.warning(
+            f"upload_to_wandb is set to {upload_to_wandb}. Using dry run mode for wandb."
+        )
+
+    if not upload_to_vespa:
+        logger.warning(
+            f"upload_to_vespa is set to {upload_to_vespa}. Using dry run mode for vespa."
+        )
+
     classifier_specs = load_classifier_specs(aws_env)
     logger.info(
         f"Loaded {len(classifier_specs)} classifier specs for env {aws_env.name}"
