@@ -433,7 +433,7 @@ async def create_aggregate_inference_summary_artifact(
         flow_run_name = f"unknown-{generate_slug(2)}"
 
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"batch-aggregate-{flow_run_name}",
+        key=f"batch-aggregate-{config.aws_env.value}-{flow_run_name}",
         table=details,
         description=overview_description,
     )
@@ -481,7 +481,7 @@ async def create_aggregate_inference_overall_summary_artifact(
             )
 
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"aggregate-inference-overall-{aws_env.value}",
+        key=f"aggregate-inference-overall-{aws_env.value}-{generate_slug(2)}",
         table=details,
         description=overview_description,
     )

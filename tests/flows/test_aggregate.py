@@ -192,7 +192,7 @@ async def test_aggregate_batch_of_documents(
         f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
     )
 
-    summary_artifact = await Artifact.get("batch-aggregate-test-flow-run")
+    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
     assert summary_artifact and summary_artifact.description
     assert summary_artifact.data == "[]"
 
@@ -229,7 +229,7 @@ async def test_aggregate_batch_of_documents__with_failures(
             run_output_identifier="test-run",
         )
 
-    summary_artifact = await Artifact.get("batch-aggregate-test-flow-run")
+    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
     assert summary_artifact and summary_artifact.description
     artifact_data = json.loads(summary_artifact.data)
     failure_stems = [f["Failed document Stem"] for f in artifact_data]

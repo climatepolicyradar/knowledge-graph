@@ -18,7 +18,6 @@ from cpr_sdk.parser_models import (
     PDFData,
     PDFTextBlock,
 )
-from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
 from prefect.states import Completed, Running
@@ -379,7 +378,16 @@ async def test_inference_with_dont_run_on_filter(
             gef_doc_id
         ]
 
-        summary_artifact = await Artifact.get("removal-details-sandbox")
+        from prefect.client.orchestration import get_client
+
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            removal_artifacts = [
+                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+            ]
+
+        assert len(removal_artifacts) == 1
+        summary_artifact = removal_artifacts[0]
         assert summary_artifact and summary_artifact.description
         assert json.loads(summary_artifact.data) == [
             {
@@ -1943,7 +1951,21 @@ async def test_inference_with_caching_enabled(
         assert call_params["batch"] == [doc_without_cache]
 
         # Verify the artifact shows 1 skipped document
-        summary_artifact = await Artifact.get("removal-details-sandbox")
+        from prefect.client.orchestration import get_client
+
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            removal_artifacts = [
+                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+            ]
+
+        assert len(removal_artifacts) > 0, (
+            "Expected at least one removal-details artifact to be created"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        removal_artifacts.sort(key=lambda x: x.created, reverse=True)
+        summary_artifact = removal_artifacts[0]  # Most recently created
         assert summary_artifact and summary_artifact.description
         artifact_data = json.loads(summary_artifact.data)
         assert len(artifact_data) == 1
@@ -2005,7 +2027,21 @@ async def test_inference_with_caching_disabled(
         assert set(call_params["batch"]) == set(input_doc_ids)
 
         # Verify the artifact shows 0 skipped documents
-        summary_artifact = await Artifact.get("removal-details-sandbox")
+        from prefect.client.orchestration import get_client
+
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            removal_artifacts = [
+                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+            ]
+
+        assert len(removal_artifacts) > 0, (
+            "Expected at least one removal-details artifact to be created"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        removal_artifacts.sort(key=lambda x: x.created, reverse=True)
+        summary_artifact = removal_artifacts[0]  # Most recently created
         assert summary_artifact and summary_artifact.description
         artifact_data = json.loads(summary_artifact.data)
         assert len(artifact_data) == 1

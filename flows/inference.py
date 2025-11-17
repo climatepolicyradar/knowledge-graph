@@ -800,6 +800,7 @@ async def create_inference_on_batch_summary_artifact(
     failures: Sequence[tuple[DocumentStem, Exception]],
     unknown_failures: Sequence[BaseException],
     flow_run_name: str | None,
+    config: Config,
 ):
     """Create an artifact with a summary about a batch inference run."""
 
@@ -850,7 +851,7 @@ async def create_inference_on_batch_summary_artifact(
         flow_run_name = f"unknown-{generate_slug(2)}"
 
     await acreate_table_artifact(
-        key=f"batch-inference-{flow_run_name}",
+        key=f"batch-inference-{config.aws_env.value}-{flow_run_name}",
         table=document_details,
         description=overview_description,
     )
@@ -1052,6 +1053,7 @@ async def _inference_batch_of_documents(
         all_failures,
         all_unknown_failures,
         flow_run_name,
+        config,
     )
 
     batch_inference_result = BatchInferenceResult(
@@ -1538,7 +1540,7 @@ async def create_dont_run_on_docs_summary_artifact(
         for spec, count in removal_details.items()
     ]
     await acreate_table_artifact(
-        key=f"removal-details-{config.aws_env.value}",
+        key=f"removal-details-{config.aws_env.value}-{generate_slug(2)}",
         table=table,
         description=description,
     )
@@ -1592,7 +1594,7 @@ async def create_inference_summary_artifact(
     ]
 
     await acreate_table_artifact(
-        key=f"classifier-inference-{config.aws_env.value}",
+        key=f"classifier-inference-{config.aws_env.value}-{generate_slug(2)}",
         table=classifier_details,
         description=overview_description,
     )
