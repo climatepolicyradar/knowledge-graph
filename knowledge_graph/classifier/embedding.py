@@ -184,7 +184,6 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClas
         self,
         concept: Concept,
         embedding_model_name: str = "ibm-granite/granite-embedding-107m-multilingual",
-        threshold: float = 0.65,
         document_prefix: str = "",
         query_prefix: str = "",
         device: str | None = None,
@@ -220,8 +219,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClas
             )
 
         self.embedding_model_name = embedding_model_name
-        self.threshold = threshold  # Keep for backwards compatibility
-        self.prediction_threshold = threshold  # New unified attribute
+        self.prediction_threshold = None
         self.document_prefix = document_prefix
         self.query_prefix = query_prefix
 
@@ -252,9 +250,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClas
 
     def __repr__(self):
         """Return a string representation of the classifier."""
-        return (
-            f'{self.name}("{self.concept.preferred_label}", threshold={self.threshold})'
-        )
+        return f'{self.name}("{self.concept.preferred_label}", threshold={self.prediction_threshold})'
 
     @property
     def id(self) -> ClassifierID:
@@ -263,7 +259,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClas
             self.name,
             self.concept.id,
             self.embedding_model,
-            self.threshold,
+            self.prediction_threshold,
             self.document_prefix,
             self.query_prefix,
         )

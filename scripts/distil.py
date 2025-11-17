@@ -193,8 +193,8 @@ def main(
     )
 
     embedding_classifier = EmbeddingClassifier(
-        concept, threshold=embedding_classifier_threshold
-    )
+        concept,
+    ).set_prediction_threshold(embedding_classifier_threshold)
     console.log(f"🤖 Created an {embedding_classifier}")
 
     passages_labelled_by_embedding_classifier = label_passages(
