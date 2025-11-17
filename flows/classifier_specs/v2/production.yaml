@@ -18,10 +18,6 @@
   classifier_id: swabfsar
   classifiers_profile: primary
   wandb_registry_version: v3
-- wikibase_id: Q123
-  concept_id: f6h7mncv
-  classifier_id: 8np4shsw
-  wandb_registry_version: v21
 - wikibase_id: Q218
   concept_id: ygjab2d5
   classifier_id: 3p7eyng3
