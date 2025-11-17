@@ -103,6 +103,9 @@ def main(
         True,
         help="Remove duplicate passages based on text content before prediction",
     ),
+    prediction_threshold: float | None = typer.Option(
+        None, help="Optional prediction threshold for the classifier."
+    ),
 ):
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
@@ -117,6 +120,8 @@ def main(
         "classifier_path": classifier_wandb_path,
         "labelled_passages_path": labelled_passages_path,
         "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "prediction_threshold": prediction_threshold,
+        "stop_after_n_positives": stop_after_n_positives,
     }
     wandb_job_type = "predict_adhoc"
 
@@ -176,6 +181,12 @@ def main(
         get_s3_client(aws_env, region_name)
 
         classifier = load_classifier_from_wandb(classifier_wandb_path)
+
+        if prediction_threshold is not None:
+            classifier.set_prediction_threshold(prediction_threshold)
+            console.print(
+                f"Classifier prediction threshold set to {prediction_threshold}"
+            )
 
         # 3. predict using model
         output_labelled_passages = label_passages_with_classifier(
