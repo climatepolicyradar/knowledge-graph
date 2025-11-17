@@ -43,10 +43,6 @@
   classifier_id: mfe6wvbv
   wandb_registry_version: v27
 - wikibase_id: Q374
-  concept_id: 5m964t43
-  classifier_id: 2dpw38rj
-  wandb_registry_version: v26
-- wikibase_id: Q374
   concept_id: 2nf7bhjg
   classifier_id: argh45s5
   classifiers_profile: primary
@@ -249,10 +245,6 @@
   concept_id: qjz8mphv
   classifier_id: mjaupkch
   wandb_registry_version: v26
-- wikibase_id: Q1016
-  concept_id: dugfcdzm
-  classifier_id: 6vn29j93
-  wandb_registry_version: v17
 - wikibase_id: Q1016
   concept_id: 4uqjca5b
   classifier_id: 78tewr6s
