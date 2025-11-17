@@ -502,8 +502,8 @@ class ArgillaSession:
         for passage in labelled_passages:
             records.append(
                 {
-                    "id": str(uuid.uuid4()),
-                    "fields": {"text": passage.text},
+                    "external_id": str(uuid.uuid4()),
+                    "text": passage.text,
                     "metadata": self._format_metadata_keys_for_argilla(
                         passage.metadata
                     ),
