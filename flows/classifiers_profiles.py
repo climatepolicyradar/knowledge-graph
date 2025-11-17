@@ -23,6 +23,9 @@ from pydantic import AnyHttpUrl, SecretStr
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
+import scripts.classifier_metadata
+import scripts.demote
+import scripts.promote
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from flows.config import Config
@@ -173,6 +176,7 @@ def handle_classifier_profile_action(
     wikibase_id: WikibaseID,
     aws_env: AwsEnv,
     action_function: Callable[..., Any],
+    upload_to_wandb: bool,
     **kwargs,
 ) -> Result[Dict, Error]:
     """
@@ -199,7 +203,12 @@ def handle_classifier_profile_action(
     kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
     try:
-        action_function(wikibase_id=wikibase_id, aws_env=aws_env, **kwargs)
+        action_function(
+            wikibase_id=wikibase_id,
+            aws_env=aws_env,
+            upload_to_wandb=upload_to_wandb,
+            **kwargs,
+        )
 
     except Exception as e:
         return log_and_return_error(
@@ -226,63 +235,78 @@ def promote_classifier_profile(
     classifier_id: ClassifierID,
     classifiers_profile: Profile,
     aws_env: AwsEnv,
+    upload_to_wandb: bool,
 ):
     """Promote a classifier and add classifiers profile"""
     logger = get_logger()
-    #     scripts.promote.main(
-    #         wikibase_id=wikibase_id,
-    #         classifier_id=classifier_id,
-    #         aws_env=aws_env,
-    #         add_classifiers_profiles=classifiers_profile,
-    #     )
 
     logger.info(
         f"Promoting {wikibase_id}, {classifier_id}, {classifiers_profile}, {aws_env}"
     )
+
+    if upload_to_wandb:
+        scripts.promote.main(
+            wikibase_id=wikibase_id,
+            classifier_id=classifier_id,
+            aws_env=aws_env,
+            add_classifiers_profiles=[classifiers_profile.value],
+        )
+    else:
+        logger.info("Dry run, not uploading to wandb.")
 
 
 def demote_classifier_profile(
     wikibase_id: WikibaseID,
     aws_env: AwsEnv,
     wandb_registry_version: Version,
+    upload_to_wandb: bool,
     classifier_id: Optional[ClassifierID] = None,
     classifiers_profile: Optional[Profile] = None,
 ):
     """Demote a classifier based on model registry and remove classifiers profile"""
     logger = get_logger()
 
-    #     scripts.demote.main(
-    #         wikibase_id=wikibase_id,
-    #         wandb_registry_version=wandb_registry_version,
-    #         aws_env=aws_env
-    #     )
-
     logger.info(
         f"Demoting {wikibase_id}, {aws_env}, {classifier_id}, {wandb_registry_version}, {classifiers_profile}"
     )
+    if upload_to_wandb:
+        scripts.demote.main(
+            wikibase_id=wikibase_id,
+            wandb_registry_version=wandb_registry_version,
+            aws_env=aws_env,
+        )
+    else:
+        logger.info("Dry run, not uploading to wandb.")
 
 
 def update_classifier_profile(
     wikibase_id: WikibaseID,
     classifier_id: ClassifierID,
     add_classifiers_profiles: list[Profile],
-    remove_classifiers_profiles: list[Profile],
+    remove_classifiers_profiles: list[str],
     aws_env: AwsEnv,
+    upload_to_wandb: bool,
 ):
     """Update classifiers profile for already promoted model"""
     logger = get_logger()
 
-    # scripts.classifier_metadata.update(
-    #     wikibase_id=wikibase_id,
-    #     classifier_id=classifier_id,
-    #     add_classifiers_profiles=add_classifiers_profile,
-    #     remove_classifiers_profiles=remove_classifiers_profile,
-    #     aws_env=aws_env,
-    #     update_specs = False
-    # )
     logger.info(
         f"Updating {wikibase_id}, {aws_env}, {classifier_id}, {str(add_classifiers_profiles[0])}, {str(remove_classifiers_profiles[0])}"
     )
+
+    if upload_to_wandb:
+        scripts.classifier_metadata.update(
+            wikibase_id=wikibase_id,
+            classifier_id=classifier_id,
+            add_classifiers_profiles=[
+                profile.value for profile in add_classifiers_profiles
+            ],
+            remove_classifiers_profiles=remove_classifiers_profiles,
+            aws_env=aws_env,
+            update_specs=False,
+        )
+    else:
+        logger.info("Dry run, not uploading to wandb.")
 
 
 async def read_concepts(
@@ -531,6 +555,7 @@ async def send_classifiers_profile_slack_alert(
     vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
+    upload_to_wandb: bool,
     upload_to_vespa: bool,
 ):
     """
@@ -555,6 +580,7 @@ async def send_classifiers_profile_slack_alert(
                 channel=channel,
                 total_concepts=total_concepts,
                 errors=len(validation_errors),
+                upload_to_wandb=upload_to_wandb,
                 upload_to_vespa=upload_to_vespa,
                 error_type="Data Quality Issues",
             )
@@ -593,6 +619,7 @@ async def send_classifiers_profile_slack_alert(
                 channel=channel,
                 total_concepts=total_concepts,
                 errors=len(other_errors),
+                upload_to_wandb=upload_to_wandb,
                 upload_to_vespa=upload_to_vespa,
                 error_type="System Errors",
             )
@@ -641,6 +668,7 @@ async def _post_errors_main(
     channel: str,
     total_concepts: int,
     errors: int,
+    upload_to_wandb: bool,
     upload_to_vespa: bool,
     error_type: str,
 ):
@@ -684,6 +712,10 @@ async def _post_errors_main(
         color = "#ecb22e"  # Orange
 
     header = "Classifiers Profile Sync Summary:"
+    if upload_to_wandb:
+        header += " uploading to wandb"
+    else:
+        header += " (dry run, not uploading to wandb)"
     if upload_to_vespa:
         header += " uploading to vespa"
     else:
@@ -1053,6 +1085,7 @@ async def sync_classifiers_profiles(
     wikibase_cache_path: Path | None = None,
     wikibase_cache_save_if_missing: bool = False,
     vespa_search_adapter: VespaSearchAdapter | None = None,
+    upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
 ):
     """Update classifier profile for a given aws environment."""
@@ -1131,6 +1164,7 @@ async def sync_classifiers_profiles(
                         wikibase_id=new_spec.wikibase_id,
                         aws_env=aws_env,
                         action_function=promote_classifier_profile,
+                        upload_to_wandb=upload_to_wandb,
                         classifier_id=new_spec.classifier_id,
                         classifiers_profile=[str(new_spec.classifiers_profile)],
                     )
@@ -1150,9 +1184,10 @@ async def sync_classifiers_profiles(
                         wikibase_id=current_spec.wikibase_id,
                         aws_env=aws_env,
                         action_function=update_classifier_profile,
+                        upload_to_wandb=upload_to_wandb,
                         classifier_id=current_spec.classifier_id,
                         remove_classifiers_profiles=[current_spec.classifiers_profile],
-                        add_classifiers_profiles=[new_spec.classifiers_profile.value],
+                        add_classifiers_profiles=[new_spec.classifiers_profile],
                     )
                 )
 
@@ -1169,6 +1204,7 @@ async def sync_classifiers_profiles(
                         wikibase_id=current_spec.wikibase_id,
                         aws_env=aws_env,
                         action_function=demote_classifier_profile,
+                        upload_to_wandb=upload_to_wandb,
                         wandb_registry_version=current_spec.wandb_registry_version,
                         classifier_id=current_spec.classifier_id,
                         classifiers_profile=current_spec.classifiers_profile,
@@ -1224,6 +1260,7 @@ async def sync_classifiers_profiles(
             vespa_errors=vespa_errors,
             successes=successes,
             aws_env=aws_env,
+            upload_to_wandb=upload_to_wandb,
             upload_to_vespa=upload_to_vespa,
         )
     except Exception as e:
