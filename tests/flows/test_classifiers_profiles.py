@@ -246,6 +246,7 @@ def test_handle_classifier_profile_action(mock_profile_mapping):
             wikibase_id=mock_profile_mapping.wikibase_id,
             aws_env=AwsEnv.staging,
             action_function=mock_action_function,
+            upload_to_wandb=False,
             classifier_id=mock_profile_mapping.classifier_id,
             classifiers_profile=mock_profile_mapping.classifiers_profile,
         )
@@ -270,7 +271,7 @@ def test_handle_classifier_profile_action(mock_profile_mapping):
 def test_promote_classifiers_profiles(mock_profile_mapping):
     """Test promoting classifiers profiles for successful validation."""
 
-    # mock response to wandb_validation
+    # mock response to wandb scripts
     with (
         patch("scripts.promote.main") as mock_promote,
     ):
@@ -279,24 +280,41 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
             classifier_id=mock_profile_mapping.classifier_id,
             classifiers_profile=mock_profile_mapping.classifiers_profile,
             aws_env=AwsEnv.staging,
+            upload_to_wandb=True,
         )
 
         # Ensure scripts.promote.main was called with the correct arguments
-        # TODO: Uncomment when promote script is added
-        # mock_promote.assert_called_once_with(
-        #     wikibase_id=mock_profile_mapping.wikibase_id,
-        #     classifier_id=mock_profile_mapping.classifier_id,
-        #     add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
-        #     aws_env=AwsEnv.staging,
-        # )
+        mock_promote.assert_called_once_with(
+            wikibase_id=mock_profile_mapping.wikibase_id,
+            classifier_id=mock_profile_mapping.classifier_id,
+            aws_env=AwsEnv.staging,
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile.value],
+        )
 
-        mock_promote.assert_not_called()  # Remove when uncommented above
+
+def test_promote_classifiers_profiles__dry_run(mock_profile_mapping):
+    """Test promoting classifiers profiles for successful validation."""
+
+    # mock response to wandb scripts
+    with (
+        patch("scripts.promote.main") as mock_promote,
+    ):
+        promote_classifier_profile(
+            wikibase_id=mock_profile_mapping.wikibase_id,
+            classifier_id=mock_profile_mapping.classifier_id,
+            classifiers_profile=mock_profile_mapping.classifiers_profile,
+            aws_env=AwsEnv.staging,
+            upload_to_wandb=False,
+        )
+
+        # Ensure scripts.demote.main was not called when dry run
+        mock_promote.assert_not_called()
 
 
 def test_demote_classifiers_profiles(mock_specs):
     """Test demoting classifiers profiles for successful validation."""
 
-    # mock response to wandb_validation
+    # mock response to wandb scripts
     with (
         patch("scripts.demote.main") as mock_demote,
     ):
@@ -305,22 +323,40 @@ def test_demote_classifiers_profiles(mock_specs):
             wandb_registry_version=mock_specs.wandb_registry_version,
             aws_env=AwsEnv.staging,
             classifier_id=mock_specs.classifier_id,
+            upload_to_wandb=True,
         )
 
         # Ensure scripts.demote.main was called with the correct arguments
-        # TODO: Uncomment when demote script is added
-        # mock_demote.assert_called_once_with(
-        #     wikibase_id=mock_specs.wikibase_id,
-        #     wandb_registry_version=mock_specs.wandb_registry_version,
-        #     aws_env=AwsEnv.staging,
-        # )
-        mock_demote.assert_not_called()  # Remove when uncommented above
+        mock_demote.assert_called_once_with(
+            wikibase_id=mock_specs.wikibase_id,
+            wandb_registry_version=mock_specs.wandb_registry_version,
+            aws_env=AwsEnv.staging,
+        )
+
+
+def test_demote_classifiers_profiles__dry_run(mock_specs):
+    """Test demoting classifiers profiles for successful validation."""
+
+    # mock response to wandb scripts
+    with (
+        patch("scripts.demote.main") as mock_demote,
+    ):
+        demote_classifier_profile(
+            wikibase_id=mock_specs.wikibase_id,
+            wandb_registry_version=mock_specs.wandb_registry_version,
+            aws_env=AwsEnv.staging,
+            classifier_id=mock_specs.classifier_id,
+            upload_to_wandb=False,
+        )
+
+        # Ensure scripts.demote.main was not called when dry run
+        mock_demote.assert_not_called()
 
 
 def test_update_classifier_profile(mock_specs, mock_profile_mapping):
     """Test updating a classifier profile for successful validation."""
 
-    # mock response to wandb_validation
+    # mock response to wandb scripts
     with (
         patch("scripts.classifier_metadata.update") as mock_update,
     ):
@@ -330,19 +366,38 @@ def test_update_classifier_profile(mock_specs, mock_profile_mapping):
             aws_env=AwsEnv.staging,
             add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
             remove_classifiers_profiles=[mock_specs.classifiers_profile],
+            upload_to_wandb=True,
         )
 
         # Ensure scripts.classifier_metadata.update was called with the correct arguments
-        # TODO: Uncomment when update script is added
-        # mock_update.assert_called_once_with(
-        #     wikibase_id=mock_specs.wikibase_id,
-        #     classifier_id=mock_specs.classifier_id,
-        #     remove_classifiers_profiles=[mock_specs.classifiers_profile],
-        #     add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
-        #     aws_env=AwsEnv.staging,
-        #     update_specs=False,
-        # )
-        mock_update.assert_not_called()  # Remove when uncommented above
+        mock_update.assert_called_once_with(
+            wikibase_id=mock_specs.wikibase_id,
+            classifier_id=mock_specs.classifier_id,
+            remove_classifiers_profiles=[mock_specs.classifiers_profile],
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile.value],
+            aws_env=AwsEnv.staging,
+            update_specs=False,
+        )
+
+
+def test_update_classifier_profile__dry_run(mock_specs, mock_profile_mapping):
+    """Test updating a classifier profile for successful validation."""
+
+    # mock response to wandb scripts
+    with (
+        patch("scripts.classifier_metadata.update") as mock_update,
+    ):
+        update_classifier_profile(
+            wikibase_id=mock_specs.wikibase_id,
+            classifier_id=mock_specs.classifier_id,
+            aws_env=AwsEnv.staging,
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
+            remove_classifiers_profiles=[mock_specs.classifiers_profile],
+            upload_to_wandb=False,
+        )
+
+        # Ensure scripts.demote.main was not called when dry run
+        mock_update.assert_not_called()
 
 
 def test_handle_classifier_profile_action__failed_validation(mock_specs):
@@ -363,6 +418,7 @@ def test_handle_classifier_profile_action__failed_validation(mock_specs):
             wikibase_id=mock_specs.wikibase_id,
             aws_env=AwsEnv.staging,
             action_function=mock_action_function,
+            upload_to_wandb=False,
             classifier_id=mock_specs.classifier_id,
         )
 
