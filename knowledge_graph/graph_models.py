@@ -3,6 +3,10 @@ from time import sleep
 
 from neo4j.exceptions import ServiceUnavailable
 from neomodel import (
+    ArrayProperty,
+    BooleanProperty,
+    DateTimeProperty,
+    IntegerProperty,
     Relationship,
     RelationshipFrom,
     RelationshipTo,
@@ -111,6 +115,13 @@ class DocumentNode(StructuredNode):
 
     title = StringProperty()
     document_id = StringProperty(required=True, unique_index=True)
+    document_slug = StringProperty()
+    family_id = StringProperty()
+    family_slug = StringProperty()
+    publication_ts = DateTimeProperty()
+    translated = BooleanProperty()
+    geography_ids = ArrayProperty(StringProperty())
+    corpus_id = StringProperty()
     passages = RelationshipTo("PassageNode", "HAS_PASSAGE")
 
 
@@ -119,6 +130,10 @@ class PassageNode(StructuredNode):
 
     document_passage_id = StringProperty(required=True, unique_index=True)
     text = StringProperty()
+    text_block_id = StringProperty()
+    text_block_language = StringProperty()
+    text_block_type = StringProperty()
+    page_number = IntegerProperty()
     concepts = RelationshipTo("ConceptNode", "MENTIONS_CONCEPT", cardinality=ZeroOrMore)
     source_document = RelationshipFrom("DocumentNode", "HAS_PASSAGE", cardinality=One)  # type: ignore
 
@@ -128,6 +143,8 @@ class ConceptNode(StructuredNode):
 
     wikibase_id = StringProperty(required=True, unique_index=True)
     preferred_label = StringProperty()
+    alternative_labels = ArrayProperty(StringProperty())
+    negative_labels = ArrayProperty(StringProperty())
     passages = RelationshipFrom(
         "PassageNode", "MENTIONS_CONCEPT", cardinality=ZeroOrMore
     )
