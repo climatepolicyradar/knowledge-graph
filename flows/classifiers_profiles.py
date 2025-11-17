@@ -28,6 +28,7 @@ from pydantic import AnyHttpUrl, SecretStr
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
+import flows.create_classifiers_specs_pr as create_classifiers_specs_pr
 import scripts.classifier_metadata
 import scripts.demote
 import scripts.promote
@@ -362,7 +363,7 @@ async def read_concepts(
 
 
 async def get_classifiers_profiles(
-    wikibase_auth: WikibaseAuth, concepts: list[Concept]
+    wikibase_auth: WikibaseAuth, concepts: list[Concept], debug: bool = False
 ) -> list[Result[ClassifiersProfileMapping, Error]]:
     """
     Return valid classifiers profiles and different kids of validation errors.
@@ -396,8 +397,8 @@ async def get_classifiers_profiles(
             concept_classifiers_profiles = await wikibase.get_classifier_ids_async(
                 wikibase_id=concept.wikibase_id
             )
-            # TODO: potentially remove this check
-            if len(concept_classifiers_profiles) == 0:
+            # only apply this check in debug mode
+            if len(concept_classifiers_profiles) == 0 and debug:
                 results.append(
                     Err(
                         Error(
@@ -987,7 +988,7 @@ async def update_vespa_with_classifiers_profiles(
             )
 
             logger.info(
-                f"Created VespaClassifiersProfile.Mapping object for {profile.value}, with mappings {profile_mappings}"
+                f"Created VespaClassifiersProfile.Mapping object for {profile.value}, with {len(profile_mappings)} mappings"
             )
 
             # convert to VespaClassifiersProfile
@@ -1258,6 +1259,8 @@ async def sync_classifiers_profiles(
     vespa_search_adapter: VespaSearchAdapter | None = None,
     upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
+    automerge_classifier_specs_pr: bool = False,
+    debug_wikibase_validation: bool = False,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1309,6 +1312,11 @@ async def sync_classifiers_profiles(
             f"upload_to_vespa is set to {upload_to_vespa}. Using dry run mode for vespa."
         )
 
+    if not automerge_classifier_specs_pr:
+        logger.warning(
+            f"automerge_classifier_specs_pr is set to {automerge_classifier_specs_pr}. Classifier specs PRs will not be auto-merged."
+        )
+
     classifier_specs = load_classifier_specs(aws_env)
     logger.info(
         f"Loaded {len(classifier_specs)} classifier specs for env {aws_env.name}"
@@ -1319,7 +1327,9 @@ async def sync_classifiers_profiles(
     )
 
     # returns Result with valid classifiers profiles and validation errors
-    results = await get_classifiers_profiles(wikibase_auth, concepts)
+    results = await get_classifiers_profiles(
+        wikibase_auth, concepts, debug=debug_wikibase_validation
+    )
 
     # retrieve validation errors and valid classifiers profiles
     validation_errors: list[Error] = [
@@ -1437,11 +1447,28 @@ async def sync_classifiers_profiles(
         # reload classifier specs to confirm updates
         updated_classifier_specs = load_classifier_specs(aws_env)
 
+        # create PR with updated classifier specs
+        spec_file = str(determine_spec_file_path(aws_env))
+        run_context = get_run_context()
+        flow_run_name = "unknown"
+        flow_run_url = "unknown"
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run:
+            flow_run_name = run_context.flow_run.name
+            flow_run_url = (
+                f"{PREFECT_UI_URL.value()}/flow-runs/flow-run/{run_context.flow_run.id}"
+            )
+        await create_classifiers_specs_pr.main(
+            spec_file=spec_file,
+            aws_env=aws_env,
+            flow_run_name=flow_run_name,
+            flow_run_url=flow_run_url,
+            auto_merge=automerge_classifier_specs_pr,
+        )
+
         async with vespa_search_adapter.client.asyncio(
             connections=VESPA_CONNECTION_POOL_SIZE,
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),
         ) as vespa_connection_pool:
-            # update vespa with latest classifiers profiles
             vespa_results = await update_vespa_with_classifiers_profiles(
                 updated_classifier_specs, vespa_connection_pool, upload_to_vespa
             )

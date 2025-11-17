@@ -75,16 +75,19 @@ def mock_specs_2profiles():
     ]
 
 
-@pytest.mark.asyncio
-async def test_get_classifiers_profiles():
-    # mock concepts
-    list_concepts = [
+@pytest.fixture
+def mock_concepts():
+    return [
         Concept(wikibase_id="Q123", preferred_label="Concept 123"),
         Concept(wikibase_id="Q100", preferred_label="Concept 100"),
         Concept(wikibase_id="Q999", preferred_label="Concept 999"),
         Concept(wikibase_id="Q200", preferred_label="Concept 200"),
+        Concept(wikibase_id="Q201", preferred_label="Concept 201"),
     ]
 
+
+@pytest.mark.asyncio
+async def test_get_classifiers_profiles(mock_concepts):
     with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
         # mock response from wikibase.get_classifier_ids_async
         mock_wikibase_auth = Mock()
@@ -110,15 +113,17 @@ async def test_get_classifiers_profiles():
                     (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
                     (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
                 ],
+                # Q201: debug False - success (no profiles)
+                [],
             ]
         )
 
         # Call the function under test
         results = await get_classifiers_profiles(
-            wikibase_auth=mock_wikibase_auth, concepts=list_concepts
+            wikibase_auth=mock_wikibase_auth, concepts=mock_concepts, debug=False
         )
 
-    assert mock_wikibase.get_classifier_ids_async.call_count == 4
+        assert mock_wikibase.get_classifier_ids_async.call_count == 5  # one per concept
 
     # assert successful profiles
     classifier_profiles = [unwrap_ok(r) for r in results if isinstance(r, Ok)]
@@ -144,8 +149,48 @@ async def test_get_classifiers_profiles():
         == "Error getting classifier ID from wikibase: Failed to fetch classifier profiles for Q100"
     )
 
-    # check mocked method called
-    assert mock_wikibase.get_classifier_ids_async.call_count == 4
+
+@pytest.mark.asyncio
+async def test_get_classifiers_profiles__debug(mock_concepts):
+    with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
+        # mock response from wikibase.get_classifier_ids_async
+        mock_wikibase_auth = Mock()
+        mock_wikibase = mock_wikibase_session.return_value
+
+        # 1 success, 3 failures
+        mock_wikibase.get_classifier_ids_async = AsyncMock(
+            side_effect=[
+                # Q123: success
+                [
+                    (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
+                    (StatementRank.DEPRECATED, ClassifierID("yyyy9999")),
+                ],
+                # Q100: failure
+                Exception("Failed to fetch classifier profiles for Q100"),
+                # Q999: fail validation - 2 primary profiles
+                [
+                    (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
+                    (StatementRank.PREFERRED, ClassifierID("cccc4444")),
+                ],
+                # Q200: fail validation - same classifier ID in 2 profiles
+                [
+                    (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
+                    (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
+                ],
+                # Q201: debug True - failure
+                [],
+            ]
+        )
+        # Call the function with debug mode on - results in extra failure
+        results_debug = await get_classifiers_profiles(
+            wikibase_auth=mock_wikibase_auth, concepts=mock_concepts, debug=True
+        )
+
+    classifier_profiles = [unwrap_ok(r) for r in results_debug if isinstance(r, Ok)]
+    assert len(classifier_profiles) == 2
+
+    failures = [unwrap_err(r) for r in results_debug if isinstance(r, Err)]
+    assert len(failures) == 4
 
 
 def test_compare_classifiers_profiles():

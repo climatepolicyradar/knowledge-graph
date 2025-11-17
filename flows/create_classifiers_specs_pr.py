@@ -1,0 +1,324 @@
+import asyncio
+import json
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+from flows.utils import get_logger
+from knowledge_graph.cloud import AwsEnv
+
+
+async def commit_and_create_pr(
+    files_pattern: str,
+    commit_message: str,
+    pr_title: str,
+    pr_body: str,
+    repo: str = "climatepolicyradar/knowledge-graph",
+    base_branch: str = "main",
+    repo_path: Path = Path("/app"),
+) -> int:
+    """
+    Commits changes and creates a GitHub PR using gh CLI.
+
+    Args:
+        files_pattern: Git pattern for files to add (e.g., "flows/classifier_specs/")
+        commit_message: Git commit message
+        pr_title: Pull request title
+        pr_body: Pull request body
+        repo: Repository in format "owner/repo"
+        base_branch: Base branch for PR
+        repo_path: Path to git repository
+
+    Returns:
+        PR number (or 0 if no changes)
+    """
+    logger = get_logger()
+
+    # Check if there are changes
+    result = subprocess.run(
+        ["git", "status", "--porcelain", files_pattern],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    if not result.stdout.strip():
+        logger.info("No changes detected, skipping PR creation")
+        return 0
+
+    # Configure git (in case not set)
+    _ = subprocess.run(
+        ["git", "config", "user.email", "tech@climatepolicyradar.org"],
+        cwd=repo_path,
+        check=True,
+    )
+    _ = subprocess.run(
+        ["git", "config", "user.name", "cpr-tech-admin"],
+        cwd=repo_path,
+        check=True,
+    )
+
+    # Create and checkout new branch
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    branch_name = f"auto/classifier-specs-{timestamp}"
+
+    _ = subprocess.run(
+        ["git", "checkout", "-b", branch_name],
+        cwd=repo_path,
+        check=True,
+    )
+
+    # Add and commit changes
+    _ = subprocess.run(
+        ["git", "add", files_pattern],
+        cwd=repo_path,
+        check=True,
+    )
+
+    _ = subprocess.run(
+        ["git", "commit", "-m", commit_message],
+        cwd=repo_path,
+        check=True,
+    )
+
+    # Ensure gh is configured as git credential helper
+    logger.info("Setting up gh as git credential helper")
+    _ = subprocess.run(
+        ["gh", "auth", "setup-git"],
+        cwd=repo_path,
+        check=True,
+    )
+
+    # Push branch to remote
+    logger.info(f"Pushing branch {branch_name} to remote")
+    _ = subprocess.run(
+        ["git", "push", "-u", "origin", branch_name],
+        cwd=repo_path,
+        check=True,
+    )
+
+    # Create PR using gh CLI
+    logger.info(f"Creating pull request: {pr_title}")
+
+    result = subprocess.run(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--title",
+            pr_title,
+            "--body",
+            pr_body,
+            "--base",
+            base_branch,
+            "--head",
+            branch_name,
+            "--repo",
+            repo,
+        ],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        logger.error(f"Failed to create PR: {result.stderr}")
+        raise RuntimeError(f"gh pr create failed: {result.stderr}")
+
+    # Extract PR number from gh output (URL is in stdout)
+    pr_url = result.stdout.strip()
+    pr_number = int(pr_url.split("/")[-1])
+
+    logger.info(f"Created PR #{pr_number}: {pr_url}")
+
+    return pr_number
+
+
+async def auto_approve_pr(
+    pr_number: int,
+    repo: str = "climatepolicyradar/knowledge-graph",
+) -> None:
+    """
+    Auto-approve a GitHub PR.
+
+    Args:
+        pr_number: Pull request number
+        repo: Repository in format "owner/repo"
+    """
+    logger = get_logger()
+
+    subprocess.run(
+        [
+            "gh",
+            "pr",
+            "review",
+            str(pr_number),
+            "--approve",
+            "--body",
+            "✓ Auto-approved by Prefect flow",
+            "--repo",
+            repo,
+        ],
+        check=True,
+    )
+
+    logger.info(f"Auto-approved PR #{pr_number}")
+
+
+async def enable_auto_merge(
+    pr_number: int,
+    repo: str,
+    merge_method: str,
+) -> None:
+    """
+    Enable auto-merge on a GitHub PR.
+
+    Args:
+        pr_number: Pull request number
+        repo: Repository in format "owner/repo"
+        merge_method: Merge method (squash, merge, or rebase)
+    """
+    logger = get_logger()
+
+    subprocess.run(
+        [
+            "gh",
+            "pr",
+            "merge",
+            str(pr_number),
+            f"--{merge_method.lower()}",
+            "--auto",
+            "--repo",
+            repo,
+        ],
+        check=True,
+    )
+
+    logger.info(f"Enabled auto-merge on PR #{pr_number}")
+
+
+async def wait_for_pr_merge(
+    pr_number: int,
+    repo: str,
+    timeout_minutes: int,
+    poll_interval_seconds: int,
+) -> None:
+    """
+    Wait for a PR to be merged by polling with gh CLI.
+
+    Args:
+        pr_number: Pull request number
+        repo: Repository in format "owner/repo"
+        timeout_minutes: Maximum time to wait
+        poll_interval_seconds: Time between status checks
+    """
+    logger = get_logger()
+
+    start_time = asyncio.get_event_loop().time()
+    timeout_seconds = timeout_minutes * 60
+
+    logger.info(
+        f"Waiting for PR #{pr_number} to merge (timeout: {timeout_minutes}m, "
+        f"poll interval: {poll_interval_seconds}s)"
+    )
+
+    while True:
+        elapsed = asyncio.get_event_loop().time() - start_time
+
+        if elapsed > timeout_seconds:
+            raise TimeoutError(
+                f"PR #{pr_number} did not merge within {timeout_minutes} minutes. "
+                f"Check: https://github.com/{repo}/pull/{pr_number}"
+            )
+
+        # Check PR status using gh
+        result = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "view",
+                str(pr_number),
+                "--json",
+                "state,mergedAt",
+                "--repo",
+                repo,
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            logger.warning(f"Failed to get PR status: {result.stderr}")
+            await asyncio.sleep(poll_interval_seconds)
+            continue
+
+        pr_data = json.loads(result.stdout)
+
+        # Check if merged (mergedAt will be non-null if merged)
+        if pr_data.get("mergedAt"):
+            logger.info(f"✓ PR #{pr_number} successfully merged!")
+            return
+
+        # Check if closed without merging
+        if pr_data.get("state") == "CLOSED" and not pr_data.get("mergedAt"):
+            raise RuntimeError(
+                f"PR #{pr_number} was closed without merging. "
+                f"Check: https://github.com/{repo}/pull/{pr_number}"
+            )
+
+        # Log current status
+        elapsed_mins = int(elapsed / 60)
+        logger.info(
+            f"PR #{pr_number} - state: {pr_data['state']}, elapsed: {elapsed_mins}m"
+        )
+
+        # Wait before next check
+        await asyncio.sleep(poll_interval_seconds)
+
+
+async def main(
+    spec_file: str,
+    aws_env: AwsEnv,
+    flow_run_name: str,
+    flow_run_url: str,
+    auto_merge: bool = False,
+):
+    """
+    Main workflow for creating and managing a PR.
+
+    Args:
+        spec_file: Path to the classifiers spec yaml file
+        aws_env: AWS environment the spec belongs to
+        flow_run_name: Name of the Prefect flow run calling the changes
+        flow_run_url: URL to the Prefect flow run calling the changes
+        auto_merge: Whether to auto-approve and merge the PR
+    """
+    pr_no = await commit_and_create_pr(
+        files_pattern=spec_file,
+        commit_message="Update classifier specs (automated)",
+        pr_title=f"Update classifier specs for {aws_env} (automated)",
+        pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
+        repo="climatepolicyradar/knowledge-graph",
+        base_branch="main",
+        repo_path=Path("./"),
+    )
+
+    print(f"PR #{pr_no} created.")
+
+    if not auto_merge:
+        print("Auto-merge not enabled as per configuration.")
+    else:
+        print("Auto-approving and merging PR...")
+        _ = await enable_auto_merge(
+            pr_number=pr_no,
+            repo="climatepolicyradar/knowledge-graph",
+            merge_method="REBASE",
+        )
+
+        _ = await wait_for_pr_merge(
+            pr_number=pr_no,
+            repo="climatepolicyradar/knowledge-graph",
+            timeout_minutes=30,
+            poll_interval_seconds=30,
+        )
