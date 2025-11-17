@@ -31,7 +31,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.train import train_on_gpu
-from flows.update_neo4j import update_neo4j
+from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
 from flows.wikibase_to_vespa import wikibase_to_vespa
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     # Sync Neo4j with Wikibase
 
     create_deployment(
-        flow=update_neo4j,
+        flow=update_concepts,
         description="Refresh Neo4j with the latest concept graph",
         env_schedules={
             AwsEnv.labs: "0 3 * * MON-THU",
