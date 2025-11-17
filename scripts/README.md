@@ -20,7 +20,15 @@ just train Q123 --track-and-upload --aws-env sandbox
 > [!NOTE]
 > Promoting requires a classifiers profile - each promoted classifier ID should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
 
-We promote with:
+Demote the old version, being superseded, with:
+
+```shell
+just demote Q123 --classifier-id abcd121212 --aws-env sandbox
+```
+
+You don't have to demote a model version. There may be 2 versions in one environment, as long as they're in different classifiers profiles.
+
+Promote with:
 
 ```shell
 just promote Q123 --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary

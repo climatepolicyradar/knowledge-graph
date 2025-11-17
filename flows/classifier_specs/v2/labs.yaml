@@ -1,9 +1,4 @@
 ---
-- wikibase_id: Q123
-  classifier_id: 8np4shsw
-  wandb_registry_version: v18
-  dont_run_on:
-  - sabin
 - wikibase_id: Q368
   classifier_id: 58br2fy7
   wandb_registry_version: v21

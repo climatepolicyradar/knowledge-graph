@@ -124,7 +124,7 @@ All the sub pipelines (inference, aggregation & indexing) can be run individuall
 1. Inference
 
 This consists of running our classifiers over our documents to generate `LabelledPassages` which themselves contain `Spans` as listed above in this `README.md`.
-
+The list of classifiers  and rules under which they are run is defined in [classifier_spec yaml file for each environment](./flows/classifier_specs/v2) e.g. the [production.yaml](./flows/classifier_specs/v2/production.yaml)
 2. Aggregation
 
 This consists of aggregating (collating) the inference results for a document from different classifiers which are stored at multiple s3 paths into one object in s3.

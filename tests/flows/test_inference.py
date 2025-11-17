@@ -387,7 +387,9 @@ async def test_inference_with_dont_run_on_filter(
                 "Classifier ID": spec.classifier_id,
                 "Dont Run Ons": ["cpr", "sabin"],
                 "Removals": 2,
-                "Cached (Skipped)": 0,
+                "Accepted": 1,
+                "Existing Results": 0,
+                "Skipped": 0,
             }
         ]
 
@@ -1945,7 +1947,9 @@ async def test_inference_with_caching_enabled(
         assert summary_artifact and summary_artifact.description
         artifact_data = json.loads(summary_artifact.data)
         assert len(artifact_data) == 1
-        assert artifact_data[0]["Cached (Skipped)"] == 1
+        assert artifact_data[0]["Skipped"] == 1
+        assert artifact_data[0]["Existing Results"] == 1
+        assert artifact_data[0]["Accepted"] == 2
 
 
 @pytest.mark.asyncio
@@ -2005,4 +2009,6 @@ async def test_inference_with_caching_disabled(
         assert summary_artifact and summary_artifact.description
         artifact_data = json.loads(summary_artifact.data)
         assert len(artifact_data) == 1
-        assert artifact_data[0]["Cached (Skipped)"] == 0
+        assert artifact_data[0]["Skipped"] == 0
+        assert artifact_data[0]["Existing Results"] == 0
+        assert artifact_data[0]["Accepted"] == 2

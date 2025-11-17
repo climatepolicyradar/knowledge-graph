@@ -18,10 +18,6 @@
   classifier_id: swabfsar
   classifiers_profile: primary
   wandb_registry_version: v3
-- wikibase_id: Q123
-  concept_id: f6h7mncv
-  classifier_id: 8np4shsw
-  wandb_registry_version: v21
 - wikibase_id: Q218
   concept_id: ygjab2d5
   classifier_id: 3p7eyng3
@@ -42,10 +38,6 @@
   concept_id: wfcb6jdf
   classifier_id: mfe6wvbv
   wandb_registry_version: v27
-- wikibase_id: Q374
-  concept_id: 5m964t43
-  classifier_id: 2dpw38rj
-  wandb_registry_version: v26
 - wikibase_id: Q374
   concept_id: 2nf7bhjg
   classifier_id: argh45s5
@@ -249,10 +241,6 @@
   concept_id: qjz8mphv
   classifier_id: mjaupkch
   wandb_registry_version: v26
-- wikibase_id: Q1016
-  concept_id: dugfcdzm
-  classifier_id: 6vn29j93
-  wandb_registry_version: v17
 - wikibase_id: Q1016
   concept_id: 4uqjca5b
   classifier_id: 78tewr6s
