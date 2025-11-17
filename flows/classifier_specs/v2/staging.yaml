@@ -19,11 +19,6 @@
   classifier_id: bp3wqfwc
   classifiers_profile: primary
   wandb_registry_version: v1
-- wikibase_id: Q123
-  concept_id: f6h7mncv
-  classifier_id: 8np4shsw
-  classifiers_profile: primary
-  wandb_registry_version: v22
 - wikibase_id: Q218
   concept_id: 7h7nwymz
   classifier_id: 3p7eyng3
