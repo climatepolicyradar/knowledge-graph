@@ -244,15 +244,15 @@ def promote_classifier_profile(
         f"Promoting {wikibase_id}, {classifier_id}, {classifiers_profile}, {aws_env}"
     )
 
-    if upload_to_wandb:
+    if not upload_to_wandb:
+        logger.info("Dry run, not uploading to wandb.")
+    else:
         scripts.promote.main(
             wikibase_id=wikibase_id,
             classifier_id=classifier_id,
             aws_env=aws_env,
             add_classifiers_profiles=[classifiers_profile.value],
         )
-    else:
-        logger.info("Dry run, not uploading to wandb.")
 
 
 def demote_classifier_profile(
@@ -269,14 +269,14 @@ def demote_classifier_profile(
     logger.info(
         f"Demoting {wikibase_id}, {aws_env}, {classifier_id}, {wandb_registry_version}, {classifiers_profile}"
     )
-    if upload_to_wandb:
+    if not upload_to_wandb:
+        logger.info("Dry run, not uploading to wandb.")
+    else:
         scripts.demote.main(
             wikibase_id=wikibase_id,
             wandb_registry_version=wandb_registry_version,
             aws_env=aws_env,
         )
-    else:
-        logger.info("Dry run, not uploading to wandb.")
 
 
 def update_classifier_profile(
@@ -294,7 +294,9 @@ def update_classifier_profile(
         f"Updating {wikibase_id}, {aws_env}, {classifier_id}, {str(add_classifiers_profiles[0])}, {str(remove_classifiers_profiles[0])}"
     )
 
-    if upload_to_wandb:
+    if not upload_to_wandb:
+        logger.info("Dry run, not uploading to wandb.")
+    else:
         scripts.classifier_metadata.update(
             wikibase_id=wikibase_id,
             classifier_id=classifier_id,
@@ -305,8 +307,6 @@ def update_classifier_profile(
             aws_env=aws_env,
             update_specs=False,
         )
-    else:
-        logger.info("Dry run, not uploading to wandb.")
 
 
 async def read_concepts(
