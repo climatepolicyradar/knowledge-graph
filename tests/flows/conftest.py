@@ -43,6 +43,7 @@ from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
+from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 
@@ -381,7 +382,9 @@ def local_classifier_id(mock_classifiers_dir):
     classifier_id = "6vxrmcuf"
     wandb_registry_version = "v1"
 
-    full_path = mock_classifiers_dir / f"{classifier_id}:v1" / "model.pickle"
+    full_path = (
+        mock_classifiers_dir / f"{classifier_id}:v1" / wandb_model_artifact_filename
+    )
     assert full_path.exists()
     yield wikibase_id, classifier_id, wandb_registry_version
 
@@ -664,7 +667,7 @@ async def mock_wandb(mock_s3_async_client, mock_classifiers_dir, local_classifie
 
         mock_run = Mock()
         mock_run.use_model.return_value = (
-            mock_classifiers_dir / f"{classifier_id}:v1" / "model.pickle"
+            mock_classifiers_dir / f"{classifier_id}:v1" / wandb_model_artifact_filename
         )
         mock_init.return_value = mock_run
         yield mock_init, mock_run, mock_artifact
