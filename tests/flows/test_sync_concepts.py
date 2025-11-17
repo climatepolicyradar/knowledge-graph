@@ -272,7 +272,9 @@ async def test_create_vespa_sync_summary_artifact__all_success(mock_concepts):
         "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/concepts_20250101_120000.parquet"
+            results=results,
+            parquet_path="/path/to/concepts_20250101_120000.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -306,7 +308,9 @@ async def test_create_vespa_sync_summary_artifact__all_failures(mock_concepts):
         "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -337,7 +341,9 @@ async def test_create_vespa_sync_summary_artifact__mixed(mock_concepts):
         "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -373,7 +379,9 @@ async def test_create_vespa_sync_summary_artifact__error_with_vespa_response(
         "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -394,7 +402,9 @@ async def test_create_vespa_sync_summary_artifact__error_without_metadata():
         "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Should not raise an error
@@ -413,7 +423,9 @@ async def test_create_vespa_sync_summary_artifact__no_parquet_path():
     with patch(
         "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
-        await create_vespa_sync_summary_artifact(results=results, parquet_path=None)
+        await create_vespa_sync_summary_artifact(
+            results=results, parquet_path=None, aws_env=AwsEnv.staging
+        )
 
         # Verify artifact was created
         mock_create.assert_called_once()

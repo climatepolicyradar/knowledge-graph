@@ -443,6 +443,7 @@ async def create_classifiers_profiles_artifact(
     wandb_errors: list[Error],
     vespa_errors: list[Error],
     successes: list[Dict],
+    aws_env: AwsEnv,
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
@@ -484,7 +485,7 @@ async def create_classifiers_profiles_artifact(
     ]
 
     await acreate_table_artifact(
-        key="classifiers-profiles-validation",
+        key=f"classifiers-profiles-validation-{aws_env.value}",
         table=cp_details,
         description=overview_description,
     )
@@ -1283,6 +1284,7 @@ async def sync_classifiers_profiles(
         wandb_errors=wandb_errors,
         vespa_errors=vespa_errors,
         successes=successes,
+        aws_env=aws_env,
     )
 
     # if vespa errors, fail the flow

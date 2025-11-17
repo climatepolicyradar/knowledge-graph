@@ -364,6 +364,7 @@ async def update_concepts_in_vespa(
 async def create_vespa_sync_summary_artifact(
     results: list[Result[Concept, Error]],
     parquet_path: str | None,
+    aws_env: AwsEnv,
 ):
     """Create an artifact with a summary about the Vespa sync run."""
 
@@ -427,7 +428,7 @@ async def create_vespa_sync_summary_artifact(
     ]
 
     await acreate_table_artifact(
-        key="vespa-sync",
+        key=f"vespa-sync-{aws_env.value}",
         table=concept_details,
         description=overview_description,
     )
@@ -1062,4 +1063,5 @@ async def sync_concepts(
     await create_vespa_sync_summary_artifact(
         results=results,
         parquet_path=str(append_path) if append_path else None,
+        aws_env=aws_env,
     )
