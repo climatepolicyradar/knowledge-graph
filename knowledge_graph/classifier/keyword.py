@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime
 
@@ -5,6 +6,8 @@ from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, merge_overlapping_spans
+
+logger = logging.getLogger(__name__)
 
 
 class KeywordClassifier(Classifier, ZeroShotClassifier):
@@ -41,6 +44,9 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         "I need to fill up my gas tank"
     but not
         "The greenhouse gas emissions are a major contributor to climate change."
+
+    KeywordClassifier does not output prediction probabilities, so spans identified by
+    this classifier will not have prediction_probability values set.
     """
 
     valid_separator_characters = [
@@ -215,7 +221,7 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
                 )
         return spans
 
-    def _predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
@@ -229,8 +235,16 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         5. Positive matches that overlap with negative matches are filtered out
 
         :param str text: The text to predict on
+        :param float | None threshold: Optional prediction threshold. Logs a warning if
+            used here; kept for API consistency.
         :return list[Span]: A list of spans in the text
         """
+        if threshold is not None:
+            logger.warning(
+                "`threshold` parameter ignored - KeywordClassifier does not output "
+                "prediction probabilities"
+            )
+
         # Find all positive matches (allowing overlaps for now)
         positive_spans = []
         positive_spans.extend(

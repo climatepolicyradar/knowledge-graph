@@ -63,7 +63,12 @@ Instructions:
 
 
 class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier, ABC):
-    """A classifier that uses an LLM to predict the presence of a concept in a text."""
+    """
+    A classifier that uses an LLM to predict the presence of a concept in a text.
+
+    Does not output prediction probabilities, so spans identified by this classifier
+    will not have prediction_probability values set.
+    """
 
     def __init__(
         self,
@@ -182,8 +187,18 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         except RuntimeError:
             pass
 
-    def _predict(self, text: str) -> list[Span]:
-        """Predict whether the supplied text contains an instance of the concept."""
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
+        """
+        Predict whether the supplied text contains an instance of the concept.
+
+        :param str text: The text to predict on
+        :param float | None threshold: Optional prediction threshold
+        :return list[Span]: A list of spans identified in the text
+        """
+        if threshold is not None:
+            logger.warning(
+                f"`threshold` parameter ignored - {self.__class__.__name__} does not output prediction probabilities",
+            )
 
         self._check_and_nest_event_loop()
 
@@ -207,7 +222,9 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             logger.warning(f"Prediction failed with unexpected exception type. {e}")
             return []
 
-    def _predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float | None = None
+    ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
 
         self._check_and_nest_event_loop()
