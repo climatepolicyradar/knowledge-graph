@@ -8,8 +8,7 @@ from pydantic import ValidationError as PydanticValidationError
 from vespa.io import VespaResponse
 
 from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
-from flows.utils import S3Uri
-from flows.wikibase_to_vespa import (
+from flows.sync_concepts import (
     concepts_to_dataframe,
     create_vespa_sync_summary_artifact,
     dataframe_to_concepts,
@@ -20,6 +19,7 @@ from flows.wikibase_to_vespa import (
     update_concept_in_vespa,
     update_concepts_in_vespa,
 )
+from flows.utils import S3Uri
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseAuth
@@ -175,7 +175,7 @@ async def test_s3_prefix_has_objects__with_objects(mock_s3_async_client):
     mock_session = AsyncMock()
     mock_session.client = mock_client
 
-    with patch("flows.wikibase_to_vespa.get_async_session", return_value=mock_session):
+    with patch("flows.sync_concepts.get_async_session", return_value=mock_session):
         s3_uri = S3Uri(bucket=bucket_name, key=prefix)
         result = await s3_prefix_has_objects(s3_uri, "eu-west-1", AwsEnv.sandbox)
 
@@ -202,7 +202,7 @@ async def test_s3_prefix_has_objects__no_objects(mock_s3_async_client):
     mock_session = AsyncMock()
     mock_session.client = mock_client
 
-    with patch("flows.wikibase_to_vespa.get_async_session", return_value=mock_session):
+    with patch("flows.sync_concepts.get_async_session", return_value=mock_session):
         s3_uri = S3Uri(bucket=bucket_name, key=prefix)
         result = await s3_prefix_has_objects(s3_uri, "eu-west-1", AwsEnv.sandbox)
 
@@ -226,7 +226,7 @@ async def test_s3_prefix_has_objects__error_propagates():
     mock_session = AsyncMock()
     mock_session.client = mock_client
 
-    with patch("flows.wikibase_to_vespa.get_async_session", return_value=mock_session):
+    with patch("flows.sync_concepts.get_async_session", return_value=mock_session):
         s3_uri = S3Uri(bucket="test-bucket", key="test-prefix")
 
         # Should raise the ClientError, not catch it
@@ -269,10 +269,12 @@ async def test_create_vespa_sync_summary_artifact__all_success(mock_concepts):
     results = [Ok(concept) for concept in mock_concepts]
 
     with patch(
-        "flows.wikibase_to_vespa.acreate_table_artifact", new_callable=AsyncMock
+        "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/concepts_20250101_120000.parquet"
+            results=results,
+            parquet_path="/path/to/concepts_20250101_120000.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -303,10 +305,12 @@ async def test_create_vespa_sync_summary_artifact__all_failures(mock_concepts):
     ]
 
     with patch(
-        "flows.wikibase_to_vespa.acreate_table_artifact", new_callable=AsyncMock
+        "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -334,10 +338,12 @@ async def test_create_vespa_sync_summary_artifact__mixed(mock_concepts):
     ]
 
     with patch(
-        "flows.wikibase_to_vespa.acreate_table_artifact", new_callable=AsyncMock
+        "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -370,10 +376,12 @@ async def test_create_vespa_sync_summary_artifact__error_with_vespa_response(
     ]
 
     with patch(
-        "flows.wikibase_to_vespa.acreate_table_artifact", new_callable=AsyncMock
+        "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Verify artifact was created
@@ -391,10 +399,12 @@ async def test_create_vespa_sync_summary_artifact__error_without_metadata():
     results = [Err(Error(msg="Some error", metadata=None))]
 
     with patch(
-        "flows.wikibase_to_vespa.acreate_table_artifact", new_callable=AsyncMock
+        "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
         await create_vespa_sync_summary_artifact(
-            results=results, parquet_path="/path/to/file.parquet"
+            results=results,
+            parquet_path="/path/to/file.parquet",
+            aws_env=AwsEnv.staging,
         )
 
         # Should not raise an error
@@ -411,9 +421,11 @@ async def test_create_vespa_sync_summary_artifact__no_parquet_path():
     results = [Err(Error(msg="Vespa update failed", metadata=None))]
 
     with patch(
-        "flows.wikibase_to_vespa.acreate_table_artifact", new_callable=AsyncMock
+        "flows.sync_concepts.acreate_table_artifact", new_callable=AsyncMock
     ) as mock_create:
-        await create_vespa_sync_summary_artifact(results=results, parquet_path=None)
+        await create_vespa_sync_summary_artifact(
+            results=results, parquet_path=None, aws_env=AwsEnv.staging
+        )
 
         # Verify artifact was created
         mock_create.assert_called_once()
@@ -739,10 +751,8 @@ async def test_send_concept_validation_alert__validation_errors_only():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         await send_concept_validation_alert(
             failures=failures,
@@ -800,10 +810,8 @@ async def test_send_concept_validation_alert__system_errors_only():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         await send_concept_validation_alert(
             failures=failures,
@@ -864,10 +872,8 @@ async def test_send_concept_validation_alert__mixed_errors():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         await send_concept_validation_alert(
             failures=failures,
@@ -899,10 +905,8 @@ async def test_send_concept_validation_alert__colour_red_high_failure_rate():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         await send_concept_validation_alert(
             failures=failures,
@@ -932,10 +936,8 @@ async def test_send_concept_validation_alert__colour_orange_low_failure_rate():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         await send_concept_validation_alert(
             failures=failures,
@@ -974,10 +976,8 @@ async def test_send_concept_validation_alert__table_format():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         await send_concept_validation_alert(
             failures=failures,
@@ -1018,10 +1018,8 @@ async def test_send_concept_validation_alert__slack_api_error():
     mock_context.flow_run = mock_flow_run
 
     with (
-        patch(
-            "flows.wikibase_to_vespa.get_slack_client", return_value=mock_slack_client
-        ),
-        patch("flows.wikibase_to_vespa.get_run_context", return_value=mock_context),
+        patch("flows.sync_concepts.get_slack_client", return_value=mock_slack_client),
+        patch("flows.sync_concepts.get_run_context", return_value=mock_context),
     ):
         # Should not raise - errors are caught and logged
         await send_concept_validation_alert(

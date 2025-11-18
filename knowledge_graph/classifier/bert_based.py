@@ -145,6 +145,7 @@ class BertBasedClassifier(
             self.name,
             self.concept.id,
             self.base_model,
+            self.prediction_threshold,
         )
 
     @contextmanager
@@ -212,11 +213,13 @@ class BertBasedClassifier(
 
             self.model.train(was_training)  # type: ignore[attr-defined]
 
-    def _predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        return self._predict_batch([text])[0]
+        return self._predict_batch([text], threshold=threshold)[0]
 
-    def _predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float | None = None
+    ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
 
         if self._use_dropout_during_inference:
@@ -226,6 +229,11 @@ class BertBasedClassifier(
             self.model.eval()  # type: ignore[attr-defined]
             predictions = self.pipeline(list(texts), padding=True, truncation=True)
 
+        # Use the provided threshold, or fall back to the classifier's default threshold
+        effective_threshold = (
+            threshold if threshold is not None else self.prediction_threshold
+        )
+
         results = []
         for text, prediction in zip(texts, predictions):
             text_results = []
@@ -233,16 +241,20 @@ class BertBasedClassifier(
             # for negative predictions and LABEL_1 for positive predictions. We check
             # for LABEL_1 to determine if the text contains an instance of the concept.
             if prediction["label"] == "LABEL_1":
-                span = Span(
-                    text=text,
-                    concept_id=self.concept.wikibase_id,
-                    prediction_probability=prediction["score"],
-                    start_index=0,
-                    end_index=len(text),
-                    labellers=[str(self)],
-                    timestamps=[datetime.now()],
-                )
-                text_results.append(span)
+                if (
+                    effective_threshold is None
+                    or prediction["score"] >= effective_threshold
+                ):
+                    span = Span(
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
+                        prediction_probability=prediction["score"],
+                        start_index=0,
+                        end_index=len(text),
+                        labellers=[str(self)],
+                        timestamps=[datetime.now()],
+                    )
+                    text_results.append(span)
             results.append(text_results)
 
         return results
@@ -376,7 +388,11 @@ class BertBasedClassifier(
 
         labels = [
             1
-            if any(span.concept_id == self.concept.wikibase_id for span in p.spans)
+            if any(
+                (span.concept_id == self.concept.wikibase_id)
+                and (span.prediction_probability != 0)
+                for span in p.spans
+            )
             else 0
             for p in labelled_passages
         ]

@@ -7,7 +7,11 @@ from typing import Optional, Sequence
 import numpy as np
 
 from knowledge_graph import config
-from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    ProbabilityCapableClassifier,
+    ZeroShotClassifier,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, Identifier
 from knowledge_graph.span import Span
@@ -166,7 +170,7 @@ class _EmbeddingCache:
         }
 
 
-class EmbeddingClassifier(Classifier, ZeroShotClassifier):
+class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClassifier):
     """
     A classifier that uses an embedding model to identify concepts in text.
 
@@ -180,7 +184,6 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         self,
         concept: Concept,
         embedding_model_name: str = "ibm-granite/granite-embedding-107m-multilingual",
-        threshold: float = 0.65,
         document_prefix: str = "",
         query_prefix: str = "",
         device: str | None = None,
@@ -216,7 +219,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             )
 
         self.embedding_model_name = embedding_model_name
-        self.threshold = threshold
+        self.prediction_threshold = None
         self.document_prefix = document_prefix
         self.query_prefix = query_prefix
 
@@ -247,9 +250,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
 
     def __repr__(self):
         """Return a string representation of the classifier."""
-        return (
-            f'{self.name}("{self.concept.preferred_label}", threshold={self.threshold})'
-        )
+        return f'{self.name}("{self.concept.preferred_label}", threshold={self.prediction_threshold})'
 
     @property
     def id(self) -> ClassifierID:
@@ -258,7 +259,7 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
             self.name,
             self.concept.id,
             self.embedding_model,
-            self.threshold,
+            self.prediction_threshold,
             self.document_prefix,
             self.query_prefix,
         )
@@ -319,7 +320,13 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
         :param list[str] texts: The texts to predict on
         :return list[list[Span]]: A list of spans in the texts for each text
         """
-        threshold = threshold or self.threshold
+        threshold = threshold or self.prediction_threshold
+
+        if threshold is None:
+            logger.warning(
+                "No threshold set for EmbeddingClassifier. Defaulting to a threshold of 0. You probably want to set an explicit threshold to avoid predicting presence of the concept for all texts."
+            )
+            threshold = 0.0
 
         # get embeddings for all text
         if self._cache is None:
@@ -360,13 +367,14 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier):
 
         spans_per_text = []
         for text, key in zip(texts, keys):
-            similarity = self.concept_embedding @ embeddings_dict[key].T
+            similarity = float(self.concept_embedding @ embeddings_dict[key].T)
             spans = []
             if similarity > threshold:
                 spans = [
                     Span(
                         text=text,
                         concept_id=self.concept.wikibase_id,
+                        prediction_probability=float(similarity),
                         start_index=0,
                         end_index=len(text),
                         labellers=[str(self)],

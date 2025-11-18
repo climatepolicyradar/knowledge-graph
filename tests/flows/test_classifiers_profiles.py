@@ -2,18 +2,25 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+# from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
+from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
+from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
+
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
     compare_classifiers_profiles,
+    create_vespa_classifiers_profile,
+    create_vespa_profile_mappings,
     demote_classifier_profile,
     get_classifiers_profiles,
     handle_classifier_profile_action,
     promote_classifier_profile,
     update_classifier_profile,
+    update_vespa_with_classifiers_profiles,
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -43,6 +50,26 @@ def mock_profile_mapping():
         classifier_id="abcd3456",
         classifiers_profile="retired",
     )
+
+
+@pytest.fixture
+def mock_specs_2profiles():
+    return [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v12",
+            concept_id="abcd2345",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q100",
+            classifier_id="nnnn5555",
+            classifiers_profile="experimental",
+            wandb_registry_version="v2",
+            concept_id="efgh5678",
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -219,6 +246,7 @@ def test_handle_classifier_profile_action(mock_profile_mapping):
             wikibase_id=mock_profile_mapping.wikibase_id,
             aws_env=AwsEnv.staging,
             action_function=mock_action_function,
+            upload_to_wandb=False,
             classifier_id=mock_profile_mapping.classifier_id,
             classifiers_profile=mock_profile_mapping.classifiers_profile,
         )
@@ -243,7 +271,7 @@ def test_handle_classifier_profile_action(mock_profile_mapping):
 def test_promote_classifiers_profiles(mock_profile_mapping):
     """Test promoting classifiers profiles for successful validation."""
 
-    # mock response to wandb_validation
+    # mock response to wandb scripts
     with (
         patch("scripts.promote.main") as mock_promote,
     ):
@@ -252,24 +280,41 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
             classifier_id=mock_profile_mapping.classifier_id,
             classifiers_profile=mock_profile_mapping.classifiers_profile,
             aws_env=AwsEnv.staging,
+            upload_to_wandb=True,
         )
 
         # Ensure scripts.promote.main was called with the correct arguments
-        # TODO: Uncomment when promote script is added
-        # mock_promote.assert_called_once_with(
-        #     wikibase_id=mock_profile_mapping.wikibase_id,
-        #     classifier_id=mock_profile_mapping.classifier_id,
-        #     add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
-        #     aws_env=AwsEnv.staging,
-        # )
+        mock_promote.assert_called_once_with(
+            wikibase_id=mock_profile_mapping.wikibase_id,
+            classifier_id=mock_profile_mapping.classifier_id,
+            aws_env=AwsEnv.staging,
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile.value],
+        )
 
-        mock_promote.assert_not_called()  # Remove when uncommented above
+
+def test_promote_classifiers_profiles__dry_run(mock_profile_mapping):
+    """Test promoting classifiers profiles for successful validation."""
+
+    # mock response to wandb scripts
+    with (
+        patch("scripts.promote.main") as mock_promote,
+    ):
+        promote_classifier_profile(
+            wikibase_id=mock_profile_mapping.wikibase_id,
+            classifier_id=mock_profile_mapping.classifier_id,
+            classifiers_profile=mock_profile_mapping.classifiers_profile,
+            aws_env=AwsEnv.staging,
+            upload_to_wandb=False,
+        )
+
+        # Ensure scripts.demote.main was not called when dry run
+        mock_promote.assert_not_called()
 
 
 def test_demote_classifiers_profiles(mock_specs):
     """Test demoting classifiers profiles for successful validation."""
 
-    # mock response to wandb_validation
+    # mock response to wandb scripts
     with (
         patch("scripts.demote.main") as mock_demote,
     ):
@@ -278,22 +323,40 @@ def test_demote_classifiers_profiles(mock_specs):
             wandb_registry_version=mock_specs.wandb_registry_version,
             aws_env=AwsEnv.staging,
             classifier_id=mock_specs.classifier_id,
+            upload_to_wandb=True,
         )
 
         # Ensure scripts.demote.main was called with the correct arguments
-        # TODO: Uncomment when demote script is added
-        # mock_demote.assert_called_once_with(
-        #     wikibase_id=mock_specs.wikibase_id,
-        #     wandb_registry_version=mock_specs.wandb_registry_version,
-        #     aws_env=AwsEnv.staging,
-        # )
-        mock_demote.assert_not_called()  # Remove when uncommented above
+        mock_demote.assert_called_once_with(
+            wikibase_id=mock_specs.wikibase_id,
+            wandb_registry_version=mock_specs.wandb_registry_version,
+            aws_env=AwsEnv.staging,
+        )
+
+
+def test_demote_classifiers_profiles__dry_run(mock_specs):
+    """Test demoting classifiers profiles for successful validation."""
+
+    # mock response to wandb scripts
+    with (
+        patch("scripts.demote.main") as mock_demote,
+    ):
+        demote_classifier_profile(
+            wikibase_id=mock_specs.wikibase_id,
+            wandb_registry_version=mock_specs.wandb_registry_version,
+            aws_env=AwsEnv.staging,
+            classifier_id=mock_specs.classifier_id,
+            upload_to_wandb=False,
+        )
+
+        # Ensure scripts.demote.main was not called when dry run
+        mock_demote.assert_not_called()
 
 
 def test_update_classifier_profile(mock_specs, mock_profile_mapping):
     """Test updating a classifier profile for successful validation."""
 
-    # mock response to wandb_validation
+    # mock response to wandb scripts
     with (
         patch("scripts.classifier_metadata.update") as mock_update,
     ):
@@ -303,19 +366,38 @@ def test_update_classifier_profile(mock_specs, mock_profile_mapping):
             aws_env=AwsEnv.staging,
             add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
             remove_classifiers_profiles=[mock_specs.classifiers_profile],
+            upload_to_wandb=True,
         )
 
         # Ensure scripts.classifier_metadata.update was called with the correct arguments
-        # TODO: Uncomment when update script is added
-        # mock_update.assert_called_once_with(
-        #     wikibase_id=mock_specs.wikibase_id,
-        #     classifier_id=mock_specs.classifier_id,
-        #     remove_classifiers_profiles=[mock_specs.classifiers_profile],
-        #     add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
-        #     aws_env=AwsEnv.staging,
-        #     update_specs=False,
-        # )
-        mock_update.assert_not_called()  # Remove when uncommented above
+        mock_update.assert_called_once_with(
+            wikibase_id=mock_specs.wikibase_id,
+            classifier_id=mock_specs.classifier_id,
+            remove_classifiers_profiles=[mock_specs.classifiers_profile],
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile.value],
+            aws_env=AwsEnv.staging,
+            update_specs=False,
+        )
+
+
+def test_update_classifier_profile__dry_run(mock_specs, mock_profile_mapping):
+    """Test updating a classifier profile for successful validation."""
+
+    # mock response to wandb scripts
+    with (
+        patch("scripts.classifier_metadata.update") as mock_update,
+    ):
+        update_classifier_profile(
+            wikibase_id=mock_specs.wikibase_id,
+            classifier_id=mock_specs.classifier_id,
+            aws_env=AwsEnv.staging,
+            add_classifiers_profiles=[mock_profile_mapping.classifiers_profile],
+            remove_classifiers_profiles=[mock_specs.classifiers_profile],
+            upload_to_wandb=False,
+        )
+
+        # Ensure scripts.demote.main was not called when dry run
+        mock_update.assert_not_called()
 
 
 def test_handle_classifier_profile_action__failed_validation(mock_specs):
@@ -336,6 +418,7 @@ def test_handle_classifier_profile_action__failed_validation(mock_specs):
             wikibase_id=mock_specs.wikibase_id,
             aws_env=AwsEnv.staging,
             action_function=mock_action_function,
+            upload_to_wandb=False,
             classifier_id=mock_specs.classifier_id,
         )
 
@@ -457,3 +540,187 @@ def test_wandb_validation__failure_restricted_run_config():
 
     assert isinstance(result, Err)
     assert "artifact validation failed: run config" in result._error.msg
+
+
+def test_create_vespa_classifiers_profile():
+    mappings = [
+        VespaClassifiersProfile.Mapping(
+            concept_id="aaaa2345",
+            concept_wikibase_id=VespaWikibaseId("Q1"),
+            classifier_id="bbbb3456",
+        )
+    ]
+    profile = create_vespa_classifiers_profile(Profile.PRIMARY, mappings)
+    assert profile.name == "primary"
+    assert len(profile.mappings) == 1
+    assert isinstance(profile, VespaClassifiersProfile)
+    assert profile.mappings[0] == mappings[0]
+    assert profile.multi is False
+    assert profile.response_raw == {}
+
+
+def test_create_vespa_profile_mappings(mock_specs_2profiles):
+    profile_mappings = create_vespa_profile_mappings(mock_specs_2profiles)
+
+    assert len(profile_mappings) == len(mock_specs_2profiles)
+    assert all(isinstance(m, VespaClassifiersProfile.Mapping) for m in profile_mappings)
+
+    for m, spec in zip(profile_mappings, mock_specs_2profiles):
+        assert m.concept_id == spec.concept_id
+        assert m.concept_wikibase_id == VespaWikibaseId(spec.wikibase_id)
+        assert m.classifier_id == spec.classifier_id
+
+
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__success(mock_specs_2profiles):
+    """Test successful updates to Vespa with valid classifiers specs"""
+
+    with (
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
+    ):
+        # Mock Vespa connection pool
+        mock_vespa_connection_pool.update_data = AsyncMock(
+            return_value=Mock(is_successful=lambda: True)
+        )
+
+        # Call the function
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
+
+        # Assertions
+        assert len(results) == 1  # No errors
+        assert all(is_ok(r) for r in results)
+        assert (
+            mock_vespa_connection_pool.update_data.call_count
+            == len(mock_specs_2profiles) + 1
+        )  # 2 profiles + 1 classifiers_profiles
+
+
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers__profiles_mapping_failure(
+    mock_specs_2profiles,
+):
+    """Test Vespa update with mapping creation failure."""
+    mock_specs = [
+        Mock(
+            classifiers_profile="primary",
+            concept_id="abcdeg98",
+            classifier_id="xyz23456",
+            wikibase_id="abc123",  # invalid wikibase id
+        )
+    ]
+    with (
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
+    ):
+        # Call the function
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs,
+            vespa_connection_pool=mock_vespa_connection_pool,
+            upload_to_vespa=False,
+        )
+
+        # Assertions
+        assert len(results) == 1  # One error
+        assert isinstance(results[0], Err)
+        assert (
+            f"Failed to create mapping for {mock_specs[0].wikibase_id}"
+            in results[0]._error.msg
+        )
+        mock_vespa_connection_pool.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__profile_creation_failure(
+    mock_specs_2profiles,
+):
+    """Test Vespa update with profile creation failure."""
+    with (
+        patch(
+            "flows.classifiers_profiles.create_vespa_classifiers_profile"
+        ) as mock_create_profile,
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
+    ):
+        # Mock Vespa profile creation to raise an exception
+        mock_create_profile.side_effect = ValueError("Profile creation failed")
+
+        # Call the function
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
+
+        # Assertions
+        assert len(results) == 1  # One error
+        assert isinstance(results[0], Err)
+        assert "Profile creation failed" in results[0]._error.msg
+        mock_vespa_connection_pool.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__vespa_sync_failure(
+    mock_specs_2profiles,
+):
+    """Test Vespa update with sync failure."""
+    with (
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
+    ):
+        # Mock Vespa connection pool to simulate a sync failure
+        mock_vespa_connection_pool.update_data = AsyncMock(
+            return_value=Mock(is_successful=lambda: False)
+        )
+
+        # Call the function
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+        )
+
+        # Assertions
+        assert len(results) == 1  # One error
+        assert isinstance(results[0], Err)
+        assert "Error syncing VespaClassifiersProfile" in results[0]._error.msg
+        assert (
+            mock_vespa_connection_pool.update_data.call_count == 1
+        )  # fails and returns
+
+
+@pytest.mark.vespa
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__real_vespa(
+    mock_specs_2profiles, local_vespa_search_adapter
+):
+    """Test update_vespa_with_classifiers_profiles with real Vespa and mock classifier specs."""
+    async with local_vespa_search_adapter.client.asyncio(
+        connections=1
+    ) as vespa_connection_pool:
+        results = await update_vespa_with_classifiers_profiles(
+            mock_specs_2profiles, vespa_connection_pool
+        )
+
+        assert len(results) == 1  # One for the classifiers_profiles update
+        assert all(is_ok(r) for r in results), f"All results should be Ok, {results}"
+
+
+@pytest.mark.asyncio
+async def test_update_vespa_with_classifiers_profiles__vespa_upload_false(
+    mock_specs_2profiles,
+):
+    """Test Vespa update with flag upload_to_vespa set to False."""
+    with (
+        patch("flows.classifiers_profiles.VespaAsync") as mock_vespa_connection_pool,
+    ):
+        # Call the function with mock specs
+        results = await update_vespa_with_classifiers_profiles(
+            classifier_specs=mock_specs_2profiles,
+            vespa_connection_pool=mock_vespa_connection_pool,
+            upload_to_vespa=False,
+        )
+
+        # Assertions
+        assert len(results) == 1  # Ok for no upload
+        assert all(is_ok(r) for r in results), f"All results should be Ok, {results}"
+
+        mock_vespa_connection_pool.update_data.assert_not_called()
+        assert unwrap_ok(results[0]) is None

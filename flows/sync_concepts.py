@@ -364,6 +364,7 @@ async def update_concepts_in_vespa(
 async def create_vespa_sync_summary_artifact(
     results: list[Result[Concept, Error]],
     parquet_path: str | None,
+    aws_env: AwsEnv,
 ):
     """Create an artifact with a summary about the Vespa sync run."""
 
@@ -427,7 +428,7 @@ async def create_vespa_sync_summary_artifact(
     ]
 
     await acreate_table_artifact(
-        key="vespa-sync",
+        key=f"vespa-sync-{aws_env.value}",
         table=concept_details,
         description=overview_description,
     )
@@ -887,7 +888,7 @@ async def _post_other_errors(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-async def wikibase_to_vespa(
+async def sync_concepts(
     aws_env: AwsEnv | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     vespa_search_adapter: VespaSearchAdapter | None = None,
@@ -956,8 +957,13 @@ async def wikibase_to_vespa(
     region = "eu-west-2" if aws_env == AwsEnv.sandbox else "eu-west-1"
 
     credential_provider: pl.CredentialProvider | None = None
+    storage_options: dict[str, str] | None = None
     if isinstance(concepts_archive_path, S3Uri):
         credential_provider = pl.CredentialProviderAWS(region_name=region)
+        storage_options = {
+            "region": region,
+            "default-region": region,
+        }
 
     # Check if archive(s) exists before trying to scan it
     logger.info("checking for existing archive(s)")
@@ -981,6 +987,7 @@ async def wikibase_to_vespa(
             pl.scan_parquet(
                 parquet_pattern,
                 credential_provider=credential_provider,
+                storage_options=storage_options,
             )
             .select("id")
             .unique()
@@ -1050,7 +1057,9 @@ async def wikibase_to_vespa(
 
         logger.info(f"appending {len(successes)} successful syncs to {append_path}")
         successful_df.write_parquet(
-            append_path, credential_provider=credential_provider
+            append_path,
+            credential_provider=credential_provider,
+            storage_options=storage_options,
         )
         logger.info(f"successfully appended {len(successes)} rows to dataframe")
     else:
@@ -1062,4 +1071,5 @@ async def wikibase_to_vespa(
     await create_vespa_sync_summary_artifact(
         results=results,
         parquet_path=str(append_path) if append_path else None,
+        aws_env=aws_env,
     )

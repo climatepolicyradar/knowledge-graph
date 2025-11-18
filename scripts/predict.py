@@ -20,6 +20,7 @@ from knowledge_graph.labelled_passage import (
 )
 from knowledge_graph.labelling import label_passages_with_classifier
 from knowledge_graph.wandb_helpers import (
+    _load_labelled_passages_from_artifact_dir,
     load_classifier_from_wandb,
     load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
@@ -103,6 +104,13 @@ def main(
         True,
         help="Remove duplicate passages based on text content before prediction",
     ),
+    exclude_training_data: bool = typer.Option(
+        True,
+        help="Exclude passages that were in the model's training data from prediction",
+    ),
+    prediction_threshold: float | None = typer.Option(
+        None, help="Optional prediction threshold for the classifier."
+    ),
     stop_after_n_positives: Annotated[
         Optional[int],
         typer.Option(
@@ -123,7 +131,9 @@ def main(
         "classifier_path": classifier_wandb_path,
         "labelled_passages_path": labelled_passages_path,
         "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "prediction_threshold": prediction_threshold,
         "stop_after_n_positives": stop_after_n_positives,
+        "exclude_training_data": exclude_training_data,
     }
     wandb_job_type = "predict_adhoc"
 
@@ -174,7 +184,56 @@ def main(
             labelled_passages = labelled_passages[:limit]
             console.print(f"Limited number of passages to {len(labelled_passages)}")
 
-        # 2. load model
+        # 2. optionally exclude training data
+        if exclude_training_data:
+            console.print(
+                "Fetching training data from classifier's W&B run to exclude from prediction..."
+            )
+            try:
+                classifier_artifact = wandb_api.artifact(classifier_wandb_path)
+
+                if classifier_run := classifier_artifact.logged_by():
+                    if training_artifacts := [
+                        a
+                        for a in classifier_run.logged_artifacts()
+                        if a.type == "labelled_passages" and "training-data" in a.name
+                    ]:
+                        artifact_dir = Path(training_artifacts[0].download())
+                        training_data = _load_labelled_passages_from_artifact_dir(
+                            artifact_dir
+                        )
+
+                        console.print(
+                            f"✓ Loaded {len(training_data)} passages from training data artifact"
+                        )
+
+                        training_data_text = {p.text for p in training_data}
+
+                        len_labelled_passages_before = len(labelled_passages)
+
+                        labelled_passages = [
+                            p
+                            for p in labelled_passages
+                            if p.text not in training_data_text
+                        ]
+
+                        num_labelled_passages_removed = (
+                            len_labelled_passages_before - len(labelled_passages)
+                        )
+                        console.print(
+                            f"Removed {num_labelled_passages_removed} passages from labelled passages dataset. {len(labelled_passages)} remaining."
+                        )
+
+                    else:
+                        console.print(
+                            "⚠ No training-data artifact found in classifier's run, skipping exclusion"
+                        )
+            except Exception as e:
+                console.print(
+                    f"⚠ Could not load training data: {e}\nContinuing with prediction without excluding training data"
+                )
+
+        # 3. load model
         region_name = "eu-west-1"
         aws_env = AwsEnv.labs
         # When running in prefect the client is instantiated earlier
@@ -183,6 +242,12 @@ def main(
         get_s3_client(aws_env, region_name)
 
         classifier = load_classifier_from_wandb(classifier_wandb_path)
+
+        if prediction_threshold is not None:
+            classifier.set_prediction_threshold(prediction_threshold)
+            console.print(
+                f"Classifier prediction threshold set to {prediction_threshold}"
+            )
 
         # 3. predict using model
         if stop_after_n_positives is None:

@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.20.0"
+version = "0.21.0"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
@@ -20,7 +20,7 @@ dependencies = [
   "more-itertools>=10.3.0",
   "argilla>=2.5",
   "griffe==1.5.7",
-  "cpr-sdk>=4.0.1",
+  "cpr-sdk>=4.2.0",
   "wandb>=0.21.0",
   "boto3>=1.35.31",
   "pyvespa>=0.54.0",
@@ -111,6 +111,7 @@ collect_prefect_artifacts = "scripts.audit.collect_prefect_artifacts:app"
 
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 env = [
   "AWS_ENV=sandbox",
   "WIKIBASE_USERNAME=test_username",

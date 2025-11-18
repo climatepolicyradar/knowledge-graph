@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 
 from pydantic import AfterValidator, BaseModel, Field, SecretStr
 
+from flows.utils import get_logger
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param, get_prefect_job_variable
 
 # Constant, s3 prefix for the aggregated results
@@ -137,9 +138,16 @@ class Config(BaseModel):
         description="API key for Argilla. Used to authenticate with an ArgillaSession",
     )
 
+    skip_existing_inference_results: bool = Field(
+        default=True,
+        description="Skip documents that already have inference results in S3. Set to False to force re-processing.",
+    )
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
+        logger = get_logger()
+
         config = cls()
         if not config.cache_bucket:
             config.cache_bucket = await get_prefect_job_variable(
@@ -174,19 +182,34 @@ class Config(BaseModel):
                 aws_env=config.aws_env,
             )
 
+        # Argilla isn't setup in all environments, so let it not exist
         if not config.argilla_api_key:
-            config.argilla_api_key = SecretStr(
-                get_aws_ssm_param(
-                    ARGILLA_API_KEY_SSM_NAME,
-                    aws_env=config.aws_env,
+            try:
+                config.argilla_api_key = SecretStr(
+                    get_aws_ssm_param(
+                        ARGILLA_API_KEY_SSM_NAME,
+                        aws_env=config.aws_env,
+                    )
                 )
-            )
+            except Exception:
+                if config.aws_env != AwsEnv.labs:
+                    logger.debug("allowing no Argilla API key parameter")
+                    pass
+                else:
+                    raise
 
         if not config.argilla_api_url:
-            config.argilla_api_url = get_aws_ssm_param(
-                ARGILLA_URL_SSM_NAME,
-                aws_env=config.aws_env,
-            )
+            try:
+                config.argilla_api_url = get_aws_ssm_param(
+                    ARGILLA_URL_SSM_NAME,
+                    aws_env=config.aws_env,
+                )
+            except Exception:
+                if config.aws_env != AwsEnv.labs:
+                    logger.debug("allowing no Argilla API URL parameter")
+                    pass
+                else:
+                    raise
 
         return config
 
@@ -218,4 +241,5 @@ class Config(BaseModel):
             ),
             "aws_env": self.aws_env,
             "s3_concurrency_limit": self.s3_concurrency_limit,
+            "skip_existing_inference_results": self.skip_existing_inference_results,
         }
