@@ -342,7 +342,7 @@ def main(
             ...,
             help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
         ),
-    ] = False,
+    ] = True,
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
