@@ -957,8 +957,13 @@ async def sync_concepts(
     region = "eu-west-2" if aws_env == AwsEnv.sandbox else "eu-west-1"
 
     credential_provider: pl.CredentialProvider | None = None
+    storage_options: dict[str, str] | None = None
     if isinstance(concepts_archive_path, S3Uri):
         credential_provider = pl.CredentialProviderAWS(region_name=region)
+        storage_options = {
+            "region": region,
+            "default-region": region,
+        }
 
     # Check if archive(s) exists before trying to scan it
     logger.info("checking for existing archive(s)")
@@ -982,6 +987,7 @@ async def sync_concepts(
             pl.scan_parquet(
                 parquet_pattern,
                 credential_provider=credential_provider,
+                storage_options=storage_options,
             )
             .select("id")
             .unique()
@@ -1051,7 +1057,9 @@ async def sync_concepts(
 
         logger.info(f"appending {len(successes)} successful syncs to {append_path}")
         successful_df.write_parquet(
-            append_path, credential_provider=credential_provider
+            append_path,
+            credential_provider=credential_provider,
+            storage_options=storage_options,
         )
         logger.info(f"successfully appended {len(successes)} rows to dataframe")
     else:
