@@ -12,6 +12,7 @@ from flows.classifiers_profiles import (
     create_vespa_classifiers_profile,
     create_vespa_profile_mappings,
     demote_classifier_profile,
+    emit_finished,
     get_classifiers_profiles,
     handle_classifier_profile_action,
     promote_classifier_profile,
@@ -724,3 +725,126 @@ async def test_update_vespa_with_classifiers_profiles__vespa_upload_false(
 
         mock_vespa_connection_pool.update_data.assert_not_called()
         assert unwrap_ok(results[0]) is None
+
+
+def test_emit_finished__success():
+    """Test emit_finished with promotions succeeds."""
+    promotions = [
+        Promote(
+            classifiers_profile_mapping=ClassifiersProfileMapping(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile=Profile.PRIMARY,
+            )
+        )
+    ]
+
+    with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
+        mock_event = Mock()
+        mock_emit_event.return_value = mock_event
+
+        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+
+        mock_emit_event.assert_called_once()
+        call_args = mock_emit_event.call_args
+        assert call_args.kwargs["event"] == "sync-classifiers_profiles.finished"
+        assert (
+            call_args.kwargs["resource"]["prefect.resource.id"]
+            == "sync-classifiers-profiles"
+        )
+        assert call_args.kwargs["resource"]["awsenv"] == AwsEnv.staging
+        assert len(call_args.kwargs["payload"]["promotions"]) == 1
+
+        assert result == Ok(mock_event)
+
+
+def test_emit_finished__no_promotions():
+    """Test emit_finished with no promotions returns."""
+    result = emit_finished(promotions=[], aws_env=AwsEnv.staging)
+
+    assert result == Ok(None)
+
+
+def test_emit_finished__emit_event_returns_none():
+    """Test emit_finished when emit_event returns."""
+    promotions = [
+        Promote(
+            classifiers_profile_mapping=ClassifiersProfileMapping(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile=Profile.PRIMARY,
+            )
+        )
+    ]
+
+    with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
+        mock_emit_event.return_value = None
+
+        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+
+        assert result == Err(
+            Error(
+                msg="emitting event returned `None`, indicating it wasn't sent",
+                metadata={
+                    "event": None,
+                    "resource": {
+                        "prefect.resource.id": "sync-classifiers-profiles",
+                        "awsenv": "staging",
+                    },
+                    "payload": {
+                        "promotions": [
+                            {
+                                "classifiers_profile_mapping": {
+                                    "wikibase_id": "Q123",
+                                    "classifier_id": "aaaa2222",
+                                    "classifiers_profile": "primary",
+                                }
+                            }
+                        ]
+                    },
+                },
+            )
+        )
+
+
+def test_emit_finished__emit_event_raises_exception():
+    """Test emit_finished when emit_event raises an exception."""
+    promotions = [
+        Promote(
+            classifiers_profile_mapping=ClassifiersProfileMapping(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile=Profile.PRIMARY,
+            )
+        )
+    ]
+
+    with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
+        mock_emit_event.side_effect = Exception("Failed to emit event")
+
+        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+
+        assert result == Err(
+            Error(
+                msg="failed to emit event",
+                metadata={
+                    "event": "sync-classifiers_profiles.finished",
+                    "resource": {
+                        "prefect.resource.id": "sync-classifiers-profiles",
+                        "awsenv": "staging",
+                    },
+                    "payload": {
+                        "promotions": [
+                            {
+                                "classifiers_profile_mapping": {
+                                    "wikibase_id": "Q123",
+                                    "classifier_id": "aaaa2222",
+                                    "classifiers_profile": "primary",
+                                }
+                            }
+                        ]
+                    },
+                    "exception": "Failed to emit event",
+                },
+            )
+        )

@@ -276,6 +276,10 @@ if __name__ == "__main__":
                 }
             ),
         },
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
     )
 
     # Wikibase
