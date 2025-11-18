@@ -19,6 +19,7 @@ from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.context import FlowRunContext, get_run_context
+from prefect.events import Event, emit_event
 from pydantic import AnyHttpUrl, SecretStr
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
@@ -29,7 +30,7 @@ import scripts.promote
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
 from flows.config import Config
-from flows.result import Err, Error, Ok, Result, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
 from flows.utils import (
     JsonDict,
     SlackNotify,
@@ -62,6 +63,9 @@ VESPA_CONNECTION_POOL_SIZE: int = 5
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
 WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
+
+SYNC_FINISHED_EVENT_NAME = "sync-classifiers_profiles.finished"
+SYNC_RESOURCE_ID = "sync-classifiers-profiles"
 
 
 def log_and_return_error(logger, msg: str, metadata: dict) -> Err:
@@ -558,6 +562,7 @@ async def send_classifiers_profile_slack_alert(
     aws_env: AwsEnv,
     upload_to_wandb: bool,
     upload_to_vespa: bool,
+    event: Result[Event | None, Error],
 ):
     """
     Send slack alert with failures from the classifiers profiles lifecycle sync.
@@ -569,7 +574,10 @@ async def send_classifiers_profile_slack_alert(
 
     # vespa_errors can be per vespa request or per concept and are excluded from total concepts count
     total_concepts = len(successes) + len(validation_errors) + len(wandb_errors)
-    other_errors = wandb_errors + vespa_errors
+
+    event_errors = [unwrap_err(event)] if is_err(event) else []
+
+    other_errors = wandb_errors + vespa_errors + event_errors
     try:
         channel = f"alerts-platform-{aws_env}"
         # TODO: change channel once CP data populated
@@ -654,6 +662,14 @@ async def send_classifiers_profile_slack_alert(
                         thread_ts=thread_ts,
                         errors=vespa_errors,
                         error_type="Vespa Errors",
+                    )
+                if event_errors:
+                    await _post_errors_thread(
+                        slack_client=slack_client,
+                        channel=channel,
+                        thread_ts=thread_ts,
+                        errors=event_errors,
+                        error_type="Event Errors",
                     )
             else:
                 raise ValueError(
@@ -1078,6 +1094,67 @@ async def update_vespa_with_classifiers_profiles(
     return results
 
 
+def emit_finished(
+    promotions: list[Promote],
+    aws_env: AwsEnv,
+) -> Result[Event | None, Error]:
+    """Emit an event indicating the pipeline finished."""
+
+    logger = get_logger()
+
+    if not promotions:
+        logger.info("no promotions, skipping emitting finished event")
+        return Ok(None)
+
+    event = SYNC_FINISHED_EVENT_NAME
+    resource = {
+        "prefect.resource.id": SYNC_RESOURCE_ID,
+        "awsenv": aws_env,
+    }
+    payload = {
+        # Not currently used by the trigger, but including just in
+        # case it'll be helpful.
+        "promotions": list(
+            map(
+                lambda p: p.model_dump(mode="json"),
+                promotions,
+            )
+        )
+    }
+
+    try:
+        if event := emit_event(
+            event=event,
+            resource=resource,
+            payload=payload,
+        ):
+            logger.info(f"finished event emitted (`{event.id}`)")
+            return Ok(event)
+        else:
+            return Err(
+                Error(
+                    msg="emitting event returned `None`, indicating it wasn't sent",
+                    metadata={
+                        "event": event,
+                        "resource": resource,
+                        "payload": payload,
+                    },
+                )
+            )
+    except Exception as e:
+        return Err(
+            Error(
+                msg="failed to emit event",
+                metadata={
+                    "event": event,
+                    "resource": resource,
+                    "payload": payload,
+                    "exception": str(e),
+                },
+            )
+        )
+
+
 @flow(on_failure=[SlackNotify.message], on_crashed=[SlackNotify.message])
 async def sync_classifiers_profiles(
     aws_env: AwsEnv,
@@ -1162,6 +1239,8 @@ async def sync_classifiers_profiles(
 
     wandb_results: list[Result[Dict, Error]] = []
 
+    promotions: list[Promote] = []
+
     for classifiers in classifiers_to_update:
         match classifiers:
             case Promote() as a:
@@ -1170,17 +1249,18 @@ async def sync_classifiers_profiles(
                 )
 
                 new_spec = a.classifiers_profile_mapping
-                wandb_results.append(
-                    handle_classifier_profile_action(
-                        action="promoting",
-                        wikibase_id=new_spec.wikibase_id,
-                        aws_env=aws_env,
-                        action_function=promote_classifier_profile,
-                        upload_to_wandb=upload_to_wandb,
-                        classifier_id=new_spec.classifier_id,
-                        classifiers_profile=[str(new_spec.classifiers_profile)],
-                    )
+                wandb_result = handle_classifier_profile_action(
+                    action="promoting",
+                    wikibase_id=new_spec.wikibase_id,
+                    aws_env=aws_env,
+                    action_function=promote_classifier_profile,
+                    upload_to_wandb=upload_to_wandb,
+                    classifier_id=new_spec.classifier_id,
+                    classifiers_profile=[str(new_spec.classifiers_profile)],
                 )
+                wandb_results.append(wandb_result)
+                if is_ok(wandb_result):
+                    promotions.append(a)
 
             case Update() as u:
                 logger.info(
@@ -1265,6 +1345,8 @@ async def sync_classifiers_profiles(
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
+    event = emit_finished(promotions, aws_env)
+
     try:
         await send_classifiers_profile_slack_alert(
             validation_errors=validation_errors,
@@ -1274,6 +1356,7 @@ async def sync_classifiers_profiles(
             aws_env=aws_env,
             upload_to_wandb=upload_to_wandb,
             upload_to_vespa=upload_to_vespa,
+            event=event,
         )
     except Exception as e:
         logger.error(f"failed to send validation alert: {e}")
