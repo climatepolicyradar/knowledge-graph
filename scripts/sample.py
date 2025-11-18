@@ -149,7 +149,8 @@ def main(
 
         model_classes = [KeywordClassifier, EmbeddingClassifier]
         models: list[Classifier] = [
-            model_class(concept) for model_class in model_classes
+            KeywordClassifier(concept), 
+            EmbeddingClassifier(concept).set_prediction_threshold(0.7),
         ]
         classifier_ids: list[str] = []
 
