@@ -21,13 +21,13 @@ from dotenv import find_dotenv, load_dotenv
 from pydantic import SecretStr
 
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import (
     LabelledPassage,
     consolidate_passages_by_text,
 )
 from knowledge_graph.span import Span
-from knowledge_graph.wikibase import Concept
 
 logger = getLogger(__name__)
 
