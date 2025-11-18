@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-import wandb
 from pydantic import BaseModel
 
 from knowledge_graph.classifier.classifier import (
@@ -116,7 +115,7 @@ class ClassifierFactory:
     @staticmethod
     def create(
         concept: Concept,
-        classifier_type: Optional[str] = None,
+        classifier_type: str | None = None,
         classifier_kwargs: dict[str, Any] = {},
     ) -> Classifier:
         """Create a classifier for a concept, depending on its attributes"""
