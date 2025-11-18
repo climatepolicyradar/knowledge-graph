@@ -102,8 +102,10 @@ class Concept(BaseModel):
         """Ensure that the negative labels are a unique set of strings"""
         negative_labels = values.get("negative_labels", [])
         if len(negative_labels) != len(set(negative_labels)):
+            wikibase_id = values.get("wikibase_id") or "unknown"
             warnings.warn(
-                "Duplicate negative labels found. Using unique values.", UserWarning
+                f"Duplicate negative labels found in {wikibase_id}. Using unique values.",
+                UserWarning,
             )
         values["negative_labels"] = list(set(str(item) for item in negative_labels))
         return values
