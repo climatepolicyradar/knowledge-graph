@@ -47,7 +47,7 @@ def main(
         help="Maximum number of passages to load from the dataset before sampling",
     ),
     track_and_upload: bool = typer.Option(
-        False,
+        True,
         help="Whether to track the run and upload the labelled passages to W&B",
     ),
     concept_override: Annotated[
