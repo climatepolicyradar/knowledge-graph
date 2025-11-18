@@ -2,7 +2,7 @@ import os
 import uuid
 from functools import lru_cache
 from logging import getLogger
-from typing import Any, Literal, NamedTuple, Optional, Sequence, Union, overload
+from typing import Any, Literal, NamedTuple, Sequence, overload
 from uuid import UUID
 
 from argilla import (
@@ -21,13 +21,13 @@ from dotenv import find_dotenv, load_dotenv
 from pydantic import SecretStr
 
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import (
     LabelledPassage,
     consolidate_passages_by_text,
 )
 from knowledge_graph.span import Span
-from knowledge_graph.wikibase import Concept
 
 logger = getLogger(__name__)
 
@@ -86,8 +86,8 @@ class ArgillaSession:
 
     def __init__(
         self,
-        api_url: Optional[str] = None,
-        api_key: Optional[str] = None,
+        api_url: str | None = None,
+        api_key: str | None = None,
         workspace: str = "knowledge-graph",
     ):
         """
@@ -111,7 +111,7 @@ class ArgillaSession:
         """Return a string representation of the Argilla session"""
         return f"<ArgillaSession: workspace={self.default_workspace}>"
 
-    def get_workspace(self, name: Optional[str] = None) -> Workspace:
+    def get_workspace(self, name: str | None = None) -> Workspace:
         """
         Get a workspace by name.
 
@@ -151,7 +151,7 @@ class ArgillaSession:
     def get_dataset(
         self,
         wikibase_id: WikibaseID | str,
-        workspace: Optional[str] = None,
+        workspace: str | None = None,
     ) -> Dataset:
         """
         Get a dataset by its Wikibase ID (ie its name) in the given workspace.
@@ -173,7 +173,7 @@ class ArgillaSession:
             logger.debug("Couldn't find dataset: %s", wikibase_id)
             raise ResourceDoesNotExistError("Dataset", str(wikibase_id))
 
-    def get_all_datasets(self, workspace: Optional[str] = None) -> list[Dataset]:
+    def get_all_datasets(self, workspace: str | None = None) -> list[Dataset]:
         """
         Get all datasets in a workspace.
 
@@ -193,7 +193,7 @@ class ArgillaSession:
     def create_dataset(
         self,
         concept: Concept,
-        workspace: Optional[str] = None,
+        workspace: str | None = None,
     ) -> Dataset:
         """
         Create a new dataset for a concept in the given workspace.
@@ -251,9 +251,9 @@ class ArgillaSession:
     def copy_dataset(
         self,
         wikibase_id: WikibaseID,
-        workspace: Optional[str] = None,
-        new_workspace: Optional[str] = None,
-        new_name: Optional[str] = None,
+        workspace: str | None = None,
+        new_workspace: str | None = None,
+        new_name: str | None = None,
     ) -> Dataset:
         """
         Copy a dataset to a new dataset name or workspace.
@@ -307,7 +307,7 @@ class ArgillaSession:
         return new_dataset
 
     @lru_cache(maxsize=64)
-    def _get_user_by_id(self, user_id: Union[UUID, str]) -> User | None:
+    def _get_user_by_id(self, user_id: UUID | str) -> User | None:
         """
         Get user object by ID.
 
@@ -330,13 +330,13 @@ class ArgillaSession:
     def get_user(self, *, username: str) -> User: ...
 
     @overload
-    def get_user(self, *, user_id: Union[UUID, str]) -> User: ...
+    def get_user(self, *, user_id: UUID | str) -> User: ...
 
     def get_user(
         self,
         *,  # Force keyword-only args
-        username: Optional[str] = None,
-        user_id: Union[UUID, str, None] = None,
+        username: str | None = None,
+        user_id: UUID | str | None = None,
     ) -> User:
         """
         Get user object by username or ID.
@@ -367,9 +367,9 @@ class ArgillaSession:
     def create_user(
         self,
         username: str,
-        password: Optional[str] = None,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
+        password: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
         role: Role | str = Role.annotator,
     ) -> User:
         """
@@ -413,7 +413,7 @@ class ArgillaSession:
     def _modify_user_workspace(
         self,
         username: str,
-        workspace: Optional[str],
+        workspace: str | None,
         action: Literal["add", "remove"],
     ):
         """
@@ -445,7 +445,7 @@ class ArgillaSession:
             "%s user '%s' to workspace '%s'", action.lower(), username, workspace_name
         )
 
-    def add_user_to_workspace(self, username: str, workspace: Optional[str] = None):
+    def add_user_to_workspace(self, username: str, workspace: str | None = None):
         """
         Add an existing user to a workspace.
 
@@ -458,9 +458,7 @@ class ArgillaSession:
             username=username, workspace=workspace, action="add"
         )
 
-    def remove_user_from_workspace(
-        self, username: str, workspace: Optional[str] = None
-    ):
+    def remove_user_from_workspace(self, username: str, workspace: str | None = None):
         """
         Remove a user from a workspace.
 
@@ -477,7 +475,7 @@ class ArgillaSession:
         self,
         labelled_passages: list[LabelledPassage],
         wikibase_id: WikibaseID | str,
-        workspace: Optional[str] = None,
+        workspace: str | None = None,
     ) -> Dataset:
         """
         Add labelled passages to an existing dataset in Argilla.
@@ -521,9 +519,9 @@ class ArgillaSession:
     def get_labelled_passages(
         self,
         wikibase_id: WikibaseID | str,
-        workspace: Optional[str] = None,
-        include_statuses: Optional[Sequence[ResponseStatus]] = None,
-        limit: Optional[int] = None,
+        workspace: str | None = None,
+        include_statuses: Sequence[ResponseStatus] | None = None,
+        limit: int | None = None,
         merge_responses_by_text: bool = True,
     ) -> list[LabelledPassage]:
         """
