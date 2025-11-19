@@ -1251,7 +1251,6 @@ def concept_present_in_vespa(
 
 @flow(on_failure=[SlackNotify.message], on_crashed=[SlackNotify.message])
 async def sync_classifiers_profiles(
-    aws_env: AwsEnv,
     wandb_api_key: SecretStr | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     wikibase_cache_path: Path | None = None,
@@ -1263,6 +1262,10 @@ async def sync_classifiers_profiles(
     """Update classifier profile for a given AWS environment."""
 
     logger = get_logger()
+
+    # Pull it from the environment, as is our approach in Prefect, and
+    # thus elsewhere, since this is run Prefect-first.
+    aws_env = AwsEnv(os.environ["AWS_ENV"])
 
     if not vespa_search_adapter:
         logger.info("no Vespa search adapter provided, getting one from AWS secrets")
