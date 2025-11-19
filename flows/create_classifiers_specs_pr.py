@@ -296,7 +296,7 @@ async def create_and_merge_pr(
     flow_run_name: str,
     flow_run_url: str,
     auto_merge: bool = False,
-) -> list[Result[None, Error]]:
+) -> list[Result[None | int, Error]]:
     """
     Main workflow for creating and managing a PR.
 
@@ -311,7 +311,7 @@ async def create_and_merge_pr(
         List of Results indicating success or failure of each step
     """
     logger = get_logger()
-    results: list[Result[None, Error]] = []
+    results = []
 
     try:
         pr_no = await commit_and_create_pr(
@@ -323,9 +323,9 @@ async def create_and_merge_pr(
             base_branch="main",
             repo_path=Path("./"),
         )
+        results.append(Ok(pr_no))
         if pr_no is None:
             logger.info("No PR created as there were no changes.")
-            results.append(Ok(None))
             return results
     except Exception as e:
         logger.error(f"Failed to create PR: {e}")

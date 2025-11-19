@@ -345,7 +345,9 @@ async def test_create_and_merge_pr__automerge_failure():
         )
         mock_wait_merge.assert_not_called()
 
-        assert all(is_err(r) for r in results)
+        assert results[0] == Ok(123)
+        errors = [r._error for r in results if isinstance(r, Err)]
+        assert any("Test error" in e.msg for e in errors)
 
 
 def test_extract_pr_details_valid_url():

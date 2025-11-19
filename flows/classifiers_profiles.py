@@ -454,6 +454,7 @@ async def create_classifiers_profiles_artifact(
     vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
+    pr_number: int | None,
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
@@ -464,6 +465,15 @@ async def create_classifiers_profiles_artifact(
     all_failures = validation_errors + wandb_errors + vespa_errors
     failed_concepts = len(all_failures)
 
+    pr_details = ""
+    if pr_number and pr_number > 0:
+        pr_url = (
+            f"https://github.com/climatepolicyradar/knowledge-graph/pull/{pr_number}"
+        )
+        pr_details = f"- **Classifiers Specs PR**: [#{pr_number}]({pr_url})\n"
+    else:
+        pr_details = "- **Classifiers Specs PR**: No PR created\n"
+
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
 - **Total concepts found**: {total_concepts}
@@ -472,6 +482,7 @@ async def create_classifiers_profiles_artifact(
 - **WandB Errors**: {len(wandb_errors)}
 - **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
+- {pr_details}
 """
 
     def format_cp_details(
@@ -616,6 +627,7 @@ async def send_classifiers_profile_slack_alert(
                 if validation_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
+                        # channel = "alerts-concept-store"
                         channel=channel,
                         thread_ts=thread_ts,
                         errors=validation_errors,
@@ -654,7 +666,6 @@ async def send_classifiers_profile_slack_alert(
                 if wandb_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        # channel="alerts-concept-store",
                         channel="alerts-platform-staging",
                         thread_ts=thread_ts,
                         errors=wandb_errors,
@@ -663,7 +674,6 @@ async def send_classifiers_profile_slack_alert(
                 if vespa_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        # channel="alerts-concept-store",
                         channel="alerts-platform-staging",
                         thread_ts=thread_ts,
                         errors=vespa_errors,
@@ -1472,7 +1482,10 @@ async def sync_classifiers_profiles(
             )
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
-    cs_pr_errors = [unwrap_err(r) for r in cs_pr_results if isinstance(r, Err)]
+
+    # retrieve PR number if PR was created successfully, otherwise set to -1
+    pr_number = unwrap_ok(cs_pr_results[0]) if isinstance(cs_pr_results[0], Ok) else -1
+    pr_errors = [unwrap_err(r) for r in cs_pr_results if isinstance(r, Err)]
 
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
@@ -1505,6 +1518,7 @@ async def sync_classifiers_profiles(
         vespa_errors=vespa_errors,
         successes=successes,
         aws_env=aws_env,
+        pr_number=pr_number,
     )
 
     if len(vespa_errors) > 0:
@@ -1512,7 +1526,7 @@ async def sync_classifiers_profiles(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
         )
     # if classifiers specs PR errors, fail the flow
-    if len(cs_pr_errors) > 0:
+    if len(pr_errors) > 0:
         raise Exception(
-            f"Errors occurred while creating classifiers specs PR: {cs_pr_errors}"
+            f"Errors occurred while creating classifiers specs PR: {pr_errors}"
         )
