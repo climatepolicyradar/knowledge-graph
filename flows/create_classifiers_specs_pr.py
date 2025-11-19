@@ -12,7 +12,7 @@ from knowledge_graph.cloud import AwsEnv
 
 
 async def commit_and_create_pr(
-    files_pattern: str,
+    file_path: str,
     commit_message: str,
     pr_title: str,
     pr_body: str,
@@ -24,7 +24,7 @@ async def commit_and_create_pr(
     Commits changes and creates a GitHub PR using gh CLI.
 
     Args:
-        files_pattern: Git pattern for files to add (e.g., "flows/classifier_specs/")
+        file_path: Path to classifiers spec file to update
         commit_message: Git commit message
         pr_title: Pull request title
         pr_body: Pull request body
@@ -39,7 +39,7 @@ async def commit_and_create_pr(
 
     # Check if there are changes
     result = subprocess.run(
-        ["git", "status", "--porcelain", files_pattern],
+        ["git", "status", "--porcelain", file_path],
         cwd=repo_path,
         capture_output=True,
         text=True,
@@ -74,7 +74,7 @@ async def commit_and_create_pr(
 
     # Add and commit changes
     _ = subprocess.run(
-        ["git", "add", files_pattern],
+        ["git", "add", file_path],
         cwd=repo_path,
         check=True,
     )
@@ -354,7 +354,7 @@ async def create_and_merge_pr(
 
     try:
         pr_no = await commit_and_create_pr(
-            files_pattern=spec_file,
+            file_path=spec_file,
             commit_message="Update classifier specs (automated)",
             pr_title=f"Update classifier specs for {aws_env} (automated)",
             pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",

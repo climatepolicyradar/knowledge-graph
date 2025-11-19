@@ -34,7 +34,7 @@ async def test_commit_and_create_pr__with_changes():
         ]
 
         pr_number = await commit_and_create_pr(
-            files_pattern="testfile",
+            file_path="testfile",
             commit_message="Update testfile",
             pr_title="Update testfile",
             pr_body="Automated update",
@@ -56,7 +56,7 @@ async def test_commit_and_create_pr__no_changes():
 
         repo_path_mock = Mock()
         pr_number = await commit_and_create_pr(
-            files_pattern="testfile",
+            file_path="testfile",
             commit_message="Update testfile",
             pr_title="Update testfile",
             pr_body="Automated update",
