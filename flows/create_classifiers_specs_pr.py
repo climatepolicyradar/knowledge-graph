@@ -19,7 +19,7 @@ async def commit_and_create_pr(
     repo: str = "climatepolicyradar/knowledge-graph",
     base_branch: str = "main",
     repo_path: Path = Path("/app"),
-) -> int:
+) -> int | None:
     """
     Commits changes and creates a GitHub PR using gh CLI.
 
@@ -48,7 +48,7 @@ async def commit_and_create_pr(
 
     if not result.stdout.strip():
         logger.info("No changes detected, skipping PR creation")
-        return 0
+        return None
 
     # Configure git (in case not set)
     _ = subprocess.run(
@@ -180,8 +180,8 @@ async def auto_approve_pr(
 
 async def enable_auto_merge(
     pr_number: int,
-    repo: str,
     merge_method: str,
+    repo: str = "climatepolicyradar/knowledge-graph",
 ) -> Result[None, Error]:
     """
     Enable auto-merge on a GitHub PR.
@@ -221,9 +221,9 @@ async def enable_auto_merge(
 
 async def wait_for_pr_merge(
     pr_number: int,
-    repo: str,
     timeout_minutes: int,
     poll_interval_seconds: int,
+    repo: str = "climatepolicyradar/knowledge-graph",
 ) -> Result[None, Error]:
     """
     Wait for a PR to be merged by polling with gh CLI.
@@ -350,6 +350,10 @@ async def create_and_merge_pr(
             base_branch="main",
             repo_path=Path("./"),
         )
+        if pr_no is None:
+            logger.info("No PR created as there were no changes.")
+            results.append(Ok(None))
+            return results
     except Exception as e:
         logger.error(f"Failed to create PR: {e}")
         results.append(
@@ -371,8 +375,8 @@ async def create_and_merge_pr(
         results.append(
             await enable_auto_merge(
                 pr_number=pr_no,
-                repo="climatepolicyradar/knowledge-graph",
                 merge_method="REBASE",
+                repo="climatepolicyradar/knowledge-graph",
             )
         )
 
@@ -383,9 +387,9 @@ async def create_and_merge_pr(
         results.append(
             await wait_for_pr_merge(
                 pr_number=pr_no,
-                repo="climatepolicyradar/knowledge-graph",
                 timeout_minutes=30,
                 poll_interval_seconds=30,
+                repo="climatepolicyradar/knowledge-graph",
             )
         )
 

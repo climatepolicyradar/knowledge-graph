@@ -369,6 +369,7 @@ async def get_classifiers_profiles(
     Return valid classifiers profiles and different kids of validation errors.
 
     Validation errors can be invalid concepts and violated business constraints.
+    Debug mode: when enabled helps identify classifiers in wikibase without any classifier IDs.
     """
     logger = get_logger()
 
