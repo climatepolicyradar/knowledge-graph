@@ -1059,7 +1059,7 @@ async def update_vespa_with_classifiers_profiles(
                 f"Synced VespaClassifiersProfile {profile_name} to Vespa with {len(profile.mappings)} mappings for doc id {doc_id}"
             )
 
-        # sync VespaClassifiersProfiles to vespa with default id
+        # sync VespaClassifiersProfiles to Vespa with default ID
         fields = JsonDict(
             vespa_classifiers_profiles.model_dump(
                 mode="json", exclude={"response_raw", "id"}
@@ -1345,7 +1345,16 @@ async def sync_classifiers_profiles(
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
-    event = emit_finished(promotions, aws_env)
+    # The default, assuming there were no Vespa successes
+    event: Result[Event | None, Error] = Ok(None)
+    if any(map(is_ok, vespa_results)):
+        logger.info("found at least 1 Vespa success, emitting finished event")
+        event = emit_finished(
+            # This is a vague check, since all of the promotions may
+            # have failed in updating Vespa to reflect them.
+            promotions,
+            aws_env,
+        )
 
     try:
         await send_classifiers_profile_slack_alert(
@@ -1361,7 +1370,6 @@ async def sync_classifiers_profiles(
     except Exception as e:
         logger.error(f"failed to send validation alert: {e}")
 
-    # create artifact with summary
     await create_classifiers_profiles_artifact(
         validation_errors=validation_errors,
         wandb_errors=wandb_errors,
@@ -1370,7 +1378,6 @@ async def sync_classifiers_profiles(
         aws_env=aws_env,
     )
 
-    # if vespa errors, fail the flow
     if len(vespa_errors) > 0:
         raise Exception(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
