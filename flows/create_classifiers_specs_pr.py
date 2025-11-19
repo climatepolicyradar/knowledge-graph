@@ -130,12 +130,24 @@ async def commit_and_create_pr(
         raise RuntimeError(f"gh pr create failed: {result.stderr}")
 
     # Extract PR number from gh output (URL is in stdout)
-    pr_url = result.stdout.strip()
-    pr_number = int(pr_url.split("/")[-1])
+    pr_number, pr_url = extract_pr_details(result.stdout)
 
     logger.info(f"Created PR #{pr_number}: {pr_url}")
 
     return pr_number
+
+
+def extract_pr_details(result_str: str) -> tuple[int, str]:
+    if not result_str.strip():
+        raise ValueError("The result string is empty.")
+
+    try:
+        pr_url = result_str.strip()
+        pr_number = int(pr_url.split("/")[-1])
+        print(f"Extracted PR number: {pr_number}, URL: {pr_url}")
+        return pr_number, pr_url
+    except Exception as e:
+        raise ValueError(f"Failed to extract PR details: {e}")
 
 
 # TODO: check not used and remove

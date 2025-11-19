@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from prefect.client.schemas.objects import FlowRun, State, StateType
+from prefect.client.schemas.objects import FlowRun, State, StateType, TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from prefect.flows import flow
 
@@ -26,6 +26,7 @@ from flows.utils import (
     fn_is_async,
     gather_and_report,
     get_file_stems_for_document_id,
+    get_run_name,
     iterate_batch,
     map_as_local,
     map_as_sub_flow,
@@ -737,3 +738,33 @@ async def test_map_as_local_wrap(
             ],
             unwrap_result=False,
         )
+
+
+def test_get_run_name__successful_flow_context():
+    flow_run = FlowRun(
+        flow_id=uuid4(),
+        name="test-flow-run",
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    with patch("flows.utils.get_run_context", return_value=mock_context):
+        assert get_run_name() == "test-flow-run"
+
+
+def test_get_run_name__successful_task_context():
+    task_run = TaskRun(
+        name="test-task-run",
+        task_key="test-task-key",
+        dynamic_key="test-dynamic-key",
+    )
+
+    mock_context = MagicMock(spec=TaskRunContext)
+    mock_context.task_run = task_run
+    with patch("flows.utils.get_run_context", return_value=mock_context):
+        assert get_run_name() == "test-task-run"
+
+
+def test_get_run_name_outside_context():
+    assert get_run_name() == "unknown"

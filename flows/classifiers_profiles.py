@@ -39,6 +39,7 @@ from flows.utils import (
     JsonDict,
     SlackNotify,
     get_logger,
+    get_run_name,
     get_slack_client,
     total_milliseconds,
 )
@@ -705,11 +706,7 @@ async def _post_errors_main(
         },
     ]
 
-    run_context = get_run_context()
-    # Set a default, just in case, to prioritise getting an alert out
-    flow_run_name = "unknown"
-    if isinstance(run_context, FlowRunContext) and run_context.flow_run:
-        flow_run_name = run_context.flow_run.name
+    flow_run_name = get_run_name()
 
     # Add context footer
     timestamp = int(datetime.now(timezone.utc).timestamp())

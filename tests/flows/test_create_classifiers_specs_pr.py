@@ -6,6 +6,7 @@ from flows.create_classifiers_specs_pr import (
     commit_and_create_pr,
     create_and_merge_pr,
     enable_auto_merge,
+    extract_pr_details,
     wait_for_pr_merge,
 )
 from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
@@ -64,7 +65,7 @@ async def test_commit_and_create_pr__no_changes():
             repo_path=repo_path_mock,
         )
 
-        assert pr_number == 0
+        assert pr_number is None
         mock_run.assert_called_once_with(
             ["git", "status", "--porcelain", "testfile"],
             cwd=repo_path_mock,
@@ -353,3 +354,34 @@ async def test_create_and_merge_pr__automerge_failure():
         assert all(is_err(r) for r in results), (
             f"Expected result to be Err {unwrap_err(results)}"
         )
+
+
+def test_extract_pr_details_valid_url():
+    """Test extracting PR details from a valid URL."""
+    result_str = "https://github.com/climatepolicyradar/knowledge-graph/pull/123"
+    pr_number, pr_url = extract_pr_details(result_str)
+
+    assert pr_number == 123
+    assert pr_url == result_str
+
+
+def test_extract_pr_details_invalid_url():
+    """Test extracting PR details from an invalid URL."""
+    result_str = "https://github.com/climatepolicyradar/knowledge-graph/pull/abc"
+    import re
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Failed to extract PR details: invalid literal for int() with base 10: 'abc'"
+        ),
+    ):
+        extract_pr_details(result_str)
+
+
+def test_extract_pr_details_empty_string():
+    """Test extracting PR details from an empty string."""
+    result_str = ""
+
+    with pytest.raises(ValueError, match="The result string is empty."):
+        extract_pr_details(result_str)
