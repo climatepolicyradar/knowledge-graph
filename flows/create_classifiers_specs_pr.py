@@ -1,6 +1,7 @@
 import asyncio
 import json
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -249,7 +250,7 @@ async def wait_for_pr_merge(
     logger = get_logger()
 
     try:
-        start_time = asyncio.get_event_loop().time()
+        start_time = time.time()
         timeout_seconds = timeout_minutes * 60
 
         logger.info(
@@ -258,7 +259,7 @@ async def wait_for_pr_merge(
         )
 
         while True:
-            elapsed = asyncio.get_event_loop().time() - start_time
+            elapsed = time.time() - start_time
 
             if elapsed > timeout_seconds:
                 logger.error(
