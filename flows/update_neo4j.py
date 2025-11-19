@@ -270,14 +270,16 @@ def _write_document_batch(
             SET d.title = doc.title,
                 d.document_slug = doc.document_slug,
                 d.family_id = doc.family_id,
+                d.family_title = doc.family_title,
                 d.family_slug = doc.family_slug,
+                d.collection_title = doc.collection_title,
                 d.publication_ts = CASE
                     WHEN doc.publication_ts IS NOT NULL
                     THEN datetime(doc.publication_ts)
                     ELSE NULL
                 END,
                 d.translated = doc.translated,
-                d.geography_ids = doc.geography_ids,
+                d.geographies = doc.geographies,
                 d.corpus_id = doc.corpus_id
             """,
             {"documents": documents},
@@ -653,12 +655,14 @@ async def update_documents(
                     "title": document_metadata.get("document_title", ""),
                     "document_slug": document_metadata.get("slug", ""),
                     "family_id": document_metadata.get("family_import_id"),
+                    "family_title": document_metadata.get("family_title", ""),
                     "family_slug": document_metadata.get("family_slug", ""),
+                    "collection_title": document_metadata.get("collection_title", ""),
                     "publication_ts": publication_ts.isoformat()
                     if publication_ts
                     else None,
                     "translated": document_data_json.get("translated", False),
-                    "geography_ids": document_metadata.get("geographies", []),
+                    "geographies": document_metadata.get("geographies", []),
                     "corpus_id": document_metadata.get("corpus_import_id"),
                 }
             )

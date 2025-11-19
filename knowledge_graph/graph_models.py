@@ -117,10 +117,12 @@ class DocumentNode(StructuredNode):
     document_id = StringProperty(required=True, unique_index=True)
     document_slug = StringProperty()
     family_id = StringProperty()
+    family_title = StringProperty()
     family_slug = StringProperty()
+    collection_title = StringProperty()
     publication_ts = DateTimeProperty()
     translated = BooleanProperty()
-    geography_ids = ArrayProperty(StringProperty())
+    geographies = ArrayProperty(StringProperty())
     corpus_id = StringProperty()
     passages = RelationshipTo("PassageNode", "HAS_PASSAGE")
 
