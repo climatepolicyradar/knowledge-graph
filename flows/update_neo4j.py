@@ -211,7 +211,9 @@ def _delete_nodes_in_batches(
     node_label: str, batch_size: int = 1000, delay: float = 0.1, *, dry_run: bool
 ) -> None:
     """
-    Delete all nodes of a given label in small batches to avoid memory issues.
+    Delete all nodes with a given label.
+    
+    Deletion is batched to avoid memory issues on the neo4j database.
 
     :param node_label: Label of nodes to delete (e.g., 'PassageNode', 'DocumentNode')
     :param batch_size: Number of nodes to delete per batch
