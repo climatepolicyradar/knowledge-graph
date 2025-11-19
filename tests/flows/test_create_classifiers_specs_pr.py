@@ -128,7 +128,8 @@ async def test_enable_auto_merge__exception():
         )
         assert is_err(result)
         error = unwrap_err(result)
-        assert "GitHub CLI error" in error.msg
+        assert error.msg == "Failed to enable auto-merge for PR."
+        assert error.metadata.get("pr_number") == 123
 
 
 @pytest.mark.asyncio
@@ -189,9 +190,10 @@ async def test_wait_for_pr_merge__timeout():
 
         assert is_err(result)
         assert (
-            "TimeoutError: PR #123 did not merge within 0 minutes. Check: https://github.com/climatepolicyradar/knowledge-graph/pull/123."
+            "TimeoutError: PR did not merge within the timeout period."
             in unwrap_err(result).msg
         )
+        assert unwrap_err(result).metadata
 
 
 @pytest.mark.asyncio
@@ -211,10 +213,9 @@ async def test_wait_for_pr_merge__closed():
         )
 
         assert is_err(result)
-        assert (
-            "RuntimeError: PR #123 was closed without merging. Check: https://github.com/climatepolicyradar/knowledge-graph/pull/123."
-            in unwrap_err(result).msg
-        )
+        assert "RuntimeError: PR was closed without merging." in unwrap_err(result).msg
+        assert unwrap_err(result).metadata.get("pr_number") == 123
+        assert unwrap_err(result).metadata.get("pr_state") == "CLOSED"
 
 
 @pytest.mark.asyncio
@@ -236,9 +237,10 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
 
         assert is_err(result)
         assert (
-            "TimeoutError: PR #123 did not merge within 0.01 minutes. Check: https://github.com/climatepolicyradar/knowledge-graph/pull/123."
+            "TimeoutError: PR did not merge within the timeout period."
             in unwrap_err(result).msg
         )
+        assert unwrap_err(result).metadata.get("pr_number") == 123
 
 
 @pytest.mark.asyncio

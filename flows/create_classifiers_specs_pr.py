@@ -187,7 +187,8 @@ async def enable_auto_merge(
         logger.error(f"Failed to enable auto-merge: {e}")
         return Err(
             Error(
-                msg=f"Failed to enable auto-merge for PR #{pr_number}: {e}", metadata={}
+                msg="Failed to enable auto-merge for PR.",
+                metadata={"exception": e, "pr_number": pr_number},
             )
         )
 
@@ -227,8 +228,13 @@ async def wait_for_pr_merge(
                 )
                 return Err(
                     Error(
-                        msg=f"TimeoutError: PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}.",
-                        metadata={},
+                        msg="TimeoutError: PR did not merge within the timeout period.",
+                        metadata={
+                            "pr_number": pr_number,
+                            "timeout_minutes": timeout_minutes,
+                            "elapsed_time": elapsed,
+                            "repo": repo,
+                        },
                     )
                 )
 
@@ -262,11 +268,17 @@ async def wait_for_pr_merge(
 
             # Check if closed without merging
             if pr_data.get("state") == "CLOSED" and not pr_data.get("mergedAt"):
-                logger.error(f"PR #{pr_number} was closed without merging.")
+                logger.error(
+                    f"PR #{pr_number} was closed without merging. Check: https://github.com/{repo}/pull/{pr_number}."
+                )
                 return Err(
                     Error(
-                        msg=f"RuntimeError: PR #{pr_number} was closed without merging. Check: https://github.com/{repo}/pull/{pr_number}.",
-                        metadata={},
+                        msg="RuntimeError: PR was closed without merging.",
+                        metadata={
+                            "pr_number": pr_number,
+                            "repo": repo,
+                            "pr_state": pr_data.get("state"),
+                        },
                     )
                 )
 
@@ -283,8 +295,8 @@ async def wait_for_pr_merge(
         logger.error(f"Error while waiting for PR merge: {e}")
         return Err(
             Error(
-                msg=f"Error while waiting for PR #{pr_number} to merge: {e}",
-                metadata={},
+                msg="Error while waiting for PR to merge",
+                metadata={"exception": e, "pr_number": pr_number},
             )
         )
 
@@ -332,8 +344,12 @@ async def create_and_merge_pr(
         results.append(
             Err(
                 Error(
-                    msg=f"Failed to create PR for classifiers specs changes: {e}",
-                    metadata={},
+                    msg="Failed to create PR for classifiers specs changes.",
+                    metadata={
+                        "exception": e,
+                        "aws_env": aws_env,
+                        "spec_file": spec_file,
+                    },
                 )
             )
         )
