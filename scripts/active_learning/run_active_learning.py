@@ -57,7 +57,6 @@ ensemble_config_llm = EnsembleConfig(
 
 def annotate_passages_with_ensemble(
     passages: list[LabelledPassage],
-    wikibase_id: WikibaseID,
     model: Classifier,
     ensemble_config: EnsembleConfig,
     batch_size: int = 50,
@@ -117,7 +116,7 @@ def annotate_passages_with_ensemble(
                     start_index=0,
                     end_index=len(passage.text),
                     prediction_probability=majority_vote_value,
-                    concept_id=wikibase_id,
+                    concept_id=model.concept.wikibase_id,
                     labellers=[str(model)],
                     timestamps=[datetime.now()],
                 )
@@ -137,7 +136,6 @@ def annotate_passages_with_ensemble(
 
 
 def run_active_learning(
-    wikibase_id: WikibaseID,
     labelled_passages: list[LabelledPassage],
     bert_classifier: Classifier,
     llm_classifier: Classifier,
@@ -165,7 +163,6 @@ def run_active_learning(
     # Run BERT ensemble annotation
     bert_labelled_passages, passages_after_bert = annotate_passages_with_ensemble(
         passages=labelled_passages,
-        wikibase_id=wikibase_id,
         model=bert_classifier,
         ensemble_config=ensemble_config_bert,
         batch_size=batch_size,
@@ -174,7 +171,6 @@ def run_active_learning(
     # Run LLM ensemble annotation on passages that BERT was uncertain about
     llm_labelled_passages, unlabelled_passages = annotate_passages_with_ensemble(
         passages=passages_after_bert,
-        wikibase_id=wikibase_id,
         model=llm_classifier,
         ensemble_config=ensemble_config_llm,
         batch_size=batch_size,
@@ -312,6 +308,16 @@ def main(
             labelled_passages_wandb_path
         )
 
+        if bert_classifier.concept.wikibase_id != wikibase_id:
+            raise ValueError(
+                f"Selected BERT classifier seems to have been trained on a concept different to the one specified.\n (classifier: {bert_classifier.concept.wikibase_id}; specified in CLI: {wikibase_id})"
+            )
+
+        if llm_classifier.concept.wikibase_id != wikibase_id:
+            raise ValueError(
+                f"Selected LLM classifier seems to have been trained on a concept different to the one specified.\n (classifier: {bert_classifier.concept.wikibase_id}; specified in CLI: {wikibase_id})"
+            )
+
         console.print(f"Loaded {len(labelled_passages)} passages")
 
         if track_and_upload and run:
@@ -390,7 +396,6 @@ def main(
         # run classifier escalation
         bert_labelled_passages, llm_labelled_passages, unlabelled_passages = (
             run_active_learning(
-                wikibase_id=wikibase_id,
                 labelled_passages=labelled_passages,
                 bert_classifier=bert_classifier,
                 llm_classifier=llm_classifier,
