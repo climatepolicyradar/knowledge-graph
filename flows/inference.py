@@ -180,9 +180,13 @@ def did_inference_fail(
     True equates to a failed run.
     """
 
-    # Check if no batch results
+    # Check if no batch results, but if all documents were
+    # skipped/cached, that's okay.
     if not batch_inference_results:
-        return True
+        return not (
+            len(requested_document_stems) > 0
+            and len(requested_document_stems) == len(successful_document_stems)
+        )
 
     # Check if any batch failed
     if any(result.failed for result in batch_inference_results):
@@ -282,6 +286,81 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
                     file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
                     file_stems.append(file_stem)
     return file_stems
+
+
+async def filter_existing_inference_results(
+    config: Config,
+    classifier_spec: ClassifierSpec,
+    filter_result: FilterResult,
+) -> tuple[
+    list[DocumentStem],
+    set[DocumentStem],
+    int,
+]:
+    logger = get_logger()
+
+    existing_results = await get_existing_inference_results(
+        config=config,
+        classifier_spec=classifier_spec,
+    )
+
+    # Filter out documents that already have results
+    documents_to_process = [
+        stem for stem in filter_result.accepted if stem not in existing_results
+    ]
+
+    # Track which documents were skipped
+    skipped_stems = set(filter_result.accepted) - set(documents_to_process)
+    logger.info(
+        f"found {len(existing_results)} existing results for {classifier_spec}, "
+        f"skipping {len(skipped_stems)} of {len(filter_result.accepted)} documents"
+    )
+
+    return (documents_to_process, skipped_stems, len(existing_results))
+
+
+async def get_existing_inference_results(
+    config: Config,
+    classifier_spec: ClassifierSpec,
+) -> set[DocumentStem]:
+    """Get document stems that have inference results for a classifier."""
+    logger = get_logger()
+
+    # Build the S3 prefix for this classifier spec's results
+    prefix = os.path.join(
+        config.inference_document_target_prefix,
+        classifier_spec.wikibase_id,
+        classifier_spec.classifier_id,
+    )
+
+    logger.debug(
+        f"checking for existing results at s3://{config.cache_bucket}/{prefix}"
+    )
+
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+
+    async with session.client("s3") as s3_client:
+        # Use paginator for efficient bulk listing
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Prefix=prefix,
+        )
+
+        existing_stems: set[DocumentStem] = set()
+        async for page in page_iterator:
+            if "Contents" in page:
+                for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
+                    key = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                    filename = Path(key).stem
+                    existing_stems.add(DocumentStem(filename))
+
+    logger.debug(f"found {len(existing_stems)} existing results for {classifier_spec}")
+
+    return existing_stems
 
 
 async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
@@ -721,6 +800,7 @@ async def create_inference_on_batch_summary_artifact(
     failures: Sequence[tuple[DocumentStem, Exception]],
     unknown_failures: Sequence[BaseException],
     flow_run_name: str | None,
+    config: Config,
 ):
     """Create an artifact with a summary about a batch inference run."""
 
@@ -771,7 +851,7 @@ async def create_inference_on_batch_summary_artifact(
         flow_run_name = f"unknown-{generate_slug(2)}"
 
     await acreate_table_artifact(
-        key=f"batch-inference-{flow_run_name}",
+        key=f"batch-inference-{config.aws_env.value}-{flow_run_name}",
         table=document_details,
         description=overview_description,
     )
@@ -973,6 +1053,7 @@ async def _inference_batch_of_documents(
         all_failures,
         all_unknown_failures,
         flow_run_name,
+        config,
     )
 
     batch_inference_result = BatchInferenceResult(
@@ -1037,11 +1118,18 @@ def filter_document_batch(
     file_stems: Sequence[DocumentStem], spec: ClassifierSpec
 ) -> FilterResult:
     """
-    Given a Sequence of DocumentStems, applies filtering rules to return a FilterResult contain the lists of accepted and removed DocumentStems according to both the ClassifierSpec rules and the Sabin placeholder filter rules.
+    Filter documents by rules.
 
-    Filters out DocumentStems according to the Classifier Spec rules to prevent them from being submitted for Inference.
-    Filters out Sabin placeholder DocumentStems, to prevent them from being submitted for Inference. The Sabin placeholder
-    Document stems have dummy files which can not be processed at Inference time
+    Given a sequence of DocumentStems, applies filtering rules to
+    return a FilterResult contain the lists of accepted and removed
+    DocumentStems according to both the ClassifierSpec rules and the
+    Sabin placeholder filter rules.
+
+    Filters out DocumentStems according to the Classifier Spec rules
+    to prevent them from being submitted for Inference. Filters out
+    Sabin placeholder DocumentStems, to prevent them from being
+    submitted for Inference. The Sabin placeholder Document stems have
+    dummy files which can not be processed at Inference time
     """
 
     removed_file_stems = []
@@ -1238,6 +1326,8 @@ async def inference(
 
     run_output_identifier = build_run_output_identifier()
 
+    logger.info(f"using run output identifier `{run_output_identifier}`")
+
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
         config=config,
@@ -1280,13 +1370,38 @@ async def inference(
     requested_document_stems: set[DocumentStem] = set()
     parameterised_batches: Sequence[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
+    skipped_by_cache: dict[ClassifierSpec, set[DocumentStem]] = {}
+    existing_results_count: dict[ClassifierSpec, int] = {}
+    accepted_documents_count: dict[ClassifierSpec, int] = {}
 
     for classifier_spec in classifier_specs:
         filter_result = filter_document_batch(validated_file_stems, classifier_spec)
-        requested_document_stems.update(filter_result.accepted)
+        accepted_documents_count[classifier_spec] = len(filter_result.accepted)
+
+        # Check for existing results if caching is enabled
+        if config.skip_existing_inference_results:
+            (
+                documents_to_process,
+                skipped_stems,
+                existing_count,
+            ) = await filter_existing_inference_results(
+                config=config,
+                classifier_spec=classifier_spec,
+                filter_result=filter_result,
+            )
+            skipped_by_cache[classifier_spec] = skipped_stems
+            existing_results_count[classifier_spec] = existing_count
+        else:
+            documents_to_process = filter_result.accepted
+            skipped_by_cache[classifier_spec] = set()
+            existing_results_count[classifier_spec] = 0
+
+        # Track all documents we were asked to process (including skipped ones)
+        requested_document_stems.update(documents_to_process)
+        requested_document_stems.update(skipped_by_cache[classifier_spec])
         removal_details[classifier_spec] = len(filter_result.removed)
 
-        for document_batch in iterate_batch(filter_result.accepted, batch_size):
+        for document_batch in iterate_batch(documents_to_process, batch_size):
             params = parameters(classifier_spec, document_batch)
             if (
                 classifier_spec.compute_environment
@@ -1299,7 +1414,11 @@ async def inference(
             parameterised_batches.append(ParameterisedFlow(fn=fn, params=params))
 
     await create_dont_run_on_docs_summary_artifact(
-        config=config, removal_details=removal_details
+        config=config,
+        removal_details=removal_details,
+        skipped_by_cache=skipped_by_cache,
+        existing_results_count=existing_results_count,
+        accepted_documents_count=accepted_documents_count,
     )
 
     all_raw_successes = []
@@ -1339,6 +1458,12 @@ async def inference(
         requested_document_stems=requested_document_stems,
         batch_inference_results=all_successes,
     )
+
+    # Add skipped documents to successful stems, as they have
+    # inference results already computed.
+    all_skipped_stems = set().union(*skipped_by_cache.values())
+    successful_document_stems.update(all_skipped_stems)
+
     inference_run_failed: bool = did_inference_fail(
         batch_inference_results=all_successes,
         requested_document_stems=requested_document_stems,
@@ -1352,6 +1477,7 @@ async def inference(
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
         removal_details=removal_details,
+        skipped_by_cache=skipped_by_cache,
         run_output_identifier=run_output_identifier,
     )
 
@@ -1394,21 +1520,27 @@ async def inference(
 async def create_dont_run_on_docs_summary_artifact(
     config: Config,
     removal_details: dict[ClassifierSpec, int],
+    skipped_by_cache: dict[ClassifierSpec, set[DocumentStem]],
+    existing_results_count: dict[ClassifierSpec, int],
+    accepted_documents_count: dict[ClassifierSpec, int],
 ) -> None:
     """Create an artifact with a summary about the inference run."""
 
-    description = "# Document removals per classifier"
+    description = "# Document removals and cache skips per classifier"
     table = [
         {
             "Wikibase ID": spec.wikibase_id,
             "Classifier ID": spec.classifier_id,
             "Dont Run Ons": [s.value for s in (spec.dont_run_on or [])],
             "Removals": count,
+            "Accepted": accepted_documents_count.get(spec, 0),
+            "Existing Results": existing_results_count.get(spec, 0),
+            "Skipped": len(skipped_by_cache.get(spec, set())),
         }
         for spec, count in removal_details.items()
     ]
     await acreate_table_artifact(
-        key=f"removal-details-{config.aws_env.value}",
+        key=f"removal-details-{config.aws_env.value}-{generate_slug(2)}",
         table=table,
         description=description,
     )
@@ -1421,16 +1553,21 @@ async def create_inference_summary_artifact(
     successful_classifier_specs: list[ClassifierSpec],
     failed_classifier_specs: list[ClassifierSpec],
     removal_details: dict[ClassifierSpec, int],
+    skipped_by_cache: dict[ClassifierSpec, set[DocumentStem]],
     run_output_identifier: RunOutputIdentifier,
 ) -> None:
     """Create an artifact with a summary about the inference run."""
+
+    total_skipped_by_cache = sum(len(stems) for stems in skipped_by_cache.values())
+    total_documents_to_process = len(requested_document_stems)
 
     # Format the overview information as a string for the description
     overview_description = f"""# Classifier Inference Summary
 
 ## Overview
 - **Environment**: {config.aws_env.value}
-- **Total documents requested**: {len(requested_document_stems)}
+- **Total documents to process**: {total_documents_to_process}
+- **Total documents skipped (cached)**: {total_skipped_by_cache}
 - **Total classifiers**: {len(classifier_specs)}
 - **Successful classifiers**: {len(successful_classifier_specs)}
 - **Failed classifiers**: {len(failed_classifier_specs)}
@@ -1442,6 +1579,7 @@ async def create_inference_summary_artifact(
         {
             "Classifier": str(spec),
             "Filtered Out": removal_details[spec],
+            "Cached (Skipped)": len(skipped_by_cache.get(spec, set())),
             "Status": "✓",
         }
         for spec in successful_classifier_specs
@@ -1449,13 +1587,14 @@ async def create_inference_summary_artifact(
         {
             "Classifier": spec.wikibase_id,
             "Filtered Out": removal_details[spec],
+            "Cached (Skipped)": len(skipped_by_cache.get(spec, set())),
             "Status": "✗",
         }
         for spec in failed_classifier_specs
     ]
 
     await acreate_table_artifact(
-        key=f"classifier-inference-{config.aws_env.value}",
+        key=f"classifier-inference-{config.aws_env.value}-{generate_slug(2)}",
         table=classifier_details,
         description=overview_description,
     )

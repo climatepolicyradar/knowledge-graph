@@ -35,7 +35,7 @@ from flows.utils import (
     build_inference_result_s3_uri,
     get_logger,
 )
-from knowledge_graph.cloud import get_async_session
+from knowledge_graph.cloud import AwsEnv, get_async_session
 
 
 async def create_full_pipeline_summary_artifact(
@@ -178,6 +178,10 @@ async def full_pipeline(
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
         return_state=True,
+        # Make sure we never wipe any concepts for users. Otherwise, it's allowed.
+        classifier_specs=classifier_specs
+        if config.aws_env != AwsEnv.production
+        else None,
     )
     aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
         raise_on_failure=False

@@ -433,7 +433,7 @@ async def create_aggregate_inference_summary_artifact(
         flow_run_name = f"unknown-{generate_slug(2)}"
 
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"batch-aggregate-{flow_run_name}",
+        key=f"batch-aggregate-{config.aws_env.value}-{flow_run_name}",
         table=details,
         description=overview_description,
     )
@@ -481,7 +481,7 @@ async def create_aggregate_inference_overall_summary_artifact(
             )
 
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"aggregate-inference-overall-{aws_env.value}",
+        key=f"aggregate-inference-overall-{aws_env.value}-{generate_slug(2)}",
         table=details,
         description=overview_description,
     )
@@ -822,7 +822,7 @@ async def _document_stems_from_parameters(
             logger.info("using document stems")
             return document_stems
         case (None, run_output_identifier):
-            logger.info("using run output identifier")
+            logger.info(f"using run output identifier `{run_output_identifier}`")
             s3_uri = build_inference_result_s3_uri(
                 cache_bucket_str=config.cache_bucket_str,
                 inference_document_target_prefix=config.inference_document_target_prefix,
@@ -858,6 +858,7 @@ async def aggregate(
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     logger = get_logger()
@@ -866,6 +867,10 @@ async def aggregate(
         logger.info("no config provided, creating one")
         config = await Config.create()
 
+    # Make sure we never wipe any concepts for users. Otherwise, it's allowed.
+    if classifier_specs is not None and config.aws_env == AwsEnv.production:
+        raise ValueError("in production you must use the full classifier specs. list")
+
     document_stems = await _document_stems_from_parameters(
         config=config,
         document_stems=document_stems,
@@ -873,13 +878,15 @@ async def aggregate(
     )
 
     run_output_identifier = build_run_output_identifier()
-    classifier_specs = load_classifier_specs(config.aws_env)
+
+    if classifier_specs is None:
+        classifier_specs = load_classifier_specs(config.aws_env)
 
     try:
         if config.cache_bucket:
             await store_metadata(
                 config=config,
-                classifier_specs=classifier_specs,
+                classifier_specs=list(classifier_specs),
                 run_output_identifier=run_output_identifier,
             )
     except Exception as e:
@@ -923,7 +930,7 @@ async def aggregate(
     await create_aggregate_inference_overall_summary_artifact(
         aws_env=config.aws_env,
         document_stems=document_stems,
-        classifier_specs=classifier_specs,
+        classifier_specs=list(classifier_specs),
         run_output_identifier=run_output_identifier,
         successes=successes,
         failures=failures,

@@ -21,6 +21,7 @@ from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
+from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.full_pipeline import full_pipeline
@@ -30,11 +31,11 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.sync_concepts import sync_concepts
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
-from flows.wikibase_to_vespa import wikibase_to_vespa
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -293,18 +294,30 @@ if __name__ == "__main__":
     )
 
     create_deployment(
-        flow=wikibase_to_vespa,
+        flow=sync_concepts,
         description="Upload concepts from Wikibase to Vespa",
         concurrency_limit=ConcurrencyLimitConfig(
             limit=1,
-            collision_strategy=ConcurrencyLimitStrategy.CANCEL_NEW,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
         ),
         env_schedules={
             # Temporarily disabled for stability
-            # AwsEnv.production: "0 9 * * *",
-            AwsEnv.staging: "0 9 * * *",
-            AwsEnv.sandbox: "0 9 * * *",
+            # AwsEnv.production: "0 8 * * MON-THU",
+            AwsEnv.staging: "0 9 * * MON-THU",
+            AwsEnv.sandbox: "0 10 * * MON-THU",
         },
+    )
+
+    # Classifiers Profiles Lifecycle
+
+    create_deployment(
+        flow=sync_classifiers_profiles,
+        description="Compare wikibase classifiers profiles with classifiers specs",
+        # Temporarily disabled while testing
+        # Schedule 2x daily during working week days
+        # env_schedules={
+        #     AwsEnv.production: "0 10,17 * * 1-4"
+        # }
     )
 
     # Sync Neo4j with Wikibase

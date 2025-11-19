@@ -15,6 +15,7 @@ from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
 from prefect.cache_policies import NONE
 from prefect.context import FlowRunContext, get_run_context
+from prefect_slack.credentials import AsyncWebClient
 from pydantic import AnyHttpUrl, SecretStr, ValidationError
 from tenacity import RetryError
 from vespa.application import VespaAsync
@@ -30,7 +31,7 @@ from flows.utils import (
     get_slack_client,
     total_milliseconds,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 
@@ -215,35 +216,48 @@ async def update_concept_in_vespa(
         )
 
 
+async def s3_prefix_has_objects(s3_uri: S3Uri, region: str, aws_env: AwsEnv) -> bool:
+    """
+    Check if an S3 prefix has any objects.
+
+    I found the Polars errors to be misleading, about the remote state
+    of the data. This explicit check is not misleading.
+
+    Returns `False` if the prefix has no objects.
+    """
+    session = get_async_session(
+        region_name=region,
+        aws_env=aws_env,
+    )
+    async with session.client("s3") as s3:
+        response = await s3.list_objects_v2(
+            Bucket=s3_uri.bucket,
+            Prefix=s3_uri.key,
+            MaxKeys=1,
+        )
+        # Empty prefix returns successfully with no Contents key
+        return "Contents" in response and len(response["Contents"]) > 0
+
+
 @task(cache_policy=NONE)
 async def get_new_versions(
     current_df: pl.LazyFrame,
-    existing_ids: pl.LazyFrame,
-    concepts_archive_path: Path | S3Uri,
+    existing_ids: pl.LazyFrame | None,
 ) -> pl.DataFrame:
     """
     Get new versions not yet synced.
 
-    Concepts whose content-based ID doesn't exist in previous state
-    The ID is a hash of the concept's content, so any change creates a
-    new ID.
+    Concepts whose content-based ID doesn't exist in previous state.
+    The ID is a hash of the concept's content, so any change creates a new ID.
     """
-    logger = get_logger()
+    if existing_ids is None:
+        return current_df.collect()
 
-    try:
-        return current_df.join(
-            existing_ids,
-            on="id",
-            how="anti",  # Anti-join: rows in current DF NOT in existing IDs
-        ).collect()
-    except pl.exceptions.ComputeError as e:
-        if "expanded paths were empty" in str(e):
-            logger.info(
-                f"no existing data at {concepts_archive_path}, all concepts are new"
-            )
-            return current_df.collect()
-        else:
-            raise
+    return current_df.join(
+        existing_ids,
+        on="id",
+        how="anti",  # Anti-join: rows in current DF NOT in existing IDs
+    ).collect()
 
 
 @task(persist_result=False)
@@ -350,6 +364,7 @@ async def update_concepts_in_vespa(
 async def create_vespa_sync_summary_artifact(
     results: list[Result[Concept, Error]],
     parquet_path: str | None,
+    aws_env: AwsEnv,
 ):
     """Create an artifact with a summary about the Vespa sync run."""
 
@@ -413,7 +428,7 @@ async def create_vespa_sync_summary_artifact(
     ]
 
     await acreate_table_artifact(
-        key="vespa-sync",
+        key=f"vespa-sync-{aws_env.value}",
         table=concept_details,
         description=overview_description,
     )
@@ -436,8 +451,6 @@ async def send_concept_validation_alert(
     logger = get_logger()
     slack_client = await get_slack_client()
 
-    failure_rate = (len(failures) / total_concepts * 100) if total_concepts > 0 else 0
-
     # Separate ValidationErrors from other errors
     validation_errors: list[Error] = []
     other_errors: list[Error] = []
@@ -450,25 +463,91 @@ async def send_concept_validation_alert(
         else:
             other_errors.append(error)
 
+    # First, send validation errors
+    try:
+        if validation_errors:
+            channel = "alerts-concept-store"
+            main_validation_response = await _post_validation_main(
+                slack_client, channel, len(validation_errors), total_concepts
+            )
+
+            if not main_validation_response.get("ok"):
+                logger.error(f"Slack API response: {main_validation_response}")
+                raise Exception(
+                    f"failed to send main response to Slack channel `#{channel}`: {main_validation_response}"
+                )
+
+            logger.info(
+                f"sent main alert to Slack channel `#{channel}`: {main_validation_response['ok']}"
+            )
+
+            # Get thread_ts for threading replies
+            if thread_ts := main_validation_response.get("ts"):
+                # Post issues to thread
+                await _post_validation_errors_thread(
+                    slack_client=slack_client,
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    validation_errors=validation_errors,
+                )
+            else:
+                raise ValueError(
+                    f"no thread TS in main response: {main_validation_response}"
+                )
+
+    except Exception as e:
+        logger.error(f"failed to send Slack alert: {e}")
+
+    # Second, send other errors
+    if other_errors:
+        try:
+            channel = f"alerts-platform-{aws_env.name}"
+            main_other_response = await _post_validation_main(
+                slack_client, channel, len(other_errors), total_concepts
+            )
+
+            if not main_other_response.get("ok"):
+                logger.error(f"Slack API response: {main_other_response}")
+                raise Exception(
+                    f"failed to send main response to Slack channel `#{channel}`: {main_other_response}"
+                )
+
+            logger.info(
+                f"sent main alert to Slack channel `#{channel}`: {main_other_response['ok']}"
+            )
+
+            # Get thread_ts for threading replies
+            if thread_ts := main_other_response.get("ts"):
+                await _post_other_errors(
+                    slack_client=slack_client,
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    other_errors=other_errors,
+                )
+            else:
+                raise ValueError(
+                    f"no thread TS in main response: {main_other_response}"
+                )
+
+        except Exception as e:
+            logger.error(f"failed to send Slack alert: {e}")
+
+
+async def _post_validation_main(
+    slack_client: AsyncWebClient,
+    channel: str,
+    failures_n: int,
+    concepts_n: int,
+):
     # Build main summary message
     summary_blocks: list[dict[str, Any]] = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"{len(failures)} of {total_concepts} concepts failed to sync to Vespa.",
+                "text": f"{failures_n} of {concepts_n} concepts failed to sync to Vespa.",
             },
-        },
-        {
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Data Quality Issues*\n{len(validation_errors)}",
-                },
-                {"type": "mrkdwn", "text": f"*System Errors*\n{len(other_errors)}"},
-            ],
-        },
+        }
     ]
 
     # Get flow run context for footer
@@ -495,58 +574,29 @@ async def send_concept_validation_alert(
         }
     )
 
-    try:
-        # Determine colour based on failure rate
-        if failure_rate >= 50:
-            color = "#e01e5a"  # Red
-        else:
-            color = "#ecb22e"  # Orange
+    failure_rate = (failures_n / concepts_n * 100) if concepts_n > 0 else 0
 
-        # Post main summary message
-        main_response = await slack_client.chat_postMessage(
-            channel="alerts-concept-store",
-            text="Concept Sync Failures",
-            attachments=[
-                {
-                    "color": color,
-                    "blocks": summary_blocks,
-                }
-            ],
-        )
+    # Determine colour based on failure rate
+    if failure_rate >= 50:
+        color = "#e01e5a"  # Red
+    else:
+        color = "#ecb22e"  # Orange
 
-        if not main_response.get("ok"):
-            logger.error(f"Slack API response: {main_response}")
-            raise Exception(f"failed to send main response to Slack: {main_response}")
-
-        logger.info(f"sent main alert to Slack: {main_response['ok']}")
-
-        # Get thread_ts for threading replies
-        if thread_ts := main_response.get("ts"):
-            # Post issues to thread
-            if validation_errors:
-                await _post_validation_errors_thread(
-                    slack_client=slack_client,
-                    channel="alerts-platform-sandbox",
-                    thread_ts=thread_ts,
-                    validation_errors=validation_errors,
-                )
-
-            if other_errors:
-                await _post_other_errors_thread(
-                    slack_client=slack_client,
-                    channel="alerts-platform-sandbox",
-                    thread_ts=thread_ts,
-                    other_errors=other_errors,
-                )
-        else:
-            raise ValueError(f"no thread TS in main response: {main_response}")
-
-    except Exception as e:
-        logger.error(f"failed to send Slack alert: {e}")
+    # Post main summary message
+    return await slack_client.chat_postMessage(
+        channel=channel,
+        text="Concept Sync Failures",
+        attachments=[
+            {
+                "color": color,
+                "blocks": summary_blocks,
+            }
+        ],
+    )
 
 
 async def _post_validation_errors_thread(
-    slack_client,
+    slack_client: AsyncWebClient,
     channel: str,
     thread_ts: str,
     validation_errors: list[Error],
@@ -720,8 +770,8 @@ async def _post_validation_errors_thread(
         logger.error(f"failed to post Data Quality Issues thread: {e}")
 
 
-async def _post_other_errors_thread(
-    slack_client,
+async def _post_other_errors(
+    slack_client: AsyncWebClient,
     channel: str,
     thread_ts: str,
     other_errors: list[Error],
@@ -838,7 +888,7 @@ async def _post_other_errors_thread(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-async def wikibase_to_vespa(
+async def sync_concepts(
     aws_env: AwsEnv | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     vespa_search_adapter: VespaSearchAdapter | None = None,
@@ -904,35 +954,54 @@ async def wikibase_to_vespa(
     current_df = concepts_to_dataframe(concepts).lazy()
     logger.info("converted to dataframe")
 
-    # Load previous state from all Parquet files
-    parquet_pattern = f"{concepts_archive_path}/*.parquet"
+    region = "eu-west-2" if aws_env == AwsEnv.sandbox else "eu-west-1"
 
-    credential_provider = pl.CredentialProviderAWS(
-        region_name="eu-west-1",
-    )
+    credential_provider: pl.CredentialProvider | None = None
+    storage_options: dict[str, str] | None = None
+    if isinstance(concepts_archive_path, S3Uri):
+        credential_provider = pl.CredentialProviderAWS(region_name=region)
+        storage_options = {
+            "region": region,
+            "default-region": region,
+        }
 
-    logger.info("getting existing versions")
-    existing_ids = (
-        pl.scan_parquet(
-            parquet_pattern,
-            credential_provider=credential_provider,
+    # Check if archive(s) exists before trying to scan it
+    logger.info("checking for existing archive(s)")
+    match concepts_archive_path:
+        case S3Uri():
+            archives_exist = await s3_prefix_has_objects(
+                concepts_archive_path,
+                region,
+                aws_env,
+            )
+        case Path():
+            archives_exist = concepts_archive_path.exists()
+    logger.info(f"found existing archive(s): {archives_exist}")
+
+    # Load previous state from all Parquet files if archive exists
+    existing_ids: pl.LazyFrame | None = None
+    if archives_exist:
+        logger.info("loading existing ID(s) from archive(s)")
+        parquet_pattern = f"{concepts_archive_path}/*.parquet"
+        existing_ids = (
+            pl.scan_parquet(
+                parquet_pattern,
+                credential_provider=credential_provider,
+                storage_options=storage_options,
+            )
+            .select("id")
+            .unique()
         )
-        .select("id")
-        .unique()
-    )
 
     logger.info("getting new versions")
-
     new_versions = await get_new_versions(
         current_df,
         existing_ids,
-        concepts_archive_path,
     )
 
     logger.info(f"new versions found: {new_versions}")
 
     if not len(new_versions):
-        logger.info("no new versions to sync")
         return
 
     kg_concepts = dataframe_to_concepts(new_versions)
@@ -988,7 +1057,9 @@ async def wikibase_to_vespa(
 
         logger.info(f"appending {len(successes)} successful syncs to {append_path}")
         successful_df.write_parquet(
-            append_path, credential_provider=credential_provider
+            append_path,
+            credential_provider=credential_provider,
+            storage_options=storage_options,
         )
         logger.info(f"successfully appended {len(successes)} rows to dataframe")
     else:
@@ -1000,4 +1071,5 @@ async def wikibase_to_vespa(
     await create_vespa_sync_summary_artifact(
         results=results,
         parquet_path=str(append_path) if append_path else None,
+        aws_env=aws_env,
     )

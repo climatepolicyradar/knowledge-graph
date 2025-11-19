@@ -66,12 +66,6 @@ class Ensemble:
                 f"All classifiers used in the ensemble must share the concept {concept}. Other concepts found: {invalid_concepts}"
             )
 
-        unique_classifier_ids = {str(clf) for clf in classifiers}
-        if len(unique_classifier_ids) < len(classifiers):
-            raise IncompatibleSubClassifiersError(
-                reason="All classifiers in the ensemble must be unique."
-            )
-
     @overload
     def predict(
         self,

@@ -2,10 +2,13 @@ name: CI
 
 on:
   pull_request:
-    # Run on all pull requests, regardless of target branch
+    paths-ignore:
+      - '**/*.md' # Run on all pull requests, regardless of target branch but don't run for a Markdown file change
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md' #don't trigger CI for a Markdown file change
   workflow_dispatch:
 
 permissions:

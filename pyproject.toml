@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.20.0"
+version = "0.21.0"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
@@ -8,7 +8,7 @@ authors = [
 ]
 license = { text = "Apache 2.0" }
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.12,<3.14"
 
 dependencies = [
   "pydantic-ai>=1.0.1",
@@ -20,7 +20,7 @@ dependencies = [
   "more-itertools>=10.3.0",
   "argilla>=2.5",
   "griffe==1.5.7",
-  "cpr-sdk>=4.0.1",
+  "cpr-sdk>=4.2.0",
   "wandb>=0.21.0",
   "boto3>=1.35.31",
   "pyvespa>=0.54.0",
@@ -48,6 +48,7 @@ dependencies = [
   "polars>=1.34.0",
   "datalake>=2.5.8",
   "deltalake>=1.2.1",
+  "scikit-learn>=1.6.1",
 ]
 
 [project.optional-dependencies]
@@ -57,14 +58,12 @@ transformers = [
   "torch>=2.8.0",
   "sentence-transformers>=5.1.0",
   "transformers[torch]>=4.55.0",
-  "scikit-learn>=1.6.1",
   "accelerate>=1.6.0",
 ]
 transformers_gpu = [
   "torch>=2.7.1",
   "sentence-transformers>=5.1.0",
   "transformers[torch]>=4.55.0",
-  "scikit-learn>=1.6.1",
   "accelerate>=1.6.0",
 ]
 # https://docs.coiled.io/user_guide/software/docker.html
@@ -112,6 +111,7 @@ collect_prefect_artifacts = "scripts.audit.collect_prefect_artifacts:app"
 
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 env = [
   "AWS_ENV=sandbox",
   "WIKIBASE_USERNAME=test_username",
@@ -212,3 +212,7 @@ members = []
 
 [tool.uv]
 conflicts = [[{ extra = "transformers" }, { extra = "transformers_gpu" }]]
+
+[tool.typos.default.extend-words]
+fpr = "fpr"
+FPR = "FPR"
