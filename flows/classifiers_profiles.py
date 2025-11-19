@@ -706,7 +706,7 @@ async def _post_errors_main(
         },
     ]
 
-    flow_run_name = get_run_name()
+    flow_run_name = get_run_name() or "unknown"
 
     # Add context footer
     timestamp = int(datetime.now(timezone.utc).timestamp())
@@ -1449,10 +1449,9 @@ async def sync_classifiers_profiles(
         # create PR with updated classifier specs
         spec_file = str(determine_spec_file_path(aws_env))
         run_context = get_run_context()
-        flow_run_name = "unknown"
+        flow_run_name = get_run_name() or "unknown"
         flow_run_url = "unknown"
         if isinstance(run_context, FlowRunContext) and run_context.flow_run:
-            flow_run_name = run_context.flow_run.name
             flow_run_url = (
                 f"{PREFECT_UI_URL.value()}/flow-runs/flow-run/{run_context.flow_run.id}"
             )

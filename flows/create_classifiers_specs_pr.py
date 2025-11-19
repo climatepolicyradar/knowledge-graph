@@ -151,46 +151,6 @@ def extract_pr_details(result_str: str) -> tuple[int, str]:
         raise ValueError(f"Failed to extract PR details: {e}")
 
 
-# TODO: check not used and remove
-async def auto_approve_pr(
-    pr_number: int,
-    repo: str = "climatepolicyradar/knowledge-graph",
-) -> Result[None, Error]:
-    """
-    Auto-approve a GitHub PR.
-
-    Args:
-        pr_number: Pull request number
-        repo: Repository in format "owner/repo"
-    """
-    logger = get_logger()
-    try:
-        subprocess.run(
-            [
-                "gh",
-                "pr",
-                "review",
-                str(pr_number),
-                "--approve",
-                "--body",
-                "✓ Auto-approved by Prefect flow",
-                "--repo",
-                repo,
-            ],
-            check=True,
-        )
-
-        logger.info(f"Auto-approved PR #{pr_number}")
-        return Ok(None)
-    except Exception as e:
-        logger.error(f"Failed to auto-approve PR: {e}")
-        return Err(
-            Error(
-                msg=f"Failed to enable auto-merge for PR #{pr_number}: {e}", metadata={}
-            )
-        )
-
-
 async def enable_auto_merge(
     pr_number: int,
     merge_method: str,

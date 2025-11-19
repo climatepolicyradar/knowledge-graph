@@ -959,15 +959,15 @@ def get_logger() -> logging.Logger | LoggingAdapter:
         return prefect.logging.get_logger()
 
 
-def get_run_name() -> str:
+def get_run_name() -> None | str:
     """
     Get the current Prefect run name.
 
     Returns:
-        str: The name of the current flow or task run, or "unknown" if not in a run context.
+        str: The name of the current flow or task run, or None if not in a run context.
     """
-    # set run name to unknown by default
-    run_name = "unknown"
+    # set run name to None by default
+    run_name = None
     try:
         run_context = get_run_context()
         if isinstance(run_context, FlowRunContext) and run_context.flow_run:

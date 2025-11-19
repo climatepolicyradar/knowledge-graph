@@ -9,7 +9,7 @@ from flows.create_classifiers_specs_pr import (
     extract_pr_details,
     wait_for_pr_merge,
 )
-from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err
 from knowledge_graph.cloud import AwsEnv
 
 
@@ -99,8 +99,7 @@ async def test_enable_auto_merge():
             ],
             check=True,
         )
-        assert is_ok(result), f"Expected result to be Ok {unwrap_ok(result)}"
-        assert unwrap_ok(result) is None
+        assert result == Ok(None)
 
 
 @pytest.mark.asyncio
@@ -127,7 +126,7 @@ async def test_enable_auto_merge__exception():
             ],
             check=True,
         )
-        assert is_err(result), f"Expected result to be Err {unwrap_err(result)}"
+        assert is_err(result)
         error = unwrap_err(result)
         assert "GitHub CLI error" in error.msg
 
@@ -169,8 +168,7 @@ async def test_wait_for_pr_merge():
             capture_output=True,
             text=True,
         )
-        assert is_ok(result)
-        assert unwrap_ok(result) is None
+        assert result == Ok(None)
 
 
 @pytest.mark.asyncio
@@ -189,7 +187,7 @@ async def test_wait_for_pr_merge__timeout():
             poll_interval_seconds=0.1,
         )
 
-        assert is_err(result), f"Expected result to be Err {unwrap_err(result)}"
+        assert is_err(result)
         assert (
             "TimeoutError: PR #123 did not merge within 0 minutes. Check: https://github.com/climatepolicyradar/knowledge-graph/pull/123."
             in unwrap_err(result).msg
@@ -212,7 +210,7 @@ async def test_wait_for_pr_merge__closed():
             poll_interval_seconds=0.1,
         )
 
-        assert is_err(result), f"Expected result to be Err {unwrap_err(result)}"
+        assert is_err(result)
         assert (
             "RuntimeError: PR #123 was closed without merging. Check: https://github.com/climatepolicyradar/knowledge-graph/pull/123."
             in unwrap_err(result).msg
@@ -236,7 +234,7 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
             poll_interval_seconds=0.2,
         )
 
-        assert is_err(result), f"Expected result to be Err {unwrap_err(result)}"
+        assert is_err(result)
         assert (
             "TimeoutError: PR #123 did not merge within 0.01 minutes. Check: https://github.com/climatepolicyradar/knowledge-graph/pull/123."
             in unwrap_err(result).msg
@@ -282,9 +280,7 @@ async def test_create_and_merge_pr():
             timeout_minutes=30,
             poll_interval_seconds=30,
         )
-        assert all(is_ok(r) for r in results), (
-            f"Expected result to be Ok {unwrap_ok(results)}"
-        )
+        assert all(is_ok(r) for r in results)
 
 
 @pytest.mark.asyncio
@@ -313,9 +309,7 @@ async def test_create_and_merge_pr__no_automerge():
         mock_enable_merge.assert_not_called()
         mock_wait_merge.assert_not_called()
 
-        assert all(is_ok(r) for r in results), (
-            f"Expected result to be Ok {unwrap_ok(results)}"
-        )
+        assert all(is_ok(r) for r in results)
 
 
 @pytest.mark.asyncio
@@ -351,9 +345,7 @@ async def test_create_and_merge_pr__automerge_failure():
         )
         mock_wait_merge.assert_not_called()
 
-        assert all(is_err(r) for r in results), (
-            f"Expected result to be Err {unwrap_err(results)}"
-        )
+        assert all(is_err(r) for r in results)
 
 
 def test_extract_pr_details_valid_url():

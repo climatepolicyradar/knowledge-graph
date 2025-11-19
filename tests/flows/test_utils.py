@@ -767,4 +767,4 @@ def test_get_run_name__successful_task_context():
 
 
 def test_get_run_name_outside_context():
-    assert get_run_name() == "unknown"
+    assert get_run_name() is None
