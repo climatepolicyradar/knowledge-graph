@@ -4,6 +4,9 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from prefect import task
+
+from flows.result import Err, Error, Ok, Result, is_err
 from flows.utils import get_logger
 from knowledge_graph.cloud import AwsEnv
 
@@ -135,10 +138,11 @@ async def commit_and_create_pr(
     return pr_number
 
 
+# TODO: check not used and remove
 async def auto_approve_pr(
     pr_number: int,
     repo: str = "climatepolicyradar/knowledge-graph",
-) -> None:
+) -> Result[None, Error]:
     """
     Auto-approve a GitHub PR.
 
@@ -147,30 +151,38 @@ async def auto_approve_pr(
         repo: Repository in format "owner/repo"
     """
     logger = get_logger()
+    try:
+        subprocess.run(
+            [
+                "gh",
+                "pr",
+                "review",
+                str(pr_number),
+                "--approve",
+                "--body",
+                "✓ Auto-approved by Prefect flow",
+                "--repo",
+                repo,
+            ],
+            check=True,
+        )
 
-    subprocess.run(
-        [
-            "gh",
-            "pr",
-            "review",
-            str(pr_number),
-            "--approve",
-            "--body",
-            "✓ Auto-approved by Prefect flow",
-            "--repo",
-            repo,
-        ],
-        check=True,
-    )
-
-    logger.info(f"Auto-approved PR #{pr_number}")
+        logger.info(f"Auto-approved PR #{pr_number}")
+        return Ok(None)
+    except Exception as e:
+        logger.error(f"Failed to auto-approve PR: {e}")
+        return Err(
+            Error(
+                msg=f"Failed to enable auto-merge for PR #{pr_number}: {e}", metadata={}
+            )
+        )
 
 
 async def enable_auto_merge(
     pr_number: int,
     repo: str,
     merge_method: str,
-) -> None:
+) -> Result[None, Error]:
     """
     Enable auto-merge on a GitHub PR.
 
@@ -181,21 +193,30 @@ async def enable_auto_merge(
     """
     logger = get_logger()
 
-    subprocess.run(
-        [
-            "gh",
-            "pr",
-            "merge",
-            str(pr_number),
-            f"--{merge_method.lower()}",
-            "--auto",
-            "--repo",
-            repo,
-        ],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "gh",
+                "pr",
+                "merge",
+                str(pr_number),
+                f"--{merge_method.lower()}",
+                "--auto",
+                "--repo",
+                repo,
+            ],
+            check=True,
+        )
 
-    logger.info(f"Enabled auto-merge on PR #{pr_number}")
+        logger.info(f"Enabled auto-merge on PR #{pr_number}")
+        return Ok(None)
+    except Exception as e:
+        logger.error(f"Failed to enable auto-merge: {e}")
+        return Err(
+            Error(
+                msg=f"Failed to enable auto-merge for PR #{pr_number}: {e}", metadata={}
+            )
+        )
 
 
 async def wait_for_pr_merge(
@@ -203,7 +224,7 @@ async def wait_for_pr_merge(
     repo: str,
     timeout_minutes: int,
     poll_interval_seconds: int,
-) -> None:
+) -> Result[None, Error]:
     """
     Wait for a PR to be merged by polling with gh CLI.
 
@@ -215,75 +236,94 @@ async def wait_for_pr_merge(
     """
     logger = get_logger()
 
-    start_time = asyncio.get_event_loop().time()
-    timeout_seconds = timeout_minutes * 60
+    try:
+        start_time = asyncio.get_event_loop().time()
+        timeout_seconds = timeout_minutes * 60
 
-    logger.info(
-        f"Waiting for PR #{pr_number} to merge (timeout: {timeout_minutes}m, "
-        f"poll interval: {poll_interval_seconds}s)"
-    )
-
-    while True:
-        elapsed = asyncio.get_event_loop().time() - start_time
-
-        if elapsed > timeout_seconds:
-            raise TimeoutError(
-                f"PR #{pr_number} did not merge within {timeout_minutes} minutes. "
-                f"Check: https://github.com/{repo}/pull/{pr_number}"
-            )
-
-        # Check PR status using gh
-        result = subprocess.run(
-            [
-                "gh",
-                "pr",
-                "view",
-                str(pr_number),
-                "--json",
-                "state,mergedAt",
-                "--repo",
-                repo,
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            logger.warning(f"Failed to get PR status: {result.stderr}")
-            await asyncio.sleep(poll_interval_seconds)
-            continue
-
-        pr_data = json.loads(result.stdout)
-
-        # Check if merged (mergedAt will be non-null if merged)
-        if pr_data.get("mergedAt"):
-            logger.info(f"✓ PR #{pr_number} successfully merged!")
-            return
-
-        # Check if closed without merging
-        if pr_data.get("state") == "CLOSED" and not pr_data.get("mergedAt"):
-            raise RuntimeError(
-                f"PR #{pr_number} was closed without merging. "
-                f"Check: https://github.com/{repo}/pull/{pr_number}"
-            )
-
-        # Log current status
-        elapsed_mins = int(elapsed / 60)
         logger.info(
-            f"PR #{pr_number} - state: {pr_data['state']}, elapsed: {elapsed_mins}m"
+            f"Waiting for PR #{pr_number} to merge (timeout: {timeout_minutes}m, "
+            f"poll interval: {poll_interval_seconds}s)"
         )
 
-        # Wait before next check
-        await asyncio.sleep(poll_interval_seconds)
+        while True:
+            elapsed = asyncio.get_event_loop().time() - start_time
+
+            if elapsed > timeout_seconds:
+                logger.error(
+                    f"PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}."
+                )
+                return Err(
+                    Error(
+                        msg=f"TimeoutError: PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}.",
+                        metadata={},
+                    )
+                )
+
+            # Check PR status using gh
+            result = subprocess.run(
+                [
+                    "gh",
+                    "pr",
+                    "view",
+                    str(pr_number),
+                    "--json",
+                    "state,mergedAt",
+                    "--repo",
+                    repo,
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode != 0:
+                logger.warning(f"Failed to get PR status: {result.stderr}")
+                await asyncio.sleep(poll_interval_seconds)
+                continue
+
+            pr_data = json.loads(result.stdout)
+
+            # Check if merged (mergedAt will be non-null if merged)
+            if pr_data.get("mergedAt"):
+                logger.info(f"✓ PR #{pr_number} successfully merged!")
+                return Ok(None)
+
+            # Check if closed without merging
+            if pr_data.get("state") == "CLOSED" and not pr_data.get("mergedAt"):
+                logger.error(f"PR #{pr_number} was closed without merging.")
+                return Err(
+                    Error(
+                        msg=f"RuntimeError: PR #{pr_number} was closed without merging. Check: https://github.com/{repo}/pull/{pr_number}.",
+                        metadata={},
+                    )
+                )
+
+            # Log current status
+            elapsed_mins = int(elapsed / 60)
+            logger.info(
+                f"PR #{pr_number} - state: {pr_data['state']}, elapsed: {elapsed_mins}m"
+            )
+
+            # Wait before next check
+            await asyncio.sleep(poll_interval_seconds)
+
+    except Exception as e:
+        logger.error(f"Error while waiting for PR merge: {e}")
+        return Err(
+            Error(
+                msg=f"Error while waiting for PR #{pr_number} to merge: {e}",
+                metadata={},
+            )
+        )
 
 
-async def main(
+@task
+async def create_and_merge_pr(
     spec_file: str,
     aws_env: AwsEnv,
     flow_run_name: str,
     flow_run_url: str,
     auto_merge: bool = False,
-):
+) -> list[Result[None, Error]]:
     """
     Main workflow for creating and managing a PR.
 
@@ -293,32 +333,60 @@ async def main(
         flow_run_name: Name of the Prefect flow run calling the changes
         flow_run_url: URL to the Prefect flow run calling the changes
         auto_merge: Whether to auto-approve and merge the PR
-    """
-    pr_no = await commit_and_create_pr(
-        files_pattern=spec_file,
-        commit_message="Update classifier specs (automated)",
-        pr_title=f"Update classifier specs for {aws_env} (automated)",
-        pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
-        repo="climatepolicyradar/knowledge-graph",
-        base_branch="main",
-        repo_path=Path("./"),
-    )
 
-    print(f"PR #{pr_no} created.")
+    Returns:
+        List of Results indicating success or failure of each step
+    """
+    logger = get_logger()
+    results: list[Result[None, Error]] = []
+
+    try:
+        pr_no = await commit_and_create_pr(
+            files_pattern=spec_file,
+            commit_message="Update classifier specs (automated)",
+            pr_title=f"Update classifier specs for {aws_env} (automated)",
+            pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
+            repo="climatepolicyradar/knowledge-graph",
+            base_branch="main",
+            repo_path=Path("./"),
+        )
+    except Exception as e:
+        logger.error(f"Failed to create PR: {e}")
+        results.append(
+            Err(
+                Error(
+                    msg=f"Failed to create PR for classifiers specs changes: {e}",
+                    metadata={},
+                )
+            )
+        )
+        return results
+
+    logger.info(f"PR #{pr_no} created.")
 
     if not auto_merge:
-        print("Auto-merge not enabled as per configuration.")
+        logger.info("Auto-merge not enabled as per configuration.")
     else:
-        print("Auto-approving and merging PR...")
-        _ = await enable_auto_merge(
-            pr_number=pr_no,
-            repo="climatepolicyradar/knowledge-graph",
-            merge_method="REBASE",
+        logger.info("Auto-approving and merging PR...")
+        results.append(
+            await enable_auto_merge(
+                pr_number=pr_no,
+                repo="climatepolicyradar/knowledge-graph",
+                merge_method="REBASE",
+            )
         )
 
-        _ = await wait_for_pr_merge(
-            pr_number=pr_no,
-            repo="climatepolicyradar/knowledge-graph",
-            timeout_minutes=30,
-            poll_interval_seconds=30,
+        # if error in results return
+        if any(is_err(result) for result in results):
+            return results
+
+        results.append(
+            await wait_for_pr_merge(
+                pr_number=pr_no,
+                repo="climatepolicyradar/knowledge-graph",
+                timeout_minutes=30,
+                poll_interval_seconds=30,
+            )
         )
+
+    return results

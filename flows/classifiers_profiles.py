@@ -1437,6 +1437,7 @@ async def sync_classifiers_profiles(
 
     # if there were changes to wandb
     vespa_results = []
+    cs_pr_results = []
     if len(successes) > 0:
         logger.info(
             f"Changes made to wandb: {len(successes)}, updating Vespa with the latest classifiers profiles..."
@@ -1457,7 +1458,7 @@ async def sync_classifiers_profiles(
             flow_run_url = (
                 f"{PREFECT_UI_URL.value()}/flow-runs/flow-run/{run_context.flow_run.id}"
             )
-        await create_classifiers_specs_pr.main(
+        cs_pr_results = await create_classifiers_specs_pr.create_and_merge_pr(
             spec_file=spec_file,
             aws_env=aws_env,
             flow_run_name=flow_run_name,
@@ -1474,6 +1475,7 @@ async def sync_classifiers_profiles(
             )
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
+    cs_pr_errors = [unwrap_err(r) for r in cs_pr_results if isinstance(r, Err)]
 
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
@@ -1511,4 +1513,9 @@ async def sync_classifiers_profiles(
     if len(vespa_errors) > 0:
         raise Exception(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
+        )
+    # if classifiers specs PR errors, fail the flow
+    if len(cs_pr_errors) > 0:
+        raise Exception(
+            f"Errors occurred while creating classifiers specs PR: {cs_pr_errors}"
         )
