@@ -24,6 +24,7 @@ from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.context import FlowRunContext, get_run_context
 from prefect.events import Event, emit_event
+from prefect.settings import PREFECT_UI_URL
 from pydantic import AnyHttpUrl, SecretStr
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
@@ -33,7 +34,11 @@ import scripts.classifier_metadata
 import scripts.demote
 import scripts.promote
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
-from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    determine_spec_file_path,
+    load_classifier_specs,
+)
 from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
 from flows.utils import (
     JsonDict,
