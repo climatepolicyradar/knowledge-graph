@@ -36,7 +36,9 @@ def data_backup():
     error = False
     datasets = argilla_session.get_all_datasets("knowledge-graph")
     for dataset in datasets:
-        labelled_passages = argilla_session.dataset_to_labelled_passages(dataset)
+        labelled_passages = argilla_session.get_labelled_passages(
+            wikibase_id=dataset.name
+        )
         try:
             hf_session.push(dataset.name, labelled_passages)
             hf_session.add_dataset_to_collection(

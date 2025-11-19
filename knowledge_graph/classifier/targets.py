@@ -1,7 +1,7 @@
 import warnings
 from abc import abstractmethod
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Sequence
 
 from knowledge_graph.classifier.classifier import (
     Classifier,
@@ -11,10 +11,6 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
-
-# optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
-# https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4
-DEFAULT_THRESHOLD = 0.524
 
 
 class BaseTargetClassifier(
@@ -38,6 +34,10 @@ class BaseTargetClassifier(
             concept,
             allowed_concept_ids=self.allowed_concept_ids,
         )
+
+        # optimal threshold for the "ClimatePolicyRadar/national-climate-targets" model as defined in
+        # https://github.com/climatepolicyradar/targets-sprint-cop28/blob/5c778d73cf4ca4c563fd9488d2cd29f824bc7dd7/src/config.py#L4
+        self.prediction_threshold = 0.524
 
         try:
             from transformers import (  # type: ignore[import-untyped]
@@ -71,11 +71,17 @@ class BaseTargetClassifier(
             device=device,
         )
 
+        self._is_fitted = True
+
     @property
     def id(self) -> ClassifierID:
         """Return a deterministic, human-readable identifier for the classifier."""
         return ClassifierID.generate(
-            self.name, self.concept.id, self.model_name, self.commit_hash
+            self.name,
+            self.concept.id,
+            self.model_name,
+            self.commit_hash,
+            self.prediction_threshold,
         )
 
     @abstractmethod
@@ -88,14 +94,16 @@ class BaseTargetClassifier(
         :return PredictionProbability: a score for the target type
         """
 
-    def predict(self, text: str, threshold: float = DEFAULT_THRESHOLD) -> list[Span]:
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         """Predict whether the supplied text contains a target."""
-        return self.predict_batch([text], threshold=threshold)[0]
+        return self._predict_batch([text], threshold=threshold)[0]
 
-    def predict_batch(
-        self, texts: list[str], threshold: float = DEFAULT_THRESHOLD
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float | None = None
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain targets."""
+
+        effective_threshold = threshold or self.prediction_threshold
 
         predictions: list[list[dict]] = self.pipeline(
             texts, padding=True, truncation=True, top_k=None
@@ -104,7 +112,10 @@ class BaseTargetClassifier(
         results = []
         for text, prediction in zip(texts, predictions):
             prediction_probability = self._get_score(prediction)
-            if prediction_probability >= threshold:
+            if (
+                effective_threshold is None
+                or prediction_probability >= effective_threshold
+            ):
                 spans = [
                     Span(
                         text=text,

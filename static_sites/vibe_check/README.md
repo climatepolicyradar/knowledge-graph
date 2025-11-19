@@ -21,7 +21,7 @@ dist/
 Before generating the site, ensure you have run the prediction pipeline:
 
 ```bash
-just predict Q123  # Replacing Q123 with your concept ID
+just vibe-check-predict Q123  # Replacing Q123 with your concept ID
 ```
 
 To generate a new set of HTML files with the latest predictions, run:

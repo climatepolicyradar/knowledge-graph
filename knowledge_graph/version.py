@@ -89,6 +89,6 @@ def get_latest_model_version(
     current_env_versions = [
         Version(artifact.version)
         for artifact in artifacts
-        if artifact.metadata.get("aws_env") == aws_env.value
+        if artifact.metadata.get("aws_env") == aws_env.name
     ]
     return max(current_env_versions)

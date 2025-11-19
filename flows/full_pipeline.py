@@ -1,3 +1,4 @@
+import json
 from collections.abc import Sequence
 
 from prefect import State, flow
@@ -27,7 +28,14 @@ from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
     inference,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault, get_logger
+from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    Fault,
+    build_inference_result_s3_uri,
+    get_logger,
+)
+from knowledge_graph.cloud import AwsEnv, get_async_session
 
 
 async def create_full_pipeline_summary_artifact(
@@ -111,11 +119,12 @@ async def full_pipeline(
         config=config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
+        return_pointer=True,
         return_state=True,
     )
 
     inference_result_raw: (
-        set[DocumentStem] | Fault | Exception
+        RunOutputIdentifier | Fault | Exception
     ) = await inference_run.result(raise_on_failure=False)
 
     match inference_result_raw:
@@ -123,32 +132,56 @@ async def full_pipeline(
             logger.error("Inference failed.")
             raise inference_result_raw
         case Fault():
-            assert isinstance(inference_result_raw.data, set), (
-                "Expected data field of the Fault to contain a set of DocumentStem objects,"
-                + f"got type: {type(inference_result_raw.data)}"
+            if not isinstance(inference_result_raw.data, dict):
+                raise ValueError(
+                    "Expected data field of the Fault to contain a dict with successful_document_stems and run_output_identifier,"
+                    + f"got type: {type(inference_result_raw.data)}"
+                )
+            successful_document_stems: set[DocumentStem] = inference_result_raw.data[
+                "successful_document_stems"
+            ]
+            run_output_identifier: RunOutputIdentifier = inference_result_raw.data[
+                "run_output_identifier"
+            ]
+            logger.info(
+                f"Inference complete with partial failures. Successfully classified {len(successful_document_stems)} documents."
             )
-            successful_document_stems: set[DocumentStem] = inference_result_raw.data
-        case set():
-            successful_document_stems: set[DocumentStem] = inference_result_raw
+        case str():
+            run_output_identifier: RunOutputIdentifier = inference_result_raw
+            s3_uri = build_inference_result_s3_uri(
+                cache_bucket_str=config.cache_bucket_str,
+                inference_document_target_prefix=config.inference_document_target_prefix,
+                run_output_identifier=run_output_identifier,
+            )
+            session = get_async_session(
+                region_name=config.bucket_region,
+                aws_env=config.aws_env,
+            )
+            async with session.client("s3") as s3_client:
+                response = await s3_client.get_object(
+                    Bucket=s3_uri.bucket, Key=s3_uri.key
+                )
+                body = await response["Body"].read()
+                result_data = json.loads(body.decode("utf-8"))
+                successful_document_stems: set[DocumentStem] = set(
+                    result_data["successful_document_stems"]
+                )
+            logger.info(
+                f"Inference complete. Successfully classified {len(successful_document_stems)} documents."
+            )
         case _:
-            raise ValueError(
-                f"Unexpected inference result type: {type(inference_result_raw)}"
-            )
-    logger.info(
-        f"Inference complete. Successfully classified {len(successful_document_stems)} documents."
-    )
-
-    if len(successful_document_stems) == 0:
-        raise ValueError(
-            "Inference successfully ran on 0 documents, skipping aggregation and indexing."
-        )
+            raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
     aggregation_run: State = await aggregate(
-        document_stems=list(successful_document_stems),
+        run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
         return_state=True,
+        # Make sure we never wipe any concepts for users. Otherwise, it's allowed.
+        classifier_specs=classifier_specs
+        if config.aws_env != AwsEnv.production
+        else None,
     )
     aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
         raise_on_failure=False

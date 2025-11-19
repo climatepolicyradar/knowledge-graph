@@ -23,8 +23,8 @@ promote id +OPTS="":
     uv run promote --wikibase-id {{id}} {{OPTS}}
 
 # demote a model for a specific wikibase ID
-demote id aws_env:
-    uv run demote --wikibase-id {{id}} --aws-env {{aws_env}}
+demote id +OPTS="":
+    uv run demote --wikibase-id {{id}} {{OPTS}}
 
 # Deploy (Get, train & deploy) new model to primary for the given AWS environment.
 # Example: just deploy-classifiers sandbox Q123
@@ -62,6 +62,10 @@ label id string:
 # find instances of the concept in a set of passages for a specific wikibase ID
 predict id +OPTS="":
     uv run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
+
+# run classifiers on balanced dataset for vibe checking (legacy predict functionality)
+vibe-check-predict id +OPTS="":
+    uv run python scripts/vibe_checker/predict.py --wikibase-id {{id}} {{OPTS}}
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:

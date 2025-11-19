@@ -11,7 +11,12 @@ import html2text
 import httpx
 from httpx import HTTPError, HTTPStatusError, RequestError
 from more_itertools import chunked
-from pydantic import SecretStr, ValidationError
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    SecretStr,
+    ValidationError,
+)
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -43,6 +48,14 @@ class StatementRank(Enum):
     PREFERRED = "preferred"
     NORMAL = "normal"
     DEPRECATED = "deprecated"
+
+
+class WikibaseAuth(BaseModel):
+    """For creating a WikibaseSession."""
+
+    username: str
+    password: SecretStr
+    url: AnyHttpUrl
 
 
 class WikibaseSession:
@@ -83,7 +96,9 @@ class WikibaseSession:
         """Initialize session - login happens on first use"""
         self.username = username or os.getenv("WIKIBASE_USERNAME")
         self.password = password or os.getenv("WIKIBASE_PASSWORD")
-        self.base_url = url or os.getenv("WIKIBASE_URL")
+        base_url = url or os.getenv("WIKIBASE_URL")
+        # Strip the trailing slash, since one is added below
+        self.base_url = base_url.rstrip("/") if base_url else base_url
         self.api_url = f"{self.base_url}/w/api.php"
 
         if not self.username or not self.password or not self.base_url:
@@ -739,6 +754,42 @@ class WikibaseSession:
             if include_recursive_subconcept_of:
                 concept.recursive_subconcept_of = results[result_index]
 
+        if include_labels_from_subconcepts:
+            # there's a really disgusting edge case where a concept can have subconcepts
+            # whose positive labels overlap with another subconcept's negative labels.
+            # For example:
+            #    fossil fuels
+            #    ├── oil
+            #    │   ├── petroleum
+            #    │   └── oil shale
+            #    ├── gas
+            #    │   ├── ethane
+            #    │   ├── propane
+            #    │   ├── butane
+            #    │   └── coal bed methane
+            #    └── coal (has negative concept: coal bed methane)
+            #        ├── bituminous coal
+            #        └── lignite
+            # If we try to fetch 'fossil fuels' with `include_labels_from_subconcepts` set
+            # to True, then the resulting 'fossil fuels' concept will pick up all of the
+            # positive labels from all of its subconcepts, including the labels from
+            # 'coal bed methane' as positives.
+            # However, it will _also_ include the _same_ labels as negatives, because they
+            # are stored as negatives on the concept of 'coal'. As a result, the 'fossil
+            # fuels' concept will include the same labels as both positives and
+            # negatives, causing concept class validators to fail.
+            # According to the policy team, the right move here is to include any positive
+            # labels from subconcepts as positives, regardless of whether they are also
+            # negative labels on some of the subconcepts. eg From the POV of the 'fossil
+            # fuels' concept, these labels are are positive - they would all count as
+            # mentions of fossil fuels if observed in text. As such, they should be
+            # included as positives and removed from the concept's negative labels.
+            # To rectify this, we need to remove any overlapping labels from the concept's
+            # negative labels before returning the concept.
+            concept.negative_labels = list(
+                set(concept.negative_labels) - set(concept.all_labels)
+            )
+
         return concept
 
     @async_to_sync
@@ -1241,16 +1292,25 @@ class WikibaseSession:
         wikibase_id: WikibaseID,
     ) -> list[tuple[StatementRank, ClassifierID]]:
         """Get the classifier IDs and their ranks for a given Wikibase item"""
+
         client = await self._get_client()
         response = await client.get(
             url=self.api_url,
-            params={"action": "wbgetentities", "ids": wikibase_id, "format": "json"},
+            params={
+                "action": "wbgetentities",
+                "ids": wikibase_id,
+                "format": "json",
+            },
         )
         response.raise_for_status()
         data = response.json()
 
-        claims = data["entities"][wikibase_id]["claims"][self.classifier_id_property_id]
+        claims = data["entities"][wikibase_id]["claims"].get(
+            self.classifier_id_property_id, []
+        )
+
         classifier_ids = []
+        validation_errors = []
         for claim in claims:
             rank_str = claim["rank"]
             classifier_id_str = claim["mainsnak"]["datavalue"]["value"]
@@ -1259,12 +1319,12 @@ class WikibaseSession:
             try:
                 statement_rank = StatementRank(rank_str)
             except ValueError as e:
-                logger.warning(
-                    "Invalid statement rank for wikibase item %s: '%s' - %s",
-                    wikibase_id,
-                    rank_str,
-                    str(e),
+                validation_message = (
+                    f"Invalid statement rank for wikibase item {wikibase_id}: "
+                    f"'{rank_str}' - {str(e)}"
                 )
+                logger.error(validation_message)
+                validation_errors.append(validation_message)
                 continue
 
             # Validate the format of the returned classifier ID
@@ -1273,12 +1333,18 @@ class WikibaseSession:
                 # Only return the statements where both classifier ID and rank are valid
                 classifier_ids.append((statement_rank, classifier_id))
             except ValueError as e:
-                logger.warning(
-                    "Invalid classifier ID format for wikibase item %s: '%s' - %s",
-                    wikibase_id,
-                    classifier_id_str,
-                    str(e),
+                validation_message = (
+                    f"Invalid classifier ID format for wikibase item {wikibase_id}: "
+                    f"'{classifier_id_str}' - {str(e)}"
                 )
+                logger.error(validation_message)
+                validation_errors.append(validation_message)
+
+        if validation_errors:
+            raise ValueError(
+                f"Validation error for Wikibase ID: {wikibase_id} \n"
+                + "\n".join(validation_errors)
+            )
 
         return classifier_ids
 

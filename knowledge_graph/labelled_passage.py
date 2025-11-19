@@ -1,7 +1,7 @@
 import html
 import re
+from collections import defaultdict
 
-from argilla import Argilla, Record, Response
 from pydantic import BaseModel, Field, model_validator
 
 from knowledge_graph.identifiers import Identifier
@@ -39,60 +39,6 @@ class LabelledPassage(BaseModel):
                     "end_index must be less than or equal to the length of the text"
                 )
         return self
-
-    @classmethod
-    def from_argilla_record(cls, record: Record, client: Argilla) -> "LabelledPassage":
-        """
-        Create a LabelledPassage object from an Argilla record
-
-        :param Record record: The Argilla record to create the LabelledPassage
-        object from
-        :return LabelledPassage: The created LabelledPassage object
-        """
-        text: str = record.fields.get("text", "")  # type: ignore
-
-        metadata = record.metadata or {}  # type: ignore
-        spans = []
-
-        # we've observed that users can submit multiple annotations for the same text!
-        # we should only consider the most recent annotation from each.
-        # NOTE we don't seem to have this field anymore
-        # most_recent_annotation_from_each_user = [
-        #     max(group, key=lambda record: record.updated_at)
-        #     for _, group in itertools.groupby(  # type: ignore
-        #         sorted(record.responses, key=lambda response: response.user_id),  # type: ignore
-        #         key=lambda response: response.user_id,
-        #     )
-        # ]
-
-        # https://docs.argilla.io/latest/reference/argilla/records/responses/?h=#usage-examples
-        # this suggests we call the attribute with the name of the question here
-        # I believe all of our questions are named "entities", so this is safe, but not aligned to
-        # what they imagined. Also, their typing is utterly unhelpful, so filling that in myself below.
-        responses: list[Response] = record.responses["entities"]
-        for response in responses:
-            user = client.users(id=response.user_id)
-            assert user is not None, f"User with id {response.user_id} not found"
-            user_name = user.username
-            try:
-                # a "value" is a dict with the keys "start", "end", and "label"
-                for value in response.value:
-                    spans.append(
-                        Span(
-                            text=text,
-                            start_index=value["start"],
-                            end_index=value["end"],
-                            concept_id=value["label"],
-                            labellers=[user_name],
-                            timestamps=[
-                                record.updated_at
-                            ],  # so it's the record that bears this attribute now rather than the response...
-                        )
-                    )
-            except KeyError:
-                pass
-
-        return cls(text=text, spans=spans, metadata=metadata)
 
     def get_highlighted_text(
         self, start_pattern: str = "[cyan]", end_pattern: str = "[/cyan]"
@@ -179,3 +125,55 @@ class LabelledPassage(BaseModel):
             }
         )
         return text.translate(normalize_translation)
+
+    def __hash__(self) -> int:
+        """Hash based on id for use in sets/dicts"""
+        return hash(self.id)
+
+
+def consolidate_passages_by_text(
+    labelled_passages: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """
+    Merge multiple LabelledPassages for the same text into single LabelledPassages.
+
+    This function combines multiple passages with the same text into single
+    passages, merging spans from all labellers. This is useful when pulling
+    passages from Argilla where multiple labellers may have annotated the same
+    text, resulting in separate passages per response.
+
+    Metadata from the first passage in each group is preserved (since passages with
+    identical text should have the same metadata from the same source document).
+
+    Args:
+        labelled_passages: List of passages, potentially containing duplicates
+            with the same text but different spans from different labellers.
+
+    Returns:
+        List of merged_passages passages with unique texts and merged spans.
+
+    Example:
+        >>> # Three passages: same text, different labellers
+        >>> passage1 = LabelledPassage(text="Hello world", spans=[span_a])
+        >>> passage2 = LabelledPassage(text="Hello world", spans=[span_b])
+        >>> passage3 = LabelledPassage(text="Different", spans=[span_c])
+        >>> merged = consolidate_passages_by_text([passage1, passage2, passage3])
+        >>> len(merged)  # Two unique texts
+        2
+        >>> len(merged[0].spans)  # Spans from both labellers combined
+        2
+    """
+    passage_groups: dict[str, list[LabelledPassage]] = defaultdict(list)
+    for passage in labelled_passages:
+        passage_groups[passage.id].append(passage)
+
+    merged_passages: list[LabelledPassage] = []
+    for group in passage_groups.values():
+        merged_passages.append(
+            LabelledPassage(
+                text=group[0].text,
+                spans=[span for passage in group for span in passage.spans],
+                metadata=group[0].metadata,
+            )
+        )
+    return merged_passages

@@ -259,7 +259,7 @@ async def main() -> None:
         enabled=True,
         aws_env=aws_env,
         expect_state=StateType.RUNNING,
-        ignore=[AwsEnv.labs],
+        ignore=[AwsEnv.labs, AwsEnv.sandbox],
         notification=notification,
     )
 

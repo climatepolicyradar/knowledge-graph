@@ -6,16 +6,16 @@ import tempfile
 from collections import Counter
 from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, NamedTuple, TypeAlias
 
 import httpx
+from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import (
     PutObjectOutputTypeDef,
 )
-from prefect import flow, task, unmapped
+from prefect import flow, task
 from prefect.artifacts import (
-    create_markdown_artifact,
     create_table_artifact,
 )
 from prefect.client.schemas import FlowRun
@@ -36,7 +36,12 @@ from flows.aggregate import (
     METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME,
 )
 from flows.aggregate import (
+    Metadata as AggregateMetadata,
+)
+from flows.aggregate import (
+    MiniClassifierSpec,
     SerialisedVespaConcept,
+    parse_model_field,
 )
 from flows.boundary import (
     CONCEPT_COUNT_SEPARATOR,
@@ -55,6 +60,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    JsonDict,
     ParameterisedFlow,
     RunOutputIdentifier,
     S3Uri,
@@ -68,6 +74,10 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.identifiers import WikibaseID
+
+# A serialised Vespa span, see cpr_sdk.models.search.Passage.Span
+SerialisedVespaSpan: TypeAlias = list[dict[str, str]]
 
 # How many connections to Vespa to use for indexing.
 DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER: Final[PositiveInt] = 10
@@ -136,6 +146,40 @@ async def store_metadata(
         logger.debug(f"wrote index metadata to {s3_uri}")
 
 
+async def load_aggregate_metadata(
+    config: Config,
+    run_output_identifier: RunOutputIdentifier,
+) -> Result[AggregateMetadata, Error]:
+    """Load metadata from aggregate run output."""
+    logger = get_logger()
+
+    metadata_key = os.path.join(
+        config.aggregate_inference_results_prefix,
+        run_output_identifier,
+        "metadata.json",
+    )
+
+    try:
+        metadata_dict = await load_async_json_data_from_s3(
+            bucket=config.cache_bucket_str,
+            key=metadata_key,
+            config=config,
+        )
+        metadata = AggregateMetadata.model_validate(metadata_dict)
+        return Ok(metadata)
+    except Exception as e:
+        logger.warning(f"Failed to load aggregate metadata from {metadata_key}: {e}")
+        return Err(
+            Error(
+                msg="Failed to load aggregate metadata",
+                metadata={
+                    "metadata_key": metadata_key,
+                    "exception": str(e),
+                },
+            )
+        )
+
+
 async def load_async_json_data_from_s3(
     bucket: str, key: str, config: Config
 ) -> dict[str, Any]:
@@ -151,8 +195,10 @@ async def load_async_json_data_from_s3(
 
 async def _update_vespa_passage_concepts(
     vespa_data_id: VespaDataId,
-    serialised_concepts: list[dict[str, Any]],
+    serialised_concepts: Sequence[SerialisedVespaConcept],
+    serialised_spans: Sequence[SerialisedVespaSpan],
     vespa_connection_pool: VespaAsync,
+    enable_v2_concepts: bool = False,
 ) -> VespaResponse:
     """Update a passage in Vespa with the given concepts."""
 
@@ -162,7 +208,11 @@ async def _update_vespa_passage_concepts(
         namespace="doc_search",
         group=None,
     )
-    fields = {"concepts": serialised_concepts}
+    fields = {
+        "concepts": serialised_concepts,
+    }
+    if enable_v2_concepts:
+        fields["spans"] = serialised_spans
 
     response: VespaResponse = await vespa_connection_pool.update_data(
         schema="document_passage",
@@ -213,7 +263,7 @@ async def _update_vespa_passage_concepts(
 async def create_indexing_summary_artifact(
     config: Config,
     document_stems: Sequence[DocumentStem],
-    successes: Sequence[None],
+    successes: Sequence[FlowRun],
     failures: Sequence[FlowRun | BaseException],
 ) -> None:
     """Create an artifact with summary information about the indexing run."""
@@ -224,7 +274,7 @@ async def create_indexing_summary_artifact(
     failed_document_batches_count = len(failures)
 
     # Format the overview information as a string for the description
-    indexing_report = f"""# Aggregate Indexing Summary
+    overview_description = f"""# Aggregate Indexing Summary
 
 ## Overview
 - **Environment**: {config.aws_env.value}
@@ -233,10 +283,32 @@ async def create_indexing_summary_artifact(
 - **Failed Batches**: {failed_document_batches_count}
 """
 
-    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+    details = []
+    for failure in failures:
+        if isinstance(failure, BaseException):
+            details.append(
+                {
+                    "Failure": f"Exception: {type(failure).__name__}: {str(failure)}",
+                    "Flow Run": "N/A",
+                }
+            )
+        elif isinstance(failure, FlowRun):
+            state_info = (
+                f"State: {failure.state.type.value if failure.state else 'Unknown'}"
+            )
+            if failure.state and failure.state.message:
+                state_info += f", Message: {failure.state.message}"
+            details.append(
+                {
+                    "Failure": state_info,
+                    "Flow Run": failure.name,
+                }
+            )
+
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"indexing-aggregate-results-summary-{config.aws_env.value}",
-        description="Summary of the passages indexing run to update concept counts.",
-        markdown=indexing_report,
+        table=details,
+        description=overview_description,
     )
 
 
@@ -246,10 +318,16 @@ class SimpleConcept:
     A simple, hashable concept.
 
     As of 2025-06-03, the Concept from the cpr_sdk isn't hashable.
+
+    The parsed_model field contains the parsed classifier spec info
+    from the model field. It is None for old format concepts (before
+    the new model format was introduced).
     """
 
     id: str
     name: str
+    model: str
+    parsed_model: MiniClassifierSpec | None
 
 
 def generate_s3_uri_input_document_passages(
@@ -274,6 +352,7 @@ async def index_document_passages(
     document_stem: DocumentStem,
     vespa_connection_pool: VespaAsync,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
+    enable_v2_concepts: bool = False,
 ) -> list[Result[list[SimpleConcept], Error]]:
     """Index aggregated inference results from S3 into Vespa document passages."""
     aggregated_results_s3_uri = generate_s3_uri_input_document_passages(
@@ -294,9 +373,10 @@ async def index_document_passages(
         key=aggregated_results_s3_uri.key,
         config=config,
     )
-    aggregated_inference_results: dict[TextBlockId, SerialisedVespaConcept] = {
-        TextBlockId(k): v for k, v in raw_data.items()
-    }
+    aggregated_inference_results: dict[
+        TextBlockId,
+        Sequence[SerialisedVespaConcept],
+    ] = {TextBlockId(k): v for k, v in raw_data.items()}
 
     document_id: DocumentImportId = remove_translated_suffix(document_stem)
     logger.info(
@@ -330,6 +410,14 @@ async def index_document_passages(
             results.append(Err(error))
             continue
 
+        if enable_v2_concepts:
+            serialised_spans = build_v2_passage_spans(
+                text_block_id=text_block_id,
+                serialised_concepts=serialised_concepts,
+            )
+        else:
+            serialised_spans = []
+
         vespa_hit_id: VespaHitId = passages_in_vespa[TextBlockId(text_block_id)][0]
         vespa_data_id: VespaDataId = get_data_id_from_vespa_hit_id(vespa_hit_id)
 
@@ -341,7 +429,9 @@ async def index_document_passages(
                     _update_vespa_passage_concepts(
                         vespa_data_id=vespa_data_id,
                         serialised_concepts=serialised_concepts,
+                        serialised_spans=serialised_spans,
                         vespa_connection_pool=vespa_connection_pool,
+                        enable_v2_concepts=enable_v2_concepts,
                     ),
                 ),
             )
@@ -393,22 +483,160 @@ async def index_document_passages(
 
             serialised_concepts = aggregated_inference_results[text_block_id]
 
-            results.append(
-                Ok(
-                    [
-                        SimpleConcept(id=concept["id"], name=concept["name"])
-                        for concept in serialised_concepts
-                    ]
+            simple_concepts = []
+            for concept in serialised_concepts:
+                if not isinstance(concept, dict):
+                    logger.warning(f"Expected dict for concept, got {type(concept)}")
+                    continue
+
+                concept_id = concept.get("id")
+                concept_name = concept.get("name")
+                concept_model = concept.get("model")
+
+                if not all(
+                    isinstance(v, str)
+                    for v in [concept_id, concept_name, concept_model]
+                ):
+                    logger.warning(
+                        f"Invalid concept fields in {text_block_id}: "
+                        f"id={concept_id}, name={concept_name}, model={concept_model}"
+                    )
+                    continue
+
+                simple_concepts.append(
+                    SimpleConcept(
+                        id=concept_id,  # type: ignore[arg-type]  # validated above
+                        name=concept_name,  # type: ignore[arg-type]  # validated above
+                        model=concept_model,  # type: ignore[arg-type]  # validated above
+                        parsed_model=parse_model_field(concept_model),  # type: ignore[arg-type]  # validated above
+                    )
                 )
-            )
+
+            results.append(Ok(simple_concepts))
 
     return results
+
+
+class Index(NamedTuple):
+    """An index for a span into a passage."""
+
+    start: int
+    end: int
+
+
+def build_v2_passage_spans(
+    text_block_id: TextBlockId,
+    serialised_concepts: Sequence[SerialisedVespaConcept],
+) -> Sequence[SerialisedVespaSpan]:
+    """Group and enrich v1 spans into v2 spans."""
+    logger = get_logger()
+
+    spans: dict[Index, VespaPassage.Span] = {}
+    for serialised_concept_json in serialised_concepts:
+        # Make sure it's valid and easier to access
+        vespa_concept: VespaPassage.Concept = VespaPassage.Concept.model_validate(
+            serialised_concept_json
+        )
+
+        parsed_model = parse_model_field(vespa_concept.model)
+        if parsed_model is None:
+            continue
+
+        try:
+            # This is mostly done to ensure that it's a valid Wikibase ID
+            wikibase_id = WikibaseID(vespa_concept.id)
+        except ValueError as e:
+            logger.warning(
+                f"invalid Wikibase ID {vespa_concept.id} for concept in "
+                f"text block {text_block_id}: {e}"
+            )
+            continue
+
+        # Verify the Wikibase ID in the model field matches the
+        # concept ID. The concept ID in the v1 concept in the SDK
+        # should be Wikibase ID. It's not a canonical ID for a concept.
+        if parsed_model.wikibase_id != wikibase_id:
+            logger.warning(
+                f"Wikibase ID mismatch for concept in text block {text_block_id}: "
+                f"concept.id={wikibase_id}, model={vespa_concept.model}"
+            )
+            continue
+
+        index = Index(
+            start=vespa_concept.start,
+            end=vespa_concept.end,
+        )
+
+        concept: VespaPassage.Span.ConceptV2 = VespaPassage.Span.ConceptV2(
+            concept_id=parsed_model.concept_id,
+            concept_wikibase_id=parsed_model.wikibase_id,
+            classifier_id=parsed_model.classifier_id,
+        )
+
+        if span := spans.get(index):
+            span.concepts_v2 = list(span.concepts_v2) + [concept]
+        else:
+            spans[index] = VespaPassage.Span(
+                start=index.start,
+                end=index.end,
+                concepts_v2=[concept],
+            )
+
+    return [v.model_dump(mode="json") for _k, v in spans.items()]  # type: ignore[return-value]
+
+
+def build_v2_document_concepts(
+    simple_concepts: list[SimpleConcept],
+) -> list[dict[str, Any]]:
+    """Group and enrich v1 concepts into v2 concepts."""
+    logger = get_logger()
+
+    # Count occurrences of each concept
+    concepts_counter: Counter[SimpleConcept] = Counter(simple_concepts)
+
+    document_concepts: list[VespaDocument.ConceptV2] = []
+    for concept, count in concepts_counter.items():
+        # Check if we have parsed model info (new format)
+        if concept.parsed_model is None:
+            # Old format - skip v2 enrichment
+            logger.debug(
+                f"skipping v2 enrichment for concept {concept.id}: old model format"
+            )
+            continue
+
+        # This is mostly done to ensure that it's a valid Wikibase ID
+        try:
+            wikibase_id = WikibaseID(concept.id)
+        except ValueError as e:
+            logger.warning(f"invalid Wikibase ID {concept.id} for concept: {e}")
+            continue
+
+        # Verify the Wikibase ID in the model field matches the
+        # concept ID. The concept ID in the v1 concept in the SDK
+        # should be Wikibase ID. It's not a canonical ID for a concept.
+        if concept.parsed_model.wikibase_id != wikibase_id:
+            logger.warning(
+                f"Wikibase ID mismatch for concept: "
+                f"concept.id={wikibase_id}, model={concept.model}"
+            )
+            continue
+
+        document_concept = VespaDocument.ConceptV2(
+            concept_id=concept.parsed_model.concept_id,
+            concept_wikibase_id=concept.parsed_model.wikibase_id,
+            classifier_id=concept.parsed_model.classifier_id,
+            count=count,
+        )
+        document_concepts.append(document_concept)
+
+    return [concept.model_dump(mode="json") for concept in document_concepts]
 
 
 async def index_family_document(
     document_id: DocumentImportId,
     vespa_connection_pool: VespaAsync,
     simple_concepts: list[SimpleConcept],
+    enable_v2_concepts: bool = False,
 ) -> Result[None, Error]:
     """Index document concept counts in Vespa via partial update."""
     logger = get_logger()
@@ -422,14 +650,26 @@ async def index_family_document(
 
     logger.debug(f"serialised concepts counts: {concepts_counts_with_names}")
 
+    concepts_v2 = build_v2_document_concepts(
+        simple_concepts=simple_concepts,
+    )
+
     path = vespa_connection_pool.app.get_document_v1_path(
         id=document_id,
         schema="family_document",
         namespace="doc_search",
         group=None,
     )
-    # NB: The schema is misnamed in Vespa
-    fields = {"concept_counts": concepts_counts_with_names}
+    fields: JsonDict = JsonDict(
+        {
+            # NB: The schema is misnamed in Vespa
+            "concept_counts": concepts_counts_with_names,
+        }
+    )
+
+    if enable_v2_concepts:
+        fields["concepts_v2"] = concepts_v2
+
     logger.debug(f"update data at path {path} with fields {fields}")
 
     response: VespaResponse = await vespa_connection_pool.update_data(
@@ -542,6 +782,7 @@ async def index_all(
     run_output_identifier: RunOutputIdentifier,
     indexer_document_passages_concurrency_limit: PositiveInt,
     indexer_max_vespa_connections: PositiveInt,
+    enable_v2_concepts: bool = False,
 ) -> DocumentStem:
     """Indexes all (document passages and family documents) data."""
     try:
@@ -564,6 +805,7 @@ async def index_all(
                 document_stem=document_stem,
                 vespa_connection_pool=vespa_connection_pool,
                 indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+                enable_v2_concepts=enable_v2_concepts,
             )
 
             simple_concepts: list[SimpleConcept] = []
@@ -581,6 +823,7 @@ async def index_all(
                 document_id=document_id,
                 vespa_connection_pool=vespa_connection_pool,
                 simple_concepts=simple_concepts,
+                enable_v2_concepts=enable_v2_concepts,
             )
 
             if is_err(result):
@@ -624,6 +867,7 @@ async def index_batch_of_documents(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
+    enable_v2_concepts: bool = False,
 ) -> None:
     """Index aggregated inference results into Vespa for family documents and document passages."""
 
@@ -651,10 +895,11 @@ async def index_batch_of_documents(
                 document_stem=document_stem,
                 config=config,
                 run_output_identifier=run_output_identifier,
-                indexer_document_passages_concurrency_limit=unmapped(
-                    int(indexer_document_passages_concurrency_limit)  # pyright: ignore[reportArgumentType]
+                indexer_document_passages_concurrency_limit=int(
+                    indexer_document_passages_concurrency_limit
                 ),
                 indexer_max_vespa_connections=indexer_max_vespa_connections,
+                enable_v2_concepts=enable_v2_concepts,
             )
         )
 
@@ -696,6 +941,7 @@ async def index(
     indexer_max_vespa_connections: PositiveInt = (
         DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER
     ),
+    enable_v2_concepts: bool | None = None,
 ) -> None:
     """
     Index aggregated inference results from a list of S3 URIs into Vespa.
@@ -725,6 +971,10 @@ async def index(
 
     indexer_max_vespa_connections : int
         The maximum number of Vespa connections to use within each indexing flow.
+
+    enable_v2_concepts : bool
+        Whether to index them into Vespa or not. Not all environments
+        currently have support.
     """
 
     logger = get_logger()
@@ -734,6 +984,19 @@ async def index(
 
     logger.info(f"Running indexing with config: {config}")
 
+    # `None` indicates that there wasn't a human set value, and thus
+    # we can programmatically set a value.
+    #
+    # Disable for production, until ready. Labs is treated as
+    # different to the other 3, as per usual.
+    if enable_v2_concepts is None:
+        enable_v2_concepts = config.aws_env in [
+            AwsEnv.sandbox,
+            AwsEnv.staging,
+        ]
+
+    logger.info(f"v2 concepts enabled: {enable_v2_concepts}")
+
     try:
         if config.cache_bucket:
             await store_metadata(
@@ -742,6 +1005,12 @@ async def index(
             )
     except Exception as e:
         logger.error(f"Failed to store index metadata: {e}")
+
+    # Load metadata from aggregate run
+    _ = await load_aggregate_metadata(
+        config=config,
+        run_output_identifier=run_output_identifier,
+    )
 
     if not document_stems:
         logger.info(
@@ -770,6 +1039,7 @@ async def index(
             "run_output_identifier": run_output_identifier,
             "indexer_document_passages_concurrency_limit": indexer_document_passages_concurrency_limit,
             "indexer_max_vespa_connections": indexer_max_vespa_connections,
+            "enable_v2_concepts": enable_v2_concepts,
         }
 
     parameterised_batches: Sequence[ParameterisedFlow] = []
@@ -786,7 +1056,7 @@ async def index(
         aws_env=config.aws_env,
         counter=indexer_concurrency_limit,
         parameterised_batches=parameterised_batches,
-        unwrap_result=True,
+        unwrap_result=False,
     )
 
     await create_indexing_summary_artifact(

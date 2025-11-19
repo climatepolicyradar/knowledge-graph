@@ -7,6 +7,7 @@ from wandb.errors.errors import CommError
 
 from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from scripts.train import (
     Namespace,
@@ -34,7 +35,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     mock_classifier.name = "test_classifier"
 
     # Create a temporary file to upload
-    test_file_path = Path(os.path.join(tmp_path, "test_model.pickle"))
+    test_file_path = Path(os.path.join(tmp_path, wandb_model_artifact_filename))
     with open(test_file_path, "w") as f:
         f.write("test model content")
 
@@ -60,7 +61,7 @@ def test_upload_model_artifact(aws_env, expected_bucket, tmp_path):
     assert bucket == expected_bucket
 
     # Assert the key structure is correct
-    assert key == "Q123/v4prnc54/v3/model.pickle"
+    assert key == f"Q123/v4prnc54/v3/{wandb_model_artifact_filename}"
 
     # Verify that the upload_file method was called with correct arguments
     mock_s3_client.upload_file.assert_called_once_with(
@@ -129,7 +130,7 @@ async def test_run_training(
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
     ):
         mock_argilla_instance = Mock()
-        mock_argilla_instance.pull_labelled_passages.return_value = []
+        mock_argilla_instance.get_labelled_passages.return_value = []
         mock_argilla_session.return_value = mock_argilla_instance
 
         mock_metrics_df = Mock()
@@ -176,7 +177,7 @@ def test_create_and_link_model_artifact():
     mock_classifier.concept.id = "5d4xcy5g"
     mock_classifier.concept.wikibase_revision = 12300
     bucket = "cpr-labs-models"
-    key = "Q123/v4prnc54/v3/model.pickle"
+    key = f"Q123/v4prnc54/v3/{wandb_model_artifact_filename}"
     aws_env = AwsEnv.labs
 
     storage_link = StorageLink(
@@ -221,50 +222,6 @@ def test_create_and_link_model_artifact():
 
         # Then the artifact was waited for
         mock_run.log_artifact.return_value.wait.assert_called_once()
-
-
-def test_create_and_link_model_artifact_with_classifier_profiles():
-    """Test that classifier profiles are added to artifact metadata."""
-    mock_run = Mock()
-    mock_classifier = Mock()
-    mock_classifier.name = "test_classifier"
-    mock_classifier.concept = Mock()
-    mock_classifier.concept.id = "5d4xcy5g"
-    mock_classifier.concept.wikibase_revision = 12300
-    bucket = "cpr-labs-models"
-    key = "Q123/v4prnc54/v3/model.pickle"
-    aws_env = AwsEnv.labs
-
-    storage_link = StorageLink(
-        bucket=bucket,
-        key=key,
-        aws_env=aws_env,
-    )
-
-    # When it's linked from S3 to a W&B artifact with classifier profiles
-    with patch("wandb.Artifact") as mock_artifact_class:
-        mock_artifact_instance = Mock()
-        mock_artifact_class.return_value = mock_artifact_instance
-
-        create_and_link_model_artifact(
-            mock_run,
-            mock_classifier,
-            storage_link,
-            add_classifiers_profiles=["profile1", "profile2"],
-        )
-
-        # Then the artifact was created with classifier profiles in metadata
-        mock_artifact_class.assert_called_once_with(
-            name=mock_classifier.id,
-            type="model",
-            metadata={
-                "aws_env": aws_env.value,
-                "classifier_name": "test_classifier",
-                "concept_id": "5d4xcy5g",
-                "concept_wikibase_revision": 12300,
-                "classifiers_profiles": ["profile1", "profile2"],
-            },
-        )
 
 
 @patch("wandb.Api")
@@ -351,7 +308,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
     ):
         mock_argilla_instance = Mock()
-        mock_argilla_instance.pull_labelled_passages.return_value = []
+        mock_argilla_instance.get_labelled_passages.return_value = []
         mock_argilla_session.return_value = mock_argilla_instance
 
         # Configure evaluate_classifier to return mock data

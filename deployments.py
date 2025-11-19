@@ -12,11 +12,16 @@ import subprocess
 from typing import Any, ParamSpec, TypeVar
 
 from prefect.blocks.system import JSON
+from prefect.client.schemas.objects import (
+    ConcurrencyLimitConfig,
+    ConcurrencyLimitStrategy,
+)
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
+from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.full_pipeline import full_pipeline
@@ -26,6 +31,7 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.sync_concepts import sync_concepts
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_neo4j
 from flows.utils import JsonDict, get_logger
@@ -88,6 +94,7 @@ def create_deployment(
     env_schedules: dict[AwsEnv, str] | None = None,
     extra_tags: list[str] = [],
     env_parameters: dict[AwsEnv, JsonDict] = {},
+    concurrency_limit: int | ConcurrencyLimitConfig | None = None,
 ) -> None:
     """Create a deployment for the specified flow"""
     logger = get_logger()
@@ -173,6 +180,7 @@ def create_deployment(
         schedule=schedule,
         build=False,
         push=False,
+        concurrency_limit=concurrency_limit,
     )
 
 
@@ -264,22 +272,7 @@ if __name__ == "__main__":
                     "document_ids": [
                         "AF.document.061MCLAR.n0000_translated_en",
                         "CCLW.executive.10512.5360",
-                    ],
-                    "classifier_specs": [
-                        # CPU-based
-                        {
-                            "wikibase_id": "Q708",
-                            "classifier_id": "x9kfsd8s",
-                            "wandb_registry_version": "v14",
-                        },
-                        # GPU-based
-                        {
-                            "wikibase_id": "Q1651",
-                            "classifier_id": "6rys3abe",
-                            "wandb_registry_version": "v13",
-                            "compute_environment": {"gpu": True},
-                        },
-                    ],
+                    ]
                 }
             ),
         },
@@ -298,6 +291,33 @@ if __name__ == "__main__":
         #         # Not needed in labs
         #         # AwsEnv.labs: "0 15 3 * *",
         #     },
+    )
+
+    create_deployment(
+        flow=sync_concepts,
+        description="Upload concepts from Wikibase to Vespa",
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
+        env_schedules={
+            # Temporarily disabled for stability
+            # AwsEnv.production: "0 8 * * MON-THU",
+            AwsEnv.staging: "0 9 * * MON-THU",
+            AwsEnv.sandbox: "0 10 * * MON-THU",
+        },
+    )
+
+    # Classifiers Profiles Lifecycle
+
+    create_deployment(
+        flow=sync_classifiers_profiles,
+        description="Compare wikibase classifiers profiles with classifiers specs",
+        # Temporarily disabled while testing
+        # Schedule 2x daily during working week days
+        # env_schedules={
+        #     AwsEnv.production: "0 10,17 * * 1-4"
+        # }
     )
 
     # Sync Neo4j with Wikibase

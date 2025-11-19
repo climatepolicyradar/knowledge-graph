@@ -67,7 +67,7 @@ def label_passages(
             ]
             batch_texts = [passage.text for passage in batch]
             try:
-                batch_spans = classifier.predict_batch(batch_texts)
+                batch_spans = classifier.predict(batch_texts)
                 predictions.extend(
                     LabelledPassage(text=text, spans=text_spans)
                     for text, text_spans in zip(batch_texts, batch_spans)
@@ -193,8 +193,8 @@ def main(
     )
 
     embedding_classifier = EmbeddingClassifier(
-        concept, threshold=embedding_classifier_threshold
-    )
+        concept,
+    ).set_prediction_threshold(embedding_classifier_threshold)
     console.log(f"🤖 Created an {embedding_classifier}")
 
     passages_labelled_by_embedding_classifier = label_passages(

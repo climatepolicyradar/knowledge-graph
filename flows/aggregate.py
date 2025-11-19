@@ -1,26 +1,27 @@
 import json
 import os
 from collections.abc import AsyncGenerator, Sequence
-from typing import Any, TypeAlias, TypeVar
+from datetime import datetime
+from typing import Any, TypeAlias, TypeVar, Union
 
-import aioboto3
 import prefect.tasks as tasks
 import pydantic
 from botocore.exceptions import ClientError
+from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
-from prefect.artifacts import create_markdown_artifact, create_table_artifact
+from prefect.artifacts import create_table_artifact
 from prefect.client.schemas.objects import FlowRun
-from prefect.context import TaskRunContext, get_run_context
+from prefect.context import FlowRunContext, TaskRunContext, get_run_context
+from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, PositiveInt, ValidationError
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
     TextBlockId,
-    convert_labelled_passage_to_concepts,
     s3_copy_file,
     s3_object_write_text_async,
 )
@@ -33,23 +34,25 @@ from flows.config import Config
 from flows.inference import (
     METADATA_FILE_NAME as INFERENCE_METADATA_FILE_NAME,
 )
-from flows.inference import (
-    deserialise_pydantic_list_with_fallback,
-)
 from flows.utils import (
     DocumentStem,
     ParameterisedFlow,
     RunOutputIdentifier,
     S3Uri,
     SlackNotify,
+    build_inference_result_s3_uri,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
+    deserialise_pydantic_list_with_fallback,
     get_logger,
     iterate_batch,
     map_as_sub_flow,
 )
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -63,8 +66,88 @@ METADATA_FILE_NAME = "metadata.json"
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
 
-# A serialised vespa concept, see cpr_sdk.models.search.Concept
+# A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
+
+
+class MiniClassifierSpec(BaseModel):
+    """Minimal classifier spec parsed from model field."""
+
+    model_config = pydantic.ConfigDict(frozen=True)
+
+    wikibase_id: WikibaseID
+    concept_id: ConceptID
+    classifier_id: ClassifierID
+
+    def to_string(self) -> str:
+        """
+        Serialise to string format.
+
+        Returns:
+            String in format "wikibase_id:concept_id:classifier_id"
+        """
+        return f"{self.wikibase_id}:{self.concept_id}:{self.classifier_id}"
+
+    @classmethod
+    def from_classifier_spec(cls, spec: ClassifierSpec) -> "MiniClassifierSpec | None":
+        """
+        Create MiniClassifierSpec from a ClassifierSpec.
+
+        Args:
+            spec: The classifier spec to convert
+
+        Returns:
+            MiniClassifierSpec with the same IDs, or None if any required field is missing
+
+        Raises:
+            ValueError: If any of the IDs are invalid
+        """
+        # Check if all required fields are present
+        if (
+            spec.wikibase_id is None
+            or spec.concept_id is None
+            or spec.classifier_id is None
+        ):
+            return None
+
+        return cls(
+            wikibase_id=WikibaseID(spec.wikibase_id),
+            concept_id=ConceptID(spec.concept_id),
+            classifier_id=ClassifierID(spec.classifier_id),
+        )
+
+
+def parse_model_field(model: str) -> MiniClassifierSpec | None:
+    """
+    Parse a classifier spec. representation out of a `model` v1 concept field.
+
+    New format: "wikibase_id:concept_id:classifier_id" (e.g., "Q1363:xyz78abc:vax7e3n7")
+    Old format: 'KeywordClassifier("concept_name")'
+
+    We do a simple best-effort for getting a classifier spec.
+    representation out. If there isn't one, then just return nothing.
+    """
+    parts = model.split(":")
+
+    if len(parts) == 3:
+        # Check if any part is the string "None", as that means that a
+        # model hasn't been retrained in some time, and is missing
+        # some data.
+        if any(part == "None" for part in parts):
+            return None
+
+        try:
+            return MiniClassifierSpec(
+                wikibase_id=WikibaseID(parts[0]),
+                concept_id=ConceptID(parts[1]),
+                classifier_id=ClassifierID(parts[2]),
+            )
+        # Handle validation errors from Pydantic, and more broad
+        # exceptions from the IDs.
+        except (ValidationError, ValueError):
+            return None
+
+    return None
 
 
 class AggregationFailure(Exception):
@@ -97,7 +180,13 @@ async def get_all_labelled_passages_for_one_document(
             classifier_spec=spec,
             document_stem=document_stem,
         )
-        response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        try:
+            response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code == "NoSuchKey":
+                e.add_note(f"S3 URI: {s3_uri}")
+            raise
         body = await response["Body"].read()
         content = body.decode("utf-8")
 
@@ -203,7 +292,10 @@ async def process_document(
     )
 
     try:
-        session = aioboto3.Session(region_name=config.bucket_region)
+        session = get_async_session(
+            region_name=config.bucket_region,
+            aws_env=config.aws_env,
+        )
         async with session.client("s3") as s3:
             concepts_for_vespa: dict[TextBlockId, SerialisedVespaConcept] = {}
             async for (
@@ -316,6 +408,7 @@ async def create_aggregate_inference_summary_artifact(
     config: Config,
     success_stems: list[DocumentStem],
     failures: list[AggregationFailure],
+    flow_run_name: str | None,
 ) -> None:
     """Create a summary artifact of the aggregated inference results."""
 
@@ -336,8 +429,11 @@ async def create_aggregate_inference_summary_artifact(
         for failure in failures
     ]
 
+    if not flow_run_name:
+        flow_run_name = f"unknown-{generate_slug(2)}"
+
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"aggregate-inference-{config.aws_env.value}",
+        key=f"batch-aggregate-{config.aws_env.value}-{flow_run_name}",
         table=details,
         description=overview_description,
     )
@@ -352,7 +448,7 @@ async def create_aggregate_inference_overall_summary_artifact(
     failures: Sequence[BaseException | FlowRun],
 ) -> None:
     """Create a summary artifact of the overall aggregated inference results."""
-    markdown_content = f"""# Aggregate Inference Overall Summary
+    overview_description = f"""# Aggregate Inference Overall Summary
 
 ## Overview
 - **Environment**: {aws_env.value}
@@ -363,9 +459,31 @@ async def create_aggregate_inference_overall_summary_artifact(
 - **Failed batches**: {len(failures)}
 """
 
-    await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"aggregate-inference-overall-{aws_env.value}",
-        markdown=markdown_content,
+    details = []
+
+    for failure in failures:
+        if isinstance(failure, BaseException):
+            details.append(
+                {
+                    "Failure": f"Exception: {type(failure).__name__}: {str(failure)}",
+                }
+            )
+        elif isinstance(failure, FlowRun):
+            state_info = (
+                f"State: {failure.state.type.value if failure.state else 'Unknown'}"
+            )
+            if failure.state and failure.state.message:
+                state_info += f", Message: {failure.state.message}"
+            details.append(
+                {
+                    "Failure": state_info,
+                }
+            )
+
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+        key=f"aggregate-inference-overall-{aws_env.value}-{generate_slug(2)}",
+        table=details,
+        description=overview_description,
     )
 
 
@@ -432,12 +550,27 @@ async def aggregate_batch_of_documents(
     # [1]: https://github.com/PrefectHQ/prefect/blob/01f9d5e7d5204f5b8760b431d72db52dd78e6aca/src/prefect/task_runners.py#L183-L213
     futures: PrefectFutureList[DocumentStem] = PrefectFutureList(tasks)  # pyright: ignore[reportAbstractUsage]
     results = futures.result(raise_on_failure=False)
-    success_stems, failures = handle_results(results)
+
+    success_stems, failures = handle_results(
+        results,
+    )
+
+    # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
+    try:
+        run_context = get_run_context()
+        flow_run_name: str | None
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
+            flow_run_name = str(run_context.flow_run.name)
+        else:
+            flow_run_name = None
+    except MissingContextError:
+        flow_run_name = None
 
     await create_aggregate_inference_summary_artifact(
         config=config,
         success_stems=success_stems,
         failures=failures,
+        flow_run_name=flow_run_name,
     )
 
     if failures:
@@ -446,6 +579,147 @@ async def aggregate_batch_of_documents(
         )
 
     return run_output_identifier
+
+
+def get_parent_concepts_from_concept(
+    concept: Concept,
+) -> tuple[list[dict], str]:
+    """
+    Extract parent concepts from a Concept object.
+
+    Currently we pull the name from the Classifier used to label the passage, this
+    doesn't hold the concept id. This is a temporary solution that is not desirable as
+    the relationship between concepts can change frequently and thus shouldn't be
+    coupled with inference.
+    """
+    parent_concepts = [
+        {"id": subconcept, "name": ""} for subconcept in concept.subconcept_of
+    ]
+    parent_concept_ids_flat = (
+        ",".join([parent_concept["id"] for parent_concept in parent_concepts]) + ","
+    )
+
+    return parent_concepts, parent_concept_ids_flat
+
+
+def get_model_from_span(
+    span: Span,
+    classifier_spec: ClassifierSpec | None,
+) -> str:
+    """
+    Get the model used to label the span.
+
+    There's 2 versions of the value. The deprecated one is from the
+    labellers. The new one is from the classifier spec.
+
+    Labellers are stored in a list, these can contain many labellers
+    as seen in the example below, referring to human and machine
+    annotators.
+
+    [
+        "alice",
+        "bob",
+        "68edec6f-fe74-413d-9cf1-39b1c3dad2c0",
+        'KeywordClassifier("extreme weather")',
+    ]
+
+    In the context of inference the labellers array should only hold
+    the model used to label the span as seen in the example below.
+
+    [
+        'KeywordClassifier("extreme weather")',
+    ]
+    """
+    if classifier_spec:
+        if mini_spec := MiniClassifierSpec.from_classifier_spec(classifier_spec):
+            return mini_spec.to_string()
+
+    # Fall back to using labellers if classifier_spec is None or
+    # missing required fields
+    if len(span.labellers) != 1:
+        raise ValueError(f"Span should have 1 labeller but has {len(span.labellers)}.")
+
+    return span.labellers[0]
+
+
+def convert_labelled_passage_to_concepts(
+    labelled_passage: LabelledPassage,
+) -> list[VespaPassage.Concept]:
+    """
+    Convert a labelled passage to a list of VespaPassage.Concept objects and their text block ID.
+
+    The labelled passage contains a list of spans relating to concepts
+    that we must convert to VespaPassage.Concept objects.
+    """
+    concepts: list[VespaPassage.Concept] = []
+    concept_json: Union[dict, None] = labelled_passage.metadata.get("concept")
+
+    if not concept_json and not labelled_passage.spans:
+        return concepts
+
+    if not concept_json and labelled_passage.spans:
+        raise ValueError(
+            "We have spans but no concept metadata for "
+            f"labelled passage {labelled_passage.id}"
+        )
+
+    # The concept used to label the passage holds some information on the parent
+    # concepts and thus this is being used as a temporary solution for providing
+    # the relationship between concepts. This has the downside that it ties a
+    # labelled passage to a particular concept when in fact the Spans that a
+    # labelled passage has can be labelled by multiple concepts.
+    concept = Concept.model_validate(concept_json)
+    parent_concepts, parent_concept_ids_flat = get_parent_concepts_from_concept(
+        concept=concept
+    )
+
+    logger = get_logger()
+
+    classifier_spec: ClassifierSpec | None = None
+    if classifier_spec_json := labelled_passage.metadata.get("classifier_spec"):
+        try:
+            classifier_spec = ClassifierSpec(**classifier_spec_json)
+        except Exception as e:
+            logger.error(
+                f"metadata contained classifier spec. but it couldn't be parsed: {e}"
+            )
+
+    # This expands the list from `n` for `LabelledPassages` to `n` for `Spans`
+    for span_idx, span in enumerate(labelled_passage.spans):
+        if span.concept_id is None:
+            # Include the Span index since Span's don't have IDs
+            logger.error(
+                f"span concept ID is missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}"
+            )
+            continue
+
+        if not span.timestamps:
+            logger.error(
+                f"span timestamps are missing: LabelledPassage.id={labelled_passage.id}, Span index={span_idx}, concept ID={concept.id}, concept Wikibase ID={concept.wikibase_id}"
+            )
+            timestamp = datetime.now()
+        else:
+            timestamp = max(span.timestamps)
+
+        concepts.append(
+            VespaPassage.Concept(
+                id=span.concept_id,
+                name=concept.preferred_label,
+                parent_concepts=parent_concepts,
+                parent_concept_ids_flat=parent_concept_ids_flat,
+                model=get_model_from_span(
+                    span=span,
+                    classifier_spec=classifier_spec,
+                ),
+                end=span.end_index,
+                start=span.start_index,
+                # These timestamps _should_ all be the same,
+                # but just in case, take the latest.
+                timestamp=timestamp,
+            )
+        )
+
+    return concepts
 
 
 class Metadata(BaseModel):
@@ -480,7 +754,7 @@ async def store_metadata(
 
     metadata_json = metadata.model_dump_json()
 
-    logger.debug(f"writing metadata: {metadata_json}")
+    logger.info(f"writing metadata: {metadata_json}")
 
     s3_uri = S3Uri(
         bucket=config.cache_bucket_str,
@@ -491,7 +765,10 @@ async def store_metadata(
         ),
     )
 
-    session = aioboto3.Session(region_name=config.bucket_region)
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
     async with session.client("s3") as s3_client:
         response: PutObjectOutputTypeDef = await s3_client.put_object(
             Bucket=s3_uri.bucket,
@@ -506,7 +783,68 @@ async def store_metadata(
                 f"Failed to store metadata to S3. Status code: {status_code}"
             )
 
-    logger.debug(f"wrote metadata to {s3_uri}")
+    logger.info(f"wrote metadata to {s3_uri}")
+
+
+async def _document_stems_from_parameters(
+    config: Config,
+    document_stems: Sequence[DocumentStem] | None = None,
+    run_output_identifier: RunOutputIdentifier | None = None,
+) -> Sequence[DocumentStem]:
+    """
+    Gets a list of document stems from the caller's parameters.
+
+    You can only use 1 of the approaches at the same time. Either
+    passing a list of document IDs, possibly with a well-known
+    translation suffix (hence why the input and outputs for this
+    function are both document stems), or a pointer to results that
+    can be loaded from S3.
+
+    If neither are used, then a default list is constructed from the
+    config.
+    """
+    logger = get_logger()
+
+    if document_stems and run_output_identifier:
+        raise ValueError(
+            "only one of document_stems and run_output_identifier can be used"
+        )
+
+    match (document_stems, run_output_identifier):
+        case (None, None):
+            logger.info(
+                "no document stems provided or run output identifier, collecting all available from S3 under prefix: "
+                + f"{config.aggregate_document_source_prefix}"
+            )
+            document_stems = await collect_stems_by_specs(config)
+            return document_stems
+        case (document_stems, None):
+            logger.info("using document stems")
+            return document_stems
+        case (None, run_output_identifier):
+            logger.info(f"using run output identifier `{run_output_identifier}`")
+            s3_uri = build_inference_result_s3_uri(
+                cache_bucket_str=config.cache_bucket_str,
+                inference_document_target_prefix=config.inference_document_target_prefix,
+                run_output_identifier=run_output_identifier,
+            )
+            session = get_async_session(
+                region_name=config.bucket_region,
+                aws_env=config.aws_env,
+            )
+            async with session.client("s3") as s3_client:
+                response = await s3_client.get_object(
+                    Bucket=s3_uri.bucket, Key=s3_uri.key
+                )
+                body = await response["Body"].read()
+                result_data: dict[str, list[DocumentStem]] = json.loads(
+                    body.decode("utf-8")
+                )
+                return result_data["successful_document_stems"]
+        case _:
+            raise ValueError(
+                "only 1 of document_stems and run_output_identifier can be used"
+            )
 
 
 @flow(
@@ -515,33 +853,40 @@ async def store_metadata(
     timeout_seconds=None,
 )
 async def aggregate(
-    document_stems: None | Sequence[DocumentStem] = None,
+    document_stems: Sequence[DocumentStem] | None = None,
+    run_output_identifier: RunOutputIdentifier | None = None,
     config: Config | None = None,
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
+    classifier_specs: Sequence[ClassifierSpec] | None = None,
 ) -> RunOutputIdentifier:
     """Aggregate the inference results for the given document ids."""
     logger = get_logger()
 
     if not config:
-        logger.debug("no config provided, creating one")
+        logger.info("no config provided, creating one")
         config = await Config.create()
 
-    if not document_stems:
-        logger.debug(
-            "no document stems provided, collecting all available from S3 under prefix: "
-            + f"{config.aggregate_document_source_prefix}"
-        )
-        document_stems = await collect_stems_by_specs(config)
+    # Make sure we never wipe any concepts for users. Otherwise, it's allowed.
+    if classifier_specs is not None and config.aws_env == AwsEnv.production:
+        raise ValueError("in production you must use the full classifier specs. list")
+
+    document_stems = await _document_stems_from_parameters(
+        config=config,
+        document_stems=document_stems,
+        run_output_identifier=run_output_identifier,
+    )
 
     run_output_identifier = build_run_output_identifier()
-    classifier_specs = load_classifier_specs(config.aws_env)
+
+    if classifier_specs is None:
+        classifier_specs = load_classifier_specs(config.aws_env)
 
     try:
         if config.cache_bucket:
             await store_metadata(
                 config=config,
-                classifier_specs=classifier_specs,
+                classifier_specs=list(classifier_specs),
                 run_output_identifier=run_output_identifier,
             )
     except Exception as e:
@@ -585,7 +930,7 @@ async def aggregate(
     await create_aggregate_inference_overall_summary_artifact(
         aws_env=config.aws_env,
         document_stems=document_stems,
-        classifier_specs=classifier_specs,
+        classifier_specs=list(classifier_specs),
         run_output_identifier=run_output_identifier,
         successes=successes,
         failures=failures,

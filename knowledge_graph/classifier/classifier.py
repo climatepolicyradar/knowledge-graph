@@ -1,10 +1,26 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, Protocol, Sequence, Union, runtime_checkable
+from typing import (
+    Optional,
+    Protocol,
+    Sequence,
+    Union,
+    overload,
+    runtime_checkable,
+)
 
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+)
 from typing_extensions import Self
 
+from flows.utils import iterate_batch
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
@@ -26,6 +42,8 @@ class Classifier(ABC):
     ):
         self.concept = concept
         self.version = version
+        self._is_fitted = False
+        self.prediction_threshold: Optional[float] = None
 
         if self.allowed_concept_ids:
             self._validate_concept_id(self.allowed_concept_ids)
@@ -42,6 +60,18 @@ class Classifier(ABC):
                 f"The concept supplied to a {self.name} must be "
                 f"{expected}, not {self.concept.wikibase_id}"
             )
+
+    def set_prediction_threshold(self, threshold: float) -> Self:
+        """
+        Set a prediction threshold for the classifier.
+
+        :param float threshold: The prediction threshold to use
+        :return Self: The classifier instance.
+        """
+
+        self.prediction_threshold = threshold
+
+        return self
 
     def fit(self, *args, **kwargs) -> "Classifier":
         """
@@ -60,26 +90,111 @@ class Classifier(ABC):
 
         :returns Classifier: The trained classifier
         """
+        self._is_fitted = True
         return self
 
+    @overload
+    def predict(
+        self,
+        text: str,
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> list[Span]: ...
+
+    @overload
+    def predict(
+        self,
+        text: list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> list[list[Span]]: ...
+
+    def predict(
+        self,
+        text: str | list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> list[Span] | list[list[Span]]:
+        """
+        Predict whether the supplied text contains an instance of the concept.
+
+        :param str | list[str] text: The text to predict on
+        :param int | None batch_size: Batch size to use if predicting on multiple texts.
+            If not passed, defaults to predicting all texts in one batch.
+        :param bool show_progress: Whether to show progress in predicting. Defaults to
+            False.
+        :param Console console: Optional rich console used to render the progress bar.
+            This is to avoid flickering when multiple consoles are created.
+        :param float | None threshold: Optional prediction threshold that overrides the
+            classifier's default threshold. Predictions with confidence scores below this
+            threshold will be filtered out.
+        :return list[Span] | list[list[Span]]: A list of spans in the text or texts
+        """
+
+        if isinstance(text, str):
+            return self._predict(text, threshold=threshold, **kwargs)
+
+        batch_size = batch_size or len(text)
+        text_batches = list(iterate_batch(text, batch_size))
+        preds = []
+
+        if show_progress:
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    "Processing batches...", total=len(text_batches)
+                )
+                for batch in text_batches:
+                    batch_preds = self._predict_batch(
+                        batch, threshold=threshold, **kwargs
+                    )
+                    preds.extend(batch_preds)
+                    progress.advance(task)
+        else:
+            for batch in text_batches:
+                batch_preds = self._predict_batch(batch, threshold=threshold, **kwargs)
+                preds.extend(batch_preds)
+
+        return preds
+
     @abstractmethod
-    def predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         """
         Predict whether the supplied text contains an instance of the concept.
 
         :param str text: The text to predict on
+        :param float | None threshold: Optional prediction threshold that overrides the
+            classifier's default threshold
         :return list[Span]: A list of spans in the text
         """
         raise NotImplementedError
 
-    def predict_batch(self, texts: list[str]) -> list[list[Span]]:
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float | None = None
+    ) -> list[list[Span]]:
         """
         Predict whether the supplied texts contain instances of the concept.
 
         :param list[str] texts: The texts to predict on
+        :param float | None threshold: Optional prediction threshold that overrides the
+            classifier's default threshold
         :return list[list[Span]]: A list of spans in the texts for each text
         """
-        return [self.predict(text) for text in texts]
+        return [self._predict(text, threshold=threshold) for text in texts]
 
     def get_variant_sub_classifier(self) -> Self:
         """
@@ -217,4 +332,4 @@ class VariantEnabledClassifier(Protocol):
     """
 
     def get_variant(self) -> "VariantEnabledClassifier": ...  # noqa: D102
-    def predict(self, text: str) -> list[Span]: ...  # noqa: D102
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]: ...  # noqa: D102
