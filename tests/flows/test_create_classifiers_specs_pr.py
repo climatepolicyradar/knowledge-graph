@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from flows.create_classifiers_specs_pr import (
     commit_and_create_pr,
@@ -267,6 +268,7 @@ async def test_create_and_merge_pr():
             aws_env=AwsEnv.staging,
             flow_run_name="Test Run",
             flow_run_url="http://example.com",
+            github_token=SecretStr("mock-token"),
             auto_merge=True,
         )
 
@@ -304,6 +306,7 @@ async def test_create_and_merge_pr__no_automerge():
             aws_env=AwsEnv.staging,
             flow_run_name="Test Run",
             flow_run_url="http://example.com",
+            github_token=SecretStr("mock-token"),
             auto_merge=False,
         )
 
@@ -336,6 +339,7 @@ async def test_create_and_merge_pr__automerge_failure():
             aws_env=AwsEnv.staging,
             flow_run_name="Test Run",
             flow_run_url="http://example.com",
+            github_token=SecretStr("mock-token"),
             auto_merge=True,
         )
 

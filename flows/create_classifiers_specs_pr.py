@@ -1,11 +1,13 @@
 import asyncio
 import json
+import os
 import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
 
 from prefect import task
+from pydantic import SecretStr
 
 from flows.result import Err, Error, Ok, Result, is_err
 from flows.utils import get_logger
@@ -307,6 +309,7 @@ async def create_and_merge_pr(
     aws_env: AwsEnv,
     flow_run_name: str,
     flow_run_url: str,
+    github_token: SecretStr,
     auto_merge: bool = False,
 ) -> list[Result[None | int, Error]]:
     """
@@ -317,6 +320,7 @@ async def create_and_merge_pr(
         aws_env: AWS environment the spec belongs to
         flow_run_name: Name of the Prefect flow run calling the changes
         flow_run_url: URL to the Prefect flow run calling the changes
+        github_token: GitHub token for authentication
         auto_merge: Whether to auto-approve and merge the PR
 
     Returns:
@@ -324,6 +328,21 @@ async def create_and_merge_pr(
     """
     logger = get_logger()
     results = []
+
+    # get github token from ssm params
+    try:
+        os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
+    except Exception as e:
+        logger.error(f"Failed to retrieve GitHub token: {e}")
+        results.append(
+            Err(
+                Error(
+                    msg="Failed to retrieve GitHub token from SSM.",
+                    metadata={"exception": e, "aws_env": aws_env},
+                )
+            )
+        )
+        return results
 
     try:
         pr_no = await commit_and_create_pr(
