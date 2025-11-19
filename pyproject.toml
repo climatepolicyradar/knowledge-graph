@@ -165,6 +165,7 @@ lint.ignore = [
   "D413",
   "D415",
   "E501",
+  "G201",  # logging-fstring-interpolation: allow f-strings in logging
 ]
 line-length = 88
 
@@ -175,6 +176,9 @@ line-length = 88
 
 [tool.pyright]
 reportMissingImports = false
+
+[tool.pylint."messages control"]
+disable = ["logging-fstring-interpolation"]  # W1203: allow f-strings in logging
 
 [tool.ruff.lint.isort]
 known-third-party = ["wandb"]
