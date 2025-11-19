@@ -1353,14 +1353,6 @@ async def sync_classifiers_profiles(
                     f"promote called for {a.classifiers_profile_mapping.wikibase_id}, {a.classifiers_profile_mapping.classifier_id}, {a.classifiers_profile_mapping.classifiers_profile}"
                 )
 
-                allow_retiring_or_other_action, wandb_results = maybe_allow_retiring(
-                    a,
-                    vespa_search_adapter,
-                    wandb_results,
-                )
-                if not allow_retiring_or_other_action:
-                    continue
-
                 new_spec = a.classifiers_profile_mapping
                 wandb_result = handle_classifier_profile_action(
                     action="promoting",
