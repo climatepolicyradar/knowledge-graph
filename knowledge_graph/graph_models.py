@@ -143,6 +143,8 @@ class ConceptNode(StructuredNode):
 
     wikibase_id = StringProperty(required=True, unique_index=True)
     preferred_label = StringProperty()
+    description = StringProperty()
+    definition = StringProperty()
     alternative_labels = ArrayProperty(StringProperty())
     negative_labels = ArrayProperty(StringProperty())
     passages = RelationshipFrom(

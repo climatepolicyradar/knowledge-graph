@@ -110,6 +110,8 @@ def create_or_update_concept_nodes(
         UNWIND $batch AS concept
         MERGE (c:ConceptNode {wikibase_id: concept.wikibase_id})
         SET c.preferred_label = concept.preferred_label,
+            c.description = concept.description,
+            c.definition = concept.definition,
             c.alternative_labels = concept.alternative_labels,
             c.negative_labels = concept.negative_labels
         """,
@@ -212,7 +214,7 @@ def _delete_nodes_in_batches(
 ) -> None:
     """
     Delete all nodes with a given label.
-    
+
     Deletion is batched to avoid memory issues on the neo4j database.
 
     :param node_label: Label of nodes to delete (e.g., 'PassageNode', 'DocumentNode')
@@ -364,6 +366,8 @@ async def update_concepts(*, dry_run: bool = False) -> None:
             {
                 "wikibase_id": str(c.wikibase_id),
                 "preferred_label": c.preferred_label,
+                "description": c.description,
+                "definition": c.definition,
                 "alternative_labels": [str(label) for label in c.alternative_labels],
                 "negative_labels": [str(label) for label in c.negative_labels],
             }
