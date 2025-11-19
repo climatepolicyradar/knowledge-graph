@@ -33,7 +33,6 @@ import scripts.demote
 import scripts.promote
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
-from flows.config import Config
 from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
 from flows.utils import (
     JsonDict,
@@ -1253,7 +1252,7 @@ def concept_present_in_vespa(
 @flow(on_failure=[SlackNotify.message], on_crashed=[SlackNotify.message])
 async def sync_classifiers_profiles(
     aws_env: AwsEnv,
-    config: Config | None = None,
+    wandb_api_key: SecretStr | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     wikibase_cache_path: Path | None = None,
     wikibase_cache_save_if_missing: bool = False,
@@ -1276,9 +1275,14 @@ async def sync_classifiers_profiles(
         )
 
     logger.info(f"Wikibase Cache Path: {wikibase_cache_path}")
-    if not config:
-        logger.info("No pipeline config provided, creating default...")
-        config = await Config.create()
+    if not wandb_api_key:
+        logger.info("no W&B API key provided, getting one from AWS secrets")
+        wandb_api_key = SecretStr(
+            get_aws_ssm_param(
+                "WANDB_API_KEY",
+                aws_env=aws_env,
+            )
+        )
 
     if wikibase_auth is None:
         wikibase_password = SecretStr(get_aws_ssm_param(WIKIBASE_PASSWORD_SSM_NAME))
@@ -1291,13 +1295,6 @@ async def sync_classifiers_profiles(
             password=wikibase_password,
             url=AnyHttpUrl(wikibase_url),
         )
-
-    if config.wandb_api_key is None:
-        raise ValueError("Wandb API key is not set in the config.")
-
-    logger.info(
-        f"Running the classifiers profiles lifecycle with the config: {config}, "
-    )
 
     if not upload_to_wandb:
         logger.warning(
@@ -1340,7 +1337,7 @@ async def sync_classifiers_profiles(
     )
     logger.info(f"Identified {len(classifiers_to_update)} updates for syncing")
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())
+    wandb.login(key=wandb_api_key.get_secret_value())
 
     wandb_results: list[Result[Dict, Error]] = []
 
