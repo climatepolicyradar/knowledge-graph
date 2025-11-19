@@ -298,6 +298,7 @@ async def main() -> None:
                 source="selected",
                 deployment_id=full_pipeline_deployment.id,
                 parameters={},
+                schedule_after=timedelta(hours=3),
             )
         ],
     )
