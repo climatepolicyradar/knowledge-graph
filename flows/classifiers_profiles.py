@@ -14,6 +14,10 @@ import httpx
 import wandb
 from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
 from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
+from cpr_sdk.models.search import (
+    ConceptV2DocumentFilter,
+    SearchParameters,
+)
 from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
@@ -1155,6 +1159,97 @@ def emit_finished(
         )
 
 
+def maybe_allow_retiring(
+    op: Promote | Update,
+    vespa_search_adapter: VespaSearchAdapter,
+    wandb_results: list[Result[Dict, Error]],
+) -> tuple[
+    bool,
+    list[Result[Dict, Error]],
+]:
+    """If the operation is for a retiring profile, check for some results in Vespa."""
+    logger = get_logger()
+
+    if op.classifiers_profile_mapping.classifiers_profile != Profile.RETIRED:
+        return True, wandb_results
+
+    match concept_present_in_vespa(
+        wikibase_id=op.classifiers_profile_mapping.wikibase_id,
+        classifier_id=op.classifiers_profile_mapping.classifier_id,
+        vespa_search_adapter=vespa_search_adapter,
+    ):
+        case Ok(True):
+            logger.info(
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in Vespa, and can be retired"
+            )
+            return True, wandb_results
+        case Ok(False):
+            logger.info(
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in Vespa, and can't be retired"
+            )
+            wandb_results.append(
+                Err(
+                    Error(
+                        msg="no results found in Vespa, so can't retire",
+                        metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
+                    )
+                )
+            )
+            return False, wandb_results
+        case Err(e):
+            logger.info(
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in Vespa: {str(e)}"
+            )
+            e.msg = e.msg + ". Failed to check for results in Vespa, so can't retire"
+            wandb_results.append(Err(e))
+            return False, wandb_results
+
+    wandb_results.append(
+        Err(
+            Error(
+                msg="failed to check for concept being present in Vespa",
+                metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
+            )
+        )
+    )
+    return False, wandb_results
+
+
+def concept_present_in_vespa(
+    wikibase_id: WikibaseID,
+    classifier_id: ClassifierID,
+    vespa_search_adapter: VespaSearchAdapter,
+) -> Result[bool, Error]:
+    """Check if a Concept<>Classifier has some results in Vespa."""
+    try:
+        response = vespa_search_adapter.search(
+            SearchParameters(
+                concept_v2_document_filters=[
+                    ConceptV2DocumentFilter(
+                        concept_wikibase_id=wikibase_id,
+                        classifier_id=classifier_id,
+                    )
+                ],
+                documents_only=True,
+                # Use the presence of 1 as proof that data is there
+                limit=1,
+            )
+        )
+
+        return Ok(len(response.results) > 0)
+    except Exception as e:
+        return Err(
+            Error(
+                msg="failed to search Vespa for results",
+                metadata={
+                    "concept_wikibase_id": wikibase_id,
+                    "classifier_id": classifier_id,
+                    "exception": str(e),
+                },
+            )
+        )
+
+
 @flow(on_failure=[SlackNotify.message], on_crashed=[SlackNotify.message])
 async def sync_classifiers_profiles(
     aws_env: AwsEnv,
@@ -1166,9 +1261,19 @@ async def sync_classifiers_profiles(
     upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
 ):
-    """Update classifier profile for a given aws environment."""
+    """Update classifier profile for a given AWS environment."""
 
     logger = get_logger()
+
+    if not vespa_search_adapter:
+        logger.info("no Vespa search adapter provided, getting one from AWS secrets")
+        temp_dir = tempfile.TemporaryDirectory()
+        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
+            cert_dir=temp_dir.name,
+            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
+            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
+            aws_env=aws_env,
+        )
 
     logger.info(f"Wikibase Cache Path: {wikibase_cache_path}")
     if not config:
@@ -1248,6 +1353,14 @@ async def sync_classifiers_profiles(
                     f"promote called for {a.classifiers_profile_mapping.wikibase_id}, {a.classifiers_profile_mapping.classifier_id}, {a.classifiers_profile_mapping.classifiers_profile}"
                 )
 
+                allow_retiring_or_other_action, wandb_results = maybe_allow_retiring(
+                    a,
+                    vespa_search_adapter,
+                    wandb_results,
+                )
+                if not allow_retiring_or_other_action:
+                    continue
+
                 new_spec = a.classifiers_profile_mapping
                 wandb_result = handle_classifier_profile_action(
                     action="promoting",
@@ -1263,6 +1376,14 @@ async def sync_classifiers_profiles(
                     promotions.append(a)
 
             case Update() as u:
+                allow_retiring_or_other_action, wandb_results = maybe_allow_retiring(
+                    u,
+                    vespa_search_adapter,
+                    wandb_results,
+                )
+                if not allow_retiring_or_other_action:
+                    continue
+
                 logger.info(
                     f"update called for {u.classifier_spec.wikibase_id}, {u.classifier_spec.classifier_id}, {u.classifier_spec.classifiers_profile} to {u.classifiers_profile_mapping.classifiers_profile}"
                 )
@@ -1323,16 +1444,6 @@ async def sync_classifiers_profiles(
 
         # reload classifier specs to confirm updates
         updated_classifier_specs = load_classifier_specs(aws_env)
-
-        if not vespa_search_adapter:
-            # Create Vespa connection inside the task to avoid serialization issues
-            temp_dir = tempfile.TemporaryDirectory()
-            vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-                cert_dir=temp_dir.name,
-                vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-                vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-                aws_env=config.aws_env,
-            )
 
         async with vespa_search_adapter.client.asyncio(
             connections=VESPA_CONNECTION_POOL_SIZE,

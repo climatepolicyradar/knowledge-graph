@@ -9,12 +9,14 @@ from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
     compare_classifiers_profiles,
+    concept_present_in_vespa,
     create_vespa_classifiers_profile,
     create_vespa_profile_mappings,
     demote_classifier_profile,
     emit_finished,
     get_classifiers_profiles,
     handle_classifier_profile_action,
+    maybe_allow_retiring,
     promote_classifier_profile,
     update_classifier_profile,
     update_vespa_with_classifiers_profiles,
@@ -848,3 +850,214 @@ def test_emit_finished__emit_event_raises_exception():
                 },
             )
         )
+
+
+def test_concept_present_in_vespa__has_results():
+    """Test concept_present_in_vespa when concept has results in Vespa."""
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+
+    result = concept_present_in_vespa(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        vespa_search_adapter=mock_search_adapter,
+    )
+
+    assert result == Ok(True)
+
+    # Verify search was called with correct parameters
+    call_args = mock_search_adapter.search.call_args
+    search_params = call_args[0][0]
+    assert len(search_params.concept_v2_document_filters) == 1
+    assert search_params.concept_v2_document_filters[0].concept_wikibase_id == "Q123"
+    assert search_params.concept_v2_document_filters[0].classifier_id == "aaaa2222"
+    assert search_params.documents_only is True
+    assert search_params.limit == 1
+
+
+def test_concept_present_in_vespa__no_results():
+    """Test concept_present_in_vespa when concept has no results in Vespa."""
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[])
+
+    result = concept_present_in_vespa(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        vespa_search_adapter=mock_search_adapter,
+    )
+
+    assert result == Ok(False)
+
+
+def test_concept_present_in_vespa__search_error():
+    """Test concept_present_in_vespa when Vespa search raises an exception."""
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.side_effect = Exception("Vespa connection failed")
+
+    result = concept_present_in_vespa(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        vespa_search_adapter=mock_search_adapter,
+    )
+
+    assert result == Err(
+        _error=Error(
+            msg="failed to search Vespa for results",
+            metadata={
+                "concept_wikibase_id": "Q123",
+                "classifier_id": "aaaa2222",
+                "exception": "Vespa connection failed",
+            },
+        )
+    )
+
+
+def test_maybe_allow_retiring__retiring_profile_with_results():
+    """Test maybe_allow_retiring allows retiring when concept has results in Vespa."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        )
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, mock_search_adapter, wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+
+
+def test_maybe_allow_retiring__retiring_profile_without_results():
+    """Test maybe_allow_retiring blocks retiring when concept has no results in Vespa."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        )
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[])
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, mock_search_adapter, wandb_results
+    )
+
+    assert not allow
+    assert updated_results == [
+        Err(
+            _error=Error(
+                msg="no results found in Vespa, so can't retire",
+                metadata={
+                    "wikibase_id": "Q123",
+                    "classifier_id": "aaaa2222",
+                    "classifiers_profile": "retired",
+                },
+            )
+        )
+    ]
+
+
+def test_maybe_allow_retiring__retiring_profile_vespa_error():
+    """Test maybe_allow_retiring blocks retiring when Vespa check fails."""
+    update_op = Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        ),
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.side_effect = Exception("Vespa connection failed")
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        update_op, mock_search_adapter, wandb_results
+    )
+
+    assert not allow
+    assert updated_results == [
+        Err(
+            _error=Error(
+                msg="failed to search Vespa for results. Failed to check for results in Vespa, so can't retire",
+                metadata={
+                    "concept_wikibase_id": "Q123",
+                    "classifier_id": "aaaa2222",
+                    "exception": "Vespa connection failed",
+                },
+            )
+        )
+    ]
+
+
+def test_maybe_allow_retiring__non_retiring_profile():
+    """Test maybe_allow_retiring allows non-retiring operations without checks."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.PRIMARY,
+        )
+    )
+
+    mock_search_adapter = Mock()
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, mock_search_adapter, wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+    # Verify Vespa search was not called
+    mock_search_adapter.search.assert_not_called()
+
+
+def test_maybe_allow_retiring__update_to_retired():
+    """Test maybe_allow_retiring checks Vespa when updating to retired profile."""
+    update_op = Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="experimental",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        ),
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        update_op, mock_search_adapter, wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+    # Verify Vespa search was called
+    mock_search_adapter.search.assert_called_once()
