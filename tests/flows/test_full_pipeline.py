@@ -104,8 +104,8 @@ async def test_full_pipeline_no_config_provided(
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
-        assert (
-            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
+        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
+            mock_run_output_identifier_str
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
@@ -113,8 +113,8 @@ async def test_full_pipeline_no_config_provided(
 
         mock_indexing.assert_called_once()
         call_args = mock_indexing.call_args
-        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
-            mock_run_output_identifier_str
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
@@ -301,7 +301,10 @@ async def test_full_pipeline_with_inference_failure(
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
-            data=RunOutputIdentifier(mock_run_output_identifier_str),
+            data=AggregateResult(
+                RunOutputIdentifier=RunOutputIdentifier(mock_run_output_identifier_str),
+                error=None,
+            ),
         )
         mock_indexing.return_value = State(
             type=StateType.COMPLETED, data={"message": "Indexing complete."}
