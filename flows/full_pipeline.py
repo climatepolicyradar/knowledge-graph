@@ -9,6 +9,7 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
+    AggregateResult,
     RunOutputIdentifier,
     aggregate,
 )
@@ -172,7 +173,7 @@ async def full_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    aggregation_run: State = await aggregate(
+    aggregation_result: AggregateResult = await aggregate(
         run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
@@ -183,17 +184,23 @@ async def full_pipeline(
         if config.aws_env != AwsEnv.production
         else None,
     )
-    aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
-        raise_on_failure=False
-    )
 
     if isinstance(aggregation_result, Exception):
         logger.error("Aggregation failed.")
         raise aggregation_result
-    logger.info(f"Aggregation complete. Run output identifier: {aggregation_result}")
+
+    if (
+        isinstance(aggregation_result, AggregateResult)
+        and aggregation_result.error is not None
+    ):
+        logger.error(f"Aggregation errors occurred: {aggregation_result.error}")
+
+    logger.info(
+        f"Aggregation complete. Run output identifier: {aggregation_result.RunOutputIdentifier}"
+    )
 
     indexing_run: State = await index(
-        run_output_identifier=aggregation_result,
+        run_output_identifier=aggregation_result.RunOutputIdentifier,
         config=config,
         batch_size=indexing_batch_size,
         indexer_concurrency_limit=indexer_concurrency_limit,

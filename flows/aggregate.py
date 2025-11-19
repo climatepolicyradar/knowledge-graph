@@ -2,7 +2,7 @@ import json
 import os
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime
-from typing import Any, TypeAlias, TypeVar, Union
+from typing import Any, Optional, TypeAlias, TypeVar, Union
 
 import prefect.tasks as tasks
 import pydantic
@@ -68,6 +68,13 @@ SpecStr: TypeAlias = str
 
 # A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
+
+
+class AggregateResult(BaseModel):
+    """Result aggregating the output of classifier inference runs. Wraps any errors in the error attribute"""
+
+    RunOutputIdentifier: str
+    error: Optional[str] = None
 
 
 class MiniClassifierSpec(BaseModel):
@@ -523,8 +530,12 @@ async def aggregate_batch_of_documents(
     config_json: dict[str, Any],
     classifier_specs: Sequence[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-) -> RunOutputIdentifier:
-    """Aggregate the inference results for the given document ids."""
+) -> AggregateResult:
+    """
+    Aggregate the inference results for the given document ids.
+
+    Returns AggregateResult which wraps any failures within AggregateResult.errors
+    """
     logger = get_logger()
 
     logger.info(
@@ -573,12 +584,14 @@ async def aggregate_batch_of_documents(
         flow_run_name=flow_run_name,
     )
 
+    aggregate_result = AggregateResult(RunOutputIdentifier=run_output_identifier)
+
     if failures:
-        raise ValueError(
+        aggregate_result.error = (
             f"Saw {len(failures)} failures when aggregating inference results"
         )
 
-    return run_output_identifier
+    return aggregate_result
 
 
 def get_parent_concepts_from_concept(
@@ -859,8 +872,12 @@ async def aggregate(
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
     classifier_specs: Sequence[ClassifierSpec] | None = None,
-) -> RunOutputIdentifier:
-    """Aggregate the inference results for the given document ids."""
+) -> AggregateResult:
+    """
+    Aggregate the inference results for the given document ids.
+
+    Return an AggregateResult which wraps information regarding any failures
+    """
     logger = get_logger()
 
     if not config:
@@ -936,7 +953,11 @@ async def aggregate(
         failures=failures,
     )
 
-    if failures:
-        raise ValueError(f"{len(failures)}/{len(failures) + len(successes)} failed")
+    aggregate_result = AggregateResult(RunOutputIdentifier=run_output_identifier)
 
-    return run_output_identifier
+    if failures:
+        aggregate_result.error = (
+            f"{len(failures)}/{len(failures) + len(successes)} failed"
+        )
+
+    return aggregate_result

@@ -9,6 +9,7 @@ from prefect.states import Completed, Failed
 from flows.aggregate import (
     DEFAULT_N_BATCHES,
     DEFAULT_N_DOCUMENTS_IN_BATCH,
+    AggregateResult,
     RunOutputIdentifier,
 )
 from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
@@ -406,43 +407,33 @@ async def test_full_pipeline_completes_after_some_docs_with_aggregation_failures
             "flows.full_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
-        patch(
-            "flows.full_pipeline.get_async_session",
-        ) as mock_get_session,
     ):
+        document_stems_successful = [DocumentStem("CCLW.executive.2.2")]
         classifier_spec = ClassifierSpec(
             wikibase_id=WikibaseID("Q100"),
             classifier_id="zzzz9999",
             wandb_registry_version="v1",
         )
 
-        # Mock S3 loading for document stems
-        mock_s3_client = AsyncMock()
-        mock_response = {
-            "Body": AsyncMock(
-                read=AsyncMock(
-                    return_value=b'{"successful_document_stems": ["CCLW.executive.4934.1571", "CCLW.executive.10014.4470_translated_en"]}'
-                )
-            )
-        }
-        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
-        mock_client_context = AsyncMock()
-        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
-        mock_client_context.__aexit__ = AsyncMock(return_value=None)
-        mock_session = Mock()
-        mock_session.client = Mock(return_value=mock_client_context)
-        mock_get_session.return_value = mock_session
-
         # Setup mocks
-        mock_inference.return_value = Completed(
-            message="Successfully ran inference on all batches!",
-            data=mock_run_output_identifier_str,
+        mock_inference.return_value = Failed(
+            message="Some inference batches had failures!",
+            data=Fault(
+                msg="Some inference batches had failures!",
+                metadata={},
+                data={
+                    "successful_document_stems": set(document_stems_successful),
+                    "run_output_identifier": mock_run_output_identifier_str,
+                },
+            ),
         )
+
         # fail on aggregation
-        mock_aggregate.return_value = State(
-            type=StateType.FAILED,
-            data=RunOutputIdentifier(mock_run_output_identifier_str),
+        mock_aggregate.return_value = AggregateResult(
+            RunOutputIdentifier=mock_run_output_identifier_str,
+            error="1/1 Documents failed",
         )
+
         mock_indexing.return_value = State(
             type=StateType.COMPLETED, data={"message": "Indexing complete."}
         )
@@ -486,6 +477,7 @@ async def test_full_pipeline_completes_after_some_docs_with_aggregation_failures
         assert (
             call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
         )
+
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
