@@ -2,6 +2,7 @@ import html
 import re
 from collections import defaultdict
 
+import pandas as pd
 from pydantic import BaseModel, Field, model_validator
 
 from knowledge_graph.identifiers import Identifier
@@ -177,3 +178,41 @@ def consolidate_passages_by_text(
             )
         )
     return merged_passages
+
+
+def labelled_passages_to_dataframe(
+    labelled_passages: list[LabelledPassage],
+) -> pd.DataFrame:
+    """
+    Convert a list of labelled passages to a dataframe, with the following characteristics:
+
+    - spans are not exploded, i.e. they are left as JSON
+    - metadata fields are given one column each
+    - new columns `prediction` and `prediction_probability` are added
+    """
+
+    labelled_passages_as_dicts = [lp.model_dump() for lp in labelled_passages]
+
+    boolean_predictions = [bool(lp.spans) for lp in labelled_passages]
+
+    if all(
+        [
+            span.prediction_probability is None
+            for lp in labelled_passages
+            for span in lp.spans
+        ]
+    ):
+        prediction_probabilities = [None] * len(labelled_passages)
+    else:
+        prediction_probabilities = [
+            max([span.prediction_probability or 0 for span in lp.spans])
+            if lp.spans
+            else 0
+            for lp in labelled_passages
+        ]
+
+    df = pd.json_normalize(labelled_passages_as_dicts)
+    df["prediction"] = boolean_predictions
+    df["prediction_probability"] = prediction_probabilities
+
+    return df

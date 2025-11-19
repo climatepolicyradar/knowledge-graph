@@ -42,7 +42,7 @@ class Classifier(ABC):
     ):
         self.concept = concept
         self.version = version
-        self._is_fitted = False
+        self.is_fitted = False
         self.prediction_threshold: Optional[float] = None
 
         if self.allowed_concept_ids:
@@ -90,7 +90,7 @@ class Classifier(ABC):
 
         :returns Classifier: The trained classifier
         """
-        self._is_fitted = True
+        self.is_fitted = True
         return self
 
     @overload
