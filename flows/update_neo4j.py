@@ -18,7 +18,7 @@ import json
 import os
 import time
 from datetime import datetime
-from typing import Annotated, Any, Sequence
+from typing import Annotated, Any, Literal, Sequence
 
 import boto3
 import botocore.exceptions
@@ -95,10 +95,13 @@ def process_in_batches(
 
 def get_existing_concept_ids_from_neo4j() -> set[str]:
     """Get the list of all wikibase_ids currently in the Neo4j database."""
-    result, _ = db.cypher_query(
-        "MATCH (c:ConceptNode) RETURN c.wikibase_id as wikibase_id"
+    result = execute_cypher(
+        "MATCH (c:ConceptNode) RETURN c.wikibase_id as wikibase_id",
+        None,
+        dry_run=False,
+        return_results=True,
     )
-    return {row[0] for row in result}
+    return {row[0] for row in result} if result else set()
 
 
 def create_or_update_concept_nodes(
@@ -149,64 +152,51 @@ def delete_concept_relationships(*, dry_run: bool) -> None:
     logger.info("Deleted RELATED_TO and SUBCONCEPT_OF relationships")
 
 
-def _create_related_to_relationships(
-    batch: Sequence[dict[str, str]], *, dry_run: bool
+def _create_relationships(
+    batch: Sequence[dict[str, str]],
+    relationship_type: Literal["RELATED_TO", "SUBCONCEPT_OF"],
+    dry_run: bool,
 ) -> None:
-    """Create RELATED_TO relationships between concepts."""
-    execute_cypher(
-        """
-        UNWIND $batch AS rel
-        MATCH (from:ConceptNode {wikibase_id: rel.from_id})
-        MATCH (to:ConceptNode {wikibase_id: rel.to_id})
-        MERGE (from)-[:RELATED_TO]->(to)
-        """,
-        {"batch": list(batch)},
-        dry_run=dry_run,
-    )
+    """
+    Create directed relationships of a specified type between ConceptNodes.
+
+    Each relationship in the batch should have 'from_id' and 'to_id' keys specifying
+    the source and target concept IDs respectively.
+
+    :param batch: Sequence of relationship dictionaries, each containing 'from_id' and 'to_id'
+    :param relationship_type: The type of relationship to create (e.g., 'RELATED_TO', 'SUBCONCEPT_OF')
+    :param dry_run: If True, skip actual writes to Neo4j
+    """
+    cypher_query = f"""
+    UNWIND $batch AS rel
+    MATCH (from:ConceptNode {{wikibase_id: rel.from_id}})
+    MATCH (to:ConceptNode {{wikibase_id: rel.to_id}})
+    MERGE (from)-[:{relationship_type}]->(to)
+    """
+    execute_cypher(cypher_query, {"batch": list(batch)}, dry_run=dry_run)
 
 
-def _create_subconcept_of_relationships(
-    batch: Sequence[dict[str, str]], *, dry_run: bool
-) -> None:
-    """Create SUBCONCEPT_OF relationships (child -> parent)."""
-    execute_cypher(
-        """
-        UNWIND $batch AS rel
-        MATCH (from:ConceptNode {wikibase_id: rel.from_id})
-        MATCH (to:ConceptNode {wikibase_id: rel.to_id})
-        MERGE (from)-[:SUBCONCEPT_OF]->(to)
-        """,
-        {"batch": list(batch)},
-        dry_run=dry_run,
-    )
+def execute_cypher(
+    query: str, params: dict | None, *, dry_run: bool, return_results: bool = False
+) -> list | None:
+    """
+    Run a Cypher statement against Neo4j, or log it when in dry-run mode.
 
-
-def _create_has_subconcept_relationships(
-    batch: Sequence[dict[str, str]], *, dry_run: bool
-) -> None:
-    """Create SUBCONCEPT_OF relationships (parent -> child, reversed)."""
-    execute_cypher(
-        """
-        UNWIND $batch AS rel
-        MATCH (from:ConceptNode {wikibase_id: rel.from_id})
-        MATCH (to:ConceptNode {wikibase_id: rel.to_id})
-        MERGE (to)-[:SUBCONCEPT_OF]->(from)
-        """,
-        {"batch": list(batch)},
-        dry_run=dry_run,
-    )
-
-
-def execute_cypher(query: str, params: dict | None, *, dry_run: bool) -> None:
-    """Run a Cypher statement against Neo4j, or log it when in dry-run mode"""
+    :param query: The Cypher query to execute
+    :param params: Optional parameters for the query
+    :param dry_run: If True, skip actual execution and log the query
+    :param return_results: If True, return the query results (first element of the tuple)
+    :return: Query results if return_results=True, otherwise None
+    """
     logger = get_logger()
     if dry_run:
         logger.info("DRY RUN — skipping Cypher execution: %s", " ".join(query.split()))
-        return
+        return None if not return_results else []
     if params is None:
-        db.cypher_query(query)
+        result, _ = db.cypher_query(query)
     else:
-        db.cypher_query(query, params)
+        result, _ = db.cypher_query(query, params)
+    return result if return_results else None
 
 
 def _delete_nodes_in_batches(
@@ -232,11 +222,13 @@ def _delete_nodes_in_batches(
             DETACH DELETE n
             RETURN count(n) as deleted
         """
+        result = execute_cypher(
+            query, {"batch_size": batch_size}, dry_run=dry_run, return_results=True
+        )
         if dry_run:
             logger.info(f"DRY RUN — would delete batch of {node_label} nodes")
             break
 
-        result, _ = db.cypher_query(query, {"batch_size": batch_size})
         batch_deleted = result[0][0] if result else 0
         deleted_count += batch_deleted
 
@@ -450,8 +442,9 @@ async def update_concepts(*, dry_run: bool = False) -> None:
                     {"from_id": str(concept.wikibase_id), "to_id": str(parent_id)}
                 )
             for child_id in concept.has_subconcept:
+                # Swap IDs so relationship goes from child -> parent (same direction as subconcept_of)
                 all_relationships["has_subconcept"].append(
-                    {"from_id": str(concept.wikibase_id), "to_id": str(child_id)}
+                    {"from_id": str(child_id), "to_id": str(concept.wikibase_id)}
                 )
 
         # Create new relationships
@@ -460,7 +453,9 @@ async def update_concepts(*, dry_run: bool = False) -> None:
                 all_relationships["related_to"],
                 RELATIONSHIP_BATCH_SIZE,
                 f"Creating RELATED_TO relationships ({len(all_relationships['related_to'])})",
-                lambda batch: _create_related_to_relationships(batch, dry_run=dry_run),
+                lambda batch: _create_relationships(
+                    batch, relationship_type="RELATED_TO", dry_run=dry_run
+                ),
             )
             logger.info(
                 "Relationships created — RELATED_TO: %s",
@@ -472,8 +467,8 @@ async def update_concepts(*, dry_run: bool = False) -> None:
                 all_relationships["subconcept_of"],
                 RELATIONSHIP_BATCH_SIZE,
                 f"Creating SUBCONCEPT_OF relationships ({len(all_relationships['subconcept_of'])})",
-                lambda batch: _create_subconcept_of_relationships(
-                    batch, dry_run=dry_run
+                lambda batch: _create_relationships(
+                    batch, relationship_type="SUBCONCEPT_OF", dry_run=dry_run
                 ),
             )
             logger.info(
@@ -486,8 +481,8 @@ async def update_concepts(*, dry_run: bool = False) -> None:
                 all_relationships["has_subconcept"],
                 RELATIONSHIP_BATCH_SIZE,
                 f"Creating HAS_SUBCONCEPT relationships ({len(all_relationships['has_subconcept'])})",
-                lambda batch: _create_has_subconcept_relationships(
-                    batch, dry_run=dry_run
+                lambda batch: _create_relationships(
+                    batch, relationship_type="SUBCONCEPT_OF", dry_run=dry_run
                 ),
             )
             logger.info(
