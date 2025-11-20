@@ -9,6 +9,7 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
+    AggregateResult,
     RunOutputIdentifier,
     aggregate,
 )
@@ -32,6 +33,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    SlackNotify,
     build_inference_result_s3_uri,
     get_logger,
 )
@@ -60,7 +62,10 @@ async def create_full_pipeline_summary_artifact(
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
-@flow()
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
@@ -172,7 +177,7 @@ async def full_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    aggregation_run: State = await aggregate(
+    aggregation_result: State = await aggregate(
         run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
@@ -183,17 +188,27 @@ async def full_pipeline(
         if config.aws_env != AwsEnv.production
         else None,
     )
-    aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
-        raise_on_failure=False
-    )
 
     if isinstance(aggregation_result, Exception):
         logger.error("Aggregation failed.")
         raise aggregation_result
-    logger.info(f"Aggregation complete. Run output identifier: {aggregation_result}")
+
+    agg_result = AggregateResult(run_output_identifier=run_output_identifier)
+
+    if isinstance(aggregation_result, State):
+        agg_result: AggregateResult = await aggregation_result.result(
+            raise_on_failure=False
+        )
+        run_output_identifier = agg_result.run_output_identifier
+        if agg_result.errors is not None:
+            logger.error(f"Aggregation errors occurred: {agg_result.errors}")
+
+    logger.info(
+        f"Aggregation complete. Run output identifier is: {run_output_identifier}"
+    )
 
     indexing_run: State = await index(
-        run_output_identifier=aggregation_result,
+        run_output_identifier=run_output_identifier,
         config=config,
         batch_size=indexing_batch_size,
         indexer_concurrency_limit=indexer_concurrency_limit,
@@ -215,3 +230,7 @@ async def full_pipeline(
     )
 
     logger.info("Full pipeline run completed!")
+
+    # mark full run as failed if aggregation errors occurred
+    if agg_result.errors is not None:
+        raise ValueError(agg_result)

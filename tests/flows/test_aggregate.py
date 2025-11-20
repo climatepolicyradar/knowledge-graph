@@ -17,6 +17,7 @@ from prefect.context import FlowRunContext
 from prefect.states import Running
 
 from flows.aggregate import (
+    AggregateResult,
     AggregationFailure,
     Metadata,
     MiniClassifierSpec,
@@ -135,12 +136,15 @@ async def test_aggregate_batch_of_documents(
     with (
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        run_reference = await aggregate_batch_of_documents(
+        aggregate_result = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
             run_output_identifier="test-run",
         )
+
+        if isinstance(aggregate_result, AggregateResult):
+            run_reference = aggregate_result.run_output_identifier
 
     all_collected_ids = []
     for document_stem in document_stems:
@@ -196,6 +200,10 @@ async def test_aggregate_batch_of_documents(
     assert summary_artifact and summary_artifact.description
     assert summary_artifact.data == "[]"
 
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert aggregate_result.errors is None
+
 
 @pytest.mark.asyncio
 async def test_aggregate_batch_of_documents__with_failures(
@@ -219,10 +227,9 @@ async def test_aggregate_batch_of_documents__with_failures(
     mock_context.flow_run = flow_run
 
     with (
-        pytest.raises(ValueError),
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        await aggregate_batch_of_documents(
+        aggregate_result = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
@@ -236,6 +243,52 @@ async def test_aggregate_batch_of_documents__with_failures(
     assert set(failure_stems) == set(expect_failure_stems)
     assert "NoSuchKey" in artifact_data[0]["Exception"]
     assert "NoSuchKey" in artifact_data[1]["Exception"]
+
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert (
+        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+    )
+
+
+@pytest.mark.asyncio
+async def test_aggregate_batch_of_documents__returns_aggregate_result_containing_errors(
+    mock_bucket_labelled_passages_large, mock_classifier_specs, test_config
+):
+    _, classifier_specs = mock_classifier_specs
+    expect_failure_stems = [
+        DocumentStem("CCLW.Made.Up.Document.ID"),
+        DocumentStem("OEP.One.That.Should.Fail"),
+    ]
+    document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
+
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        state=Running(),
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    aggregate_result = None
+
+    with (
+        patch("flows.aggregate.get_run_context", return_value=mock_context),
+    ):
+        aggregate_result = await aggregate_batch_of_documents(
+            document_stems=document_stems,
+            config_json=test_config.model_dump(),
+            classifier_specs=classifier_specs,
+            run_output_identifier="test-run",
+        )
+
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert (
+        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+    )
 
 
 def test_build_run_output_prefix():
