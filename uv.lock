@@ -1894,7 +1894,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
     { name = "fsspec" },
-    { name = "hf-xet", marker = "platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "hf-xet", marker = "platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
     { name = "packaging" },
     { name = "pyyaml" },
     { name = "requests" },
@@ -2357,6 +2357,7 @@ dependencies = [
     { name = "datalake" },
     { name = "datasets" },
     { name = "deltalake" },
+    { name = "gitpython" },
     { name = "griffe" },
     { name = "html2text" },
     { name = "httpx" },
@@ -2455,6 +2456,7 @@ requires-dist = [
     { name = "distributed", marker = "extra == 'coiled'", specifier = ">=2025.7.0" },
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.3.2" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.12.3" },
+    { name = "gitpython", specifier = ">=3.1.45" },
     { name = "griffe", specifier = "==1.5.7" },
     { name = "html2text", specifier = ">=2025.4.15" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -5571,7 +5573,7 @@ name = "tqdm"
 version = "4.67.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737, upload-time = "2024-11-24T20:12:22.481Z" }
 wheels = [
