@@ -329,7 +329,6 @@ async def create_and_merge_pr(
     logger = get_logger()
     results = []
 
-    # get github token from ssm params
     try:
         os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
     except Exception as e:
