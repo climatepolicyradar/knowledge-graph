@@ -1273,6 +1273,7 @@ async def sync_classifiers_profiles(
     upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
     automerge_classifier_specs_pr: bool = False,
+    auto_train: bool = False,
     debug_wikibase_validation: bool = False,
 ):
     """Update classifier profile for a given AWS environment."""
@@ -1502,7 +1503,7 @@ async def sync_classifiers_profiles(
 
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
-    if any(map(is_ok, vespa_results)):
+    if any(map(is_ok, vespa_results)) and auto_train:
         logger.info("found at least 1 Vespa success, emitting finished event")
         event = emit_finished(
             # This is a vague check, since all of the promotions may
