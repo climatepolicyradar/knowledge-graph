@@ -1315,6 +1315,13 @@ async def sync_classifiers_profiles(
             url=AnyHttpUrl(wikibase_url),
         )
 
+    github_token = SecretStr(
+        get_aws_ssm_param(
+            "GITHUB_TOKEN",
+            aws_env=aws_env,
+        )
+    )
+
     if not upload_to_wandb:
         logger.warning(
             f"upload_to_wandb is set to {upload_to_wandb}. Using dry run mode for wandb."
@@ -1475,6 +1482,7 @@ async def sync_classifiers_profiles(
             aws_env=aws_env,
             flow_run_name=flow_run_name,
             flow_run_url=flow_run_url,
+            github_token=github_token,
             auto_merge=automerge_classifier_specs_pr,
         )
 
