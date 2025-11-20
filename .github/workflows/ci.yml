@@ -44,6 +44,7 @@ jobs:
         run: just lint-all
 
   test:
+    needs: lint
     runs-on: ubuntu-latest
     name: "Test"
     steps:
@@ -87,6 +88,7 @@ jobs:
         run: just test-with-vespa -vv
 
   deploy_prefect_sandbox:
+    needs: test
     name: "Sandbox"
     uses: ./.github/workflows/prefect_deploy.yml
     with:
