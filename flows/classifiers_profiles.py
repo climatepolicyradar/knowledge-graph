@@ -1286,6 +1286,7 @@ async def sync_classifiers_profiles(
     wandb_api_key: SecretStr | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     wikibase_cache_path: Path | None = None,
+    github_token: SecretStr | None = None,
     wikibase_cache_save_if_missing: bool = False,
     vespa_search_adapter: VespaSearchAdapter | None = None,
     upload_to_wandb: bool = False,  # set to False for dry run by default
@@ -1334,12 +1335,13 @@ async def sync_classifiers_profiles(
             url=AnyHttpUrl(wikibase_url),
         )
 
-    github_token = SecretStr(
-        get_aws_ssm_param(
-            "GITHUB_TOKEN",
-            aws_env=aws_env,
+    if github_token is None:
+        github_token = SecretStr(
+            get_aws_ssm_param(
+                "GITHUB_TOKEN",
+                aws_env=aws_env,
+            )
         )
-    )
 
     if not upload_to_wandb:
         logger.warning(
@@ -1516,7 +1518,10 @@ async def sync_classifiers_profiles(
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
     # retrieve PR number if PR was created successfully, otherwise set to -1
-    pr_number = unwrap_ok(cs_pr_results[0]) if isinstance(cs_pr_results[0], Ok) else -1
+    if cs_pr_results and isinstance(cs_pr_results[0], Ok):
+        pr_number = unwrap_ok(cs_pr_results[0])
+    else:
+        pr_number = -1
     pr_errors = [unwrap_err(r) for r in cs_pr_results if isinstance(r, Err)]
 
     # The default, assuming there were no Vespa successes
