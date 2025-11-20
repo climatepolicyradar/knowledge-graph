@@ -332,11 +332,11 @@ async def create_and_merge_pr(
     try:
         os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
     except Exception as e:
-        logger.error(f"Failed to retrieve GitHub token: {e}")
+        logger.error(f"Failed to set GitHub token environment var: {e}")
         results.append(
             Err(
                 Error(
-                    msg="Failed to retrieve GitHub token from SSM.",
+                    msg="Failed to set GitHub token environment var.",
                     metadata={"exception": e, "aws_env": aws_env},
                 )
             )
