@@ -447,24 +447,28 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
             type=StateType.COMPLETED, data={"message": "Indexing complete."}
         )
 
-        # Run the flow
-        await full_pipeline(
-            config=test_config,
-            classifier_specs=[classifier_spec],
-            document_ids=[
-                DocumentImportId("test.doc.1"),
-                DocumentImportId("test.doc.2"),
-            ],
-            inference_use_new_and_updated=True,
-            inference_batch_size=500,
-            inference_classifier_concurrency_limit=5,
-            aggregation_n_documents_in_batch=50,
-            aggregation_n_batches=3,
-            indexing_batch_size=200,
-            indexer_concurrency_limit=2,
-            indexer_document_passages_concurrency_limit=4,
-            indexer_max_vespa_connections=8,
-        )
+        # Run the flow and expect an exception to be returned
+        with pytest.raises(
+            ValueError,
+            match="run_output_identifier='2025-05-25T07:32-eta85-alchibah' errors='1/2 Documents failed'",
+        ):
+            await full_pipeline(
+                config=test_config,
+                classifier_specs=[classifier_spec],
+                document_ids=[
+                    DocumentImportId("test.doc.1"),
+                    DocumentImportId("test.doc.2"),
+                ],
+                inference_use_new_and_updated=True,
+                inference_batch_size=500,
+                inference_classifier_concurrency_limit=5,
+                aggregation_n_documents_in_batch=50,
+                aggregation_n_batches=3,
+                indexing_batch_size=200,
+                indexer_concurrency_limit=2,
+                indexer_document_passages_concurrency_limit=4,
+                indexer_max_vespa_connections=8,
+            )
 
         # Verify sub-flows were called with correct parameters
         mock_inference.assert_called_once()

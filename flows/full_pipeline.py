@@ -193,6 +193,8 @@ async def full_pipeline(
         logger.error("Aggregation failed.")
         raise aggregation_result
 
+    agg_result = AggregateResult(run_output_identifier=run_output_identifier)
+
     if isinstance(aggregation_result, State):
         agg_result: AggregateResult = await aggregation_result.result(
             raise_on_failure=False
@@ -201,7 +203,9 @@ async def full_pipeline(
         if agg_result.errors is not None:
             logger.error(f"Aggregation errors occurred: {agg_result.errors}")
 
-    logger.info(f"Aggregation complete. Run output identifier: {run_output_identifier}")
+    logger.info(
+        f"Aggregation complete. Run output identifier is: {run_output_identifier}"
+    )
 
     indexing_run: State = await index(
         run_output_identifier=run_output_identifier,
@@ -226,3 +230,7 @@ async def full_pipeline(
     )
 
     logger.info("Full pipeline run completed!")
+
+    # mark full run as failed if aggregation errors occurred
+    if agg_result.errors is not None:
+        raise ValueError(agg_result)
