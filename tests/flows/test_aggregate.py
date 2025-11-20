@@ -200,6 +200,10 @@ async def test_aggregate_batch_of_documents(
     assert summary_artifact and summary_artifact.description
     assert summary_artifact.data == "[]"
 
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert aggregate_result.errors is None
+
 
 @pytest.mark.asyncio
 async def test_aggregate_batch_of_documents__with_failures(
@@ -225,7 +229,7 @@ async def test_aggregate_batch_of_documents__with_failures(
     with (
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        await aggregate_batch_of_documents(
+        aggregate_result = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
@@ -239,6 +243,12 @@ async def test_aggregate_batch_of_documents__with_failures(
     assert set(failure_stems) == set(expect_failure_stems)
     assert "NoSuchKey" in artifact_data[0]["Exception"]
     assert "NoSuchKey" in artifact_data[1]["Exception"]
+
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert (
+        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+    )
 
 
 @pytest.mark.asyncio
@@ -275,6 +285,10 @@ async def test_aggregate_batch_of_documents__returns_aggregate_result_containing
         )
 
     assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert (
+        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+    )
 
 
 def test_build_run_output_prefix():
