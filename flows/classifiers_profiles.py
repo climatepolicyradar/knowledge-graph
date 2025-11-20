@@ -46,7 +46,6 @@ from flows.utils import (
     get_logger,
     get_run_name,
     get_slack_client,
-    total_milliseconds,
 )
 from knowledge_graph.classifier import ModelPath
 from knowledge_graph.classifiers_profiles import (
@@ -67,7 +66,7 @@ from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 from scripts.update_classifier_spec import refresh_all_available_classifiers
 
-VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
+VESPA_MAX_TIMEOUT_M: timedelta = timedelta(minutes=5)
 VESPA_CONNECTION_POOL_SIZE: int = 5
 
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
@@ -136,7 +135,6 @@ def wandb_validation(
             return Ok(wikibase_id)
 
     except Exception as e:
-        # urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='api.wandb.ai', port=443): Read timed out. (read timeout=19)
         return log_and_return_error(
             logger,
             msg=f"Error retrieving artifact: {e}",
@@ -1509,7 +1507,7 @@ async def sync_classifiers_profiles(
 
         async with vespa_search_adapter.client.asyncio(
             connections=VESPA_CONNECTION_POOL_SIZE,
-            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
         ) as vespa_connection_pool:
             vespa_results = await update_vespa_with_classifiers_profiles(
                 updated_classifier_specs, vespa_connection_pool, upload_to_vespa
