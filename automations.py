@@ -17,6 +17,7 @@ from prefect.events.actions import RunDeployment, SendNotification
 from prefect.exceptions import ObjectNotFound
 from prefect_slack.credentials import SlackWebhook
 
+from flows.classifiers_profiles import SYNC_FINISHED_EVENT_NAME, SYNC_RESOURCE_ID
 from flows.full_pipeline import full_pipeline
 from knowledge_graph.cloud import AwsEnv, generate_deployment_name
 
@@ -261,6 +262,56 @@ async def main() -> None:
         expect_state=StateType.RUNNING,
         ignore=[AwsEnv.labs, AwsEnv.sandbox],
         notification=notification,
+    )
+
+    # Custom event trigger for sync-classifiers-profiles finished
+    client = get_client()
+    logger.info(
+        "Loading deployment for sync classifiers profiles trigger: %s",
+        full_pipeline.name,
+    )
+    full_pipeline_deployment = await client.read_deployment_by_name(
+        name=flow_deployment_names_id(
+            full_pipeline.name, generate_deployment_name(full_pipeline.name, aws_env)
+        )
+    )
+    logger.info(
+        f"Loaded deployment: name={full_pipeline_deployment.name}, flow_id={full_pipeline_deployment.flow_id}",
+    )
+
+    sync_automation = Automation(
+        name=f"sync-classifiers-profiles-triggers-{full_pipeline_deployment.name}",
+        description=f"Trigger full pipeline when syncing classifiers profiles finishes in {aws_env.value}.",
+        enabled=True,
+        trigger=automations.EventTrigger(
+            expect={SYNC_FINISHED_EVENT_NAME},
+            match={  # pyright: ignore[reportArgumentType]
+                "awsenv": aws_env,
+                "prefect.resource.id": SYNC_RESOURCE_ID,
+            },
+            posture=automations.Posture.Reactive,
+            threshold=1,
+            within=timedelta(seconds=0),
+        ),
+        actions=[
+            RunDeployment(
+                source="selected",
+                deployment_id=full_pipeline_deployment.id,
+                parameters={},
+                schedule_after=timedelta(hours=3),
+            )
+        ],
+    )
+
+    logger.info("Deleting automation if it already exists: %s", sync_automation.name)
+    await delete_if_exists(name=sync_automation.name)
+
+    logger.info("Creating automation: %s", sync_automation.name)
+    created_sync_automation = await sync_automation.acreate()
+    logger.info(
+        "Created Automation with id=`%s`, name=`%s`",
+        created_sync_automation.id,
+        created_sync_automation.name,
     )
 
 

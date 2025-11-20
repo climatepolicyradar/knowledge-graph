@@ -22,10 +22,6 @@
   concept_id: ygjab2d5
   classifier_id: 3p7eyng3
   wandb_registry_version: v23
-- wikibase_id: Q221
-  concept_id: s9rbcnjc
-  classifier_id: zahr3y3c
-  wandb_registry_version: v14
 - wikibase_id: Q223
   concept_id: fxx6vsts
   classifier_id: dntrzvg4
