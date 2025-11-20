@@ -71,10 +71,20 @@ SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 
 
 class AggregateResult(BaseModel):
-    """Result aggregating the output of classifier inference runs. Wraps any errors in the error attribute"""
+    """
+    Result of aggregating the output of classifier inference run on a document.
+
+    Args:
+    run_output_identifier : RunOutputIdentifier
+                            Unique identifier of the Prefect run
+
+    errors: str
+            Any errors in an Aggregation run can be represented here for later logging
+
+    """
 
     run_output_identifier: RunOutputIdentifier
-    error: Optional[str] = None
+    errors: Optional[str] = None
 
 
 class MiniClassifierSpec(BaseModel):
@@ -587,7 +597,7 @@ async def aggregate_batch_of_documents(
     aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
-        aggregate_result.error = (
+        aggregate_result.errors = (
             f"Saw {len(failures)} failures when aggregating inference results"
         )
 
@@ -876,7 +886,7 @@ async def aggregate(
     """
     Aggregate the inference results for the given document ids.
 
-    Return an AggregateResult which wraps information regarding any failures
+    Return an AggregateResult
     """
     logger = get_logger()
 
@@ -956,7 +966,7 @@ async def aggregate(
     aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
-        aggregate_result.error = (
+        aggregate_result.errors = (
             f"{len(failures)}/{len(failures) + len(successes)} failed"
         )
 

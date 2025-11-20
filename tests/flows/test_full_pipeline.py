@@ -82,7 +82,7 @@ async def test_full_pipeline_no_config_provided(
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
             data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, error=None
+                run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
         mock_indexing.return_value = State(
@@ -188,7 +188,7 @@ async def test_full_pipeline_with_full_config(
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
             data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, error=None
+                run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
         mock_indexing.return_value = State(
@@ -306,7 +306,7 @@ async def test_full_pipeline_with_inference_failure(
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
             data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, error=None
+                run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
         mock_indexing.return_value = State(
@@ -439,7 +439,7 @@ async def test_full_pipeline_completes_after_some_docs_with_aggregation_failures
             type=StateType.COMPLETED,
             data=AggregateResult(
                 run_output_identifier=mock_run_output_identifier_str,
-                error="1/2 Documents failed",
+                errors="1/2 Documents failed",
             ),
         )
 

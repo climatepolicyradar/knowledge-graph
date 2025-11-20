@@ -196,8 +196,8 @@ async def full_pipeline(
             raise_on_failure=False
         )
         aggregation_run_identifier = agg_result.run_output_identifier
-        if agg_result.error is not None:
-            logger.error(f"Aggregation errors occurred: {agg_result.error}")
+        if agg_result.errors is not None:
+            logger.error(f"Aggregation errors occurred: {agg_result.errors}")
 
     logger.info(
         f"Aggregation complete. Run output identifier: {aggregation_run_identifier}"
