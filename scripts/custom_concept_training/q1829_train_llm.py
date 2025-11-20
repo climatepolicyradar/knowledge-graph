@@ -25,28 +25,17 @@ def train_financial_flow() -> None:
     of the same financial flow.
 
     Guidelines for annotation are:
-
-
-Rules
-    - Include when the text describes money or financial assets moving (e.g. payments, loans, investments, disbursements, repayments).
-    - Include both one-off transactions and ongoing streams (e.g. monthly payments, yearly disbursements).
-    - Include in the same label all relevant elements of the flow (if given): who is paying, who is receiving, the purpose, the amount and the timeframe.
-    - Exclude when the text only states amounts held, owed, or valued at a point in time (these are stocks, not flows).
-    - Exclude metaphorical/non-financial uses of "flow" (e.g. "flow of information").
-    - Exclude hypothetical flows, unless they are part of plans or budgets (e.g. exclude "increased subsidies could unlock..." but include "we are planning to spend...")
-    - Exclude discussions on the need for finance or finance flows.
-
-    Positive Examples (label as "financial flow")
-    "The government confirmed $10 million to level up towns."
-    "Foreign direct investment inflows totalling €2 billion in 2023."
-    "The charity disbursed £500,000 to local projects."
-    "Additional funds shall be made available to provide grants to States"
-    "GCF funding for capacity building at similar levels to last year"
-
-    Negative Examples (do NOT label as "financial flow")
-    "The company's assets are worth $5 billion." (stock/valuation)
-    "GDP increased by $2 billion" (not flowing between parties)
-    "Information flows quickly in digital markets." (not financial)"""
+    
+        - Include when the text describes money or financial assets moving (e.g. payments, loans, investments, disbursements, repayments).
+        - Include both one-off transactions and ongoing streams (e.g. monthly payments, yearly disbursements).
+        - Include in the same label all relevant elements of the flow (if given): who is paying, who is receiving, the purpose, the amount and the timeframe, as well as any crucial details, such as legal conditions or interest payable. However, always insure such statements include the flow itself; do not tag if the text only specifies conditions.
+        - Include financial commitments, as well as disbursements, as long as commitments are firm, such as budgets and pledges. 
+        - Exclude when the text only states amounts held, owed, or valued at a point in time (these are stocks, not flows).
+        - Exclude metaphorical/non-financial uses of "flow" (e.g. "flow of information").
+        - Exclude hypothetical flows and financial discussions which are not tied to concrete financial commitments.
+        - Exclude financial flows that are outside the real economy, which means excluding factors like operational expenses or investments made into financial markets. Note, however, that flows such as development assistance or payments to/from climate funds are to be included. 
+        - Exclude discussions on the need for finance or finance flows, as well as discussions- or statistics on the economy or performance of a company.
+"""
 
     system_prompt_template = """
     You are a specialist analyst, tasked with identifying mentions of concepts in policy documents.
@@ -62,7 +51,7 @@ Rules
     Instructions:
 
     1. Read through each passage carefully, thinking about the concept and different ways it can be used in documents.
-    2. Identify any mentions of the concept, including references that are not included as an example, but which match the definition and guidelines.
+    2. Identify any mentions of the concept, including references that are not included explicitly as examples, but which do match the definition and guidelines.
     3. Surround each identified mention with <concept> tags.
     4. If a passage contains multiple instances, each one should be tagged separately.
     5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
