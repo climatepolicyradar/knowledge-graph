@@ -251,7 +251,16 @@ def promote_classifier_profile(
     aws_env: AwsEnv,
     upload_to_wandb: bool,
 ):
-    """Promote a classifier and add classifiers profile"""
+    """
+    Promote a classifier and add classifiers profile
+
+    This promotes a classifier that exists in wandb projects into
+    wandb registry. It tags the artifact with the aws_env and
+    sets the classifiers profile in the metadata.
+    The projects and registry artifacts are linked,
+    any changes applied to one artifact will be reflected in the other.
+    When refreshed, tagged artifacts in wandb registry return in the classifiers specs file.
+    """
     logger = get_logger()
 
     logger.info(
@@ -277,7 +286,13 @@ def demote_classifier_profile(
     classifier_id: Optional[ClassifierID] = None,
     classifiers_profile: Optional[Profile] = None,
 ):
-    """Demote a classifier based on model registry and remove classifiers profile"""
+    """
+    Demote a classifier based on model registry and remove classifiers profile
+
+    This removes the tag and the classifiers profile from the wandb registry artifact.
+    When refreshed, the classifiers specs file will no longer include this classifier.
+    The link between the project and wandb registry artifacts is retained.
+    """
     logger = get_logger()
 
     logger.info(
@@ -301,7 +316,12 @@ def update_classifier_profile(
     aws_env: AwsEnv,
     upload_to_wandb: bool,
 ):
-    """Update classifiers profile for already promoted model"""
+    """
+    Update classifiers profile for already promoted model
+
+    This modifies the metadata of a classifier already in the wandb registry.
+    It adds and optionally removes classifiers profiles as specified by the parameters.
+    """
     logger = get_logger()
 
     logger.info(
