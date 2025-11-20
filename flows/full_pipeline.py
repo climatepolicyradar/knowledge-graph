@@ -33,6 +33,7 @@ from flows.utils import (
     DocumentImportId,
     DocumentStem,
     Fault,
+    SlackNotify,
     build_inference_result_s3_uri,
     get_logger,
 )
@@ -61,7 +62,10 @@ async def create_full_pipeline_summary_artifact(
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
-@flow()
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
