@@ -37,7 +37,7 @@ from prefect.artifacts import (
     update_progress_artifact,
 )
 from prefect.client.schemas.objects import FlowRun, State, StateType
-from prefect.context import TaskRunContext, get_run_context
+from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
@@ -957,6 +957,27 @@ def get_logger() -> logging.Logger | LoggingAdapter:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
         return prefect.logging.get_logger()
+
+
+def get_run_name() -> None | str:
+    """
+    Get the current Prefect run name.
+
+    Returns:
+        str: The name of the current flow or task run, or None if not in a run context.
+    """
+    # set run name to None by default
+    run_name = None
+    try:
+        run_context = get_run_context()
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run:
+            run_name = run_context.flow_run.name
+        elif isinstance(run_context, TaskRunContext) and run_context.task_run:
+            run_name = run_context.task_run.name
+    except prefect.exceptions.MissingContextError:
+        return run_name
+
+    return run_name
 
 
 def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:

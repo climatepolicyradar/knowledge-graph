@@ -24,20 +24,27 @@ from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.context import FlowRunContext, get_run_context
 from prefect.events import Event, emit_event
+from prefect.settings import PREFECT_UI_URL
 from pydantic import AnyHttpUrl, SecretStr
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
+import flows.create_classifiers_specs_pr as create_classifiers_specs_pr
 import scripts.classifier_metadata
 import scripts.demote
 import scripts.promote
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
-from flows.classifier_specs.spec_interface import ClassifierSpec, load_classifier_specs
+from flows.classifier_specs.spec_interface import (
+    ClassifierSpec,
+    determine_spec_file_path,
+    load_classifier_specs,
+)
 from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
 from flows.utils import (
     JsonDict,
     SlackNotify,
     get_logger,
+    get_run_name,
     get_slack_client,
     total_milliseconds,
 )
@@ -362,12 +369,13 @@ async def read_concepts(
 
 
 async def get_classifiers_profiles(
-    wikibase_auth: WikibaseAuth, concepts: list[Concept]
+    wikibase_auth: WikibaseAuth, concepts: list[Concept], debug: bool = False
 ) -> list[Result[ClassifiersProfileMapping, Error]]:
     """
     Return valid classifiers profiles and different kids of validation errors.
 
     Validation errors can be invalid concepts and violated business constraints.
+    Debug mode: when enabled helps identify classifiers in wikibase without any classifier IDs.
     """
     logger = get_logger()
 
@@ -396,8 +404,8 @@ async def get_classifiers_profiles(
             concept_classifiers_profiles = await wikibase.get_classifier_ids_async(
                 wikibase_id=concept.wikibase_id
             )
-            # TODO: potentially remove this check
-            if len(concept_classifiers_profiles) == 0:
+            # only apply this check in debug mode
+            if len(concept_classifiers_profiles) == 0 and debug:
                 results.append(
                     Err(
                         Error(
@@ -451,6 +459,7 @@ async def create_classifiers_profiles_artifact(
     vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
+    pr_number: int | None,
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
@@ -461,6 +470,15 @@ async def create_classifiers_profiles_artifact(
     all_failures = validation_errors + wandb_errors + vespa_errors
     failed_concepts = len(all_failures)
 
+    pr_details = ""
+    if pr_number and pr_number > 0:
+        pr_url = (
+            f"https://github.com/climatepolicyradar/knowledge-graph/pull/{pr_number}"
+        )
+        pr_details = f"- **Classifiers Specs PR**: [#{pr_number}]({pr_url})\n"
+    else:
+        pr_details = "- **Classifiers Specs PR**: No PR created\n"
+
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
 - **Total concepts found**: {total_concepts}
@@ -469,6 +487,7 @@ async def create_classifiers_profiles_artifact(
 - **WandB Errors**: {len(wandb_errors)}
 - **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
+- {pr_details}
 """
 
     def format_cp_details(
@@ -613,6 +632,7 @@ async def send_classifiers_profile_slack_alert(
                 if validation_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
+                        # channel = "alerts-concept-store"
                         channel=channel,
                         thread_ts=thread_ts,
                         errors=validation_errors,
@@ -651,7 +671,6 @@ async def send_classifiers_profile_slack_alert(
                 if wandb_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        # channel="alerts-concept-store",
                         channel="alerts-platform-staging",
                         thread_ts=thread_ts,
                         errors=wandb_errors,
@@ -660,7 +679,6 @@ async def send_classifiers_profile_slack_alert(
                 if vespa_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        # channel="alerts-concept-store",
                         channel="alerts-platform-staging",
                         thread_ts=thread_ts,
                         errors=vespa_errors,
@@ -703,11 +721,7 @@ async def _post_errors_main(
         },
     ]
 
-    run_context = get_run_context()
-    # Set a default, just in case, to prioritise getting an alert out
-    flow_run_name = "unknown"
-    if isinstance(run_context, FlowRunContext) and run_context.flow_run:
-        flow_run_name = run_context.flow_run.name
+    flow_run_name = get_run_name() or "unknown"
 
     # Add context footer
     timestamp = int(datetime.now(timezone.utc).timestamp())
@@ -987,7 +1001,7 @@ async def update_vespa_with_classifiers_profiles(
             )
 
             logger.info(
-                f"Created VespaClassifiersProfile.Mapping object for {profile.value}, with mappings {profile_mappings}"
+                f"Created VespaClassifiersProfile.Mapping object for {profile.value}, with {len(profile_mappings)} mappings"
             )
 
             # convert to VespaClassifiersProfile
@@ -1258,6 +1272,8 @@ async def sync_classifiers_profiles(
     vespa_search_adapter: VespaSearchAdapter | None = None,
     upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
+    automerge_classifier_specs_pr: bool = False,
+    debug_wikibase_validation: bool = False,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1309,6 +1325,11 @@ async def sync_classifiers_profiles(
             f"upload_to_vespa is set to {upload_to_vespa}. Using dry run mode for vespa."
         )
 
+    if not automerge_classifier_specs_pr:
+        logger.warning(
+            f"automerge_classifier_specs_pr is set to {automerge_classifier_specs_pr}. Classifier specs PRs will not be auto-merged."
+        )
+
     classifier_specs = load_classifier_specs(aws_env)
     logger.info(
         f"Loaded {len(classifier_specs)} classifier specs for env {aws_env.name}"
@@ -1319,7 +1340,9 @@ async def sync_classifiers_profiles(
     )
 
     # returns Result with valid classifiers profiles and validation errors
-    results = await get_classifiers_profiles(wikibase_auth, concepts)
+    results = await get_classifiers_profiles(
+        wikibase_auth, concepts, debug=debug_wikibase_validation
+    )
 
     # retrieve validation errors and valid classifiers profiles
     validation_errors: list[Error] = [
@@ -1427,6 +1450,7 @@ async def sync_classifiers_profiles(
 
     # if there were changes to wandb
     vespa_results = []
+    cs_pr_results = []
     if len(successes) > 0:
         logger.info(
             f"Changes made to wandb: {len(successes)}, updating Vespa with the latest classifiers profiles..."
@@ -1437,16 +1461,36 @@ async def sync_classifiers_profiles(
         # reload classifier specs to confirm updates
         updated_classifier_specs = load_classifier_specs(aws_env)
 
+        # create PR with updated classifier specs
+        spec_file = str(determine_spec_file_path(aws_env))
+        run_context = get_run_context()
+        flow_run_name = get_run_name() or "unknown"
+        flow_run_url = "unknown"
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run:
+            flow_run_url = (
+                f"{PREFECT_UI_URL.value()}/flow-runs/flow-run/{run_context.flow_run.id}"
+            )
+        cs_pr_results = await create_classifiers_specs_pr.create_and_merge_pr(
+            spec_file=spec_file,
+            aws_env=aws_env,
+            flow_run_name=flow_run_name,
+            flow_run_url=flow_run_url,
+            auto_merge=automerge_classifier_specs_pr,
+        )
+
         async with vespa_search_adapter.client.asyncio(
             connections=VESPA_CONNECTION_POOL_SIZE,
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),
         ) as vespa_connection_pool:
-            # update vespa with latest classifiers profiles
             vespa_results = await update_vespa_with_classifiers_profiles(
                 updated_classifier_specs, vespa_connection_pool, upload_to_vespa
             )
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
+
+    # retrieve PR number if PR was created successfully, otherwise set to -1
+    pr_number = unwrap_ok(cs_pr_results[0]) if isinstance(cs_pr_results[0], Ok) else -1
+    pr_errors = [unwrap_err(r) for r in cs_pr_results if isinstance(r, Err)]
 
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
@@ -1479,9 +1523,15 @@ async def sync_classifiers_profiles(
         vespa_errors=vespa_errors,
         successes=successes,
         aws_env=aws_env,
+        pr_number=pr_number,
     )
 
     if len(vespa_errors) > 0:
         raise Exception(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
+        )
+    # if classifiers specs PR errors, fail the flow
+    if len(pr_errors) > 0:
+        raise Exception(
+            f"Errors occurred while creating classifiers specs PR: {pr_errors}"
         )
