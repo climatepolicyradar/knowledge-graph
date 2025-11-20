@@ -393,7 +393,7 @@ async def test_full_pipeline_with_inference_failure(
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_completes_after_some_docs_with_aggregation_failures(
+async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggregation(
     test_config,
     mock_run_output_identifier_str,
 ):
@@ -509,6 +509,8 @@ async def test_full_pipeline_completes_after_some_docs_with_aggregation_failures
             summary_artifact.description
             == "Summary of the full pipeline successful run."
         )
+
+        # assert pipeline completed all three flows despite inference and aggregation failures
         assert mock_inference.call_count == 1
         assert mock_aggregate.call_count == 1
         assert mock_indexing.call_count == 1
