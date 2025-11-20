@@ -88,6 +88,12 @@ jobs:
         run: just test-with-vespa -vv
 
   deploy_prefect_sandbox:
+
+    concurrency:
+      group: deploy-sandbox-ci
+      cancel-in-progress: False
+
+
     needs: test
     name: "Sandbox"
     uses: ./.github/workflows/prefect_deploy.yml

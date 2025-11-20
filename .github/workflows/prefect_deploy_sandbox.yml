@@ -7,6 +7,11 @@ permissions:
 
 jobs:
   deploy_prefect_sandbox:
+
+    concurrency:
+      group: deploy-sandbox-ci
+      cancel-in-progress: False
+
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/prefect_deploy.yml
     with:
