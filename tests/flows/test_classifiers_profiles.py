@@ -1106,3 +1106,8 @@ def test_maybe_allow_retiring__update_to_retired():
     assert updated_results == []
     # Verify Vespa search was called
     mock_search_adapter.search.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_sync_classifiers_profiles():
+    pass
