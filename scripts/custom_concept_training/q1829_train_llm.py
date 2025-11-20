@@ -28,7 +28,7 @@ def train_financial_flow() -> None:
     
         - Include when the text describes money or financial assets moving (e.g. payments, loans, investments, disbursements, repayments).
         - Include both one-off transactions and ongoing streams (e.g. monthly payments, yearly disbursements).
-        - Include in the same label all relevant elements of the flow (if given): who is paying, who is receiving, the purpose, the amount and the timeframe, as well as any crucial details, such as legal conditions or interest payable. However, always insure such statements include the flow itself; do not tag if the text only specifies conditions.
+        - Include in the same label all relevant elements of the flow (if given): who is paying, who is receiving, the purpose, the amount and the timeframe, as well as any crucial details, such as legal conditions or interest payable. However, always ensure such statements include the flow itself; do not tag if the text only specifies conditions.
         - Include financial commitments, as well as disbursements, as long as commitments are firm, such as budgets and pledges. 
         - Exclude when the text only states amounts held, owed, or valued at a point in time (these are stocks, not flows).
         - Exclude metaphorical/non-financial uses of "flow" (e.g. "flow of information").
