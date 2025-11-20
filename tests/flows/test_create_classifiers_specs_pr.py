@@ -1,3 +1,4 @@
+import os
 from unittest.mock import Mock, patch
 
 import pytest
@@ -284,6 +285,7 @@ async def test_create_and_merge_pr():
             timeout_minutes=30,
             poll_interval_seconds=30,
         )
+        assert os.environ["GITHUB_TOKEN"] == "mock-token"
         assert all(is_ok(r) for r in results)
 
 
@@ -385,3 +387,28 @@ def test_extract_pr_details_empty_string():
 
     with pytest.raises(ValueError, match="The result string is empty."):
         extract_pr_details(result_str)
+
+
+@pytest.mark.asyncio
+async def test_create_and_merge_pr__github_token_exception():
+    """Test the workflow when setting GitHub token raises an exception."""
+    with patch("flows.create_classifiers_specs_pr.commit_and_create_pr") as mock_commit:
+        # Call the main function with a SecretStr that raises an exception
+        github_token_mock = Mock(SecretStr("mock-token"))
+        github_token_mock.get_secret_value.side_effect = Exception("Token error")
+
+        results = await create_and_merge_pr(
+            spec_file="testfile",
+            aws_env=AwsEnv.staging,
+            flow_run_name="Test Run",
+            flow_run_url="http://example.com",
+            github_token=github_token_mock,
+            auto_merge=True,
+        )
+
+        mock_commit.assert_not_called()
+
+        errors = [r._error for r in results if isinstance(r, Err)]
+        assert any(
+            "Failed to set GitHub token environment var." in e.msg for e in errors
+        )
