@@ -3,14 +3,14 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from prefect import task
 from pydantic import SecretStr
 
 from flows.result import Err, Error, Ok, Result, is_err
-from flows.utils import get_logger
+from flows.utils import get_logger, total_minutes
 from knowledge_graph.cloud import AwsEnv
 
 
@@ -197,8 +197,8 @@ async def enable_auto_merge(
 
 async def wait_for_pr_merge(
     pr_number: int,
-    timeout_minutes: int,
-    poll_interval_seconds: int,
+    timeout: timedelta,
+    poll_interval: timedelta,
     repo: str = "climatepolicyradar/knowledge-graph",
 ) -> Result[None, Error]:
     """
@@ -207,14 +207,15 @@ async def wait_for_pr_merge(
     Args:
         pr_number: Pull request number
         repo: Repository in format "owner/repo"
-        timeout_minutes: Maximum time to wait
-        poll_interval_seconds: Time between status checks
+        timeout: Maximum time to wait
+        poll_interval: Time between status checks
     """
     logger = get_logger()
 
     try:
         start_time = time.time()
-        timeout_seconds = timeout_minutes * 60
+        timeout_minutes = total_minutes(timeout)
+        poll_interval_seconds = poll_interval.total_seconds()
 
         logger.info(
             f"Waiting for PR #{pr_number} to merge (timeout: {timeout_minutes}m, "
@@ -224,7 +225,7 @@ async def wait_for_pr_merge(
         while True:
             elapsed = time.time() - start_time
 
-            if elapsed > timeout_seconds:
+            if elapsed > timeout.total_seconds():
                 logger.error(
                     f"PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}."
                 )
@@ -394,8 +395,8 @@ async def create_and_merge_pr(
         results.append(
             await wait_for_pr_merge(
                 pr_number=pr_no,
-                timeout_minutes=30,
-                poll_interval_seconds=30,
+                timeout=timedelta(minutes=30),
+                poll_interval=timedelta(seconds=30),
                 repo="climatepolicyradar/knowledge-graph",
             )
         )
