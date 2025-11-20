@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
@@ -152,8 +153,8 @@ async def test_wait_for_pr_merge():
         result = await wait_for_pr_merge(
             pr_number=123,
             repo="climatepolicyradar/knowledge-graph",
-            timeout_minutes=1,
-            poll_interval_seconds=0.1,
+            timeout=timedelta(seconds=1),
+            poll_interval=timedelta(milliseconds=100),
         )
 
         assert mock_run.call_count == 2  # merged by 2nd call
@@ -186,8 +187,8 @@ async def test_wait_for_pr_merge__timeout():
         result = await wait_for_pr_merge(
             pr_number=123,
             repo="climatepolicyradar/knowledge-graph",
-            timeout_minutes=0,
-            poll_interval_seconds=0.1,
+            timeout=timedelta(seconds=0),
+            poll_interval=timedelta(milliseconds=100),
         )
 
         assert is_err(result)
@@ -210,8 +211,8 @@ async def test_wait_for_pr_merge__closed():
         result = await wait_for_pr_merge(
             pr_number=123,
             repo="climatepolicyradar/knowledge-graph",
-            timeout_minutes=1,
-            poll_interval_seconds=0.1,
+            timeout=timedelta(minutes=1),
+            poll_interval=timedelta(milliseconds=100),
         )
 
         assert is_err(result)
@@ -233,8 +234,8 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
         result = await wait_for_pr_merge(
             pr_number=123,
             repo="climatepolicyradar/knowledge-graph",
-            timeout_minutes=0.01,  # Short timeout for test 0.6s
-            poll_interval_seconds=0.2,
+            timeout=timedelta(milliseconds=100),
+            poll_interval=timedelta(milliseconds=200),
         )
 
         assert is_err(result)
@@ -282,8 +283,8 @@ async def test_create_and_merge_pr():
         mock_wait_merge.assert_called_once_with(
             pr_number=123,
             repo="climatepolicyradar/knowledge-graph",
-            timeout_minutes=30,
-            poll_interval_seconds=30,
+            timeout=timedelta(minutes=30),
+            poll_interval=timedelta(seconds=30),
         )
         assert os.environ["GITHUB_TOKEN"] == "mock-token"
         assert all(is_ok(r) for r in results)

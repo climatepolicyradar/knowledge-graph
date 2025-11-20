@@ -1042,3 +1042,7 @@ def build_inference_result_s3_uri(
 
 def total_milliseconds(td: timedelta) -> int:
     return int(td.total_seconds() * 1_000)
+
+
+def total_minutes(td: timedelta) -> int:
+    return int(td.total_seconds() / 60)
