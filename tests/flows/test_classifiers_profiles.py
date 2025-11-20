@@ -9,11 +9,14 @@ from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
     compare_classifiers_profiles,
+    concept_present_in_vespa,
     create_vespa_classifiers_profile,
     create_vespa_profile_mappings,
     demote_classifier_profile,
+    emit_finished,
     get_classifiers_profiles,
     handle_classifier_profile_action,
+    maybe_allow_retiring,
     promote_classifier_profile,
     update_classifier_profile,
     update_vespa_with_classifiers_profiles,
@@ -72,16 +75,19 @@ def mock_specs_2profiles():
     ]
 
 
-@pytest.mark.asyncio
-async def test_get_classifiers_profiles():
-    # mock concepts
-    list_concepts = [
+@pytest.fixture
+def mock_concepts():
+    return [
         Concept(wikibase_id="Q123", preferred_label="Concept 123"),
         Concept(wikibase_id="Q100", preferred_label="Concept 100"),
         Concept(wikibase_id="Q999", preferred_label="Concept 999"),
         Concept(wikibase_id="Q200", preferred_label="Concept 200"),
+        Concept(wikibase_id="Q201", preferred_label="Concept 201"),
     ]
 
+
+@pytest.mark.asyncio
+async def test_get_classifiers_profiles(mock_concepts):
     with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
         # mock response from wikibase.get_classifier_ids_async
         mock_wikibase_auth = Mock()
@@ -107,15 +113,17 @@ async def test_get_classifiers_profiles():
                     (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
                     (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
                 ],
+                # Q201: debug False - success (no profiles)
+                [],
             ]
         )
 
         # Call the function under test
         results = await get_classifiers_profiles(
-            wikibase_auth=mock_wikibase_auth, concepts=list_concepts
+            wikibase_auth=mock_wikibase_auth, concepts=mock_concepts, debug=False
         )
 
-    assert mock_wikibase.get_classifier_ids_async.call_count == 4
+        assert mock_wikibase.get_classifier_ids_async.call_count == 5  # one per concept
 
     # assert successful profiles
     classifier_profiles = [unwrap_ok(r) for r in results if isinstance(r, Ok)]
@@ -141,8 +149,48 @@ async def test_get_classifiers_profiles():
         == "Error getting classifier ID from wikibase: Failed to fetch classifier profiles for Q100"
     )
 
-    # check mocked method called
-    assert mock_wikibase.get_classifier_ids_async.call_count == 4
+
+@pytest.mark.asyncio
+async def test_get_classifiers_profiles__debug(mock_concepts):
+    with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
+        # mock response from wikibase.get_classifier_ids_async
+        mock_wikibase_auth = Mock()
+        mock_wikibase = mock_wikibase_session.return_value
+
+        # 1 success, 3 failures
+        mock_wikibase.get_classifier_ids_async = AsyncMock(
+            side_effect=[
+                # Q123: success
+                [
+                    (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
+                    (StatementRank.DEPRECATED, ClassifierID("yyyy9999")),
+                ],
+                # Q100: failure
+                Exception("Failed to fetch classifier profiles for Q100"),
+                # Q999: fail validation - 2 primary profiles
+                [
+                    (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
+                    (StatementRank.PREFERRED, ClassifierID("cccc4444")),
+                ],
+                # Q200: fail validation - same classifier ID in 2 profiles
+                [
+                    (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
+                    (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
+                ],
+                # Q201: debug True - failure
+                [],
+            ]
+        )
+        # Call the function with debug mode on - results in extra failure
+        results_debug = await get_classifiers_profiles(
+            wikibase_auth=mock_wikibase_auth, concepts=mock_concepts, debug=True
+        )
+
+    classifier_profiles = [unwrap_ok(r) for r in results_debug if isinstance(r, Ok)]
+    assert len(classifier_profiles) == 2
+
+    failures = [unwrap_err(r) for r in results_debug if isinstance(r, Err)]
+    assert len(failures) == 4
 
 
 def test_compare_classifiers_profiles():
@@ -724,3 +772,337 @@ async def test_update_vespa_with_classifiers_profiles__vespa_upload_false(
 
         mock_vespa_connection_pool.update_data.assert_not_called()
         assert unwrap_ok(results[0]) is None
+
+
+def test_emit_finished__success():
+    """Test emit_finished with promotions succeeds."""
+    promotions = [
+        Promote(
+            classifiers_profile_mapping=ClassifiersProfileMapping(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile=Profile.PRIMARY,
+            )
+        )
+    ]
+
+    with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
+        mock_event = Mock()
+        mock_emit_event.return_value = mock_event
+
+        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+
+        mock_emit_event.assert_called_once()
+        call_args = mock_emit_event.call_args
+        assert call_args.kwargs["event"] == "sync-classifiers_profiles.finished"
+        assert (
+            call_args.kwargs["resource"]["prefect.resource.id"]
+            == "sync-classifiers-profiles"
+        )
+        assert call_args.kwargs["resource"]["awsenv"] == AwsEnv.staging
+        assert len(call_args.kwargs["payload"]["promotions"]) == 1
+
+        assert result == Ok(mock_event)
+
+
+def test_emit_finished__no_promotions():
+    """Test emit_finished with no promotions returns."""
+    result = emit_finished(promotions=[], aws_env=AwsEnv.staging)
+
+    assert result == Ok(None)
+
+
+def test_emit_finished__emit_event_returns_none():
+    """Test emit_finished when emit_event returns."""
+    promotions = [
+        Promote(
+            classifiers_profile_mapping=ClassifiersProfileMapping(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile=Profile.PRIMARY,
+            )
+        )
+    ]
+
+    with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
+        mock_emit_event.return_value = None
+
+        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+
+        assert result == Err(
+            Error(
+                msg="emitting event returned `None`, indicating it wasn't sent",
+                metadata={
+                    "event": None,
+                    "resource": {
+                        "prefect.resource.id": "sync-classifiers-profiles",
+                        "awsenv": "staging",
+                    },
+                    "payload": {
+                        "promotions": [
+                            {
+                                "classifiers_profile_mapping": {
+                                    "wikibase_id": "Q123",
+                                    "classifier_id": "aaaa2222",
+                                    "classifiers_profile": "primary",
+                                }
+                            }
+                        ]
+                    },
+                },
+            )
+        )
+
+
+def test_emit_finished__emit_event_raises_exception():
+    """Test emit_finished when emit_event raises an exception."""
+    promotions = [
+        Promote(
+            classifiers_profile_mapping=ClassifiersProfileMapping(
+                wikibase_id=WikibaseID("Q123"),
+                classifier_id=ClassifierID("aaaa2222"),
+                classifiers_profile=Profile.PRIMARY,
+            )
+        )
+    ]
+
+    with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
+        mock_emit_event.side_effect = Exception("Failed to emit event")
+
+        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+
+        assert result == Err(
+            Error(
+                msg="failed to emit event",
+                metadata={
+                    "event": "sync-classifiers_profiles.finished",
+                    "resource": {
+                        "prefect.resource.id": "sync-classifiers-profiles",
+                        "awsenv": "staging",
+                    },
+                    "payload": {
+                        "promotions": [
+                            {
+                                "classifiers_profile_mapping": {
+                                    "wikibase_id": "Q123",
+                                    "classifier_id": "aaaa2222",
+                                    "classifiers_profile": "primary",
+                                }
+                            }
+                        ]
+                    },
+                    "exception": "Failed to emit event",
+                },
+            )
+        )
+
+
+def test_concept_present_in_vespa__has_results():
+    """Test concept_present_in_vespa when concept has results in Vespa."""
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+
+    result = concept_present_in_vespa(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        vespa_search_adapter=mock_search_adapter,
+    )
+
+    assert result == Ok(True)
+
+    # Verify search was called with correct parameters
+    call_args = mock_search_adapter.search.call_args
+    search_params = call_args[0][0]
+    assert len(search_params.concept_v2_document_filters) == 1
+    assert search_params.concept_v2_document_filters[0].concept_wikibase_id == "Q123"
+    assert search_params.concept_v2_document_filters[0].classifier_id == "aaaa2222"
+    assert search_params.documents_only is True
+    assert search_params.limit == 1
+
+
+def test_concept_present_in_vespa__no_results():
+    """Test concept_present_in_vespa when concept has no results in Vespa."""
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[])
+
+    result = concept_present_in_vespa(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        vespa_search_adapter=mock_search_adapter,
+    )
+
+    assert result == Ok(False)
+
+
+def test_concept_present_in_vespa__search_error():
+    """Test concept_present_in_vespa when Vespa search raises an exception."""
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.side_effect = Exception("Vespa connection failed")
+
+    result = concept_present_in_vespa(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        vespa_search_adapter=mock_search_adapter,
+    )
+
+    assert result == Err(
+        _error=Error(
+            msg="failed to search Vespa for results",
+            metadata={
+                "concept_wikibase_id": "Q123",
+                "classifier_id": "aaaa2222",
+                "exception": "Vespa connection failed",
+            },
+        )
+    )
+
+
+def test_maybe_allow_retiring__retiring_profile_with_results():
+    """Test maybe_allow_retiring allows retiring when concept has results in Vespa."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        )
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, mock_search_adapter, wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+
+
+def test_maybe_allow_retiring__retiring_profile_without_results():
+    """Test maybe_allow_retiring blocks retiring when concept has no results in Vespa."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        )
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[])
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, mock_search_adapter, wandb_results
+    )
+
+    assert not allow
+    assert updated_results == [
+        Err(
+            _error=Error(
+                msg="no results found in Vespa, so can't retire",
+                metadata={
+                    "wikibase_id": "Q123",
+                    "classifier_id": "aaaa2222",
+                    "classifiers_profile": "retired",
+                },
+            )
+        )
+    ]
+
+
+def test_maybe_allow_retiring__retiring_profile_vespa_error():
+    """Test maybe_allow_retiring blocks retiring when Vespa check fails."""
+    update_op = Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        ),
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.side_effect = Exception("Vespa connection failed")
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        update_op, mock_search_adapter, wandb_results
+    )
+
+    assert not allow
+    assert updated_results == [
+        Err(
+            _error=Error(
+                msg="failed to search Vespa for results. Failed to check for results in Vespa, so can't retire",
+                metadata={
+                    "concept_wikibase_id": "Q123",
+                    "classifier_id": "aaaa2222",
+                    "exception": "Vespa connection failed",
+                },
+            )
+        )
+    ]
+
+
+def test_maybe_allow_retiring__non_retiring_profile():
+    """Test maybe_allow_retiring allows non-retiring operations without checks."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.PRIMARY,
+        )
+    )
+
+    mock_search_adapter = Mock()
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, mock_search_adapter, wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+    # Verify Vespa search was not called
+    mock_search_adapter.search.assert_not_called()
+
+
+def test_maybe_allow_retiring__update_to_retired():
+    """Test maybe_allow_retiring checks Vespa when updating to retired profile."""
+    update_op = Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="experimental",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        ),
+    )
+
+    mock_search_adapter = Mock()
+    mock_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        update_op, mock_search_adapter, wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+    # Verify Vespa search was called
+    mock_search_adapter.search.assert_called_once()

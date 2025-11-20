@@ -276,6 +276,10 @@ if __name__ == "__main__":
                 }
             ),
         },
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
     )
 
     # Wikibase
@@ -312,7 +316,7 @@ if __name__ == "__main__":
 
     create_deployment(
         flow=sync_classifiers_profiles,
-        description="Compare wikibase classifiers profiles with classifiers specs",
+        description="Compare Wikibase classifiers profiles with classifiers specs",
         # Temporarily disabled while testing
         # Schedule 2x daily during working week days
         # env_schedules={

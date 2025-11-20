@@ -33,6 +33,7 @@ COPY knowledge_graph ./knowledge_graph/
 COPY flows ./flows/
 COPY scripts ./scripts/
 COPY static_sites ./static_sites/
+COPY .git ./.git/
 
 # Install the project
 RUN uv pip install --system -e .
