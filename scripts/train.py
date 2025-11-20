@@ -659,6 +659,7 @@ async def run_training(
         include_labels_from_subconcepts=True,
         include_recursive_has_subconcept=True,
         wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
     )
 
     if concept_overrides:
