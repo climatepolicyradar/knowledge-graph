@@ -81,7 +81,9 @@ async def test_full_pipeline_no_config_provided(
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
-            data=RunOutputIdentifier(mock_run_output_identifier_str),
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, error=None
+            ),
         )
         mock_indexing.return_value = State(
             type=StateType.COMPLETED, data={"message": "Indexing complete."}
@@ -113,8 +115,8 @@ async def test_full_pipeline_no_config_provided(
 
         mock_indexing.assert_called_once()
         call_args = mock_indexing.call_args
-        assert (
-            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
+        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
+            mock_run_output_identifier_str
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
@@ -185,7 +187,9 @@ async def test_full_pipeline_with_full_config(
         )
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
-            data=RunOutputIdentifier(mock_run_output_identifier_str),
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, error=None
+            ),
         )
         mock_indexing.return_value = State(
             type=StateType.COMPLETED, data={"message": "Indexing complete."}
@@ -302,8 +306,7 @@ async def test_full_pipeline_with_inference_failure(
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
             data=AggregateResult(
-                RunOutputIdentifier=RunOutputIdentifier(mock_run_output_identifier_str),
-                error=None,
+                run_output_identifier=mock_run_output_identifier_str, error=None
             ),
         )
         mock_indexing.return_value = State(
@@ -431,10 +434,13 @@ async def test_full_pipeline_completes_after_some_docs_with_aggregation_failures
             ),
         )
 
-        # fail on aggregation
-        mock_aggregate.return_value = AggregateResult(
-            RunOutputIdentifier=mock_run_output_identifier_str,
-            error="1/1 Documents failed",
+        # aggregation state contains failed documents
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str,
+                error="1/2 Documents failed",
+            ),
         )
 
         mock_indexing.return_value = State(

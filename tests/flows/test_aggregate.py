@@ -144,7 +144,7 @@ async def test_aggregate_batch_of_documents(
         )
 
         if isinstance(aggregate_result, AggregateResult):
-            run_reference = aggregate_result.RunOutputIdentifier
+            run_reference = aggregate_result.run_output_identifier
 
     all_collected_ids = []
     for document_stem in document_stems:

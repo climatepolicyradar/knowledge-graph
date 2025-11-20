@@ -173,7 +173,7 @@ async def full_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    aggregation_result: AggregateResult = await aggregate(
+    aggregation_result: State = await aggregate(
         run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
@@ -191,22 +191,18 @@ async def full_pipeline(
         logger.error("Aggregation failed.")
         raise aggregation_result
 
-    if (
-        isinstance(aggregation_result, AggregateResult)
-        and aggregation_result.error is not None
-    ):
-        logger.error(f"Aggregation errors occurred: {aggregation_result.error}")
-        aggregation_run_identifier = aggregation_result.RunOutputIdentifier
-
     if isinstance(aggregation_result, State):
-        agg_result_raw: RunOutputIdentifier = await aggregation_result.result(
+        agg_result: AggregateResult = await aggregation_result.result(
             raise_on_failure=False
         )
+        aggregation_run_identifier = agg_result.run_output_identifier
+        if agg_result.error is not None:
+            logger.error(f"Aggregation errors occurred: {agg_result.error}")
 
-        if hasattr(agg_result_raw, "RunOutputIdentifier"):
-            aggregation_run_identifier: AggregateResult = (
-                agg_result_raw.RunOutputIdentifier
-            )
+    if isinstance(aggregation_result, AggregateResult):
+        aggregation_run_identifier = aggregation_result.run_output_identifier
+        if aggregation_result.error is not None:
+            logger.error(f"Aggregation errors occurred: {aggregation_result.error}")
 
     logger.info(
         f"Aggregation complete. Run output identifier: {aggregation_run_identifier}"

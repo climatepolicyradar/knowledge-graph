@@ -73,7 +73,7 @@ SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
 class AggregateResult(BaseModel):
     """Result aggregating the output of classifier inference runs. Wraps any errors in the error attribute"""
 
-    RunOutputIdentifier: str
+    run_output_identifier: RunOutputIdentifier
     error: Optional[str] = None
 
 
@@ -584,7 +584,7 @@ async def aggregate_batch_of_documents(
         flow_run_name=flow_run_name,
     )
 
-    aggregate_result = AggregateResult(RunOutputIdentifier=run_output_identifier)
+    aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
         aggregate_result.error = (
@@ -953,7 +953,7 @@ async def aggregate(
         failures=failures,
     )
 
-    aggregate_result = AggregateResult(RunOutputIdentifier=run_output_identifier)
+    aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
         aggregate_result.error = (
