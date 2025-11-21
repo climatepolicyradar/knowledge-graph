@@ -132,6 +132,7 @@ async def train_from_config(
     config_file_path: str = "vibe-checker/config.yml",
     config: Config | None = None,
     force: bool = False,
+    concurrency_limit: int = 3,
 ) -> list[Any]:
     """
     Train classifiers for all concepts listed in the `vibe-checker/config.yml` file.
@@ -144,6 +145,7 @@ async def train_from_config(
     :param config_file_path: Path to the config file containing Wikibase IDs
     :param config: Optional pre-configured Config object. If not provided, will be created.
     :param force: If True, force re-training even if classifier already exists in W&B
+    :param concurrency_limit: Maximum number of concurrent training tasks (default: 3)
     :return: List of trained classifiers
     """
     logger = get_logger()
@@ -155,26 +157,36 @@ async def train_from_config(
 
     # Load Wikibase IDs from config file
     wikibase_ids = _load_wikibase_ids_from_config(config_file_path)
-    logger.info(f"Training classifiers for {len(wikibase_ids)} concepts")
+    logger.info(
+        f"Training classifiers for {len(wikibase_ids)} concepts "
+        f"(max {concurrency_limit} at a time)"
+    )
 
-    # Run training for all concepts in parallel
+    # Create a semaphore to limit concurrent training tasks
+    semaphore = asyncio.Semaphore(concurrency_limit)
+
+    async def run_training_with_concurrency_limit(wikibase_id: WikibaseID) -> Any:
+        """Wrapper to run training with concurrency limit."""
+        async with semaphore:
+            return await run_training(
+                wikibase_id=wikibase_id,
+                track_and_upload=track_and_upload,
+                aws_env=aws_env,
+                wikibase_config=wikibase_config,
+                argilla_config=argilla_config,
+                s3_client=s3_client,
+                evaluate=True,
+                classifier_type=None,  # Use ClassifierFactory default
+                classifier_kwargs=None,
+                concept_overrides=None,
+                training_data_wandb_path=None,
+                limit_training_samples=None,
+                force=force,
+            )
+
+    # Create tasks with concurrency limit
     training_tasks = [
-        run_training(
-            wikibase_id=wikibase_id,
-            track_and_upload=track_and_upload,
-            aws_env=aws_env,
-            wikibase_config=wikibase_config,
-            argilla_config=argilla_config,
-            s3_client=s3_client,
-            evaluate=True,
-            classifier_type=None,  # Use ClassifierFactory default
-            classifier_kwargs=None,
-            concept_overrides=None,
-            training_data_wandb_path=None,
-            limit_training_samples=None,
-            force=force,
-        )
-        for wikibase_id in wikibase_ids
+        run_training_with_concurrency_limit(wikibase_id) for wikibase_id in wikibase_ids
     ]
 
     results = await asyncio.gather(*training_tasks, return_exceptions=True)
