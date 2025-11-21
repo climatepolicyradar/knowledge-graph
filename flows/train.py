@@ -15,20 +15,16 @@ from knowledge_graph.wikibase import WikibaseConfig
 from scripts.train import run_training
 
 
-@flow()
-async def train_on_gpu(
-    wikibase_id: WikibaseID,
-    track_and_upload: bool = False,
-    aws_env: AwsEnv = AwsEnv.labs,
-    evaluate: bool = True,
-    classifier_type: Optional[str] = None,
-    classifier_kwargs: Optional[dict[str, Any]] = None,
-    concept_overrides: Optional[dict[str, Any]] = None,
-    training_data_wandb_path: Optional[str] = None,
-    limit_training_samples: Optional[int] = None,
-    config: Config | None = None,
-):
-    """Trigger the training script in prefect using coiled."""
+async def _setup_training_environment(
+    config: Config | None,
+    aws_env: AwsEnv,
+) -> tuple[Config, WikibaseConfig, ArgillaConfig, Any]:
+    """
+    Set up the common config for classifier training
+
+    :param config: Optional pre-configured Config object
+    :param aws_env: AWS environment to use for creating the S3 client
+    """
     if not config:
         config = await Config.create()
 
@@ -55,7 +51,32 @@ async def train_on_gpu(
         url=config.argilla_api_url,
     )
 
-    s3_client = boto3.client("s3", region_name=config.bucket_region)
+    session = boto3.session.Session(
+        profile_name=aws_env.value,
+        region_name=config.bucket_region,
+    )
+    s3_client = session.client("s3")
+
+    return config, wikibase_config, argilla_config, s3_client
+
+
+@flow()
+async def train_on_gpu(
+    wikibase_id: WikibaseID,
+    track_and_upload: bool = False,
+    aws_env: AwsEnv = AwsEnv.labs,
+    evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
+    concept_overrides: Optional[dict[str, Any]] = None,
+    training_data_wandb_path: Optional[str] = None,
+    limit_training_samples: Optional[int] = None,
+    config: Config | None = None,
+):
+    """Trigger the training script in prefect using coiled."""
+    _, wikibase_config, argilla_config, s3_client = await _setup_training_environment(
+        config=config, aws_env=aws_env
+    )
 
     return await run_training(
         wikibase_id=wikibase_id,
@@ -83,6 +104,8 @@ def _load_wikibase_ids_from_config(
             config = yaml.safe_load(f)
         # make sure the contents are a list of valid Wikibase IDs
         wikibase_ids = [WikibaseID(id) for id in config]
+        # make sure the list of wikibase ids is unique
+        wikibase_ids = list(set(wikibase_ids))
     except yaml.YAMLError as e:
         raise ValueError(
             "The config file should be valid YAML containing a list of Wikibase IDs"
@@ -121,37 +144,9 @@ async def train_from_config(
     logger = get_logger()
     logger.info("Starting training from config file")
 
-    if not config:
-        config = await Config.create()
-
-    if (
-        not config.wandb_api_key
-        or not config.wikibase_username
-        or not config.wikibase_password
-        or not config.wikibase_url
-        or not config.argilla_api_key
-        or not config.argilla_api_url
-    ):
-        raise ValueError("Missing values in config.")
-
-    wandb.login(key=config.wandb_api_key.get_secret_value())
-
-    wikibase_config = WikibaseConfig(
-        username=config.wikibase_username,
-        password=config.wikibase_password,
-        url=config.wikibase_url,
+    _, wikibase_config, argilla_config, s3_client = await _setup_training_environment(
+        config=config, aws_env=aws_env
     )
-
-    argilla_config = ArgillaConfig(
-        api_key=config.argilla_api_key,
-        url=config.argilla_api_url,
-    )
-
-    session = boto3.session.Session(
-        profile_name=aws_env.value,
-        region_name=config.bucket_region,
-    )
-    s3_client = session.client("s3")
 
     # Load Wikibase IDs from config file
     wikibase_ids = _load_wikibase_ids_from_config(config_file_path)
