@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 from typing import Any, Optional
 
 import boto3
@@ -99,6 +100,10 @@ def _load_wikibase_ids_from_config(
 ) -> list[WikibaseID]:
     """Load concept IDs from the configuration file."""
     logger = get_logger()
+    config_path = Path(config_file_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_file_path}")
+
     try:
         with open(config_file_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
