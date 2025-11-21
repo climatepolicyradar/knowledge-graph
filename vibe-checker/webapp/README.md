@@ -5,14 +5,11 @@ A Next.js-based web application for testing and evaluating classifiers against r
 ## Local Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Run the development server
-npm run dev
+just install-webapp
+just serve-webapp
 ```
 
-The app will be available at `http://localhost:3000`.
+This should start a local development server at `http://localhost:3000`.
 
 The app depends on being able to fetch data from an s3 bucket, hosted in the `labs` account and managed by the code in the [infra](../infra) directory. You'll need to authenticate with AWS to access the bucket.
 

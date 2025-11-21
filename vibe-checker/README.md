@@ -1,3 +1,13 @@
+# Vibe Checker
+
+[The vibe checker](https://vibe-checker.labs.climatepolicyradar.org) is a tool that gives concept developers a qualitative feel for how classifiers might perform on real-world policy documents. In combination with the quantitative evaluation results from the formal labelling process (stored alongside the models in Weights & Biases), this should provide a full picture of a classifier's performance and readiness for deployment.
+
+The vibe checker is composed of two main components:
+
+- A Prefect flow which runs inference on a small, well-chosen sample of passages from our dataset.
+- A webapp which displays the predictions of the classifiers, with UI for filtering, searching, and comparing the predictions.
+
+The prefect flow runs nightly and stores predictions in an S3 bucket. The webapp is deployed on ECS Fargate and reads predictions directly from S3.
 
 ## Running the flow locally
 
@@ -19,7 +29,7 @@ Both options will dump the results of the inference to the s3 bucket, in the `{c
 
 ## S3 bucket structure
 
-The s3 bucket is structured as follows:
+The S3 bucket stores both input datasets and output predictions. The structure is as follows:
 
 ```text
 s3://{BUCKET_NAME}/
@@ -42,8 +52,6 @@ To update the config file, you should edit the config file in `vibe-checker/conf
 - Q789
 ```
 
-Alternatively, you can specify custom IDs for a one-off run by submitting a run with an extra parameter:
+## Further instructions
 
-```bash
-prefect flow run flows.vibe_check:vibe_check_inference --param wikibase_ids='["Q123","Q456","Q789"]'
-```
+Take a look at the [webapp](./webapp/README.md) and [infra](./infra/README.md) directories for more detailed instructions on how to deploy and run the webapp and the associated infrastructure.
