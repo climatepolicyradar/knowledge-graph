@@ -51,6 +51,8 @@ export async function GET(
     const { wikibase_id, classifier_id } = await params;
     const key = `${wikibase_id}/${classifier_id}/predictions.jsonl`;
 
+    const bucketName = await getBucketName();
+
     // Check cache first
     const cacheKey = `predictions-${wikibase_id}-${classifier_id}`;
     let allPredictions = cache.get<Prediction[]>(cacheKey);
@@ -59,7 +61,7 @@ export async function GET(
       console.log(`Cache miss for predictions: ${key}, fetching from S3...`);
 
       const s3Client = createS3Client();
-      const bucket = await getBucketName();
+      const bucket = bucketName;
 
       const command = new GetObjectCommand({ Bucket: bucket, Key: key });
       const response = await s3Client.send(command);
@@ -114,7 +116,7 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: paginatedPassages,
-      s3Uri: `s3://${BUCKET_NAME}/${key}`,
+      s3Uri: `s3://${bucketName}/${key}`,
       pagination: {
         page,
         pageSize,
