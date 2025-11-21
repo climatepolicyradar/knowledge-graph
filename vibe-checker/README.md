@@ -3,16 +3,16 @@
 
 `flows/vibe_check.py` contains a Prefect flow (`vibe_check_inference`) which runs the inference pipeline on a pre-determined set of passages from our dataset. You can run it locally using Prefect CLI.
 
-By default, the flow will run on all concepts defined in the `config.yml` file which is stored in S3.
+By default, the flow will run on all concepts defined in the `vibe-checker/config.yml` file.
 
 ```bash
-cd pipeline && prefect flow run vibe_check:vibe_check_inference
+prefect flow run flows.vibe_check:vibe_check_inference
 ```
 
 However, if you want to run the flow on a specific set of concepts, you can pass the Wikibase IDs as a parameter:
 
 ```bash
-cd pipeline && prefect flow run vibe_check:vibe_check_inference --param wikibase_ids='["Q69","Q420"]'
+prefect flow run flows.vibe_check:vibe_check_inference --param wikibase_ids='["Q69","Q420"]'
 ```
 
 Both options will dump the results of the inference to the s3 bucket, in the `{concept_id}/{classifier_id}/` directory, where they'll immediately be available to users via the webapp.
@@ -45,5 +45,5 @@ To update the config file, you should edit the config file in `vibe-checker/conf
 Alternatively, you can specify custom IDs for a one-off run by submitting a run with an extra parameter:
 
 ```bash
-prefect flow run vibe_check:vibe_check_inference --param wikibase_ids='["Q123","Q456","Q789"]'
+prefect flow run flows.vibe_check:vibe_check_inference --param wikibase_ids='["Q123","Q456","Q789"]'
 ```
