@@ -5,6 +5,7 @@ from typing import Any, Optional
 import boto3
 import wandb
 import yaml
+from mypy_boto3_s3 import S3Client
 from prefect import flow
 
 from flows.config import Config
@@ -16,10 +17,10 @@ from knowledge_graph.wikibase import WikibaseConfig
 from scripts.train import run_training
 
 
-async def _setup_training_environment(
+async def _set_up_training_environment(
     config: Config | None,
     aws_env: AwsEnv,
-) -> tuple[Config, WikibaseConfig, ArgillaConfig, Any]:
+) -> tuple[Config, WikibaseConfig, ArgillaConfig, S3Client]:
     """
     Set up the common config for classifier training
 
@@ -75,7 +76,7 @@ async def train_on_gpu(
     config: Config | None = None,
 ):
     """Trigger the training script in prefect using coiled."""
-    _, wikibase_config, argilla_config, s3_client = await _setup_training_environment(
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=aws_env
     )
 
@@ -151,7 +152,7 @@ async def train_from_config(
     logger = get_logger()
     logger.info("Starting training from config file")
 
-    _, wikibase_config, argilla_config, s3_client = await _setup_training_environment(
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=aws_env
     )
 
