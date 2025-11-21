@@ -35,6 +35,7 @@ from flows.sync_concepts import sync_concepts
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
+from flows.vibe_check import vibe_check_inference
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
@@ -351,5 +352,16 @@ if __name__ == "__main__":
         description="Deploy all Argilla datasets to Huggingface",
         env_schedules={
             AwsEnv.labs: "0 0 * * *",  # Every day at midnight
+        },
+    )
+
+    # Vibe Check
+
+    create_deployment(
+        flow=vibe_check_inference,  # pyright: ignore[reportArgumentType]
+        description="Run vibe check inference on a set of concepts and push the results to s3. Optionally provide a custom list of Wikibase IDs to process.",
+        env_schedules={
+            # Once a week, at midday on Sunday
+            AwsEnv.labs: "0 12 * * SUN",
         },
     )
