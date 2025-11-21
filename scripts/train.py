@@ -31,10 +31,7 @@ from knowledge_graph.cloud import (
     get_s3_client,
     is_logged_in,
 )
-from knowledge_graph.config import (
-    WANDB_ENTITY,
-    wandb_model_artifact_filename,
-)
+from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -245,6 +242,32 @@ def create_and_link_model_artifact(
     artifact = artifact.wait()
 
     return artifact
+
+
+def classifier_exists_in_wandb(
+    namespace: Namespace,
+    target_path: ModelPath,
+) -> bool:
+    """
+    Check whether a classifier artifact already exists in W&B.
+
+    :param namespace: The W&B configuration containing project and entity.
+    :param target_path: The path to the classifier in W&B.
+    :return: True if the artifact exists, False otherwise.
+    """
+    try:
+        api = wandb.Api()
+        api.artifact(f"{namespace.entity}/{target_path}:latest")
+        return True
+    except CommError as e:
+        error_message = str(e)
+        # Check if the error is because the artifact doesn't exist
+        # Error format: "artifact membership '...' not found in '{entity}/{wikibase_id}'"
+        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{target_path.wikibase_id}'"
+        if re.search(pattern, error_message):
+            return False
+        # Re-raise if it's a different error (e.g., network issue)
+        raise
 
 
 def get_next_version(
@@ -475,6 +498,7 @@ async def train_classifier(
     extra_wandb_config: dict[str, Any] = {},
     train_validation_data: Optional[list[LabelledPassage]] = None,
     max_training_samples: Optional[int] = None,
+    force: bool = False,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -486,6 +510,19 @@ async def train_classifier(
 
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    # Check whether the classifier already exists in W&B, unless the user wants to force re-training
+    if track_and_upload and not force:
+        target_path = ModelPath(
+            wikibase_id=namespace.project, classifier_id=classifier.id
+        )
+        if classifier_exists_in_wandb(namespace=namespace, target_path=target_path):
+            # If the classifier already exists, just log and return the classifier without
+            # running the redundant training/uploading process
+            console.log(
+                f"Classifier {classifier.id} already exists in W&B. Skipping training."
+            )
+            return classifier
 
     wandb_config = {
         "classifier_type": classifier.name,
@@ -643,6 +680,7 @@ async def run_training(
     concept_overrides: Optional[dict[str, Any]] = None,
     training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
+    force: bool = False,
 ) -> Classifier:
     """
     Get a concept and create a classifier, then train the classifier.
@@ -712,6 +750,7 @@ async def run_training(
         extra_wandb_config=extra_wandb_config,
         train_validation_data=labelled_passages,
         max_training_samples=limit_training_samples,
+        force=force,
     )
 
 
