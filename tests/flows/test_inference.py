@@ -260,7 +260,7 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
     # Verify that providing both parameters raises a ValueError
     with pytest.raises(
         ValueError,
-        match="mutually exclusive|document_ids.*document_ids_s3_uri|document_ids_s3_uri.*document_ids",
+        match="`document_ids` and `document_ids_s3_uri` are mutually exclusive.",
     ) as exc_info:
         await inference(
             classifier_specs=[spec],
@@ -291,7 +291,8 @@ async def test_inference_with_document_ids_s3_uri_file_not_found(
     )
 
     with pytest.raises(
-        (FileNotFoundError, ValueError), match="not found|does not exist"
+        (FileNotFoundError),
+        match="File not found: s3://test_bucket/non-existent-file.txt",
     ):
         await inference(
             classifier_specs=[spec],
@@ -330,14 +331,11 @@ async def test_inference_with_document_ids_s3_uri_empty_file(
         (ValueError),
         match="No document IDs found in file: s3://test_bucket/empty-document-ids.txt",
     ):
-        result = await inference(
+        await inference(
             classifier_specs=[spec],
             document_ids_s3_uri=s3_uri,
             config=test_config,
         )
-
-        # Should handle empty file gracefully
-        assert isinstance(result, set)
 
 
 @pytest.mark.asyncio

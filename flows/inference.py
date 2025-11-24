@@ -58,12 +58,11 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
     return_with,
-    s3_file_exists,
     serialise_pydantic_list_as_jsonl,
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
-from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.cloud import get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -364,32 +363,37 @@ async def get_existing_inference_results(
 
 
 async def get_inference_document_ids_from_file(
-    s3_uri: S3Uri, aws_env: AwsEnv, region: str
+    s3_uri: S3Uri, config: Config
 ) -> list[DocumentImportId]:
+    """Retrieve DocumentImportId's for from an s3 file."""
     session = get_async_session(
-        region_name=region,
-        aws_env=aws_env,
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
     )
     async with session.client("s3") as s3_client:
-        if not await s3_file_exists(s3_uri.key, s3_uri.bucket, s3_client):
-            raise FileNotFoundError(f"Document IDs file not found in S3: {s3_uri}")
-
         try:
-            response = await s3_client.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+            data = await download_s3_file(config, s3_uri.key, s3_client)
         except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code == "NoSuchKey":
+                raise FileNotFoundError(f"File not found: {s3_uri}")
             if extra_context := parse_client_error_details(e):
                 e.add_note(f"{extra_context}, key: {s3_uri.key}")
             raise
+        if not data:
+            raise ValueError(f"No document IDs found in file: {s3_uri}")
 
-        body = await response["Body"].read()
-        content = body.decode("utf-8")
-        lines = content.splitlines()
+    # File contains plain text with one document ID per line, not JSON
+    lines = data.splitlines()
 
     parsed_document_ids = [
         DocumentImportId(line.strip())
         for line in lines
         if line.strip()  # Skip empty lines
     ]
+
+    if not parsed_document_ids:
+        raise ValueError(f"No document IDs found in file: {s3_uri}")
 
     return parsed_document_ids
 
@@ -413,20 +417,9 @@ async def determine_file_stems(
 
     For requested document ids we identify whether there are any translated files that
     should also be processed by identifying their file stems as well.
-
-    Args:
-        config: Configuration object
-        requested_document_ids: Optional sequence of document IDs to process
-        document_ids_s3_uri: Optional path to a file containing document IDs (one per line).
-            Mutually exclusive with requested_document_ids.
-        current_bucket_file_stems: List of document stems currently in the bucket
-
-    Raises:
-        ValueError: If both requested_document_ids and document_ids_s3_uri are provided,
-            or if the file path is provided but the file doesn't exist.
     """
 
-    if requested_document_ids is not None and document_ids_s3_uri is not None:
+    if requested_document_ids and document_ids_s3_uri:
         raise ValueError(
             "`document_ids` and `document_ids_s3_uri` are mutually exclusive. "
             "Please provide either document_ids or document_ids_s3_uri, but not both."
@@ -437,11 +430,8 @@ async def determine_file_stems(
             DocumentImportId
         ] = await get_inference_document_ids_from_file(
             s3_uri=document_ids_s3_uri,
-            aws_env=config.aws_env,
-            region=config.bucket_region,
+            config=config,
         )
-        if not parsed_document_ids:
-            raise ValueError(f"No document IDs found in file: {document_ids_s3_uri}")
         requested_document_ids = parsed_document_ids
 
     if requested_document_ids is None:
@@ -534,6 +524,7 @@ async def download_s3_file(config: Config, key: str, s3_client: S3Client):
         if extra_context := parse_client_error_details(e):
             e.add_note(f"{extra_context}, key: {key}")
         raise
+
     body = await response["Body"].read()
     return body.decode("utf-8")
 
