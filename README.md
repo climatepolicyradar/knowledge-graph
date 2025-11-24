@@ -137,7 +137,9 @@ This consists of indexing the spans identified from inference in to our passage 
 
 Prefect Deployments are defined in [deployments.py](./deployments.py)
 
-A merge to main branch will deploy the to Sandbox, Staging, and Production environments
+A push of a commit to a PR will deploy to Sandbox environment
+
+A merge to `main` branch will deploy the to the Labs, Staging, and Production environments
 
 You may also run the Github Actions Workflow directly in the [Github UI to deploy to an environment such as Sandbox](https://github.com/climatepolicyradar/knowledge-graph/actions/workflows/prefect_deploy_sandbox.yml)
 
