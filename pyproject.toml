@@ -49,6 +49,7 @@ dependencies = [
   "datalake>=2.5.8",
   "deltalake>=1.2.1",
   "scikit-learn>=1.6.1",
+  "gitpython>=3.1.45",
 ]
 
 [project.optional-dependencies]
