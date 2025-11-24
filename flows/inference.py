@@ -58,6 +58,7 @@ from flows.utils import (
     iterate_batch,
     map_as_sub_flow,
     return_with,
+    s3_file_exists,
     serialise_pydantic_list_as_jsonl,
     wait_for_semaphore,
 )
@@ -365,7 +366,8 @@ async def get_existing_inference_results(
 async def determine_file_stems(
     config: Config,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
-    current_bucket_file_stems: list[DocumentStem],
+    document_ids_s3_uri: S3Uri | None = None,
+    current_bucket_file_stems: list[DocumentStem] | None = None,
 ) -> list[DocumentStem]:
     """
     Function for identifying the file stems to process.
@@ -380,14 +382,81 @@ async def determine_file_stems(
 
     For requested document ids we identify whether there are any translated files that
     should also be processed by identifying their file stems as well.
+
+    Args:
+        config: Configuration object
+        requested_document_ids: Optional sequence of document IDs to process
+        document_ids_s3_uri: Optional path to a file containing document IDs (one per line).
+            Mutually exclusive with requested_document_ids.
+        current_bucket_file_stems: List of document stems currently in the bucket
+
+    Raises:
+        ValueError: If both requested_document_ids and document_ids_s3_uri are provided,
+            or if the file path is provided but the file doesn't exist.
     """
+    logger = get_logger()
+
+    if requested_document_ids is not None and document_ids_s3_uri is not None:
+        raise ValueError(
+            "`document_ids` and `document_ids_s3_uri` are mutually exclusive. "
+            "Please provide either document_ids or document_ids_s3_uri, but not both."
+        )
+
+    if document_ids_s3_uri is not None:
+        logger.info(f"Reading document IDs from S3: {document_ids_s3_uri}")
+
+        session = get_async_session(
+            region_name=config.bucket_region,
+            aws_env=config.aws_env,
+        )
+        async with session.client("s3") as s3_client:
+            if not await s3_file_exists(
+                document_ids_s3_uri.key, document_ids_s3_uri.bucket, s3_client
+            ):
+                raise FileNotFoundError(
+                    f"Document IDs file not found in S3: {document_ids_s3_uri}"
+                )
+
+            try:
+                response = await s3_client.get_object(
+                    Bucket=document_ids_s3_uri.bucket, Key=document_ids_s3_uri.key
+                )
+            except ClientError as e:
+                if extra_context := parse_client_error_details(e):
+                    e.add_note(f"{extra_context}, key: {document_ids_s3_uri.key}")
+                raise
+
+            body = await response["Body"].read()
+            content = body.decode("utf-8")
+            lines = content.splitlines()
+
+        # Parse document IDs from file
+        parsed_document_ids = [
+            DocumentImportId(line.strip())
+            for line in lines
+            if line.strip()  # Skip empty lines
+        ]
+
+        if not parsed_document_ids:
+            logger.warning(
+                f"S3 file {document_ids_s3_uri} contains no valid document IDs"
+            )
+
+        # Assign parsed IDs to the parameter variable
+        requested_document_ids = parsed_document_ids
+
     if requested_document_ids is None:
+        if current_bucket_file_stems is None:
+            raise ValueError(
+                "current_bucket_file_stems cannot be None when no document IDs are requested"
+            )
         current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
         )
         return current_bucket_file_stems__filtered
 
     assert config.cache_bucket
+    assert current_bucket_file_stems is not None
 
     requested_document_stems = []
 
@@ -1197,6 +1266,7 @@ async def store_inference_result(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
+    document_ids_s3_uri: S3Uri | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1208,6 +1278,7 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
+    document_ids_s3_uri: S3Uri | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1222,6 +1293,7 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
+    document_ids_s3_uri: S3Uri | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1237,6 +1309,8 @@ async def inference(
 
     params:
     - document_ids: List of document ids to run inference on
+    - document_ids_s3_uri: Path to a file containing document IDs (one per line).
+      Mutually exclusive with document_ids parameter.
     - classifier_spec: List of classifier names and aliases (alias tag
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
@@ -1261,6 +1335,7 @@ async def inference(
     validated_file_stems = await determine_file_stems(
         config=config,
         requested_document_ids=document_ids,
+        document_ids_s3_uri=document_ids_s3_uri,
         current_bucket_file_stems=current_bucket_file_stems,
     )
 
