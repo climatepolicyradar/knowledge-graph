@@ -3,15 +3,51 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from prefect import task
 from pydantic import SecretStr
 
 from flows.result import Err, Error, Ok, Result, is_err
-from flows.utils import get_logger
+from flows.utils import get_logger, total_minutes
 from knowledge_graph.cloud import AwsEnv
+
+
+def _run_subprocess_with_error_logging(
+    cmd: list[str], cwd: Path, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """
+    Run a subprocess command, capturing output and logging error.
+
+    Args:
+        cmd: The command to run as a list of strings.
+        cwd: The working directory for the command.
+        check: If True, raise a CalledProcessError on non-zero exit codes.
+
+    Returns:
+        The CompletedProcess object.
+
+    Raises:
+        subprocess.CalledProcessError: If the command fails and check is True.
+    """
+    logger = get_logger()
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=check,
+        )
+        return result
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Command `{' '.join(cmd)}` failed with exit code {e.returncode}")
+        if e.stdout:
+            logger.error(f"STDOUT: {e.stdout.strip()}")
+        if e.stderr:
+            logger.error(f"STDERR: {e.stderr.strip()}")
+        raise
 
 
 async def commit_and_create_pr(
@@ -41,12 +77,9 @@ async def commit_and_create_pr(
     logger = get_logger()
 
     # Check if there are changes
-    result = subprocess.run(
+    result = _run_subprocess_with_error_logging(
         ["git", "status", "--porcelain", file_path],
         cwd=repo_path,
-        capture_output=True,
-        text=True,
-        check=True,
     )
 
     if not result.stdout.strip():
@@ -54,60 +87,53 @@ async def commit_and_create_pr(
         return None
 
     # Configure git (in case not set)
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["git", "config", "user.email", "tech@climatepolicyradar.org"],
         cwd=repo_path,
-        check=True,
     )
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["git", "config", "user.name", "cpr-tech-admin"],
         cwd=repo_path,
-        check=True,
     )
 
     # Create and checkout new branch
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     branch_name = f"auto/classifier-specs-{timestamp}"
 
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["git", "checkout", "-b", branch_name],
         cwd=repo_path,
-        check=True,
     )
 
     # Add and commit changes
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["git", "add", file_path],
         cwd=repo_path,
-        check=True,
     )
 
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["git", "commit", "-m", commit_message],
         cwd=repo_path,
-        check=True,
     )
 
     # Ensure gh is configured as git credential helper
     logger.info("Setting up gh as git credential helper")
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["gh", "auth", "setup-git"],
         cwd=repo_path,
-        check=True,
     )
 
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
-    _ = subprocess.run(
+    _ = _run_subprocess_with_error_logging(
         ["git", "push", "-u", "origin", branch_name],
         cwd=repo_path,
-        check=True,
     )
 
     # Create PR using gh CLI
     logger.info(f"Creating pull request: {pr_title}")
 
-    result = subprocess.run(
+    result = _run_subprocess_with_error_logging(
         [
             "gh",
             "pr",
@@ -124,13 +150,7 @@ async def commit_and_create_pr(
             repo,
         ],
         cwd=repo_path,
-        capture_output=True,
-        text=True,
     )
-
-    if result.returncode != 0:
-        logger.error(f"Failed to create PR: {result.stderr}")
-        raise RuntimeError(f"gh pr create failed: {result.stderr}")
 
     # Extract PR number from gh output (URL is in stdout)
     pr_number, pr_url = extract_pr_details(result.stdout)
@@ -169,7 +189,7 @@ async def enable_auto_merge(
     logger = get_logger()
 
     try:
-        subprocess.run(
+        _ = _run_subprocess_with_error_logging(
             [
                 "gh",
                 "pr",
@@ -180,7 +200,7 @@ async def enable_auto_merge(
                 "--repo",
                 repo,
             ],
-            check=True,
+            cwd=Path("./"),
         )
 
         logger.info(f"Enabled auto-merge on PR #{pr_number}")
@@ -197,8 +217,8 @@ async def enable_auto_merge(
 
 async def wait_for_pr_merge(
     pr_number: int,
-    timeout_minutes: int,
-    poll_interval_seconds: int,
+    timeout: timedelta,
+    poll_interval: timedelta,
     repo: str = "climatepolicyradar/knowledge-graph",
 ) -> Result[None, Error]:
     """
@@ -207,14 +227,15 @@ async def wait_for_pr_merge(
     Args:
         pr_number: Pull request number
         repo: Repository in format "owner/repo"
-        timeout_minutes: Maximum time to wait
-        poll_interval_seconds: Time between status checks
+        timeout: Maximum time to wait
+        poll_interval: Time between status checks
     """
     logger = get_logger()
 
     try:
         start_time = time.time()
-        timeout_seconds = timeout_minutes * 60
+        timeout_minutes = total_minutes(timeout)
+        poll_interval_seconds = poll_interval.total_seconds()
 
         logger.info(
             f"Waiting for PR #{pr_number} to merge (timeout: {timeout_minutes}m, "
@@ -224,7 +245,7 @@ async def wait_for_pr_merge(
         while True:
             elapsed = time.time() - start_time
 
-            if elapsed > timeout_seconds:
+            if elapsed > timeout.total_seconds():
                 logger.error(
                     f"PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}."
                 )
@@ -394,8 +415,8 @@ async def create_and_merge_pr(
         results.append(
             await wait_for_pr_merge(
                 pr_number=pr_no,
-                timeout_minutes=30,
-                poll_interval_seconds=30,
+                timeout=timedelta(minutes=30),
+                poll_interval=timedelta(seconds=30),
                 repo="climatepolicyradar/knowledge-graph",
             )
         )
