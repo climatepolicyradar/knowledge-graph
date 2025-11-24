@@ -3,7 +3,7 @@
 
 `flows/vibe_check.py` contains a Prefect flow (`vibe_check_inference`) which runs the inference pipeline on a pre-determined set of passages from our dataset. You can run it locally using Prefect CLI.
 
-By default, the flow will run on all concepts defined in the `config.yml` file which is stored in S3.
+By default, the flow will run on all concepts defined in `vibe-checker/config.yml`.
 
 ```bash
 cd pipeline && prefect flow run vibe_check:vibe_check_inference
