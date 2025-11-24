@@ -615,6 +615,7 @@ async def train_classifier(
                 classifier=classifier,
                 labelled_passages=classifier.concept.labelled_passages,
                 wandb_run=run,
+                batch_size=50,
             )
 
             if track_and_upload and run:
@@ -659,6 +660,7 @@ async def run_training(
         include_labels_from_subconcepts=True,
         include_recursive_has_subconcept=True,
         wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
     )
 
     if concept_overrides:

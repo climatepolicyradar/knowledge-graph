@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-import wandb
 from pydantic import BaseModel
 
 from knowledge_graph.classifier.classifier import (
@@ -85,7 +84,7 @@ __all__ = [
 
 
 def create_classifier(
-    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
+    concept: Concept, classifier_type: str, classifier_kwargs: dict[str, Any]
 ) -> Classifier:
     """
     Create a classifier from its type and any kwargs.
@@ -110,12 +109,13 @@ class ClassifierFactory:
         WikibaseID("Q1651"): ("TargetClassifier", ".targets"),
         WikibaseID("Q1652"): ("EmissionsReductionTargetClassifier", ".targets"),
         WikibaseID("Q1653"): ("NetZeroTargetClassifier", ".targets"),
+        WikibaseID("Q1829"): ("BertBasedClassifier", ".bert_based"),
     }
 
     @staticmethod
     def create(
         concept: Concept,
-        classifier_type: Optional[str] = None,
+        classifier_type: str | None = None,
         classifier_kwargs: dict[str, Any] = {},
     ) -> Classifier:
         """Create a classifier for a concept, depending on its attributes"""

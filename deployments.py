@@ -33,7 +33,7 @@ from flows.inference import (
 )
 from flows.sync_concepts import sync_concepts
 from flows.train import train_on_gpu
-from flows.update_neo4j import update_neo4j
+from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
@@ -276,6 +276,10 @@ if __name__ == "__main__":
                 }
             ),
         },
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
     )
 
     # Wikibase
@@ -312,7 +316,7 @@ if __name__ == "__main__":
 
     create_deployment(
         flow=sync_classifiers_profiles,
-        description="Compare wikibase classifiers profiles with classifiers specs",
+        description="Compare Wikibase classifiers profiles with classifiers specs",
         # Temporarily disabled while testing
         # Schedule 2x daily during working week days
         # env_schedules={
@@ -323,7 +327,7 @@ if __name__ == "__main__":
     # Sync Neo4j with Wikibase
 
     create_deployment(
-        flow=update_neo4j,
+        flow=update_concepts,
         description="Refresh Neo4j with the latest concept graph",
         env_schedules={
             AwsEnv.labs: "0 3 * * MON-THU",
