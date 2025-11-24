@@ -517,6 +517,7 @@ async def test_full_pipeline_with_document_ids_s3_uri(
     test_config,
     mock_run_output_identifier_str,
     aggregate_inference_results_document_stems,
+    mock_async_bucket,
     mock_s3_async_client,
 ):
     """Test full_pipeline flow with document_ids_s3_uri parameter."""

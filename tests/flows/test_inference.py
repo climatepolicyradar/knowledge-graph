@@ -224,6 +224,8 @@ async def test_inference_with_document_ids_s3_uri(
 @pytest.mark.asyncio
 async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
     test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
 ):
     """
     Test that providing both document_ids and document_ids_s3_uri raises an error.
@@ -238,6 +240,16 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
 
     # Create S3Uri for document IDs file
     s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
+
+    # Create file content with document IDs (even though it won't be read due to validation error)
+    file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
+
+    # Upload document IDs file to S3
+    await mock_s3_async_client.put_object(
+        Bucket=s3_uri.bucket,
+        Key=s3_uri.key,
+        Body=file_content.encode("utf-8"),
+    )
 
     spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),
@@ -263,7 +275,9 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
 
 
 @pytest.mark.asyncio
-async def test_inference_with_document_ids_s3_uri_file_not_found(test_config):
+async def test_inference_with_document_ids_s3_uri_file_not_found(
+    mock_s3_async_client, mock_async_bucket, test_config
+):
     """Test that providing a non-existent S3 file raises an error."""
     spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),
@@ -312,16 +326,10 @@ async def test_inference_with_document_ids_s3_uri_empty_file(
         Body="".encode("utf-8"),
     )
 
-    # Empty file should result in no document IDs, so it should process all documents
-    # or handle gracefully
-    state = Completed(
-        data=BatchInferenceResult(
-            batch_document_stems=[],
-            successful_document_stems=[],
-            classifier_spec=spec,
-        ),
-    )
-    with mock_deployment(state) as _:
+    with pytest.raises(
+        (ValueError),
+        match="No document IDs found in file: s3://test_bucket/empty-document-ids.txt",
+    ):
         result = await inference(
             classifier_specs=[spec],
             document_ids_s3_uri=s3_uri,

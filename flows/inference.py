@@ -63,7 +63,7 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
-from knowledge_graph.cloud import get_async_session
+from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -363,6 +363,37 @@ async def get_existing_inference_results(
     return existing_stems
 
 
+async def get_inference_document_ids_from_file(
+    s3_uri: S3Uri, aws_env: AwsEnv, region: str
+) -> list[DocumentImportId]:
+    session = get_async_session(
+        region_name=region,
+        aws_env=aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        if not await s3_file_exists(s3_uri.key, s3_uri.bucket, s3_client):
+            raise FileNotFoundError(f"Document IDs file not found in S3: {s3_uri}")
+
+        try:
+            response = await s3_client.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+        except ClientError as e:
+            if extra_context := parse_client_error_details(e):
+                e.add_note(f"{extra_context}, key: {s3_uri.key}")
+            raise
+
+        body = await response["Body"].read()
+        content = body.decode("utf-8")
+        lines = content.splitlines()
+
+    parsed_document_ids = [
+        DocumentImportId(line.strip())
+        for line in lines
+        if line.strip()  # Skip empty lines
+    ]
+
+    return parsed_document_ids
+
+
 async def determine_file_stems(
     config: Config,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
@@ -394,7 +425,6 @@ async def determine_file_stems(
         ValueError: If both requested_document_ids and document_ids_s3_uri are provided,
             or if the file path is provided but the file doesn't exist.
     """
-    logger = get_logger()
 
     if requested_document_ids is not None and document_ids_s3_uri is not None:
         raise ValueError(
@@ -403,46 +433,15 @@ async def determine_file_stems(
         )
 
     if document_ids_s3_uri is not None:
-        logger.info(f"Reading document IDs from S3: {document_ids_s3_uri}")
-
-        session = get_async_session(
-            region_name=config.bucket_region,
+        parsed_document_ids: list[
+            DocumentImportId
+        ] = await get_inference_document_ids_from_file(
+            s3_uri=document_ids_s3_uri,
             aws_env=config.aws_env,
+            region=config.bucket_region,
         )
-        async with session.client("s3") as s3_client:
-            if not await s3_file_exists(
-                document_ids_s3_uri.key, document_ids_s3_uri.bucket, s3_client
-            ):
-                raise FileNotFoundError(
-                    f"Document IDs file not found in S3: {document_ids_s3_uri}"
-                )
-
-            try:
-                response = await s3_client.get_object(
-                    Bucket=document_ids_s3_uri.bucket, Key=document_ids_s3_uri.key
-                )
-            except ClientError as e:
-                if extra_context := parse_client_error_details(e):
-                    e.add_note(f"{extra_context}, key: {document_ids_s3_uri.key}")
-                raise
-
-            body = await response["Body"].read()
-            content = body.decode("utf-8")
-            lines = content.splitlines()
-
-        # Parse document IDs from file
-        parsed_document_ids = [
-            DocumentImportId(line.strip())
-            for line in lines
-            if line.strip()  # Skip empty lines
-        ]
-
         if not parsed_document_ids:
-            logger.warning(
-                f"S3 file {document_ids_s3_uri} contains no valid document IDs"
-            )
-
-        # Assign parsed IDs to the parameter variable
+            raise ValueError(f"No document IDs found in file: {document_ids_s3_uri}")
         requested_document_ids = parsed_document_ids
 
     if requested_document_ids is None:
