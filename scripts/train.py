@@ -652,6 +652,7 @@ async def train_classifier(
                 classifier=classifier,
                 labelled_passages=classifier.concept.labelled_passages,
                 wandb_run=run,
+                batch_size=50,
             )
 
             if track_and_upload and run:

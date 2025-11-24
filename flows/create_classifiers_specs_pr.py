@@ -5,6 +5,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 
 from prefect import task
 from pydantic import SecretStr
@@ -17,20 +18,7 @@ from knowledge_graph.cloud import AwsEnv
 def _run_subprocess_with_error_logging(
     cmd: list[str], cwd: Path, check: bool = True
 ) -> subprocess.CompletedProcess[str]:
-    """
-    Run a subprocess command, capturing output and logging error.
-
-    Args:
-        cmd: The command to run as a list of strings.
-        cwd: The working directory for the command.
-        check: If True, raise a CalledProcessError on non-zero exit codes.
-
-    Returns:
-        The CompletedProcess object.
-
-    Raises:
-        subprocess.CalledProcessError: If the command fails and check is True.
-    """
+    """Run a subprocess command, capturing output and logging error."""
     logger = get_logger()
     try:
         result = subprocess.run(
@@ -50,71 +38,191 @@ def _run_subprocess_with_error_logging(
         raise
 
 
+class GitOps(Protocol):
+    """Protocol defining Git operations interface."""
+
+    def config(self, key: str, value: str) -> None:
+        """Set a git config value."""
+        ...
+
+    def status_porcelain(self, file_path: str) -> str:
+        """Get git status output for a specific file in porcelain format."""
+        ...
+
+    def checkout_new_branch(self, branch_name: str) -> None:
+        """Create and checkout a new branch."""
+        ...
+
+    def add(self, file_path: str) -> None:
+        """Stage a file for commit."""
+        ...
+
+    def commit(self, message: str) -> None:
+        """Commit staged changes with a message."""
+        ...
+
+    def push(self, branch_name: str, remote: str = "origin") -> None:
+        """Push a branch to remote."""
+        ...
+
+
+class GitCliOps:
+    """Git operations implemented using CLI subprocess commands."""
+
+    def __init__(self, repo_path: Path) -> None:
+        """Initialise with repository path."""
+        # Check if git CLI is installed
+        try:
+            subprocess.run(
+                ["git", "--version"],
+                capture_output=True,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            raise RuntimeError(
+                "Git CLI is not installed or not available in PATH. "
+                "Please install git: https://git-scm.com/downloads"
+            ) from e
+
+        self.repo_path = repo_path
+
+    def config(self, key: str, value: str) -> None:
+        """Set a git config value."""
+        _run_subprocess_with_error_logging(
+            ["git", "config", key, value],
+            cwd=self.repo_path,
+        )
+
+    def status_porcelain(self, file_path: str) -> str:
+        """Get git status output for a specific file in porcelain format."""
+        result = _run_subprocess_with_error_logging(
+            ["git", "status", "--porcelain", file_path],
+            cwd=self.repo_path,
+        )
+        return result.stdout
+
+    def checkout_new_branch(self, branch_name: str) -> None:
+        """Create and checkout a new branch."""
+        _run_subprocess_with_error_logging(
+            ["git", "checkout", "-b", branch_name],
+            cwd=self.repo_path,
+        )
+
+    def add(self, file_path: str) -> None:
+        """Stage a file for commit."""
+        _run_subprocess_with_error_logging(
+            ["git", "add", file_path],
+            cwd=self.repo_path,
+        )
+
+    def commit(self, message: str) -> None:
+        """Commit staged changes with a message."""
+        _run_subprocess_with_error_logging(
+            ["git", "commit", "-m", message],
+            cwd=self.repo_path,
+        )
+
+    def push(self, branch_name: str, remote: str = "origin") -> None:
+        """Push a branch to remote."""
+        _run_subprocess_with_error_logging(
+            ["git", "push", "-u", remote, branch_name],
+            cwd=self.repo_path,
+        )
+
+
+class GitPyOps:
+    """Git operations implemented using GitPython library."""
+
+    def __init__(self, repo_path: Path) -> None:
+        """Initialise with repository path."""
+        try:
+            import git
+        except ImportError:
+            raise ImportError(
+                "GitPython is not installed. Install it with: pip install GitPython"
+            )
+
+        self.repo = git.Repo(repo_path)
+
+    def config(self, key: str, value: str) -> None:
+        """Set a git config value."""
+        with self.repo.config_writer() as config:
+            section, option = key.split(".", 1)
+            config.set_value(section, option, value)
+
+    def status_porcelain(self, file_path: str) -> str:
+        """Get git status output for a specific file in porcelain format."""
+        # GitPython doesn't have direct porcelain output, so we simulate it
+        diff_index = self.repo.index.diff(None)  # Unstaged changes
+        diff_staged = self.repo.index.diff("HEAD")  # Staged changes
+        untracked = self.repo.untracked_files
+
+        result = []
+        for diff in diff_staged:
+            if diff.a_path == file_path or diff.b_path == file_path:
+                result.append(f"M  {file_path}")
+
+        for diff in diff_index:
+            if diff.a_path == file_path or diff.b_path == file_path:
+                result.append(f" M {file_path}")
+
+        if file_path in untracked:
+            result.append(f"?? {file_path}")
+
+        return "\n".join(result)
+
+    def checkout_new_branch(self, branch_name: str) -> None:
+        """Create and checkout a new branch."""
+        new_branch = self.repo.create_head(branch_name)
+        new_branch.checkout()
+
+    def add(self, file_path: str) -> None:
+        """Stage a file for commit."""
+        self.repo.index.add([file_path])
+
+    def commit(self, message: str) -> None:
+        """Commit staged changes with a message."""
+        self.repo.index.commit(message)
+
+    def push(self, branch_name: str, remote: str = "origin") -> None:
+        """Push a branch to remote."""
+        origin = self.repo.remote(name=remote)
+        origin.push(refspec=f"{branch_name}:{branch_name}", set_upstream=True)
+
+
 async def commit_and_create_pr(
     file_path: str,
     commit_message: str,
     pr_title: str,
     pr_body: str,
+    git: GitOps,
     repo: str = "climatepolicyradar/knowledge-graph",
     base_branch: str = "main",
     repo_path: Path = Path("/app"),
 ) -> int | None:
-    """
-    Commits changes and creates a GitHub PR using gh CLI.
-
-    Args:
-        file_path: Path to classifiers spec file to update
-        commit_message: Git commit message
-        pr_title: Pull request title
-        pr_body: Pull request body
-        repo: Repository in format "owner/repo"
-        base_branch: Base branch for PR
-        repo_path: Path to git repository
-
-    Returns:
-        PR number (or 0 if no changes)
-    """
+    """Commits changes and creates a GitHub PR using gh CLI."""
     logger = get_logger()
 
     # Check if there are changes
-    result = _run_subprocess_with_error_logging(
-        ["git", "status", "--porcelain", file_path],
-        cwd=repo_path,
-    )
+    status_output = git.status_porcelain(file_path)
 
-    if not result.stdout.strip():
+    if not status_output.strip():
         logger.info("No changes detected, skipping PR creation")
         return None
 
     # Configure git (in case not set)
-    _ = _run_subprocess_with_error_logging(
-        ["git", "config", "user.email", "tech@climatepolicyradar.org"],
-        cwd=repo_path,
-    )
-    _ = _run_subprocess_with_error_logging(
-        ["git", "config", "user.name", "cpr-tech-admin"],
-        cwd=repo_path,
-    )
+    git.config("user.email", "tech@climatepolicyradar.org")
+    git.config("user.name", "cpr-tech-admin")
 
     # Create and checkout new branch
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     branch_name = f"auto/classifier-specs-{timestamp}"
 
-    _ = _run_subprocess_with_error_logging(
-        ["git", "checkout", "-b", branch_name],
-        cwd=repo_path,
-    )
+    git.checkout_new_branch(branch_name)
 
     # Add and commit changes
-    _ = _run_subprocess_with_error_logging(
-        ["git", "add", file_path],
-        cwd=repo_path,
-    )
-
-    _ = _run_subprocess_with_error_logging(
-        ["git", "commit", "-m", commit_message],
-        cwd=repo_path,
-    )
+    git.add(file_path)
+    git.commit(commit_message)
 
     # Ensure gh is configured as git credential helper
     logger.info("Setting up gh as git credential helper")
@@ -125,10 +233,7 @@ async def commit_and_create_pr(
 
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
-    _ = _run_subprocess_with_error_logging(
-        ["git", "push", "-u", "origin", branch_name],
-        cwd=repo_path,
-    )
+    git.push(branch_name)
 
     # Create PR using gh CLI
     logger.info(f"Creating pull request: {pr_title}")
@@ -178,14 +283,7 @@ async def enable_auto_merge(
     merge_method: str,
     repo: str = "climatepolicyradar/knowledge-graph",
 ) -> Result[None, Error]:
-    """
-    Enable auto-merge on a GitHub PR.
-
-    Args:
-        pr_number: Pull request number
-        repo: Repository in format "owner/repo"
-        merge_method: Merge method (squash, merge, or rebase)
-    """
+    """Enable auto-merge on a GitHub PR."""
     logger = get_logger()
 
     try:
@@ -221,15 +319,7 @@ async def wait_for_pr_merge(
     poll_interval: timedelta,
     repo: str = "climatepolicyradar/knowledge-graph",
 ) -> Result[None, Error]:
-    """
-    Wait for a PR to be merged by polling with gh CLI.
-
-    Args:
-        pr_number: Pull request number
-        repo: Repository in format "owner/repo"
-        timeout: Maximum time to wait
-        poll_interval: Time between status checks
-    """
+    """Wait for a PR to be merged by polling with gh CLI."""
     logger = get_logger()
 
     try:
@@ -333,20 +423,7 @@ async def create_and_merge_pr(
     github_token: SecretStr,
     auto_merge: bool = False,
 ) -> list[Result[None | int, Error]]:
-    """
-    Main workflow for creating and managing a PR.
-
-    Args:
-        spec_file: Path to the classifiers spec yaml file
-        aws_env: AWS environment the spec belongs to
-        flow_run_name: Name of the Prefect flow run calling the changes
-        flow_run_url: URL to the Prefect flow run calling the changes
-        github_token: GitHub token for authentication
-        auto_merge: Whether to auto-approve and merge the PR
-
-    Returns:
-        List of Results indicating success or failure of each step
-    """
+    """Main workflow for creating and managing a PR."""
     logger = get_logger()
     results = []
 
@@ -365,14 +442,18 @@ async def create_and_merge_pr(
         return results
 
     try:
+        repo_path = Path("./")
+        git_ops = GitPyOps(repo_path)
+
         pr_no = await commit_and_create_pr(
             file_path=spec_file,
             commit_message="Update classifier specs (automated)",
             pr_title=f"Update classifier specs for {aws_env} (automated)",
             pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
+            git=git_ops,
             repo="climatepolicyradar/knowledge-graph",
             base_branch="main",
-            repo_path=Path("./"),
+            repo_path=repo_path,
         )
         results.append(Ok(pr_no))
         if pr_no is None:
