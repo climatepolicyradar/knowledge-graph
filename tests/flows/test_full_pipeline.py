@@ -101,7 +101,6 @@ async def test_full_pipeline_no_config_provided(
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
-        assert call_args.kwargs["use_new_and_updated"] is False
         assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
 
         mock_aggregate.assert_called_once()
@@ -203,7 +202,6 @@ async def test_full_pipeline_with_full_config(
                 DocumentImportId("test.doc.1"),
                 DocumentImportId("test.doc.2"),
             ],
-            inference_use_new_and_updated=True,
             inference_batch_size=500,
             inference_classifier_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
@@ -224,7 +222,6 @@ async def test_full_pipeline_with_full_config(
                 DocumentImportId("test.doc.2"),
             ]
         )
-        assert call_args.kwargs["use_new_and_updated"] is True
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
@@ -318,7 +315,6 @@ async def test_full_pipeline_with_inference_failure(
             config=test_config,
             classifier_specs=[classifier_spec],
             document_ids=document_ids,
-            inference_use_new_and_updated=True,
             inference_batch_size=500,
             inference_classifier_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
@@ -339,7 +335,6 @@ async def test_full_pipeline_with_inference_failure(
                 DocumentImportId("CCLW.executive.2.2"),
             ]
         )
-        assert call_args.kwargs["use_new_and_updated"] is True
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
@@ -376,7 +371,6 @@ async def test_full_pipeline_with_inference_failure(
                 config=test_config,
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
-                inference_use_new_and_updated=True,
                 inference_batch_size=500,
                 inference_classifier_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
@@ -459,7 +453,6 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
                     DocumentImportId("test.doc.1"),
                     DocumentImportId("test.doc.2"),
                 ],
-                inference_use_new_and_updated=True,
                 inference_batch_size=500,
                 inference_classifier_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
@@ -480,7 +473,6 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
                 DocumentImportId("test.doc.2"),
             ]
         )
-        assert call_args.kwargs["use_new_and_updated"] is True
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5

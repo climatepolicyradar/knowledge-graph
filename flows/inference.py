@@ -13,7 +13,6 @@ from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from mypy_boto3_s3.type_defs import (
-    ObjectTypeDef,
     PutObjectOutputTypeDef,
 )
 from prefect import flow
@@ -363,69 +362,8 @@ async def get_existing_inference_results(
     return existing_stems
 
 
-async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
-    """
-    Get IDs of changed documents from the latest ingest run
-
-    Retrieves the `new_and_updated_docs.json` file from the latest ingest.
-    Extracts the ids from the file, and returns them as a single list.
-    """
-    logger = get_logger()
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        page_iterator = await get_bucket_paginator(
-            config, config.pipeline_state_prefix, s3_client
-        )
-        file_name = "new_and_updated_documents.json"
-
-        # First get all matching files, then sort them
-        matching_files: list[ObjectTypeDef] = []
-
-        # Iterate through pages and extract the "Contents" list
-        async for page in page_iterator:
-            if "Contents" in page:
-                contents: list[ObjectTypeDef] = page[
-                    "Contents"
-                ]  # Explicitly type the contents
-                matching_files.extend(contents)
-
-    # Filter files that contain the target file name in their "Key"
-    filtered_files = [
-        item for item in matching_files if "Key" in item and file_name in item["Key"]
-    ]
-
-    if not filtered_files:
-        raise ValueError(
-            f"failed to find any `{file_name}` files in "
-            f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
-        )
-
-    # Sort by "Key" and get the last one
-    latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
-
-    latest_key = latest["Key"]
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        data = await download_s3_file(config, latest_key, s3_client)
-        content = json.loads(data)
-        updated = list(content["updated_documents"].keys())
-        new = [d["import_id"] for d in content["new_documents"]]
-
-    logger.info(
-        f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}"
-    )
-    return new + updated
-
-
 async def determine_file_stems(
     config: Config,
-    use_new_and_updated: bool,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
     current_bucket_file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
@@ -443,13 +381,7 @@ async def determine_file_stems(
     For requested document ids we identify whether there are any translated files that
     should also be processed by identifying their file stems as well.
     """
-    if use_new_and_updated and requested_document_ids:
-        raise ValueError(
-            "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
-        )
-    elif use_new_and_updated:
-        requested_document_ids = await get_latest_ingest_documents(config)
-    elif requested_document_ids is None:
+    if requested_document_ids is None:
         current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
         )
@@ -1265,7 +1197,6 @@ async def store_inference_result(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    use_new_and_updated: bool = False,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1277,7 +1208,6 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    use_new_and_updated: bool = False,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1292,7 +1222,6 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    use_new_and_updated: bool = False,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1331,7 +1260,6 @@ async def inference(
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
         config=config,
-        use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
         current_bucket_file_stems=current_bucket_file_stems,
     )

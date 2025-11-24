@@ -37,7 +37,6 @@ from flows.inference import (
     gather_successful_document_stems,
     get_existing_inference_results,
     get_inference_fault_metadata,
-    get_latest_ingest_documents,
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
@@ -135,7 +134,6 @@ async def test_determine_file_stems(
 ):
     got = await determine_file_stems(
         config=test_config,
-        use_new_and_updated=False,
         requested_document_ids=doc_ids,
         current_bucket_file_stems=bucket_ids,
     )
@@ -149,7 +147,6 @@ async def test_determine_file_stems__error(
     with pytest.raises(ValueError):
         _ = await determine_file_stems(
             config=test_config,
-            use_new_and_updated=False,
             requested_document_ids=[
                 DocumentImportId("AF.document.002MMUCR.n0000"),
                 DocumentImportId("AF.document.AFRDG00038.n00002"),
@@ -484,28 +481,6 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         assert type(inference_result) is set
 
         assert inference_result == set(input_doc_ids)
-
-
-@pytest.mark.asyncio
-async def test_get_latest_ingest_documents(
-    test_config, mock_bucket_new_and_updated_documents_json
-):
-    _, latest_docs = mock_bucket_new_and_updated_documents_json
-    doc_ids = await get_latest_ingest_documents(test_config)
-    assert set(doc_ids) == latest_docs
-
-
-@pytest.mark.asyncio
-async def test_get_latest_ingest_documents_no_latest(
-    test_config,
-    # Setup the empty bucket
-    mock_async_bucket,
-):
-    with pytest.raises(
-        ValueError,
-        match="failed to find",
-    ):
-        await get_latest_ingest_documents(test_config)
 
 
 @pytest.mark.asyncio
