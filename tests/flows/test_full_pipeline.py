@@ -1,5 +1,3 @@
-import os
-import tempfile
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -24,7 +22,7 @@ from flows.full_pipeline import full_pipeline
 from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault
+from flows.utils import DocumentImportId, DocumentStem, Fault, S3Uri
 
 
 @pytest.mark.asyncio
@@ -519,6 +517,7 @@ async def test_full_pipeline_with_document_ids_s3_uri(
     test_config,
     mock_run_output_identifier_str,
     aggregate_inference_results_document_stems,
+    mock_s3_async_client,
 ):
     """Test full_pipeline flow with document_ids_s3_uri parameter."""
     classifier_spec = ClassifierSpec(
@@ -527,93 +526,95 @@ async def test_full_pipeline_with_document_ids_s3_uri(
         wandb_registry_version="v1",
     )
 
+    # Create S3Uri for document IDs file
+    s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
+
+    # Create file content with document IDs
     document_ids = [
         DocumentImportId("test.doc.1"),
         DocumentImportId("test.doc.2"),
     ]
+    file_content = "\n".join(str(doc_id) for doc_id in document_ids) + "\n"
 
-    # Create a temporary file with document IDs
-    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
-        for doc_id in document_ids:
-            f.write(f"{doc_id}\n")
-        file_path = f.name
+    # Upload document IDs file to S3
+    await mock_s3_async_client.put_object(
+        Bucket=s3_uri.bucket,
+        Key=s3_uri.key,
+        Body=file_content.encode("utf-8"),
+    )
 
-    try:
-        # Mock the sub-flows
-        with (
-            patch(
-                "flows.full_pipeline.inference",
-                new_callable=AsyncMock,
-            ) as mock_inference,
-            patch(
-                "flows.full_pipeline.aggregate",
-                new_callable=AsyncMock,
-            ) as mock_aggregate,
-            patch(
-                "flows.full_pipeline.index",
-                new_callable=AsyncMock,
-            ) as mock_indexing,
-            patch(
-                "flows.full_pipeline.get_async_session",
-            ) as mock_get_session,
-        ):
-            # Mock S3 loading for document stems
-            mock_s3_client = AsyncMock()
-            mock_response = {
-                "Body": AsyncMock(
-                    read=AsyncMock(
-                        return_value=b'{"successful_document_stems": ["test.doc.1", "test.doc.2"]}'
-                    )
+    # Mock the sub-flows
+    with (
+        patch(
+            "flows.full_pipeline.inference",
+            new_callable=AsyncMock,
+        ) as mock_inference,
+        patch(
+            "flows.full_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
+        patch(
+            "flows.full_pipeline.index",
+            new_callable=AsyncMock,
+        ) as mock_indexing,
+        patch(
+            "flows.full_pipeline.get_async_session",
+        ) as mock_get_session,
+    ):
+        # Mock S3 loading for document stems
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["test.doc.1", "test.doc.2"]}'
                 )
-            }
-            mock_s3_client.get_object = AsyncMock(return_value=mock_response)
-            mock_client_context = AsyncMock()
-            mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
-            mock_client_context.__aexit__ = AsyncMock(return_value=None)
-            mock_session = Mock()
-            mock_session.client = Mock(return_value=mock_client_context)
-            mock_get_session.return_value = mock_session
-
-            mock_inference.return_value = Completed(
-                message="Successfully ran inference on all batches!",
-                data=mock_run_output_identifier_str,
             )
-            mock_aggregate.return_value = State(
-                type=StateType.COMPLETED,
-                data=AggregateResult(
-                    run_output_identifier=mock_run_output_identifier_str, errors=None
-                ),
-            )
-            mock_indexing.return_value = State(
-                type=StateType.COMPLETED, data={"message": "Indexing complete."}
-            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
 
-            # Run the flow with document_ids_s3_uri
-            await full_pipeline(
-                config=test_config,
-                classifier_specs=[classifier_spec],
-                document_ids_s3_uri=file_path,
-                inference_batch_size=500,
-                inference_classifier_concurrency_limit=5,
-                aggregation_n_documents_in_batch=50,
-                aggregation_n_batches=3,
-                indexing_batch_size=200,
-                indexer_concurrency_limit=2,
-                indexer_document_passages_concurrency_limit=4,
-                indexer_max_vespa_connections=8,
-            )
+        mock_inference.return_value = Completed(
+            message="Successfully ran inference on all batches!",
+            data=mock_run_output_identifier_str,
+        )
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, errors=None
+            ),
+        )
+        mock_indexing.return_value = State(
+            type=StateType.COMPLETED, data={"message": "Indexing complete."}
+        )
 
-            # Verify sub-flows were called with correct parameters
-            mock_inference.assert_called_once()
-            call_args = mock_inference.call_args
-            assert call_args.kwargs["classifier_specs"] == [classifier_spec]
-            assert call_args.kwargs["document_ids_s3_uri"] == file_path
-            assert call_args.kwargs["config"] == test_config
-            assert call_args.kwargs["batch_size"] == 500
-            assert call_args.kwargs["classifier_concurrency_limit"] == 5
+        # Run the flow with document_ids_s3_uri
+        await full_pipeline(
+            config=test_config,
+            classifier_specs=[classifier_spec],
+            document_ids_s3_uri=s3_uri,
+            inference_batch_size=500,
+            inference_classifier_concurrency_limit=5,
+            aggregation_n_documents_in_batch=50,
+            aggregation_n_batches=3,
+            indexing_batch_size=200,
+            indexer_concurrency_limit=2,
+            indexer_document_passages_concurrency_limit=4,
+            indexer_max_vespa_connections=8,
+        )
 
-            mock_aggregate.assert_called_once()
-            mock_indexing.assert_called_once()
-    finally:
-        # Clean up temporary file
-        os.unlink(file_path)
+        # Verify sub-flows were called with correct parameters
+        mock_inference.assert_called_once()
+        call_args = mock_inference.call_args
+        assert call_args.kwargs["classifier_specs"] == [classifier_spec]
+        assert call_args.kwargs["document_ids_s3_uri"] == s3_uri
+        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["batch_size"] == 500
+        assert call_args.kwargs["classifier_concurrency_limit"] == 5
+
+        mock_aggregate.assert_called_once()
+        mock_indexing.assert_called_once()
