@@ -33,9 +33,11 @@ from prefect import flow, task
 from prefect.futures import wait
 from prefect.logging import get_logger
 from prefect.task_runners import ThreadPoolTaskRunner
+from pydantic import Field
 from rich.logging import RichHandler
 from sentence_transformers import SentenceTransformer
 
+from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.classifier import ClassifierFactory
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -43,6 +45,27 @@ from knowledge_graph.wikibase import WikibaseSession
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
 aws_profile = os.getenv("AWS_PROFILE", "labs")
+
+
+class LabelledPassageWithMarkup(LabelledPassage):
+    """LabelledPassage wrapper including an extra field for text marked up as HTML."""
+
+    marked_up_text: str = Field(
+        ..., description="Text marked up as HTML with highlighted spans"
+    )
+
+    @classmethod
+    def from_labelled_passage(
+        cls, labelled_passage: LabelledPassage
+    ) -> "LabelledPassageWithMarkup":
+        """Create a LabelledPassageWithMarkup from a LabelledPassage."""
+        return cls(
+            marked_up_text=labelled_passage.get_highlighted_text(
+                start_pattern='<span class="prediction-highlight">',
+                end_pattern="</span>",
+            ),
+            **labelled_passage.model_dump(),
+        )
 
 
 def _get_bucket_name_from_ssm() -> str:
@@ -343,20 +366,11 @@ def process_single_concept(
         logger.info(f"Outputs will be stored in s3://{bucket_name}/{output_prefix}")
 
         # Push results for this concept to S3
-        jsonl_string = "\n".join(
-            [
-                json.dumps(
-                    {
-                        "marked_up_text": labelled_passage.get_highlighted_text(
-                            start_pattern='<span class="prediction-highlight">',
-                            end_pattern="</span>",
-                        ),
-                        **json.loads(labelled_passage.model_dump_json()),
-                    }
-                )
-                for labelled_passage in labelled_passages
-            ]
-        )
+        passages_with_markup = [
+            LabelledPassageWithMarkup.from_labelled_passage(labelled_passage)
+            for labelled_passage in labelled_passages
+        ]
+        jsonl_string = serialise_pydantic_list_as_jsonl(passages_with_markup)
 
         logger.info(f"Pushing predictions to S3: {output_prefix / 'predictions.jsonl'}")
         push_object_bytes_to_s3(
