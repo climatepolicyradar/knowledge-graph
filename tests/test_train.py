@@ -128,6 +128,7 @@ async def test_run_training(
         ) as mock_artifact_class,
         patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
+        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -306,6 +307,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         patch("wandb.Artifact") as mock_artifact_class,
         patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
+        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []

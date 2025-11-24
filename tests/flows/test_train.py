@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -9,9 +9,16 @@ from knowledge_graph.identifiers import WikibaseID
 
 @pytest.mark.asyncio
 async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
-    with patch(
-        "flows.train.run_training", return_value=AsyncMock()
-    ) as mock_run_training:
+    # Create a mock session that returns our mock_s3_client
+    mock_session = MagicMock()
+    mock_session.client.return_value = mock_s3_client
+
+    with (
+        patch(
+            "flows.train.run_training", return_value=AsyncMock()
+        ) as mock_run_training,
+        patch("boto3.session.Session", return_value=mock_session),
+    ):
         pass_through_kwargs = {
             "wikibase_id": WikibaseID("Q1"),
             "track_and_upload": False,
