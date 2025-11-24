@@ -102,6 +102,27 @@ class Disagreement(EnsembleMetric):
         return UnitInterval(disagreement)
 
 
+class MajorityVote(EnsembleMetric):
+    """The majority vote of an ensemble. Returns 0.5 if there's a 50-50 split."""
+
+    def __call__(self, spans_per_classifier: Sequence[Sequence[Span]]) -> UnitInterval:
+        """Calculate majority vote."""
+
+        binary_predictions = [
+            1 if predictions else 0 for predictions in spans_per_classifier
+        ]
+
+        num_positives = sum(binary_predictions)
+        num_negatives = len(binary_predictions) - sum(binary_predictions)
+
+        if num_positives == num_negatives:
+            return UnitInterval(0.5)
+
+        majority_vote = 1 if num_positives > num_negatives else 0
+
+        return UnitInterval(majority_vote)
+
+
 class PredictionProbabilityStandardDeviation(ProbabilityBasedEnsembleMetric):
     """The standard deviation of prediction probability for passage-level predictions."""
 

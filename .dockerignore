@@ -60,7 +60,6 @@ data/
 .ipynb_checkpoints/
 
 # Git
-.git/
 .gitignore
 
 # Docker
