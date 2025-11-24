@@ -1,9 +1,12 @@
+import pandas as pd
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import (
     LabelledPassage,
+    dataframe_to_labelled_passages,
     labelled_passages_to_dataframe,
 )
 from knowledge_graph.span import Span
@@ -292,3 +295,142 @@ def test_labelled_passages_to_dataframe_without_probabilities(
     assert len(df) == len(labelled_passages_without_probabilities)
     assert df["prediction"].tolist() == [True, True]
     assert df["prediction_probability"].tolist() == [None, None]
+
+
+def test_dataframe_to_labelled_passages_without_human_labels():
+    """Test that passages created without human labels have no spans."""
+    df = pd.DataFrame(
+        {
+            "id": ["abc", "def"],
+            "text": ["Climate change is severe", "Another passage"],
+            "metadata.source": ["doc1", "doc2"],
+        }
+    )
+
+    passages = dataframe_to_labelled_passages(df, concept_id=WikibaseID("Q123"))
+
+    assert len(passages) == 2
+    assert len(passages[0].spans) == 0
+    assert len(passages[1].spans) == 0
+    assert passages[0].metadata == {"source": "doc1"}
+    assert passages[1].metadata == {"source": "doc2"}
+
+
+def test_dataframe_to_labelled_passages_with_human_label_boolean():
+    """Test dataframe_to_labelled_passages with boolean human label column."""
+    df = pd.DataFrame(
+        {
+            "id": ["abc", "def"],
+            "text": ["Climate change is severe", "Another passage"],
+            "spans": [[], []],
+            "human_label": [True, False],
+        }
+    )
+
+    passages = dataframe_to_labelled_passages(
+        df,
+        human_label_column="human_label",
+        labeller_name="siôn",
+        concept_id=WikibaseID("Q42"),
+    )
+
+    assert len(passages[0].spans) == 1
+    assert passages[0].spans[0].labellers == ["siôn"]
+    assert passages[0].spans[0].concept_id == "Q42"
+    assert passages[0].spans[0].start_index == 0
+    assert passages[0].spans[0].end_index == len("Climate change is severe")
+
+    assert len(passages[1].spans) == 0
+
+
+def test_dataframe_to_labelled_passages_with_human_label_string():
+    """Test dataframe_to_labelled_passages with string human label column."""
+    df = pd.DataFrame(
+        {
+            "id": ["abc", "def", "ghi", "jkl", "mno", "pqr"],
+            "text": ["Test 1", "Test 2", "Test 3", "Test 4", "Test 5", "Test 6"],
+            "spans": [[], [], [], [], [], []],
+            "human_label": ["yes", "no", "Y", "", "N", "false"],
+        }
+    )
+
+    passages = dataframe_to_labelled_passages(
+        df,
+        human_label_column="human_label",
+        labeller_name="anne",
+        concept_id=WikibaseID("Q123"),
+        skip_unlabelled=False,
+    )
+
+    # "yes"
+    assert len(passages[0].spans) == 1
+    assert passages[0].spans[0].labellers == ["anne"]
+
+    # "no"
+    assert len(passages[1].spans) == 0
+
+    # "Y"
+    assert len(passages[2].spans) == 1
+
+    # Empty string
+    assert len(passages[3].spans) == 0
+
+    # "N"
+    assert len(passages[4].spans) == 0
+
+    # "false"
+    assert len(passages[5].spans) == 0
+
+
+def test_dataframe_to_labelled_passages_metadata_reconstruction():
+    """Test that metadata is correctly reconstructed from flattened columns."""
+    df = pd.DataFrame(
+        {
+            "id": ["abc"],
+            "text": ["Test text"],
+            "spans": [[]],
+            "metadata.source": ["doc1"],
+            "metadata.dataset": ["train"],
+            "metadata.page": [42],
+        }
+    )
+
+    passages = dataframe_to_labelled_passages(df, concept_id=WikibaseID("Q123"))
+
+    assert len(passages) == 1
+    assert passages[0].metadata == {
+        "source": "doc1",
+        "dataset": "train",
+        "page": 42,
+    }
+
+
+def test_dataframe_to_labelled_passages_skip_unlabelled():
+    """Test that skip_unlabelled parameter filters out unlabelled passages."""
+    df = pd.DataFrame(
+        {
+            "id": ["abc", "def", "ghi", "jkl"],
+            "text": ["Test 1", "Test 2", "Test 3", "Test 4"],
+            "human_label": [True, False, None, ""],  # True, False, None, None
+        }
+    )
+
+    # With skip_unlabelled=False (default), all passages returned
+    passages = dataframe_to_labelled_passages(
+        df,
+        human_label_column="human_label",
+        skip_unlabelled=False,
+        concept_id=WikibaseID("Q123"),
+    )
+    assert len(passages) == 4
+
+    # With skip_unlabelled=True, only labelled passages returned
+    passages = dataframe_to_labelled_passages(
+        df,
+        human_label_column="human_label",
+        skip_unlabelled=True,
+        concept_id=WikibaseID("Q123"),
+    )
+    assert len(passages) == 2
+    assert passages[0].text == "Test 1"
+    assert passages[1].text == "Test 2"
