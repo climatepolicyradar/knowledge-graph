@@ -291,37 +291,32 @@ def main(
         prediction_exception: Exception | None = None
 
         try:
-            if stop_after_n_positives is None:
-                output_labelled_passages = label_passages_with_classifier(
-                    classifier=classifier,
-                    labelled_passages=labelled_passages,
-                    batch_size=batch_size,
-                    show_progress=True,
-                )
-            else:
-                # Early stopping: process batch-by-batch until we have enough positives
-                positives_found = 0
-                passages_processed = 0
+            # Process batch-by-batch to save partial results on failure
+            positives_found = 0
+            passages_processed = 0
 
+            if stop_after_n_positives is not None:
                 console.print(
                     f"[cyan]Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages[/cyan]"
                 )
 
-                for i in range(0, len(labelled_passages), batch_size):
-                    batch = labelled_passages[i : i + batch_size]
+            for i in range(0, len(labelled_passages), batch_size):
+                batch = labelled_passages[i : i + batch_size]
 
-                    batch_output = label_passages_with_classifier(
-                        classifier=classifier,
-                        labelled_passages=batch,
-                        batch_size=batch_size,
-                        show_progress=True,
-                    )
+                batch_output = label_passages_with_classifier(
+                    classifier=classifier,
+                    labelled_passages=batch,
+                    batch_size=batch_size,
+                    show_progress=True,
+                )
 
+                passages_processed += len(batch)
+                output_labelled_passages.extend(batch_output)
+
+                # Track positives if early stopping is enabled
+                if stop_after_n_positives is not None:
                     batch_positives = sum(1 for p in batch_output if len(p.spans) > 0)
                     positives_found += batch_positives
-                    passages_processed += len(batch)
-
-                    output_labelled_passages.extend(batch_output)
 
                     console.print(
                         f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages, "
@@ -334,6 +329,10 @@ def main(
                             f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)[/green]"
                         )
                         break
+                else:
+                    console.print(
+                        f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages[/cyan]"
+                    )
 
         except Exception as e:
             prediction_exception = e
