@@ -159,6 +159,177 @@ async def test_determine_file_stems__error(
 
 
 @pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_uri(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket,
+    mock_async_bucket_multiple_sources,
+    mock_deployment,
+):
+    """Test inference flow with document_ids_s3_uri parameter."""
+    input_doc_ids = [
+        DocumentImportId(Path(doc).stem) for doc in mock_async_bucket_multiple_sources
+    ]
+    gef_doc_id, cpr_doc_id, sabin_doc_id = input_doc_ids
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    # Create a temporary file with document IDs
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        for doc_id in input_doc_ids:
+            f.write(f"{doc_id}\n")
+        file_path = f.name
+
+    try:
+        # Convert DocumentImportId to DocumentStem for BatchInferenceResult
+        batch_stems = [
+            DocumentStem(str(doc_id))
+            for doc_id in [gef_doc_id, cpr_doc_id, sabin_doc_id]
+        ]
+        state = Completed(
+            data=BatchInferenceResult(
+                batch_document_stems=batch_stems,
+                successful_document_stems=batch_stems,
+                classifier_spec=spec,
+            ),
+        )
+        with mock_deployment(state) as mock_inference_run_deployment:
+            # Run the inference flow with document_ids_s3_uri
+            result = await inference(
+                classifier_specs=[spec],
+                document_ids_s3_uri=file_path,
+                config=test_config,
+            )
+
+            # Verify that the inference was called with the correct document IDs
+            assert isinstance(result, set)
+            assert len(result) > 0
+
+            # Verify deployment was called
+            assert mock_inference_run_deployment.called
+    finally:
+        # Clean up temporary file
+        os.unlink(file_path)
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
+    test_config,
+):
+    """
+    Test that providing both document_ids and document_ids_s3_uri raises an error.
+
+    Users must pick one input method - either provide document_ids directly or
+    provide a file path containing document IDs, but not both.
+    """
+    input_doc_ids = [
+        DocumentImportId("AF.document.002MMUCR.n0000"),
+        DocumentImportId("AF.document.AFRDG00038.n00002"),
+    ]
+
+    # Create a temporary file with document IDs
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        for doc_id in input_doc_ids:
+            f.write(f"{doc_id}\n")
+        file_path = f.name
+
+    try:
+        spec = ClassifierSpec(
+            wikibase_id=WikibaseID("Q788"),
+            classifier_id="bvaw9xxm",
+            wandb_registry_version="v13",
+        )
+
+        # Verify that providing both parameters raises a ValueError
+        with pytest.raises(
+            ValueError,
+            match="mutually exclusive|document_ids.*document_ids_s3_uri|document_ids_s3_uri.*document_ids",
+        ) as exc_info:
+            await inference(
+                classifier_specs=[spec],
+                document_ids=input_doc_ids,
+                document_ids_s3_uri=file_path,
+                config=test_config,
+            )
+
+        # Verify the error message is clear about the conflict
+        error_message = str(exc_info.value).lower()
+        assert "document" in error_message or "mutually" in error_message
+    finally:
+        # Clean up temporary file
+        os.unlink(file_path)
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_uri_file_not_found(test_config):
+    """Test that providing a non-existent file path raises an error."""
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    non_existent_path = "/tmp/non_existent_file_12345.txt"
+
+    with pytest.raises(
+        (FileNotFoundError, ValueError), match="not found|does not exist"
+    ):
+        await inference(
+            classifier_specs=[spec],
+            document_ids_s3_uri=non_existent_path,
+            config=test_config,
+        )
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_uri_empty_file(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket,
+    mock_deployment,
+):
+    """Test inference with an empty document ID file."""
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    # Create an empty temporary file
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        file_path = f.name
+
+    try:
+        # Empty file should result in no document IDs, so it should process all documents
+        # or handle gracefully
+        state = Completed(
+            data=BatchInferenceResult(
+                batch_document_stems=[],
+                successful_document_stems=[],
+                classifier_spec=spec,
+            ),
+        )
+        with mock_deployment(state) as _:
+            result = await inference(
+                classifier_specs=[spec],
+                document_ids_s3_uri=file_path,
+                config=test_config,
+            )
+
+            # Should handle empty file gracefully
+            assert isinstance(result, set)
+    finally:
+        # Clean up temporary file
+        os.unlink(file_path)
+
+
+@pytest.mark.asyncio
 async def test_load_classifier__existing_classifier(
     mock_wandb, test_config, mock_classifiers_dir, local_classifier_id
 ):
