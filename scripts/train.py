@@ -6,6 +6,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
+import torch
 import typer
 import wandb
 from prefect.client.schemas.objects import FlowRun
@@ -160,6 +161,23 @@ def limit_training_samples(
     limited_dataset = limited_positive + limited_negative
     random.shuffle(limited_dataset)
     return limited_dataset
+
+
+def move_model_to_cpu(classifier: Classifier) -> None:
+    """
+    Move a model which uses torch to CPU.
+
+    No-op if the classifier's model is already on CPU, or the classifier doesn't have
+    a 'pipeline' attribute. This needs to be done before the model is saved, otherwise
+    an MPS device will not be able to load a classifier stored on CUDA and vice-versa.
+    """
+
+    console = Console()
+
+    if hasattr(classifier, "pipeline"):
+        classifier.pipeline.model.to("cpu")  # type: ignore
+        classifier.pipeline.device = torch.device("cpu")  # type: ignore
+        console.log("Moved model to CPU")
 
 
 class StorageUpload(BaseModel):
@@ -586,6 +604,8 @@ async def train_classifier(
             labelled_passages=deduplicated_training_data,
             enable_wandb=track_and_upload,
         )
+
+        move_model_to_cpu(classifier)
 
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
