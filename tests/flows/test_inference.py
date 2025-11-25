@@ -523,6 +523,7 @@ async def test_inference_with_dont_run_on_filter(
     mock_async_bucket,
     mock_async_bucket_multiple_sources,
     mock_deployment,
+    prefect_client_with_cleanup,
 ):
     input_doc_ids = [
         DocumentImportId(Path(doc).stem) for doc in mock_async_bucket_multiple_sources
@@ -555,13 +556,12 @@ async def test_inference_with_dont_run_on_filter(
             gef_doc_id
         ]
 
-        from prefect.client.orchestration import get_client
-
-        async with get_client() as client:
-            artifacts = await client.read_artifacts()
-            removal_artifacts = [
-                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
-            ]
+        # Use the client from the fixture
+        client = prefect_client_with_cleanup
+        artifacts = await client.read_artifacts()
+        removal_artifacts = [
+            a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+        ]
 
         assert len(removal_artifacts) == 1
         summary_artifact = removal_artifacts[0]
