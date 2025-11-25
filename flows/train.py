@@ -96,7 +96,7 @@ async def train_on_gpu(
 
 
 def _load_wikibase_ids_from_config(
-    config_file_path: str = "vibe-checker/config.yml",
+    config_file_path: str,
 ) -> list[WikibaseID]:
     """Load concept IDs from a configuration YAML file."""
     logger = get_logger()
@@ -127,22 +127,22 @@ def _load_wikibase_ids_from_config(
 
 @flow()
 async def train_from_config(
+    config_file_path: str,
     track_and_upload: bool = True,
     aws_env: AwsEnv = AwsEnv.labs,
-    config_file_path: str = "vibe-checker/config.yml",
     config: Config | None = None,
     force: bool = False,
     concurrency_limit: int = 3,
 ) -> list[Any]:
     """
-    Train classifiers for all concepts listed in the `vibe-checker/config.yml` file.
+    Train classifiers for all concepts listed in a configuration YAML file.
 
     Reads Wikibase IDs from the config file and runs training for each concept in
     parallel. Training results and evaluation metrics are uploaded to W&B.
 
+    :param config_file_path: Path to the config file containing Wikibase IDs
     :param track_and_upload: Whether to track training runs and upload artifacts to W&B
     :param aws_env: AWS environment to use for S3 uploads
-    :param config_file_path: Path to the config file containing Wikibase IDs
     :param config: Optional pre-configured Config object. If not provided, will be created.
     :param force: If True, force re-training even if classifier already exists in W&B
     :param concurrency_limit: Maximum number of concurrent training tasks (default: 3)
@@ -202,3 +202,31 @@ async def train_from_config(
             logger.error(f"Training error {i + 1}: {error}")
 
     return results
+
+
+@flow()
+async def train_for_vibe_checker(
+    track_and_upload: bool = True,
+    aws_env: AwsEnv = AwsEnv.labs,
+    config: Config | None = None,
+    force: bool = False,
+    concurrency_limit: int = 3,
+) -> list[Any]:
+    """
+    Train classifiers for all concepts listed in the `vibe-checker/config.yml` file.
+
+    :param track_and_upload: Whether to track training runs and upload artifacts to W&B
+    :param aws_env: AWS environment to use for S3 uploads
+    :param config: Optional pre-configured Config object. If not provided, will be created.
+    :param force: If True, force re-training even if classifier already exists in W&B
+    :param concurrency_limit: Maximum number of concurrent training tasks (default: 3)
+    :return: List of trained classifiers
+    """
+    return await train_from_config(
+        config_file_path="vibe-checker/config.yml",
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        config=config,
+        force=force,
+        concurrency_limit=concurrency_limit,
+    )
