@@ -98,7 +98,7 @@ async def train_on_gpu(
 def _load_wikibase_ids_from_config(
     config_file_path: str = "vibe-checker/config.yml",
 ) -> list[WikibaseID]:
-    """Load concept IDs from the configuration file."""
+    """Load concept IDs from a configuration YAML file."""
     logger = get_logger()
     config_path = Path(config_file_path)
     if not config_path.exists():
