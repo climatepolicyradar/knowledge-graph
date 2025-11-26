@@ -362,7 +362,7 @@ async def get_existing_inference_results(
     return existing_stems
 
 
-async def get_inference_document_ids_from_file(
+async def get_document_ids_from_file(
     s3_uri: S3Uri, config: Config
 ) -> list[DocumentImportId]:
     """Retrieve DocumentImportId's for from an s3 file."""
@@ -380,13 +380,10 @@ async def get_inference_document_ids_from_file(
             if extra_context := parse_client_error_details(e):
                 e.add_note(f"{extra_context}, key: {s3_uri.key}")
             raise
-        if not data:
-            raise ValueError(f"No document IDs found in file: {s3_uri}")
 
-    # File contains plain text with one document ID per line, not JSON
     lines = data.splitlines()
 
-    parsed_document_ids = [
+    parsed_document_ids: list[DocumentImportId] = [
         DocumentImportId(line.strip())
         for line in lines
         if line.strip()  # Skip empty lines
@@ -398,11 +395,37 @@ async def get_inference_document_ids_from_file(
     return parsed_document_ids
 
 
+async def get_file_stems_for_document_ids(
+    document_ids: list[DocumentImportId],
+    config: Config,
+) -> list[DocumentStem]:
+    """Collect all the Document Stems for the Document Import Ids"""
+
+    if config.cache_bucket is None:
+        raise ValueError("cache_bucket must be set in config")
+
+    document_stems: list[DocumentStem] = []
+
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        for doc_id in document_ids:
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
+            )
+            document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
+    return document_stems
+
+
 async def determine_file_stems(
     config: Config,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
+    current_bucket_file_stems: list[DocumentStem],
     document_ids_s3_uri: S3Uri | None = None,
-    current_bucket_file_stems: list[DocumentStem] | None = None,
 ) -> list[DocumentStem]:
     """
     Function for identifying the file stems to process.
@@ -426,51 +449,31 @@ async def determine_file_stems(
         )
 
     if document_ids_s3_uri is not None:
-        parsed_document_ids: list[
-            DocumentImportId
-        ] = await get_inference_document_ids_from_file(
+        document_ids = await get_document_ids_from_file(
             s3_uri=document_ids_s3_uri,
             config=config,
         )
-        requested_document_ids = parsed_document_ids
-
-    if requested_document_ids is None:
-        if current_bucket_file_stems is None:
-            raise ValueError(
-                "current_bucket_file_stems cannot be None when no document IDs are requested"
-            )
-        current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
+        document_stems = await get_file_stems_for_document_ids(
+            document_ids=document_ids, config=config
+        )
+    elif requested_document_ids is None:
+        document_stems = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
         )
-        return current_bucket_file_stems__filtered
+    elif requested_document_ids:
+        document_stems = await get_file_stems_for_document_ids(
+            document_ids=list(requested_document_ids), config=config
+        )
+    else:
+        raise ValueError("No document IDs provided or found!")
 
-    assert config.cache_bucket
-    assert current_bucket_file_stems is not None
-
-    requested_document_stems = []
-
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        for doc_id in requested_document_ids:
-            document_key = os.path.join(
-                config.inference_document_source_prefix, f"{doc_id}.json"
-            )
-            requested_document_stems += await get_file_stems_for_document_id(
-                doc_id, config.cache_bucket, document_key, s3_client
-            )
-
-    missing_from_bucket = list(
-        set(requested_document_stems) - set(current_bucket_file_stems)
-    )
+    missing_from_bucket = list(set(document_stems) - set(current_bucket_file_stems))
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
-    return requested_document_stems
+    return document_stems
 
 
 @retry(
