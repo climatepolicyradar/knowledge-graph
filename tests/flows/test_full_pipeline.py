@@ -527,24 +527,19 @@ async def test_full_pipeline_with_document_ids_s3_uri(
         wandb_registry_version="v1",
     )
 
-    # Create S3Uri for document IDs file
     s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
-
-    # Create file content with document IDs
     document_ids = [
         DocumentImportId("test.doc.1"),
         DocumentImportId("test.doc.2"),
     ]
     file_content = "\n".join(str(doc_id) for doc_id in document_ids) + "\n"
 
-    # Upload document IDs file to S3
     await mock_s3_async_client.put_object(
         Bucket=s3_uri.bucket,
         Key=s3_uri.key,
         Body=file_content.encode("utf-8"),
     )
 
-    # Mock the sub-flows
     with (
         patch(
             "flows.full_pipeline.inference",

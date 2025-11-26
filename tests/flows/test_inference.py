@@ -181,20 +181,14 @@ async def test_inference_with_document_ids_s3_uri(
         wandb_registry_version="v13",
     )
 
-    # Create S3Uri for document IDs file
     s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
-
-    # Create file content with document IDs
     file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
-
-    # Upload to S3
     await mock_s3_async_client.put_object(
         Bucket=s3_uri.bucket,
         Key=s3_uri.key,
         Body=file_content.encode("utf-8"),
     )
 
-    # Convert DocumentImportId to DocumentStem for BatchInferenceResult
     batch_stems = [
         DocumentStem(str(doc_id)) for doc_id in [gef_doc_id, cpr_doc_id, sabin_doc_id]
     ]
@@ -213,11 +207,8 @@ async def test_inference_with_document_ids_s3_uri(
             config=test_config,
         )
 
-        # Verify that the inference was called with the correct document IDs
         assert isinstance(result, set)
         assert len(result) > 0
-
-        # Verify deployment was called
         assert mock_inference_run_deployment.called
 
 
@@ -238,13 +229,8 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
         DocumentImportId("AF.document.AFRDG00038.n00002"),
     ]
 
-    # Create S3Uri for document IDs file
     s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
-
-    # Create file content with document IDs (even though it won't be read due to validation error)
     file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
-
-    # Upload document IDs file to S3
     await mock_s3_async_client.put_object(
         Bucket=s3_uri.bucket,
         Key=s3_uri.key,
@@ -285,7 +271,6 @@ async def test_inference_with_document_ids_s3_uri_file_not_found(
         wandb_registry_version="v13",
     )
 
-    # Create S3Uri for non-existent file
     non_existent_s3_uri = S3Uri(
         bucket=test_config.cache_bucket, key="non-existent-file.txt"
     )
@@ -317,10 +302,7 @@ async def test_inference_with_document_ids_s3_uri_empty_file(
         wandb_registry_version="v13",
     )
 
-    # Create S3Uri for empty document IDs file
     s3_uri = S3Uri(bucket=test_config.cache_bucket, key="empty-document-ids.txt")
-
-    # Upload empty file to S3
     await mock_s3_async_client.put_object(
         Bucket=s3_uri.bucket,
         Key=s3_uri.key,
@@ -556,7 +538,6 @@ async def test_inference_with_dont_run_on_filter(
             gef_doc_id
         ]
 
-        # Use the client from the fixture
         client = prefect_client_with_cleanup
         artifacts = await client.read_artifacts()
         removal_artifacts = [
