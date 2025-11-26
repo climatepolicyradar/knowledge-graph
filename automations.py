@@ -231,39 +231,6 @@ async def main() -> None:
     """Create or update the automation for triggering inference."""
     aws_env = AwsEnv(os.getenv("AWS_ENV"))
 
-    if aws_env == AwsEnv.production:
-        # From https://github.com/climatepolicyradar/orchestrator/blob/4da9a897f29fd689020b3bd91c9cb9fc4888701f/infra/prefect_infra/prefect_blocks.py#L70-L88
-        slack_channel_name = "prod-updates"
-        slack_webhook_notification_block_name = (
-            f"slack-webhook-{slack_channel_name}-prefect-mvp-{aws_env.value}"
-        )
-        logger.info(f"Loading {slack_webhook_notification_block_name}...")
-        slack_notification_block = await SlackWebhook.load(
-            name=slack_webhook_notification_block_name
-        )
-        logger.info(f"Loaded {slack_webhook_notification_block_name}")
-        notification = Notification(
-            subject="Starting full pipeline for Knowledge Graph",
-            body="Flow run: {{ flow.name }}/{{ flow_run.name }}.",
-            slack_notification_block=slack_notification_block,
-        )
-    else:
-        notification = None
-
-    await a_triggers_b(
-        a_flow_name="backup",
-        a_deployment_name=f"navigator-data-s3-backup-pipeline-cache-{aws_env}",
-        b_flow_name=full_pipeline.name,
-        b_deployment_name=generate_deployment_name(full_pipeline.name, aws_env),
-        b_parameters={},
-        description="Start the knowledge graph full pipeline.",
-        enabled=True,
-        aws_env=aws_env,
-        expect_state=StateType.RUNNING,
-        ignore=[AwsEnv.labs, AwsEnv.sandbox],
-        notification=notification,
-    )
-
     # Custom event trigger for sync-classifiers-profiles finished
     client = get_client()
     logger.info(
