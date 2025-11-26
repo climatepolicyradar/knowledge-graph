@@ -32,10 +32,7 @@ import aioboto3
 import prefect.exceptions
 import prefect.logging
 from botocore.exceptions import ClientError
-from prefect.artifacts import (
-    create_progress_artifact,
-    update_progress_artifact,
-)
+from prefect.artifacts import create_progress_artifact, update_progress_artifact
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.deployments import run_deployment
