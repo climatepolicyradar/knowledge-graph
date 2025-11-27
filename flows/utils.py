@@ -403,46 +403,6 @@ async def s3_file_exists(file_key: str, bucket_name: str, s3_client: S3Client) -
         raise
 
 
-async def get_file_stems_for_document_id(
-    document_id: DocumentImportId,
-    bucket_name: str,
-    document_key: str,
-    s3_client: S3Client,
-) -> list[DocumentStem]:
-    """
-    Get the file stems for a document ID.
-
-    This function is used to get the file stems for a document ID. For example we would
-    find any translated documents in a directory for a document id as follows:
-
-    Example:
-    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en"]
-
-    Note that we don't include the original document ID in the list of stems.
-    This is because we are looking for only English language documents.
-    """
-    stems = []
-
-    for target_language in ["en"]:
-        translated_file_key = (
-            Path(document_key)
-            .with_stem(f"{document_id}_translated_{target_language}")
-            .with_suffix(".json")
-        )
-
-        if await s3_file_exists(
-            file_key=translated_file_key.__str__(),
-            bucket_name=bucket_name,
-            s3_client=s3_client,
-        ):
-            stems.append(translated_file_key.stem)
-
-    if not stems:
-        stems.append(document_id)
-
-    return stems
-
-
 async def collect_unique_file_stems_under_prefix(
     bucket_name: str,
     prefix: str,

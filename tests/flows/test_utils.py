@@ -2,8 +2,6 @@ import asyncio
 import os
 import time
 from datetime import datetime, timezone
-from io import BytesIO
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -14,7 +12,6 @@ from prefect.context import FlowRunContext, TaskRunContext
 from prefect.flows import flow
 
 from flows.utils import (
-    DocumentImportId,
     DocumentStem,
     Fault,
     ParameterisedFlow,
@@ -26,7 +23,6 @@ from flows.utils import (
     filter_non_english_language_file_stems,
     fn_is_async,
     gather_and_report,
-    get_file_stems_for_document_id,
     get_run_name,
     iterate_batch,
     map_as_local,
@@ -147,51 +143,6 @@ async def test_s3_file_exists(
     assert not await s3_file_exists(
         "non_existent_key", test_config.cache_bucket, mock_s3_async_client
     )
-
-
-@pytest.mark.asyncio
-async def test_get_file_stems_for_document_id(
-    test_config,
-    mock_s3_async_client,
-    mock_async_bucket_documents,
-) -> None:
-    """Test that we can get the file stems for a document ID."""
-
-    document_id = DocumentImportId(Path(mock_async_bucket_documents[0]).stem)
-
-    file_stems = await get_file_stems_for_document_id(
-        document_id,
-        test_config.cache_bucket,
-        test_config.inference_document_source_prefix,
-        mock_s3_async_client,
-    )
-
-    assert file_stems == [document_id]
-
-    body = BytesIO('{"some_key": "some_value"}'.encode("utf-8"))
-    key = os.path.join(
-        test_config.inference_document_source_prefix,
-        f"{document_id}_translated_en.json",
-    )
-
-    await mock_s3_async_client.put_object(
-        Bucket=test_config.cache_bucket,
-        Key=key,
-        Body=body,
-        ContentType="application/json",
-    )
-
-    file_stems = await get_file_stems_for_document_id(
-        document_id=document_id,
-        bucket_name=test_config.cache_bucket,
-        document_key=os.path.join(
-            test_config.inference_document_source_prefix,
-            f"{document_id}.json",
-        ),
-        s3_client=mock_s3_async_client,
-    )
-
-    assert file_stems == [f"{document_id}_translated_en"]
 
 
 @pytest.mark.asyncio
