@@ -8,7 +8,7 @@ from wandb.errors.errors import CommError
 from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.config import wandb_model_artifact_filename
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from scripts.train import (
     Namespace,
     StorageLink,
@@ -128,6 +128,7 @@ async def test_run_training(
         ) as mock_artifact_class,
         patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
+        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -306,6 +307,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         patch("wandb.Artifact") as mock_artifact_class,
         patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
+        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -344,3 +346,62 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         assert len(log_artifact_calls) == 2
 
     assert result == mock_classifier
+
+
+@pytest.mark.asyncio
+async def test_whether_run_training_skips_classifier_when_it_already_exists_in_wandb(
+    MockedWikibaseSession, mock_s3_client
+):
+    """Test that training is skipped when classifier already exists in W&B."""
+    mock_s3_client.create_bucket(
+        Bucket="cpr-labs-models",
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+
+    # Setup test data
+    mock_classifier = Mock()
+    mock_classifier.fit = Mock()
+    mock_classifier.save = Mock()
+    mock_classifier.id = ClassifierID.generate("existing_classifier")
+    mock_classifier.version = None
+
+    mock_concept = Mock()
+    mock_concept.id = "5d4xcy5g"
+    mock_concept.wikibase_revision = 12300
+    mock_concept.labelled_passages = []
+    mock_classifier.concept = mock_concept
+
+    mock_path = Path("tests/fixtures/data/processed/classifiers")
+
+    with (
+        patch(
+            "knowledge_graph.classifier.ClassifierFactory.create",
+            return_value=mock_classifier,
+        ),
+        patch("knowledge_graph.config.classifier_dir", mock_path),
+        patch("scripts.train.validate_params"),
+        patch("wandb.init"),
+        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch("scripts.train.classifier_exists_in_wandb", return_value=True),
+        patch("wandb.Artifact") as mock_artifact_class,
+    ):
+        mock_argilla_instance = Mock()
+        mock_argilla_instance.get_labelled_passages.return_value = []
+        mock_argilla_session.return_value = mock_argilla_instance
+
+        result = await run_training(
+            wikibase_id=WikibaseID("Q787"),
+            track_and_upload=True,
+            aws_env=AwsEnv.labs,
+            s3_client=mock_s3_client,
+        )
+
+        # Should return classifier without training
+        assert result == mock_classifier
+
+        # Verify training was skipped
+        mock_classifier.fit.assert_not_called()
+        mock_classifier.save.assert_not_called()
+
+        # Verify no artifacts were created
+        mock_artifact_class.assert_not_called()
