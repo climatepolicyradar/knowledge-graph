@@ -8,6 +8,7 @@ from uuid import UUID
 from argilla import (
     Argilla,
     Dataset,
+    OverlapTaskDistribution,
     ResponseStatus,
     Settings,
     SpanQuestion,
@@ -254,6 +255,7 @@ class ArgillaSession:
         workspace: str | None = None,
         new_workspace: str | None = None,
         new_name: str | None = None,
+        min_submitted: int | None = None,
     ) -> Dataset:
         """
         Copy a dataset to a new dataset name or workspace.
@@ -263,6 +265,10 @@ class ArgillaSession:
             provided, uses the session's default_workspace.
         :param new_workspace: Workspace to push new dataset to
         :param new_name: Name of new dataset
+        :param min_submitted: Optionally override the minimum submitted responses
+            setting for the new dataset. This can't be changed for a dataset once
+            created, so is useful to be able to set on copy. If None, maintains the
+            setting from the dataset to be copied.
         :return Dataset: new dataset
         """
 
@@ -295,10 +301,29 @@ class ArgillaSession:
             f"Copying dataset {existing_dataset.name} (workspace {existing_dataset.workspace.name}) to new dataset {new_dataset_name} in {new_workspace_object.name}"
         )
 
+        new_dataset_settings = existing_dataset.settings
+
+        if min_submitted is not None:
+            existing_dataset_min_submitted = (
+                existing_dataset.settings.distribution.min_submitted
+            )
+
+            if min_submitted == existing_dataset_min_submitted:
+                logger.warning(
+                    f"The min_submitted value provided for the new dataset ({min_submitted}) is the same as the one for the existing dataset. No changes will occur."
+                )
+            else:
+                logger.info(
+                    f"Overriding the min_submitted setting in the copy of the dataset to {min_submitted} (from {existing_dataset_min_submitted})"
+                )
+                new_dataset_settings.distribution = OverlapTaskDistribution(
+                    min_submitted=min_submitted
+                )
+
         new_dataset = Dataset(
             name=new_dataset_name,
             workspace=new_workspace_object,
-            settings=existing_dataset.settings,
+            settings=new_dataset_settings,
         )
 
         new_dataset.create()
