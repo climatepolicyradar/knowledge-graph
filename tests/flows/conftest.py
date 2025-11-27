@@ -27,7 +27,6 @@ from cpr_sdk.parser_models import (
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
-from prefect.client.orchestration import get_client
 from prefect.client.schemas import StateType
 from prefect.logging import disable_run_logger
 from prefect.testing.utilities import prefect_test_harness
@@ -905,18 +904,3 @@ async def mock_bucket_stem(
         await mock_s3_async_client.put_object(Bucket=mock_async_bucket, Key=s3_path)
 
     yield
-
-
-@pytest_asyncio.fixture
-async def prefect_client_with_cleanup() -> AsyncGenerator[Any, None]:
-    """Fixture that cleans up prefect artifacts."""
-
-    async with get_client() as client:
-        artifacts = await client.read_artifacts()
-        for artifact in artifacts:
-            try:
-                await client.delete_artifact(artifact.id)
-            except Exception:
-                pass
-
-        yield client
