@@ -262,6 +262,32 @@ async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client)
     )
 
 
+async def get_file_stems_for_document_ids(
+    document_ids: list[DocumentImportId],
+    config: Config,
+) -> list[DocumentStem]:
+    """Collect all the Document Stems for the Document Import Ids"""
+
+    if config.cache_bucket is None:
+        raise ValueError("cache_bucket must be set in config")
+
+    document_stems: list[DocumentStem] = []
+
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        for doc_id in document_ids:
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
+            )
+            document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
+    return document_stems
+
+
 async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
@@ -393,32 +419,6 @@ async def get_document_ids_from_file(
         raise ValueError(f"No document IDs found in file: {s3_uri}")
 
     return parsed_document_ids
-
-
-async def get_file_stems_for_document_ids(
-    document_ids: list[DocumentImportId],
-    config: Config,
-) -> list[DocumentStem]:
-    """Collect all the Document Stems for the Document Import Ids"""
-
-    if config.cache_bucket is None:
-        raise ValueError("cache_bucket must be set in config")
-
-    document_stems: list[DocumentStem] = []
-
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        for doc_id in document_ids:
-            document_key = os.path.join(
-                config.inference_document_source_prefix, f"{doc_id}.json"
-            )
-            document_stems += await get_file_stems_for_document_id(
-                doc_id, config.cache_bucket, document_key, s3_client
-            )
-    return document_stems
 
 
 async def determine_file_stems(
