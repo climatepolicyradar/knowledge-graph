@@ -1555,7 +1555,7 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
     mock_slack_client = AsyncMock()
     mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
 
-    mock_vespa_results = Err(Error(msg="Error creating Vespa Objects", metadata={}))
+    mock_vespa_results = [Err(Error(msg="Error creating Vespa Objects", metadata={}))]
     mock_update_vespa = AsyncMock(return_value=mock_vespa_results)
 
     with (
@@ -1587,7 +1587,8 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
         ) as mock_acreate_table_artifact,
     ):
         with pytest.raises(
-            Exception, match="Errors occurred while creating classifiers specs PR"
+            Exception,
+            match="Errors occurred while updating Vespa with classifiers profiles",
         ):
             await sync_classifiers_profiles(
                 wandb_api_key=mock_wandb_api_key,

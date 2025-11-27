@@ -1299,7 +1299,6 @@ async def sync_classifiers_profiles(
     automerge_classifier_specs_pr: bool = False,
     auto_train: bool = False,
     debug_wikibase_validation: bool = False,
-    vespa_rerun_only: bool = False,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1362,11 +1361,6 @@ async def sync_classifiers_profiles(
     if not automerge_classifier_specs_pr:
         logger.warning(
             f"automerge_classifier_specs_pr is set to {automerge_classifier_specs_pr}. Classifier specs PRs will not be auto-merged."
-        )
-
-    if vespa_rerun_only:
-        logger.warning(
-            f"vespa_rerun_only is set to {vespa_rerun_only}. Vespa will be updated even if no changes are made to classifier specs."
         )
 
     classifier_specs = load_classifier_specs(aws_env)
@@ -1497,7 +1491,9 @@ async def sync_classifiers_profiles(
     # reload classifier specs to confirm updates
     updated_classifier_specs = load_classifier_specs(aws_env)
 
-    if classifier_specs != updated_classifier_specs:
+    if classifier_specs == updated_classifier_specs:
+        logger.info("No changes to classifier specs")
+    else:
         logger.info(
             f"Changes made to classifier specs: {len(successes)} wandb changes, creating and merging PR..."
         )
@@ -1520,19 +1516,14 @@ async def sync_classifiers_profiles(
             auto_merge=automerge_classifier_specs_pr,
         )
 
-        if is_err(cs_pr_results):
-            logger.warning("Error creating and merging PR, skipping vespa updates")
-            vespa_update_needed = False
-        else:
-            vespa_update_needed = True
-
+    if is_err(cs_pr_results):
+        logger.warning("Error creating and merging PR, skipping vespa updates")
     else:
-        logger.info("No changes to classifier specs")
-        # vespa update only needed if rerun is requested
-        vespa_update_needed = vespa_rerun_only
-
-    if vespa_update_needed:
         logger.info("Updating Vespa with classifiers profiles...")
+        # vespa will update every pipeline run if no PR errors
+        # the update will overwrite the doc if the field are unchanged
+        # or if there are changes to the fields but same doc_id
+        # or create a new document if a new doc_id is generated or it does not exist
         async with vespa_search_adapter.client.asyncio(
             connections=VESPA_CONNECTION_POOL_SIZE,
             timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
@@ -1540,8 +1531,6 @@ async def sync_classifiers_profiles(
             vespa_results = await update_vespa_with_classifiers_profiles(
                 updated_classifier_specs, vespa_connection_pool, upload_to_vespa
             )
-    else:
-        logger.info("Skipping Vespa updates")
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
