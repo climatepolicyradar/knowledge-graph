@@ -22,7 +22,7 @@ from flows.full_pipeline import full_pipeline
 from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault, S3Uri
+from flows.utils import DocumentImportId, DocumentStem, Fault
 
 
 @pytest.mark.asyncio
@@ -513,21 +513,23 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_with_document_ids_s3_uri(
+async def test_full_pipeline_with_document_ids_s3_path(
     test_config,
     mock_run_output_identifier_str,
     aggregate_inference_results_document_stems,
     mock_async_bucket,
     mock_s3_async_client,
 ):
-    """Test full_pipeline flow with document_ids_s3_uri parameter."""
+    """Test full_pipeline flow with document_ids_s3_path parameter."""
     classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q100"),
         classifier_id="zzzz9999",
         wandb_registry_version="v1",
     )
 
-    s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
+    s3_key: str = "test-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
     document_ids = [
         DocumentImportId("test.doc.1"),
         DocumentImportId("test.doc.2"),
@@ -535,8 +537,8 @@ async def test_full_pipeline_with_document_ids_s3_uri(
     file_content = "\n".join(str(doc_id) for doc_id in document_ids) + "\n"
 
     await mock_s3_async_client.put_object(
-        Bucket=s3_uri.bucket,
-        Key=s3_uri.key,
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
         Body=file_content.encode("utf-8"),
     )
 
@@ -588,11 +590,11 @@ async def test_full_pipeline_with_document_ids_s3_uri(
             type=StateType.COMPLETED, data={"message": "Indexing complete."}
         )
 
-        # Run the flow with document_ids_s3_uri
+        # Run the flow with document_ids_s3_path
         await full_pipeline(
             config=test_config,
             classifier_specs=[classifier_spec],
-            document_ids_s3_uri=s3_uri,
+            document_ids_s3_path=s3_path,
             inference_batch_size=500,
             inference_classifier_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
@@ -607,7 +609,7 @@ async def test_full_pipeline_with_document_ids_s3_uri(
         mock_inference.assert_called_once()
         call_args = mock_inference.call_args
         assert call_args.kwargs["classifier_specs"] == [classifier_spec]
-        assert call_args.kwargs["document_ids_s3_uri"] == s3_uri
+        assert call_args.kwargs["document_ids_s3_path"] == s3_path
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5

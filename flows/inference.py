@@ -444,8 +444,8 @@ async def determine_file_stems(
 
     if requested_document_ids and document_ids_s3_uri:
         raise ValueError(
-            "`document_ids` and `document_ids_s3_uri` are mutually exclusive. "
-            "Please provide either document_ids or document_ids_s3_uri, but not both."
+            "`document_ids` and `document_ids_s3_path` are mutually exclusive. "
+            "Please provide either document_ids or document_ids_s3_path, but not both."
         )
 
     if document_ids_s3_uri is not None:
@@ -1259,7 +1259,7 @@ async def store_inference_result(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    document_ids_s3_uri: S3Uri | None = None,
+    document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1271,7 +1271,7 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    document_ids_s3_uri: S3Uri | None = None,
+    document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1286,7 +1286,7 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    document_ids_s3_uri: S3Uri | None = None,
+    document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1302,8 +1302,9 @@ async def inference(
 
     params:
     - document_ids: List of document ids to run inference on
-    - document_ids_s3_uri: Path to a file containing document IDs (one per line).
-      Mutually exclusive with document_ids parameter.
+    - document_ids_s3_path: S3 path string (e.g., "s3://bucket/key") to a file
+        containing document IDs (one per line). Mutually exclusive with document_ids
+        parameter.
     - classifier_spec: List of classifier names and aliases (alias tag
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
@@ -1323,6 +1324,10 @@ async def inference(
     run_output_identifier = build_run_output_identifier()
 
     logger.info(f"using run output identifier `{run_output_identifier}`")
+
+    document_ids_s3_uri: S3Uri | None = (
+        S3Uri.from_s3_path(document_ids_s3_path) if document_ids_s3_path else None
+    )
 
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(

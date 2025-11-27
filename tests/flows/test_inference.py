@@ -54,7 +54,6 @@ from flows.utils import (
     DocumentStem,
     Fault,
     JsonDict,
-    S3Uri,
     deserialise_pydantic_list_from_jsonl,
     deserialise_pydantic_list_with_fallback,
     serialise_pydantic_list_as_jsonl,
@@ -160,7 +159,7 @@ async def test_determine_file_stems__error(
 
 
 @pytest.mark.asyncio
-async def test_inference_with_document_ids_s3_uri(
+async def test_inference_with_document_ids_s3_path(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -169,7 +168,7 @@ async def test_inference_with_document_ids_s3_uri(
     mock_deployment,
     mock_s3_async_client,
 ):
-    """Test inference flow with document_ids_s3_uri parameter."""
+    """Test inference flow with document_ids_s3_path parameter."""
     input_doc_ids = [
         DocumentImportId(Path(doc).stem) for doc in mock_async_bucket_multiple_sources
     ]
@@ -181,11 +180,13 @@ async def test_inference_with_document_ids_s3_uri(
         wandb_registry_version="v13",
     )
 
-    s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
+    s3_key: str = "test-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
     file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
     await mock_s3_async_client.put_object(
-        Bucket=s3_uri.bucket,
-        Key=s3_uri.key,
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
         Body=file_content.encode("utf-8"),
     )
 
@@ -200,10 +201,10 @@ async def test_inference_with_document_ids_s3_uri(
         ),
     )
     with mock_deployment(state) as mock_inference_run_deployment:
-        # Run the inference flow with document_ids_s3_uri
+        # Run the inference flow with document_ids_s3_path
         result = await inference(
             classifier_specs=[spec],
-            document_ids_s3_uri=s3_uri,
+            document_ids_s3_path=s3_path,
             config=test_config,
         )
 
@@ -213,13 +214,13 @@ async def test_inference_with_document_ids_s3_uri(
 
 
 @pytest.mark.asyncio
-async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
+async def test_inference_with_document_ids_s3_path_and_document_ids_error(
     test_config,
     mock_async_bucket,
     mock_s3_async_client,
 ):
     """
-    Test that providing both document_ids and document_ids_s3_uri raises an error.
+    Test that providing both document_ids and document_ids_s3_path raises an error.
 
     Users must pick one input method - either provide document_ids directly or
     provide a file path containing document IDs, but not both.
@@ -229,11 +230,13 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
         DocumentImportId("AF.document.AFRDG00038.n00002"),
     ]
 
-    s3_uri = S3Uri(bucket=test_config.cache_bucket, key="test-document-ids.txt")
+    s3_key: str = "test-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
     file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
     await mock_s3_async_client.put_object(
-        Bucket=s3_uri.bucket,
-        Key=s3_uri.key,
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
         Body=file_content.encode("utf-8"),
     )
 
@@ -246,12 +249,12 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
     # Verify that providing both parameters raises a ValueError
     with pytest.raises(
         ValueError,
-        match="`document_ids` and `document_ids_s3_uri` are mutually exclusive.",
+        match="`document_ids` and `document_ids_s3_path` are mutually exclusive.",
     ) as exc_info:
         await inference(
             classifier_specs=[spec],
             document_ids=input_doc_ids,
-            document_ids_s3_uri=s3_uri,
+            document_ids_s3_path=s3_path,
             config=test_config,
         )
 
@@ -261,7 +264,7 @@ async def test_inference_with_document_ids_s3_uri_and_document_ids_error(
 
 
 @pytest.mark.asyncio
-async def test_inference_with_document_ids_s3_uri_file_not_found(
+async def test_inference_with_document_ids_s3_path_file_not_found(
     mock_s3_async_client, mock_async_bucket, test_config
 ):
     """Test that providing a non-existent S3 file raises an error."""
@@ -271,8 +274,9 @@ async def test_inference_with_document_ids_s3_uri_file_not_found(
         wandb_registry_version="v13",
     )
 
-    non_existent_s3_uri = S3Uri(
-        bucket=test_config.cache_bucket, key="non-existent-file.txt"
+    non_existent_s3_key: str = "non-existent-file.txt"
+    non_existent_s3_path: str = (
+        f"s3://{test_config.cache_bucket}/" + non_existent_s3_key
     )
 
     with pytest.raises(
@@ -281,13 +285,13 @@ async def test_inference_with_document_ids_s3_uri_file_not_found(
     ):
         await inference(
             classifier_specs=[spec],
-            document_ids_s3_uri=non_existent_s3_uri,
+            document_ids_s3_path=non_existent_s3_path,
             config=test_config,
         )
 
 
 @pytest.mark.asyncio
-async def test_inference_with_document_ids_s3_uri_empty_file(
+async def test_inference_with_document_ids_s3_path_empty_file(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -302,10 +306,12 @@ async def test_inference_with_document_ids_s3_uri_empty_file(
         wandb_registry_version="v13",
     )
 
-    s3_uri = S3Uri(bucket=test_config.cache_bucket, key="empty-document-ids.txt")
+    s3_key: str = "empty-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
     await mock_s3_async_client.put_object(
-        Bucket=s3_uri.bucket,
-        Key=s3_uri.key,
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
         Body="".encode("utf-8"),
     )
 
@@ -315,7 +321,7 @@ async def test_inference_with_document_ids_s3_uri_empty_file(
     ):
         await inference(
             classifier_specs=[spec],
-            document_ids_s3_uri=s3_uri,
+            document_ids_s3_path=s3_path,
             config=test_config,
         )
 
