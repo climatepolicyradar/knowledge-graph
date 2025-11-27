@@ -18,6 +18,7 @@ from flows.utils import (
     DocumentStem,
     Fault,
     ParameterisedFlow,
+    S3Uri,
     SlackNotify,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
@@ -768,3 +769,17 @@ def test_get_run_name__successful_task_context():
 
 def test_get_run_name_outside_context():
     assert get_run_name() is None
+
+
+def test_s3_uri_class() -> None:
+    """Test the features of the S3Uri Class"""
+
+    # From s3 path method
+    s3_uri: S3Uri = S3Uri.from_s3_path("s3://bucket/prefix/file.json")
+
+    assert s3_uri.protocol == "s3"
+    assert s3_uri.bucket == "bucket"
+    assert s3_uri.key == "prefix/file.json"
+
+    with pytest.raises((Exception), match="S3 Path does not represent an s3 path:"):
+        S3Uri.from_s3_path("bucket/prefix/file.json")
