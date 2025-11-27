@@ -1331,6 +1331,10 @@ async def test_sync_classifiers_profiles(
         patch(
             "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
         ) as mock_acreate_table_artifact,
+        patch(
+            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
+            wraps=update_vespa_with_classifiers_profiles,
+        ) as spy_update_vespa_with_classifiers_profiles,
     ):
         await sync_classifiers_profiles(
             wandb_api_key=mock_wandb_api_key,
@@ -1359,6 +1363,8 @@ async def test_sync_classifiers_profiles(
         mock_vespa_search_adapter.search.assert_called_once()
         # check create and merge pr called once
         mock_create_and_merge_pr.assert_called_once()
+        # check vespa called
+        spy_update_vespa_with_classifiers_profiles.assert_called_once()
 
         # check slack messages sent, only validation errors so: 1 main, 1 thread
         assert mock_slack_client.chat_postMessage.call_count == 2
@@ -1377,6 +1383,128 @@ async def test_sync_classifiers_profiles(
         )  # number rows: 2 successes + 3 validation errors
         assert (
             f"**Classifiers Specs PR**: [#{pr_number}]"
+            in artifact_call_args["description"]
+        )
+
+
+@pytest.mark.asyncio
+async def test_sync_classifiers_profiles__failure_creating_pr(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test full sync_classifiers_profiles when create/merge PR fails"""
+
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # mock vespa search adaptor for calls to concept_present_in_vespa
+    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
+    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
+
+    # mock create_and_merge_pr results as async function with error
+    mock_pr_results = Err(Error(msg="Error creating PR", metadata={}))
+    mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
+
+    mock_updated_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v2",
+            concept_id="mmmm5566",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="abcd3456",
+            classifiers_profile="retired",
+            wandb_registry_version="v20",
+            concept_id="mmmm5555",
+        ),
+    ]
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], mock_updated_specs],
+        ),
+        patch("wandb.login"),
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
+            mock_create_and_merge_pr,
+        ),
+        patch(
+            "flows.classifiers_profiles.get_slack_client",
+            return_value=mock_slack_client,
+        ),
+        patch(
+            "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
+        ) as mock_acreate_table_artifact,
+        patch(
+            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
+            wraps=update_vespa_with_classifiers_profiles,
+        ) as spy_update_vespa_with_classifiers_profiles,
+    ):
+        # test with vespa_rerun_only = False to make sure vespa does not run when PR fails
+        with pytest.raises(
+            Exception, match="Errors occurred while creating classifiers specs PR"
+        ):
+            await sync_classifiers_profiles(
+                wandb_api_key=mock_wandb_api_key,
+                wikibase_auth=mock_wikibase_auth,
+                vespa_search_adapter=mock_vespa_search_adapter,
+                github_token=Mock(SecretStr("mock-github-token")),
+                upload_to_wandb=False,
+                upload_to_vespa=False,
+                automerge_classifier_specs_pr=False,
+                auto_train=False,
+            )
+
+        # vespa_rerun_only False - should not be called
+        spy_update_vespa_with_classifiers_profiles.assert_not_called()
+        # check create and merge pr called once
+        mock_create_and_merge_pr.assert_called_once()
+
+        # use artifact call args to check final results
+        mock_acreate_table_artifact.assert_called_once()
+        artifact_call_args = mock_acreate_table_artifact.call_args.kwargs
+        assert artifact_call_args["key"] == "classifiers-profiles-validation-sandbox"
+        assert (
+            len(artifact_call_args["table"]) == 2 + 3
+        )  # number rows: 2 successes + 3 validation errors
+        assert (
+            "**Classifiers Specs PR**: Error creating or merging PR"
             in artifact_call_args["description"]
         )
 
