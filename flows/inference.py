@@ -53,7 +53,6 @@ from flows.utils import (
     build_inference_result_s3_uri,
     build_run_output_identifier,
     filter_non_english_language_file_stems,
-    get_file_stems_for_document_id,
     get_logger,
     iterate_batch,
     map_as_sub_flow,
@@ -264,27 +263,28 @@ async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client)
 
 async def get_file_stems_for_document_ids(
     document_ids: list[DocumentImportId],
-    config: Config,
+    s3_prefix_document_stems: list[DocumentStem],
+    target_languages: Sequence[str] = ("en",),
 ) -> list[DocumentStem]:
     """Collect all the Document Stems for the Document Import Ids"""
 
-    if config.cache_bucket is None:
-        raise ValueError("cache_bucket must be set in config")
-
     document_stems: list[DocumentStem] = []
 
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        for doc_id in document_ids:
-            document_key = os.path.join(
-                config.inference_document_source_prefix, f"{doc_id}.json"
+    for document_id in document_ids:
+        found_translated = False
+
+        for target_language in target_languages:
+            document_stem_translated = DocumentStem(
+                f"{document_id}_translated_{target_language}"
             )
-            document_stems += await get_file_stems_for_document_id(
-                doc_id, config.cache_bucket, document_key, s3_client
-            )
+
+            if document_stem_translated in s3_prefix_document_stems:
+                document_stems.append(document_stem_translated)
+                found_translated = True
+
+        if not found_translated:
+            document_stems.append(DocumentStem(document_id))
+
     return document_stems
 
 
@@ -453,7 +453,8 @@ async def determine_file_stems(
             config=config,
         )
         document_stems = await get_file_stems_for_document_ids(
-            document_ids=document_ids, config=config
+            document_ids=document_ids,
+            s3_prefix_document_stems=current_bucket_file_stems,
         )
     elif requested_document_ids is None:
         document_stems = filter_non_english_language_file_stems(
@@ -461,7 +462,8 @@ async def determine_file_stems(
         )
     elif requested_document_ids:
         document_stems = await get_file_stems_for_document_ids(
-            document_ids=list(requested_document_ids), config=config
+            document_ids=list(requested_document_ids),
+            s3_prefix_document_stems=current_bucket_file_stems,
         )
     else:
         raise ValueError("No document IDs provided or found!")
