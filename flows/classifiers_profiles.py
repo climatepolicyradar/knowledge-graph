@@ -1510,14 +1510,16 @@ async def sync_classifiers_profiles(
             github_token=github_token,
             auto_merge=automerge_classifier_specs_pr,
         )
-
-        async with vespa_search_adapter.client.asyncio(
-            connections=VESPA_CONNECTION_POOL_SIZE,
-            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
-        ) as vespa_connection_pool:
-            vespa_results = await update_vespa_with_classifiers_profiles(
-                updated_classifier_specs, vespa_connection_pool, upload_to_vespa
-            )
+        if is_err(cs_pr_results):
+            logger.warning("Error creating and merging PR, skipping vespa updates")
+        else:
+            async with vespa_search_adapter.client.asyncio(
+                connections=VESPA_CONNECTION_POOL_SIZE,
+                timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
+            ) as vespa_connection_pool:
+                vespa_results = await update_vespa_with_classifiers_profiles(
+                    updated_classifier_specs, vespa_connection_pool, upload_to_vespa
+                )
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
@@ -1555,12 +1557,12 @@ async def sync_classifiers_profiles(
         cs_pr_results=cs_pr_results,
     )
 
-    if len(vespa_errors) > 0:
-        raise Exception(
-            f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
-        )
     # if classifiers specs PR errors, fail the flow
     if is_err(cs_pr_results):
         raise Exception(
             f"Errors occurred while creating classifiers specs PR: {unwrap_err(cs_pr_results)}"
+        )
+    if len(vespa_errors) > 0:
+        raise Exception(
+            f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
         )
