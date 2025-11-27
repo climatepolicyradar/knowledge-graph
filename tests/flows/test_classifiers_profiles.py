@@ -1473,5 +1473,6 @@ async def test_create_classifiers_profiles_artifact__pr_error():
 
         # Assert the description contains the PR number
         assert (
-            f"**Classifiers Specs PR**: Error creating PR {pr_errors[0]}" in description
+            f"**Classifiers Specs PR**: Error creating or merging PR {pr_errors[0]}"
+            in description
         )
