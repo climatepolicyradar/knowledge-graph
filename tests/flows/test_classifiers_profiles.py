@@ -1,15 +1,18 @@
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
-
-# from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
 from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
 from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
+from cpr_sdk.search_adaptors import VespaSearchAdapter
+from pydantic import SecretStr
 
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.classifiers_profiles import (
+    _post_errors_main,
+    _post_errors_thread,
     compare_classifiers_profiles,
     concept_present_in_vespa,
+    create_classifiers_profiles_artifact,
     create_vespa_classifiers_profile,
     create_vespa_profile_mappings,
     demote_classifier_profile,
@@ -18,12 +21,15 @@ from flows.classifiers_profiles import (
     handle_classifier_profile_action,
     maybe_allow_retiring,
     promote_classifier_profile,
+    read_concepts,
+    send_classifiers_profile_slack_alert,
+    sync_classifiers_profiles,
     update_classifier_profile,
     update_vespa_with_classifiers_profiles,
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, is_ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -33,7 +39,7 @@ from knowledge_graph.compare_result_operation import Demote, Ignore, Promote, Up
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import Version
-from knowledge_graph.wikibase import StatementRank
+from knowledge_graph.wikibase import StatementRank, WikibaseAuth
 
 
 @pytest.fixture
@@ -43,6 +49,7 @@ def mock_specs():
         classifier_id="abcd3456",
         classifiers_profile="primary",
         wandb_registry_version="v20",
+        concept_id="mmmm5555",
     )
 
 
@@ -86,8 +93,42 @@ def mock_concepts():
     ]
 
 
+@pytest.fixture
+def mock_classifier_ids():
+    return [
+        # Q123: success
+        [
+            (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
+            (StatementRank.DEPRECATED, ClassifierID("abcd3456")),
+        ],
+        # Q100: failure
+        Exception("Failed to fetch classifier profiles for Q100"),
+        # Q999: fail validation - 2 primary profiles
+        [
+            (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
+            (StatementRank.PREFERRED, ClassifierID("cccc4444")),
+        ],
+        # Q200: fail validation - same classifier ID in 2 profiles
+        [
+            (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
+            (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
+        ],
+        # Q201: debug False - success (no profiles)
+        [],
+    ]
+
+
+@pytest.fixture
+def mock_wikibase_auth():
+    return WikibaseAuth(
+        username="test",
+        password="password",
+        url="https://example.com",
+    )
+
+
 @pytest.mark.asyncio
-async def test_get_classifiers_profiles(mock_concepts):
+async def test_get_classifiers_profiles(mock_concepts, mock_classifier_ids):
     with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
         # mock response from wikibase.get_classifier_ids_async
         mock_wikibase_auth = Mock()
@@ -95,27 +136,7 @@ async def test_get_classifiers_profiles(mock_concepts):
 
         # 1 success, 3 failures
         mock_wikibase.get_classifier_ids_async = AsyncMock(
-            side_effect=[
-                # Q123: success
-                [
-                    (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
-                    (StatementRank.DEPRECATED, ClassifierID("yyyy9999")),
-                ],
-                # Q100: failure
-                Exception("Failed to fetch classifier profiles for Q100"),
-                # Q999: fail validation - 2 primary profiles
-                [
-                    (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
-                    (StatementRank.PREFERRED, ClassifierID("cccc4444")),
-                ],
-                # Q200: fail validation - same classifier ID in 2 profiles
-                [
-                    (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
-                    (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
-                ],
-                # Q201: debug False - success (no profiles)
-                [],
-            ]
+            side_effect=mock_classifier_ids
         )
 
         # Call the function under test
@@ -135,7 +156,7 @@ async def test_get_classifiers_profiles(mock_concepts):
     )
     assert classifier_profiles[1] == ClassifiersProfileMapping(
         wikibase_id=WikibaseID("Q123"),
-        classifier_id=ClassifierID("yyyy9999"),
+        classifier_id=ClassifierID("abcd3456"),
         classifiers_profile=Profile.RETIRED,
     )
 
@@ -151,7 +172,7 @@ async def test_get_classifiers_profiles(mock_concepts):
 
 
 @pytest.mark.asyncio
-async def test_get_classifiers_profiles__debug(mock_concepts):
+async def test_get_classifiers_profiles__debug(mock_concepts, mock_classifier_ids):
     with patch("flows.classifiers_profiles.WikibaseSession") as mock_wikibase_session:
         # mock response from wikibase.get_classifier_ids_async
         mock_wikibase_auth = Mock()
@@ -159,27 +180,7 @@ async def test_get_classifiers_profiles__debug(mock_concepts):
 
         # 1 success, 3 failures
         mock_wikibase.get_classifier_ids_async = AsyncMock(
-            side_effect=[
-                # Q123: success
-                [
-                    (StatementRank.PREFERRED, ClassifierID("aaaa2222")),
-                    (StatementRank.DEPRECATED, ClassifierID("yyyy9999")),
-                ],
-                # Q100: failure
-                Exception("Failed to fetch classifier profiles for Q100"),
-                # Q999: fail validation - 2 primary profiles
-                [
-                    (StatementRank.PREFERRED, ClassifierID("bbbb3333")),
-                    (StatementRank.PREFERRED, ClassifierID("cccc4444")),
-                ],
-                # Q200: fail validation - same classifier ID in 2 profiles
-                [
-                    (StatementRank.PREFERRED, ClassifierID("xyzz2345")),
-                    (StatementRank.DEPRECATED, ClassifierID("xyzz2345")),
-                ],
-                # Q201: debug True - failure
-                [],
-            ]
+            side_effect=mock_classifier_ids,
         )
         # Call the function with debug mode on - results in extra failure
         results_debug = await get_classifiers_profiles(
@@ -1106,3 +1107,372 @@ def test_maybe_allow_retiring__update_to_retired():
     assert updated_results == []
     # Verify Vespa search was called
     mock_search_adapter.search.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_read_concepts(mock_wikibase_auth, mock_concepts):
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+
+    with patch(
+        "flows.classifiers_profiles.WikibaseSession", return_value=mock_wikibase_session
+    ):
+        concepts = await read_concepts(
+            wikibase_auth=mock_wikibase_auth,
+            wikibase_cache_path=None,
+            wikibase_cache_save_if_missing=False,
+        )
+
+    assert concepts == mock_concepts
+    mock_wikibase_session.get_concepts_async.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_send_classifiers_profile_slack_alert_success():
+    """Test send_classifiers_profile_slack_alert with successful Slack messages."""
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
+
+    validation_errors = [
+        Error(msg="Validation error", metadata={"wikibase_id": "Q1"}),
+        Error(msg="Validation error", metadata={"wikibase_id": "Q2"}),
+    ]
+    wandb_errors = [
+        Error(msg="WandB error", metadata={"wikibase_id": "Q3"}),
+    ]
+    vespa_errors = [
+        Error(msg="Vespa error", metadata={"wikibase_id": "Q4"}),
+    ]
+    successes = [
+        {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
+        {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
+    ]
+
+    with (
+        patch(
+            "flows.classifiers_profiles.get_slack_client",
+            return_value=mock_slack_client,
+        ),
+        patch(
+            "flows.classifiers_profiles._post_errors_main", wraps=_post_errors_main
+        ) as spy_post_errors_main,
+        patch(
+            "flows.classifiers_profiles._post_errors_thread", wraps=_post_errors_thread
+        ) as spy_post_errors_thread,
+    ):
+        await send_classifiers_profile_slack_alert(
+            validation_errors=validation_errors,
+            wandb_errors=wandb_errors,
+            vespa_errors=vespa_errors,
+            successes=successes,
+            aws_env=AwsEnv.staging,
+            upload_to_wandb=True,
+            upload_to_vespa=True,
+            event=Mock(),
+        )
+
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-staging",
+            text="Classifiers Profile Sync Summary: uploading to wandb uploading to vespa",
+            attachments=ANY,  # ignore content of attachments
+        )
+
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-staging",
+            thread_ts="12345",
+            text=f"Data Quality Issues: {len(validation_errors)} issues found",
+            blocks=ANY,
+        )
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-staging",
+            thread_ts="12345",
+            text=f"WandB Errors: {len(wandb_errors)} issues found",
+            blocks=ANY,
+        )
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-staging",
+            thread_ts="12345",
+            text=f"Vespa Errors: {len(vespa_errors)} issues found",
+            blocks=ANY,
+        )
+        assert spy_post_errors_main.call_count == 2
+        assert spy_post_errors_thread.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_send_classifiers_profile_slack_alert__slack_failure():
+    """Test send_classifiers_profile_slack_alert when Slack API fails."""
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {
+        "ok": False,
+        "error": "Slack API failure",
+    }
+    with (
+        patch(
+            "flows.classifiers_profiles.get_slack_client",
+            return_value=mock_slack_client,
+        ),
+        patch(
+            "flows.classifiers_profiles._post_errors_main", wraps=_post_errors_main
+        ) as spy_post_errors_main,
+        patch(
+            "flows.classifiers_profiles._post_errors_thread", wraps=_post_errors_thread
+        ) as spy_post_errors_thread,
+    ):
+        await send_classifiers_profile_slack_alert(
+            validation_errors=[
+                Error(msg="Validation error: test", metadata={"wikibase_id": "Q1"}),
+            ],
+            wandb_errors=[],
+            vespa_errors=[],
+            successes=[],
+            aws_env=AwsEnv.staging,
+            upload_to_wandb=True,
+            upload_to_vespa=True,
+            event=Mock(),
+        )
+
+        mock_slack_client.chat_postMessage.assert_called_once_with(
+            channel="alerts-platform-staging",
+            text="Classifiers Profile Sync Summary: uploading to wandb uploading to vespa",
+            attachments=ANY,
+        )
+
+        assert spy_post_errors_main.call_count == 1
+        spy_post_errors_thread.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_classifiers_profiles(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test full sync_classifiers_profiles with success."""
+
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # mock vespa search adaptor for calls to concept_present_in_vespa
+    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
+    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
+
+    # mock create_and_merge_pr results as async function
+    pr_number = 123
+    mock_pr_results = Ok(pr_number)
+    mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
+
+    mock_updated_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v2",
+            concept_id="mmmm5566",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="abcd3456",
+            classifiers_profile="retired",
+            wandb_registry_version="v20",
+            concept_id="mmmm5555",
+        ),
+    ]
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], mock_updated_specs],
+        ),
+        patch("wandb.login") as mock_wandb_login,
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
+            mock_create_and_merge_pr,
+        ),
+        patch(
+            "flows.classifiers_profiles.get_slack_client",
+            return_value=mock_slack_client,
+        ),
+        patch(
+            "flows.classifiers_profiles.handle_classifier_profile_action",
+            wraps=handle_classifier_profile_action,
+        ) as spy_handle_classifier_profile_action,
+        patch(
+            "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
+        ) as mock_acreate_table_artifact,
+    ):
+        await sync_classifiers_profiles(
+            wandb_api_key=mock_wandb_api_key,
+            wikibase_auth=mock_wikibase_auth,
+            vespa_search_adapter=mock_vespa_search_adapter,
+            github_token=Mock(SecretStr("mock-github-token")),
+            upload_to_wandb=False,
+            upload_to_vespa=False,
+            automerge_classifier_specs_pr=False,
+            auto_train=False,
+        )
+
+        # check wandb login called with api key
+        mock_wandb_login.assert_called_once_with(key="mock-wandb-api-key")
+
+        # check handle_classifier_profile_action called twice: 1 update, 1 promote
+        assert spy_handle_classifier_profile_action.call_count == 2
+        action_calls = [
+            call.kwargs["action"]
+            for call in spy_handle_classifier_profile_action.call_args_list
+        ]
+        assert "updating" in action_calls
+        assert "promoting" in action_calls
+
+        # check vespa search called once (1 update with retired profile)
+        mock_vespa_search_adapter.search.assert_called_once()
+        # check create and merge pr called once
+        mock_create_and_merge_pr.assert_called_once()
+
+        # check slack messages sent, only validation errors so: 1 main, 1 thread
+        assert mock_slack_client.chat_postMessage.call_count == 2
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-sandbox",
+            text="Classifiers Profile Sync Summary: (dry run, not uploading to wandb) (dry run, not uploading to vespa)",
+            attachments=ANY,
+        )
+
+        # use artifact call args to check final results
+        mock_acreate_table_artifact.assert_called_once()
+        artifact_call_args = mock_acreate_table_artifact.call_args.kwargs
+        assert artifact_call_args["key"] == "classifiers-profiles-validation-sandbox"
+        assert (
+            len(artifact_call_args["table"]) == 2 + 3
+        )  # number rows: 2 successes + 3 validation errors
+        assert (
+            f"**Classifiers Specs PR**: [#{pr_number}]"
+            in artifact_call_args["description"]
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_classifiers_profiles_artifact():
+    validation_errors = [
+        Error(msg="Validation error 1", metadata={"wikibase_id": "Q1"}),
+        Error(msg="Validation error 2", metadata={"wikibase_id": "Q2"}),
+    ]
+    wandb_errors = [
+        Error(msg="WandB error 1", metadata={"wikibase_id": "Q3"}),
+    ]
+    vespa_errors = [
+        Error(msg="Vespa error 1", metadata={"wikibase_id": "Q4"}),
+    ]
+    successes = [
+        {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
+        {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
+    ]
+    aws_env = AwsEnv.staging
+    cs_pr_results = Ok(123)
+
+    with patch(
+        "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
+    ) as mock_acreate_table_artifact:
+        await create_classifiers_profiles_artifact(
+            validation_errors=validation_errors,
+            wandb_errors=wandb_errors,
+            vespa_errors=vespa_errors,
+            successes=successes,
+            aws_env=aws_env,
+            cs_pr_results=cs_pr_results,
+        )
+
+        mock_acreate_table_artifact.assert_called_once()
+
+        call_args = mock_acreate_table_artifact.call_args
+        key = call_args.kwargs["key"]
+        table = call_args.kwargs["table"]
+        description = call_args.kwargs["description"]
+
+        # Assert the key is correct
+        assert key == f"classifiers-profiles-validation-{aws_env.value}"
+
+        # Assert the table contains the correct number of rows
+        assert len(table) == len(successes) + len(validation_errors) + len(
+            wandb_errors
+        ) + len(vespa_errors)  # pr errors not added to table
+
+        # Assert the description contains the PR number
+        assert f"**Classifiers Specs PR**: [#{unwrap_ok(cs_pr_results)}]" in description
+
+
+@pytest.mark.asyncio
+async def test_create_classifiers_profiles_artifact__pr_error():
+    validation_errors = []
+    wandb_errors = []
+    vespa_errors = []
+    successes = [
+        {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
+        {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
+    ]
+    aws_env = AwsEnv.staging
+    cs_pr_results = Err(Error(msg="Failed to create PR", metadata={}))
+
+    pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
+    with patch(
+        "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
+    ) as mock_acreate_table_artifact:
+        await create_classifiers_profiles_artifact(
+            validation_errors=validation_errors,
+            wandb_errors=wandb_errors,
+            vespa_errors=vespa_errors,
+            successes=successes,
+            aws_env=aws_env,
+            cs_pr_results=cs_pr_results,
+        )
+
+        mock_acreate_table_artifact.assert_called_once()
+
+        call_args = mock_acreate_table_artifact.call_args
+        key = call_args.kwargs["key"]
+        table = call_args.kwargs["table"]
+        description = call_args.kwargs["description"]
+
+        # Assert the key is correct
+        assert key == f"classifiers-profiles-validation-{aws_env.value}"
+
+        # Assert the table contains the correct number of rows
+        assert len(table) == len(successes) + len(validation_errors) + len(
+            wandb_errors
+        ) + len(vespa_errors)  # pr errors not added to table
+
+        # Assert the description contains the PR number
+        assert (
+            f"**Classifiers Specs PR**: Error creating or merging PR {pr_errors[0]}"
+            in description
+        )

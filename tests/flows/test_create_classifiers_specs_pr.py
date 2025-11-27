@@ -269,8 +269,9 @@ async def test_enable_auto_merge():
     """Test enabling auto-merge on a PR."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = Mock()
+        pr_number = 123
         result = await enable_auto_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             merge_method="squash",
         )
@@ -293,7 +294,7 @@ async def test_enable_auto_merge():
             text=True,
             check=True,
         )
-        assert result == Ok(None)
+        assert result == Ok(pr_number)
 
 
 @pytest.mark.asyncio
@@ -301,8 +302,9 @@ async def test_enable_auto_merge__exception():
     """Test enabling auto-merge on a PR where exception is raised."""
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = Exception("GitHub CLI error")
+        pr_number = 123
         result = await enable_auto_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             merge_method="squash",
         )
@@ -328,7 +330,7 @@ async def test_enable_auto_merge__exception():
         assert is_err(result)
         error = unwrap_err(result)
         assert error.msg == "Failed to enable auto-merge for PR."
-        assert error.metadata.get("pr_number") == 123
+        assert error.metadata.get("pr_number") == pr_number
 
 
 @pytest.mark.asyncio
@@ -346,8 +348,9 @@ async def test_wait_for_pr_merge():
             ),  # Second poll
         ]
 
+        pr_number = 123
         result = await wait_for_pr_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             timeout=timedelta(seconds=1),
             poll_interval=timedelta(milliseconds=100),
@@ -368,7 +371,7 @@ async def test_wait_for_pr_merge():
             capture_output=True,
             text=True,
         )
-        assert result == Ok(None)
+        assert result == Ok(pr_number)
 
 
 @pytest.mark.asyncio
@@ -404,8 +407,9 @@ async def test_wait_for_pr_merge__closed():
             stdout='{"state": "CLOSED", "mergedAt": null}', returncode=0
         )
 
+        pr_number = 123
         result = await wait_for_pr_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             timeout=timedelta(minutes=1),
             poll_interval=timedelta(milliseconds=100),
@@ -413,7 +417,7 @@ async def test_wait_for_pr_merge__closed():
 
         assert is_err(result)
         assert "RuntimeError: PR was closed without merging." in unwrap_err(result).msg
-        assert unwrap_err(result).metadata.get("pr_number") == 123
+        assert unwrap_err(result).metadata.get("pr_number") == pr_number
         assert unwrap_err(result).metadata.get("pr_state") == "CLOSED"
 
 
@@ -423,12 +427,13 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
     with patch("subprocess.run") as mock_run:
         # Mock subprocess.run for gh pr view
         # Returncode 1 simulates failure to get PR info until timeout
+        pr_number = 123
         mock_run.return_value = Mock(
             stdout='{"state": "OPEN", "mergedAt": null}', returncode=1
         )
 
         result = await wait_for_pr_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             timeout=timedelta(milliseconds=100),
             poll_interval=timedelta(milliseconds=200),
@@ -439,7 +444,7 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
             "TimeoutError: PR did not merge within the timeout period."
             in unwrap_err(result).msg
         )
-        assert unwrap_err(result).metadata.get("pr_number") == 123
+        assert unwrap_err(result).metadata.get("pr_number") == pr_number
 
 
 @pytest.mark.asyncio
@@ -483,7 +488,7 @@ async def test_create_and_merge_pr():
             poll_interval=timedelta(seconds=30),
         )
         assert os.environ["GITHUB_TOKEN"] == "mock-token"
-        assert all(is_ok(r) for r in results)
+        assert is_ok(results)
 
 
 @pytest.mark.asyncio
@@ -513,7 +518,7 @@ async def test_create_and_merge_pr__no_automerge():
         mock_enable_merge.assert_not_called()
         mock_wait_merge.assert_not_called()
 
-        assert all(is_ok(r) for r in results)
+        assert is_ok(results)
 
 
 @pytest.mark.asyncio
@@ -550,9 +555,9 @@ async def test_create_and_merge_pr__automerge_failure():
         )
         mock_wait_merge.assert_not_called()
 
-        assert results[0] == Ok(123)
-        errors = [r._error for r in results if isinstance(r, Err)]
-        assert any("Test error" in e.msg for e in errors)
+        errors = unwrap_err(results)
+        assert is_err(results)
+        assert "Test error" in errors.msg
 
 
 def test_extract_pr_details_valid_url():
@@ -605,10 +610,9 @@ async def test_create_and_merge_pr__github_token_exception():
 
         mock_commit.assert_not_called()
 
-        errors = [r._error for r in results if isinstance(r, Err)]
-        assert any(
-            "Failed to set GitHub token environment var." in e.msg for e in errors
-        )
+        errors = unwrap_err(results)
+        assert is_err(results)
+        assert "Failed to set GitHub token environment var." in errors.msg
 
 
 @pytest.fixture
