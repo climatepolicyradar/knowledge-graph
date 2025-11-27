@@ -407,18 +407,17 @@ async def get_document_ids_from_file(
                 e.add_note(f"{extra_context}, key: {s3_uri.key}")
             raise
 
-    lines = data.splitlines()
-
-    parsed_document_ids: list[DocumentImportId] = [
-        DocumentImportId(line.strip())
-        for line in lines
-        if line.strip()  # Skip empty lines
-    ]
-
-    if not parsed_document_ids:
+    if not data:
         raise ValueError(f"No document IDs found in file: {s3_uri}")
 
-    return parsed_document_ids
+    document_ids: list[DocumentImportId] = [
+        DocumentImportId(doc_id) for doc_id in json.loads(data)
+    ]
+
+    if not document_ids:
+        raise ValueError(f"No document IDs found in file: {s3_uri}")
+
+    return document_ids
 
 
 async def determine_file_stems(

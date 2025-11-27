@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -534,7 +535,7 @@ async def test_full_pipeline_with_document_ids_s3_path(
         DocumentImportId("test.doc.1"),
         DocumentImportId("test.doc.2"),
     ]
-    file_content = "\n".join(str(doc_id) for doc_id in document_ids) + "\n"
+    file_content: str = json.dumps(document_ids)
 
     await mock_s3_async_client.put_object(
         Bucket=test_config.cache_bucket,

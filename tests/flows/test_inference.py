@@ -183,7 +183,7 @@ async def test_inference_with_document_ids_s3_path(
     s3_key: str = "test-document-ids.txt"
     s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
 
-    file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
+    file_content: str = json.dumps(input_doc_ids)
     await mock_s3_async_client.put_object(
         Bucket=test_config.cache_bucket,
         Key=s3_key,
@@ -233,7 +233,7 @@ async def test_inference_with_document_ids_s3_path_and_document_ids_error(
     s3_key: str = "test-document-ids.txt"
     s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
 
-    file_content = "\n".join(str(doc_id) for doc_id in input_doc_ids) + "\n"
+    file_content: str = json.dumps(input_doc_ids)
     await mock_s3_async_client.put_object(
         Bucket=test_config.cache_bucket,
         Key=s3_key,
