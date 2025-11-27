@@ -38,6 +38,7 @@ from flows.utils import (
     DocumentObjectUri,
     S3Uri,
     get_logger,
+    total_milliseconds,
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.exceptions import QueryError
@@ -57,10 +58,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Set the garbage collection debugging flags. Debugging information will be written to sys.stderr. See below for a list of debugging flags which can be combined using bit operations to control debugging.
 gc.set_debug(gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_SAVEALL)
-
-
-def total_milliseconds(td: timedelta) -> int:
-    return int(td.total_seconds() * 1_000)
 
 
 VESPA_MAX_LIMIT: int = 50_000

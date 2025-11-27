@@ -27,18 +27,6 @@ def test_whether_ensemble_rejects_classifiers_with_different_concepts():
 
 
 @pytest.mark.xdist_group(name="classifier")
-def test_whether_ensemble_rejects_nonunique_lists_of_classifiers():
-    """Test that Ensemble raises error when classifiers don't have unique IDs."""
-    concept1 = Concept(wikibase_id=WikibaseID("Q1"), preferred_label="test1")
-
-    classifier1 = KeywordClassifier(concept1)
-    classifier2 = KeywordClassifier(concept1)
-
-    with pytest.raises(IncompatibleSubClassifiersError):
-        Ensemble(concept1, [classifier1, classifier2])
-
-
-@pytest.mark.xdist_group(name="classifier")
 @given(concept=concept_strategy())
 def test_whether_ensemble_id_is_deterministic(concept: Concept):
     """Test that Ensemble generates deterministic IDs."""

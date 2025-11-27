@@ -5,23 +5,33 @@ This directory contains scripts that are used to run various processes around th
 Individual scripts' docstrings contain more information about their purpose and usage.
 For additional details and context, see [classifier model training and deployment](https://www.notion.so/climatepolicyradar/KG-Model-Deployment-28d9109609a480a5991fe0e75ecfaa79).
 
-## Updating a Classifier
+## Training and promoting a classifier
 
-First we run the training scripts. This will upload the classifier to s3 and link to it from its weights and biases project. You can then run the promote script which is used for promoting a model to primary within an aws environment. Promotion as adds the model to the weights and bias registry and setting it as primary gives it the environment alias.
+First we run the training scripts. This will upload the classifier to S3 and link to it from its Weights and Biases project. You can then run the promote script which is used for promoting a model to primary within an AWS environment. Promotion as adds the model to the Weights and Bias registry and setting it as primary gives it the environment alias.
 
-_Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires s3 access._
+_Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires S3 access. You can also use your own AWS profile, by using a combination of `USE_AWS_PROFILES=true` and `AWS_PROFILE=XXXX`._
+
+_Note: You control whether the model artifact  is tracked in W&B and uploaded to S3, with `--track-and-upload`._
 
 ```shell
-just train "Q123" --track --aws-env sandbox
+just train Q123 --track-and-upload --aws-env sandbox
 ```
 
 > [!NOTE]
 > Promoting requires a classifiers profile - each promoted classifier ID should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
 
-We promote with:
+Demote the old version, being superseded, with:
 
 ```shell
-just promote "Q123" --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
+just demote Q123 --classifier-id abcd121212 --aws-env sandbox
+```
+
+You don't have to demote a model version. There may be 2 versions in one environment, as long as they're in different classifiers profiles.
+
+Promote with:
+
+```shell
+just promote Q123 --classifier-id abcd2345 --aws-env sandbox --add-classifiers-profiles primary
 ```
 
 Finally, to update the classifier specs:

@@ -1,10 +1,12 @@
 import asyncio
 import os
+import random
 import re
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
+import torch
 import typer
 import wandb
 from prefect.client.schemas.objects import FlowRun
@@ -30,12 +32,16 @@ from knowledge_graph.cloud import (
     get_s3_client,
     is_logged_in,
 )
-from knowledge_graph.config import WANDB_ENTITY
+from knowledge_graph.config import (
+    WANDB_ENTITY,
+    wandb_model_artifact_filename,
+)
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
-    load_labelled_passages_from_wandb_run,
+    load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
 from knowledge_graph.wikibase import WikibaseConfig
@@ -43,20 +49,6 @@ from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
-
-
-def load_training_data_from_wandb(
-    training_data_wandb_run_path: str,
-) -> list[LabelledPassage]:
-    """Load training data from a W&B run."""
-    Console().log(
-        f"📥 Fetching training data from W&B run: {training_data_wandb_run_path}"
-    )
-    api = wandb.Api()
-    wandb_run = api.run(training_data_wandb_run_path)
-    labelled_passages = load_labelled_passages_from_wandb_run(wandb_run)
-    Console().log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
-    return labelled_passages
 
 
 def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
@@ -115,6 +107,80 @@ def deduplicate_training_data(
     )
 
     return filtered
+
+
+def limit_training_samples(
+    training_data: list[LabelledPassage],
+    max_samples: int,
+) -> list[LabelledPassage]:
+    """
+    Limit the number of training samples, aiming for a balanced set.
+
+    If a perfect split isn't possible, take all available from the smaller group and
+    the remainder from the larger group.
+
+    :param training_data: The list of labelled passages to limit.
+    :type training_data: list[LabelledPassage]
+    :param max_samples: Maximum number of samples to keep in total.
+    :type max_samples: int
+    :return: A (mostly) balanced subset of the training data.
+    :rtype: list[LabelledPassage]
+    """
+    console = Console()
+
+    positive_passages = [p for p in training_data if p.spans]
+    negative_passages = [p for p in training_data if not p.spans]
+
+    console.log(
+        f"📊 Starting with {len(positive_passages)} positive and "
+        f"{len(negative_passages)} negative passages"
+    )
+
+    half = max_samples // 2
+    # Take up to half from each group, or as many as you can
+    pos_count = min(len(positive_passages), half)
+    neg_count = min(len(negative_passages), half)
+
+    # Fill up with remainder from the group that still has samples left
+    remainder = max_samples - (pos_count + neg_count)
+    if remainder > 0:
+        if pos_count < len(positive_passages):
+            extra = min(remainder, len(positive_passages) - pos_count)
+            pos_count += extra
+            remainder -= extra
+        if remainder > 0 and neg_count < len(negative_passages):
+            extra = min(remainder, len(negative_passages) - neg_count)
+            neg_count += extra
+
+    limited_positive = positive_passages[:pos_count]
+    limited_negative = negative_passages[:neg_count]
+
+    console.log(
+        f"✂️  Limited to {len(limited_positive)} positive and "
+        f"{len(limited_negative)} negative passages "
+        f"({len(limited_positive) + len(limited_negative)} total)"
+    )
+
+    limited_dataset = limited_positive + limited_negative
+    random.shuffle(limited_dataset)
+    return limited_dataset
+
+
+def move_model_to_cpu(classifier: Classifier) -> None:
+    """
+    Move a model which uses torch to CPU.
+
+    No-op if the classifier's model is already on CPU, or the classifier doesn't have
+    a 'pipeline' attribute. This needs to be done before the model is saved, otherwise
+    an MPS device will not be able to load a classifier stored on CUDA and vice-versa.
+    """
+
+    console = Console()
+
+    if hasattr(classifier, "pipeline"):
+        classifier.pipeline.model.to("cpu")  # type: ignore
+        classifier.pipeline.device = torch.device("cpu")  # type: ignore
+        console.log("Moved model to CPU")
 
 
 class StorageUpload(BaseModel):
@@ -260,7 +326,7 @@ def upload_model_artifact(
     key = os.path.join(
         storage_upload.target_path,
         storage_upload.next_version,
-        "model.pickle",
+        wandb_model_artifact_filename,
     )
 
     Console().log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
@@ -294,7 +360,7 @@ def main(
             ...,
             help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
         ),
-    ] = False,
+    ] = True,
     aws_env: Annotated[
         AwsEnv,
         typer.Option(
@@ -337,10 +403,16 @@ def main(
             help="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
-    training_data_wandb_run_path: Annotated[
+    training_data_wandb_path: Annotated[
         Optional[str],
         typer.Option(
-            help="W&B run path (entity/project/run_id) to fetch training data from instead of using concept's labelled passages",
+            help="W&B artifact path (e.g., 'entity/project/artifact:version') to fetch training data from.",
+        ),
+    ] = None,
+    limit_training_samples: Annotated[
+        Optional[int],
+        typer.Option(
+            help="Maximum number of training samples to use. Samples are selected in a way that achieves the best possible class balance. If not specified, all samples are used.",
         ),
     ] = None,
 ) -> Classifier | None:
@@ -364,6 +436,8 @@ def main(
     :type classifier_override: Optional[list[str]]
     :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
     :type concept_override: Optional[list[str]]
+    :param limit_training_samples: Maximum number of training samples to use
+    :type limit_training_samples: Optional[int]
     """
     classifier_kwargs = parse_kwargs_from_strings(classifier_override)
     concept_overrides = parse_kwargs_from_strings(concept_override)
@@ -383,7 +457,8 @@ def main(
                 "classifier_type": classifier_type,
                 "classifier_kwargs": classifier_kwargs,
                 "concept_overrides": concept_overrides,
-                "training_data_wandb_run_path": training_data_wandb_run_path,
+                "training_data_wandb_path": training_data_wandb_path,
+                "limit_training_samples": limit_training_samples,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
@@ -402,7 +477,8 @@ def main(
                 classifier_type=classifier_type,
                 classifier_kwargs=classifier_kwargs,
                 concept_overrides=concept_overrides,
-                training_data_wandb_run_path=training_data_wandb_run_path,
+                training_data_wandb_path=training_data_wandb_path,
+                limit_training_samples=limit_training_samples,
             )
         )
 
@@ -416,6 +492,7 @@ async def train_classifier(
     evaluate: bool = True,
     extra_wandb_config: dict[str, Any] = {},
     train_validation_data: Optional[list[LabelledPassage]] = None,
+    max_training_samples: Optional[int] = None,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -446,22 +523,52 @@ async def train_classifier(
     ) as run:
         # Determine training data and deduplicate against evaluation set
         training_data = (
-            train_validation_data
-            if train_validation_data is not None
-            else classifier.concept.labelled_passages
+            train_validation_data if train_validation_data is not None else []
         )
+        if max_training_samples is not None:
+            training_data = limit_training_samples(training_data, max_training_samples)
+
+        if training_data and wandb_config.get("training_data_wandb_path") and run:
+            unprocessed_training_data_artifact_path = wandb_config[
+                "training_data_wandb_path"
+            ]
+            run.use_artifact(unprocessed_training_data_artifact_path)
 
         # Remove any passages from training that appear in evaluation set
         evaluation_data = classifier.concept.labelled_passages
-        deduplicated_training_data = deduplicate_training_data(
-            training_data=training_data,
-            evaluation_data=evaluation_data,
-        )
+        if training_data:
+            deduplicated_training_data = deduplicate_training_data(
+                training_data=training_data,
+                evaluation_data=evaluation_data,
+            )
+
+            train_num_positives = len(
+                [p for p in deduplicated_training_data if p.spans]
+            )
+            train_num_negatives = len(deduplicated_training_data) - train_num_positives
+            Console().print(
+                f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
+            )
+
+            if track_and_upload and run and deduplicated_training_data:
+                console.log("📄 Creating artifact for deduplicated training data")
+                log_labelled_passages_artifact_to_wandb_run(
+                    labelled_passages=deduplicated_training_data,
+                    run=run,
+                    concept=classifier.concept,
+                    classifier=classifier,
+                    artifact_name="training-data",
+                )
+                console.log("✅ Training data artifact uploaded successfully")
+        else:
+            deduplicated_training_data = []
 
         classifier.fit(
             labelled_passages=deduplicated_training_data,
             enable_wandb=track_and_upload,
         )
+
+        move_model_to_cpu(classifier)
 
         target_path = ModelPath(
             wikibase_id=namespace.project, classifier_id=classifier.id
@@ -528,6 +635,7 @@ async def train_classifier(
                 classifier=classifier,
                 labelled_passages=classifier.concept.labelled_passages,
                 wandb_run=run,
+                batch_size=50,
             )
 
             if track_and_upload and run:
@@ -548,12 +656,14 @@ async def run_training(
     track_and_upload: bool,
     aws_env: AwsEnv,
     wikibase_config: Optional[WikibaseConfig] = None,
+    argilla_config: Optional[ArgillaConfig] = None,
     s3_client: Optional[Any] = None,
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
     concept_overrides: Optional[dict[str, Any]] = None,
-    training_data_wandb_run_path: Optional[str] = None,
+    training_data_wandb_path: Optional[str] = None,
+    limit_training_samples: Optional[int] = None,
 ) -> Classifier:
     """
     Get a concept and create a classifier, then train the classifier.
@@ -570,6 +680,7 @@ async def run_training(
         include_labels_from_subconcepts=True,
         include_recursive_has_subconcept=True,
         wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
     )
 
     if concept_overrides:
@@ -585,8 +696,14 @@ async def run_training(
 
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
-    if training_data_wandb_run_path:
-        labelled_passages = load_training_data_from_wandb(training_data_wandb_run_path)
+    if training_data_wandb_path:
+        console.log(
+            f"📥 Fetching training data from W&B artifact path: {training_data_wandb_path}"
+        )
+        labelled_passages = load_labelled_passages_from_wandb(
+            wandb_path=training_data_wandb_path
+        )
+        console.log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
 
     classifier = ClassifierFactory.create(
         concept=concept,
@@ -601,10 +718,10 @@ async def run_training(
         "classifier_kwargs": classifier_kwargs,
         "concept_overrides": concept_overrides,
     }
-    if training_data_wandb_run_path:
-        extra_wandb_config["training_data_wandb_run_path"] = (
-            training_data_wandb_run_path
-        )
+    if training_data_wandb_path:
+        extra_wandb_config["training_data_wandb_path"] = training_data_wandb_path
+    if limit_training_samples is not None:
+        extra_wandb_config["limit_training_samples"] = limit_training_samples
 
     return await train_classifier(
         classifier=classifier,
@@ -615,6 +732,7 @@ async def run_training(
         evaluate=evaluate,
         extra_wandb_config=extra_wandb_config,
         train_validation_data=labelled_passages,
+        max_training_samples=limit_training_samples,
     )
 
 

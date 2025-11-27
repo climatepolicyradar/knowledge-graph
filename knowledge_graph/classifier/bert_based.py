@@ -2,7 +2,6 @@ import logging
 import os
 import tempfile
 from contextlib import contextmanager
-from copy import deepcopy
 from datetime import datetime
 from typing import Sequence
 
@@ -102,11 +101,15 @@ class BertBasedClassifier(
     def __init__(
         self,
         concept: Concept,
-        base_model: str = "answerdotai/ModernBERT-base",
+        model_name: str = "answerdotai/ModernBERT-base",
     ):
         super().__init__(concept)
-        self.base_model = base_model
+        self.model_name = model_name
+
+        # Private properties for creating and running inference on classifier variants
         self._use_dropout_during_inference = False
+        self._variant_seed = False
+        self._variant_dropout_rate = False
 
         # For training, we can use GPU/MPS if available
         if torch.backends.mps.is_available():
@@ -118,9 +121,9 @@ class BertBasedClassifier(
 
         # Initialize model and tokenizer
         self.model: PreTrainedModel = (
-            AutoModelForSequenceClassification.from_pretrained(base_model)
+            AutoModelForSequenceClassification.from_pretrained(model_name)
         )
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(base_model)
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model_name)
 
         # Always use CPU for inference, to ensure consistency across different deployment
         # environments. Models may be developed on machines with GPU/MPS but need to run
@@ -141,7 +144,8 @@ class BertBasedClassifier(
         return ClassifierID.generate(
             self.name,
             self.concept.id,
-            self.base_model,
+            self.model_name,
+            self.prediction_threshold,
         )
 
     @contextmanager
@@ -150,28 +154,85 @@ class BertBasedClassifier(
         Context manager for safely enabling dropout during inference.
 
         This ensures the model is always returned to its original state,
-        even if an exception occurs during uncertainty estimation.
+        even if an exception occurs during inference.
+
+        Sets a unique random seed for this variant if one was specified during
+        variant creation. Also temporarily sets the dropout rate if one was
+        specified, then restores the original rates afterwards.
         """
         was_training = self.model.training  # type: ignore[attr-defined]
+
+        dropout_layers = [
+            m for m in self.model.modules() if isinstance(m, torch.nn.Dropout)
+        ]
+
+        # Log dropout configuration for debugging (only once per variant)
+        if not hasattr(self, "_dropout_logged"):
+            if not dropout_layers:
+                logger.warning(
+                    "⚠️  No dropout layers found in model %s. "
+                    "Ensemble variants may produce identical predictions.",
+                    self.model_name,
+                )
+            else:
+                original_rates = {layer.p for layer in dropout_layers}
+                logger.info(
+                    "✓ Found %d dropout layers with original rates: %s",
+                    len(dropout_layers),
+                    original_rates,
+                )
+            self._dropout_logged = True
+
+        original_dropout_rates = [layer.p for layer in dropout_layers]
+
+        if self._variant_dropout_rate is not None and dropout_layers:
+            for layer in dropout_layers:
+                layer.p = self._variant_dropout_rate
+            logger.debug(
+                "Temporarily set dropout rate to %.2f for %d layers",
+                self._variant_dropout_rate,
+                len(dropout_layers),
+            )
+
+        # A unique random seed per variant at inference time ensures different dropout
+        # masks across variants
+        if self._variant_seed is not None:
+            torch.manual_seed(self._variant_seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed(self._variant_seed)
+            if torch.backends.mps.is_available():
+                torch.mps.manual_seed(self._variant_seed)
+
         self.model.train()  # type: ignore[attr-defined]
         try:
             yield
         finally:
+            # Restore original dropout rates
+            for layer, original_rate in zip(dropout_layers, original_dropout_rates):
+                layer.p = original_rate
+
             self.model.train(was_training)  # type: ignore[attr-defined]
 
-    def _predict(self, text: str) -> list[Span]:
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
-        return self._predict_batch([text])[0]
+        return self._predict_batch([text], threshold=threshold)[0]
 
-    def _predict_batch(self, texts: Sequence[str]) -> list[list[Span]]:
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float | None = None
+    ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
 
-        if getattr(self, "_use_dropout_during_inference", False):
+        if self._use_dropout_during_inference:
             with self._dropout_enabled():
                 predictions = self.pipeline(list(texts), padding=True, truncation=True)
         else:
             self.model.eval()  # type: ignore[attr-defined]
             predictions = self.pipeline(list(texts), padding=True, truncation=True)
+
+        # Use the provided threshold, or fall back to the classifier's default threshold
+        effective_threshold = (
+            threshold if threshold is not None else self.prediction_threshold
+        )
 
         results = []
         for text, prediction in zip(texts, predictions):
@@ -180,24 +241,59 @@ class BertBasedClassifier(
             # for negative predictions and LABEL_1 for positive predictions. We check
             # for LABEL_1 to determine if the text contains an instance of the concept.
             if prediction["label"] == "LABEL_1":
-                span = Span(
-                    text=text,
-                    concept_id=self.concept.wikibase_id,
-                    prediction_probability=prediction["score"],
-                    start_index=0,
-                    end_index=len(text),
-                    labellers=[str(self)],
-                    timestamps=[datetime.now()],
-                )
-                text_results.append(span)
+                if (
+                    effective_threshold is None
+                    or prediction["score"] >= effective_threshold
+                ):
+                    span = Span(
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
+                        prediction_probability=prediction["score"],
+                        start_index=0,
+                        end_index=len(text),
+                        labellers=[str(self)],
+                        timestamps=[datetime.now()],
+                    )
+                    text_results.append(span)
             results.append(text_results)
 
         return results
 
-    def get_variant(self) -> Self:
-        """Get a variant of the classifier for Monte Carlo dropout estimation."""
-        variant = deepcopy(self)
+    def get_variant(
+        self, random_seed: int | None = None, dropout_rate: float = 0.1
+    ) -> Self:
+        """
+        Get a variant of the classifier for Monte Carlo dropout estimation.
+
+        Creates a new classifier instance with the same trained weights but potentially
+        different random state for dropout sampling. This enables Monte Carlo Dropout
+        for uncertainty estimation in ensembles.
+
+        Args:
+            random_seed: Set at inference time to ensure different dropout masks
+                across variants. If not set, uses the containing random state.
+            dropout_rate: Dropout probability to use during inference for this variant.
+                The dropout rate is temporarily set during inference using the
+                _dropout_enabled() context manager. Defaults to 0.1.
+
+        Returns:
+            A new classifier instance with dropout enabled during inference.
+        """
+        variant = self.__class__(concept=self.concept, model_name=self.model_name)
+        variant.model.load_state_dict(self.model.state_dict())
+        variant.pipeline = pipeline(
+            "text-classification",
+            model=variant.model,
+            tokenizer=variant.tokenizer,
+            device=variant.training_device,
+        )
+
+        variant._variant_seed = random_seed
+        variant._variant_dropout_rate = dropout_rate
+
         variant._use_dropout_during_inference = True  # noqa: SLF001
+        variant._is_fitted = self._is_fitted
+
         return variant
 
     def _prepare_dataset(self, labelled_passages: list[LabelledPassage]) -> Dataset:
@@ -292,7 +388,11 @@ class BertBasedClassifier(
 
         labels = [
             1
-            if any(span.concept_id == self.concept.wikibase_id for span in p.spans)
+            if any(
+                (span.concept_id == self.concept.wikibase_id)
+                and (span.prediction_probability != 0)
+                for span in p.spans
+            )
             else 0
             for p in labelled_passages
         ]
@@ -379,7 +479,7 @@ class BertBasedClassifier(
                 max_grad_norm=1.0,
                 learning_rate=5e-4,
                 weight_decay=0.01,
-                warmup_ratio=0.06,
+                warmup_ratio=0.1,
                 lr_scheduler_type="cosine",
                 optim="adamw_torch_fused",
                 fp16=False,

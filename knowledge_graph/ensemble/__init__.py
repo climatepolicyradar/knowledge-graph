@@ -66,12 +66,6 @@ class Ensemble:
                 f"All classifiers used in the ensemble must share the concept {concept}. Other concepts found: {invalid_concepts}"
             )
 
-        unique_classifier_ids = {str(clf) for clf in classifiers}
-        if len(unique_classifier_ids) < len(classifiers):
-            raise IncompatibleSubClassifiersError(
-                reason="All classifiers in the ensemble must be unique."
-            )
-
     @overload
     def predict(
         self,
@@ -215,7 +209,7 @@ def create_ensemble(
             f"Classifier must be variant-enabled to be part of an ensemble.\nClassifier type {classifier.name} is not."
         )
 
-    if not classifier._is_fitted and not isinstance(classifier, ZeroShotClassifier):
+    if not classifier.is_fitted and not isinstance(classifier, ZeroShotClassifier):
         raise ValueError(
             f"Classifier must be fitted before creating an ensemble.\n"
             f"Call {classifier.name}.fit() before creating the ensemble."

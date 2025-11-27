@@ -102,6 +102,27 @@ class Disagreement(EnsembleMetric):
         return UnitInterval(disagreement)
 
 
+class MajorityVote(EnsembleMetric):
+    """The majority vote of an ensemble. Returns 0.5 if there's a 50-50 split."""
+
+    def __call__(self, spans_per_classifier: Sequence[Sequence[Span]]) -> UnitInterval:
+        """Calculate majority vote."""
+
+        binary_predictions = [
+            1 if predictions else 0 for predictions in spans_per_classifier
+        ]
+
+        num_positives = sum(binary_predictions)
+        num_negatives = len(binary_predictions) - sum(binary_predictions)
+
+        if num_positives == num_negatives:
+            return UnitInterval(0.5)
+
+        majority_vote = 1 if num_positives > num_negatives else 0
+
+        return UnitInterval(majority_vote)
+
+
 class PredictionProbabilityStandardDeviation(ProbabilityBasedEnsembleMetric):
     """The standard deviation of prediction probability for passage-level predictions."""
 
@@ -112,9 +133,23 @@ class PredictionProbabilityStandardDeviation(ProbabilityBasedEnsembleMetric):
         :raises ValueError: if there is more than one Span predicted per piece of text
             per classifier. This metric does not handle aggregating prediction
             probabilities for several spans on a passage of text.
+        :raises ValueError: if there are insufficient spans to calculate standard deviation
+            (need at least 2 spans with probabilities)
         """
 
         spans_flat = [span for spans in spans_per_classifier for span in spans]
+
+        if len(spans_flat) == 0:
+            raise ValueError(
+                "Can't calculate probability standard deviation: "
+                "no classifiers predicted positive (all span lists are empty)."
+            )
+
+        if len(spans_flat) < 2:
+            raise ValueError(
+                "Can't calculate probability standard deviation: "
+                f"only {len(spans_flat)} span(s) found. Need at least 2 to calculate standard deviation."
+            )
 
         if not all_spans_have_probability(spans_flat):
             raise ValueError(

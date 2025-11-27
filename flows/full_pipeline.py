@@ -1,3 +1,4 @@
+import json
 from collections.abc import Sequence
 
 from prefect import State, flow
@@ -8,6 +9,7 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
+    AggregateResult,
     RunOutputIdentifier,
     aggregate,
 )
@@ -27,7 +29,15 @@ from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
     inference,
 )
-from flows.utils import DocumentImportId, DocumentStem, Fault, get_logger
+from flows.utils import (
+    DocumentImportId,
+    DocumentStem,
+    Fault,
+    SlackNotify,
+    build_inference_result_s3_uri,
+    get_logger,
+)
+from knowledge_graph.cloud import AwsEnv, get_async_session
 
 
 async def create_full_pipeline_summary_artifact(
@@ -52,7 +62,10 @@ async def create_full_pipeline_summary_artifact(
 
 
 # pyright: reportCallIssue=false, reportGeneralTypeIssues=false
-@flow()
+@flow(
+    on_failure=[SlackNotify.message],
+    on_crashed=[SlackNotify.message],
+)
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
@@ -111,11 +124,12 @@ async def full_pipeline(
         config=config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
+        return_pointer=True,
         return_state=True,
     )
 
     inference_result_raw: (
-        set[DocumentStem] | Fault | Exception
+        RunOutputIdentifier | Fault | Exception
     ) = await inference_run.result(raise_on_failure=False)
 
     match inference_result_raw:
@@ -123,44 +137,78 @@ async def full_pipeline(
             logger.error("Inference failed.")
             raise inference_result_raw
         case Fault():
-            assert isinstance(inference_result_raw.data, set), (
-                "Expected data field of the Fault to contain a set of DocumentStem objects,"
-                + f"got type: {type(inference_result_raw.data)}"
+            if not isinstance(inference_result_raw.data, dict):
+                raise ValueError(
+                    "Expected data field of the Fault to contain a dict with successful_document_stems and run_output_identifier,"
+                    + f"got type: {type(inference_result_raw.data)}"
+                )
+            successful_document_stems: set[DocumentStem] = inference_result_raw.data[
+                "successful_document_stems"
+            ]
+            run_output_identifier: RunOutputIdentifier = inference_result_raw.data[
+                "run_output_identifier"
+            ]
+            logger.info(
+                f"Inference complete with partial failures. Successfully classified {len(successful_document_stems)} documents."
             )
-            successful_document_stems: set[DocumentStem] = inference_result_raw.data
-        case set():
-            successful_document_stems: set[DocumentStem] = inference_result_raw
+        case str():
+            run_output_identifier: RunOutputIdentifier = inference_result_raw
+            s3_uri = build_inference_result_s3_uri(
+                cache_bucket_str=config.cache_bucket_str,
+                inference_document_target_prefix=config.inference_document_target_prefix,
+                run_output_identifier=run_output_identifier,
+            )
+            session = get_async_session(
+                region_name=config.bucket_region,
+                aws_env=config.aws_env,
+            )
+            async with session.client("s3") as s3_client:
+                response = await s3_client.get_object(
+                    Bucket=s3_uri.bucket, Key=s3_uri.key
+                )
+                body = await response["Body"].read()
+                result_data = json.loads(body.decode("utf-8"))
+                successful_document_stems: set[DocumentStem] = set(
+                    result_data["successful_document_stems"]
+                )
+            logger.info(
+                f"Inference complete. Successfully classified {len(successful_document_stems)} documents."
+            )
         case _:
-            raise ValueError(
-                f"Unexpected inference result type: {type(inference_result_raw)}"
-            )
-    logger.info(
-        f"Inference complete. Successfully classified {len(successful_document_stems)} documents."
-    )
+            raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    if len(successful_document_stems) == 0:
-        raise ValueError(
-            "Inference successfully ran on 0 documents, skipping aggregation and indexing."
-        )
-
-    aggregation_run: State = await aggregate(
-        document_stems=list(successful_document_stems),
+    aggregation_result: State = await aggregate(
+        run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
         return_state=True,
-    )
-    aggregation_result: RunOutputIdentifier | Exception = await aggregation_run.result(
-        raise_on_failure=False
+        # Make sure we never wipe any concepts for users. Otherwise, it's allowed.
+        classifier_specs=classifier_specs
+        if config.aws_env != AwsEnv.production
+        else None,
     )
 
     if isinstance(aggregation_result, Exception):
         logger.error("Aggregation failed.")
         raise aggregation_result
-    logger.info(f"Aggregation complete. Run output identifier: {aggregation_result}")
+
+    agg_result = AggregateResult(run_output_identifier=run_output_identifier)
+
+    if isinstance(aggregation_result, State):
+        agg_result: AggregateResult = await aggregation_result.result(
+            raise_on_failure=False
+        )
+        run_output_identifier = agg_result.run_output_identifier
+        if agg_result.errors is not None:
+            logger.error(f"Aggregation errors occurred: {agg_result.errors}")
+
+    logger.info(
+        f"Aggregation complete. Run output identifier is: {run_output_identifier}"
+    )
 
     indexing_run: State = await index(
-        run_output_identifier=aggregation_result,
+        run_output_identifier=run_output_identifier,
         config=config,
         batch_size=indexing_batch_size,
         indexer_concurrency_limit=indexer_concurrency_limit,
@@ -182,3 +230,7 @@ async def full_pipeline(
     )
 
     logger.info("Full pipeline run completed!")
+
+    # mark full run as failed if aggregation errors occurred
+    if agg_result.errors is not None:
+        raise ValueError(agg_result)

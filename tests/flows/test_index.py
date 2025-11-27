@@ -538,7 +538,14 @@ async def test_run_indexing_from_aggregate_results__handles_failures(
         assert summary_artifact and summary_artifact.description
         assert (
             summary_artifact.description
-            == "Summary of the passages indexing run to update concept counts."
+            == """# Aggregate Indexing Summary
+
+## Overview
+- **Environment**: sandbox
+- **Total documents processed**: 3
+- **Successful Batches**: 0
+- **Failed Batches**: 3
+"""
         )
 
 

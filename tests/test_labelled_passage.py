@@ -2,7 +2,10 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelled_passage import (
+    LabelledPassage,
+    labelled_passages_to_dataframe,
+)
 from knowledge_graph.span import Span
 from tests.common_strategies import span_strategy, text_strategy
 
@@ -154,3 +157,138 @@ def test_whether_highlighted_text_correctly_handles_html_tags():
     )
     highlighted = passage.get_highlighted_text()
     assert highlighted == "This is a test [cyan]passage[/cyan]."
+
+
+@pytest.fixture
+def labelled_passages_with_probabilities():
+    """
+    Fixture providing labelled passages with prediction probabilities.
+
+    :return list[LabelledPassage]: List of labelled passages with spans containing prediction probabilities
+    """
+    return [
+        LabelledPassage(
+            text="Climate change is a global issue.",
+            spans=[
+                Span(
+                    text="Climate change is a global issue.",
+                    start_index=0,
+                    end_index=14,
+                    concept_id="Q123",
+                    labellers=["user1"],
+                    prediction_probability=0.95,
+                ),
+                Span(
+                    text="Climate change is a global issue.",
+                    start_index=20,
+                    end_index=26,
+                    concept_id="Q456",
+                    labellers=["user1"],
+                    prediction_probability=0.87,
+                ),
+            ],
+            metadata={"source": "test_doc_1", "dataset": "train"},
+        ),
+        LabelledPassage(
+            text="Renewable energy is important.",
+            spans=[
+                Span(
+                    text="Renewable energy is important.",
+                    start_index=0,
+                    end_index=16,
+                    concept_id="Q789",
+                    labellers=["user2"],
+                    prediction_probability=0.92,
+                )
+            ],
+            metadata={"source": "test_doc_2", "dataset": "train"},
+        ),
+        LabelledPassage(
+            text="This passage has no spans.",
+            spans=[],
+            metadata={"source": "test_doc_3", "dataset": "test"},
+        ),
+    ]
+
+
+@pytest.fixture
+def labelled_passages_without_probabilities():
+    """
+    Fixture providing labelled passages without prediction probabilities.
+
+    :return list[LabelledPassage]: List of labelled passages with spans that don't have prediction probabilities
+    """
+    return [
+        LabelledPassage(
+            text="Climate change is a global issue.",
+            spans=[
+                Span(
+                    text="Climate change is a global issue.",
+                    start_index=0,
+                    end_index=14,
+                    concept_id="Q123",
+                    labellers=["user1"],
+                ),
+                Span(
+                    text="Climate change is a global issue.",
+                    start_index=20,
+                    end_index=26,
+                    concept_id="Q456",
+                    labellers=["user1"],
+                ),
+            ],
+            metadata={"source": "test_doc_1", "dataset": "train"},
+        ),
+        LabelledPassage(
+            text="Renewable energy is important.",
+            spans=[
+                Span(
+                    text="Renewable energy is important.",
+                    start_index=0,
+                    end_index=16,
+                    concept_id="Q789",
+                    labellers=["user2"],
+                )
+            ],
+            metadata={"source": "test_doc_2", "dataset": "train"},
+        ),
+    ]
+
+
+def test_labelled_passages_to_dataframe_with_probabilities(
+    labelled_passages_with_probabilities,
+):
+    """
+    Test that labelled_passages_to_dataframe correctly converts passages with prediction probabilities.
+
+    :param list[LabelledPassage] labelled_passages_with_probabilities: Fixture with test data
+    """
+    df = labelled_passages_to_dataframe(labelled_passages_with_probabilities)
+
+    assert len(df) == len(labelled_passages_with_probabilities)
+    assert "id" in df.columns
+    assert "text" in df.columns
+    assert "spans" in df.columns
+    assert "prediction" in df.columns
+    assert "prediction_probability" in df.columns
+
+    assert df["prediction"].tolist() == [True, True, False]
+    assert df["prediction_probability"].tolist() == [0.95, 0.92, 0]
+
+    # Check that spans are not exploded (they should be lists/dicts)
+    assert isinstance(df["spans"].iloc[0], list)
+
+
+def test_labelled_passages_to_dataframe_without_probabilities(
+    labelled_passages_without_probabilities,
+):
+    """
+    Test that labelled_passages_to_dataframe correctly handles passages without prediction probabilities.
+
+    :param list[LabelledPassage] labelled_passages_without_probabilities: Fixture with test data
+    """
+    df = labelled_passages_to_dataframe(labelled_passages_without_probabilities)
+
+    assert len(df) == len(labelled_passages_without_probabilities)
+    assert df["prediction"].tolist() == [True, True]
+    assert df["prediction_probability"].tolist() == [None, None]

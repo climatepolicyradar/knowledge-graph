@@ -17,9 +17,12 @@ from prefect.context import FlowRunContext
 from prefect.states import Running
 
 from flows.aggregate import (
+    AggregateResult,
     AggregationFailure,
     Metadata,
     MiniClassifierSpec,
+    _document_stems_from_parameters,
+    aggregate,
     aggregate_batch_of_documents,
     build_run_output_identifier,
     collect_stems_by_specs,
@@ -33,7 +36,9 @@ from flows.aggregate import (
     validate_passages_are_same_except_concepts,
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
-from flows.utils import DocumentStem
+from flows.config import Config
+from flows.utils import DocumentStem, build_inference_result_s3_uri
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -85,6 +90,26 @@ def mock_classifier_specs():
 
 
 @pytest.mark.asyncio
+async def test_aggregate_dont_allow_prod_classifier_specs(test_config):
+    test_config.aws_env = AwsEnv.production
+
+    with pytest.raises(
+        ValueError, match="in production you must use the full classifier specs. list"
+    ):
+        _ = await aggregate(
+            config=test_config,
+            classifier_specs=[
+                ClassifierSpec(
+                    wikibase_id="Q1286",
+                    classifier_id="7bt99yeu",
+                    wandb_registry_version="v3",
+                    dont_run_on=["sabin", "cclw"],
+                ),
+            ],
+        )
+
+
+@pytest.mark.asyncio
 async def test_aggregate_batch_of_documents(
     mock_bucket_labelled_passages_large, test_config, mock_classifier_specs
 ):
@@ -111,12 +136,15 @@ async def test_aggregate_batch_of_documents(
     with (
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        run_reference = await aggregate_batch_of_documents(
+        aggregate_result = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
             run_output_identifier="test-run",
         )
+
+        if isinstance(aggregate_result, AggregateResult):
+            run_reference = aggregate_result.run_output_identifier
 
     all_collected_ids = []
     for document_stem in document_stems:
@@ -168,9 +196,13 @@ async def test_aggregate_batch_of_documents(
         f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
     )
 
-    summary_artifact = await Artifact.get("batch-aggregate-test-flow-run")
+    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
     assert summary_artifact and summary_artifact.description
     assert summary_artifact.data == "[]"
+
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert aggregate_result.errors is None
 
 
 @pytest.mark.asyncio
@@ -195,23 +227,68 @@ async def test_aggregate_batch_of_documents__with_failures(
     mock_context.flow_run = flow_run
 
     with (
-        pytest.raises(ValueError),
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        await aggregate_batch_of_documents(
+        aggregate_result = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
             run_output_identifier="test-run",
         )
 
-    summary_artifact = await Artifact.get("batch-aggregate-test-flow-run")
+    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
     assert summary_artifact and summary_artifact.description
     artifact_data = json.loads(summary_artifact.data)
     failure_stems = [f["Failed document Stem"] for f in artifact_data]
     assert set(failure_stems) == set(expect_failure_stems)
     assert "NoSuchKey" in artifact_data[0]["Exception"]
     assert "NoSuchKey" in artifact_data[1]["Exception"]
+
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert (
+        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+    )
+
+
+@pytest.mark.asyncio
+async def test_aggregate_batch_of_documents__returns_aggregate_result_containing_errors(
+    mock_bucket_labelled_passages_large, mock_classifier_specs, test_config
+):
+    _, classifier_specs = mock_classifier_specs
+    expect_failure_stems = [
+        DocumentStem("CCLW.Made.Up.Document.ID"),
+        DocumentStem("OEP.One.That.Should.Fail"),
+    ]
+    document_stems = [DocumentStem("CCLW.executive.10061.4515")] + expect_failure_stems
+
+    flow_run = FlowRun(
+        id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
+        flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
+        name="test-flow-run",
+        state=Running(),
+    )
+
+    mock_context = MagicMock(spec=FlowRunContext)
+    mock_context.flow_run = flow_run
+
+    aggregate_result = None
+
+    with (
+        patch("flows.aggregate.get_run_context", return_value=mock_context),
+    ):
+        aggregate_result = await aggregate_batch_of_documents(
+            document_stems=document_stems,
+            config_json=test_config.model_dump(),
+            classifier_specs=classifier_specs,
+            run_output_identifier="test-run",
+        )
+
+    assert aggregate_result is not None
+    assert aggregate_result.run_output_identifier == "test-run"
+    assert (
+        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+    )
 
 
 def test_build_run_output_prefix():
@@ -629,3 +706,129 @@ def test_convert_labelled_passage_to_concepts_with_classifier_spec_in_metadata(
     assert len(concepts) == 1
     # Should use classifier_spec format instead of span.labellers
     assert concepts[0].model == "Q1363:xyz78abc:vax7e3n7"
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_neither(
+    test_config: Config,
+    mock_classifier_specs,
+    mock_bucket_labelled_passages_large,
+):
+    actual = await _document_stems_from_parameters(
+        config=test_config,
+        document_stems=None,
+        run_output_identifier=None,
+    )
+
+    assert set(actual) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_both(test_config: Config):
+    run_output_identifier = "2025-01-15T10:30-test-flow-run"
+
+    with pytest.raises(
+        ValueError,
+        match="only one of document_stems and run_output_identifier can be used",
+    ):
+        _ = await _document_stems_from_parameters(
+            config=test_config,
+            document_stems=[
+                DocumentStem("UNFCCC.non-party.467.0"),
+                DocumentStem("CCLW.executive.10061.4515"),
+                DocumentStem("AF.document.i00000021.n0000_translated_en"),
+                DocumentStem("UNFCCC.party.492.0"),
+                DocumentStem("CPR.document.i00000549.n0000"),
+            ],
+            run_output_identifier=run_output_identifier,
+        )
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_document_stems(
+    test_config: Config,
+    mock_classifier_specs,
+    mock_bucket_labelled_passages_large,
+):
+    actual = await _document_stems_from_parameters(
+        config=test_config,
+        document_stems=[
+            DocumentStem("UNFCCC.non-party.467.0"),
+            DocumentStem("CCLW.executive.10061.4515"),
+            DocumentStem("AF.document.i00000021.n0000_translated_en"),
+            DocumentStem("UNFCCC.party.492.0"),
+            DocumentStem("CPR.document.i00000549.n0000"),
+        ],
+        run_output_identifier=None,
+    )
+
+    assert set(actual) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test__document_stems_from_parameters_pointer(
+    test_config: Config,
+    mock_classifier_specs,
+    mock_bucket_labelled_passages_large,
+    mock_s3_async_client,
+):
+    run_output_identifier = "2025-01-15T10:30-test-flow-run"
+
+    inference_result_s3_uri = build_inference_result_s3_uri(
+        cache_bucket_str=test_config.cache_bucket_str,
+        inference_document_target_prefix=test_config.inference_document_target_prefix,
+        run_output_identifier=run_output_identifier,
+    )
+
+    document_stems = [
+        "UNFCCC.non-party.467.0",
+        "CCLW.executive.10061.4515",
+        "AF.document.i00000021.n0000_translated_en",
+        "UNFCCC.party.492.0",
+        "CPR.document.i00000549.n0000",
+    ]
+
+    result_data = {
+        "successful_document_stems": list(document_stems),
+    }
+
+    result_json = json.dumps(result_data)
+
+    _ = await mock_s3_async_client.put_object(
+        Bucket=inference_result_s3_uri.bucket,
+        Key=inference_result_s3_uri.key,
+        Body=result_json,
+        ContentType="application/json",
+    )
+
+    actual = await _document_stems_from_parameters(
+        config=test_config,
+        document_stems=None,
+        run_output_identifier=run_output_identifier,
+    )
+
+    assert set(actual) == set(
+        [
+            "UNFCCC.non-party.467.0",
+            "CCLW.executive.10061.4515",
+            "AF.document.i00000021.n0000_translated_en",
+            "UNFCCC.party.492.0",
+            "CPR.document.i00000549.n0000",
+        ]
+    )

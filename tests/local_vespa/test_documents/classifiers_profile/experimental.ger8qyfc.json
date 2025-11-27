@@ -1,0 +1,20 @@
+{
+  "id": "id:doc_search:classifiers_profile::experimental.ger8qyfc",
+  "fields": {
+    "id": "ger8qyfc",
+    "name": "experimental",
+    "multi": false,
+    "mappings": [
+      {
+        "concept_id": "q4af5w56",
+        "concept_wikibase_id": "Q880",
+        "classifier_id": "r5n8qz2t"
+      },
+      {
+        "concept_id": "wv6fw93z",
+        "concept_wikibase_id": "Q730",
+        "classifier_id": "w3kb7x1s"
+      }
+    ]
+  }
+}
