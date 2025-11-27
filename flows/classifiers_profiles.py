@@ -1291,14 +1291,15 @@ async def sync_classifiers_profiles(
     wandb_api_key: SecretStr | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     wikibase_cache_path: Path | None = None,
-    github_token: SecretStr | None = None,
     wikibase_cache_save_if_missing: bool = False,
+    github_token: SecretStr | None = None,
     vespa_search_adapter: VespaSearchAdapter | None = None,
     upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
     automerge_classifier_specs_pr: bool = False,
     auto_train: bool = False,
     debug_wikibase_validation: bool = False,
+    vespa_rerun_only: bool = False,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1361,6 +1362,11 @@ async def sync_classifiers_profiles(
     if not automerge_classifier_specs_pr:
         logger.warning(
             f"automerge_classifier_specs_pr is set to {automerge_classifier_specs_pr}. Classifier specs PRs will not be auto-merged."
+        )
+
+    if vespa_rerun_only:
+        logger.warning(
+            f"vespa_rerun_only is set to {vespa_rerun_only}. Vespa will be updated even if no changes are made to classifier specs."
         )
 
     classifier_specs = load_classifier_specs(aws_env)
@@ -1483,17 +1489,18 @@ async def sync_classifiers_profiles(
 
     # set as default value to indicate no PR created
     cs_pr_results: Result[int | None, Error] = Ok(None)
-    # if there were changes to wandb
     vespa_results = []
-    if len(successes) > 0:
-        logger.info(
-            f"Changes made to wandb: {len(successes)}, updating Vespa with the latest classifiers profiles..."
-        )
-        # update classifiers specs yaml file
-        refresh_all_available_classifiers([aws_env])
 
-        # reload classifier specs to confirm updates
-        updated_classifier_specs = load_classifier_specs(aws_env)
+    # update classifiers specs yaml file
+    refresh_all_available_classifiers([aws_env])
+
+    # reload classifier specs to confirm updates
+    updated_classifier_specs = load_classifier_specs(aws_env)
+
+    if classifier_specs != updated_classifier_specs:
+        logger.info(
+            f"Changes made to classifier specs: {len(successes)} wandb changes, creating and merging PR..."
+        )
 
         # create PR with updated classifier specs
         spec_file = str(determine_spec_file_path(aws_env))
@@ -1512,16 +1519,29 @@ async def sync_classifiers_profiles(
             github_token=github_token,
             auto_merge=automerge_classifier_specs_pr,
         )
+
         if is_err(cs_pr_results):
             logger.warning("Error creating and merging PR, skipping vespa updates")
+            vespa_update_needed = False
         else:
-            async with vespa_search_adapter.client.asyncio(
-                connections=VESPA_CONNECTION_POOL_SIZE,
-                timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
-            ) as vespa_connection_pool:
-                vespa_results = await update_vespa_with_classifiers_profiles(
-                    updated_classifier_specs, vespa_connection_pool, upload_to_vespa
-                )
+            vespa_update_needed = True
+
+    else:
+        logger.info("No changes to classifier specs")
+        # vespa update only needed if rerun is requested
+        vespa_update_needed = vespa_rerun_only
+
+    if vespa_update_needed:
+        logger.info("Updating Vespa with classifiers profiles...")
+        async with vespa_search_adapter.client.asyncio(
+            connections=VESPA_CONNECTION_POOL_SIZE,
+            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
+        ) as vespa_connection_pool:
+            vespa_results = await update_vespa_with_classifiers_profiles(
+                updated_classifier_specs, vespa_connection_pool, upload_to_vespa
+            )
+    else:
+        logger.info("Skipping Vespa updates")
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
