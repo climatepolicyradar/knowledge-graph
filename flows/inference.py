@@ -13,7 +13,6 @@ from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
 from cpr_sdk.parser_models import BaseParserOutput, BlockType
 from mypy_boto3_s3.type_defs import (
-    ObjectTypeDef,
     PutObjectOutputTypeDef,
 )
 from prefect import flow
@@ -263,6 +262,32 @@ async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client)
     )
 
 
+async def get_file_stems_for_document_ids(
+    document_ids: list[DocumentImportId],
+    config: Config,
+) -> list[DocumentStem]:
+    """Collect all the Document Stems for the Document Import Ids"""
+
+    if config.cache_bucket is None:
+        raise ValueError("cache_bucket must be set in config")
+
+    document_stems: list[DocumentStem] = []
+
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        for doc_id in document_ids:
+            document_key = os.path.join(
+                config.inference_document_source_prefix, f"{doc_id}.json"
+            )
+            document_stems += await get_file_stems_for_document_id(
+                doc_id, config.cache_bucket, document_key, s3_client
+            )
+    return document_stems
+
+
 async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     """
     Scan configured bucket and return all file stems.
@@ -363,71 +388,44 @@ async def get_existing_inference_results(
     return existing_stems
 
 
-async def get_latest_ingest_documents(config: Config) -> Sequence[DocumentImportId]:
-    """
-    Get IDs of changed documents from the latest ingest run
-
-    Retrieves the `new_and_updated_docs.json` file from the latest ingest.
-    Extracts the ids from the file, and returns them as a single list.
-    """
-    logger = get_logger()
+async def get_document_ids_from_file(
+    s3_uri: S3Uri, config: Config
+) -> list[DocumentImportId]:
+    """Retrieve DocumentImportId's for from an s3 file."""
     session = get_async_session(
         region_name=config.bucket_region,
         aws_env=config.aws_env,
     )
     async with session.client("s3") as s3_client:
-        page_iterator = await get_bucket_paginator(
-            config, config.pipeline_state_prefix, s3_client
-        )
-        file_name = "new_and_updated_documents.json"
+        try:
+            data = await download_s3_file(config, s3_uri.key, s3_client)
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code == "NoSuchKey":
+                raise FileNotFoundError(f"File not found: {s3_uri}")
+            if extra_context := parse_client_error_details(e):
+                e.add_note(f"{extra_context}, key: {s3_uri.key}")
+            raise
 
-        # First get all matching files, then sort them
-        matching_files: list[ObjectTypeDef] = []
+    lines = data.splitlines()
 
-        # Iterate through pages and extract the "Contents" list
-        async for page in page_iterator:
-            if "Contents" in page:
-                contents: list[ObjectTypeDef] = page[
-                    "Contents"
-                ]  # Explicitly type the contents
-                matching_files.extend(contents)
-
-    # Filter files that contain the target file name in their "Key"
-    filtered_files = [
-        item for item in matching_files if "Key" in item and file_name in item["Key"]
+    parsed_document_ids: list[DocumentImportId] = [
+        DocumentImportId(line.strip())
+        for line in lines
+        if line.strip()  # Skip empty lines
     ]
 
-    if not filtered_files:
-        raise ValueError(
-            f"failed to find any `{file_name}` files in "
-            f"`{config.cache_bucket}/{config.pipeline_state_prefix}`"
-        )
+    if not parsed_document_ids:
+        raise ValueError(f"No document IDs found in file: {s3_uri}")
 
-    # Sort by "Key" and get the last one
-    latest = sorted(filtered_files, key=lambda x: x["Key"])[-1]
-
-    latest_key = latest["Key"]
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        data = await download_s3_file(config, latest_key, s3_client)
-        content = json.loads(data)
-        updated = list(content["updated_documents"].keys())
-        new = [d["import_id"] for d in content["new_documents"]]
-
-    logger.info(
-        f"Retrieved {len(new)} new, and {len(updated)} updated from {latest_key}"
-    )
-    return new + updated
+    return parsed_document_ids
 
 
 async def determine_file_stems(
     config: Config,
-    use_new_and_updated: bool,
     requested_document_ids: Optional[Sequence[DocumentImportId]],
     current_bucket_file_stems: list[DocumentStem],
+    document_ids_s3_uri: S3Uri | None = None,
 ) -> list[DocumentStem]:
     """
     Function for identifying the file stems to process.
@@ -443,44 +441,39 @@ async def determine_file_stems(
     For requested document ids we identify whether there are any translated files that
     should also be processed by identifying their file stems as well.
     """
-    if use_new_and_updated and requested_document_ids:
+
+    if requested_document_ids and document_ids_s3_uri:
         raise ValueError(
-            "`use_new_and_updated`, and `requested_document_ids` are mutually exclusive"
+            "`document_ids` and `document_ids_s3_path` are mutually exclusive. "
+            "Please provide either document_ids or document_ids_s3_path, but not both."
         )
-    elif use_new_and_updated:
-        requested_document_ids = await get_latest_ingest_documents(config)
+
+    if document_ids_s3_uri is not None:
+        document_ids = await get_document_ids_from_file(
+            s3_uri=document_ids_s3_uri,
+            config=config,
+        )
+        document_stems = await get_file_stems_for_document_ids(
+            document_ids=document_ids, config=config
+        )
     elif requested_document_ids is None:
-        current_bucket_file_stems__filtered = filter_non_english_language_file_stems(
+        document_stems = filter_non_english_language_file_stems(
             file_stems=current_bucket_file_stems
         )
-        return current_bucket_file_stems__filtered
+    elif requested_document_ids:
+        document_stems = await get_file_stems_for_document_ids(
+            document_ids=list(requested_document_ids), config=config
+        )
+    else:
+        raise ValueError("No document IDs provided or found!")
 
-    assert config.cache_bucket
-
-    requested_document_stems = []
-
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        for doc_id in requested_document_ids:
-            document_key = os.path.join(
-                config.inference_document_source_prefix, f"{doc_id}.json"
-            )
-            requested_document_stems += await get_file_stems_for_document_id(
-                doc_id, config.cache_bucket, document_key, s3_client
-            )
-
-    missing_from_bucket = list(
-        set(requested_document_stems) - set(current_bucket_file_stems)
-    )
+    missing_from_bucket = list(set(document_stems) - set(current_bucket_file_stems))
     if len(missing_from_bucket) > 0:
         raise ValueError(
             f"Requested document_ids not found in bucket: {missing_from_bucket}"
         )
 
-    return requested_document_stems
+    return document_stems
 
 
 @retry(
@@ -534,6 +527,7 @@ async def download_s3_file(config: Config, key: str, s3_client: S3Client):
         if extra_context := parse_client_error_details(e):
             e.add_note(f"{extra_context}, key: {key}")
         raise
+
     body = await response["Body"].read()
     return body.decode("utf-8")
 
@@ -1265,7 +1259,7 @@ async def store_inference_result(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    use_new_and_updated: bool = False,
+    document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1277,7 +1271,7 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    use_new_and_updated: bool = False,
+    document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1292,7 +1286,7 @@ async def inference(
 async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    use_new_and_updated: bool = False,
+    document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
@@ -1308,6 +1302,9 @@ async def inference(
 
     params:
     - document_ids: List of document ids to run inference on
+    - document_ids_s3_path: S3 path string (e.g., "s3://bucket/key") to a file
+        containing document IDs (one per line). Mutually exclusive with document_ids
+        parameter.
     - classifier_spec: List of classifier names and aliases (alias tag
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
@@ -1328,11 +1325,15 @@ async def inference(
 
     logger.info(f"using run output identifier `{run_output_identifier}`")
 
+    document_ids_s3_uri: S3Uri | None = (
+        S3Uri.from_s3_path(document_ids_s3_path) if document_ids_s3_path else None
+    )
+
     current_bucket_file_stems = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
         config=config,
-        use_new_and_updated=use_new_and_updated,
         requested_document_ids=document_ids,
+        document_ids_s3_uri=document_ids_s3_uri,
         current_bucket_file_stems=current_bucket_file_stems,
     )
 
