@@ -29,7 +29,7 @@ from flows.classifiers_profiles import (
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, is_ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -1266,7 +1266,7 @@ async def test_sync_classifiers_profiles(
 
     # mock create_and_merge_pr results as async function
     pr_number = 123
-    mock_pr_results = [Ok(pr_number), Ok(None), Ok(None)]
+    mock_pr_results = Ok(pr_number)
     mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
 
     # wandb validation mocks
@@ -1398,7 +1398,7 @@ async def test_create_classifiers_profiles_artifact():
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
     ]
     aws_env = AwsEnv.staging
-    pr_number = 123
+    cs_pr_results = Ok(123)
 
     with patch(
         "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
@@ -1409,7 +1409,7 @@ async def test_create_classifiers_profiles_artifact():
             vespa_errors=vespa_errors,
             successes=successes,
             aws_env=aws_env,
-            pr_number=pr_number,
+            cs_pr_results=cs_pr_results,
         )
 
         mock_acreate_table_artifact.assert_called_once()
@@ -1425,7 +1425,53 @@ async def test_create_classifiers_profiles_artifact():
         # Assert the table contains the correct number of rows
         assert len(table) == len(successes) + len(validation_errors) + len(
             wandb_errors
-        ) + len(vespa_errors)
+        ) + len(vespa_errors)  # pr errors not added to table
 
         # Assert the description contains the PR number
-        assert f"**Classifiers Specs PR**: [#{pr_number}]" in description
+        assert f"**Classifiers Specs PR**: [#{unwrap_ok(cs_pr_results)}]" in description
+
+
+@pytest.mark.asyncio
+async def test_create_classifiers_profiles_artifact__pr_error():
+    validation_errors = []
+    wandb_errors = []
+    vespa_errors = []
+    successes = [
+        {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
+        {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
+    ]
+    aws_env = AwsEnv.staging
+    cs_pr_results = Err(Error(msg="Failed to create PR", metadata={}))
+
+    pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
+    with patch(
+        "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
+    ) as mock_acreate_table_artifact:
+        await create_classifiers_profiles_artifact(
+            validation_errors=validation_errors,
+            wandb_errors=wandb_errors,
+            vespa_errors=vespa_errors,
+            successes=successes,
+            aws_env=aws_env,
+            cs_pr_results=cs_pr_results,
+        )
+
+        mock_acreate_table_artifact.assert_called_once()
+
+        call_args = mock_acreate_table_artifact.call_args
+        key = call_args.kwargs["key"]
+        table = call_args.kwargs["table"]
+        description = call_args.kwargs["description"]
+
+        # Assert the key is correct
+        assert key == f"classifiers-profiles-validation-{aws_env.value}"
+
+        # Assert the table contains the correct number of rows
+        assert len(table) == len(successes) + len(validation_errors) + len(
+            wandb_errors
+        ) + len(vespa_errors)  # pr errors not added to table
+
+        # Assert the description contains the PR number
+        assert (
+            f"**Classifiers Specs PR**: Error creating PR {pr_errors[0]}" in description
+        )

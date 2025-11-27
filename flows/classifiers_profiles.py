@@ -477,7 +477,7 @@ async def create_classifiers_profiles_artifact(
     vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
-    pr_number: int | None,
+    cs_pr_results: Result[int | None, Error],
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
@@ -489,13 +489,16 @@ async def create_classifiers_profiles_artifact(
     failed_concepts = len(all_failures)
 
     pr_details = ""
-    if pr_number and pr_number > 0:
+    if cs_pr_results and is_ok(cs_pr_results):
+        pr_number = unwrap_ok(cs_pr_results)
         pr_url = (
             f"https://github.com/climatepolicyradar/knowledge-graph/pull/{pr_number}"
         )
-        pr_details = f"- **Classifiers Specs PR**: [#{pr_number}]({pr_url})\n"
+        pr_details = "- **Classifiers Specs PR**: "
+        pr_details += f"[#{pr_number}]({pr_url})\n" if pr_number else "No PR created \n"
     else:
-        pr_details = "- **Classifiers Specs PR**: No PR created\n"
+        pr_error = unwrap_err(cs_pr_results) if is_err(cs_pr_results) else None
+        pr_details = f"- **Classifiers Specs PR**: Error creating PR {pr_error}\n"
 
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
@@ -1338,7 +1341,7 @@ async def sync_classifiers_profiles(
     if github_token is None:
         github_token = SecretStr(
             get_aws_ssm_param(
-                "GITHUB_TOKEN",
+                "/GitHub/Token",
                 aws_env=aws_env,
             )
         )
@@ -1476,9 +1479,10 @@ async def sync_classifiers_profiles(
         f"Successful updates: {len(successes)}, Validation errors: {len(validation_errors)}, Wandb errors: {len(wandb_errors)}"
     )
 
+    # set as default value to indicate no PR created
+    cs_pr_results: Result[int | None, Error] = Ok(None)
     # if there were changes to wandb
     vespa_results = []
-    cs_pr_results = []
     if len(successes) > 0:
         logger.info(
             f"Changes made to wandb: {len(successes)}, updating Vespa with the latest classifiers profiles..."
@@ -1517,13 +1521,6 @@ async def sync_classifiers_profiles(
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
 
-    # retrieve PR number if PR was created successfully, otherwise set to -1
-    if cs_pr_results and isinstance(cs_pr_results[0], Ok):
-        pr_number = unwrap_ok(cs_pr_results[0])
-    else:
-        pr_number = -1
-    pr_errors = [unwrap_err(r) for r in cs_pr_results if isinstance(r, Err)]
-
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
     if any(map(is_ok, vespa_results)) and auto_train:
@@ -1555,7 +1552,7 @@ async def sync_classifiers_profiles(
         vespa_errors=vespa_errors,
         successes=successes,
         aws_env=aws_env,
-        pr_number=pr_number,
+        cs_pr_results=cs_pr_results,
     )
 
     if len(vespa_errors) > 0:
@@ -1563,7 +1560,7 @@ async def sync_classifiers_profiles(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
         )
     # if classifiers specs PR errors, fail the flow
-    if len(pr_errors) > 0:
+    if is_err(cs_pr_results):
         raise Exception(
-            f"Errors occurred while creating classifiers specs PR: {pr_errors}"
+            f"Errors occurred while creating classifiers specs PR: {unwrap_err(cs_pr_results)}"
         )
