@@ -287,8 +287,8 @@ def _reconstruct_metadata(df_row: pd.Series) -> dict:
 def dataframe_to_labelled_passages(
     df: pd.DataFrame,
     concept_id: WikibaseID,
+    labeller_names: list[str],
     human_label_column: str | None = None,
-    labeller_name: str = "anonymous_human",
     skip_unlabelled: bool = True,
 ) -> list[LabelledPassage]:
     """
@@ -303,9 +303,11 @@ def dataframe_to_labelled_passages(
         - 'metadata.*': flattened metadata fields (optional, e.g., 'metadata.source')
         - human label column specified by `human_label_column` parameter
     :param concept_id: Concept ID to use for human-labelled spans
+    :param labeller_names: List of identifiers for the human labellers. All names will be
+        added to each span's labellers field. If not provided, spans will have empty
+        labellers lists.
     :param human_label_column: Name of column containing human labels. If not specified,
         passages will be created with no spans.
-    :param labeller_name: Identifier for the human labeller. Defaults to "anonymous_human"
     :param skip_unlabelled: If True, skip passages where the human label is None
         (empty/unlabeled). Only passages with explicit labels (True or False) will be
         returned. Defaults to True.
@@ -320,13 +322,13 @@ def dataframe_to_labelled_passages(
         ... })
         >>> passages = dataframe_to_labelled_passages(
         ...     df,
+        ...     labeller_names=['alice', 'bob'],
         ...     human_label_column='human_label',
-        ...     labeller_name='alice',
         ...     default_concept_id='Q42'
         ... )
         >>> assert len(passages[0].spans) == 1  # Positive label creates span
         >>> assert len(passages[1].spans) == 0  # Negative label, no span
-        >>> assert passages[0].spans[0].labellers == ['alice']
+        >>> assert passages[0].spans[0].labellers == ['alice', 'bob']
     """
 
     if bool(df["id"].isnull().any()):
@@ -357,14 +359,17 @@ def dataframe_to_labelled_passages(
             # False = explicit negative label (no span created)
             # None = no label/unlabeled (no span created)
             if label is True:
+                timestamp = datetime.now()
+                timestamps = [timestamp] * len(labeller_names)
+
                 spans.append(
                     Span(
                         text=text,
                         start_index=0,
                         end_index=len(text),
                         concept_id=WikibaseID(concept_id),
-                        labellers=[labeller_name],
-                        timestamps=[datetime.now()],
+                        labellers=labeller_names,
+                        timestamps=timestamps,
                     )
                 )
 

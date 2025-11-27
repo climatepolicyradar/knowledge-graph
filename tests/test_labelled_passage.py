@@ -330,7 +330,7 @@ def test_dataframe_to_labelled_passages_with_human_label_boolean():
     passages = dataframe_to_labelled_passages(
         df,
         human_label_column="human_label",
-        labeller_name="siôn",
+        labeller_names=["siôn"],
         concept_id=WikibaseID("Q42"),
     )
 
@@ -357,7 +357,7 @@ def test_dataframe_to_labelled_passages_with_human_label_string():
     passages = dataframe_to_labelled_passages(
         df,
         human_label_column="human_label",
-        labeller_name="anne",
+        labeller_names=["anne"],
         concept_id=WikibaseID("Q123"),
         skip_unlabelled=False,
     )
@@ -487,7 +487,7 @@ def test_labelled_passages_roundtrip_conversion():
     roundtrip_passages = dataframe_to_labelled_passages(
         df,
         human_label_column="prediction",
-        labeller_name="roundtrip_labeller",
+        labeller_names=["roundtrip_labeller"],
         concept_id=WikibaseID("Q999"),
         skip_unlabelled=False,
     )
