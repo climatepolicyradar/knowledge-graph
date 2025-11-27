@@ -3,6 +3,7 @@ export WANDB_DIR := "./data/wandb"
 import "tests/local_vespa/local_vespa.just"
 import "tests/local_wikibase/local_wikibase.just"
 import "scripts/scripts.just"
+import "vibe-checker/vibe-checker.just"
 
 # Set the default command to list all available commands
 default:
