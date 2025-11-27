@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-import wandb
 from pydantic import BaseModel
 
 from knowledge_graph.classifier.classifier import (
@@ -37,9 +36,9 @@ class ModelPath(BaseModel):
 
 def get_local_classifier_path(target_path: ModelPath, version: str) -> Path:
     """Returns a path for a classifier file."""
-    from knowledge_graph.config import classifier_dir, model_artifact_name
+    from knowledge_graph.config import classifier_dir, wandb_model_artifact_filename
 
-    return classifier_dir / target_path / version / model_artifact_name
+    return classifier_dir / target_path / version / wandb_model_artifact_filename
 
 
 def __getattr__(name):
@@ -85,7 +84,7 @@ __all__ = [
 
 
 def create_classifier(
-    concept, classifier_type: str, classifier_kwargs: dict[str, Any]
+    concept: Concept, classifier_type: str, classifier_kwargs: dict[str, Any]
 ) -> Classifier:
     """
     Create a classifier from its type and any kwargs.
@@ -110,12 +109,13 @@ class ClassifierFactory:
         WikibaseID("Q1651"): ("TargetClassifier", ".targets"),
         WikibaseID("Q1652"): ("EmissionsReductionTargetClassifier", ".targets"),
         WikibaseID("Q1653"): ("NetZeroTargetClassifier", ".targets"),
+        WikibaseID("Q1829"): ("BertBasedClassifier", ".bert_based"),
     }
 
     @staticmethod
     def create(
         concept: Concept,
-        classifier_type: Optional[str] = None,
+        classifier_type: str | None = None,
         classifier_kwargs: dict[str, Any] = {},
     ) -> Classifier:
         """Create a classifier for a concept, depending on its attributes"""
@@ -141,25 +141,3 @@ class ClassifierFactory:
 
         # Then handle more generic cases
         return KeywordClassifier(concept)
-
-
-def load_classifier_from_wandb(
-    wandb_path: str, model_to_cuda: bool = False
-) -> "Classifier":
-    """
-    Load a classifier from a W&B path.
-
-    This works for any classifier and W&B team. A separate, CPR-specific method
-    to load models from the model registry exists in flows/inference and is more robust
-    for use in production pipelines.
-
-    :param str wandb_path: E.g. climatepolicyradar/Q913/rsgz5ygh:v0
-    :param bool model_to_cuda: Whether to load the model to CUDA if available
-    :return Classifier: The loaded classifier
-    """
-
-    api = wandb.Api()
-    model_artifact = api.artifact(wandb_path)
-    model_artifact_dir = model_artifact.download()
-    model_pickle_path = Path(model_artifact_dir) / "model.pickle"
-    return Classifier.load(model_pickle_path, model_to_cuda=model_to_cuda)

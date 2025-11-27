@@ -1,0 +1,19 @@
+{
+  "id": "id:doc_search:concept::Q110.5d4xcy5g",
+  "fields": {
+    "id": "5d4xcy5g",
+    "wikibase_id": "Q110",
+    "wikibase_revision": 15001,
+    "wikibase_url": "https://wikibase.example.org/wiki/Item:Q110",
+    "preferred_label": "environmental issues",
+    "description": "",
+    "definition": "",
+    "alternative_labels": [],
+    "negative_labels": [],
+    "subconcept_of": [],
+    "has_subconcept": [],
+    "related_concepts": [],
+    "recursive_subconcept_of": [],
+    "recursive_has_subconcept": []
+  }
+}

@@ -9,6 +9,7 @@ import textwrap
 import time
 from collections.abc import Awaitable, Generator, Sequence
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
 from typing import (
@@ -31,17 +32,14 @@ import aioboto3
 import prefect.exceptions
 import prefect.logging
 from botocore.exceptions import ClientError
-from prefect.artifacts import (
-    create_progress_artifact,
-    update_progress_artifact,
-)
+from prefect.artifacts import create_progress_artifact, update_progress_artifact
 from prefect.client.schemas.objects import FlowRun, State, StateType
-from prefect.context import TaskRunContext, get_run_context
+from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.deployments import run_deployment
 from prefect.flows import Flow
 from prefect.settings import PREFECT_UI_URL, get_current_settings
 from prefect.utilities.names import generate_slug
-from prefect_slack.credentials import SlackWebhook
+from prefect_slack.credentials import AsyncWebClient, SlackCredentials, SlackWebhook
 from pydantic import BaseModel, Field, PositiveInt, RootModel, ValidationError
 from types_aiobotocore_s3.client import S3Client
 from types_aiobotocore_s3.paginator import ListObjectsV2Paginator
@@ -105,6 +103,24 @@ def file_name_from_path(path: str) -> str:
 def get_flow_run_ui_url(flow_run: FlowRun):
     """Determine the prefect console URL for a flow run."""
     return f"{get_current_settings().ui_url}/flow-runs/flow-run/{flow_run.id}"
+
+
+async def get_slack_client(
+    credentials: SlackCredentials | None = None,
+) -> AsyncWebClient:
+    """
+    Get a Slack client for the Navigator Notifier bot.
+
+    Can be used in any channel, just make sure to invite it: `/invite
+    @navigator-notifier`.
+
+    Optionally you may have already loaded some credentials, and if
+    so, can pass them in.
+    """
+    if not credentials:
+        credentials = await SlackCredentials.load("slack-navigator-notifier-bot")  # pyright: ignore[reportAssignmentType, reportGeneralTypeIssues]
+
+    return credentials.get_client()  # pyright: ignore[reportOptionalMemberAccess]
 
 
 class SlackNotify:
@@ -222,8 +238,8 @@ class SlackNotify:
                         "type": "mrkdwn",
                         "text": f"*Timestamp*\n`{state.timestamp}`",
                     },
-                    cls.slack_runtime_block(flow_run),
-                ],
+                ]
+                + cls.slack_created_by_block(flow_run),
             },
             {"type": "divider"},
             {
@@ -237,8 +253,34 @@ class SlackNotify:
         ]
 
     @staticmethod
-    def slack_runtime_block(flow_run: FlowRun):
-        """Create the runtime Slack Block"""
+    def slack_created_by_block(flow_run: FlowRun):
+        """Create the created by Slack Block"""
+
+        if not flow_run.created_by:
+            return []
+
+        # There's nothing to show
+        if not any(
+            [
+                flow_run.created_by.id,
+                flow_run.created_by.type,
+                flow_run.created_by.display_value,
+            ]
+        ):
+            return []
+
+        if_none = lambda x: x if x else "-"  # noqa: E731
+
+        return [
+            {
+                "type": "mrkdwn",
+                "text": f"*Creator*\nDisplay: {if_none(flow_run.created_by.display_value)} / Type: {if_none(flow_run.created_by.type)}",
+            }
+        ]
+
+    @staticmethod
+    def slack_duration_block(flow_run: FlowRun):
+        """Create the duration Slack Block"""
 
         match (flow_run.start_time, flow_run.end_time):
             case (start, end) if start is not None and end is not None:
@@ -914,6 +956,27 @@ def get_logger() -> logging.Logger | LoggingAdapter:
         return prefect.logging.get_logger()
 
 
+def get_run_name() -> None | str:
+    """
+    Get the current Prefect run name.
+
+    Returns:
+        str: The name of the current flow or task run, or None if not in a run context.
+    """
+    # set run name to None by default
+    run_name = None
+    try:
+        run_context = get_run_context()
+        if isinstance(run_context, FlowRunContext) and run_context.flow_run:
+            run_name = run_context.flow_run.name
+        elif isinstance(run_context, TaskRunContext) and run_context.task_run:
+            run_name = run_context.task_run.name
+    except prefect.exceptions.MissingContextError:
+        return run_name
+
+    return run_name
+
+
 def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
     """
     Serialize a list of Pydantic models as JSONL (JSON Lines) format.
@@ -956,3 +1019,27 @@ def deserialise_pydantic_list_with_fallback[T: BaseModel](
         # Fall back to original format (array of JSON strings)
         data = json.loads(content)
         return [model_class.model_validate_json(passage) for passage in data]
+
+
+def build_inference_result_s3_uri(
+    cache_bucket_str: str,
+    inference_document_target_prefix: str,
+    run_output_identifier: RunOutputIdentifier,
+) -> S3Uri:
+    """Build S3 URI for inference results file."""
+    return S3Uri(
+        bucket=cache_bucket_str,
+        key=os.path.join(
+            inference_document_target_prefix,
+            run_output_identifier,
+            "results.json",
+        ),
+    )
+
+
+def total_milliseconds(td: timedelta) -> int:
+    return int(td.total_seconds() * 1_000)
+
+
+def total_minutes(td: timedelta) -> int:
+    return int(td.total_seconds() / 60)

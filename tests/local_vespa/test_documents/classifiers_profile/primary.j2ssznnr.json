@@ -1,0 +1,20 @@
+{
+  "id": "id:doc_search:classifiers_profile::primary.j2ssznnr",
+  "fields": {
+    "id": "j2ssznnr",
+    "name": "primary",
+    "multi": false,
+    "mappings": [
+      {
+        "concept_id": "r3dkctge",
+        "concept_wikibase_id": "Q125",
+        "classifier_id": "kx7m3p9w"
+      },
+      {
+        "concept_id": "ycwjhefq",
+        "concept_wikibase_id": "Q456",
+        "classifier_id": "w3kb7x1s"
+      }
+    ]
+  }
+}

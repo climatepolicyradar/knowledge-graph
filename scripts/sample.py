@@ -1,6 +1,6 @@
 import math
 from contextlib import nullcontext
-from typing import Annotated
+from typing import Annotated, Optional
 
 import click
 import pandas as pd
@@ -17,6 +17,7 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.sampling import create_balanced_sample, split_evenly
 from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
+from scripts.train import parse_kwargs_from_strings
 
 app = typer.Typer()
 console = Console()
@@ -46,9 +47,15 @@ def main(
         help="Maximum number of passages to load from the dataset before sampling",
     ),
     track_and_upload: bool = typer.Option(
-        False,
+        True,
         help="Whether to track the run and upload the labelled passages to W&B",
     ),
+    concept_override: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Concept property overrides in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
 ):
     """
     Evenly sample passages for concepts from the balanced dataset.
@@ -66,6 +73,9 @@ def main(
     - type of document, eg CCLW, MCF, corporate disclosure
 
     The sampled passages are saved to a local file.
+
+    :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
+    :type concept_override: Optional[list[str]]
     """
     # Calculate the optimal number of positive and negative samples to take
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
@@ -103,11 +113,25 @@ def main(
     wikibase = WikibaseSession()
     concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
+    if concept_overrides := parse_kwargs_from_strings(concept_override):
+        console.log(f"🔧 Applying custom concept properties: {concept_overrides}")
+        for key, value in concept_overrides.items():
+            if hasattr(concept, key):
+                setattr(concept, key, value)
+                console.log(f"  ✓ Set concept.{key} = {value}")
+            else:
+                console.log(
+                    f"  ⚠️  Warning: concept has no attribute '{key}'", style="yellow"
+                )
+
     job_type = "sample"
     wandb_config = {
         "concept_id": concept.id,
         "sample_size": sample_size,
         "dataset_name": dataset_name,
+        "experimental_concept": concept_overrides is not None
+        and len(concept_overrides) > 0,
+        "concept_overrides": concept_overrides,
     }
 
     with (
@@ -123,9 +147,9 @@ def main(
         # Run inference with all classifiers
         raw_text_passages = dataset["text_block.text"].tolist()
 
-        model_classes = [KeywordClassifier, EmbeddingClassifier]
         models: list[Classifier] = [
-            model_class(concept) for model_class in model_classes
+            KeywordClassifier(concept),
+            EmbeddingClassifier(concept).set_prediction_threshold(0.7),
         ]
         classifier_ids: list[str] = []
 

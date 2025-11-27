@@ -124,7 +124,7 @@ All the sub pipelines (inference, aggregation & indexing) can be run individuall
 1. Inference
 
 This consists of running our classifiers over our documents to generate `LabelledPassages` which themselves contain `Spans` as listed above in this `README.md`.
-
+The list of classifiers  and rules under which they are run is defined in [classifier_spec yaml file for each environment](./flows/classifier_specs/v2) e.g. the [production.yaml](./flows/classifier_specs/v2/production.yaml)
 2. Aggregation
 
 This consists of aggregating (collating) the inference results for a document from different classifiers which are stored at multiple s3 paths into one object in s3.
@@ -136,6 +136,14 @@ This consists of indexing the spans identified from inference in to our passage 
 ## Deployment and flows with Prefect
 
 Prefect Deployments are defined in [deployments.py](./deployments.py)
+
+A push of a commit to a PR will deploy to Sandbox environment
+
+A merge to `main` branch will deploy the to the Labs, Staging, and Production environments
+
+You may also run the Github Actions Workflow directly in the [Github UI to deploy to an environment such as Sandbox](https://github.com/climatepolicyradar/knowledge-graph/actions/workflows/prefect_deploy_sandbox.yml)
+
+For [full details see the Notion page](https://www.notion.so/climatepolicyradar/KG-Deployment-Triggering-2799109609a48043bcd5fdc77df1c94d)
 
 ### Monitoring Deployment status
 

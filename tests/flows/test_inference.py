@@ -1,5 +1,7 @@
 import json
 import os
+import random
+import string
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -16,7 +18,6 @@ from cpr_sdk.parser_models import (
     PDFData,
     PDFTextBlock,
 )
-from prefect.artifacts import Artifact
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
 from prefect.states import Completed, Running
@@ -34,6 +35,7 @@ from flows.inference import (
     document_passages,
     filter_document_batch,
     gather_successful_document_stems,
+    get_existing_inference_results,
     get_inference_fault_metadata,
     get_latest_ingest_documents,
     inference,
@@ -57,7 +59,7 @@ from flows.utils import (
     deserialise_pydantic_list_with_fallback,
     serialise_pydantic_list_as_jsonl,
 )
-from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
+from knowledge_graph.identifiers import ClassifierID, ConceptID, Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 
@@ -376,7 +378,16 @@ async def test_inference_with_dont_run_on_filter(
             gef_doc_id
         ]
 
-        summary_artifact = await Artifact.get("removal-details-sandbox")
+        from prefect.client.orchestration import get_client
+
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            removal_artifacts = [
+                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+            ]
+
+        assert len(removal_artifacts) == 1
+        summary_artifact = removal_artifacts[0]
         assert summary_artifact and summary_artifact.description
         assert json.loads(summary_artifact.data) == [
             {
@@ -384,6 +395,9 @@ async def test_inference_with_dont_run_on_filter(
                 "Classifier ID": spec.classifier_id,
                 "Dont Run Ons": ["cpr", "sabin"],
                 "Removals": 2,
+                "Accepted": 1,
+                "Existing Results": 0,
+                "Skipped": 0,
             }
         ]
 
@@ -612,6 +626,7 @@ async def test_inference_batch_of_documents_cpu(
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
     assert result.classifier_spec == classifier_spec
+    assert not result.failed
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -864,12 +879,130 @@ async def test__inference_batch_of_documents(
     assert result.batch_document_stems == batch
     assert result.successful_document_stems == batch
     assert result.classifier_spec == classifier_spec
+    assert result.failed is False, "All documents succeeded, so failed should be False"
+    assert result.failed_document_count == 0
+    assert result.all_document_count == 1
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
         entity=test_config.wandb_entity,
         job_type="concept_inference",
     )
+
+    # Test partial success
+    batch = [
+        DocumentStem(Path(mock_async_bucket_documents[0]).stem),  # Real document
+        DocumentStem("NonExistent.doc.1"),  # Will fail
+    ]
+
+    with patch("flows.inference.get_run_context", return_value=mock_context):
+        result_partial = await _inference_batch_of_documents(
+            batch=batch,
+            config_json=config_json,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+        )
+
+        assert isinstance(result_partial, BatchInferenceResult)
+        assert result_partial.batch_document_stems == batch
+        assert len(result_partial.successful_document_stems) == 1
+        assert result_partial.failed is False  # Not failed because some succeeded
+        assert result_partial.failed_document_count > 0
+
+
+def test_batch_inference_result_failed_property():
+    """Test BatchInferenceResult.failed property."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v7",
+    )
+
+    doc1 = DocumentStem("TEST.doc.1.1")
+    doc2 = DocumentStem("TEST.doc.1.2")
+
+    # Empty batch - not failed
+    result_empty = BatchInferenceResult(
+        batch_document_stems=[],
+        successful_document_stems=[],
+        classifier_spec=classifier_spec,
+    )
+    assert result_empty.failed is False
+
+    # All successful - not failed
+    result_all_success = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[doc1, doc2],
+        classifier_spec=classifier_spec,
+    )
+    assert result_all_success.failed is False
+
+    # Partial success - not failed (some succeeded)
+    result_partial = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[doc1],
+        classifier_spec=classifier_spec,
+    )
+    assert result_partial.failed is False
+
+    # All failed - is failed
+    result_all_failed = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[],
+        classifier_spec=classifier_spec,
+    )
+    assert result_all_failed.failed is True
+
+
+def test_batch_inference_result_failed_document_stems():
+    """Test BatchInferenceResult.failed_document_stems property."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v7",
+    )
+
+    doc1 = DocumentStem("TEST.doc.1.1")
+    doc2 = DocumentStem("TEST.doc.1.2")
+    doc3 = DocumentStem("TEST.doc.1.3")
+
+    # All successful
+    result = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2, doc3],
+        successful_document_stems=[doc1, doc2, doc3],
+        classifier_spec=classifier_spec,
+    )
+    assert result.failed_document_stems == []
+
+    # Some failed
+    result = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2, doc3],
+        successful_document_stems=[doc1],
+        classifier_spec=classifier_spec,
+    )
+    assert set(result.failed_document_stems) == {doc2, doc3}
+    assert result.failed_document_count == 2
+    assert not result.failed
+
+
+def test_batch_inference_result_all_document_count():
+    """Test BatchInferenceResult.all_document_count property."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaa2222",
+        wandb_registry_version="v7",
+    )
+
+    doc1 = DocumentStem("TEST.doc.1.1")
+    doc2 = DocumentStem("TEST.doc.1.2")
+
+    result = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[doc1],
+        classifier_spec=classifier_spec,
+    )
+    assert result.all_document_count == 2
+    assert len(result.successful_document_stems) == 1
+    assert not result.failed
 
 
 def test_jsonl_serialization_roundtrip():
@@ -1024,6 +1157,8 @@ def test_document_passages(
                 "Sabin.document.9869.10352.json",
                 "CPR.document.i00003835.n0000.json",
                 "Sabin.document.2524.placeholder",
+                "UNCDB.document.1.1",
+                "UNCDB.document.2.2.json",
             ],
         ),
     ],
@@ -1039,6 +1174,8 @@ def test_filter_document_batch(dont_run_on, removed):
         "Sabin.document.9869.10352.json",
         "CPR.document.i00003835.n0000.json",
         "Sabin.document.2524.placeholder",
+        "UNCDB.document.1.1",
+        "UNCDB.document.2.2.json",
     ]
     accepted = [f for f in file_stems if f not in removed]
 
@@ -1232,6 +1369,7 @@ async def test_store_metadata(
         await store_metadata(
             config=test_config,
             classifier_specs=classifier_specs,
+            run_output_identifier=mock_run_output_id,
         )
 
     expected_key = os.path.join(
@@ -1291,6 +1429,7 @@ async def test_store_inference_result(
         await store_inference_result(
             config=test_config,
             successful_document_stems=set([DocumentStem("TEST.DOC.1.1")]),
+            run_output_identifier=mock_run_output_id,
         )
 
     expected_key = os.path.join(
@@ -1644,3 +1783,268 @@ def test_process_single_document_inference():
 
     successes, failures, unknown_failures = process_single_document_inference(results)
     assert (len(successes), len(failures), len(unknown_failures)) == (1, 1, 1)
+
+
+@pytest.mark.asyncio
+async def test_get_existing_inference_results_empty(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    # A randomly generated, brand new classifier spec.
+    classifier_id = Identifier.generate(
+        "".join(
+            random.choices(
+                string.ascii_letters + string.digits,
+                k=16,
+            )
+        )
+    )
+
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q999"),
+        classifier_id=classifier_id,
+        wandb_registry_version="v1",
+    )
+
+    existing = await get_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+    )
+
+    assert existing == set()
+
+
+@pytest.mark.asyncio
+async def test_get_existing_inference_results_with_results(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="testabcd",
+        wandb_registry_version="v1",
+    )
+
+    # Create some fake result files in S3
+    documents = [
+        DocumentStem("TEST.doc.1.1"),
+        DocumentStem("TEST.doc.2.2"),
+        DocumentStem("TEST.doc.3.3"),
+    ]
+
+    for doc in documents:
+        key = f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{doc}.json"
+        await mock_s3_async_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=key,
+            Body=b'{"test": "data"}',
+        )
+
+    existing = await get_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+    )
+
+    assert existing == set(documents)
+
+
+@pytest.mark.asyncio
+async def test_get_existing_inference_results_different_classifiers(
+    test_config, mock_async_bucket, mock_s3_async_client
+):
+    classifier_spec_1 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="aaaabbbb",
+        wandb_registry_version="v1",
+    )
+    classifier_spec_2 = ClassifierSpec(
+        wikibase_id=WikibaseID("Q789"),
+        classifier_id="ccccdddd",
+        wandb_registry_version="v1",
+    )
+
+    # Create results for classifier 1
+    doc1 = DocumentStem("TEST.doc.1.1")
+    key1 = f"{test_config.inference_document_target_prefix}{classifier_spec_1.wikibase_id}/{classifier_spec_1.classifier_id}/{doc1}.json"
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=key1,
+        Body=b'{"test": "data"}',
+    )
+
+    # Create results for classifier 2
+    doc2 = DocumentStem("TEST.doc.2.2")
+    key2 = f"{test_config.inference_document_target_prefix}{classifier_spec_2.wikibase_id}/{classifier_spec_2.classifier_id}/{doc2}.json"
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=key2,
+        Body=b'{"test": "data"}',
+    )
+
+    # Check that each classifier only sees its own results
+    existing_1 = await get_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec_1,
+    )
+    existing_2 = await get_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec_2,
+    )
+
+    assert existing_1 == {doc1}
+    assert existing_2 == {doc2}
+
+
+@pytest.mark.asyncio
+async def test_inference_with_caching_enabled(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket_documents,
+    mock_s3_async_client,
+    mock_deployment,
+):
+    input_doc_ids = [
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_async_bucket_documents
+    ]
+
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="abcd2345",
+        wandb_registry_version="v1",
+    )
+
+    # First, pre-populate S3 with results for the first document only
+    doc_with_cache = input_doc_ids[0]
+    key = f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{doc_with_cache}.json"
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=key,
+        Body=b'{"test": "cached_data"}',
+    )
+
+    # Mock deployment to only expect the document without cache
+    doc_without_cache = input_doc_ids[1]
+    state = Completed(
+        data=BatchInferenceResult(
+            batch_document_stems=[doc_without_cache],
+            successful_document_stems=[doc_without_cache],
+            classifier_spec=classifier_spec,
+        )
+    )
+
+    test_config.skip_existing_inference_results = True
+
+    with mock_deployment(state) as mock_inference_run_deployment:
+        _ = await inference(
+            classifier_specs=[classifier_spec],
+            document_ids=input_doc_ids,
+            config=test_config,
+        )
+
+        # Verify only the un-cached document was processed
+        mock_inference_run_deployment.assert_called_once()
+        call_params = mock_inference_run_deployment.call_args.kwargs["parameters"]
+        assert call_params["batch"] == [doc_without_cache]
+
+        # Verify the artifact shows 1 skipped document
+        from prefect.client.orchestration import get_client
+
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            removal_artifacts = [
+                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+            ]
+
+        assert len(removal_artifacts) > 0, (
+            "Expected at least one removal-details artifact to be created"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        removal_artifacts.sort(key=lambda x: x.created, reverse=True)
+        summary_artifact = removal_artifacts[0]  # Most recently created
+        assert summary_artifact and summary_artifact.description
+        artifact_data = json.loads(summary_artifact.data)
+        assert len(artifact_data) == 1
+        assert artifact_data[0]["Skipped"] == 1
+        assert artifact_data[0]["Existing Results"] == 1
+        assert artifact_data[0]["Accepted"] == 2
+
+
+@pytest.mark.asyncio
+async def test_inference_with_caching_disabled(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket_documents,
+    mock_s3_async_client,
+    mock_deployment,
+):
+    input_doc_ids = [
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_async_bucket_documents
+    ]
+
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="efgh6789",
+        wandb_registry_version="v1",
+    )
+
+    # Pre-populate S3 with results for all documents
+    for doc_id in input_doc_ids:
+        key = f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{doc_id}.json"
+        await mock_s3_async_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=key,
+            Body=b'{"test": "cached_data"}',
+        )
+
+    # Mock deployment to expect all documents
+    state = Completed(
+        data=BatchInferenceResult(
+            batch_document_stems=list(input_doc_ids),
+            successful_document_stems=list(input_doc_ids),
+            classifier_spec=classifier_spec,
+        )
+    )
+
+    test_config.skip_existing_inference_results = False
+
+    with mock_deployment(state) as mock_inference_run_deployment:
+        _ = await inference(
+            classifier_specs=[classifier_spec],
+            document_ids=input_doc_ids,
+            config=test_config,
+        )
+
+        # Verify all documents were processed despite existing results
+        mock_inference_run_deployment.assert_called_once()
+        call_params = mock_inference_run_deployment.call_args.kwargs["parameters"]
+        assert set(call_params["batch"]) == set(input_doc_ids)
+
+        # Verify the artifact shows 0 skipped documents
+        from prefect.client.orchestration import get_client
+
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            removal_artifacts = [
+                a for a in artifacts if a.key and "removal-details-sandbox" in a.key
+            ]
+
+        assert len(removal_artifacts) > 0, (
+            "Expected at least one removal-details artifact to be created"
+        )
+
+        # Sort artifacts by creation time and get the most recent one (this test's artifact)
+        removal_artifacts.sort(key=lambda x: x.created, reverse=True)
+        summary_artifact = removal_artifacts[0]  # Most recently created
+        assert summary_artifact and summary_artifact.description
+        artifact_data = json.loads(summary_artifact.data)
+        assert len(artifact_data) == 1
+        assert artifact_data[0]["Skipped"] == 0
+        assert artifact_data[0]["Existing Results"] == 0
+        assert artifact_data[0]["Accepted"] == 2
