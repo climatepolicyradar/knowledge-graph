@@ -434,3 +434,78 @@ def test_dataframe_to_labelled_passages_skip_unlabelled():
     assert len(passages) == 2
     assert passages[0].text == "Test 1"
     assert passages[1].text == "Test 2"
+
+
+def test_labelled_passages_roundtrip_conversion():
+    """
+    Test roundtrip conversion: LabelledPassages -> DataFrame -> LabelledPassages.
+
+    Note: Original span details (start/end indices, concept IDs) are not preserved
+    in the roundtrip because dataframe_to_labelled_passages creates new full-text
+    spans based on the label column.
+    """
+
+    original_passages = [
+        # Positive example with multiple spans
+        LabelledPassage(
+            text="Climate change is a global crisis.",
+            spans=[
+                Span(
+                    text="Climate change is a global crisis.",
+                    start_index=0,
+                    end_index=14,
+                    concept_id=WikibaseID("Q123"),
+                    labellers=["original_labeller"],
+                )
+            ],
+            metadata={"source": "doc1", "dataset": "train"},
+        ),
+        # Negative example (no spans)
+        LabelledPassage(
+            text="This is not relevant.",
+            spans=[],
+            metadata={"source": "doc2", "dataset": "test"},
+        ),
+        # Another positive example
+        LabelledPassage(
+            text="Renewable energy solutions.",
+            spans=[
+                Span(
+                    text="Renewable energy solutions.",
+                    start_index=0,
+                    end_index=16,
+                    concept_id=WikibaseID("Q456"),
+                    labellers=["original_labeller"],
+                )
+            ],
+            metadata={"source": "doc3", "dataset": "train"},
+        ),
+    ]
+
+    df = labelled_passages_to_dataframe(original_passages)
+
+    roundtrip_passages = dataframe_to_labelled_passages(
+        df,
+        human_label_column="prediction",
+        labeller_name="roundtrip_labeller",
+        concept_id=WikibaseID("Q999"),
+        skip_unlabelled=False,
+    )
+
+    assert len(roundtrip_passages) == len(original_passages)
+
+    assert roundtrip_passages[0].text == original_passages[0].text
+    assert len(roundtrip_passages[0].spans) == 1  # Should have a span (positive label)
+    assert roundtrip_passages[0].spans[0].concept_id == "Q999"
+    assert roundtrip_passages[0].spans[0].labellers == ["roundtrip_labeller"]
+    assert roundtrip_passages[0].metadata == original_passages[0].metadata
+
+    assert roundtrip_passages[1].text == original_passages[1].text
+    assert (
+        len(roundtrip_passages[1].spans) == 0
+    )  # Should have no spans (negative label)
+    assert roundtrip_passages[1].metadata == original_passages[1].metadata
+
+    assert roundtrip_passages[2].text == original_passages[2].text
+    assert len(roundtrip_passages[2].spans) == 1  # Should have a span (positive label)
+    assert roundtrip_passages[2].metadata == original_passages[2].metadata
