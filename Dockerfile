@@ -23,8 +23,9 @@ FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d1
 
 WORKDIR /app
 
-# Install git for GitPython operations within knowledge graph
-RUN apt-get update && apt-get install -y git
+# Install git and git-lfs for GitPython operations within knowledge graph
+RUN apt-get update && apt-get install -y git && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
+RUN git lfs install
 
 # Copy Python packages from builder stage
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
