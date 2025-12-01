@@ -6,6 +6,7 @@ Assumes that the classifier model has been trained in wandb
 
 import os
 import tempfile
+import textwrap
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -494,13 +495,18 @@ async def create_classifiers_profiles_artifact(
         pr_url = (
             f"https://github.com/climatepolicyradar/knowledge-graph/pull/{pr_number}"
         )
-        pr_details = "- **Classifiers Specs PR**: "
-        pr_details += f"[#{pr_number}]({pr_url})\n" if pr_number else "No PR created \n"
-    else:
-        pr_error = unwrap_err(cs_pr_results) if is_err(cs_pr_results) else None
-        pr_details = (
-            f"- **Classifiers Specs PR**: Error creating or merging PR {pr_error}\n"
+        pr_details = f"[#{pr_number}]({pr_url})\n" if pr_number else "No PR created \n"
+    elif is_err(cs_pr_results):
+        pr_error = unwrap_err(cs_pr_results)
+        msg = textwrap.shorten(pr_error.msg, width=100, placeholder="...")
+        exception = textwrap.shorten(
+            (pr_error.metadata or {}).get("exception", ""), width=100, placeholder="..."
         )
+        pr_details = (
+            f"Error creating or merging PR, msg: {msg}, exception: {exception}\n"
+        )
+    else:
+        pr_details = "No PR details"
 
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
@@ -510,7 +516,7 @@ async def create_classifiers_profiles_artifact(
 - **WandB Errors**: {len(wandb_errors)}
 - **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
-- {pr_details}
+- **Classifiers Specs PR**: {pr_details}
 """
 
     def format_cp_details(
@@ -1505,7 +1511,7 @@ async def sync_classifiers_profiles(
         logger.info("No changes to classifier specs")
     else:
         logger.info(
-            f"Changes made to classifier specs: {len(successes)} wandb changes, creating and merging PR..."
+            f"Changes made to classifier specs: {len(classifier_specs)} specs vs. {len(updated_classifier_specs)} updated, creating and merging PR..."
         )
 
         # create PR with updated classifier specs
@@ -1593,3 +1599,5 @@ async def sync_classifiers_profiles(
         raise Exception(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
         )
+
+    logger.info("Successfully completed classifiers profiles sync")
