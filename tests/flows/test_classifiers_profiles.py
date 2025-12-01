@@ -29,7 +29,7 @@ from flows.classifiers_profiles import (
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -1147,6 +1147,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
     ]
+    pr_results: Result[int | None, Error] = Err(Error(msg="PR error", metadata={}))
 
     with (
         patch(
@@ -1169,6 +1170,7 @@ async def test_send_classifiers_profile_slack_alert_success():
             upload_to_wandb=True,
             upload_to_vespa=True,
             event=Mock(),
+            cs_pr_results=pr_results,
         )
 
         mock_slack_client.chat_postMessage.assert_any_call(
@@ -1195,8 +1197,14 @@ async def test_send_classifiers_profile_slack_alert_success():
             text=f"Vespa Errors: {len(vespa_errors)} issues found",
             blocks=ANY,
         )
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-staging",
+            thread_ts="12345",
+            text="PR Errors: 1 issues found",
+            blocks=ANY,
+        )
         assert spy_post_errors_main.call_count == 2
-        assert spy_post_errors_thread.call_count == 3
+        assert spy_post_errors_thread.call_count == 4
 
 
 @pytest.mark.asyncio
@@ -1230,6 +1238,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
             upload_to_wandb=True,
             upload_to_vespa=True,
             event=Mock(),
+            cs_pr_results=Mock(),
         )
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
@@ -1345,6 +1354,8 @@ async def test_sync_classifiers_profiles(
             upload_to_vespa=False,
             automerge_classifier_specs_pr=False,
             auto_train=False,
+            debug_wikibase_validation=False,
+            enable_slack_notifications=True,
         )
 
         # check wandb login called with api key
@@ -1488,6 +1499,8 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
                 upload_to_vespa=False,
                 automerge_classifier_specs_pr=False,
                 auto_train=False,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
             )
 
         # vespa should not be called when create PR fails
@@ -1599,6 +1612,8 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
                 upload_to_vespa=False,
                 automerge_classifier_specs_pr=False,
                 auto_train=False,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
             )
 
         # vespa should be called once and return exception
@@ -1711,6 +1726,6 @@ async def test_create_classifiers_profiles_artifact__pr_error():
 
         # Assert the description contains the PR number
         assert (
-            f"**Classifiers Specs PR**: Error creating or merging PR {pr_errors[0]}"
+            f"**Classifiers Specs PR**: Error creating or merging PR, msg: {pr_errors[0].msg}"
             in description
         )

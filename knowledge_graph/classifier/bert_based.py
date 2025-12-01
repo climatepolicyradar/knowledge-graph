@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime
@@ -111,6 +112,9 @@ class BertBasedClassifier(
         self._variant_seed = False
         self._variant_dropout_rate = False
 
+        # Random component for nondeterministic ID, generated once when classifier is fitted
+        self._random_id_component: str = ""
+
         # For training, we can use GPU/MPS if available
         if torch.backends.mps.is_available():
             self.training_device = torch.device("mps")
@@ -140,12 +144,23 @@ class BertBasedClassifier(
 
     @property
     def id(self) -> ClassifierID:
-        """Return a deterministic, human-readable identifier for the classifier."""
+        """
+        Return a human-readable identifier for the classifier.
+
+        As BERT model training is inherently nondeterministic and this identifier should
+        change for each classifier instance with different *behaviour*, only classifiers
+        that are not yet fitted have deterministic IDs.
+
+        For fitted classifiers, a random component is generated once during training and
+        persisted with the model.
+        """
+
         return ClassifierID.generate(
             self.name,
             self.concept.id,
             self.model_name,
             self.prediction_threshold,
+            self._random_id_component,
         )
 
     @contextmanager
@@ -545,5 +560,12 @@ class BertBasedClassifier(
             logger.info("📊 Final F1 score: %.4f", final_f1)
 
         logger.info("✅ Training complete for concept %s!", self.concept.id)
+
         self.is_fitted = True
+
+        # Generate a random component for the classifier ID
+        # This ensures the ID is unique to this trained instance but remains stable
+        # across pickle serialization/deserialization
+        self._random_id_component = str(random.getrandbits(128))
+
         return self

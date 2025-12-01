@@ -21,7 +21,7 @@ import os
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import boto3
 import numpy as np
@@ -37,11 +37,15 @@ from pydantic import Field
 from rich.logging import RichHandler
 from sentence_transformers import SentenceTransformer
 
+from flows.config import Config
+from flows.train import _set_up_training_environment
 from flows.utils import serialise_pydantic_list_as_jsonl
-from knowledge_graph.classifier import ClassifierFactory
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.wikibase import WikibaseSession
+from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
+from scripts.train import run_training
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
 aws_profile = os.getenv("AWS_PROFILE", "labs")
@@ -197,7 +201,7 @@ def load_wikibase_ids_from_config(
 ) -> list[str]:
     """Load concept IDs from the configuration file."""
     try:
-        with open(config_file_path, "r") as f:
+        with open(config_file_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
         # make sure the contents are a list of valid Wikibase IDs
         wikibase_ids = [str(WikibaseID(id)) for id in config]
@@ -233,11 +237,16 @@ def load_embeddings_metadata(
 
 
 @task(retries=2, retry_delay_seconds=10)
-def process_single_concept(
+async def process_single_concept(
     wikibase_id: WikibaseID,
     passages_dataset: pd.DataFrame,
     passages_embeddings: np.ndarray,
     embedding_model: SentenceTransformer,
+    wikibase_config: WikibaseConfig,
+    argilla_config: ArgillaConfig,
+    s3_client: Any,
+    aws_env: AwsEnv,
+    track_and_upload: bool = True,
 ) -> dict:
     """
     Process inference for a single concept.
@@ -323,8 +332,19 @@ def process_single_concept(
         min_similarity = min(selected_passages["similarity"])
         logger.info(f"Similarity range: {min_similarity:.3f}-{max_similarity:.3f}")
 
-        classifier = ClassifierFactory.create(concept)
-        logger.info(f"Created a {classifier}")
+        # Get or create classifier from W&B (with force=False, this will fetch existing
+        # or train new if missing, ensuring we always have the latest model)
+        classifier = await run_training(
+            wikibase_id=wikibase_id,
+            track_and_upload=track_and_upload,
+            aws_env=aws_env,
+            wikibase_config=wikibase_config,
+            argilla_config=argilla_config,
+            s3_client=s3_client,
+            force=False,  # Fetch if exists, train if missing
+            evaluate=True,  # Evaluate if we just trained a new model
+        )
+        logger.info(f"Loaded/trained classifier: {classifier}")
 
         classifier_metadata = {
             "id": classifier.id,
@@ -430,7 +450,7 @@ def process_single_concept(
     timeout_seconds=None,
     task_runner=ThreadPoolTaskRunner(max_workers=10),  # pyright: ignore[reportArgumentType]
 )
-def vibe_check_inference(
+async def vibe_check_inference(
     wikibase_ids: Optional[list[str]] = None,
 ) -> list[dict[str, str]]:
     """
@@ -439,7 +459,8 @@ def vibe_check_inference(
     For each concept, this flow:
     - Loads the passages dataset and pre-computed embeddings from S3
     - Samples passages most relevant to the concept based on their semantic similarity
-    - Runs a default classifier for the concept on the selected passages
+    - Gets the latest classifier from W&B (or trains a new one if one doesn't exist)
+    - Runs inference on the selected passages
     - Pushes predictions and concept/classifier metadata to S3
 
     Concepts are processed in parallel. If any concept fails, it should not affect the
@@ -448,6 +469,11 @@ def vibe_check_inference(
     :param wikibase_ids: Optional list of Wikibase IDs to process. If not provided,
     the flow will load the default list from vibe-checker/config.yml.
     """
+    config = await Config.create()
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
+        config=config, aws_env=config.aws_env
+    )
+
     if not wikibase_ids:
         logger.info("Loading wikibase IDs from config...")
         wikibase_ids = load_wikibase_ids_from_config()
@@ -484,6 +510,11 @@ def vibe_check_inference(
             passages_dataset=passages_dataset,
             passages_embeddings=passages_embeddings,
             embedding_model=embedding_model,
+            wikibase_config=wikibase_config,
+            argilla_config=argilla_config,
+            s3_client=s3_client,
+            aws_env=config.aws_env,
+            track_and_upload=True,
         )
         concept_futures.append(future)
 

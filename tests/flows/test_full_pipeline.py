@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -101,7 +102,6 @@ async def test_full_pipeline_no_config_provided(
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
-        assert call_args.kwargs["use_new_and_updated"] is False
         assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
 
         mock_aggregate.assert_called_once()
@@ -203,7 +203,6 @@ async def test_full_pipeline_with_full_config(
                 DocumentImportId("test.doc.1"),
                 DocumentImportId("test.doc.2"),
             ],
-            inference_use_new_and_updated=True,
             inference_batch_size=500,
             inference_classifier_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
@@ -224,7 +223,6 @@ async def test_full_pipeline_with_full_config(
                 DocumentImportId("test.doc.2"),
             ]
         )
-        assert call_args.kwargs["use_new_and_updated"] is True
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
@@ -318,7 +316,6 @@ async def test_full_pipeline_with_inference_failure(
             config=test_config,
             classifier_specs=[classifier_spec],
             document_ids=document_ids,
-            inference_use_new_and_updated=True,
             inference_batch_size=500,
             inference_classifier_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
@@ -339,7 +336,6 @@ async def test_full_pipeline_with_inference_failure(
                 DocumentImportId("CCLW.executive.2.2"),
             ]
         )
-        assert call_args.kwargs["use_new_and_updated"] is True
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
@@ -376,7 +372,6 @@ async def test_full_pipeline_with_inference_failure(
                 config=test_config,
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
-                inference_use_new_and_updated=True,
                 inference_batch_size=500,
                 inference_classifier_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
@@ -459,7 +454,6 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
                     DocumentImportId("test.doc.1"),
                     DocumentImportId("test.doc.2"),
                 ],
-                inference_use_new_and_updated=True,
                 inference_batch_size=500,
                 inference_classifier_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
@@ -480,7 +474,6 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
                 DocumentImportId("test.doc.2"),
             ]
         )
-        assert call_args.kwargs["use_new_and_updated"] is True
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_concurrency_limit"] == 5
@@ -518,3 +511,109 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
         assert mock_inference.call_count == 1
         assert mock_aggregate.call_count == 1
         assert mock_indexing.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_full_pipeline_with_document_ids_s3_path(
+    test_config,
+    mock_run_output_identifier_str,
+    aggregate_inference_results_document_stems,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    """Test full_pipeline flow with document_ids_s3_path parameter."""
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q100"),
+        classifier_id="zzzz9999",
+        wandb_registry_version="v1",
+    )
+
+    s3_key: str = "test-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
+    document_ids = [
+        DocumentImportId("test.doc.1"),
+        DocumentImportId("test.doc.2"),
+    ]
+    file_content: str = json.dumps(document_ids)
+
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
+        Body=file_content.encode("utf-8"),
+    )
+
+    with (
+        patch(
+            "flows.full_pipeline.inference",
+            new_callable=AsyncMock,
+        ) as mock_inference,
+        patch(
+            "flows.full_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
+        patch(
+            "flows.full_pipeline.index",
+            new_callable=AsyncMock,
+        ) as mock_indexing,
+        patch(
+            "flows.full_pipeline.get_async_session",
+        ) as mock_get_session,
+    ):
+        # Mock S3 loading for document stems
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["test.doc.1", "test.doc.2"]}'
+                )
+            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
+
+        mock_inference.return_value = Completed(
+            message="Successfully ran inference on all batches!",
+            data=mock_run_output_identifier_str,
+        )
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, errors=None
+            ),
+        )
+        mock_indexing.return_value = State(
+            type=StateType.COMPLETED, data={"message": "Indexing complete."}
+        )
+
+        # Run the flow with document_ids_s3_path
+        await full_pipeline(
+            config=test_config,
+            classifier_specs=[classifier_spec],
+            document_ids_s3_path=s3_path,
+            inference_batch_size=500,
+            inference_classifier_concurrency_limit=5,
+            aggregation_n_documents_in_batch=50,
+            aggregation_n_batches=3,
+            indexing_batch_size=200,
+            indexer_concurrency_limit=2,
+            indexer_document_passages_concurrency_limit=4,
+            indexer_max_vespa_connections=8,
+        )
+
+        # Verify sub-flows were called with correct parameters
+        mock_inference.assert_called_once()
+        call_args = mock_inference.call_args
+        assert call_args.kwargs["classifier_specs"] == [classifier_spec]
+        assert call_args.kwargs["document_ids_s3_path"] == s3_path
+        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["batch_size"] == 500
+        assert call_args.kwargs["classifier_concurrency_limit"] == 5
+
+        mock_aggregate.assert_called_once()
+        mock_indexing.assert_called_once()

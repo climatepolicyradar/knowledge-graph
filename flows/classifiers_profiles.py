@@ -6,6 +6,7 @@ Assumes that the classifier model has been trained in wandb
 
 import os
 import tempfile
+import textwrap
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -494,13 +495,18 @@ async def create_classifiers_profiles_artifact(
         pr_url = (
             f"https://github.com/climatepolicyradar/knowledge-graph/pull/{pr_number}"
         )
-        pr_details = "- **Classifiers Specs PR**: "
-        pr_details += f"[#{pr_number}]({pr_url})\n" if pr_number else "No PR created \n"
-    else:
-        pr_error = unwrap_err(cs_pr_results) if is_err(cs_pr_results) else None
-        pr_details = (
-            f"- **Classifiers Specs PR**: Error creating or merging PR {pr_error}\n"
+        pr_details = f"[#{pr_number}]({pr_url})\n" if pr_number else "No PR created \n"
+    elif is_err(cs_pr_results):
+        pr_error = unwrap_err(cs_pr_results)
+        msg = textwrap.shorten(pr_error.msg, width=100, placeholder="...")
+        exception = textwrap.shorten(
+            (pr_error.metadata or {}).get("exception", ""), width=100, placeholder="..."
         )
+        pr_details = (
+            f"Error creating or merging PR, msg: {msg}, exception: {exception}\n"
+        )
+    else:
+        pr_details = "No PR details"
 
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
@@ -510,7 +516,7 @@ async def create_classifiers_profiles_artifact(
 - **WandB Errors**: {len(wandb_errors)}
 - **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
-- {pr_details}
+- **Classifiers Specs PR**: {pr_details}
 """
 
     def format_cp_details(
@@ -608,6 +614,7 @@ async def send_classifiers_profile_slack_alert(
     upload_to_wandb: bool,
     upload_to_vespa: bool,
     event: Result[Event | None, Error],
+    cs_pr_results: Result[int | None, Error],
 ):
     """
     Send slack alert with failures from the classifiers profiles lifecycle sync.
@@ -621,8 +628,9 @@ async def send_classifiers_profile_slack_alert(
     total_concepts = len(successes) + len(validation_errors) + len(wandb_errors)
 
     event_errors = [unwrap_err(event)] if is_err(event) else []
+    pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
 
-    other_errors = wandb_errors + vespa_errors + event_errors
+    other_errors = wandb_errors + vespa_errors + event_errors + pr_errors
     try:
         channel = f"alerts-platform-{aws_env}"
         # TODO: change channel once CP data populated
@@ -714,6 +722,14 @@ async def send_classifiers_profile_slack_alert(
                         thread_ts=thread_ts,
                         errors=event_errors,
                         error_type="Event Errors",
+                    )
+                if pr_errors:
+                    await _post_errors_thread(
+                        slack_client=slack_client,
+                        channel=channel,
+                        thread_ts=thread_ts,
+                        errors=pr_errors,
+                        error_type="PR Errors",
                     )
             else:
                 raise ValueError(
@@ -1299,6 +1315,7 @@ async def sync_classifiers_profiles(
     automerge_classifier_specs_pr: bool = False,
     auto_train: bool = False,
     debug_wikibase_validation: bool = False,
+    enable_slack_notifications: bool = True,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1481,21 +1498,20 @@ async def sync_classifiers_profiles(
         f"Successful updates: {len(successes)}, Validation errors: {len(validation_errors)}, Wandb errors: {len(wandb_errors)}"
     )
 
-    # set as default value to indicate no PR created
-    cs_pr_results: Result[int | None, Error] = Ok(None)
-    vespa_results = []
-
     # update classifiers specs yaml file
     refresh_all_available_classifiers([aws_env])
 
     # reload classifier specs to confirm updates
     updated_classifier_specs = load_classifier_specs(aws_env)
 
+    # set as default value to indicate no PR created
+    cs_pr_results: Result[int | None, Error] = Ok(None)
+
     if classifier_specs == updated_classifier_specs:
         logger.info("No changes to classifier specs")
     else:
         logger.info(
-            f"Changes made to classifier specs: {len(successes)} wandb changes, creating and merging PR..."
+            f"Changes made to classifier specs: {len(classifier_specs)} specs vs. {len(updated_classifier_specs)} updated, creating and merging PR..."
         )
 
         # create PR with updated classifier specs
@@ -1515,6 +1531,8 @@ async def sync_classifiers_profiles(
             github_token=github_token,
             auto_merge=automerge_classifier_specs_pr,
         )
+
+    vespa_results = []
 
     if is_err(cs_pr_results):
         logger.warning("Error creating and merging PR, skipping vespa updates")
@@ -1545,19 +1563,23 @@ async def sync_classifiers_profiles(
             aws_env,
         )
 
-    try:
-        await send_classifiers_profile_slack_alert(
-            validation_errors=validation_errors,
-            wandb_errors=wandb_errors,
-            vespa_errors=vespa_errors,
-            successes=successes,
-            aws_env=aws_env,
-            upload_to_wandb=upload_to_wandb,
-            upload_to_vespa=upload_to_vespa,
-            event=event,
-        )
-    except Exception as e:
-        logger.error(f"failed to send validation alert: {e}")
+    if not enable_slack_notifications:
+        logger.warning("Slack notifications are not enabled")
+    else:
+        try:
+            await send_classifiers_profile_slack_alert(
+                validation_errors=validation_errors,
+                wandb_errors=wandb_errors,
+                vespa_errors=vespa_errors,
+                successes=successes,
+                aws_env=aws_env,
+                upload_to_wandb=upload_to_wandb,
+                upload_to_vespa=upload_to_vespa,
+                event=event,
+                cs_pr_results=cs_pr_results,
+            )
+        except Exception as e:
+            logger.error(f"failed to send validation alert: {e}")
 
     await create_classifiers_profiles_artifact(
         validation_errors=validation_errors,
@@ -1577,3 +1599,5 @@ async def sync_classifiers_profiles(
         raise Exception(
             f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
         )
+
+    logger.info("Successfully completed classifiers profiles sync")
