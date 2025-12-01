@@ -16,7 +16,7 @@ from knowledge_graph.wikibase import WikibaseConfig
 from scripts.train import run_training
 
 
-async def _setup_training_environment(
+async def _set_up_training_environment(
     config: Config | None,
     aws_env: AwsEnv,
 ) -> tuple[Config, WikibaseConfig, ArgillaConfig, Any]:
@@ -75,7 +75,7 @@ async def train_on_gpu(
     config: Config | None = None,
 ):
     """Trigger the training script in prefect using coiled."""
-    _, wikibase_config, argilla_config, s3_client = await _setup_training_environment(
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=aws_env
     )
 
@@ -151,7 +151,7 @@ async def train_from_config(
     logger = get_logger()
     logger.info("Starting training from config file")
 
-    _, wikibase_config, argilla_config, s3_client = await _setup_training_environment(
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=aws_env
     )
 
