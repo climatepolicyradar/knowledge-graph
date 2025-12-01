@@ -516,7 +516,7 @@ async def train_classifier(
     extra_wandb_config: dict[str, Any] = {},
     train_validation_data: Optional[list[LabelledPassage]] = None,
     max_training_samples: Optional[int] = None,
-    force: bool = False,
+    force: bool = True,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     # Create console locally to avoid serialization issues
@@ -701,7 +701,7 @@ async def run_training(
     concept_overrides: Optional[dict[str, Any]] = None,
     training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
-    force: bool = False,
+    force: bool = True,
 ) -> Classifier:
     """
     Get a concept and create a classifier, then train the classifier.

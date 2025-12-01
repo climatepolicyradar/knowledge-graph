@@ -131,7 +131,7 @@ async def train_from_config(
     track_and_upload: bool = True,
     aws_env: AwsEnv = AwsEnv.labs,
     config: Config | None = None,
-    force: bool = False,
+    force: bool = True,
     concurrency_limit: int = 3,
 ) -> list[Any]:
     """
