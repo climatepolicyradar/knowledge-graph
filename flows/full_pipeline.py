@@ -69,7 +69,7 @@ async def create_full_pipeline_summary_artifact(
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    inference_use_new_and_updated: bool = False,
+    document_ids_s3_path: str | None = None,
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
     config: Config | None = None,
@@ -91,8 +91,8 @@ async def full_pipeline(
     Args:
         classifier_specs: Classifier specifications to use for inference.
         document_ids: Specific document IDs to process. If None, processes all.
+        document_ids_s3_path: An S3 path string (e.g., "s3://bucket/key") that contains document ids to process.
         config: Configuration for the inference, aggregation and index flows. If None, creates default.
-        inference_use_new_and_updated: Whether to process only new/updated documents.
         inference_batch_size: Number of documents to process in each batch.
         inference_classifier_concurrency_limit: Maximum concurrent classifiers.
         aggregation_n_documents_in_batch: Number of documents per aggregation batch.
@@ -120,7 +120,7 @@ async def full_pipeline(
     inference_run: State = await inference(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
-        use_new_and_updated=inference_use_new_and_updated,
+        document_ids_s3_path=document_ids_s3_path,
         config=config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,

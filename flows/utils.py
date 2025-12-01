@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
+from re import Match
 from typing import (
     Annotated,
     Any,
@@ -32,6 +33,7 @@ import aioboto3
 import prefect.exceptions
 import prefect.logging
 from botocore.exceptions import ClientError
+from cpr_sdk.s3 import S3_PATTERN
 from prefect.artifacts import create_progress_artifact, update_progress_artifact
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.context import FlowRunContext, TaskRunContext, get_run_context
@@ -341,6 +343,19 @@ class S3Uri:
         """Return the stem of the S3 URI (the key without the extension)."""
         return Path(self.key).stem
 
+    @classmethod
+    def from_s3_path(cls, s3_path: str) -> "S3Uri":
+        """Create an S3Uri object from a path string."""
+
+        s3_match: Match | None = S3_PATTERN.match(s3_path)
+        if not isinstance(s3_match, Match):
+            raise Exception(f"S3 Path does not represent an s3 path: {s3_path}")
+
+        bucket: str = s3_match.group("bucket")
+        key: str = s3_match.group("prefix").rstrip("/")
+
+        return cls(bucket=bucket, key=key)
+
 
 def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
     """
@@ -386,46 +401,6 @@ async def s3_file_exists(file_key: str, bucket_name: str, s3_client: S3Client) -
         ]:  # pyright: ignore[reportTypedDictNotRequiredAccess]
             return False
         raise
-
-
-async def get_file_stems_for_document_id(
-    document_id: DocumentImportId,
-    bucket_name: str,
-    document_key: str,
-    s3_client: S3Client,
-) -> list[DocumentStem]:
-    """
-    Get the file stems for a document ID.
-
-    This function is used to get the file stems for a document ID. For example we would
-    find any translated documents in a directory for a document id as follows:
-
-    Example:
-    "CCLW.executive.1.1" -> ["CCLW.executive.1.1_translated_en"]
-
-    Note that we don't include the original document ID in the list of stems.
-    This is because we are looking for only English language documents.
-    """
-    stems = []
-
-    for target_language in ["en"]:
-        translated_file_key = (
-            Path(document_key)
-            .with_stem(f"{document_id}_translated_{target_language}")
-            .with_suffix(".json")
-        )
-
-        if await s3_file_exists(
-            file_key=translated_file_key.__str__(),
-            bucket_name=bucket_name,
-            s3_client=s3_client,
-        ):
-            stems.append(translated_file_key.stem)
-
-    if not stems:
-        stems.append(document_id)
-
-    return stems
 
 
 async def collect_unique_file_stems_under_prefix(
