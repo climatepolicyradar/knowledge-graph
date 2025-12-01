@@ -29,7 +29,7 @@ from flows.classifiers_profiles import (
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
+from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -1147,6 +1147,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
     ]
+    pr_results: Result[int | None, Error] = Err(Error(msg="PR error", metadata={}))
 
     with (
         patch(
@@ -1169,6 +1170,7 @@ async def test_send_classifiers_profile_slack_alert_success():
             upload_to_wandb=True,
             upload_to_vespa=True,
             event=Mock(),
+            cs_pr_results=pr_results,
         )
 
         mock_slack_client.chat_postMessage.assert_any_call(
@@ -1195,8 +1197,14 @@ async def test_send_classifiers_profile_slack_alert_success():
             text=f"Vespa Errors: {len(vespa_errors)} issues found",
             blocks=ANY,
         )
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-staging",
+            thread_ts="12345",
+            text="PR Errors: 1 issues found",
+            blocks=ANY,
+        )
         assert spy_post_errors_main.call_count == 2
-        assert spy_post_errors_thread.call_count == 3
+        assert spy_post_errors_thread.call_count == 4
 
 
 @pytest.mark.asyncio
@@ -1230,6 +1238,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
             upload_to_wandb=True,
             upload_to_vespa=True,
             event=Mock(),
+            cs_pr_results=Mock(),
         )
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
