@@ -117,6 +117,12 @@ def main(
             help="Stop prediction after finding this many positive passages",
         ),
     ] = None,
+    restart_from_wandb_run: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
+        ),
+    ] = None,
 ):
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
@@ -134,6 +140,7 @@ def main(
         "prediction_threshold": prediction_threshold,
         "stop_after_n_positives": stop_after_n_positives,
         "exclude_training_data": exclude_training_data,
+        "restart_from_wandb_run": restart_from_wandb_run,
     }
     wandb_job_type = "predict_adhoc"
 
@@ -170,6 +177,36 @@ def main(
             raise ValueError(
                 "One of `labelled_passages_path` and `labelled_passages_run_name` must be defined."
             )
+
+        already_predicted_passages: list[LabelledPassage] = []
+        if restart_from_wandb_run:
+            console.print(
+                f"Loading already-predicted passages from {restart_from_wandb_run} to skip..."
+            )
+            try:
+                restart_run = wandb_api.run(restart_from_wandb_run)
+                already_predicted_passages = load_labelled_passages_from_wandb(
+                    run=restart_run
+                )
+                console.print(
+                    f"[green]✓ Loaded {len(already_predicted_passages)} already-predicted passages[/green]"
+                )
+
+                # Filter out already-predicted passages based on ID
+                already_predicted_ids = {p.id for p in already_predicted_passages}
+                len_before = len(labelled_passages)
+                labelled_passages = [
+                    p for p in labelled_passages if p.id not in already_predicted_ids
+                ]
+                num_skipped = len_before - len(labelled_passages)
+                console.print(
+                    f"Skipped {num_skipped} already-predicted passages. {len(labelled_passages)} remaining to predict."
+                )
+            except Exception as e:
+                console.print(
+                    f"[red]⚠ Could not load already-predicted passages: {e}[/red]"
+                )
+                console.print("Continuing without skipping any passages")
 
         if deduplicate_inputs:
             original_count = len(labelled_passages)
@@ -249,23 +286,19 @@ def main(
                 f"Classifier prediction threshold set to {prediction_threshold}"
             )
 
-        # 3. predict using model
-        if stop_after_n_positives is None:
-            output_labelled_passages = label_passages_with_classifier(
-                classifier=classifier,
-                labelled_passages=labelled_passages,
-                batch_size=batch_size,
-                show_progress=True,
-            )
-        else:
-            # Early stopping: process batch-by-batch until we have enough positives
-            output_labelled_passages = []
+        # 4. predict using model
+        output_labelled_passages: list[LabelledPassage] = []
+        prediction_exception: Exception | None = None
+
+        try:
+            # Process batch-by-batch to save partial results on failure
             positives_found = 0
             passages_processed = 0
 
-            console.print(
-                f"[cyan]Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages[/cyan]"
-            )
+            if stop_after_n_positives is not None:
+                console.print(
+                    f"[cyan]Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages[/cyan]"
+                )
 
             for i in range(0, len(labelled_passages), batch_size):
                 batch = labelled_passages[i : i + batch_size]
@@ -277,40 +310,68 @@ def main(
                     show_progress=True,
                 )
 
-                batch_positives = sum(1 for p in batch_output if len(p.spans) > 0)
-                positives_found += batch_positives
                 passages_processed += len(batch)
-
                 output_labelled_passages.extend(batch_output)
 
+                # Track positives if early stopping is enabled
+                if stop_after_n_positives is not None:
+                    batch_positives = sum(1 for p in batch_output if len(p.spans) > 0)
+                    positives_found += batch_positives
+
+                    console.print(
+                        f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages, "
+                        f"found {positives_found} positives ({batch_positives} in batch)[/cyan]"
+                    )
+
+                    if positives_found >= stop_after_n_positives:
+                        console.print(
+                            f"[green]✓ Reached target of {stop_after_n_positives} positives. "
+                            f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)[/green]"
+                        )
+                        break
+                else:
+                    console.print(
+                        f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages[/cyan]"
+                    )
+
+        except Exception as e:
+            prediction_exception = e
+            console.print(
+                f"[red]⚠ Prediction failed: {e}[/red]\n"
+                f"[yellow]Saving {len(output_labelled_passages)} partial results...[/yellow]"
+            )
+
+        finally:
+            if output_labelled_passages or already_predicted_passages:
+                all_passages = already_predicted_passages + output_labelled_passages
+
+                labelled_passages_filename = (
+                    f"{classifier.id}_{run.name}.jsonl"
+                    if run
+                    else f"{classifier.id}.jsonl"
+                )
+                labelled_passages_path = (
+                    predictions_dir / wikibase_id / labelled_passages_filename
+                )
+                labelled_passages_jsonl = serialise_pydantic_list_as_jsonl(all_passages)
+
+                labelled_passages_path.parent.mkdir(parents=True, exist_ok=True)
+                labelled_passages_path.write_text(labelled_passages_jsonl)
                 console.print(
-                    f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages, "
-                    f"found {positives_found} positives ({batch_positives} in batch)[/cyan]"
+                    f"[green]✓ Saved {len(all_passages)} passages to {labelled_passages_path}[/green]"
                 )
 
-                if positives_found >= stop_after_n_positives:
-                    console.print(
-                        f"[green]✓ Reached target of {stop_after_n_positives} positives. "
-                        f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)[/green]"
+                if track_and_upload and run:
+                    log_labelled_passages_artifact_to_wandb_run(
+                        all_passages, run=run, concept=classifier.concept
                     )
-                    break
+                    console.print(
+                        f"[green]✓ Uploaded passages to W&B run {run.name}[/green]"
+                    )
 
-        # 4. save to local (and wandb)
-        labelled_passages_filename = (
-            f"{classifier.id}_{run.name}.jsonl" if run else f"{classifier.id}.jsonl"
-        )
-        labelled_passages_path = (
-            predictions_dir / wikibase_id / labelled_passages_filename
-        )
-        labelled_passages_jsonl = serialise_pydantic_list_as_jsonl(
-            output_labelled_passages
-        )
-        Path(labelled_passages_filename).write_text(labelled_passages_jsonl)
-
-        if track_and_upload and run:
-            log_labelled_passages_artifact_to_wandb_run(
-                output_labelled_passages, run=run, concept=classifier.concept
-            )
+        # Re-raise the exception after saving
+        if prediction_exception:
+            raise prediction_exception
 
 
 if __name__ == "__main__":

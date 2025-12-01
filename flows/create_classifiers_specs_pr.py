@@ -282,7 +282,7 @@ async def enable_auto_merge(
     pr_number: int,
     merge_method: str,
     repo: str = "climatepolicyradar/knowledge-graph",
-) -> Result[None, Error]:
+) -> Result[int | None, Error]:
     """Enable auto-merge on a GitHub PR."""
     logger = get_logger()
 
@@ -302,7 +302,7 @@ async def enable_auto_merge(
         )
 
         logger.info(f"Enabled auto-merge on PR #{pr_number}")
-        return Ok(None)
+        return Ok(pr_number)
     except Exception as e:
         logger.error(f"Failed to enable auto-merge: {e}")
         return Err(
@@ -318,7 +318,7 @@ async def wait_for_pr_merge(
     timeout: timedelta,
     poll_interval: timedelta,
     repo: str = "climatepolicyradar/knowledge-graph",
-) -> Result[None, Error]:
+) -> Result[int | None, Error]:
     """Wait for a PR to be merged by polling with gh CLI."""
     logger = get_logger()
 
@@ -377,7 +377,7 @@ async def wait_for_pr_merge(
             # Check if merged (mergedAt will be non-null if merged)
             if pr_data.get("mergedAt"):
                 logger.info(f"✓ PR #{pr_number} successfully merged!")
-                return Ok(None)
+                return Ok(pr_number)
 
             # Check if closed without merging
             if pr_data.get("state") == "CLOSED" and not pr_data.get("mergedAt"):
@@ -422,24 +422,27 @@ async def create_and_merge_pr(
     flow_run_url: str,
     github_token: SecretStr,
     auto_merge: bool = False,
-) -> list[Result[None | int, Error]]:
-    """Main workflow for creating and managing a PR."""
+) -> Result[None | int, Error]:
+    """
+    Main workflow for creating and managing a PR
+
+    Returns:
+        Ok(None) if no changes to file,
+        Ok(pr_number) for successes,
+        Err on failures.
+    """
     logger = get_logger()
-    results = []
 
     try:
         os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
     except Exception as e:
         logger.error(f"Failed to set GitHub token environment var: {e}")
-        results.append(
-            Err(
-                Error(
-                    msg="Failed to set GitHub token environment var.",
-                    metadata={"exception": e, "aws_env": aws_env},
-                )
+        return Err(
+            Error(
+                msg="Failed to set GitHub token environment var.",
+                metadata={"exception": e, "aws_env": aws_env},
             )
         )
-        return results
 
     try:
         repo_path = Path("./")
@@ -455,51 +458,45 @@ async def create_and_merge_pr(
             base_branch="main",
             repo_path=repo_path,
         )
-        results.append(Ok(pr_no))
+
         if pr_no is None:
             logger.info("No PR created as there were no changes.")
-            return results
+            return Ok(None)
     except Exception as e:
         logger.error(f"Failed to create PR: {e}")
-        results.append(
-            Err(
-                Error(
-                    msg="Failed to create PR for classifiers specs changes.",
-                    metadata={
-                        "exception": e,
-                        "aws_env": aws_env,
-                        "spec_file": spec_file,
-                    },
-                )
+        return Err(
+            Error(
+                msg="Failed to create PR for classifiers specs changes.",
+                metadata={
+                    "exception": e,
+                    "aws_env": aws_env,
+                    "spec_file": spec_file,
+                },
             )
         )
-        return results
 
     logger.info(f"PR #{pr_no} created.")
 
     if not auto_merge:
         logger.info("Auto-merge not enabled as per configuration.")
+        return Ok(pr_no)
     else:
         logger.info("Auto-approving and merging PR...")
-        results.append(
-            await enable_auto_merge(
-                pr_number=pr_no,
-                merge_method="REBASE",
-                repo="climatepolicyradar/knowledge-graph",
-            )
+        auto_merge_results = await enable_auto_merge(
+            pr_number=pr_no,
+            merge_method="REBASE",
+            repo="climatepolicyradar/knowledge-graph",
         )
 
-        # if error in results return
-        if any(is_err(result) for result in results):
-            return results
+        # if error in results return early
+        if is_err(auto_merge_results):
+            return auto_merge_results
 
-        results.append(
-            await wait_for_pr_merge(
-                pr_number=pr_no,
-                timeout=timedelta(minutes=30),
-                poll_interval=timedelta(seconds=30),
-                repo="climatepolicyradar/knowledge-graph",
-            )
+        pr_merge_results = await wait_for_pr_merge(
+            pr_number=pr_no,
+            timeout=timedelta(minutes=30),
+            poll_interval=timedelta(seconds=30),
+            repo="climatepolicyradar/knowledge-graph",
         )
 
-    return results
+        return pr_merge_results

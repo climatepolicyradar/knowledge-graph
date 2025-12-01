@@ -30,15 +30,16 @@ import yaml
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 from prefect import flow, task
-from prefect.artifacts import create_progress_artifact, update_progress_artifact
 from prefect.futures import wait
 from prefect.logging import get_logger
 from prefect.task_runners import ThreadPoolTaskRunner
+from pydantic import Field
 from rich.logging import RichHandler
 from sentence_transformers import SentenceTransformer
 
 from flows.config import Config
 from flows.train import _set_up_training_environment
+from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -48,6 +49,27 @@ from scripts.train import run_training
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
 aws_profile = os.getenv("AWS_PROFILE", "labs")
+
+
+class LabelledPassageWithMarkup(LabelledPassage):
+    """LabelledPassage wrapper including an extra field for text marked up as HTML."""
+
+    marked_up_text: str = Field(
+        ..., description="Text marked up as HTML with highlighted spans"
+    )
+
+    @classmethod
+    def from_labelled_passage(
+        cls, labelled_passage: LabelledPassage
+    ) -> "LabelledPassageWithMarkup":
+        """Create a LabelledPassageWithMarkup from a LabelledPassage."""
+        return cls(
+            marked_up_text=labelled_passage.get_highlighted_text(
+                start_pattern='<span class="prediction-highlight">',
+                end_pattern="</span>",
+            ),
+            **labelled_passage.model_dump(),
+        )
 
 
 def _get_bucket_name_from_ssm() -> str:
@@ -232,15 +254,8 @@ async def process_single_concept(
     This task is designed to be isolated - if it fails, it won't affect the other
     concept processing tasks.
     """
+    s3_client = get_s3_client()
     try:
-        # Create progress artifact for this concept
-        progress_id = create_progress_artifact(
-            progress=0.0,
-            key=f"concept-{wikibase_id}".lower(),
-            description=f"Processing concept {wikibase_id}",
-        )
-
-        # Load concept for embedding calculation
         wikibase = WikibaseSession()
         concept = wikibase.get_concept(wikibase_id)
         logger.info(f"Loaded concept: {concept}")
@@ -309,7 +324,7 @@ async def process_single_concept(
         # Ensure we don't exceed max_passages in either scenario
         selected_passages = selected_passages.head(max_passages)
 
-        # Reset index to get sequential integers for progress tracking
+        # Reset index to get sequential integers
         selected_passages = selected_passages.reset_index(drop=True)
 
         logger.info(f"Selected {len(selected_passages)} passages")
@@ -339,14 +354,20 @@ async def process_single_concept(
 
         # Run inference for the concept
         logger.info(f"Running inference for {classifier}")
-        # Calculate total passages for progress tracking
-        n_passages = len(selected_passages)
 
-        labelled_passages: list[LabelledPassage] = []
+        # Collect all texts into a list for batch prediction
         assert isinstance(selected_passages, pd.DataFrame)
+        texts = [str(row["text_block.text"]) for _, row in selected_passages.iterrows()]
+
+        # Run predict in batches
+        logger.info(f"Making predictions for {len(texts)} passages")
+        predicted_spans_list = classifier.predict(texts, show_progress=True)
+
+        # Create labelled passages from batch results
+        labelled_passages: list[LabelledPassage] = []
         for idx, (_, row) in enumerate(selected_passages.iterrows()):
-            text = str(row["text_block.text"])
-            predicted_spans = classifier.predict(text)
+            text = texts[idx]
+            predicted_spans = predicted_spans_list[idx]
             text_block_metadata = {str(k): str(v) for k, v in row.to_dict().items()}
             labelled_passage = LabelledPassage(
                 text=text,
@@ -354,16 +375,6 @@ async def process_single_concept(
                 metadata=text_block_metadata,
             )
             labelled_passages.append(labelled_passage)
-
-            # Update progress every 50 passages (or on the last passage)
-            passage_num = idx + 1
-            if passage_num % 50 == 0 or passage_num == n_passages:
-                progress = (passage_num / n_passages) * 100
-                update_progress_artifact(
-                    progress_id,  # type: ignore
-                    progress=progress,
-                    description=f"Processed passage {passage_num}/{n_passages}",
-                )
 
         logger.info(f"Generated {len(labelled_passages)} labelled passages")
 
@@ -375,20 +386,11 @@ async def process_single_concept(
         logger.info(f"Outputs will be stored in s3://{bucket_name}/{output_prefix}")
 
         # Push results for this concept to S3
-        jsonl_string = "\n".join(
-            [
-                json.dumps(
-                    {
-                        "marked_up_text": labelled_passage.get_highlighted_text(
-                            start_pattern='<span class="prediction-highlight">',
-                            end_pattern="</span>",
-                        ),
-                        **json.loads(labelled_passage.model_dump_json()),
-                    }
-                )
-                for labelled_passage in labelled_passages
-            ]
-        )
+        passages_with_markup = [
+            LabelledPassageWithMarkup.from_labelled_passage(labelled_passage)
+            for labelled_passage in labelled_passages
+        ]
+        jsonl_string = serialise_pydantic_list_as_jsonl(passages_with_markup)
 
         logger.info(f"Pushing predictions to S3: {output_prefix / 'predictions.jsonl'}")
         push_object_bytes_to_s3(
@@ -428,11 +430,6 @@ async def process_single_concept(
         logger.info(
             f"Completed processing {wikibase_id} ({n_positive_passages}/{len(labelled_passages)} positive)"
         )
-        update_progress_artifact(
-            progress_id,  # type: ignore
-            progress=100.0,
-            description="Inference completed successfully",
-        )
         return result
 
     except (ValueError, RuntimeError, ConnectionError) as e:
@@ -462,7 +459,7 @@ async def vibe_check_inference(
     For each concept, this flow:
     - Loads the passages dataset and pre-computed embeddings from S3
     - Samples passages most relevant to the concept based on their semantic similarity
-    - Gets or creates the latest classifier from W&B (trains if missing)
+    - Gets the latest classifier from W&B (or trains a new one if one doesn't exist)
     - Runs inference on the selected passages
     - Pushes predictions and concept/classifier metadata to S3
 
