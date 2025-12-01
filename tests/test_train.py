@@ -349,7 +349,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
 
 
 @pytest.mark.asyncio
-async def test_whether_run_training_skips_classifier_when_it_already_exists_in_wandb(
+async def test_whether_run_training_skips_classifier_when_it_already_exists_in_wandb_and_force_false_is_set(
     MockedWikibaseSession, mock_s3_client
 ):
     """Test that training is skipped when classifier already exists in W&B."""
@@ -394,6 +394,7 @@ async def test_whether_run_training_skips_classifier_when_it_already_exists_in_w
             track_and_upload=True,
             aws_env=AwsEnv.labs,
             s3_client=mock_s3_client,
+            force=False,
         )
 
         # Should return classifier without training
