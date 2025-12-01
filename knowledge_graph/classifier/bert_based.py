@@ -292,7 +292,7 @@ class BertBasedClassifier(
         variant._variant_dropout_rate = dropout_rate
 
         variant._use_dropout_during_inference = True  # noqa: SLF001
-        variant._is_fitted = self._is_fitted
+        variant.is_fitted = self.is_fitted
 
         return variant
 
@@ -545,5 +545,5 @@ class BertBasedClassifier(
             logger.info("📊 Final F1 score: %.4f", final_f1)
 
         logger.info("✅ Training complete for concept %s!", self.concept.id)
-        self._is_fitted = True
+        self.is_fitted = True
         return self

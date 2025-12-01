@@ -71,7 +71,7 @@ class BaseTargetClassifier(
             device=device,
         )
 
-        self._is_fitted = True
+        self.is_fitted = True
 
     @property
     def id(self) -> ClassifierID:
