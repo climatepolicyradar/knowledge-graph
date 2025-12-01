@@ -770,3 +770,67 @@ def test_cli_gitops_succeeds_when_git_installed(temp_git_repo):
     # This should not raise any exception. Assumes git is installed.
     git_ops = GitCliOps(temp_git_repo)
     assert git_ops.repo_path == temp_git_repo
+
+
+@pytest.mark.asyncio
+async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
+    git_ops, temp_git_repo
+):
+    """Test that only the specified file is staged and committed in a temp git repo."""
+
+    # Create two files in the repo
+    file_path = temp_git_repo / "testfile.yaml"
+    other_file = temp_git_repo / "otherfile.yaml"
+    file_path.write_text("new content")
+    other_file.write_text("untouched content")
+
+    # Only run for GitPyOps to avoid subprocess patching
+    if isinstance(git_ops, GitPyOps):
+        # GitPyOps only patch setup and push
+        with (
+            patch(
+                "flows.create_classifiers_specs_pr._run_subprocess_with_error_logging"
+            ) as mock_run_subprocess,
+            patch.object(git_ops, "push", autospec=True) as mock_push,
+        ):
+            mock_run_subprocess.side_effect = [
+                Mock(stdout=""),  # gh auth setup-git
+                Mock(
+                    stdout="https://github.com/climatepolicyradar/knowledge-graph/pull/123"
+                ),  # gh pr create
+            ]
+
+            pr_number = await commit_and_create_pr(
+                file_path=str(file_path.relative_to(temp_git_repo)),
+                commit_message="Update testfile",
+                pr_title="Update testfile",
+                pr_body="Automated update",
+                git=git_ops,
+                repo="test_repo",
+                base_branch="main",
+                repo_path=temp_git_repo,
+            )
+
+        assert pr_number == 123
+        mock_push.assert_called_once()
+
+        # Check git status: only testfile.yaml should be committed
+        result = git_ops.status_porcelain(str(file_path.relative_to(temp_git_repo)))
+        assert result.strip() == ""  # No changes left for testfile.yaml
+
+        # Check that otherfile.yaml is still unstaged
+        other_status = git_ops.status_porcelain(
+            str(other_file.relative_to(temp_git_repo))
+        )
+        assert other_status.strip() == "?? otherfile.yaml"
+
+        # Check git log to confirm only testfile.yaml was committed
+        log_result = subprocess.run(
+            ["git", "log", "--name-only", "--pretty=oneline"],
+            cwd=temp_git_repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "testfile.yaml" in log_result.stdout
+        assert "otherfile.yaml" not in log_result.stdout
