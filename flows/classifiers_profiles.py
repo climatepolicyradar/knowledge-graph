@@ -497,7 +497,7 @@ async def create_classifiers_profiles_artifact(
         pr_details = "- **Classifiers Specs PR**: "
         pr_details += f"[#{pr_number}]({pr_url})\n" if pr_number else "No PR created \n"
     else:
-        pr_error = unwrap_err(cs_pr_results) if is_err(cs_pr_results) else ""
+        pr_error = unwrap_err(cs_pr_results) if is_err(cs_pr_results) else None
         pr_details = f"- **Classifiers Specs PR**: Error creating or merging PR, msg: {pr_error.msg if pr_error and hasattr(pr_error, 'msg') else 'unknown'}\n"
 
     overview_description = f"""# Classifiers Profiles Validation Summary
