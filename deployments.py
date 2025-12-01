@@ -320,9 +320,25 @@ if __name__ == "__main__":
         description="Compare Wikibase classifiers profiles with classifiers specs",
         # Temporarily disabled while testing
         # Schedule 2x daily during working week days
-        # env_schedules={
-        #     AwsEnv.production: "0 10,17 * * 1-4"
-        # }
+        env_schedules={
+            AwsEnv.staging: "0 10 * * MON-THU",  # staging run 1x per day
+            # AwsEnv.production: "0 10,17 * * MON-THU",
+        },
+        env_parameters={
+            AwsEnv.staging: JsonDict(
+                {  # dry run: no changes to external services
+                    "upload_to_wandb": False,
+                    "upload_to_vespa": False,
+                    "automerge_classifier_specs_pr": False,
+                    "auto_train": False,
+                    "enable_slack_notifications": False,
+                }
+            ),
+        },
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
     )
 
     # Sync Neo4j with Wikibase

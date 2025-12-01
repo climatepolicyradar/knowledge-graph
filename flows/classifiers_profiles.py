@@ -1309,6 +1309,7 @@ async def sync_classifiers_profiles(
     automerge_classifier_specs_pr: bool = False,
     auto_train: bool = False,
     debug_wikibase_validation: bool = False,
+    enable_slack_notifications: bool = True,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1556,20 +1557,23 @@ async def sync_classifiers_profiles(
             aws_env,
         )
 
-    try:
-        await send_classifiers_profile_slack_alert(
-            validation_errors=validation_errors,
-            wandb_errors=wandb_errors,
-            vespa_errors=vespa_errors,
-            successes=successes,
-            aws_env=aws_env,
-            upload_to_wandb=upload_to_wandb,
-            upload_to_vespa=upload_to_vespa,
-            event=event,
-            cs_pr_results=cs_pr_results,
-        )
-    except Exception as e:
-        logger.error(f"failed to send validation alert: {e}")
+    if not enable_slack_notifications:
+        logger.warning("Slack notifications are not enabled")
+    else:
+        try:
+            await send_classifiers_profile_slack_alert(
+                validation_errors=validation_errors,
+                wandb_errors=wandb_errors,
+                vespa_errors=vespa_errors,
+                successes=successes,
+                aws_env=aws_env,
+                upload_to_wandb=upload_to_wandb,
+                upload_to_vespa=upload_to_vespa,
+                event=event,
+                cs_pr_results=cs_pr_results,
+            )
+        except Exception as e:
+            logger.error(f"failed to send validation alert: {e}")
 
     await create_classifiers_profiles_artifact(
         validation_errors=validation_errors,

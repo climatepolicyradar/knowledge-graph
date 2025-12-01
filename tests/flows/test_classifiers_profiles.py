@@ -1354,6 +1354,8 @@ async def test_sync_classifiers_profiles(
             upload_to_vespa=False,
             automerge_classifier_specs_pr=False,
             auto_train=False,
+            debug_wikibase_validation=False,
+            enable_slack_notifications=True,
         )
 
         # check wandb login called with api key
@@ -1497,6 +1499,8 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
                 upload_to_vespa=False,
                 automerge_classifier_specs_pr=False,
                 auto_train=False,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
             )
 
         # vespa should not be called when create PR fails
@@ -1608,6 +1612,8 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
                 upload_to_vespa=False,
                 automerge_classifier_specs_pr=False,
                 auto_train=False,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
             )
 
         # vespa should be called once and return exception
