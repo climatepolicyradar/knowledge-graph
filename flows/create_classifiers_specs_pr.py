@@ -65,8 +65,8 @@ class GitOps(Protocol):
         """Push a branch to remote."""
         ...
 
-    def sparse_checkout(self, file_path: str) -> None:
-        """Sparse checkout of specific file path."""
+    def enable_sparse_checkout(self, file_path: str) -> None:
+        """Enable a sparse checkout of a specific file path."""
         ...
 
 
@@ -133,8 +133,8 @@ class GitCliOps:
             cwd=self.repo_path,
         )
 
-    def sparse_checkout(self, file_path: str) -> None:
-        """Sparse checkout of specific file path."""
+    def enable_sparse_checkout(self, file_path: str) -> None:
+        """Enable a sparse checkout of a specific file path."""
         _run_subprocess_with_error_logging(
             ["git", "sparse-checkout", "set", file_path],
             cwd=self.repo_path,
@@ -200,8 +200,8 @@ class GitPyOps:
         origin = self.repo.remote(name=remote)
         origin.push(refspec=f"{branch_name}:{branch_name}", set_upstream=True)
 
-    def sparse_checkout(self, file_path: str) -> None:
-        """Sparse checkout of specific file path."""
+    def enable_sparse_checkout(self, file_path: str) -> None:
+        """Enable a sparse checkout of a specific file path."""
         self.repo.git.sparse_checkout("set", file_path)
 
 
@@ -229,8 +229,7 @@ async def commit_and_create_pr(
     git.config("user.email", "tech@climatepolicyradar.org")
     git.config("user.name", "cpr-tech-admin")
 
-    # enable sparse checkout
-    git.sparse_checkout(file_path)
+    git.enable_sparse_checkout(file_path)
 
     # Create and checkout new branch
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")

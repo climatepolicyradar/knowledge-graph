@@ -765,7 +765,7 @@ def test_cli_gitops_checks_git_installed():
         )
 
 
-def test_gitops_sparse_checkout(git_ops, temp_git_repo):
+def test_gitops_enable_sparse_checkout(git_ops, temp_git_repo):
     """Test that both gitops perform sparse checkout."""
     file_path = "testfile.yaml"
 
@@ -773,7 +773,7 @@ def test_gitops_sparse_checkout(git_ops, temp_git_repo):
     (temp_git_repo / "otherfile.yaml").write_text("other content")
     (temp_git_repo / "text.txt").write_text("extra content")
 
-    git_ops.sparse_checkout(file_path)
+    git_ops.enable_sparse_checkout(file_path)
 
     # Check only the specified file is tracked by git
     result = subprocess.run(
