@@ -26,7 +26,7 @@ just train Q123 --track-and-upload --aws-env sandbox
 Demote the old version, being superseded, with:
 
 ```shell
-just demote Q123 --classifier-id abcd121212 --aws-env sandbox
+just demote Q123 --wandb-registry-version v10 --aws-env sandbox
 ```
 
 You don't have to demote a model version. There may be 2 versions in one environment, as long as they're in different classifiers profiles.
