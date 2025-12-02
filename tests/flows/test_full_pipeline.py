@@ -243,6 +243,7 @@ async def test_full_pipeline_with_full_config(
             indexer_concurrency_limit=2,
             indexer_document_passages_concurrency_limit=4,
             indexer_max_vespa_connections=8,
+            enable_v2_concepts=None,
             return_state=True,
         )
 
@@ -355,6 +356,7 @@ async def test_full_pipeline_with_inference_failure(
             indexer_concurrency_limit=2,
             indexer_document_passages_concurrency_limit=4,
             indexer_max_vespa_connections=8,
+            enable_v2_concepts=None,
             return_state=True,
         )
 
@@ -495,6 +497,7 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
             indexer_concurrency_limit=2,
             indexer_document_passages_concurrency_limit=4,
             indexer_max_vespa_connections=8,
+            enable_v2_concepts=None,
             return_state=True,
         )
 
