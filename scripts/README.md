@@ -7,6 +7,9 @@ For additional details and context, see [classifier model training and deploymen
 
 ## Training and promoting a classifier
 
+> [!IMPORTANT]
+> With model hot swapping, you should ideally only train via script and let promotion and demotion be handled via the classifiers profiles sync pipeline. It relies on Wikibase as the source for what is to be demoted and promoted. This is for _production_. You can still follow the steps below (promote and update the classifier specs). There are scenarios where this manual process is valid, such as re-training after a bug fix.
+
 First we run the training scripts. This will upload the classifier to S3 and link to it from its Weights and Biases project. You can then run the promote script which is used for promoting a model to primary within an AWS environment. Promotion as adds the model to the Weights and Bias registry and setting it as primary gives it the environment alias.
 
 _Note: You will need a profile in your `.aws/config` file with an active terminal session to use the following command as the upload command requires S3 access. You can also use your own AWS profile, by using a combination of `USE_AWS_PROFILES=true` and `AWS_PROFILE=XXXX`._
