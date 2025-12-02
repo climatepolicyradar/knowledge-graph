@@ -500,7 +500,9 @@ async def create_classifiers_profiles_artifact(
         pr_error = unwrap_err(cs_pr_results)
         msg = textwrap.shorten(pr_error.msg, width=100, placeholder="...")
         exception = textwrap.shorten(
-            (pr_error.metadata or {}).get("exception", ""), width=100, placeholder="..."
+            str((pr_error.metadata or {}).get("exception", "")),
+            width=100,
+            placeholder="...",
         )
         pr_details = (
             f"Error creating or merging PR, msg: {msg}, exception: {exception}\n"

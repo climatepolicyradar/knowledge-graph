@@ -66,7 +66,7 @@ class GitOps(Protocol):
         ...
 
     def enable_sparse_checkout(self, file_path: str) -> None:
-        """Enable a sparse checkout of a specific file path."""
+        """Enable a sparse checkout of a specific directory path."""
         ...
 
 
@@ -134,9 +134,10 @@ class GitCliOps:
         )
 
     def enable_sparse_checkout(self, file_path: str) -> None:
-        """Enable a sparse checkout of a specific file path."""
+        """Enable a sparse checkout of a specific directory path."""
+        dir_path = str(Path(file_path).parent)
         _run_subprocess_with_error_logging(
-            ["git", "sparse-checkout", "set", file_path],
+            ["git", "sparse-checkout", "set", dir_path],
             cwd=self.repo_path,
         )
 
@@ -201,8 +202,9 @@ class GitPyOps:
         origin.push(refspec=f"{branch_name}:{branch_name}", set_upstream=True)
 
     def enable_sparse_checkout(self, file_path: str) -> None:
-        """Enable a sparse checkout of a specific file path."""
-        self.repo.git.sparse_checkout("set", file_path)
+        """Enable a sparse checkout of a specific directory path."""
+        dir_path = str(Path(file_path).parent)
+        self.repo.git.sparse_checkout("set", dir_path)
 
 
 async def commit_and_create_pr(

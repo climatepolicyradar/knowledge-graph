@@ -767,8 +767,10 @@ def test_cli_gitops_checks_git_installed():
 
 def test_gitops_enable_sparse_checkout(git_ops, temp_git_repo):
     """Test that both gitops perform sparse checkout."""
-    file_path = "testfile.yaml"
+    file_path = "subdir/testfile.yaml"
+    dir_path = str(Path(file_path).parent)
 
+    (temp_git_repo / file_path).parent.mkdir(parents=True, exist_ok=True)
     (temp_git_repo / file_path).write_text("new content")
     (temp_git_repo / "otherfile.yaml").write_text("other content")
     (temp_git_repo / "text.txt").write_text("extra content")
@@ -783,8 +785,8 @@ def test_gitops_enable_sparse_checkout(git_ops, temp_git_repo):
         text=True,
         check=True,
     )
-    tracked_files = result.stdout.strip().splitlines()
-    assert tracked_files == ["testfile.yaml"]
+    tracked_dirs = result.stdout.strip().splitlines()
+    assert dir_path in tracked_dirs
 
 
 def test_cli_gitops_succeeds_when_git_installed(temp_git_repo):
@@ -801,7 +803,8 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
     """Test that only the specified file is staged and committed in a temp git repo."""
 
     # Create two files in the repo
-    file_path = temp_git_repo / "testfile.yaml"
+    file_path = temp_git_repo / "subdir" / "testfile.yaml"
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     other_file = temp_git_repo / "otherfile.yaml"
     file_path.write_text("new content")
     other_file.write_text("untouched content")
@@ -854,5 +857,5 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
             text=True,
             check=True,
         )
-        assert "testfile.yaml" in log_result.stdout
+        assert "subdir/testfile.yaml" in log_result.stdout
         assert "otherfile.yaml" not in log_result.stdout
