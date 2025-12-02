@@ -1651,7 +1651,11 @@ async def test_create_classifiers_profiles_artifact():
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
     ]
     aws_env = AwsEnv.staging
-    cs_pr_results = Ok(123)
+    cs_pr_results = Err(
+        Error(
+            msg="Error in PR results", metadata={"exception": Exception("error in PR")}
+        )
+    )
 
     with patch(
         "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
@@ -1681,7 +1685,11 @@ async def test_create_classifiers_profiles_artifact():
         ) + len(vespa_errors)  # pr errors not added to table
 
         # Assert the description contains the PR number
-        assert f"**Classifiers Specs PR**: [#{unwrap_ok(cs_pr_results)}]" in description
+        pr_error = unwrap_err(cs_pr_results)
+        assert (
+            f"**Classifiers Specs PR**: Error creating or merging PR, msg: {pr_error.msg}, exception: {str((pr_error.metadata or {}).get('exception', ''))}"
+            in description
+        )
 
 
 @pytest.mark.asyncio
