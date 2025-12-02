@@ -101,6 +101,10 @@ class WikibaseSession:
         self.base_url = base_url.rstrip("/") if base_url else base_url
         self.api_url = f"{self.base_url}/w/api.php"
 
+        self.sparql_url = f"{self.base_url}/query/sparql"
+        self.sparql_entity_prefix = f"{self.base_url}/entity/"
+        self.sparql_property_prefix = f"{self.base_url}/prop/direct/"
+
         if not self.username or not self.password or not self.base_url:
             raise ValueError(
                 "username, password and url must be set, either as arguments or "
@@ -722,7 +726,6 @@ class WikibaseSession:
             tasks.append(
                 self.get_recursive_subconcept_of_relationships_async(wikibase_id)
             )
-
         if tasks:
             results = await asyncio.gather(*tasks)
             result_index = 0
@@ -930,28 +933,14 @@ class WikibaseSession:
         self,
         wikibase_id: WikibaseID,
         property_id: str,
-        max_depth: int = 50,
-        current_depth: int = 0,
-        visited: Optional[set[WikibaseID]] = None,
     ) -> list[WikibaseID]:
         """
-        Async version of recursive relationship fetching with concurrency
+        Async version of recursive relationship fetching using SPARQL
 
         Args:
             wikibase_id: The Wikibase ID of the concept to get relationships for
             property_id: The property ID of the relationship to fetch
-            max_depth: The maximum number of levels to recurse the relationships
-            current_depth: The current recursion depth, starting at 0
-            visited: The set of visited Wikibase IDs
         """
-        if visited is None:
-            visited = set()
-
-        if current_depth >= max_depth or wikibase_id in visited:
-            return []
-
-        visited.add(wikibase_id)
-
         valid_property_ids = [
             self.subconcept_of_property_id,
             self.has_subconcept_property_id,
@@ -962,13 +951,20 @@ class WikibaseSession:
         client = await self._get_client()
         wikibase_id = self._resolve_redirect(wikibase_id)
 
+        sparql_query = f"""
+        PREFIX ent: <{self.sparql_entity_prefix}>
+        PREFIX dp: <{self.sparql_property_prefix}>
+
+        SELECT ?entity WHERE {{
+          ent:{wikibase_id} dp:{property_id}+ ?entity.
+        }}
+        """
+
         response = await client.get(
-            url=self.api_url,
+            url=self.sparql_url,
             params={
-                "action": "wbgetentities",
+                "query": sparql_query,
                 "format": "json",
-                "ids": wikibase_id,
-                "props": "claims",
             },
         )
         response.raise_for_status()
@@ -976,50 +972,24 @@ class WikibaseSession:
         try:
             data = response.json()
         except json.JSONDecodeError:
-            logger.warning(
-                "❌ Invalid JSON response for concept %s: %s",
+            logger.error(
+                "❌ Invalid JSON response for SPARQL query on %s: %s",
                 wikibase_id,
                 response.text,
             )
             raise
-
-        entity = data["entities"][str(wikibase_id)]
         related_concepts = []
+        bindings = data.get("results", {}).get("bindings", [])
 
-        if "claims" in entity:
-            direct_related_ids = []
-            for claim in entity["claims"].values():
-                for statement in claim:
-                    if (
-                        statement["mainsnak"]["snaktype"] == "value"
-                        and statement["mainsnak"]["property"] == property_id
-                    ):
-                        related_id = self._resolve_redirect(
-                            statement["mainsnak"]["datavalue"]["value"]["id"]
-                        )
-                        if related_id not in visited:
-                            direct_related_ids.append(related_id)
+        for binding in bindings:
+            concept_uri = binding.get("entity", {}).get("value", "")
+            concept_id = WikibaseID(concept_uri.split("/")[-1])
 
-            # Fetch relationships concurrently
-            if direct_related_ids:
-                related_concepts.extend(direct_related_ids)
+            resolved_id = self._resolve_redirect(concept_id)
+            if resolved_id not in related_concepts:
+                related_concepts.append(resolved_id)
 
-                # Create concurrent tasks for the next level
-                if tasks := [
-                    self._get_recursive_relationships_async(
-                        related_id,
-                        property_id,
-                        max_depth,
-                        current_depth + 1,
-                        visited.copy(),
-                    )
-                    for related_id in direct_related_ids
-                ]:
-                    results = await asyncio.gather(*tasks)
-                    for result in results:
-                        related_concepts.extend(result)
-
-        return list(set(related_concepts))
+        return sorted(list(set(related_concepts)))
 
     async def close(self):
         """Close the async client"""

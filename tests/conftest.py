@@ -323,6 +323,19 @@ def MockedWikibaseSession(
         if not httpx.URL(mock_wikibase_url).host == request.url.host:
             raise MockedWikibaseException(f"Non-test endpoint used: {request.url}")
 
+        if request.url.path == "/query/sparql":
+            query = request.url.params.get("query", "")
+            if "select ?entity where" in query.lower():
+                sparql_response = {
+                    "head": {"vars": ["entity"]},
+                    "results": {"bindings": []},
+                }
+                return httpx.Response(200, json=sparql_response)
+            else:
+                raise MockedWikibaseException(
+                    f"Expected SPARQL query format not used: {query}"
+                )
+
         if not request.url.path == "/w/api.php":
             raise MockedWikibaseException(f"Expected Api path not used: {request.url}")
 
