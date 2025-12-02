@@ -79,6 +79,7 @@ async def full_pipeline(
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
+    enable_v2_concepts: bool | None = None,
 ) -> None:
     """
     Full KG pipeline.
@@ -101,6 +102,7 @@ async def full_pipeline(
         indexer_concurrency_limit: Maximum concurrent indexers.
         indexer_document_passages_concurrency_limit: Max concurrent passage indexers.
         indexer_max_vespa_connections: Maximum Vespa connections for indexing.
+        enable_v2_concepts: Whether to index them into Vespa or not. If set to boolean value will be inferred.
 
     Returns:
         None
@@ -214,6 +216,7 @@ async def full_pipeline(
         indexer_concurrency_limit=indexer_concurrency_limit,
         indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
         indexer_max_vespa_connections=indexer_max_vespa_connections,
+        enable_v2_concepts=enable_v2_concepts,
         return_state=True,
     )
     indexing_result: None | Exception = await indexing_run.result(

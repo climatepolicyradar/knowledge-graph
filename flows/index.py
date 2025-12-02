@@ -973,8 +973,8 @@ async def index(
         The maximum number of Vespa connections to use within each indexing flow.
 
     enable_v2_concepts : bool
-        Whether to index them into Vespa or not. Not all environments
-        currently have support.
+        Whether to index them into Vespa or not. If set to boolean
+        value will be inferred.
     """
 
     logger = get_logger()
@@ -987,12 +987,12 @@ async def index(
     # `None` indicates that there wasn't a human set value, and thus
     # we can programmatically set a value.
     #
-    # Disable for production, until ready. Labs is treated as
-    # different to the other 3, as per usual.
+    # Labs is treated as different to the other 3, as per usual.
     if enable_v2_concepts is None:
         enable_v2_concepts = config.aws_env in [
             AwsEnv.sandbox,
             AwsEnv.staging,
+            AwsEnv.production,
         ]
 
     logger.info(f"v2 concepts enabled: {enable_v2_concepts}")
