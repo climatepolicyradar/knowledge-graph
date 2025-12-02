@@ -23,6 +23,9 @@ just train Q123 --track-and-upload --aws-env sandbox
 > [!NOTE]
 > Promoting requires a classifiers profile - each promoted classifier ID should have 1 classifiers profile. This is set in the metadata during promotion or by updating the classifier metadata.
 
+> [!NOTE]
+> W&B Metadata is shared between an artifact from its project to the registry. That means if you update one, it updates the other. Metadata at training should have config and the like, but not configuration for inference, etc.
+
 Demote the old version, being superseded, with:
 
 ```shell
