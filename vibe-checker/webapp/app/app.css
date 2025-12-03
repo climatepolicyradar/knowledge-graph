@@ -1,0 +1,232 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "material-symbols/rounded.css";
+
+/* Semantic color system that automatically adapts to light/dark themes */
+:root {
+  /* Accent colors */
+  --color-accent-primary: theme(colors.sky.500);
+  --color-accent-secondary: theme(colors.sky.600);
+
+  /* Background colors */
+  --color-bg-primary: theme(colors.white);
+  --color-bg-secondary: theme(colors.neutral.50);
+  --color-bg-tertiary: theme(colors.neutral.100);
+  --color-bg-inverse: theme(colors.neutral.900);
+
+  /* Text colors */
+  --color-text-primary: theme(colors.neutral.900);
+  --color-text-secondary: theme(colors.neutral.600);
+  --color-text-tertiary: theme(colors.neutral.500);
+  --color-text-inverse: theme(colors.neutral.100);
+
+  /* Border colors */
+  --color-border-primary: theme(colors.neutral.200);
+  --color-border-secondary: theme(colors.neutral.300);
+  --color-border-tertiary: theme(colors.neutral.400);
+
+  /* Interactive states */
+  --color-interactive-hover: theme(colors.neutral.50);
+  --color-interactive-active: theme(colors.neutral.100);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Accent colors */
+    --color-accent-primary: theme(colors.amber.600);
+    --color-accent-secondary: theme(colors.amber.700);
+
+    /* Background colors */
+    --color-bg-primary: theme(colors.neutral.800);
+    --color-bg-secondary: theme(colors.neutral.700);
+    --color-bg-tertiary: theme(colors.neutral.600);
+    --color-bg-inverse: theme(colors.neutral.100);
+
+    /* Text colors */
+    --color-text-primary: theme(colors.neutral.100);
+    --color-text-secondary: theme(colors.neutral.400);
+    --color-text-tertiary: theme(colors.neutral.500);
+    --color-text-inverse: theme(colors.neutral.900);
+
+    /* Border colors */
+    --color-border-primary: theme(colors.neutral.700);
+    --color-border-secondary: theme(colors.neutral.600);
+    --color-border-tertiary: theme(colors.neutral.500);
+
+    /* Interactive states */
+    --color-interactive-hover: theme(colors.neutral.700);
+    --color-interactive-active: theme(colors.neutral.600);
+  }
+}
+
+@theme {
+  /* Export semantic colors for Tailwind */
+  --color-accent-primary: var(--color-accent-primary);
+  --color-accent-secondary: var(--color-accent-secondary);
+  --color-accent: var(--color-accent-primary);
+
+  --color-bg-primary: var(--color-bg-primary);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-bg-tertiary: var(--color-bg-tertiary);
+  --color-bg-inverse: var(--color-bg-inverse);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-text-inverse: var(--color-text-inverse);
+
+  --color-border-primary: var(--color-border-primary);
+  --color-border-secondary: var(--color-border-secondary);
+  --color-border-tertiary: var(--color-border-tertiary);
+
+  --color-interactive-hover: var(--color-interactive-hover);
+  --color-interactive-active: var(--color-interactive-active);
+}
+
+/* Typography hierarchy */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-fraunces);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* Base body uses DM Mono for that technical feel */
+body {
+  font-family: var(--font-dm-mono);
+  font-weight: 400;
+}
+
+/* Smooth theme transitions */
+* {
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+/* Common layout utilities */
+.page-container {
+  @apply min-h-screen bg-bg-primary p-6;
+}
+
+.content-container {
+  @apply mx-auto max-w-7xl;
+}
+
+.page-header {
+  @apply mb-8 flex w-full items-center justify-between;
+}
+
+.page-title {
+  @apply font-serif text-2xl font-semibold text-text-primary;
+}
+
+.page-subtitle {
+  @apply mt-1 text-sm text-text-secondary;
+}
+
+/* Table utilities */
+.table-header {
+  @apply border-b border-border-primary bg-bg-secondary;
+}
+
+.table-cell {
+  @apply border-b border-border-primary p-4;
+}
+
+.table-row-hover {
+  @apply cursor-pointer transition-colors hover:bg-interactive-hover;
+}
+
+/* Text utilities for consistent hierarchy */
+.text-primary {
+  @apply text-text-primary;
+}
+
+.text-secondary {
+  @apply text-text-secondary;
+}
+
+.text-muted {
+  @apply text-text-tertiary;
+}
+
+/* Card utilities */
+.card {
+  @apply rounded-lg border border-border-primary bg-bg-primary shadow-sm;
+}
+
+.card-header {
+  @apply border-b border-border-primary bg-bg-secondary p-4;
+}
+
+.card-body {
+  @apply p-4;
+}
+
+/* Button utilities */
+.btn-primary {
+  @apply rounded-md border border-border-secondary bg-bg-primary px-3 py-2 text-text-primary transition-colors hover:bg-interactive-hover;
+}
+
+.btn-secondary {
+  @apply rounded-md border border-border-primary bg-bg-secondary px-3 py-2 text-text-primary transition-colors hover:bg-interactive-hover;
+}
+
+/* Input utilities */
+.input {
+  @apply rounded-md border border-border-secondary bg-bg-primary px-3 py-2 text-text-primary transition-colors hover:border-border-tertiary focus:border-accent-primary focus:ring-1 focus:ring-accent-primary focus:outline-none;
+}
+
+/* Material Symbols configuration */
+.material-symbols-rounded {
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 700,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/* Prediction highlighting */
+.passage-text {
+  line-height: 1.6;
+}
+
+.passage-text .prediction-highlight {
+  @apply bg-accent-primary/15 rounded px-1 py-0.5 font-medium transition-colors hover:bg-accent-primary/25;
+}
+
+/* Ensure highlighting works even if CSS processing fails */
+.prediction-highlight {
+  background-color: rgba(14, 165, 233, 0.15) !important;
+  border-radius: 0.25rem !important;
+  padding: 0.125rem 0.25rem !important;
+  font-weight: 500 !important;
+  transition: background-color 150ms ease !important;
+}
+
+.prediction-highlight:hover {
+  background-color: rgba(14, 165, 233, 0.25) !important;
+}
+
+/* Dark mode fallback */
+@media (prefers-color-scheme: dark) {
+  .prediction-highlight {
+    background-color: rgba(245, 158, 11, 0.2) !important;
+  }
+
+  .prediction-highlight:hover {
+    background-color: rgba(245, 158, 11, 0.3) !important;
+  }
+}
