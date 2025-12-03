@@ -90,6 +90,7 @@ def deploy_static_sites():
     app_name_to_bucket_name = {
         "concept_librarian": "cpr-knowledge-graph-concept-librarian",
         "labelling_librarian": "cpr-knowledge-graph-labelling-librarian",
+        "vibe_check": "cpr-knowledge-graph-vibe-check",
     }
 
     setup_environment()
