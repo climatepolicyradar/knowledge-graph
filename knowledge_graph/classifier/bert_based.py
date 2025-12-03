@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime
@@ -101,15 +102,18 @@ class BertBasedClassifier(
     def __init__(
         self,
         concept: Concept,
-        base_model: str = "answerdotai/ModernBERT-base",
+        model_name: str = "answerdotai/ModernBERT-base",
     ):
         super().__init__(concept)
-        self.base_model = base_model
+        self.model_name = model_name
 
         # Private properties for creating and running inference on classifier variants
         self._use_dropout_during_inference = False
         self._variant_seed = False
         self._variant_dropout_rate = False
+
+        # Random component for nondeterministic ID, generated once when classifier is fitted
+        self._random_id_component: str = ""
 
         # For training, we can use GPU/MPS if available
         if torch.backends.mps.is_available():
@@ -121,9 +125,9 @@ class BertBasedClassifier(
 
         # Initialize model and tokenizer
         self.model: PreTrainedModel = (
-            AutoModelForSequenceClassification.from_pretrained(base_model)
+            AutoModelForSequenceClassification.from_pretrained(model_name)
         )
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(base_model)
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model_name)
 
         # Always use CPU for inference, to ensure consistency across different deployment
         # environments. Models may be developed on machines with GPU/MPS but need to run
@@ -140,12 +144,23 @@ class BertBasedClassifier(
 
     @property
     def id(self) -> ClassifierID:
-        """Return a deterministic, human-readable identifier for the classifier."""
+        """
+        Return a human-readable identifier for the classifier.
+
+        As BERT model training is inherently nondeterministic and this identifier should
+        change for each classifier instance with different *behaviour*, only classifiers
+        that are not yet fitted have deterministic IDs.
+
+        For fitted classifiers, a random component is generated once during training and
+        persisted with the model.
+        """
+
         return ClassifierID.generate(
             self.name,
             self.concept.id,
-            self.base_model,
+            self.model_name,
             self.prediction_threshold,
+            self._random_id_component,
         )
 
     @contextmanager
@@ -172,7 +187,7 @@ class BertBasedClassifier(
                 logger.warning(
                     "⚠️  No dropout layers found in model %s. "
                     "Ensemble variants may produce identical predictions.",
-                    self.base_model,
+                    self.model_name,
                 )
             else:
                 original_rates = {layer.p for layer in dropout_layers}
@@ -279,7 +294,7 @@ class BertBasedClassifier(
         Returns:
             A new classifier instance with dropout enabled during inference.
         """
-        variant = self.__class__(concept=self.concept, base_model=self.base_model)
+        variant = self.__class__(concept=self.concept, model_name=self.model_name)
         variant.model.load_state_dict(self.model.state_dict())
         variant.pipeline = pipeline(
             "text-classification",
@@ -292,7 +307,7 @@ class BertBasedClassifier(
         variant._variant_dropout_rate = dropout_rate
 
         variant._use_dropout_during_inference = True  # noqa: SLF001
-        variant._is_fitted = self._is_fitted
+        variant.is_fitted = self.is_fitted
 
         return variant
 
@@ -545,5 +560,12 @@ class BertBasedClassifier(
             logger.info("📊 Final F1 score: %.4f", final_f1)
 
         logger.info("✅ Training complete for concept %s!", self.concept.id)
-        self._is_fitted = True
+
+        self.is_fitted = True
+
+        # Generate a random component for the classifier ID
+        # This ensures the ID is unique to this trained instance but remains stable
+        # across pickle serialization/deserialization
+        self._random_id_component = str(random.getrandbits(128))
+
         return self

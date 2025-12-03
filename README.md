@@ -137,6 +137,14 @@ This consists of indexing the spans identified from inference in to our passage 
 
 Prefect Deployments are defined in [deployments.py](./deployments.py)
 
+A push of a commit to a PR will deploy to Sandbox environment
+
+A merge to `main` branch will deploy the to the Labs, Staging, and Production environments
+
+You may also run the Github Actions Workflow directly in the [Github UI to deploy to an environment such as Sandbox](https://github.com/climatepolicyradar/knowledge-graph/actions/workflows/prefect_deploy_sandbox.yml)
+
+For [full details see the Notion page](https://www.notion.so/climatepolicyradar/KG-Deployment-Triggering-2799109609a48043bcd5fdc77df1c94d)
+
 ### Monitoring Deployment status
 
 The [Prefect Dashboard shows all deployments, flows and runs](https://app.prefect.cloud/account/4b1558a0-3c61-4849-8b18-3e97e0516d78/workspace/1753b4f0-6221-4f6a-9233-b146518b4545/deployments?g_range={%22type%22:%22span%22,%22seconds%22:-2592000}),

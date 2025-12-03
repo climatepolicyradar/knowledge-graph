@@ -14,6 +14,25 @@ get-concept id wikibase_config="":
 train id +OPTS="":
     uv run train --wikibase-id {{id}} {{OPTS}}
 
+# train multiple models and export their performance tables to CSV
+train-with-output-csv ids combined_name="" +OPTS="":
+    #!/bin/bash
+    set -e
+
+    # Train each model
+    for id in {{ids}}; do
+        echo "Training model for $id..."
+        uv run train --wikibase-id $id {{OPTS}}
+    done
+
+    # Fetch performance tables
+    echo "Fetching performance tables..."
+    if [ -n "{{combined_name}}" ]; then
+        uv run python scripts/fetch_performance_tables.py {{ids}} --combined-name {{combined_name}}
+    else
+        uv run python scripts/fetch_performance_tables.py {{ids}}
+    fi
+
 # evaluate a model for a specific wikibase ID
 evaluate id +OPTS="":
     uv run evaluate --wikibase-id {{id}} {{OPTS}}

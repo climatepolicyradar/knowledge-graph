@@ -42,7 +42,7 @@ s3://{BUCKET_NAME}/
 │   └── classifier.json             # Output: Metadata about the classifier used to generate the predictions
 ```
 
-## Changing the list of concepts to process
+## Changing the list of default concepts to process
 
 To update the config file, you should edit the config file in `vibe-checker/config.yml`. The file should be a list of Wikibase IDs:
 

@@ -32,11 +32,10 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.sync_concepts import sync_concepts
-from flows.train import train_from_config, train_on_gpu
+from flows.train import train_for_vibe_checker, train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.vibe_check import vibe_check_inference
-from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -286,19 +285,6 @@ if __name__ == "__main__":
     # Wikibase
 
     create_deployment(
-        flow=wikibase_to_s3,
-        description="Upload concepts from Wikibase to S3",
-        # Temporarily disabled for stability
-        #     env_schedules={
-        #         AwsEnv.production: "0 9 * * TUE,THU",
-        #         AwsEnv.staging: "0 15 2 * *",
-        #         AwsEnv.sandbox: "0 15 1 * *",
-        #         # Not needed in labs
-        #         # AwsEnv.labs: "0 15 3 * *",
-        #     },
-    )
-
-    create_deployment(
         flow=sync_concepts,
         description="Upload concepts from Wikibase to Vespa",
         concurrency_limit=ConcurrencyLimitConfig(
@@ -306,8 +292,7 @@ if __name__ == "__main__":
             collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
         ),
         env_schedules={
-            # Temporarily disabled for stability
-            # AwsEnv.production: "0 8 * * MON-THU",
+            AwsEnv.production: "0 8 * * MON-THU",
             AwsEnv.staging: "0 9 * * MON-THU",
             AwsEnv.sandbox: "0 10 * * MON-THU",
         },
@@ -320,9 +305,25 @@ if __name__ == "__main__":
         description="Compare Wikibase classifiers profiles with classifiers specs",
         # Temporarily disabled while testing
         # Schedule 2x daily during working week days
-        # env_schedules={
-        #     AwsEnv.production: "0 10,17 * * 1-4"
-        # }
+        env_schedules={
+            AwsEnv.staging: "0 10 * * MON-THU",  # staging run 1x per day
+            # AwsEnv.production: "0 10,17 * * MON-THU",
+        },
+        env_parameters={
+            AwsEnv.staging: JsonDict(
+                {  # dry run: no changes to external services
+                    "upload_to_wandb": False,
+                    "upload_to_vespa": False,
+                    "automerge_classifier_specs_pr": False,
+                    "auto_train": False,
+                    "enable_slack_notifications": False,
+                }
+            ),
+        },
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
     )
 
     # Sync Neo4j with Wikibase
@@ -367,7 +368,7 @@ if __name__ == "__main__":
     )
 
     create_deployment(
-        flow=train_from_config,
+        flow=train_for_vibe_checker,
         description="Train classifiers for all concepts listed in vibe-checker/config.yml. Runs training in parallel and uploads results to Weights & Biases.",
         gpu=False,
         env_schedules={
