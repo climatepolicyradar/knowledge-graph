@@ -232,6 +232,9 @@ async def commit_and_create_pr(
     git.config("user.name", "cpr-tech-admin")
 
     git.enable_sparse_checkout(file_path)
+    # Some files that are not copied in the docker build may
+    # show as D (deleted) however only specified file_path will
+    # be committed
 
     # Create and checkout new branch
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
