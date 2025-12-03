@@ -266,7 +266,7 @@ class ArgillaSession:
         :return Dataset: new dataset
         """
 
-        if not new_workspace or new_name:
+        if not (new_workspace or new_name):
             raise ValueError("One of new_workspace or new_name must be specified.")
 
         existing_dataset = self.get_dataset(
