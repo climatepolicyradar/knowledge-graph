@@ -1366,6 +1366,8 @@ async def sync_classifiers_profiles(
                 aws_env=aws_env,
             )
         )
+        token_value = github_token.get_secret_value()
+        logger.info(f"Github value: {token_value[-5:]}")
 
     if not upload_to_wandb:
         logger.warning(
