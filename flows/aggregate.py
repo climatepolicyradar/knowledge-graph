@@ -199,18 +199,22 @@ async def get_all_labelled_passages_for_one_document(
         )
         try:
             response = await s3.get_object(Bucket=s3_uri.bucket, Key=s3_uri.key)
+            content = (await response["Body"].read()).decode("utf-8")
+
+            labelled_passages = deserialise_pydantic_list_with_fallback(
+                content, LabelledPassage
+            )
+            yield spec, labelled_passages
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code")
             if error_code == "NoSuchKey":
-                e.add_note(f"S3 URI: {s3_uri}")
-            raise
-        body = await response["Body"].read()
-        content = body.decode("utf-8")
-
-        labelled_passages = deserialise_pydantic_list_with_fallback(
-            content, LabelledPassage
-        )
-        yield spec, labelled_passages
+                yield spec, []
+            else:
+                e.add_note(
+                    f"Failed to load labelled passages for {document_stem} with "
+                    f"classifier {spec.wikibase_id}:{spec.classifier_id} from {s3_uri}"
+                )
+                raise
 
 
 def check_all_values_are_the_same(values: list[Any]) -> bool:
