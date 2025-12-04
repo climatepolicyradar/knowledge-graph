@@ -194,9 +194,9 @@ async def test_commit_and_create_pr__with_changes():
     """Test commit_and_create_pr when there are changes to commit."""
     with patch("subprocess.run") as mock_run:
         # Create mock result objects with proper stdout attributes
-        gh_auth_result = Mock()
-        gh_auth_result.stdout = ""
-        gh_auth_result.returncode = 0
+        git_success = Mock()
+        git_success.stdout = ""
+        git_success.returncode = 0
 
         gh_pr_result = Mock()
         gh_pr_result.stdout = (
@@ -206,7 +206,8 @@ async def test_commit_and_create_pr__with_changes():
 
         # Mock subprocess.run for gh commands only
         mock_run.side_effect = [
-            gh_auth_result,  # gh auth setup-git
+            git_success,  # gh auth setup-git
+            git_success,  # git remote set-url
             gh_pr_result,  # gh pr create
         ]
 
@@ -820,6 +821,7 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
         ):
             mock_run_subprocess.side_effect = [
                 Mock(stdout=""),  # gh auth setup-git
+                Mock(stdout=""),  # git remote set url
                 Mock(
                     stdout="https://github.com/climatepolicyradar/knowledge-graph/pull/123"
                 ),  # gh pr create
