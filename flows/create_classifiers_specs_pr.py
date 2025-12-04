@@ -254,6 +254,13 @@ async def commit_and_create_pr(
         cwd=repo_path,
     )
 
+    # convert ssh to https to use github token
+    logger.info("Configure remote with https")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "remote", "set-url", "origin", f"https://github.com/{repo}.git"],
+        cwd=repo_path,
+    )
+
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
     git.push(branch_name)
